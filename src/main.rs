@@ -21,6 +21,7 @@ fn main() {
         // ====================================================================
         // 3. 配置系统托盘
         // ====================================================================
+        cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
         cx.set_tray_tooltip("StarTray - AI Quota Monitor");
 
         cx.set_tray_menu(vec![

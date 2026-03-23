@@ -24,16 +24,16 @@ impl RenderOnce for SettingsPanel {
         let (section_bg, border_color, sub_text, label_color): (Hsla, Hsla, Hsla, Hsla) =
             match self.theme {
                 AppTheme::Dark => (
-                    rgb(0x232540).into(),
-                    rgb(0x2d2f45).into(),
-                    rgb(0x94a3b8).into(),
-                    rgb(0xe2e8f0).into(),
+                    rgb(0x0a0a0a).into(), // flat neutral-950
+                    rgb(0x262626).into(), // neutral-800
+                    rgb(0xa3a3a3).into(), // neutral-400
+                    rgb(0xfafafa).into(), // neutral-50
                 ),
                 AppTheme::Light => (
-                    rgb(0xffffff).into(),
-                    rgb(0xe2e8f0).into(),
-                    rgb(0x64748b).into(),
-                    rgb(0x1e293b).into(),
+                    rgb(0xffffff).into(), // flat white
+                    rgb(0xe5e5e5).into(), // neutral-200
+                    rgb(0x737373).into(), // neutral-500
+                    rgb(0x0a0a0a).into(), // neutral-950
                 ),
             };
 
@@ -45,9 +45,9 @@ impl RenderOnce for SettingsPanel {
             // 标题
             .child(
                 div()
-                    .text_size(px(20.0))
-                    .font_weight(FontWeight::BOLD)
-                    .child("⚙️ Settings"),
+                    .text_size(px(18.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Settings"),
             )
             // 外观设置
             .child(self.render_section(
@@ -131,14 +131,14 @@ impl SettingsPanel {
         rows: Vec<Div>,
     ) -> impl IntoElement {
         div()
-            .rounded(px(12.0))
+            .rounded(px(6.0))
             .bg(bg)
             .border_1()
             .border_color(border)
             .p(px(16.0))
             .flex()
             .flex_col()
-            .gap(px(12.0))
+            .gap(px(16.0))
             .child(
                 div()
                     .flex()

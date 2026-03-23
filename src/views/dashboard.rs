@@ -23,8 +23,8 @@ impl Dashboard {
 impl RenderOnce for Dashboard {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let sub_text = match self.theme {
-            AppTheme::Dark => rgb(0x94a3b8),
-            AppTheme::Light => rgb(0x64748b),
+            AppTheme::Dark => rgb(0xa3a3a3), // neutral-400
+            AppTheme::Light => rgb(0x737373), // neutral-500
         };
 
         let enabled_providers: Vec<_> = self
@@ -55,9 +55,9 @@ impl RenderOnce for Dashboard {
                             .gap(px(4.0))
                             .child(
                                 div()
-                                    .text_size(px(20.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .child("📊 Quota Overview"),
+                                    .text_size(px(18.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child("Quota Overview"),
                             )
                             .child(
                                 div()
@@ -93,7 +93,7 @@ impl Dashboard {
             .collect();
 
         for chunk in chunks {
-            let mut row = div().flex().gap(px(12.0)).w_full();
+            let mut row = div().flex().gap(px(16.0)).w_full();
             for provider in chunk {
                 row = row.child(
                     div()
@@ -104,6 +104,6 @@ impl Dashboard {
             rows.push(row);
         }
 
-        div().flex().flex_col().gap(px(12.0)).children(rows)
+        div().flex().flex_col().gap(px(16.0)).children(rows)
     }
 }

@@ -71,17 +71,17 @@ impl Render for AppState {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.settings.theme;
 
-        // 根据主题设置背景色和文字色
+        // 根据主题设置背景色和文字色 (Minimalist Premium style)
         let (bg_color, text_color, border_color) = match theme {
             AppTheme::Dark => (
-                rgb(0x1a1b2e),
-                rgb(0xe2e8f0),
-                rgb(0x2d2f45),
+                rgb(0x0a0a0a), // neutral-950
+                rgb(0xfafafa), // neutral-50
+                rgb(0x262626), // neutral-800
             ),
             AppTheme::Light => (
-                rgb(0xf8fafc),
-                rgb(0x1e293b),
-                rgb(0xe2e8f0),
+                rgb(0xffffff), // pure white
+                rgb(0x0a0a0a), // neutral-950
+                rgb(0xe5e5e5), // neutral-200
             ),
         };
 
@@ -128,16 +128,24 @@ impl AppState {
         theme: AppTheme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let (active_bg, inactive_text) = match theme {
-            AppTheme::Dark => (rgb(0x3b82f6), rgb(0x94a3b8)),
-            AppTheme::Light => (rgb(0x2563eb), rgb(0x64748b)),
+        // Premium minimalist nav styles (Text color emphasis instead of background pills)
+        let (active_text, inactive_text) = match theme {
+            AppTheme::Dark => (
+                rgb(0xffffff), // pure white active
+                rgb(0xa3a3a3), // neutral-400 inactive
+            ),
+            AppTheme::Light => (
+                rgb(0x000000), // pure black active
+                rgb(0x737373), // neutral-500 inactive
+            ),
         };
 
         div()
             .flex()
             .items_center()
             .justify_between()
-            .px(px(16.0))
+            .pl(px(88.0)) // Explicit left padding to dodge macOS window controls
+            .pr(px(16.0))
             .py(px(12.0))
             .border_b_1()
             .border_color(border_color)
@@ -162,7 +170,7 @@ impl AppState {
                     .child(self.render_nav_button(
                         "Dashboard",
                         active_panel == ActivePanel::Dashboard,
-                        active_bg.into(),
+                        active_text.into(),
                         inactive_text.into(),
                         cx.entity().clone(),
                         ActivePanel::Dashboard,
@@ -170,11 +178,24 @@ impl AppState {
                     .child(self.render_nav_button(
                         "Settings",
                         active_panel == ActivePanel::Settings,
-                        active_bg.into(),
+                        active_text.into(),
                         inactive_text.into(),
                         cx.entity().clone(),
                         ActivePanel::Settings,
-                    )),
+                    ))
+                    .child(
+                        // 分隔线
+                        div().w(px(1.0)).h(px(16.0)).bg(inactive_text).mx(px(4.0)).opacity(0.3)
+                    )
+                    .child(
+                        // 主题切换按钮
+                        self.render_theme_toggle(
+                            theme,
+                            inactive_text.into(),
+                            active_text.into(),
+                            cx.entity().clone()
+                        )
+                    )
             )
     }
 
@@ -183,26 +204,25 @@ impl AppState {
         &self,
         label: &'static str,
         is_active: bool,
-        active_bg: Hsla,
+        active_text: Hsla,
         inactive_text: Hsla,
         entity: Entity<AppState>,
         target_panel: ActivePanel,
     ) -> impl IntoElement {
         let mut btn = div()
-            .px(px(12.0))
-            .py(px(6.0))
-            .rounded(px(6.0))
+            .px(px(8.0))
+            .py(px(4.0))
             .cursor_pointer()
             .text_size(px(13.0))
-            .font_weight(FontWeight::MEDIUM)
+            .font_weight(if is_active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
             .child(label);
 
         if is_active {
-            btn = btn.bg(active_bg).text_color(rgb(0xffffff));
+            btn = btn.text_color(active_text);
         } else {
             btn = btn
                 .text_color(inactive_text)
-                .hover(|s| s.bg(active_bg.opacity(0.1)));
+                .hover(|s| s.text_color(active_text));
         }
 
         btn.on_mouse_down(MouseButton::Left, move |_ev, _window, cx| {
@@ -214,5 +234,38 @@ impl AppState {
                 cx.notify();
             });
         })
+    }
+
+    /// 渲染主题切换按钮
+    fn render_theme_toggle(
+        &self,
+        theme: AppTheme,
+        inactive_text: Hsla,
+        active_text: Hsla,
+        entity: Entity<AppState>,
+    ) -> impl IntoElement {
+        let (icon, label) = match theme {
+            AppTheme::Dark => ("☀️", "Light"),
+            AppTheme::Light => ("🌙", "Dark"),
+        };
+
+        div()
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .px(px(8.0))
+            .py(px(4.0))
+            .cursor_pointer()
+            .text_size(px(13.0))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(inactive_text)
+            .hover(|s| s.text_color(active_text))
+            .child(icon)
+            .child(label)
+            .on_mouse_down(MouseButton::Left, move |_ev, _window, cx| {
+                entity.update(cx, |state, cx| {
+                    state.toggle_theme(cx);
+                });
+            })
     }
 }
