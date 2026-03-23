@@ -1,0 +1,200 @@
+use serde::{Deserialize, Serialize};
+
+// ============================================================================
+// Provider 类型定义
+// ============================================================================
+
+/// 支持的 AI Provider 枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ProviderKind {
+    Claude,
+    Gemini,
+    Copilot,
+    Codex,
+    Kimi,
+    Amp,
+}
+
+impl ProviderKind {
+    /// 获取 Provider 显示名称
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+            Self::Gemini => "Gemini",
+            Self::Copilot => "GitHub Copilot",
+            Self::Codex => "Codex (ChatGPT)",
+            Self::Kimi => "Kimi",
+            Self::Amp => "Amp (Sourcegraph)",
+        }
+    }
+
+    /// 获取所有 Provider
+    pub fn all() -> &'static [ProviderKind] {
+        &[
+            Self::Claude,
+            Self::Gemini,
+            Self::Copilot,
+            Self::Codex,
+            Self::Kimi,
+            Self::Amp,
+        ]
+    }
+}
+
+// ============================================================================
+// 用量信息
+// ============================================================================
+
+/// 用量配额信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotaInfo {
+    /// 已使用量
+    pub used: f64,
+    /// 总配额
+    pub limit: f64,
+    /// 配额类型标签（如 "Session", "Daily", "Weekly"）
+    pub label: String,
+}
+
+impl QuotaInfo {
+    pub fn new(label: impl Into<String>, used: f64, limit: f64) -> Self {
+        Self {
+            used,
+            limit,
+            label: label.into(),
+        }
+    }
+
+    /// 使用百分比 (0.0 - 100.0)
+    pub fn percentage(&self) -> f64 {
+        if self.limit <= 0.0 {
+            return 0.0;
+        }
+        (self.used / self.limit * 100.0).min(100.0)
+    }
+
+    /// 状态等级：Green / Yellow / Red
+    pub fn status_level(&self) -> StatusLevel {
+        let pct = self.percentage();
+        if pct < 60.0 {
+            StatusLevel::Green
+        } else if pct < 85.0 {
+            StatusLevel::Yellow
+        } else {
+            StatusLevel::Red
+        }
+    }
+}
+
+// ============================================================================
+// 状态等级
+// ============================================================================
+
+/// 用量状态等级（用于颜色编码）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusLevel {
+    Green,
+    Yellow,
+    Red,
+}
+
+// ============================================================================
+// Provider 状态
+// ============================================================================
+
+/// 连接状态
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConnectionStatus {
+    Connected,
+    Disconnected,
+    Error,
+}
+
+/// 单个 Provider 的完整状态
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderStatus {
+    pub kind: ProviderKind,
+    pub enabled: bool,
+    pub connection: ConnectionStatus,
+    pub quotas: Vec<QuotaInfo>,
+}
+
+impl ProviderStatus {
+    /// 创建 mock 数据，用于开发阶段
+    pub fn mock(kind: ProviderKind) -> Self {
+        let quotas = match kind {
+            ProviderKind::Claude => vec![
+                QuotaInfo::new("Session (5h)", 35.0, 50.0),
+                QuotaInfo::new("Daily", 120.0, 200.0),
+            ],
+            ProviderKind::Gemini => vec![
+                QuotaInfo::new("Requests/min", 8.0, 15.0),
+                QuotaInfo::new("Daily Tokens", 450_000.0, 1_000_000.0),
+            ],
+            ProviderKind::Copilot => vec![
+                QuotaInfo::new("Completions/h", 150.0, 300.0),
+                QuotaInfo::new("Chat Messages", 40.0, 100.0),
+            ],
+            ProviderKind::Codex => vec![
+                QuotaInfo::new("Session", 22.0, 50.0),
+                QuotaInfo::new("Weekly", 180.0, 500.0),
+            ],
+            ProviderKind::Kimi => vec![
+                QuotaInfo::new("Daily Requests", 85.0, 100.0),
+            ],
+            ProviderKind::Amp => vec![
+                QuotaInfo::new("Daily", 30.0, 100.0),
+                QuotaInfo::new("Monthly", 250.0, 1000.0),
+            ],
+        };
+
+        Self {
+            kind,
+            enabled: true,
+            connection: ConnectionStatus::Connected,
+            quotas,
+        }
+    }
+
+    /// 获取最高用量的状态等级（用于总览显示）
+    pub fn worst_status(&self) -> StatusLevel {
+        self.quotas
+            .iter()
+            .map(|q| q.status_level())
+            .max_by_key(|s| match s {
+                StatusLevel::Green => 0,
+                StatusLevel::Yellow => 1,
+                StatusLevel::Red => 2,
+            })
+            .unwrap_or(StatusLevel::Green)
+    }
+}
+
+// ============================================================================
+// 应用设置
+// ============================================================================
+
+/// 应用主题
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AppTheme {
+    Light,
+    Dark,
+}
+
+/// 应用配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    pub theme: AppTheme,
+    pub refresh_interval_secs: u64,
+    pub global_hotkey: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            theme: AppTheme::Dark,
+            refresh_interval_secs: 30,
+            global_hotkey: "Cmd+Shift+S".to_string(),
+        }
+    }
+}

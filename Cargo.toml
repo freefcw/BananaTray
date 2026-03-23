@@ -1,0 +1,12 @@
+[package]
+name = "startray"
+version = "0.1.0"
+edition = "2021"
+description = "A cross-platform system tray application for monitoring AI coding assistant quotas"
+license = "MIT"
+
+[dependencies]
+adabraka-ui = "0.3.9"
+gpui = { package = "adabraka-gpui", version = "0.5.1" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
