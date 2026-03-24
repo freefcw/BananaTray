@@ -6,8 +6,38 @@ mod views;
 
 use app::AppState;
 use gpui::*;
+use std::borrow::Cow;
 use std::cell::RefCell;
+use std::fs;
+use std::path::PathBuf;
 use std::rc::Rc;
+
+struct Assets {
+    base: PathBuf,
+}
+
+impl AssetSource for Assets {
+    fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        fs::read(self.base.join(path))
+            .map(|data| Some(Cow::Owned(data)))
+            .map_err(|err| err.into())
+    }
+
+    fn list(&self, path: &str) -> anyhow::Result<Vec<SharedString>> {
+        fs::read_dir(self.base.join(path))
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| {
+                        entry
+                            .ok()
+                            .and_then(|entry| entry.file_name().into_string().ok())
+                            .map(SharedString::from)
+                    })
+                    .collect()
+            })
+            .map_err(|err| err.into())
+    }
+}
 
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 struct TrayController {
@@ -39,7 +69,7 @@ impl TrayController {
     }
 
     fn open(&mut self, cx: &mut App) {
-        let window_size = size(px(320.0), px(520.0));
+        let window_size = size(px(308.0), px(548.0));
         let tray_bounds = cx.tray_icon_bounds().unwrap_or_default();
         let bounds =
             cx.compute_window_bounds(window_size, &WindowPosition::TrayCenter(tray_bounds));
@@ -60,9 +90,11 @@ impl TrayController {
 
         if let Ok(handle) = result {
             // 监听窗口失焦，自动关闭
+            let auto_hide_state = self.state.clone();
             let _ = handle.update(cx, |view, window, cx| {
-                let sub = cx.observe_window_activation(window, |_view, window, _cx| {
-                    if !window.is_window_active() {
+                let sub = cx.observe_window_activation(window, move |_view, window, _cx| {
+                    let should_auto_hide = auto_hide_state.borrow().settings.auto_hide_window;
+                    if should_auto_hide && !window.is_window_active() {
                         window.remove_window();
                     }
                 });
@@ -74,42 +106,46 @@ impl TrayController {
 }
 
 fn main() {
-    Application::new().run(|cx: &mut App| {
-        // 1. 初始化
-        adabraka_ui::init(cx);
-        adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::dark());
-        cx.set_keep_alive_without_windows(true);
+    Application::new()
+        .with_assets(Assets {
+            base: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+        })
+        .run(|cx: &mut App| {
+            // 1. 初始化
+            adabraka_ui::init(cx);
+            adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::dark());
+            cx.set_keep_alive_without_windows(true);
 
-        // 2. 配置系统托盘
-        cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
-        cx.set_tray_tooltip("BananaTray - AI Quota Monitor");
-        cx.set_tray_panel_mode(true);
+            // 2. 配置系统托盘
+            cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
+            cx.set_tray_tooltip("BananaTray - AI Quota Monitor");
+            cx.set_tray_panel_mode(true);
 
-        // 3. 窗口控制器
-        let controller = Rc::new(RefCell::new(TrayController::new()));
+            // 3. 窗口控制器
+            let controller = Rc::new(RefCell::new(TrayController::new()));
 
-        // 4. 托盘点击
-        let tray_ctrl = controller.clone();
-        cx.on_tray_icon_event(move |event, cx| {
-            if matches!(event, TrayIconEvent::LeftClick | TrayIconEvent::RightClick) {
-                tray_ctrl.borrow_mut().toggle(cx);
+            // 4. 托盘点击
+            let tray_ctrl = controller.clone();
+            cx.on_tray_icon_event(move |event, cx| {
+                if matches!(event, TrayIconEvent::LeftClick | TrayIconEvent::RightClick) {
+                    tray_ctrl.borrow_mut().toggle(cx);
+                }
+            });
+
+            // 5. 全局热键 Cmd+Shift+S
+            if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
+                let _ = cx.register_global_hotkey(1, &keystroke);
             }
-        });
+            let async_cx = cx.to_async();
+            let hotkey_ctrl = controller.clone();
+            cx.on_global_hotkey(move |id| {
+                if id == 1 {
+                    let _ = async_cx.update(|cx| {
+                        hotkey_ctrl.borrow_mut().toggle(cx);
+                    });
+                }
+            });
 
-        // 5. 全局热键 Cmd+Shift+S
-        if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
-            let _ = cx.register_global_hotkey(1, &keystroke);
-        }
-        let async_cx = cx.to_async();
-        let hotkey_ctrl = controller.clone();
-        cx.on_global_hotkey(move |id| {
-            if id == 1 {
-                let _ = async_cx.update(|cx| {
-                    hotkey_ctrl.borrow_mut().toggle(cx);
-                });
-            }
+            println!("🚀 BananaTray is running! Look for the tray icon in your menu bar.");
         });
-
-        println!("🚀 BananaTray is running! Look for the tray icon in your menu bar.");
-    });
 }
