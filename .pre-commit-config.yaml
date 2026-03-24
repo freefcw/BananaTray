@@ -1,0 +1,62 @@
+# Rust 项目的 pre-commit 配置
+# 安装: pip install pre-commit
+# 启用: pre-commit install
+# 手动运行: pre-commit run --all-files
+
+repos:
+  # 基础检查（通用）
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+
+  # Rust 专用检查
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --
+        language: system
+        types: [rust]
+        pass_filenames: true
+
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
+
+      # 可选：运行测试（取消注释以启用）
+      # - id: cargo-test
+      #   name: cargo test
+      #   entry: cargo test
+      #   language: system
+      #   types: [rust]
+      #   pass_filenames: false
+      #   always_run: true
+
+  # 提交信息规范检查（可选）
+  # - repo: https://github.com/commitizen-tools/commitizen
+  #   rev: v3.13.0
+  #   hooks:
+  #     - id: commitizen
+  #       stages: [commit-msg]
