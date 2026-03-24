@@ -31,7 +31,7 @@ repos:
 
       - id: cargo-check
         name: cargo check
-        entry: cargo check
+        entry: cargo check --all-targets --all-features
         language: system
         types: [rust]
         pass_filenames: false
@@ -39,20 +39,20 @@ repos:
 
       - id: cargo-clippy
         name: cargo clippy
-        entry: cargo clippy -- -D warnings
+        entry: cargo clippy --all-targets --all-features -- -D warnings
         language: system
         types: [rust]
         pass_filenames: false
         always_run: true
 
       # 可选：运行测试（取消注释以启用）
-      # - id: cargo-test
-      #   name: cargo test
-      #   entry: cargo test
-      #   language: system
-      #   types: [rust]
-      #   pass_filenames: false
-      #   always_run: true
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --all-targets --all-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
 
   # 提交信息规范检查（可选）
   # - repo: https://github.com/commitizen-tools/commitizen

@@ -29,19 +29,25 @@ impl AiProvider for AmpProvider {
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
         let output = Command::new("amp")
-            .args(&["usage", "--no-color"])
+            .args(["usage", "--no-color"])
             .output()
             .context("Failed to execute 'amp usage' correctly.")?;
 
         if !output.status.success() {
-            anyhow::bail!("'amp usage' command failed with exit status {:?}", output.status);
+            anyhow::bail!(
+                "'amp usage' command failed with exit status {:?}",
+                output.status
+            );
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
         let mut quotas = Vec::new();
 
         // 匹配类似于: "Amp Free: $17.59/$20 remaining" 或者 "Individual credits: $0 remaining"
-        let credit_re = Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s*/\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap();
+        let credit_re = Regex::new(
+            r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s*/\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining",
+        )
+        .unwrap();
         let balance_re = Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap();
 
         for line in output_str.lines() {
@@ -50,14 +56,14 @@ impl AiProvider for AmpProvider {
                 let label = caps.get(1).unwrap().as_str().trim();
                 let remaining: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
                 let total: f64 = caps.get(3).unwrap().as_str().parse().unwrap_or(0.0);
-                
+
                 let used = total - remaining;
                 quotas.push(QuotaInfo::new(label, used.max(0.0), total));
             } else if let Some(caps) = balance_re.captures(line) {
                 let label = caps.get(1).unwrap().as_str().trim();
                 let balance: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
-                
-                quotas.push(QuotaInfo::new(label, 0.0, balance)); 
+
+                quotas.push(QuotaInfo::new(label, 0.0, balance));
             }
         }
 

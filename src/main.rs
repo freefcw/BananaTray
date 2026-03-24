@@ -1,13 +1,13 @@
 mod app;
 mod models;
+mod providers;
 mod theme;
 mod views;
-mod providers;
 
 use app::AppState;
 use gpui::*;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 struct TrayController {
@@ -26,13 +26,14 @@ impl TrayController {
 
     fn toggle(&mut self, cx: &mut App) {
         if let Some(window) = self.window.take() {
-            // 有窗口 → 销毁它
-            let _ = window.update(cx, |_, window, _| {
+            let result = window.update(cx, |_, window, _| {
                 window.remove_window();
             });
-            // 即使 update 失败 (窗口已被系统回收)，window 也已从 self 取走
+            if result.is_err() {
+                // 窗口已被失焦回调销毁，重新打开
+                self.open(cx);
+            }
         } else {
-            // 无窗口 → 创建
             self.open(cx);
         }
     }
@@ -40,10 +41,8 @@ impl TrayController {
     fn open(&mut self, cx: &mut App) {
         let window_size = size(px(320.0), px(520.0));
         let tray_bounds = cx.tray_icon_bounds().unwrap_or_default();
-        let bounds = cx.compute_window_bounds(
-            window_size,
-            &WindowPosition::TrayCenter(tray_bounds),
-        );
+        let bounds =
+            cx.compute_window_bounds(window_size, &WindowPosition::TrayCenter(tray_bounds));
 
         let state = self.state.clone();
 
@@ -56,12 +55,19 @@ impl TrayController {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_window, cx| {
-                cx.new(|cx| app::AppView::new(state, cx))
-            },
+            |_window, cx| cx.new(|cx| app::AppView::new(state, cx)),
         );
 
         if let Ok(handle) = result {
+            // 监听窗口失焦，自动关闭
+            let _ = handle.update(cx, |view, window, cx| {
+                let sub = cx.observe_window_activation(window, |_view, window, _cx| {
+                    if !window.is_window_active() {
+                        window.remove_window();
+                    }
+                });
+                view._activation_sub = Some(sub);
+            });
             self.window = Some(handle);
         }
     }

@@ -22,7 +22,7 @@ impl SettingsPanel {
 impl RenderOnce for SettingsPanel {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.global::<Theme>();
-        
+
         let section_bg = theme.bg_panel;
         let border_color = theme.border_subtle;
         let sub_text = theme.text_secondary;
@@ -49,18 +49,15 @@ impl RenderOnce for SettingsPanel {
                 section_bg,
                 border_color,
                 sub_text,
-                label_color,
-                vec![
-                    self.render_setting_row(
-                        "Theme",
-                        match settings.theme {
-                            AppTheme::Dark => "🌙 Dark",
-                            AppTheme::Light => "☀️ Light",
-                        },
-                        label_color,
-                        sub_text,
-                    ),
-                ],
+                vec![self.render_setting_row(
+                    "Theme",
+                    match settings.theme {
+                        AppTheme::Dark => "🌙 Dark",
+                        AppTheme::Light => "☀️ Light",
+                    },
+                    label_color,
+                    sub_text,
+                )],
             ))
             // 监控设置
             .child(self.render_section(
@@ -69,7 +66,6 @@ impl RenderOnce for SettingsPanel {
                 section_bg,
                 border_color,
                 sub_text,
-                label_color,
                 vec![
                     self.render_setting_row(
                         "Refresh Interval",
@@ -92,7 +88,6 @@ impl RenderOnce for SettingsPanel {
                 section_bg,
                 border_color,
                 sub_text,
-                label_color,
                 vec![
                     self.render_setting_row(
                         "Framework",
@@ -120,7 +115,6 @@ impl SettingsPanel {
         bg: Hsla,
         border: Hsla,
         sub_text: Hsla,
-        _label_color: Hsla,
         rows: Vec<Div>,
     ) -> impl IntoElement {
         div()

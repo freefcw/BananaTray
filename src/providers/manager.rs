@@ -23,6 +23,14 @@ impl ProviderManager {
     }
 
     pub fn register(&mut self, provider: Arc<dyn AiProvider>) {
+        let provider_id = provider.id();
+        if self
+            .providers
+            .iter()
+            .any(|existing| existing.id() == provider_id)
+        {
+            return;
+        }
         self.providers.push(provider);
     }
 
@@ -44,13 +52,19 @@ impl ProviderManager {
     }
 
     /// 刷新指定的 Provider
-    pub async fn refresh_provider(&self, kind: ProviderKind) -> Result<Vec<crate::models::QuotaInfo>> {
+    pub async fn refresh_provider(
+        &self,
+        kind: ProviderKind,
+    ) -> Result<Vec<crate::models::QuotaInfo>> {
         for p in &self.providers {
             if p.kind() == kind {
                 if p.is_available().await {
                     return p.refresh().await;
                 } else {
-                    bail!("Provider {} is currently unavailable in this environment.", kind.display_name());
+                    bail!(
+                        "Provider {} is currently unavailable in this environment.",
+                        kind.display_name()
+                    );
                 }
             }
         }

@@ -1,7 +1,7 @@
-pub mod manager;
-pub mod claude;
 pub mod amp;
+pub mod claude;
 pub mod copilot;
+pub mod manager;
 
 use crate::models::{ProviderKind, QuotaInfo};
 use anyhow::Result;

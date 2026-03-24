@@ -30,18 +30,26 @@ impl AiProvider for CopilotProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        let username = std::env::var("GITHUB_USERNAME").context("Missing environment variable 'GITHUB_USERNAME'")?;
-        let token = std::env::var("GITHUB_TOKEN").context("Missing environment variable 'GITHUB_TOKEN'")?;
+        let username = std::env::var("GITHUB_USERNAME")
+            .context("Missing environment variable 'GITHUB_USERNAME'")?;
+        let token =
+            std::env::var("GITHUB_TOKEN").context("Missing environment variable 'GITHUB_TOKEN'")?;
 
-        let url = format!("https://api.github.com/users/{}/settings/billing/premium_request/usage", username);
+        let url = format!(
+            "https://api.github.com/users/{}/settings/billing/premium_request/usage",
+            username
+        );
 
         let output = Command::new("curl")
-            .args(&[
+            .args([
                 "-s", // silent
-                "-H", &format!("Authorization: Bearer {}", token),
-                "-H", "Accept: application/vnd.github+json",
-                "-H", "X-GitHub-Api-Version: 2022-11-28",
-                &url
+                "-H",
+                &format!("Authorization: Bearer {}", token),
+                "-H",
+                "Accept: application/vnd.github+json",
+                "-H",
+                "X-GitHub-Api-Version: 2022-11-28",
+                &url,
             ])
             .output()
             .context("Error launching curl Command to reach GitHub API.")?;
@@ -51,7 +59,8 @@ impl AiProvider for CopilotProvider {
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        let resp: Value = serde_json::from_str(&output_str).context("Invalid JSON returned from GitHub API.")?;
+        let resp: Value =
+            serde_json::from_str(&output_str).context("Invalid JSON returned from GitHub API.")?;
 
         if let Some(error_message) = resp.get("message") {
             anyhow::bail!("GitHub API Error: {}", error_message.as_str().unwrap_or(""));
@@ -62,7 +71,10 @@ impl AiProvider for CopilotProvider {
             for item in items {
                 if let Some(product_name) = item.get("product").and_then(|v| v.as_str()) {
                     if product_name.to_lowercase().contains("copilot") {
-                        let gross = item.get("grossQuantity").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let gross = item
+                            .get("grossQuantity")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
                         total_requests += gross;
                     }
                 }
@@ -70,13 +82,18 @@ impl AiProvider for CopilotProvider {
         } else {
             // Check if there are just no items or if it's completely malformed
             if !output_str.contains("usageItems") {
-                anyhow::bail!("Unrecognized data format from Github API endpoints: {}", output_str.chars().take(100).collect::<String>());
+                anyhow::bail!(
+                    "Unrecognized data format from Github API endpoints: {}",
+                    output_str.chars().take(100).collect::<String>()
+                );
             }
         }
 
         // 以默认每月限额 50（标准配置）做计算
-        Ok(vec![
-            QuotaInfo::new("Monthly Requests", total_requests, 50.0),
-        ])
+        Ok(vec![QuotaInfo::new(
+            "Monthly Requests",
+            total_requests,
+            50.0,
+        )])
     }
 }

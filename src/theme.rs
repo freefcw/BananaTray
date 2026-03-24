@@ -31,8 +31,8 @@ impl Theme {
             element_active: rgb(0x000000).into(),
             element_inactive: rgb(0x737373).into(),
             element_selected: rgb(0xe5e7eb).into(), // Gray 200
-            status_success: rgb(0x10b981).into(), // Green 500
-            status_error: rgb(0xef4444).into(), // Red 500
+            status_success: rgb(0x10b981).into(),   // Green 500
+            status_error: rgb(0xef4444).into(),     // Red 500
         }
     }
 

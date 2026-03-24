@@ -1,9 +1,11 @@
-use gpui::*;
-use crate::models::{AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind, ProviderStatus};
+use crate::models::{
+    AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind, ProviderStatus, StatusLevel,
+};
 use crate::theme::Theme;
 use crate::views::settings::SettingsPanel;
-use std::rc::Rc;
+use gpui::*;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 // ============================================================================
@@ -39,11 +41,16 @@ impl AppState {
 
 pub struct AppView {
     state: Rc<RefCell<AppState>>,
+    pub _activation_sub: Option<gpui::Subscription>,
 }
 
 impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
-        cx.set_global(Theme::dark());
+        let theme = match state.borrow().settings.theme {
+            AppTheme::Light => Theme::light(),
+            AppTheme::Dark => Theme::dark(),
+        };
+        cx.set_global(theme);
 
         // 只在首次打开时刷新 provider 数据
         if !state.borrow().refreshed {
@@ -51,7 +58,10 @@ impl AppView {
             Self::start_background_refresh(state.borrow().manager.clone(), cx);
         }
 
-        Self { state }
+        Self {
+            state,
+            _activation_sub: None,
+        }
     }
 
     fn start_background_refresh(
@@ -65,17 +75,15 @@ impl AppView {
                 let all_kinds = crate::models::ProviderKind::all().to_vec();
                 for kind in all_kinds {
                     let mgr = manager.clone();
-                    let result = smol::unblock(move || {
-                        smol::block_on(mgr.refresh_provider(kind))
-                    })
-                    .await;
+                    let result =
+                        smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
 
                     let entity = entity.clone();
                     match result {
                         Ok(quotas) => {
                             async_cx
                                 .update(|cx| {
-                                    let _ = entity.update(cx, |view, cx| {
+                                    entity.update(cx, |view, cx| {
                                         let mut s = view.state.borrow_mut();
                                         if let Some(p) =
                                             s.providers.iter_mut().find(|p| p.kind == kind)
@@ -93,7 +101,7 @@ impl AppView {
                         Err(_) => {
                             async_cx
                                 .update(|cx| {
-                                    let _ = entity.update(cx, |view, cx| {
+                                    entity.update(cx, |view, cx| {
                                         let mut s = view.state.borrow_mut();
                                         if let Some(p) =
                                             s.providers.iter_mut().find(|p| p.kind == kind)
@@ -101,8 +109,7 @@ impl AppView {
                                             if p.quotas.is_empty() {
                                                 p.connection = ConnectionStatus::Error;
                                             }
-                                            p.last_updated_at =
-                                                Some("Update failed".to_string());
+                                            p.last_updated_at = Some("Update failed".to_string());
                                         }
                                         cx.notify();
                                     });
@@ -177,12 +184,48 @@ impl AppView {
             .px(px(12.0))
             .gap(px(8.0))
             .child(self.render_nav_item("🍱", "Overview", NavTab::Overview, active_tab, cx))
-            .child(self.render_nav_item("🔱", "Claude", NavTab::Provider(ProviderKind::Claude), active_tab, cx))
-            .child(self.render_nav_item("✨", "Gemini", NavTab::Provider(ProviderKind::Gemini), active_tab, cx))
-            .child(self.render_nav_item("🐙", "Copilot", NavTab::Provider(ProviderKind::Copilot), active_tab, cx))
-            .child(self.render_nav_item("⚡", "Amp", NavTab::Provider(ProviderKind::Amp), active_tab, cx))
-            .child(self.render_nav_item("🏮", "Kimi", NavTab::Provider(ProviderKind::Kimi), active_tab, cx))
-            .child(self.render_nav_item("📜", "Codex", NavTab::Provider(ProviderKind::Codex), active_tab, cx))
+            .child(self.render_nav_item(
+                "🔱",
+                "Claude",
+                NavTab::Provider(ProviderKind::Claude),
+                active_tab,
+                cx,
+            ))
+            .child(self.render_nav_item(
+                "✨",
+                "Gemini",
+                NavTab::Provider(ProviderKind::Gemini),
+                active_tab,
+                cx,
+            ))
+            .child(self.render_nav_item(
+                "🐙",
+                "Copilot",
+                NavTab::Provider(ProviderKind::Copilot),
+                active_tab,
+                cx,
+            ))
+            .child(self.render_nav_item(
+                "⚡",
+                "Amp",
+                NavTab::Provider(ProviderKind::Amp),
+                active_tab,
+                cx,
+            ))
+            .child(self.render_nav_item(
+                "🏮",
+                "Kimi",
+                NavTab::Provider(ProviderKind::Kimi),
+                active_tab,
+                cx,
+            ))
+            .child(self.render_nav_item(
+                "📜",
+                "Codex",
+                NavTab::Provider(ProviderKind::Codex),
+                active_tab,
+                cx,
+            ))
     }
 
     fn render_nav_item(
@@ -207,17 +250,27 @@ impl AppView {
             .py(px(4.0))
             .rounded_md()
             .cursor_pointer()
-            .bg(if is_active { theme.element_selected } else { Hsla::transparent_black() })
+            .bg(if is_active {
+                theme.element_selected
+            } else {
+                Hsla::transparent_black()
+            })
             .child(div().text_size(px(18.0)).child(icon))
             .child(
                 div()
                     .text_size(px(11.0))
-                    .text_color(if is_active { theme.text_primary } else { theme.text_secondary })
+                    .text_color(if is_active {
+                        theme.element_active
+                    } else {
+                        theme.element_inactive
+                    })
                     .child(label),
             )
             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                 state.borrow_mut().active_tab = tab;
-                entity.update(cx, |_, cx| { cx.notify(); });
+                entity.update(cx, |_, cx| {
+                    cx.notify();
+                });
             })
     }
 
@@ -230,7 +283,11 @@ impl AppView {
             .collect();
         drop(state);
 
-        div().flex_col().py(px(8.0)).children(rows).into_any_element()
+        div()
+            .flex_col()
+            .py(px(8.0))
+            .children(rows)
+            .into_any_element()
     }
 
     fn render_compact_provider_row(
@@ -240,6 +297,11 @@ impl AppView {
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let worst_quota = p.quotas.first();
+        let usage_color = match p.worst_status() {
+            StatusLevel::Green => theme.status_success,
+            StatusLevel::Yellow => theme.text_accent,
+            StatusLevel::Red => theme.status_error,
+        };
         let connected = p.connection == ConnectionStatus::Connected;
         let name = p.kind.display_name();
         let pct_text = worst_quota
@@ -257,16 +319,24 @@ impl AppView {
                     .flex()
                     .items_center()
                     .gap(px(12.0))
+                    .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(if connected {
+                        theme.status_success
+                    } else {
+                        theme.status_error
+                    }))
                     .child(
                         div()
-                            .w(px(8.0))
-                            .h(px(8.0))
-                            .rounded_full()
-                            .bg(if connected { theme.status_success } else { theme.status_error }),
-                    )
-                    .child(div().text_size(px(14.0)).text_color(theme.text_primary).child(name)),
+                            .text_size(px(14.0))
+                            .text_color(theme.text_primary)
+                            .child(name),
+                    ),
             )
-            .child(div().text_size(px(12.0)).text_color(theme.text_secondary).child(pct_text))
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(usage_color)
+                    .child(pct_text),
+            )
     }
 
     fn render_provider_detail(&self, kind: ProviderKind, cx: &mut Context<Self>) -> AnyElement {
@@ -294,15 +364,30 @@ impl AppView {
                         .child(
                             div()
                                 .flex_col()
-                                .child(div().text_size(px(18.0)).font_weight(FontWeight::BOLD).child(display_name))
-                                .child(div().text_size(px(12.0)).text_color(theme.text_secondary).child(last_updated)),
+                                .child(
+                                    div()
+                                        .text_size(px(18.0))
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(display_name),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_secondary)
+                                        .child(last_updated),
+                                ),
                         )
                         .child(
                             div()
                                 .flex_col()
                                 .items_end()
                                 .child(div().text_size(px(13.0)).child(email))
-                                .child(div().text_size(px(12.0)).text_color(theme.text_accent).child(if is_paid { "Paid" } else { "Free" })),
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_accent)
+                                        .child(if is_paid { "Paid" } else { "Free" }),
+                                ),
                         ),
                 )
                 .child(
@@ -338,7 +423,12 @@ impl AppView {
         div()
             .flex_col()
             .gap(px(4.0))
-            .child(div().text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD).child(q.label.clone()))
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(q.label.clone()),
+            )
             .child(
                 div()
                     .w_full()
@@ -364,11 +454,7 @@ impl AppView {
             )
     }
 
-    fn render_action_link(
-        &self,
-        label: &'static str,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_action_link(&self, label: &'static str, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         div()
             .py(px(4.0))
@@ -399,7 +485,9 @@ impl AppView {
                     .child("Settings...")
                     .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                         state.borrow_mut().active_tab = NavTab::Settings;
-                        entity.update(cx, |_, cx| { cx.notify(); });
+                        entity.update(cx, |_, cx| {
+                            cx.notify();
+                        });
                     }),
             )
             .child(

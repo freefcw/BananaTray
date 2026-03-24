@@ -134,45 +134,6 @@ pub struct ProviderStatus {
 }
 
 impl ProviderStatus {
-    /// 创建 mock 数据，用于开发阶段
-    pub fn mock(kind: ProviderKind) -> Self {
-        let quotas = match kind {
-            ProviderKind::Claude => vec![
-                QuotaInfo::new("Session (5h)", 35.0, 50.0),
-                QuotaInfo::new("Daily", 120.0, 200.0),
-            ],
-            ProviderKind::Gemini => vec![
-                QuotaInfo::new("Requests/min", 8.0, 15.0),
-                QuotaInfo::new("Daily Tokens", 450_000.0, 1_000_000.0),
-            ],
-            ProviderKind::Copilot => vec![
-                QuotaInfo::new("Completions/h", 150.0, 300.0),
-                QuotaInfo::new("Chat Messages", 40.0, 100.0),
-            ],
-            ProviderKind::Codex => vec![
-                QuotaInfo::new("Session", 22.0, 50.0),
-                QuotaInfo::new("Weekly", 180.0, 500.0),
-            ],
-            ProviderKind::Kimi => vec![
-                QuotaInfo::new("Daily Requests", 85.0, 100.0),
-            ],
-            ProviderKind::Amp => vec![
-                QuotaInfo::new("Daily", 30.0, 100.0),
-                QuotaInfo::new("Monthly", 250.0, 1000.0),
-            ],
-        };
-
-        Self {
-            kind,
-            enabled: true,
-            connection: ConnectionStatus::Connected,
-            quotas,
-            account_email: Some("user@example.com".to_string()),
-            is_paid: true,
-            last_updated_at: Some("Updated just now".to_string()),
-        }
-    }
-
     /// 获取最高用量的状态等级（用于总览显示）
     pub fn worst_status(&self) -> StatusLevel {
         self.quotas
