@@ -1,6 +1,7 @@
 use gpui::*;
 
-use crate::models::{AppTheme, ProviderStatus};
+use crate::models::ProviderStatus;
+use crate::theme::Theme;
 use crate::views::provider_card::ProviderCard;
 
 // ============================================================================
@@ -11,31 +12,26 @@ use crate::views::provider_card::ProviderCard;
 #[derive(IntoElement)]
 pub struct Dashboard {
     providers: Vec<ProviderStatus>,
-    theme: AppTheme,
 }
 
 impl Dashboard {
-    pub fn new(providers: Vec<ProviderStatus>, theme: AppTheme) -> Self {
-        Self { providers, theme }
+    pub fn new(providers: Vec<ProviderStatus>) -> Self {
+        Self { providers }
     }
 }
 
 impl RenderOnce for Dashboard {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let sub_text = match self.theme {
-            AppTheme::Dark => rgb(0xa3a3a3), // neutral-400
-            AppTheme::Light => rgb(0x737373), // neutral-500
-        };
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        let sub_text = theme.text_secondary;
 
-        let enabled_providers: Vec<_> = self
-            .providers
+        let enabled_providers: Vec<_> = self.providers
             .iter()
             .filter(|p| p.enabled)
             .cloned()
             .collect();
 
         let provider_count = enabled_providers.len();
-        let theme = self.theme;
 
         div()
             .p(px(20.0))
@@ -73,17 +69,14 @@ impl RenderOnce for Dashboard {
             )
             // Provider 卡片网格（2 列）
             .child(
-                Self::render_card_grid(enabled_providers, theme),
+                Self::render_card_grid(enabled_providers),
             )
     }
 }
 
 impl Dashboard {
     /// 渲染 Provider 卡片网格
-    fn render_card_grid(
-        providers: Vec<ProviderStatus>,
-        theme: AppTheme,
-    ) -> impl IntoElement {
+    fn render_card_grid(providers: Vec<ProviderStatus>) -> impl IntoElement {
         // 将 providers 分成每行 2 个的网格布局
         let mut rows: Vec<Div> = Vec::new();
 
@@ -98,7 +91,7 @@ impl Dashboard {
                 row = row.child(
                     div()
                         .flex_1()
-                        .child(ProviderCard::new(provider, theme)),
+                        .child(ProviderCard::new(provider)),
                 );
             }
             rows.push(row);

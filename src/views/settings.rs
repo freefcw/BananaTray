@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::models::{AppSettings, AppTheme};
+use crate::theme::Theme;
 
 // ============================================================================
 // 设置面板
@@ -10,32 +11,24 @@ use crate::models::{AppSettings, AppTheme};
 #[derive(IntoElement)]
 pub struct SettingsPanel {
     settings: AppSettings,
-    theme: AppTheme,
 }
 
 impl SettingsPanel {
-    pub fn new(settings: AppSettings, theme: AppTheme) -> Self {
-        Self { settings, theme }
+    pub fn new(settings: AppSettings) -> Self {
+        Self { settings }
     }
 }
 
 impl RenderOnce for SettingsPanel {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let (section_bg, border_color, sub_text, label_color): (Hsla, Hsla, Hsla, Hsla) =
-            match self.theme {
-                AppTheme::Dark => (
-                    rgb(0x0a0a0a).into(), // flat neutral-950
-                    rgb(0x262626).into(), // neutral-800
-                    rgb(0xa3a3a3).into(), // neutral-400
-                    rgb(0xfafafa).into(), // neutral-50
-                ),
-                AppTheme::Light => (
-                    rgb(0xffffff).into(), // flat white
-                    rgb(0xe5e5e5).into(), // neutral-200
-                    rgb(0x737373).into(), // neutral-500
-                    rgb(0x0a0a0a).into(), // neutral-950
-                ),
-            };
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        
+        let section_bg = theme.bg_panel;
+        let border_color = theme.border_subtle;
+        let sub_text = theme.text_secondary;
+        let label_color = theme.text_primary;
+
+        let settings = &self.settings;
 
         div()
             .p(px(20.0))
@@ -60,7 +53,7 @@ impl RenderOnce for SettingsPanel {
                 vec![
                     self.render_setting_row(
                         "Theme",
-                        match self.settings.theme {
+                        match settings.theme {
                             AppTheme::Dark => "🌙 Dark",
                             AppTheme::Light => "☀️ Light",
                         },
@@ -80,13 +73,13 @@ impl RenderOnce for SettingsPanel {
                 vec![
                     self.render_setting_row(
                         "Refresh Interval",
-                        &format!("{}s", self.settings.refresh_interval_secs),
+                        &format!("{}s", settings.refresh_interval_secs),
                         label_color,
                         sub_text,
                     ),
                     self.render_setting_row(
                         "Global Hotkey",
-                        &self.settings.global_hotkey,
+                        &settings.global_hotkey,
                         label_color,
                         sub_text,
                     ),

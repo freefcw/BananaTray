@@ -1,8 +1,9 @@
 mod app;
 mod models;
+mod theme;
 mod views;
 
-use app::AppState;
+use app::AppView;
 use gpui::*;
 
 fn main() {
@@ -59,7 +60,7 @@ fn main() {
         };
 
         let window = cx
-            .open_window(window_options, |_window, cx| cx.new(|_cx| AppState::new()))
+            .open_window(window_options, |_window, cx| cx.new(|cx| AppView::new(cx)))
             .expect("Failed to open main window");
 
         // ====================================================================
@@ -70,16 +71,16 @@ fn main() {
             
             match id.as_ref() {
                 "show_dashboard" => {
-                    let _ = window.update(cx, |state, window, cx| {
-                        window.activate_window(); // 激活窗口
-                        state.show_dashboard();
+                    let _ = window.update(cx, |view, window, cx| {
+                        window.activate_window(); 
+                        view.model.show_dashboard();
                         cx.notify();
                     });
                 }
                 "settings" => {
-                    let _ = window.update(cx, |state, window, cx| {
-                        window.activate_window(); // 激活窗口
-                        state.show_settings();
+                    let _ = window.update(cx, |view, window, cx| {
+                        window.activate_window(); 
+                        view.model.show_settings();
                         cx.notify();
                     });
                 }

@@ -1,11 +1,12 @@
 use gpui::*;
 
 use crate::models::{AppSettings, AppTheme, ProviderKind, ProviderStatus};
+use crate::theme::Theme;
 use crate::views::dashboard::Dashboard;
 use crate::views::settings::SettingsPanel;
 
 // ============================================================================
-// 应用视图状态
+// 应用状态模型 (纯业务状态逻辑)
 // ============================================================================
 
 /// 当前显示的面板
@@ -15,19 +16,14 @@ pub enum ActivePanel {
     Settings,
 }
 
-// ============================================================================
-// 主应用状态
-// ============================================================================
-
-/// 主应用实体，管理全局状态
-pub struct AppState {
+/// 主应用模型，负责保存状态和修改逻辑
+pub struct AppModel {
     pub providers: Vec<ProviderStatus>,
     pub settings: AppSettings,
     pub active_panel: ActivePanel,
-    pub window_visible: bool,
 }
 
-impl AppState {
+impl AppModel {
     pub fn new() -> Self {
         // 使用 mock 数据初始化所有 providers
         let providers = ProviderKind::all()
@@ -37,67 +33,68 @@ impl AppState {
 
         Self {
             providers,
-            settings: AppSettings::default(),
+            settings: AppSettings {
+                theme: AppTheme::Dark,
+                ..Default::default()
+            },
             active_panel: ActivePanel::Dashboard,
-            window_visible: true,
         }
     }
 
-    /// 切换到仪表盘面板
     pub fn show_dashboard(&mut self) {
         self.active_panel = ActivePanel::Dashboard;
     }
 
-    /// 切换到设置面板
     pub fn show_settings(&mut self) {
         self.active_panel = ActivePanel::Settings;
     }
 
-    /// 切换主题
-    pub fn toggle_theme(&mut self, cx: &mut Context<Self>) {
+    pub fn toggle_theme<V>(&mut self, cx: &mut Context<V>) {
         self.settings.theme = match self.settings.theme {
-            AppTheme::Light => AppTheme::Dark,
-            AppTheme::Dark => AppTheme::Light,
+            AppTheme::Light => {
+                cx.set_global(Theme::dark());
+                AppTheme::Dark
+            }
+            AppTheme::Dark => {
+                cx.set_global(Theme::light());
+                AppTheme::Light
+            }
         };
-        cx.notify();
     }
 }
 
 // ============================================================================
-// Render 实现
+// 根视图控制 (UI 视图层)
 // ============================================================================
 
-impl Render for AppState {
+pub struct AppView {
+    pub model: AppModel,
+}
+
+impl AppView {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        cx.set_global(Theme::dark());
+        Self {
+            model: AppModel::new(),
+        }
+    }
+}
+
+impl Render for AppView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = self.settings.theme;
-
-        // 根据主题设置背景色和文字色 (Minimalist Premium style)
-        let (bg_color, text_color, border_color) = match theme {
-            AppTheme::Dark => (
-                rgb(0x0a0a0a), // neutral-950
-                rgb(0xfafafa), // neutral-50
-                rgb(0x262626), // neutral-800
-            ),
-            AppTheme::Light => (
-                rgb(0xffffff), // pure white
-                rgb(0x0a0a0a), // neutral-950
-                rgb(0xe5e5e5), // neutral-200
-            ),
-        };
-
-        let active_panel = self.active_panel;
-        let providers = self.providers.clone();
-        let settings = self.settings.clone();
+        let theme = cx.global::<Theme>();
+        let active_panel = self.model.active_panel;
+        let current_app_theme = self.model.settings.theme;
 
         div()
             .flex()
             .flex_col()
             .size_full()
-            .bg(bg_color)
-            .text_color(text_color)
+            .bg(theme.bg_base)
+            .text_color(theme.text_primary)
             .child(
                 // 顶部导航栏
-                self.render_nav_bar(active_panel, border_color.into(), theme, cx),
+                self.render_nav_bar(active_panel, current_app_theme, cx),
             )
             .child(
                 // 内容区域
@@ -107,38 +104,28 @@ impl Render for AppState {
                     .overflow_y_scroll()
                     .child(match active_panel {
                         ActivePanel::Dashboard => {
-                            div().child(Dashboard::new(providers, theme))
-                                .into_any_element()
+                            div().child(Dashboard::new(self.model.providers.clone())).into_any_element()
                         }
                         ActivePanel::Settings => {
-                            div().child(SettingsPanel::new(settings, theme))
-                                .into_any_element()
+                            div().child(SettingsPanel::new(self.model.settings.clone())).into_any_element()
                         }
                     }),
             )
     }
 }
 
-impl AppState {
+impl AppView {
     /// 渲染顶部导航栏
     fn render_nav_bar(
         &self,
         active_panel: ActivePanel,
-        border_color: Hsla,
-        theme: AppTheme,
+        current_app_theme: AppTheme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        // Premium minimalist nav styles (Text color emphasis instead of background pills)
-        let (active_text, inactive_text) = match theme {
-            AppTheme::Dark => (
-                rgb(0xffffff), // pure white active
-                rgb(0xa3a3a3), // neutral-400 inactive
-            ),
-            AppTheme::Light => (
-                rgb(0x000000), // pure black active
-                rgb(0x737373), // neutral-500 inactive
-            ),
-        };
+        let theme = cx.global::<Theme>();
+        let border_color = theme.border_subtle;
+        let active_text = theme.element_active;
+        let inactive_text = theme.element_inactive;
 
         div()
             .flex()
@@ -170,18 +157,18 @@ impl AppState {
                     .child(self.render_nav_button(
                         "Dashboard",
                         active_panel == ActivePanel::Dashboard,
-                        active_text.into(),
-                        inactive_text.into(),
-                        cx.entity().clone(),
+                        active_text,
+                        inactive_text,
                         ActivePanel::Dashboard,
+                        cx.entity().clone()
                     ))
                     .child(self.render_nav_button(
                         "Settings",
                         active_panel == ActivePanel::Settings,
-                        active_text.into(),
-                        inactive_text.into(),
-                        cx.entity().clone(),
+                        active_text,
+                        inactive_text,
                         ActivePanel::Settings,
+                        cx.entity().clone()
                     ))
                     .child(
                         // 分隔线
@@ -190,9 +177,9 @@ impl AppState {
                     .child(
                         // 主题切换按钮
                         self.render_theme_toggle(
-                            theme,
-                            inactive_text.into(),
-                            active_text.into(),
+                            current_app_theme,
+                            inactive_text,
+                            active_text,
                             cx.entity().clone()
                         )
                     )
@@ -206,8 +193,8 @@ impl AppState {
         is_active: bool,
         active_text: Hsla,
         inactive_text: Hsla,
-        entity: Entity<AppState>,
         target_panel: ActivePanel,
+        entity: Entity<AppView>,
     ) -> impl IntoElement {
         let mut btn = div()
             .px(px(8.0))
@@ -226,10 +213,10 @@ impl AppState {
         }
 
         btn.on_mouse_down(MouseButton::Left, move |_ev, _window, cx| {
-            entity.update(cx, |state, cx| {
+            entity.update(cx, |view, cx| {
                 match target_panel {
-                    ActivePanel::Dashboard => state.show_dashboard(),
-                    ActivePanel::Settings => state.show_settings(),
+                    ActivePanel::Dashboard => view.model.show_dashboard(),
+                    ActivePanel::Settings => view.model.show_settings(),
                 }
                 cx.notify();
             });
@@ -239,12 +226,12 @@ impl AppState {
     /// 渲染主题切换按钮
     fn render_theme_toggle(
         &self,
-        theme: AppTheme,
+        current_theme: AppTheme,
         inactive_text: Hsla,
         active_text: Hsla,
-        entity: Entity<AppState>,
+        entity: Entity<AppView>,
     ) -> impl IntoElement {
-        let (icon, label) = match theme {
+        let (icon, label) = match current_theme {
             AppTheme::Dark => ("☀️", "Light"),
             AppTheme::Light => ("🌙", "Dark"),
         };
@@ -263,8 +250,9 @@ impl AppState {
             .child(icon)
             .child(label)
             .on_mouse_down(MouseButton::Left, move |_ev, _window, cx| {
-                entity.update(cx, |state, cx| {
-                    state.toggle_theme(cx);
+                entity.update(cx, |view, cx| {
+                    view.model.toggle_theme(cx);
+                    cx.notify();
                 });
             })
     }

@@ -1,6 +1,7 @@
 use gpui::*;
 
-use crate::models::{AppTheme, ProviderStatus, StatusLevel};
+use crate::models::{ProviderStatus, StatusLevel};
+use crate::theme::Theme;
 
 // ============================================================================
 // Provider 卡片组件
@@ -10,21 +11,21 @@ use crate::models::{AppTheme, ProviderStatus, StatusLevel};
 #[derive(IntoElement)]
 pub struct ProviderCard {
     provider: ProviderStatus,
-    theme: AppTheme,
 }
 
 impl ProviderCard {
-    pub fn new(provider: ProviderStatus, theme: AppTheme) -> Self {
-        Self { provider, theme }
+    pub fn new(provider: ProviderStatus) -> Self {
+        Self { provider }
     }
 }
 
 impl RenderOnce for ProviderCard {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let (card_bg, card_border, sub_text) = match self.theme {
-            AppTheme::Dark => (rgb(0x0a0a0a), rgb(0x262626), rgb(0xa3a3a3)), // Flat bg neutral-950, border neutral-800, subtext neutral-400
-            AppTheme::Light => (rgb(0xffffff), rgb(0xe5e5e5), rgb(0x737373)), // Flat white, border neutral-200, subtext neutral-500
-        };
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        
+        let card_bg = theme.bg_panel;
+        let card_border = theme.border_subtle;
+        let sub_text = theme.text_secondary;
 
         let status_color: Hsla = match self.provider.worst_status() {
             StatusLevel::Green => rgb(0x22c55e).into(),
@@ -77,16 +78,11 @@ impl RenderOnce for ProviderCard {
                 self.provider.quotas.iter().map(|quota| {
                     let pct = quota.percentage();
                     let bar_color = match quota.status_level() {
-                        StatusLevel::Green | StatusLevel::Yellow => match self.theme {
-                            AppTheme::Dark => rgb(0x3b82f6), // blue-500
-                            AppTheme::Light => rgb(0x2563eb), // blue-600
-                        },
-                        StatusLevel::Red => rgb(0xef4444), // red-500
+                        StatusLevel::Green | StatusLevel::Yellow => theme.element_active,
+                        StatusLevel::Red => rgb(0xef4444).into(), // always red for errors
                     };
-                    let bar_bg = match self.theme {
-                        AppTheme::Dark => rgb(0x171717), // neutral-900
-                        AppTheme::Light => rgb(0xf5f5f5), // neutral-100
-                    };
+                    
+                    let bar_bg = theme.border_subtle; // Use subtle border color for unfilled bar track
 
                     div()
                         .mb(px(8.0))
