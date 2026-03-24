@@ -146,7 +146,7 @@ impl AppView {
                         div()
                             .text_size(px(18.0))
                             .font_weight(FontWeight::BOLD)
-                            .child("⚡ StarTray"),
+                            .child("🍌 BananaTray"),
                     ),
             )
             .child(

@@ -88,7 +88,7 @@ impl RenderOnce for SettingsPanel {
             // 关于
             .child(self.render_section(
                 "About",
-                "StarTray v0.1.0",
+                "BananaTray v0.1.0",
                 section_bg,
                 border_color,
                 sub_text,

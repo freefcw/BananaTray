@@ -1,5 +1,5 @@
 [package]
-name = "startray"
+name = "bananatray"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform system tray application for monitoring AI coding assistant quotas"

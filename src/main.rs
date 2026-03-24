@@ -23,7 +23,7 @@ fn main() {
         // 3. 配置系统托盘
         // ====================================================================
         cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
-        cx.set_tray_tooltip("StarTray - AI Quota Monitor");
+        cx.set_tray_tooltip("BananaTray - AI Quota Monitor");
 
         cx.set_tray_menu(vec![
             TrayMenuItem::Action {
@@ -37,7 +37,7 @@ fn main() {
             },
             TrayMenuItem::Separator,
             TrayMenuItem::Action {
-                label: "Quit StarTray".into(),
+                label: "Quit BananaTray".into(),
                 id: "quit".into(),
             },
         ]);
@@ -47,7 +47,7 @@ fn main() {
         // ====================================================================
         let window_options = WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some("StarTray".into()),
+                title: Some("BananaTray".into()),
                 appears_transparent: true,
                 ..Default::default()
             }),
@@ -112,6 +112,6 @@ fn main() {
             }
         });
 
-        println!("🚀 StarTray is running! Look for the tray icon in your menu bar.");
+        println!("🚀 BananaTray is running! Look for the tray icon in your menu bar.");
     });
 }
