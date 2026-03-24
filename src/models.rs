@@ -21,10 +21,32 @@ impl ProviderKind {
         match self {
             Self::Claude => "Claude",
             Self::Gemini => "Gemini",
-            Self::Copilot => "GitHub Copilot",
-            Self::Codex => "Codex (ChatGPT)",
+            Self::Copilot => "Copilot",
+            Self::Codex => "Codex",
             Self::Kimi => "Kimi",
-            Self::Amp => "Amp (Sourcegraph)",
+            Self::Amp => "Amp",
+        }
+    }
+
+    pub fn icon_asset(&self) -> &'static str {
+        match self {
+            Self::Claude => "src/icons/provider-claude.svg",
+            Self::Gemini => "src/icons/provider-gemini.svg",
+            Self::Copilot => "src/icons/provider-copilot.svg",
+            Self::Codex => "src/icons/provider-codex.svg",
+            Self::Kimi => "src/icons/provider-kimi.svg",
+            Self::Amp => "src/icons/provider-amp.svg",
+        }
+    }
+
+    pub fn account_hint(&self) -> &'static str {
+        match self {
+            Self::Claude => "Anthropic workspace",
+            Self::Gemini => "Google account",
+            Self::Copilot => "GitHub account",
+            Self::Codex => "OpenAI account",
+            Self::Kimi => "Moonshot account",
+            Self::Amp => "Amp CLI",
         }
     }
 
@@ -131,6 +153,8 @@ pub struct ProviderStatus {
     pub is_paid: bool,
     /// 上次更新时间描述（如 "Updated just now"）
     pub last_updated_at: Option<String>,
+    /// 最近一次刷新失败时的提示文案
+    pub error_message: Option<String>,
 }
 
 impl ProviderStatus {
@@ -165,6 +189,7 @@ pub struct AppSettings {
     pub theme: AppTheme,
     pub refresh_interval_secs: u64,
     pub global_hotkey: String,
+    pub auto_hide_window: bool,
 }
 
 impl Default for AppSettings {
@@ -173,6 +198,7 @@ impl Default for AppSettings {
             theme: AppTheme::Dark,
             refresh_interval_secs: 30,
             global_hotkey: "Cmd+Shift+S".to_string(),
+            auto_hide_window: true,
         }
     }
 }

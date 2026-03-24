@@ -16,6 +16,7 @@ impl ProviderManager {
 
         // 注册已有的真实 Provider (比如 claude)
         manager.register(Arc::new(super::claude::ClaudeProvider::new()));
+        manager.register(Arc::new(super::gemini::GeminiProvider::new()));
         manager.register(Arc::new(super::amp::AmpProvider::new()));
         manager.register(Arc::new(super::copilot::CopilotProvider::new()));
 
@@ -46,6 +47,7 @@ impl ProviderManager {
                 account_email: None,
                 is_paid: false,
                 last_updated_at: None,
+                error_message: None,
             });
         }
         statuses
