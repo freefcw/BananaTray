@@ -34,7 +34,10 @@ impl ProviderManager {
                 kind: *kind,
                 enabled: true,
                 connection: ConnectionStatus::Disconnected,
-                quotas: Vec::new(),
+                quotas: vec![],
+                account_email: None,
+                is_paid: false,
+                last_updated_at: None,
             });
         }
         statuses

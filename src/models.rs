@@ -41,6 +41,14 @@ impl ProviderKind {
     }
 }
 
+/// 底部导航页签
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NavTab {
+    Overview,
+    Provider(ProviderKind),
+    Settings,
+}
+
 // ============================================================================
 // 用量信息
 // ============================================================================
@@ -117,6 +125,12 @@ pub struct ProviderStatus {
     pub enabled: bool,
     pub connection: ConnectionStatus,
     pub quotas: Vec<QuotaInfo>,
+    /// 账号邮箱（可选，用于 UI 展示）
+    pub account_email: Option<String>,
+    /// 是否为付费版
+    pub is_paid: bool,
+    /// 上次更新时间描述（如 "Updated just now"）
+    pub last_updated_at: Option<String>,
 }
 
 impl ProviderStatus {
@@ -153,6 +167,9 @@ impl ProviderStatus {
             enabled: true,
             connection: ConnectionStatus::Connected,
             quotas,
+            account_email: Some("user@example.com".to_string()),
+            is_paid: true,
+            last_updated_at: Some("Updated just now".to_string()),
         }
     }
 
