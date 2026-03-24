@@ -1,9 +1,10 @@
 use gpui::*;
 
-use crate::models::{AppSettings, AppTheme, ProviderKind, ProviderStatus};
+use crate::models::{AppSettings, AppTheme, ConnectionStatus, ProviderKind, ProviderStatus};
 use crate::theme::Theme;
 use crate::views::dashboard::Dashboard;
 use crate::views::settings::SettingsPanel;
+use std::sync::Arc;
 
 // ============================================================================
 // 应用状态模型 (纯业务状态逻辑)
@@ -21,24 +22,64 @@ pub struct AppModel {
     pub providers: Vec<ProviderStatus>,
     pub settings: AppSettings,
     pub active_panel: ActivePanel,
+    pub manager: Arc<crate::providers::ProviderManager>,
 }
 
 impl AppModel {
-    pub fn new() -> Self {
-        // 使用 mock 数据初始化所有 providers
-        let providers = ProviderKind::all()
-            .iter()
-            .map(|kind| ProviderStatus::mock(*kind))
-            .collect();
+    pub fn new(cx: &mut Context<AppView>) -> Self {
+        let manager = Arc::new(crate::providers::ProviderManager::new());
+        let providers = manager.initial_statuses();
 
-        Self {
+        let model = Self {
             providers,
             settings: AppSettings {
                 theme: AppTheme::Dark,
                 ..Default::default()
             },
             active_panel: ActivePanel::Dashboard,
-        }
+            manager: manager.clone(),
+        };
+
+        Self::start_background_refresh(manager, cx);
+        model
+    }
+
+    fn start_background_refresh(manager: Arc<crate::providers::ProviderManager>, cx: &mut Context<AppView>) {
+        let entity = cx.entity().clone();
+        cx.spawn(|_view, mut cx: &mut gpui::AsyncApp| {
+            let mut async_cx = cx.clone();
+            async move {
+                let all_kinds = crate::models::ProviderKind::all().to_vec();
+                for kind in all_kinds {
+                    let mgr = manager.clone();
+                    match mgr.refresh_provider(kind).await {
+                        Ok(quotas) => {
+                            async_cx.update(|cx| {
+                                let _ = entity.update(cx, |view, cx| {
+                                    if let Some(p) = view.model.providers.iter_mut().find(|p| p.kind == kind) {
+                                        p.quotas = quotas;
+                                        p.connection = ConnectionStatus::Connected;
+                                    }
+                                    cx.notify();
+                                });
+                            }).ok();
+                        }
+                        Err(_) => {
+                            async_cx.update(|cx| {
+                                let _ = entity.update(cx, |view, cx| {
+                                    if let Some(p) = view.model.providers.iter_mut().find(|p| p.kind == kind) {
+                                        if p.quotas.is_empty() {
+                                            p.connection = ConnectionStatus::Error;
+                                        }
+                                    }
+                                    cx.notify();
+                                });
+                            }).ok();
+                        }
+                    }
+                }
+            }
+        }).detach();
     }
 
     pub fn show_dashboard(&mut self) {
@@ -75,7 +116,7 @@ impl AppView {
     pub fn new(cx: &mut Context<Self>) -> Self {
         cx.set_global(Theme::dark());
         Self {
-            model: AppModel::new(),
+            model: AppModel::new(cx),
         }
     }
 }

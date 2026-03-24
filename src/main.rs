@@ -2,6 +2,7 @@ mod app;
 mod models;
 mod theme;
 mod views;
+mod providers;
 
 use app::AppView;
 use gpui::*;
