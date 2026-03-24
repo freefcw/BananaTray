@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; if [[ \"$f\" == *.rs ]]; then cargo fmt -- \"$f\" 2>/dev/null; fi; } || true",
+            "timeout": 30,
+            "statusMessage": "Running cargo fmt..."
+          }
+        ]
+      }
+    ]
+  }
+}
