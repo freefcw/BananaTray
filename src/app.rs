@@ -303,16 +303,12 @@ impl SettingsView {
     /// Render a placeholder page for unimplemented tabs
     fn render_placeholder_tab(tab: SettingsTab, theme: &Theme) -> Div {
         let title = match tab {
-            SettingsTab::Providers => "Providers",
             SettingsTab::Display => "Display",
             SettingsTab::Advanced => "Advanced",
             SettingsTab::About => "About",
             _ => "",
         };
         let desc = match tab {
-            SettingsTab::Providers => {
-                "Configure which AI providers to monitor and their API credentials."
-            }
             SettingsTab::Display => {
                 "Customize appearance, menu bar icon style, and notification preferences."
             }
@@ -359,6 +355,482 @@ impl SettingsView {
                     ),
             )
     }
+
+    /// Render Providers settings tab
+    fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        let github_token = settings.providers.github_token.clone().unwrap_or_default();
+        let has_token = !github_token.is_empty();
+
+        div()
+            .flex_col()
+            .flex_1()
+            .px(px(16.0))
+            .pt(px(16.0))
+            .pb(px(20.0))
+            // ═══════ COPILOT ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .child(Self::render_section_label("GITHUB COPILOT", theme))
+                    .child(
+                        Self::render_card()
+                            // GitHub Token
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("GitHub Token"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Classic PAT with 'copilot' scope. Auto-detects plan & quota."),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_shrink_0()
+                                            .items_center()
+                                            .ml(px(12.0))
+                                            .px(px(10.0))
+                                            .py(px(4.0))
+                                            .rounded(px(6.0))
+                                            .border_1()
+                                            .border_color(theme.border_strong)
+                                            .bg(theme.element_active)
+                                            .text_size(px(12.0))
+                                            .text_color(if github_token.is_empty() {
+                                                theme.text_muted
+                                            } else {
+                                                theme.text_primary
+                                            })
+                                            .child(if github_token.is_empty() {
+                                                "Not set".to_string()
+                                            } else {
+                                                format!("{}...", &github_token[..8.min(github_token.len())])
+                                            }),
+                                    ),
+                            )
+                            .child(Self::render_card_separator())
+                            // Status
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Status"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child(if has_token {
+                                                        "Token configured. Copilot quota will be auto-detected."
+                                                    } else {
+                                                        "Set your GitHub token to enable Copilot monitoring."
+                                                    }),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .px(px(8.0))
+                                            .py(px(4.0))
+                                            .rounded(px(6.0))
+                                            .bg(if has_token {
+                                                theme.status_success
+                                            } else {
+                                                theme.status_warning
+                                            })
+                                            .text_size(px(11.0))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(theme.element_active)
+                                            .child(if has_token { "Ready" } else { "Not Configured" }),
+                                    ),
+                            ),
+                    ),
+            )
+            // ═══════ CONFIG FILE INFO ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .mt(px(12.0))
+                    .child(Self::render_section_label("CONFIGURATION", theme))
+                    .child(
+                        Self::render_card()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(4.0))
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Config File Location"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.text_muted)
+                                                    .child("~/Library/Application Support/BananaTray/settings.json"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .mt(px(4.0))
+                                                    .child("Click 'Edit Config' to open the file in your default editor."),
+                                            ),
+                                    ),
+                            )
+                            .child(Self::render_card_separator())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5))
+                                            .text_color(theme.text_secondary)
+                                            .child("Example format:"),
+                                    )
+                                    .child(
+                                        div()
+                                            .px(px(12.0))
+                                            .py(px(6.0))
+                                            .rounded(px(8.0))
+                                            .bg(theme.text_accent)
+                                            .text_size(px(12.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(theme.element_active)
+                                            .cursor_pointer()
+                                            .child("Edit Config")
+                                            .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                                let path = dirs::config_dir()
+                                                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                                                    .join("BananaTray")
+                                                    .join("settings.json");
+                                                // 确保目录存在
+                                                if let Some(parent) = path.parent() {
+                                                    let _ = std::fs::create_dir_all(parent);
+                                                }
+                                                // 用系统默认编辑器打开
+                                                let _ = std::process::Command::new("open")
+                                                    .arg(&path)
+                                                    .spawn();
+                                            }),
+                                    ),
+                            ),
+                    ),
+            )
+            // ═══════ ENV VARIABLES INFO ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .mt(px(12.0))
+                    .child(Self::render_section_label("ALTERNATIVE", theme))
+                    .child(
+                        Self::render_card()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(4.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Environment Variables"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("You can also set GITHUB_USERNAME and GITHUB_TOKEN environment variables instead of using the config file."),
+                                            ),
+                                    ),
+                            ),
+                    ),
+            )
+    }
+
+    /// Render General settings tab
+    fn render_general_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        div()
+            .flex_col()
+            .flex_1()
+            .px(px(16.0))
+            .pt(px(16.0))
+            .pb(px(20.0))
+            // ═══════ SYSTEM ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .child(Self::render_section_label("SYSTEM", theme))
+                    .child(
+                        Self::render_card()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(self.render_settings_checkbox(false, theme))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Start at Login"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Automatically opens BananaTray when you start your Mac."),
+                                            ),
+                                    ),
+                            ),
+                    ),
+            )
+            // ═══════ USAGE ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .mt(px(12.0))
+                    .child(Self::render_section_label("USAGE", theme))
+                    .child(
+                        Self::render_card()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(self.render_settings_checkbox(true, theme))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Show cost summary"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Reads local usage logs. Shows today + last 30 days cost in the menu."),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex_col()
+                                                    .gap(px(1.0))
+                                                    .mt(px(4.0))
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.text_muted)
+                                                    .child(div().child("Auto-refresh: hourly · Timeout: 10m"))
+                                                    .child(div().child("Claude: no data yet"))
+                                                    .child(div().child("Codex: no data yet")),
+                                            ),
+                                    ),
+                            ),
+                    ),
+            )
+            // ═══════ AUTOMATION ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .mt(px(12.0))
+                    .child(Self::render_section_label("AUTOMATION", theme))
+                    .child(
+                        Self::render_card()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Refresh cadence"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("How often BananaTray polls providers in the background."),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_shrink_0()
+                                            .items_center()
+                                            .gap(px(3.0))
+                                            .ml(px(12.0))
+                                            .px(px(10.0))
+                                            .py(px(4.0))
+                                            .rounded(px(6.0))
+                                            .border_1()
+                                            .border_color(theme.border_strong)
+                                            .bg(theme.element_active)
+                                            .text_size(px(12.0))
+                                            .text_color(theme.text_primary)
+                                            .child(format!("{} sec", settings.refresh_interval_secs))
+                                            .child(
+                                                div()
+                                                    .text_size(px(7.0))
+                                                    .text_color(theme.text_muted)
+                                                    .ml(px(1.0))
+                                                    .child("▲▼"),
+                                            ),
+                                    ),
+                            )
+                            .child(Self::render_card_separator())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(self.render_settings_checkbox(true, theme))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Check provider status"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Polls provider status pages, surfacing incidents in the icon and menu."),
+                                            ),
+                                    ),
+                            )
+                            .child(Self::render_card_separator())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(10.0))
+                                    .px(px(14.0))
+                                    .py(px(10.0))
+                                    .child(self.render_settings_checkbox(true, theme))
+                                    .child(
+                                        div()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child("Session quota notifications"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .line_height(relative(1.4))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Notifies when the 5-hour session quota hits 0% and when it becomes available again."),
+                                            ),
+                                    ),
+                            ),
+                    ),
+            )
+            // ═══════ Quit ═══════
+            .child(
+                div()
+                    .flex()
+                    .justify_center()
+                    .mt(px(12.0))
+                    .pb(px(4.0))
+                    .child(
+                        div()
+                            .px(px(22.0))
+                            .py(px(8.0))
+                            .rounded_full()
+                            .bg(theme.status_error)
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .child("Quit BananaTray")
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                cx.quit();
+                            }),
+                    ),
+            )
+    }
 }
 
 impl Render for SettingsView {
@@ -398,278 +870,16 @@ impl Render for SettingsView {
         }
 
         // ── Content area (depends on active tab) ─────────────
-        let content = if active_tab == SettingsTab::General {
-            div()
-                .id("settings-content")
-                .flex_col()
-                .flex_1()
-                .overflow_y_scroll()
-                .px(px(16.0))
-                .pt(px(16.0))
-                .pb(px(20.0))
-        } else {
-            // Placeholder tabs fill the space
-            div()
-                .id("settings-content")
-                .flex_col()
-                .flex_1()
-                .child(Self::render_placeholder_tab(active_tab, &theme))
-        };
-
-        let content = if active_tab == SettingsTab::General {
-            content
-                            // ═══════ SYSTEM ═══════
-                            .child(
-                                div()
-                                    .flex_col()
-                                    .child(Self::render_section_label("SYSTEM", &theme))
-                                    .child(
-                                        Self::render_card()
-                                            .child(
-                                                // Start at Login row
-                                                div()
-                                                    .flex()
-                                                    .items_start()
-                                                    .gap(px(10.0))
-                                                    .px(px(14.0))
-                                                    .py(px(10.0))
-                                                    .child(
-                                                        self.render_settings_checkbox(false, &theme),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex_col()
-                                                            .gap(px(2.0))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(13.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .child("Start at Login"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(12.5))
-                                                                    .line_height(relative(1.4))
-                                                                    .text_color(theme.text_secondary)
-                                                                    .child("Automatically opens BananaTray when you start your Mac."),
-                                                            ),
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            // ═══════ USAGE ═══════
-                            .child(
-                                div()
-                                    .flex_col()
-                                    .mt(px(12.0))
-                                    .child(Self::render_section_label("USAGE", &theme))
-                                    .child(
-                                        Self::render_card()
-                                            .child(
-                                                // Show cost summary row
-                                                div()
-                                                    .flex()
-                                                    .items_start()
-                                                    .gap(px(10.0))
-                                                    .px(px(14.0))
-                                                    .py(px(10.0))
-                                                    .child(
-                                                        self.render_settings_checkbox(true, &theme),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex_col()
-                                                            .gap(px(2.0))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(13.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .child("Show cost summary"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(12.5))
-                                                                    .line_height(relative(1.4))
-                                                                    .text_color(theme.text_secondary)
-                                                                    .child("Reads local usage logs. Shows today + last 30 days cost in the menu."),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .flex_col()
-                                                                    .gap(px(1.0))
-                                                                    .mt(px(4.0))
-                                                                    .text_size(px(11.5))
-                                                                    .text_color(theme.text_muted)
-                                                                    .child(
-                                                                        div().child("Auto-refresh: hourly · Timeout: 10m"),
-                                                                    )
-                                                                    .child(
-                                                                        div().child("Claude: no data yet"),
-                                                                    )
-                                                                    .child(
-                                                                        div().child("Codex: no data yet"),
-                                                                    ),
-                                                            ),
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            // ═══════ AUTOMATION ═══════
-                            .child(
-                                div()
-                                    .flex_col()
-                                    .mt(px(12.0))
-                                    .child(Self::render_section_label("AUTOMATION", &theme))
-                                    .child(
-                                        Self::render_card()
-                                            // ── Refresh cadence ──
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_between()
-                                                    .px(px(14.0))
-                                                    .py(px(10.0))
-                                                    .child(
-                                                        div()
-                                                            .flex_col()
-                                                            .gap(px(2.0))
-                                                            .flex_1()
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(13.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .child("Refresh cadence"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(12.5))
-                                                                    .line_height(relative(1.4))
-                                                                    .text_color(theme.text_secondary)
-                                                                    .child("How often BananaTray polls providers in the background."),
-                                                            ),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_shrink_0()
-                                                            .items_center()
-                                                            .gap(px(3.0))
-                                                            .ml(px(12.0))
-                                                            .px(px(10.0))
-                                                            .py(px(4.0))
-                                                            .rounded(px(6.0))
-                                                            .border_1()
-                                                            .border_color(theme.border_strong)
-                                                            .bg(theme.element_active)
-                                                            .text_size(px(12.0))
-                                                            .text_color(theme.text_primary)
-                                                            .child(format!(
-                                                                "{} sec",
-                                                                settings.refresh_interval_secs,
-                                                            ))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(7.0))
-                                                                    .text_color(theme.text_muted)
-                                                                    .ml(px(1.0))
-                                                                    .child("▲▼"),
-                                                            ),
-                                                    ),
-                                            )
-                                            .child(Self::render_card_separator())
-                                            // ── Check provider status ──
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_start()
-                                                    .gap(px(10.0))
-                                                    .px(px(14.0))
-                                                    .py(px(10.0))
-                                                    .child(
-                                                        self.render_settings_checkbox(true, &theme),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex_col()
-                                                            .gap(px(2.0))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(13.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .child("Check provider status"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(12.5))
-                                                                    .line_height(relative(1.4))
-                                                                    .text_color(theme.text_secondary)
-                                                                    .child("Polls provider status pages, surfacing incidents in the icon and menu."),
-                                                            ),
-                                                    ),
-                                            )
-                                            .child(Self::render_card_separator())
-                                            // ── Session quota notifications ──
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_start()
-                                                    .gap(px(10.0))
-                                                    .px(px(14.0))
-                                                    .py(px(10.0))
-                                                    .child(
-                                                        self.render_settings_checkbox(true, &theme),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex_col()
-                                                            .gap(px(2.0))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(13.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .child("Session quota notifications"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(12.5))
-                                                                    .line_height(relative(1.4))
-                                                                    .text_color(theme.text_secondary)
-                                                                    .child("Notifies when the 5-hour session quota hits 0% and when it becomes available again."),
-                                                            ),
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            // ═══════ Quit ═══════
-                            .child(
-                                div()
-                                    .flex()
-                                    .justify_center()
-                                    .mt(px(12.0))
-                                    .pb(px(4.0))
-                                    .child(
-                                        div()
-                                            .px(px(22.0))
-                                            .py(px(8.0))
-                                            .rounded_full()
-                                            .bg(theme.status_error)
-                                            .text_size(px(13.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme.element_active)
-                                            .cursor_pointer()
-                                            .child("Quit BananaTray")
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                |_, _, cx| {
-                                                    cx.quit();
-                                                },
-                                            ),
-                                    ),
-                            )
-        } else {
-            content
-        };
+        let content = div()
+            .id("settings-content")
+            .flex_col()
+            .flex_1()
+            .overflow_y_scroll()
+            .child(match active_tab {
+                SettingsTab::General => self.render_general_tab(&settings, &theme),
+                SettingsTab::Providers => self.render_providers_tab(&settings, &theme),
+                _ => Self::render_placeholder_tab(active_tab, &theme),
+            });
 
         div()
             .size_full()
