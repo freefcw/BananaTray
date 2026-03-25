@@ -182,6 +182,13 @@ pub enum AppTheme {
     Dark,
 }
 
+/// Provider 特定配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderSettings {
+    /// Copilot: GitHub Token (Classic PAT with copilot scope)
+    pub github_token: Option<String>,
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -190,6 +197,8 @@ pub struct AppSettings {
     pub global_hotkey: String,
     pub auto_hide_window: bool,
     pub visible_provider_count: usize,
+    /// Provider 特定配置
+    pub providers: ProviderSettings,
 }
 
 impl Default for AppSettings {
@@ -200,6 +209,7 @@ impl Default for AppSettings {
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
             visible_provider_count: 4,
+            providers: ProviderSettings::default(),
         }
     }
 }
