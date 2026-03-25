@@ -66,7 +66,6 @@ impl ProviderKind {
 /// 底部导航页签
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NavTab {
-    Overview,
     Provider(ProviderKind),
     Settings,
 }
@@ -190,6 +189,7 @@ pub struct AppSettings {
     pub refresh_interval_secs: u64,
     pub global_hotkey: String,
     pub auto_hide_window: bool,
+    pub visible_provider_count: usize,
 }
 
 impl Default for AppSettings {
@@ -199,6 +199,7 @@ impl Default for AppSettings {
             refresh_interval_secs: 30,
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
+            visible_provider_count: 4,
         }
     }
 }

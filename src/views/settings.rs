@@ -37,9 +37,9 @@ impl RenderOnce for SettingsPanel {
         div()
             .flex()
             .flex_col()
-            .gap(px(16.0))
-            .rounded(px(14.0))
-            .bg(theme.bg_panel)
+            .gap(px(14.0))
+            .rounded(px(16.0))
+            .bg(theme.bg_card)
             .border_1()
             .border_color(theme.border_subtle)
             .p(px(16.0))
@@ -50,15 +50,40 @@ impl RenderOnce for SettingsPanel {
                     .items_center()
                     .child(
                         div()
-                            .text_size(px(18.0))
-                            .font_weight(FontWeight::BOLD)
-                            .child("General"),
+                            .flex_col()
+                            .gap(px(3.0))
+                            .child(
+                                div()
+                                    .text_size(px(10.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_accent)
+                                    .child("BANANA CONTROL"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(20.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("Settings"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(theme.text_secondary)
+                                    .child("Tune the tray app without turning it into a dashboard."),
+                            ),
                     )
                     .child(
                         div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_secondary)
-                            .child("CodexBar style"),
+                            .px(px(10.0))
+                            .py(px(5.0))
+                            .rounded_full()
+                            .bg(theme.bg_subtle)
+                            .border_1()
+                            .border_color(theme.text_accent_soft)
+                            .text_size(px(11.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_accent)
+                            .child("Quiet defaults"),
                     ),
             )
             .child(
@@ -66,8 +91,8 @@ impl RenderOnce for SettingsPanel {
                     .flex()
                     .flex_col()
                     .gap(px(12.0))
-                    .rounded(px(14.0))
-                    .bg(theme.bg_card)
+                    .rounded(px(16.0))
+                    .bg(theme.bg_panel)
                     .border_1()
                     .border_color(theme.border_subtle)
                     .p(px(14.0))
@@ -91,18 +116,21 @@ impl RenderOnce for SettingsPanel {
                                             .text_size(px(16.0))
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(theme.text_primary)
-                                            .child("Menu bar behavior and refresh defaults."),
+                                            .child("Defaults tuned for a quiet tray app."),
                                     ),
                             )
                             .child(
                                 div()
                                     .px(px(10.0))
                                     .py(px(6.0))
-                                    .rounded(px(10.0))
-                                    .bg(theme.bg_hover)
+                                    .rounded_full()
+                                    .bg(theme.bg_subtle)
+                                    .border_1()
+                                    .border_color(theme.text_accent_soft)
                                     .text_size(px(11.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme.text_accent)
-                                    .child("Live"),
+                                    .child("Current"),
                             ),
                     )
                     .child(
@@ -141,7 +169,7 @@ impl RenderOnce for SettingsPanel {
                     ]),
             )
             .child(self.render_section(
-                "SYSTEM",
+                "Window",
                 vec![
                     self.render_checkbox_row(
                         "Start at Login",
@@ -153,14 +181,15 @@ impl RenderOnce for SettingsPanel {
                 theme,
             ))
             .child(self.render_section(
-                "USAGE",
+                "Monitoring",
                 vec![
                     self.render_checkbox_row(
-                        "Show cost summary",
+                        "Compact tray summary",
                         &format!(
-                            "Theme: {} · Hotkey: {}\nAuto-refresh: hourly · Timeout: 10m\nClaude: no data yet\nCodex: no data yet",
+                            "Theme: {} · Hotkey: {} · Refresh every {} sec",
                             theme_label,
                             settings.global_hotkey,
+                            settings.refresh_interval_secs,
                         ),
                         true,
                         theme,
@@ -169,7 +198,7 @@ impl RenderOnce for SettingsPanel {
                 theme,
             ))
             .child(self.render_section(
-                "AUTOMATION",
+                "Automation",
                 vec![
                     self.render_select_row(
                         "Refresh cadence",
@@ -206,7 +235,7 @@ impl RenderOnce for SettingsPanel {
                             .text_size(px(11.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text_muted)
-                            .child("DANGER ZONE"),
+                            .child("Maintenance"),
                     )
                     .child(
                         div()
@@ -220,7 +249,7 @@ impl RenderOnce for SettingsPanel {
                             .px(px(14.0))
                             .py(px(10.0))
                             .rounded(px(12.0))
-                            .bg(theme.element_selected)
+                            .bg(theme.status_error)
                             .text_color(theme.element_active)
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("Quit BananaTray"),
@@ -264,15 +293,15 @@ impl SettingsPanel {
             .gap(px(6.0))
             .flex_1()
             .py(px(10.0))
-            .rounded(px(10.0))
+            .rounded(px(12.0))
             .bg(if active {
-                theme.bg_hover
+                theme.bg_card_active
             } else {
                 theme.bg_panel
             })
             .border_1()
             .border_color(if active {
-                theme.text_accent_soft
+                theme.text_accent
             } else {
                 theme.border_subtle
             })
@@ -286,7 +315,7 @@ impl SettingsPanel {
                     .rounded(px(7.0))
                     .border_1()
                     .border_color(if active {
-                        theme.text_accent_soft
+                        theme.text_accent
                     } else {
                         theme.border_strong
                     })
@@ -304,8 +333,13 @@ impl SettingsPanel {
             .child(
                 div()
                     .text_size(px(11.0))
+                    .font_weight(if active {
+                        FontWeight::SEMIBOLD
+                    } else {
+                        FontWeight::NORMAL
+                    })
                     .text_color(if active {
-                        theme.text_accent
+                        theme.element_active
                     } else {
                         theme.text_secondary
                     })
@@ -321,9 +355,9 @@ impl SettingsPanel {
             .px(px(10.0))
             .py(px(10.0))
             .rounded(px(12.0))
-            .bg(theme.bg_hover)
+            .bg(theme.bg_subtle)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.text_accent_soft)
             .child(
                 div()
                     .text_size(px(10.0))
@@ -350,9 +384,16 @@ impl SettingsPanel {
             .flex()
             .justify_between()
             .gap(px(10.0))
-            .py(px(8.0))
-            .border_b_1()
-            .border_color(theme.border_subtle)
+            .rounded(px(12.0))
+            .bg(theme.bg_panel)
+            .border_1()
+            .border_color(if checked {
+                theme.text_accent_soft
+            } else {
+                theme.border_subtle
+            })
+            .px(px(10.0))
+            .py(px(10.0))
             .child(
                 div()
                     .flex()
@@ -382,14 +423,10 @@ impl SettingsPanel {
                     .px(px(8.0))
                     .py(px(5.0))
                     .rounded(px(9.0))
-                    .bg(if checked {
-                        theme.bg_hover
-                    } else {
-                        theme.bg_subtle
-                    })
+                    .bg(theme.bg_subtle)
                     .border_1()
                     .border_color(if checked {
-                        theme.text_accent_soft
+                        theme.text_accent
                     } else {
                         theme.border_strong
                     })
@@ -408,9 +445,12 @@ impl SettingsPanel {
             .flex()
             .justify_between()
             .items_center()
-            .py(px(8.0))
-            .border_b_1()
-            .border_color(theme.border_subtle)
+            .rounded(px(12.0))
+            .bg(theme.bg_panel)
+            .border_1()
+            .border_color(theme.text_accent_soft)
+            .px(px(10.0))
+            .py(px(10.0))
             .child(
                 div()
                     .flex_col()
@@ -435,7 +475,7 @@ impl SettingsPanel {
                     .rounded(px(10.0))
                     .bg(theme.bg_subtle)
                     .border_1()
-                    .border_color(theme.border_strong)
+                    .border_color(theme.text_accent)
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(value.to_string()),
@@ -458,7 +498,7 @@ impl SettingsPanel {
             })
             .border_1()
             .border_color(if checked {
-                theme.text_accent_soft
+                theme.text_accent
             } else {
                 theme.border_strong
             })
