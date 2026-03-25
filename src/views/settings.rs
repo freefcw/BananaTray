@@ -140,7 +140,7 @@ impl RenderOnce for SettingsPanel {
                             .child(self.render_snapshot_chip("Theme", theme_label, theme))
                             .child(self.render_snapshot_chip(
                                 "Refresh",
-                                &format!("{} sec", settings.refresh_interval_secs),
+                                &format!("{} min", settings.refresh_interval_mins),
                                 theme,
                             ))
                             .child(self.render_snapshot_chip(
@@ -186,10 +186,10 @@ impl RenderOnce for SettingsPanel {
                     self.render_checkbox_row(
                         "Compact tray summary",
                         &format!(
-                            "Theme: {} · Hotkey: {} · Refresh every {} sec",
+                            "Theme: {} · Hotkey: {} · Refresh every {} min",
                             theme_label,
                             settings.global_hotkey,
-                            settings.refresh_interval_secs,
+                            settings.refresh_interval_mins,
                         ),
                         true,
                         theme,
@@ -203,7 +203,7 @@ impl RenderOnce for SettingsPanel {
                     self.render_select_row(
                         "Refresh cadence",
                         "How often BananaTray polls providers in the background.",
-                        &format!("{} sec", settings.refresh_interval_secs),
+                        &format!("{} min", settings.refresh_interval_mins),
                         theme,
                     ),
                     self.render_checkbox_row(

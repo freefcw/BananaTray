@@ -48,6 +48,7 @@ impl ProviderManager {
                 is_paid: false,
                 last_updated_at: None,
                 error_message: None,
+                last_refreshed_instant: None,
             });
         }
         statuses
