@@ -44,7 +44,7 @@ impl Theme {
             status_success: rgb(0x3d7a3f).into(),
             status_error: rgb(0xbf513b).into(),
             status_warning: rgb(0xcf8a12).into(),
-            progress_track: rgb(0xe3d2a7).into(),
+            progress_track: rgb(0xd6c48f).into(),
         }
     }
 
@@ -67,7 +67,7 @@ impl Theme {
             status_success: rgb(0x6bd06c).into(),
             status_error: rgb(0xff8b72).into(),
             status_warning: rgb(0xffc44d).into(),
-            progress_track: rgb(0x46361d).into(),
+            progress_track: rgb(0x3a2c18).into(),
         }
     }
 }

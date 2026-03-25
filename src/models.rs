@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 // ============================================================================
 // Provider 类型定义
@@ -47,6 +48,18 @@ impl ProviderKind {
             Self::Codex => "OpenAI account",
             Self::Kimi => "Moonshot account",
             Self::Amp => "Amp CLI",
+        }
+    }
+
+    /// 获取 Provider 用量详情页面 URL
+    pub fn dashboard_url(&self) -> &'static str {
+        match self {
+            Self::Claude => "https://console.anthropic.com/settings/usage",
+            Self::Gemini => "https://aistudio.google.com/billing",
+            Self::Copilot => "https://github.com/settings/copilot",
+            Self::Codex => "https://platform.openai.com/usage",
+            Self::Kimi => "https://platform.moonshot.cn/console/account",
+            Self::Amp => "https://app.amphq.com/usage",
         }
     }
 
@@ -150,14 +163,40 @@ pub struct ProviderStatus {
     pub account_email: Option<String>,
     /// 是否为付费版
     pub is_paid: bool,
-    /// 上次更新时间描述（如 "Updated just now"）
+    /// 上次更新时间描述（仅用于错误/断连状态的静态文案）
     pub last_updated_at: Option<String>,
     /// 最近一次刷新失败时的提示文案
     pub error_message: Option<String>,
+    /// 上次成功刷新的时刻（不序列化，用于计算相对时间）
+    #[serde(skip)]
+    pub last_refreshed_instant: Option<Instant>,
 }
 
 impl ProviderStatus {
+    /// 格式化上次刷新的相对时间
+    pub fn format_last_updated(&self) -> String {
+        if let Some(instant) = self.last_refreshed_instant {
+            let secs = instant.elapsed().as_secs();
+            if secs < 60 {
+                "Updated just now".to_string()
+            } else if secs < 3600 {
+                format!("Updated {} min ago", secs / 60)
+            } else {
+                format!("Updated {} hr ago", secs / 3600)
+            }
+        } else if let Some(ref text) = self.last_updated_at {
+            text.clone()
+        } else {
+            match self.connection {
+                ConnectionStatus::Connected => "Waiting for data".to_string(),
+                ConnectionStatus::Error => "Needs attention".to_string(),
+                ConnectionStatus::Disconnected => "Not connected".to_string(),
+            }
+        }
+    }
+
     /// 获取最高用量的状态等级（用于总览显示）
+    #[allow(dead_code)]
     pub fn worst_status(&self) -> StatusLevel {
         self.quotas
             .iter()
@@ -193,7 +232,8 @@ pub struct ProviderSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub theme: AppTheme,
-    pub refresh_interval_secs: u64,
+    /// 自动刷新间隔（分钟），0 表示禁用自动刷新
+    pub refresh_interval_mins: u64,
     pub global_hotkey: String,
     pub auto_hide_window: bool,
     pub visible_provider_count: usize,
@@ -205,7 +245,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: AppTheme::Dark,
-            refresh_interval_secs: 30,
+            refresh_interval_mins: 5,
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
             visible_provider_count: 4,
