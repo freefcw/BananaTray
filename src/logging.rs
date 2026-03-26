@@ -1,81 +1,100 @@
-use env_logger::fmt::Target;
-use env_logger::Env;
-use std::fs::OpenOptions;
-use std::io::Write;
+use anyhow::{Context, Result};
+use chrono::Local;
+use log::LevelFilter;
+use std::backtrace::Backtrace;
+use std::env;
+use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 pub struct LoggingInit {
-    pub target_description: String,
+    pub log_path: PathBuf,
 }
 
-pub fn init() -> LoggingInit {
-    let mut builder = env_logger::Builder::from_env(Env::default().default_filter_or("info"));
-    builder.format(|buf, record| {
-        writeln!(
-            buf,
-            "{} {:<5} {:<12} {}",
-            buf.timestamp_millis(),
-            record.level(),
-            record.target(),
-            record.args()
-        )
-    });
+pub fn init() -> Result<LoggingInit> {
+    let log_path = resolve_log_path()?;
+    let level = resolve_log_level();
 
-    let target_description = if should_log_to_file() {
-        match open_log_file() {
-            Ok(file) => {
-                builder.target(Target::Pipe(Box::new(file)));
-                "./banana.log".to_string()
-            }
-            Err(err) => {
-                eprintln!("failed to open banana.log, falling back to stderr: {err}");
-                builder.target(Target::Stderr);
-                "stderr".to_string()
-            }
-        }
-    } else {
-        builder.target(Target::Stderr);
-        "stderr".to_string()
-    };
+    let file_dispatch = fern::log_file(&log_path)
+        .with_context(|| format!("failed to open log file: {}", log_path.display()))?;
 
-    builder.init();
+    fern::Dispatch::new()
+        .level(level)
+        .level_for("wgpu", LevelFilter::Warn)
+        .level_for("naga", LevelFilter::Warn)
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{} [{}] {:<12} {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .chain(std::io::stdout())
+        .chain(file_dispatch)
+        .apply()
+        .context("failed to install global logger")?;
 
-    LoggingInit { target_description }
+    install_panic_hook();
+
+    Ok(LoggingInit { log_path })
 }
 
-fn should_log_to_file() -> bool {
-    std::env::var("BANANATRAY_LOG_FILE")
-        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
-        .unwrap_or(false)
-}
-
-fn open_log_file() -> std::io::Result<SharedFile> {
-    let path = PathBuf::from("banana.log");
-    let file = OpenOptions::new().create(true).append(true).open(path)?;
-    Ok(SharedFile {
-        file: Arc::new(Mutex::new(file)),
-    })
-}
-
-struct SharedFile {
-    file: Arc<Mutex<std::fs::File>>,
-}
-
-impl Write for SharedFile {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| std::io::Error::other("failed to lock banana.log"))?;
-        file.write(buf)
+fn resolve_log_path() -> Result<PathBuf> {
+    if let Ok(dir) = env::var("BANANATRAY_LOG_DIR") {
+        let path = PathBuf::from(dir);
+        fs::create_dir_all(&path)
+            .with_context(|| format!("failed to create log directory: {}", path.display()))?;
+        return Ok(path.join("bananatray.log"));
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| std::io::Error::other("failed to lock banana.log"))?;
-        file.flush()
+    let base_dir = dirs::state_dir()
+        .or_else(dirs::data_local_dir)
+        .or_else(|| env::current_dir().ok().map(|dir| dir.join("logs")))
+        .context("failed to resolve log directory")?;
+
+    let log_dir = base_dir.join("bananatray");
+    fs::create_dir_all(&log_dir)
+        .with_context(|| format!("failed to create log directory: {}", log_dir.display()))?;
+
+    Ok(log_dir.join("bananatray.log"))
+}
+
+fn resolve_log_level() -> LevelFilter {
+    match env::var("RUST_LOG") {
+        Ok(value) => match value.to_ascii_lowercase().as_str() {
+            "trace" => LevelFilter::Trace,
+            "debug" => LevelFilter::Debug,
+            "warn" => LevelFilter::Warn,
+            "error" => LevelFilter::Error,
+            "off" => LevelFilter::Off,
+            _ => LevelFilter::Info,
+        },
+        Err(_) => LevelFilter::Info,
     }
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let location = panic_info
+            .location()
+            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
+
+        let payload = if let Some(msg) = panic_info.payload().downcast_ref::<&str>() {
+            (*msg).to_string()
+        } else if let Some(msg) = panic_info.payload().downcast_ref::<String>() {
+            msg.clone()
+        } else {
+            "unknown panic payload".to_string()
+        };
+
+        log::error!(
+            target: "bananatray::panic",
+            "panic at {}: {}\n{}",
+            location,
+            payload,
+            Backtrace::force_capture()
+        );
+    }));
 }
