@@ -12,6 +12,7 @@ use gpui::*;
 use log::{error, info, warn};
 use models::NavTab;
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
@@ -125,19 +126,42 @@ impl TrayController {
         }
     }
 
+    fn preferred_window_kind() -> WindowKind {
+        if cfg!(target_os = "linux") {
+            WindowKind::Floating
+        } else {
+            WindowKind::PopUp
+        }
+    }
+
+    fn preferred_window_bounds(cx: &App, window_size: Size<Pixels>) -> Bounds<Pixels> {
+        let tray_bounds = cx
+            .tray_icon_bounds()
+            .filter(|b| b.size.width > px(0.0) && b.size.height > px(0.0));
+
+        let position = if let Some(tray_bounds) = tray_bounds {
+            WindowPosition::TrayCenter(tray_bounds)
+        } else if cfg!(target_os = "linux") {
+            WindowPosition::TopRight { margin: px(16.0) }
+        } else {
+            WindowPosition::Center
+        };
+
+        cx.compute_window_bounds(window_size, &position)
+    }
+
     fn open(&mut self, cx: &mut App) {
         let dynamic_height = app::compute_popup_height(&self.state.borrow());
         let window_size = size(px(app::PopupLayout::WIDTH), px(dynamic_height));
-        let tray_bounds = cx.tray_icon_bounds().unwrap_or_default();
-        let bounds =
-            cx.compute_window_bounds(window_size, &WindowPosition::TrayCenter(tray_bounds));
+        let bounds = Self::preferred_window_bounds(cx, window_size);
+        let kind = Self::preferred_window_kind();
 
         let state = self.state.clone();
 
         let result = cx.open_window(
             WindowOptions {
                 titlebar: None,
-                kind: WindowKind::PopUp,
+                kind,
                 focus: true,
                 show: true,
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -150,8 +174,13 @@ impl TrayController {
             info!(target: "tray", "tray popup opened successfully");
             // 监听窗口失焦，自动关闭
             let auto_hide_state = self.state.clone();
+            let activation_initialized = Rc::new(Cell::new(false));
             let _ = handle.update(cx, |view, window, cx| {
+                let activation_initialized = activation_initialized.clone();
                 let sub = cx.observe_window_activation(window, move |_view, window, _cx| {
+                    if !activation_initialized.replace(true) {
+                        return;
+                    }
                     let should_auto_hide = auto_hide_state.borrow().settings.auto_hide_window;
                     if should_auto_hide && !window.is_window_active() {
                         info!(target: "tray", "auto-hide closing inactive tray popup");
