@@ -91,13 +91,15 @@ impl TrayController {
 
     fn show_settings(&mut self, cx: &mut App) {
         info!(target: "tray", "requested settings window from tray controller");
+        let mut display_id = None;
         if let Some(window) = self.window.take() {
             info!(target: "tray", "closing existing tray panel before opening settings window");
-            let _ = window.update(cx, |_, window, _| {
+            let _ = window.update(cx, |_, window, cx| {
+                display_id = window.display(cx).map(|d| d.id());
                 window.remove_window();
             });
         }
-        schedule_open_settings_window(self.state.clone(), cx);
+        schedule_open_settings_window(self.state.clone(), display_id, cx);
     }
 
     fn show(&mut self, tab: NavTab, cx: &mut App) {

@@ -11,6 +11,89 @@ use std::rc::Rc;
 use std::time::Duration;
 
 // ============================================================================
+// macOS: find the display containing the mouse cursor
+// ============================================================================
+
+#[cfg(target_os = "macos")]
+mod platform_display {
+    use gpui::{App, DisplayId};
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CGPoint {
+        x: f64,
+        y: f64,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CGSize {
+        width: f64,
+        height: f64,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CGRect {
+        origin: CGPoint,
+        size: CGSize,
+    }
+
+    type CGDirectDisplayID = u32;
+
+    // Opaque pointer for CGEvent
+    type CGEventRef = *const std::ffi::c_void;
+
+    extern "C" {
+        fn CGEventCreate(source: *const std::ffi::c_void) -> CGEventRef;
+        fn CGEventGetLocation(event: CGEventRef) -> CGPoint;
+        fn CFRelease(cf: *const std::ffi::c_void);
+        fn CGDisplayBounds(display: CGDirectDisplayID) -> CGRect;
+    }
+
+    /// Get the global mouse cursor position via CoreGraphics.
+    fn mouse_position() -> Option<CGPoint> {
+        unsafe {
+            let event = CGEventCreate(std::ptr::null());
+            if event.is_null() {
+                return None;
+            }
+            let loc = CGEventGetLocation(event);
+            CFRelease(event);
+            Some(loc)
+        }
+    }
+
+    /// Find which display the mouse cursor is on by checking CGDisplayBounds
+    /// for each display known to GPUI.
+    pub fn find_mouse_display(cx: &App) -> Option<DisplayId> {
+        let pos = mouse_position()?;
+        cx.displays().into_iter().find_map(|d| {
+            let id_u32: u32 = d.id().into();
+            let rect = unsafe { CGDisplayBounds(id_u32) };
+            let contains = pos.x >= rect.origin.x
+                && pos.x < rect.origin.x + rect.size.width
+                && pos.y >= rect.origin.y
+                && pos.y < rect.origin.y + rect.size.height;
+            if contains {
+                Some(d.id())
+            } else {
+                None
+            }
+        })
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod platform_display {
+    use gpui::{App, DisplayId};
+
+    pub fn find_mouse_display(_cx: &App) -> Option<DisplayId> {
+        None
+    }
+}
+
+// ============================================================================
 // Settings Tab 枚举
 // ============================================================================
 
@@ -31,8 +114,12 @@ thread_local! {
     static SETTINGS_WINDOW: RefCell<Option<WindowHandle<SettingsView>>> = const { RefCell::new(None) };
 }
 
-pub fn schedule_open_settings_window(state: Rc<RefCell<AppState>>, cx: &mut App) {
-    info!(target: "settings", "scheduled async settings window open");
+pub fn schedule_open_settings_window(
+    state: Rc<RefCell<AppState>>,
+    display_id: Option<DisplayId>,
+    cx: &mut App,
+) {
+    info!(target: "settings", "scheduled async settings window open (display: {:?})", display_id);
     let async_cx = cx.to_async();
     let delayed_cx = async_cx.clone();
     async_cx
@@ -40,13 +127,13 @@ pub fn schedule_open_settings_window(state: Rc<RefCell<AppState>>, cx: &mut App)
         .spawn(async move {
             smol::Timer::after(Duration::from_millis(10)).await;
             let _ = delayed_cx.update(|cx| {
-                open_settings_window(state, cx);
+                open_settings_window(state, display_id, cx);
             });
         })
         .detach();
 }
 
-fn open_settings_window(state: Rc<RefCell<AppState>>, cx: &mut App) {
+fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<DisplayId>, cx: &mut App) {
     info!(target: "settings", "requested settings window");
 
     // Try to activate an existing settings window first
@@ -79,15 +166,20 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, cx: &mut App) {
     });
 
     let settings_state = state.clone();
+    // Use the provided display_id, or fall back to detecting the mouse cursor's display.
+    let display_id = display_id.or_else(|| platform_display::find_mouse_display(cx));
+    let window_size = size(px(640.0), px(700.0));
+    let window_bounds = WindowBounds::Windowed(Bounds::centered(display_id, window_size, cx));
     let result = cx.open_window(
         WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(640.0), px(700.0)), cx)),
+            window_bounds: Some(window_bounds),
             window_min_size: Some(size(px(560.0), px(500.0))),
             titlebar: Some(TitlebarOptions {
                 title: Some("BananaTray Settings".into()),
                 ..Default::default()
             }),
             kind: WindowKind::Normal,
+            display_id,
             ..Default::default()
         },
         |_window, cx| cx.new(|cx| SettingsView::new(settings_state, cx)),

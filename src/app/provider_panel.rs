@@ -4,6 +4,7 @@ use super::AppView;
 use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
 use crate::theme::Theme;
 use gpui::*;
+use log::{info, warn};
 
 // const USAGE_ICON: &str = "src/icons/usage.svg";  // This is now used in mod.rs
 // const REFRESH_ICON: &str = "src/icons/settings.svg";
@@ -82,9 +83,10 @@ impl AppView {
                     .cursor_pointer()
                     .child("Open Settings")
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        let display_id = window.display(cx).map(|d| d.id());
                         window.remove_window();
                         let settings_state = state.clone();
-                        schedule_open_settings_window(settings_state, cx);
+                        schedule_open_settings_window(settings_state, display_id, cx);
                     }),
             )
             .into_any_element()
@@ -180,7 +182,7 @@ impl AppView {
                 super::widgets::render_quota_bar(quota, index > 0, theme)
             }))
         } else {
-            shell.child(self.render_provider_empty_state(provider, theme))
+            shell.child(self.render_provider_empty_state(provider, cx))
         };
 
         shell.into_any_element()
@@ -189,8 +191,9 @@ impl AppView {
     fn render_provider_empty_state(
         &self,
         provider: &ProviderStatus,
-        theme: &Theme,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
         let title = match provider.connection {
             ConnectionStatus::Connected => "Waiting for usage data",
             ConnectionStatus::Refreshing => "Refreshing…",
@@ -198,8 +201,14 @@ impl AppView {
             ConnectionStatus::Error => "Refresh failed",
         };
         let message = provider_logic::provider_empty_message(provider);
+        let show_refresh = matches!(
+            provider.connection,
+            ConnectionStatus::Error | ConnectionStatus::Disconnected
+        );
+        let kind = provider.kind;
+        let entity = cx.entity().clone();
 
-        div()
+        let mut container = div()
             .flex_col()
             .gap(px(8.0))
             .rounded(px(8.0))
@@ -219,6 +228,108 @@ impl AppView {
                     .line_height(relative(1.4))
                     .text_color(theme.text_secondary)
                     .child(message),
-            )
+            );
+
+        if show_refresh {
+            container = container.child(
+                div().flex().mt(px(4.0)).child(
+                    div()
+                        .px(px(12.0))
+                        .py(px(6.0))
+                        .rounded(px(8.0))
+                        .bg(theme.text_accent)
+                        .text_size(px(12.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.element_active)
+                        .cursor_pointer()
+                        .child("Retry")
+                        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                            entity.update(cx, |view, cx| {
+                                view.refresh_single_provider(kind, cx);
+                            });
+                        }),
+                ),
+            );
+        }
+
+        container
+    }
+
+    /// Trigger a refresh for a single provider (used by the retry button).
+    fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
+        let state = self.state.clone();
+        let manager = state.borrow().manager.clone();
+
+        // Mark as Refreshing
+        {
+            let mut s = state.borrow_mut();
+            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                p.connection = ConnectionStatus::Refreshing;
+                p.error_message = None;
+            }
+        }
+        cx.notify();
+
+        cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
+            let mut async_cx = cx.clone();
+            async move {
+                let mgr = manager.clone();
+
+                let mgr_check = mgr.clone();
+                let available = smol::unblock(move || {
+                    smol::block_on(mgr_check.is_provider_available(kind))
+                })
+                .await;
+
+                if !available {
+                    info!(target: "providers", "retry: provider {:?} unavailable", kind);
+                    let _ = this.update(&mut async_cx, |view, cx| {
+                        let mut s = view.state.borrow_mut();
+                        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                            p.connection = ConnectionStatus::Disconnected;
+                            p.error_message =
+                                Some("Provider is currently unavailable.".to_string());
+                        }
+                        cx.notify();
+                    });
+                    return;
+                }
+
+                info!(target: "providers", "retry: refreshing provider {:?}", kind);
+                let result =
+                    smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
+
+                match result {
+                    Ok(quotas) => {
+                        info!(target: "providers", "retry: provider {:?} succeeded with {} quotas", kind, quotas.len());
+                        let _ = this.update(&mut async_cx, |view, cx| {
+                            let mut s = view.state.borrow_mut();
+                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                                p.quotas = quotas;
+                                p.connection = ConnectionStatus::Connected;
+                                p.last_refreshed_instant =
+                                    Some(std::time::Instant::now());
+                                p.last_updated_at = None;
+                                p.error_message = None;
+                            }
+                            cx.notify();
+                        });
+                    }
+                    Err(err) => {
+                        warn!(target: "providers", "retry: provider {:?} failed: {err}", kind);
+                        let _ = this.update(&mut async_cx, |view, cx| {
+                            let mut s = view.state.borrow_mut();
+                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                                p.connection = ConnectionStatus::Error;
+                                p.last_updated_at = Some("Update failed".to_string());
+                                p.error_message = Some(err.to_string());
+                            }
+                            cx.notify();
+                        });
+                    }
+                }
+            }
+        })
+        .detach();
     }
 }
