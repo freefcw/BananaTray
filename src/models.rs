@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::Instant;
 
 // ============================================================================
@@ -88,6 +89,30 @@ impl ProviderKind {
             Self::Kimi,
             Self::Amp,
         ]
+    }
+
+    /// 配置文件中使用的小写标识符
+    pub fn id_key(&self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Gemini => "gemini",
+            Self::Copilot => "copilot",
+            Self::Codex => "codex",
+            Self::Kimi => "kimi",
+            Self::Amp => "amp",
+        }
+    }
+
+    /// 数据源描述标签
+    pub fn source_label(&self) -> &'static str {
+        match self {
+            Self::Claude => "claude cli",
+            Self::Gemini => "gemini api",
+            Self::Copilot => "github api",
+            Self::Codex => "openai api",
+            Self::Kimi => "kimi api",
+            Self::Amp => "amp cli",
+        }
     }
 }
 
@@ -303,6 +328,9 @@ pub struct AppSettings {
     pub session_quota_notifications: bool,
     /// Provider 特定配置
     pub providers: ProviderSettings,
+    /// 各 Provider 启用状态（key = provider id_key, value = enabled）
+    #[serde(default)]
+    pub enabled_providers: HashMap<String, bool>,
 }
 
 fn default_true() -> bool {
@@ -322,6 +350,23 @@ impl Default for AppSettings {
             check_provider_status: true,
             session_quota_notifications: true,
             providers: ProviderSettings::default(),
+            enabled_providers: HashMap::new(),
         }
+    }
+}
+
+impl AppSettings {
+    /// 检查指定 Provider 是否已启用
+    pub fn is_provider_enabled(&self, kind: ProviderKind) -> bool {
+        self.enabled_providers
+            .get(kind.id_key())
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// 设置指定 Provider 的启用状态
+    pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
+        self.enabled_providers
+            .insert(kind.id_key().to_string(), enabled);
     }
 }

@@ -1,10 +1,14 @@
 use super::provider_logic;
+use super::settings_window::schedule_open_settings_window;
 use super::AppView;
 use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus, StatusLevel};
 use crate::theme::Theme;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
+use log::info;
 
 const USAGE_ICON: &str = "src/icons/usage.svg";
+const REFRESH_ICON: &str = "src/icons/settings.svg";
 
 impl AppView {
     pub(crate) fn render_provider_detail(
@@ -13,14 +17,79 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let state = self.state.borrow();
+        let is_enabled = state.settings.is_provider_enabled(kind);
         let provider = state.providers.iter().find(|p| p.kind == kind).cloned();
         drop(state);
+
+        if !is_enabled {
+            return self.render_provider_not_enabled(kind, cx);
+        }
 
         if let Some(provider) = provider {
             self.render_provider_panel(&provider, true, true, cx)
         } else {
             div().child("Provider not found").into_any_element()
         }
+    }
+
+    fn render_provider_not_enabled(
+        &self,
+        kind: ProviderKind,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.global::<Theme>();
+        let state = self.state.clone();
+
+        div()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(12.0))
+            .px(px(20.0))
+            .py(px(40.0))
+            .rounded(px(14.0))
+            .bg(theme.bg_card)
+            .border_1()
+            .border_color(theme.border_subtle)
+            .child(
+                svg()
+                    .path(kind.icon_asset())
+                    .size(px(32.0))
+                    .text_color(theme.text_muted),
+            )
+            .child(
+                div()
+                    .text_size(px(14.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.text_primary)
+                    .child(format!("{} is not enabled", kind.display_name())),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .text_align(TextAlign::Center)
+                    .line_height(relative(1.4))
+                    .child("Enable it in Settings → Providers to start tracking quota."),
+            )
+            .child(
+                div()
+                    .px(px(14.0))
+                    .py(px(8.0))
+                    .rounded(px(10.0))
+                    .bg(theme.text_accent)
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.element_active)
+                    .cursor_pointer()
+                    .child("Open Settings")
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        window.remove_window();
+                        let settings_state = state.clone();
+                        schedule_open_settings_window(settings_state, cx);
+                    }),
+            )
+            .into_any_element()
     }
 
     fn render_provider_panel(
@@ -118,15 +187,68 @@ impl AppView {
 
         let shell = if show_actions {
             let dashboard_url = provider.kind.dashboard_url();
+            let kind = provider.kind;
+            let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
+            let refresh_state = self.state.clone();
+            let refresh_entity = cx.entity().clone();
+
             shell.child(
                 div()
                     .border_t_1()
                     .border_color(theme.border_subtle)
                     .pt(px(8.0))
                     .mt(px(2.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    // Refresh button
                     .child(
                         div()
                             .flex()
+                            .flex_1()
+                            .items_center()
+                            .gap(px(8.0))
+                            .px(px(4.0))
+                            .py(px(5.0))
+                            .rounded(px(6.0))
+                            .cursor(if is_refreshing { CursorStyle::default() } else { CursorStyle::PointingHand })
+                            .text_size(px(13.0))
+                            .text_color(if is_refreshing {
+                                theme.text_muted
+                            } else if highlighted {
+                                theme.element_active
+                            } else {
+                                theme.text_primary
+                            })
+                            .child(self.render_svg_icon(
+                                REFRESH_ICON,
+                                px(13.0),
+                                if is_refreshing {
+                                    theme.text_muted
+                                } else if highlighted {
+                                    theme.text_secondary
+                                } else {
+                                    theme.text_muted
+                                },
+                            ))
+                            .child(if is_refreshing { "Refreshing…" } else { "Refresh" })
+                            .when(!is_refreshing, |el| {
+                                el.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                    info!(target: "providers", "manual refresh triggered for {:?}", kind);
+                                    Self::trigger_single_refresh(
+                                        refresh_state.clone(),
+                                        refresh_entity.clone(),
+                                        kind,
+                                        cx,
+                                    );
+                                })
+                            }),
+                    )
+                    // Usage Dashboard button
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
                             .items_center()
                             .gap(px(8.0))
                             .px(px(4.0))
@@ -148,7 +270,7 @@ impl AppView {
                                     theme.text_muted
                                 },
                             ))
-                            .child("Usage Dashboard")
+                            .child("Dashboard")
                             .on_mouse_down(MouseButton::Left, move |_, _, _| {
                                 let _ = std::process::Command::new("open")
                                     .arg(dashboard_url)

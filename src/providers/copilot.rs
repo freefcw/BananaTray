@@ -18,9 +18,9 @@ impl CopilotProvider {
         crate::settings_store::config_path()
     }
 
-    /// 从配置文件或环境变量读取 GitHub Token
+    /// 从配置文件、GitHub Copilot 扩展配置或环境变量读取 GitHub Token
     fn get_token(&self) -> Option<String> {
-        // 优先从配置文件读取
+        // 1. 优先从 BananaTray 配置文件读取
         if let Ok(content) = std::fs::read_to_string(Self::settings_path()) {
             if let Ok(settings) = serde_json::from_str::<serde_json::Value>(&content) {
                 let token = settings
@@ -37,8 +37,44 @@ impl CopilotProvider {
             }
         }
 
-        // 后备：从环境变量读取
+        // 2. 从 GitHub Copilot 扩展配置读取 OAuth token
+        if let Some(token) = Self::read_copilot_oauth_token() {
+            return Some(token);
+        }
+
+        // 3. 后备：从环境变量读取
         std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty())
+    }
+
+    /// 从 ~/.config/github-copilot/ 读取已有的 OAuth token
+    fn read_copilot_oauth_token() -> Option<String> {
+        let home = dirs::home_dir()?;
+        let copilot_dir = home.join(".config").join("github-copilot");
+
+        // 尝试 hosts.json（旧版）和 apps.json（新版）
+        for filename in &["hosts.json", "apps.json"] {
+            let path = copilot_dir.join(filename);
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    // 格式: { "github.com": { "oauth_token": "gho_xxx", ... } }
+                    // 或: { "github.com:copilot": { "oauth_token": "gho_xxx", ... } }
+                    if let Some(obj) = json.as_object() {
+                        for (key, value) in obj {
+                            if key.contains("github.com") {
+                                if let Some(token) = value
+                                    .get("oauth_token")
+                                    .and_then(|v| v.as_str())
+                                    .filter(|s| !s.is_empty())
+                                {
+                                    return Some(token.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

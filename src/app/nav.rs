@@ -15,12 +15,11 @@ impl AppView {
     ) -> impl IntoElement {
         let settings_action = self.render_settings_trigger(cx);
         let theme = cx.global::<Theme>();
-        let visible_provider_count = self
-            .state
-            .borrow()
-            .settings
-            .visible_provider_count
-            .clamp(3, 5);
+        let state_ref = self.state.borrow();
+        let visible_provider_count = state_ref.settings.visible_provider_count.clamp(3, 6);
+        let settings = state_ref.settings.clone();
+        drop(state_ref);
+
         let provider_order = [
             ProviderKind::Claude,
             ProviderKind::Gemini,
@@ -29,8 +28,10 @@ impl AppView {
             ProviderKind::Kimi,
             ProviderKind::Codex,
         ];
+        // 仅显示已启用的 Provider tab
         let nav_items: Vec<_> = provider_order
             .into_iter()
+            .filter(|kind| settings.is_provider_enabled(*kind))
             .take(visible_provider_count)
             .map(|kind| {
                 (
