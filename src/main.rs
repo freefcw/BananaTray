@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 mod app;
 mod logging;
 mod models;
@@ -122,7 +124,8 @@ impl TrayController {
     }
 
     fn open(&mut self, cx: &mut App) {
-        let window_size = size(px(308.0), px(548.0));
+        let dynamic_height = app::compute_popup_height(&self.state.borrow());
+        let window_size = size(px(app::PopupLayout::WIDTH), px(dynamic_height));
         let tray_bounds = cx.tray_icon_bounds().unwrap_or_default();
         let bounds =
             cx.compute_window_bounds(window_size, &WindowPosition::TrayCenter(tray_bounds));
@@ -173,7 +176,7 @@ fn main() {
 
             // 1. 初始化
             adabraka_ui::init(cx);
-            adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::dark());
+            adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
             cx.set_keep_alive_without_windows(true);
 
             // 2. 配置系统托盘

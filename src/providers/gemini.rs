@@ -86,8 +86,8 @@ impl GeminiProvider {
         let response: QuotaResponse = serde_json::from_str(&response_str)
             .with_context(|| format!("Failed to parse API response: {}", response_str))?;
 
-        // Group quotas by model, keeping lowest percentage per model
-        let mut model_quotas: std::collections::HashMap<String, (f64, Option<String>)> =
+        // Group quotas by label instead of model_id, keeping lowest percentage per label
+        let mut label_quotas: std::collections::HashMap<String, (f64, Option<String>)> =
             std::collections::HashMap::new();
 
         for bucket in response.buckets.unwrap_or_default() {
@@ -95,9 +95,11 @@ impl GeminiProvider {
                 let percent_left = fraction * 100.0;
                 let used_percent = 100.0 - percent_left;
 
-                // Keep the lowest percentage (most restrictive) per model
-                let entry = model_quotas
-                    .entry(model_id)
+                let label = Self::simplify_model_name(&model_id);
+
+                // Keep the lowest percentage (most restrictive) per model label
+                let entry = label_quotas
+                    .entry(label)
                     .or_insert((used_percent, bucket.reset_time.clone()));
                 if used_percent > entry.0 {
                     entry.0 = used_percent;
@@ -106,17 +108,16 @@ impl GeminiProvider {
             }
         }
 
-        // Sort by model name and create QuotaInfo
-        let mut quotas: Vec<QuotaInfo> = model_quotas
+        // Sort by label name and create QuotaInfo
+        let mut quotas: Vec<QuotaInfo> = label_quotas
             .into_iter()
-            .map(|(model_id, (used_percent, reset))| {
-                let label = Self::simplify_model_name(&model_id);
+            .map(|(label, (used_percent, reset))| {
                 let reset_text = reset.as_ref().and_then(|r| Self::format_reset_time(r));
                 QuotaInfo::with_details(
-                    label,
+                    label.clone(),
                     used_percent,
                     100.0,
-                    QuotaType::ModelSpecific(model_id),
+                    QuotaType::ModelSpecific(label),
                     reset_text,
                 )
             })
@@ -133,15 +134,95 @@ impl GeminiProvider {
 
     /// Format ISO8601 reset time to human-readable countdown
     fn format_reset_time(iso_str: &str) -> Option<String> {
-        // Parse ISO8601 timestamp like "2025-03-25T12:00:00Z"
-        // Simple approach: extract date/time parts
-        let parts: Vec<&str> = iso_str.split('T').collect();
+        // Parse ISO8601 timestamp like "2025-03-25T12:00:00Z" or "2025-03-25T12:00:00+00:00"
+        // Extract date and time parts
+        let clean = iso_str.trim_end_matches('Z');
+        // Strip timezone offset if present (e.g. +08:00)
+        let clean = if let Some(pos) = clean.rfind('+') {
+            if pos > 10 {
+                &clean[..pos]
+            } else {
+                clean
+            }
+        } else if let Some(pos) = clean.rfind('-') {
+            // Avoid stripping the date separator; only strip if after index 10
+            if pos > 10 {
+                &clean[..pos]
+            } else {
+                clean
+            }
+        } else {
+            clean
+        };
+
+        let parts: Vec<&str> = clean.split('T').collect();
         if parts.len() != 2 {
-            return Some(format!("Resets at {}", iso_str));
+            return Some("Resets in ?".to_string());
         }
-        // Return the raw time for now - a full ISO8601 parser would be better
-        // but we keep dependencies minimal
-        Some(format!("Resets at {}", iso_str.trim_end_matches('Z')))
+
+        let date_parts: Vec<&str> = parts[0].split('-').collect();
+        let time_parts: Vec<&str> = parts[1].split(':').collect();
+        if date_parts.len() != 3 || time_parts.len() < 2 {
+            return Some("Resets in ?".to_string());
+        }
+
+        let year: i64 = date_parts[0].parse().unwrap_or(0);
+        let month: i64 = date_parts[1].parse().unwrap_or(0);
+        let day: i64 = date_parts[2].parse().unwrap_or(0);
+        let hour: i64 = time_parts[0].parse().unwrap_or(0);
+        let min: i64 = time_parts[1].parse().unwrap_or(0);
+
+        // Rough epoch conversion (good enough for relative delta)
+        let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        let mut total_days: i64 = 0;
+        for y in 1970..year {
+            total_days += if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
+                366
+            } else {
+                365
+            };
+        }
+        let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        for m in 1..month {
+            total_days += days_in_month[m as usize];
+            if m == 2 && is_leap {
+                total_days += 1;
+            }
+        }
+        total_days += day - 1;
+        let reset_epoch_secs = total_days * 86400 + hour * 3600 + min * 60;
+
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        let delta = reset_epoch_secs - now_secs;
+        if delta <= 0 {
+            return Some("Resets soon".to_string());
+        }
+
+        let days = delta / 86400;
+        let hours = (delta % 86400) / 3600;
+        let mins = (delta % 3600) / 60;
+
+        let text = if days > 0 {
+            if hours > 0 {
+                format!("Resets in {}d {}h", days, hours)
+            } else {
+                format!("Resets in {}d", days)
+            }
+        } else if hours > 0 {
+            if mins > 0 {
+                format!("Resets in {}h {}m", hours, mins)
+            } else {
+                format!("Resets in {}h", hours)
+            }
+        } else {
+            format!("Resets in {}m", mins.max(1))
+        };
+
+        Some(text)
     }
 
     fn simplify_model_name(name: &str) -> String {
