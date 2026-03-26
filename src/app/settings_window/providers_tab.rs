@@ -338,9 +338,8 @@ impl SettingsView {
         if let Some(p) = provider {
             if !p.quotas.is_empty() {
                 for quota in &p.quotas {
-                    section = section.child(crate::app::widgets::render_quota_bar(
-                        quota, false, false, false, theme,
-                    ));
+                    section =
+                        section.child(crate::app::widgets::render_quota_bar(quota, false, theme));
                 }
             } else if p.connection == ConnectionStatus::Error {
                 let title = format!("Last {} fetch failed:", p.kind.display_name());

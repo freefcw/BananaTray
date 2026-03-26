@@ -129,7 +129,6 @@ impl SettingsView {
             bg_panel: rgb(0xffffff).into(),
             bg_subtle: rgb(0xebebf0).into(),
             bg_card: rgb(0xe0ecfb).into(),
-            bg_card_active: rgb(0xe0ecfb).into(),
             text_primary: rgb(0x1c1c1e).into(),
             text_secondary: rgb(0x6e6e73).into(),
             text_muted: rgb(0x8e8e93).into(),

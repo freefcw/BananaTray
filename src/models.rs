@@ -56,6 +56,7 @@ impl ProviderKind {
         }
     }
 
+    #[allow(dead_code)]
     pub fn account_hint(&self) -> &'static str {
         match self {
             Self::Claude => "Anthropic workspace",
@@ -184,20 +185,61 @@ impl QuotaInfo {
     }
 
     /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
+    #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
         (self.limit - 100.0).abs() < f64::EPSILON
     }
 
-    /// 状态等级：Green / Yellow / Red
+    /// 状态等级：Green / Yellow / Red (基于剩余量)
     pub fn status_level(&self) -> StatusLevel {
         let pct = self.percentage();
-        if pct < 50.0 {
+        let remaining_pct = (100.0 - pct).max(0.0);
+
+        if remaining_pct > 50.0 {
             StatusLevel::Green
-        } else if pct < 80.0 {
+        } else if remaining_pct >= 20.0 {
             StatusLevel::Yellow
         } else {
             StatusLevel::Red
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quota_percentage() {
+        let q1 = QuotaInfo::new("test", 50.0, 100.0);
+        assert_eq!(q1.percentage(), 50.0);
+
+        let q2 = QuotaInfo::new("test", 150.0, 100.0); // 溢出
+        assert_eq!(q2.percentage(), 100.0);
+
+        let q3 = QuotaInfo::new("test", 0.0, 0.0); // 除零
+        assert_eq!(q3.percentage(), 0.0);
+    }
+
+    #[test]
+    fn test_quota_status_level() {
+        // 阈值：>50% Green, 20-50% Yellow, <20% Red (基于剩余值)
+
+        // 剩余 60% (已用 40%) -> Green
+        let q_green = QuotaInfo::new("green", 40.0, 100.0);
+        assert_eq!(q_green.status_level(), StatusLevel::Green);
+
+        // 剩余 50% (已用 50%) -> Yellow (刚好在 50% 边界，不大于 50%)
+        let q_yellow_edge = QuotaInfo::new("yellow", 50.0, 100.0);
+        assert_eq!(q_yellow_edge.status_level(), StatusLevel::Yellow);
+
+        // 剩余 20% (已用 80%) -> Yellow (刚好在 20% 边界)
+        let q_yellow_20 = QuotaInfo::new("yellow", 80.0, 100.0);
+        assert_eq!(q_yellow_20.status_level(), StatusLevel::Yellow);
+
+        // 剩余 19% (已用 81%) -> Red
+        let q_red = QuotaInfo::new("red", 81.0, 100.0);
+        assert_eq!(q_red.status_level(), StatusLevel::Red);
     }
 }
 
@@ -340,7 +382,7 @@ fn default_true() -> bool {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            theme: AppTheme::Dark,
+            theme: AppTheme::Light,
             refresh_interval_mins: 5,
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
@@ -368,5 +410,74 @@ impl AppSettings {
     pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
         self.enabled_providers
             .insert(kind.id_key().to_string(), enabled);
+    }
+}
+
+// ============================================================================
+// 弹出窗口布局常量与计算
+// ============================================================================
+
+/// 弹出窗口布局相关常量，集中管理避免 magic numbers
+pub struct PopupLayout;
+
+impl PopupLayout {
+    /// 弹出窗口固定宽度（px）
+    pub const WIDTH: f32 = 308.0;
+    /// 基础高度：nav_bar(~46) + header(~40) + menu(~110) + padding(~44)
+    pub const BASE_HEIGHT: f32 = 240.0;
+    /// 每个 quota bar 的预估高度
+    pub const PER_QUOTA_HEIGHT: f32 = 42.0;
+    /// 最小窗口高度
+    pub const MIN_HEIGHT: f32 = 300.0;
+    /// 最大窗口高度
+    pub const MAX_HEIGHT: f32 = 548.0;
+}
+
+/// 根据 quota 数量计算弹出窗口高度（纯函数，适合测试）
+pub fn compute_popup_height_for_quotas(quota_count: usize) -> f32 {
+    let count = quota_count.max(1) as f32;
+    (PopupLayout::BASE_HEIGHT + count * PopupLayout::PER_QUOTA_HEIGHT)
+        .clamp(PopupLayout::MIN_HEIGHT, PopupLayout::MAX_HEIGHT)
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn test_popup_height_clamps_to_minimum() {
+        // 0 个 quota → max(1) → 240 + 42 = 282 → clamp 到 300
+        assert_eq!(compute_popup_height_for_quotas(0), PopupLayout::MIN_HEIGHT);
+    }
+
+    #[test]
+    fn test_popup_height_single_quota() {
+        // 1 个 quota: 240 + 42 = 282 → clamp 到 300
+        assert_eq!(compute_popup_height_for_quotas(1), PopupLayout::MIN_HEIGHT);
+    }
+
+    #[test]
+    fn test_popup_height_three_quotas() {
+        // 3 个 quota: 240 + 3*42 = 366
+        let height = compute_popup_height_for_quotas(3);
+        assert!((height - 366.0).abs() < f32::EPSILON);
+        assert!(height >= PopupLayout::MIN_HEIGHT);
+        assert!(height <= PopupLayout::MAX_HEIGHT);
+    }
+
+    #[test]
+    fn test_popup_height_clamps_to_maximum() {
+        // 20 个 quota: 240 + 20*42 = 1080 → clamp 到 548
+        assert_eq!(compute_popup_height_for_quotas(20), PopupLayout::MAX_HEIGHT);
+    }
+
+    #[test]
+    fn test_popup_height_monotonically_increases() {
+        let mut prev = compute_popup_height_for_quotas(1);
+        for n in 2..=8 {
+            let h = compute_popup_height_for_quotas(n);
+            assert!(h >= prev, "height should be non-decreasing");
+            prev = h;
+        }
     }
 }

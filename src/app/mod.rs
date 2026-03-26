@@ -76,6 +76,29 @@ impl AppState {
     }
 }
 
+// ============================================================================
+// 弹出窗口高度计算（布局常量在 models::PopupLayout 中）
+// ============================================================================
+
+pub(crate) use crate::models::PopupLayout;
+
+/// 根据活跃 Provider 的 quota 数量动态计算弹出窗口高度
+pub(crate) fn compute_popup_height(state: &AppState) -> f32 {
+    let kind = if let NavTab::Provider(k) = state.active_tab {
+        k
+    } else {
+        state.last_provider_kind
+    };
+    let quota_count = state
+        .providers
+        .iter()
+        .find(|p| p.kind == kind)
+        .map(|p| p.quotas.len())
+        .unwrap_or(1)
+        .max(1);
+    crate::models::compute_popup_height_for_quotas(quota_count)
+}
+
 pub(crate) fn persist_settings(settings: &AppSettings) {
     match crate::settings_store::save(settings) {
         Ok(path) => {
@@ -265,9 +288,6 @@ impl AppView {
         .detach();
     }
 
-    /// 手动刷新的最小冷却时间（防止连续点击）
-    const MANUAL_REFRESH_COOLDOWN: Duration = Duration::from_secs(10);
-
     /// 获取 per-provider 防抖冷却时间：取刷新间隔的一半，但不低于 30 秒
     fn refresh_cooldown(state: &AppState) -> Duration {
         let interval_secs = state.settings.refresh_interval_mins * 60;
@@ -285,98 +305,109 @@ impl AppView {
         false
     }
 
-    /// Trigger a manual refresh for a single provider (with debounce)
-    pub(crate) fn trigger_single_refresh(
-        state: Rc<RefCell<AppState>>,
-        entity: Entity<AppView>,
-        kind: ProviderKind,
-        cx: &mut App,
-    ) {
-        // 防抖：短冷却防连点
-        {
-            let s = state.borrow();
-            if let Some(p) = s.providers.iter().find(|p| p.kind == kind) {
-                if let Some(instant) = p.last_refreshed_instant {
-                    if instant.elapsed() < Self::MANUAL_REFRESH_COOLDOWN {
-                        info!(target: "providers", "manual refresh {:?} skipped (within {}s cooldown)",
-                            kind, Self::MANUAL_REFRESH_COOLDOWN.as_secs());
-                        return;
-                    }
-                }
-            }
+    fn render_global_actions(
+        &self,
+        active_tab: NavTab,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        let state = self.state.clone();
+
+        let mut menu = div()
+            .flex_col()
+            .w_full()
+            .px(px(8.0))
+            .py(px(6.0))
+            .bg(theme.bg_subtle)
+            .border_t_1()
+            .border_color(theme.border_subtle);
+
+        if let NavTab::Provider(kind) = active_tab {
+            let dashboard_url = kind.dashboard_url();
+            menu = menu
+                .child(self.render_menu_item(
+                    "Status Page",
+                    Some("src/icons/usage.svg"),
+                    theme,
+                    move |_, _, _| {
+                        let _ = std::process::Command::new("open")
+                            .arg(dashboard_url)
+                            .spawn();
+                    },
+                ))
+                .child(div().h(px(1.0)).bg(theme.border_subtle).my(px(3.0)));
         }
 
-        let manager = state.borrow().manager.clone();
-        entity
-            .update(cx, |_, cx| {
-                cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
-                    let mut async_cx = cx.clone();
-                    async move {
-                        // Set Refreshing state
-                        let _ = this.update(&mut async_cx, |view, cx| {
-                            let mut s = view.state.borrow_mut();
-                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
-                                p.connection = ConnectionStatus::Refreshing;
-                            }
-                            cx.notify();
-                        });
+        let settings_state = state.clone();
+        menu.child(
+            self.render_menu_item("Settings...", None, theme, move |_, window, cx| {
+                window.remove_window();
+                schedule_open_settings_window(settings_state.clone(), cx);
+            }),
+        )
+        .child(self.render_menu_item("Quit", None, theme, |_, _, cx| {
+            cx.quit();
+        }))
+    }
 
-                        let mgr = manager.clone();
-                        let result =
-                            smol::unblock(move || smol::block_on(mgr.refresh_provider(kind)))
-                                .await;
+    fn render_menu_item<F>(
+        &self,
+        label: &'static str,
+        icon_path: Option<&'static str>,
+        theme: &Theme,
+        on_click: F,
+    ) -> impl IntoElement
+    where
+        F: Fn(&gpui::MouseDownEvent, &mut Window, &mut App) + 'static,
+    {
+        let item = div()
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(6.0))
+            .py(px(4.0))
+            .rounded(px(6.0))
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.border_subtle));
 
-                        match result {
-                            Ok(quotas) => {
-                                info!(target: "providers", "manual refresh {:?} succeeded with {} quotas", kind, quotas.len());
-                                let _ = this.update(&mut async_cx, |view, cx| {
-                                    let mut s = view.state.borrow_mut();
-                                    if let Some(p) =
-                                        s.providers.iter_mut().find(|p| p.kind == kind)
-                                    {
-                                        p.quotas = quotas;
-                                        p.connection = ConnectionStatus::Connected;
-                                        p.last_refreshed_instant =
-                                            Some(std::time::Instant::now());
-                                        p.last_updated_at = None;
-                                        p.error_message = None;
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                            Err(err) => {
-                                warn!(target: "providers", "manual refresh {:?} failed: {err}", kind);
-                                let _ = this.update(&mut async_cx, |view, cx| {
-                                    let mut s = view.state.borrow_mut();
-                                    if let Some(p) =
-                                        s.providers.iter_mut().find(|p| p.kind == kind)
-                                    {
-                                        if p.quotas.is_empty() {
-                                            p.connection = ConnectionStatus::Error;
-                                        } else {
-                                            p.connection = ConnectionStatus::Connected;
-                                        }
-                                        p.last_updated_at =
-                                            Some("Update failed".to_string());
-                                        p.error_message = Some(err.to_string());
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                        }
-                    }
-                })
-                .detach();
-            });
+        let item = if let Some(path) = icon_path {
+            item.child(crate::app::widgets::render_svg_icon(
+                path,
+                px(14.0),
+                theme.text_secondary,
+            ))
+        } else {
+            item
+        };
+
+        item.child(
+            div()
+                .text_size(px(13.0))
+                .text_color(theme.text_primary)
+                .child(label),
+        )
+        .on_mouse_down(MouseButton::Left, on_click)
     }
 }
 
 impl Render for AppView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let state = self.state.borrow();
         let active_tab = state.active_tab;
+        // 在每次渲染时动态调整窗口高度
+        let desired_height = compute_popup_height(&state);
         drop(state);
+
+        // 仅对 Windowed 类型窗口执行 resize（避免影响全屏/最大化窗口）
+        let bounds = window.window_bounds();
+        if let WindowBounds::Windowed(current_bounds) = bounds {
+            let new_height = px(desired_height);
+            let diff = current_bounds.size.height - new_height;
+            if diff.abs() > px(2.0) {
+                window.resize(size(px(PopupLayout::WIDTH), new_height));
+            }
+        }
 
         div()
             .flex()
@@ -392,12 +423,13 @@ impl Render for AppView {
                     .overflow_y_scroll()
                     .child(match active_tab {
                         NavTab::Provider(kind) => div()
-                            .px(px(12.0))
-                            .py(px(10.0))
+                            .px(px(8.0)) // 更小边距
+                            .py(px(4.0)) // 更小边距
                             .child(self.render_provider_detail(kind, cx))
                             .into_any_element(),
                         NavTab::Settings => self.render_settings_content(cx),
                     }),
             )
+            .child(self.render_global_actions(active_tab, cx))
     }
 }

@@ -2,6 +2,7 @@
 /// Extracted for testability (GPUI proc macros crash during test compilation).
 use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus, QuotaInfo};
 
+#[allow(dead_code)]
 pub fn format_amount(value: f64) -> String {
     if (value.fract() - 0.0).abs() < f64::EPSILON {
         format!("{:.0}", value)
@@ -10,6 +11,7 @@ pub fn format_amount(value: f64) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     if quota.is_percentage_mode() {
         format!("{}% remaining", format_amount(quota.limit - quota.used))
@@ -58,6 +60,7 @@ pub fn provider_empty_message(provider: &ProviderStatus) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> String {
     if let Some(email) = &provider.account_email {
         return email.clone();
