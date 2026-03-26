@@ -168,14 +168,20 @@ impl TrayController {
 }
 
 fn main() {
+    match logging::init() {
+        Ok(init) => {
+            log::info!(target: "app", "logging initialized at {}", init.log_path.display());
+        }
+        Err(err) => {
+            eprintln!("failed to initialize logging: {err:#}");
+        }
+    }
+
     Application::new()
         .with_assets(Assets {
             base: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         })
         .run(|cx: &mut App| {
-            let logging = logging::init();
-            info!(target: "app", "starting BananaTray application");
-
             // 1. 初始化
             adabraka_ui::init(cx);
             adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
@@ -215,9 +221,6 @@ fn main() {
                 }
             });
 
-            println!("🚀 BananaTray is running! Look for the tray icon in your menu bar.");
-            println!("🪵 Logging target: {}", logging.target_description);
-            println!("🪵 Use BANANATRAY_LOG_FILE=1 to write logs into ./banana.log");
-            info!(target: "app", "logging initialized with env_logger backend -> {}", logging.target_description);
+            info!(target: "app", "BananaTray is running - look for the tray icon");
         });
 }
