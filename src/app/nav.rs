@@ -159,7 +159,11 @@ impl AppView {
             .bg(theme.bg_subtle)
             .border_1()
             .border_color(theme.border_subtle)
-            .child(self.render_svg_icon(SETTINGS_ICON, px(13.0), theme.text_secondary))
+            .child(super::widgets::render_svg_icon(
+                SETTINGS_ICON,
+                px(13.0),
+                theme.text_secondary,
+            ))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 info!(target: "settings", "settings trigger clicked from tray header");
                 window.remove_window();

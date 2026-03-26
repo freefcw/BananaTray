@@ -1,6 +1,10 @@
 use super::SettingsView;
+use crate::app::widgets::{
+    render_card, render_card_separator, render_checkbox, render_detail_section_title,
+    render_info_row,
+};
 use crate::app::{persist_settings, provider_logic};
-use crate::models::{AppSettings, ConnectionStatus, ProviderKind, StatusLevel};
+use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 use crate::theme::Theme;
 use gpui::*;
 
@@ -16,9 +20,7 @@ impl SettingsView {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
     }
-}
 
-impl SettingsView {
     /// Render Providers settings tab — CodeBar-style two-column layout
     pub(super) fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let selected = self.state.borrow().settings_selected_provider;
@@ -41,7 +43,7 @@ impl SettingsView {
         settings: &AppSettings,
         theme: &Theme,
     ) -> Div {
-        let mut card = Self::render_card().py(px(4.0));
+        let mut card = render_card().py(px(4.0));
 
         for (i, kind) in ProviderKind::all().iter().enumerate() {
             let provider = providers.iter().find(|p| p.kind == *kind);
@@ -57,7 +59,7 @@ impl SettingsView {
             let kind_copy = *kind;
 
             if i > 0 {
-                card = card.child(Self::render_card_separator());
+                card = card.child(render_card_separator());
             }
 
             let mut item = div()
@@ -132,7 +134,7 @@ impl SettingsView {
 
             // Enabled badge (blue checkbox)
             if is_enabled {
-                item = item.child(Self::render_enabled_badge(theme));
+                item = item.child(render_checkbox(true, px(20.0), theme));
             }
 
             item = item.on_mouse_down(MouseButton::Left, move |_, window, _| {
@@ -236,28 +238,40 @@ impl SettingsView {
                                     .child("⟳"),
                             )
                             // Toggle switch
-                            .child(Self::render_toggle(is_enabled, theme).on_mouse_down(
-                                MouseButton::Left,
-                                move |_, window, _| {
-                                    let settings = {
-                                        let mut s = state_toggle.borrow_mut();
-                                        let new_val = !s.settings.is_provider_enabled(toggle_kind);
-                                        s.settings.set_provider_enabled(toggle_kind, new_val);
-                                        if let Some(p) =
-                                            s.providers.iter_mut().find(|p| p.kind == toggle_kind)
-                                        {
-                                            p.enabled = new_val;
-                                        }
-                                        // Force a fresh refresh when the popup next opens
-                                        if new_val {
-                                            s.last_refresh_started = None;
-                                        }
-                                        s.settings.clone()
-                                    };
-                                    persist_settings(&settings);
-                                    window.refresh();
-                                },
-                            )),
+                            .child(
+                                crate::app::widgets::render_toggle_switch(
+                                    is_enabled,
+                                    px(44.0),
+                                    px(24.0),
+                                    px(18.0),
+                                    theme,
+                                )
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    move |_, window, _| {
+                                        let settings = {
+                                            let mut s = state_toggle.borrow_mut();
+                                            let new_val =
+                                                !s.settings.is_provider_enabled(toggle_kind);
+                                            s.settings.set_provider_enabled(toggle_kind, new_val);
+                                            if let Some(p) = s
+                                                .providers
+                                                .iter_mut()
+                                                .find(|p| p.kind == toggle_kind)
+                                            {
+                                                p.enabled = new_val;
+                                            }
+                                            // Force a fresh refresh when the popup next opens
+                                            if new_val {
+                                                s.last_refresh_started = None;
+                                            }
+                                            s.settings.clone()
+                                        };
+                                        persist_settings(&settings);
+                                        window.refresh();
+                                    },
+                                ),
+                            ),
                     ),
             )
             // ── Info table ──
@@ -293,29 +307,10 @@ impl SettingsView {
         div()
             .flex_col()
             .gap(px(6.0))
-            .child(Self::render_info_row("State", state_text, theme))
-            .child(Self::render_info_row("Source", source_text, theme))
-            .child(Self::render_info_row("Updated", &updated_text, theme))
-            .child(Self::render_info_row("Status", &status_text, theme))
-    }
-
-    fn render_info_row(label: &str, value: &str, theme: &Theme) -> Div {
-        div()
-            .flex()
-            .items_center()
-            .child(
-                div()
-                    .w(px(70.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_muted)
-                    .child(label.to_string()),
-            )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_primary)
-                    .child(value.to_string()),
-            )
+            .child(render_info_row("State", state_text, theme))
+            .child(render_info_row("Source", source_text, theme))
+            .child(render_info_row("Updated", &updated_text, theme))
+            .child(render_info_row("Status", &status_text, theme))
     }
 
     // ══════ Usage section ══════
@@ -326,13 +321,10 @@ impl SettingsView {
         enabled: bool,
         theme: &Theme,
     ) -> Div {
-        let mut section = div().flex_col().gap(px(8.0)).child(
-            div()
-                .text_size(px(14.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text_primary)
-                .child("Usage"),
-        );
+        let mut section = div()
+            .flex_col()
+            .gap(px(8.0))
+            .child(render_detail_section_title("Usage", theme));
 
         if !enabled {
             return section.child(
@@ -346,7 +338,9 @@ impl SettingsView {
         if let Some(p) = provider {
             if !p.quotas.is_empty() {
                 for quota in &p.quotas {
-                    section = section.child(Self::render_quota_bar_light(quota, theme));
+                    section = section.child(crate::app::widgets::render_quota_bar(
+                        quota, false, false, false, theme,
+                    ));
                 }
             } else if p.connection == ConnectionStatus::Error {
                 let title = format!("Last {} fetch failed:", p.kind.display_name());
@@ -395,76 +389,6 @@ impl SettingsView {
         section
     }
 
-    // ══════ Quota bar (light theme) ══════
-
-    fn render_quota_bar_light(quota: &crate::models::QuotaInfo, theme: &Theme) -> Div {
-        let pct = quota.percentage();
-        let remaining = (100.0 - pct).max(0.0);
-        let bar_color = match quota.status_level() {
-            StatusLevel::Green => theme.status_success,
-            StatusLevel::Yellow => theme.status_warning,
-            StatusLevel::Red => theme.status_error,
-        };
-
-        div()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text_primary)
-                            .child(quota.label.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(theme.text_muted)
-                            .child(if let Some(ref reset) = quota.reset_at {
-                                reset.clone()
-                            } else {
-                                String::new()
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .h(px(8.0))
-                    .bg(theme.progress_track)
-                    .rounded_full()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .w(relative(pct as f32 / 100.0))
-                            .h_full()
-                            .bg(bar_color)
-                            .rounded_full(),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(10.5))
-                            .text_color(theme.text_muted)
-                            .child(format!("{:.0}% left", remaining)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.5))
-                            .text_color(theme.text_muted)
-                            .child(provider_logic::format_quota_usage(quota)),
-                    ),
-            )
-    }
-
     // ══════ Provider-specific settings ══════
 
     fn render_settings_section(
@@ -473,13 +397,10 @@ impl SettingsView {
         settings: &AppSettings,
         theme: &Theme,
     ) -> Div {
-        let mut section = div().flex_col().gap(px(8.0)).child(
-            div()
-                .text_size(px(14.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text_primary)
-                .child("Settings"),
-        );
+        let mut section = div()
+            .flex_col()
+            .gap(px(8.0))
+            .child(render_detail_section_title("Settings", theme));
 
         match kind {
             ProviderKind::Copilot => {
@@ -603,54 +524,5 @@ impl SettingsView {
                             }),
                     )
             })
-    }
-
-    // ══════ Widget helpers ══════
-
-    fn render_toggle(enabled: bool, theme: &Theme) -> Div {
-        div()
-            .w(px(44.0))
-            .h(px(24.0))
-            .flex()
-            .items_center()
-            .rounded_full()
-            .px(px(2.0))
-            .cursor_pointer()
-            .bg(if enabled {
-                theme.element_selected
-            } else {
-                theme.bg_subtle
-            })
-            .border_1()
-            .border_color(if enabled {
-                theme.text_accent_soft
-            } else {
-                theme.border_strong
-            })
-            .child(
-                div()
-                    .w(px(18.0))
-                    .h(px(18.0))
-                    .rounded_full()
-                    .bg(theme.element_active)
-                    .ml(if enabled { px(20.0) } else { px(0.0) }),
-            )
-    }
-
-    fn render_enabled_badge(theme: &Theme) -> Div {
-        let blue: Hsla = rgb(0x007aff).into();
-        div()
-            .w(px(20.0))
-            .h(px(20.0))
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .justify_center()
-            .rounded(px(5.0))
-            .bg(blue)
-            .text_size(px(11.0))
-            .font_weight(FontWeight::BOLD)
-            .text_color(theme.element_active)
-            .child("✓")
     }
 }

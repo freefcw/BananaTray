@@ -1,5 +1,8 @@
 use super::SettingsView;
 use crate::app::persist_settings;
+use crate::app::widgets::{
+    render_card, render_card_separator, render_checkbox_row, render_section_label,
+};
 use crate::models::AppSettings;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
@@ -47,45 +50,25 @@ impl SettingsView {
             .child(
                 div()
                     .flex_col()
-                    .child(Self::render_section_label("SYSTEM", theme))
+                    .child(render_section_label("SYSTEM", theme))
                     .child(
-                        Self::render_card()
+                        render_card()
                             .child(
-                                div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .cursor_pointer()
-                                    .child(self.render_settings_checkbox(login_checked, theme))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Start at Login"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("Automatically opens BananaTray when you start your Mac."),
-                                            ),
-                                    )
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        let settings = {
-                                            let mut s = login_state.borrow_mut();
-                                            s.settings.start_at_login = !s.settings.start_at_login;
-                                            s.settings.clone()
-                                        };
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    }),
+                                render_checkbox_row(
+                                    "Start at Login",
+                                    "Automatically opens BananaTray when you start your Mac.",
+                                    login_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = login_state.borrow_mut();
+                                        s.settings.start_at_login = !s.settings.start_at_login;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
                             ),
                     ),
             )
@@ -94,45 +77,25 @@ impl SettingsView {
                 div()
                     .flex_col()
                     .mt(px(12.0))
-                    .child(Self::render_section_label("USAGE", theme))
+                    .child(render_section_label("USAGE", theme))
                     .child(
-                        Self::render_card()
+                        render_card()
                             .child(
-                                div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .cursor_pointer()
-                                    .child(self.render_settings_checkbox(cost_checked, theme))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Show cost summary"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("Reads local usage logs. Shows today + last 30 days cost in the menu."),
-                                            ),
-                                    )
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        let settings = {
-                                            let mut s = cost_state.borrow_mut();
-                                            s.settings.show_cost_summary = !s.settings.show_cost_summary;
-                                            s.settings.clone()
-                                        };
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    }),
+                                render_checkbox_row(
+                                    "Show cost summary",
+                                    "Reads local usage logs. Shows today + last 30 days cost in the menu.",
+                                    cost_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = cost_state.borrow_mut();
+                                        s.settings.show_cost_summary = !s.settings.show_cost_summary;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
                             ),
                     ),
             )
@@ -141,9 +104,9 @@ impl SettingsView {
                 div()
                     .flex_col()
                     .mt(px(12.0))
-                    .child(Self::render_section_label("AUTOMATION", theme))
+                    .child(render_section_label("AUTOMATION", theme))
                     .child(
-                        Self::render_card()
+                        render_card()
                             // Refresh cadence (dropdown)
                             .child({
                                 let dropdown_open = self.state.borrow().cadence_dropdown_open;
@@ -273,83 +236,43 @@ impl SettingsView {
 
                                 cadence_row
                             })
-                            .child(Self::render_card_separator())
+                            .child(render_card_separator())
                             // Check provider status
                             .child(
-                                div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .cursor_pointer()
-                                    .child(self.render_settings_checkbox(status_checked, theme))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Check provider status"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("Polls provider status pages, surfacing incidents in the icon and menu."),
-                                            ),
-                                    )
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        let settings = {
-                                            let mut s = status_state.borrow_mut();
-                                            s.settings.check_provider_status = !s.settings.check_provider_status;
-                                            s.settings.clone()
-                                        };
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    }),
+                                render_checkbox_row(
+                                    "Check provider status",
+                                    "Polls provider status pages, surfacing incidents in the icon and menu.",
+                                    status_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = status_state.borrow_mut();
+                                        s.settings.check_provider_status = !s.settings.check_provider_status;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
                             )
-                            .child(Self::render_card_separator())
+                            .child(render_card_separator())
                             // Session quota notifications
                             .child(
-                                div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .cursor_pointer()
-                                    .child(self.render_settings_checkbox(notif_checked, theme))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Session quota notifications"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("Notifies when the 5-hour session quota hits 0% and when it becomes available again."),
-                                            ),
-                                    )
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        let settings = {
-                                            let mut s = notif_state.borrow_mut();
-                                            s.settings.session_quota_notifications = !s.settings.session_quota_notifications;
-                                            s.settings.clone()
-                                        };
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    }),
+                                render_checkbox_row(
+                                    "Session quota notifications",
+                                    "Notifies when the 5-hour session quota hits 0% and when it becomes available again.",
+                                    notif_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = notif_state.borrow_mut();
+                                        s.settings.session_quota_notifications = !s.settings.session_quota_notifications;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
                             ),
                     ),
             )
