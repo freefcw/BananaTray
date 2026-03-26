@@ -4,10 +4,38 @@ use crate::theme::Theme;
 use gpui::*;
 
 impl SettingsView {
+    /// Read github_token from the actual config file on disk
+    fn read_github_token_from_config() -> Option<String> {
+        let path = crate::settings_store::config_path();
+        let content = std::fs::read_to_string(path).ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+        json.get("providers")
+            .and_then(|p| p.get("github_token"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+    }
+}
+
+impl SettingsView {
     /// Render Providers settings tab
-    pub(super) fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        let github_token = settings.providers.github_token.clone().unwrap_or_default();
-        let has_token = !github_token.is_empty();
+    pub(super) fn render_providers_tab(&self, _settings: &AppSettings, theme: &Theme) -> Div {
+        // Read the actual token from config file (same source as CopilotProvider)
+        let github_token = Self::read_github_token_from_config().unwrap_or_default();
+        let env_token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
+        let has_token = !github_token.is_empty() || env_token.is_some();
+        let display_token = if !github_token.is_empty() {
+            github_token.clone()
+        } else {
+            env_token.unwrap_or_default()
+        };
+        let token_source = if !github_token.is_empty() {
+            "config file"
+        } else if has_token {
+            "GITHUB_TOKEN env"
+        } else {
+            ""
+        };
 
         div()
             .flex_col()
@@ -62,15 +90,15 @@ impl SettingsView {
                                             .border_color(theme.border_strong)
                                             .bg(theme.element_active)
                                             .text_size(px(12.0))
-                                            .text_color(if github_token.is_empty() {
+                                            .text_color(if display_token.is_empty() {
                                                 theme.text_muted
                                             } else {
                                                 theme.text_primary
                                             })
-                                            .child(if github_token.is_empty() {
+                                            .child(if display_token.is_empty() {
                                                 "Not set".to_string()
                                             } else {
-                                                format!("{}...", &github_token[..8.min(github_token.len())])
+                                                format!("{}…", &display_token[..8.min(display_token.len())])
                                             }),
                                     ),
                             )
@@ -99,9 +127,9 @@ impl SettingsView {
                                                     .line_height(relative(1.4))
                                                     .text_color(theme.text_secondary)
                                                     .child(if has_token {
-                                                        "Token configured. Copilot quota will be auto-detected."
+                                                        format!("Token configured via {}. Copilot quota will be auto-detected.", token_source)
                                                     } else {
-                                                        "Set your GitHub token to enable Copilot monitoring."
+                                                        "Set your GitHub token to enable Copilot monitoring.".to_string()
                                                     }),
                                             ),
                                     )

@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -13,12 +13,9 @@ impl CopilotProvider {
         Self {}
     }
 
-    /// 获取配置文件路径
+    /// 获取配置文件路径（与 settings_store 保持一致）
     fn settings_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("BananaTray")
-            .join("settings.json")
+        crate::settings_store::config_path()
     }
 
     /// 从配置文件或环境变量读取 GitHub Token
@@ -86,10 +83,11 @@ impl AiProvider for CopilotProvider {
             .get_token()
             .context("GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.")?;
 
-        // 使用 Copilot Internal API - 更简单，直接返回配额信息
         let output = Command::new("curl")
             .args([
                 "-s",
+                "-w",
+                "\n%{http_code}",
                 "-H",
                 &format!("Authorization: Bearer {}", token),
                 "-H",
@@ -105,30 +103,81 @@ impl AiProvider for CopilotProvider {
 
         let output_str = String::from_utf8_lossy(&output.stdout);
 
+        // Extract HTTP status code from last line
+        let (body, status_code) = {
+            let trimmed = output_str.trim();
+            if let Some(pos) = trimmed.rfind('\n') {
+                let code = trimmed[pos + 1..].trim();
+                let body = &trimmed[..pos];
+                (body.to_string(), code.to_string())
+            } else {
+                (trimmed.to_string(), String::new())
+            }
+        };
+
+        match status_code.as_str() {
+            "401" => bail!(
+                "GitHub token is invalid or expired. Update your token in Settings → Providers."
+            ),
+            "403" => {
+                bail!("Token lacks required permissions. Use a Classic PAT with 'copilot' scope.")
+            }
+            "404" => bail!(
+                "Copilot not enabled for this account. Check your GitHub Copilot subscription."
+            ),
+            _ => {}
+        }
+
         // 解析响应
-        let resp: CopilotInternalResponse = serde_json::from_str(&output_str)
+        let resp: CopilotInternalResponse = serde_json::from_str(&body)
             .context("Failed to parse Copilot Internal API response.")?;
 
         let plan = resp.copilot_plan.unwrap_or_else(|| "unknown".to_string());
+        let plan_label = capitalize_first(&plan);
 
         // 检查是否有 premium_interactions 配额
         let quota = if let Some(snapshots) = resp.quota_snapshots {
             if let Some(interactions) = snapshots.premium_interactions {
                 if interactions.unlimited.unwrap_or(false) {
-                    QuotaInfo::new("Premium Requests (Unlimited)", 0.0, 0.0)
+                    QuotaInfo::with_details(
+                        format!("Premium Requests ({})", plan_label),
+                        0.0,
+                        0.0,
+                        QuotaType::General,
+                        Some("Unlimited".to_string()),
+                    )
                 } else {
-                    let used = (interactions.entitlement - interactions.remaining) as f64;
+                    let used = (interactions.entitlement - interactions.remaining).max(0) as f64;
                     let limit = interactions.entitlement as f64;
-                    QuotaInfo::new(format!("Premium Requests ({})", plan), used, limit)
+                    QuotaInfo::with_details(
+                        format!("Premium Requests ({})", plan_label),
+                        used,
+                        limit,
+                        QuotaType::Weekly,
+                        None,
+                    )
                 }
             } else {
-                // 没有 premium_interactions 配额（可能是只有基础 chat/completions）
-                QuotaInfo::new("Premium Requests", 0.0, 0.0)
+                QuotaInfo::with_details(
+                    format!("Chat & Completions ({})", plan_label),
+                    0.0,
+                    0.0,
+                    QuotaType::General,
+                    Some("Unlimited".to_string()),
+                )
             }
         } else {
-            bail!("No quota data found in Copilot API response");
+            bail!("No quota data found in Copilot API response.");
         };
 
         Ok(vec![quota])
+    }
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
     }
 }

@@ -19,6 +19,8 @@ impl ProviderManager {
         manager.register(Arc::new(super::gemini::GeminiProvider::new()));
         manager.register(Arc::new(super::amp::AmpProvider::new()));
         manager.register(Arc::new(super::copilot::CopilotProvider::new()));
+        manager.register(Arc::new(super::codex::CodexProvider::new()));
+        manager.register(Arc::new(super::kimi::KimiProvider::new()));
 
         manager
     }
@@ -46,12 +48,23 @@ impl ProviderManager {
                 quotas: vec![],
                 account_email: None,
                 is_paid: false,
+                account_tier: None,
                 last_updated_at: None,
                 error_message: None,
                 last_refreshed_instant: None,
             });
         }
         statuses
+    }
+
+    /// 检查指定 Provider 是否可用
+    pub async fn is_provider_available(&self, kind: ProviderKind) -> bool {
+        for p in &self.providers {
+            if p.kind() == kind {
+                return p.is_available().await;
+            }
+        }
+        false
     }
 
     /// 刷新指定的 Provider

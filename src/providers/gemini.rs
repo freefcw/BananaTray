@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -109,10 +109,16 @@ impl GeminiProvider {
         // Sort by model name and create QuotaInfo
         let mut quotas: Vec<QuotaInfo> = model_quotas
             .into_iter()
-            .map(|(model_id, (used_percent, _reset))| {
-                // Simplify model name for display
+            .map(|(model_id, (used_percent, reset))| {
                 let label = Self::simplify_model_name(&model_id);
-                QuotaInfo::new(label, used_percent, 100.0)
+                let reset_text = reset.as_ref().and_then(|r| Self::format_reset_time(r));
+                QuotaInfo::with_details(
+                    label,
+                    used_percent,
+                    100.0,
+                    QuotaType::ModelSpecific(model_id),
+                    reset_text,
+                )
             })
             .collect();
 
@@ -123,6 +129,19 @@ impl GeminiProvider {
         }
 
         Ok(quotas)
+    }
+
+    /// Format ISO8601 reset time to human-readable countdown
+    fn format_reset_time(iso_str: &str) -> Option<String> {
+        // Parse ISO8601 timestamp like "2025-03-25T12:00:00Z"
+        // Simple approach: extract date/time parts
+        let parts: Vec<&str> = iso_str.split('T').collect();
+        if parts.len() != 2 {
+            return Some(format!("Resets at {}", iso_str));
+        }
+        // Return the raw time for now - a full ISO8601 parser would be better
+        // but we keep dependencies minimal
+        Some(format!("Resets at {}", iso_str.trim_end_matches('Z')))
     }
 
     fn simplify_model_name(name: &str) -> String {
@@ -148,6 +167,30 @@ impl GeminiProvider {
                 .collect::<Vec<_>>()
                 .join(" ")
         }
+    }
+
+    /// Try to refresh the OAuth token by briefly running the gemini CLI
+    fn refresh_token_via_cli(&self) -> Result<()> {
+        let output = Command::new("gemini").args(["--version"]).output();
+
+        if output.is_err() {
+            anyhow::bail!("gemini CLI not found. Install it to enable automatic token refresh.");
+        }
+
+        // Run `gemini` with `/quit` input to trigger token refresh without interactive session
+        let output = Command::new("sh")
+            .args(["-c", "echo '/quit' | gemini 2>/dev/null || true"])
+            .output()
+            .context("Failed to run gemini CLI for token refresh")?;
+
+        if !output.status.success() {
+            log::warn!(target: "providers", "gemini CLI token refresh exited with: {:?}", output.status);
+        }
+
+        // Wait briefly for the token file to be updated
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+
+        Ok(())
     }
 }
 
@@ -217,18 +260,57 @@ impl AiProvider for GeminiProvider {
             .context("No access token found. Please login with 'gemini' CLI first.")?;
 
         // Check if token is expired (expiry_date is in milliseconds since epoch)
-        if let Some(expiry_ms) = creds.expiry_date_ms {
+        let token_expired = if let Some(expiry_ms) = creds.expiry_date_ms {
             let expiry_secs = expiry_ms / 1000.0;
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0);
-            if expiry_secs < now_secs {
-                anyhow::bail!("Gemini token expired. Please run 'gemini' CLI to refresh.");
+            expiry_secs < now_secs
+        } else {
+            false
+        };
+
+        if token_expired {
+            // Try to refresh token via CLI
+            log::info!(target: "providers", "Gemini token expired, attempting CLI refresh");
+            if let Err(e) = self.refresh_token_via_cli() {
+                log::warn!(target: "providers", "Gemini CLI token refresh failed: {e}");
+                anyhow::bail!("Gemini token expired. Please run 'gemini' CLI to refresh. ({e})");
             }
+
+            // Reload credentials after CLI refresh
+            let refreshed_creds = self.load_credentials()?;
+            let new_token = refreshed_creds
+                .access_token
+                .filter(|t| !t.is_empty())
+                .context("Token still empty after CLI refresh.")?;
+
+            return self.fetch_quota_via_api(&new_token);
         }
 
         // Fetch quota via API
-        self.fetch_quota_via_api(&access_token)
+        match self.fetch_quota_via_api(&access_token) {
+            Ok(quotas) => Ok(quotas),
+            Err(e) => {
+                let err_str = e.to_string();
+                // If the error looks like an auth issue, try CLI refresh once
+                if err_str.contains("401")
+                    || err_str.contains("403")
+                    || err_str.contains("Unauthorized")
+                {
+                    log::info!(target: "providers", "Gemini API returned auth error, attempting CLI refresh");
+                    if self.refresh_token_via_cli().is_ok() {
+                        let refreshed_creds = self.load_credentials()?;
+                        if let Some(new_token) =
+                            refreshed_creds.access_token.filter(|t| !t.is_empty())
+                        {
+                            return self.fetch_quota_via_api(&new_token);
+                        }
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 }

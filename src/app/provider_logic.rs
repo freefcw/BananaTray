@@ -11,11 +11,15 @@ pub fn format_amount(value: f64) -> String {
 }
 
 pub fn format_quota_usage(quota: &QuotaInfo) -> String {
-    format!(
-        "{} / {} used",
-        format_amount(quota.used),
-        format_amount(quota.limit)
-    )
+    if quota.is_percentage_mode() {
+        format!("{}% remaining", format_amount(quota.limit - quota.used))
+    } else {
+        format!(
+            "{} / {} used",
+            format_amount(quota.used),
+            format_amount(quota.limit)
+        )
+    }
 }
 
 pub fn provider_empty_message(provider: &ProviderStatus) -> String {
@@ -40,6 +44,9 @@ pub fn provider_empty_message(provider: &ProviderStatus) -> String {
                 "{} usage could not be refreshed right now.",
                 provider.kind.display_name()
             )
+        }
+        ConnectionStatus::Refreshing => {
+            format!("Fetching {} usage data…", provider.kind.display_name())
         }
         ConnectionStatus::Disconnected => {
             format!(
@@ -83,6 +90,7 @@ mod tests {
             quotas: vec![],
             account_email: None,
             is_paid: false,
+            account_tier: None,
             last_updated_at: None,
             error_message: None,
             last_refreshed_instant: None,
@@ -107,8 +115,14 @@ mod tests {
 
     #[test]
     fn format_quota_usage_integers() {
-        let q = QuotaInfo::new("Daily", 50.0, 100.0);
-        assert_eq!(format_quota_usage(&q), "50 / 100 used");
+        let q = QuotaInfo::new("Daily", 50.0, 200.0);
+        assert_eq!(format_quota_usage(&q), "50 / 200 used");
+    }
+
+    #[test]
+    fn format_quota_usage_percentage_mode() {
+        let q = QuotaInfo::new("Model", 65.0, 100.0);
+        assert_eq!(format_quota_usage(&q), "35% remaining");
     }
 
     #[test]
