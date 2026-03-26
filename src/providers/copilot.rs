@@ -1,10 +1,10 @@
+use super::http_client;
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub struct CopilotProvider {}
 
@@ -119,37 +119,11 @@ impl AiProvider for CopilotProvider {
             .get_token()
             .context("GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.")?;
 
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-w",
-                "\n%{http_code}",
-                "-H",
-                &format!("Authorization: Bearer {}", token),
-                "-H",
-                "Accept: application/json",
-                "https://api.github.com/copilot_internal/user",
-            ])
-            .output()
-            .context("Error launching curl command to reach GitHub Copilot Internal API.")?;
-
-        if !output.status.success() {
-            bail!("curl to GitHub API unexpectedly failed.");
-        }
-
-        let output_str = String::from_utf8_lossy(&output.stdout);
-
-        // Extract HTTP status code from last line
-        let (body, status_code) = {
-            let trimmed = output_str.trim();
-            if let Some(pos) = trimmed.rfind('\n') {
-                let code = trimmed[pos + 1..].trim();
-                let body = &trimmed[..pos];
-                (body.to_string(), code.to_string())
-            } else {
-                (trimmed.to_string(), String::new())
-            }
-        };
+        let auth_header = format!("Authorization: Bearer {}", token);
+        let (body, status_code) = http_client::curl_get_with_status(
+            "https://api.github.com/copilot_internal/user",
+            &[&auth_header, "Accept: application/json"],
+        )?;
 
         match status_code.as_str() {
             "401" => bail!(
