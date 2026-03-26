@@ -1,9 +1,10 @@
+use super::http_client;
+use super::time_utils;
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub struct CodexProvider {}
 
@@ -57,35 +58,8 @@ impl CodexProvider {
             return true;
         };
 
-        // Parse ISO 8601 timestamp manually: "2025-01-15T10:00:00.000Z"
-        // Compare with current time; if older than 8 days, refresh.
-        let Ok(output) = Command::new("date").arg("+%s").output() else {
-            return true;
-        };
-        let now_secs: i64 = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse()
-            .unwrap_or(0);
-
-        // Use date -jf on macOS to parse the ISO timestamp
-        let parse_result = Command::new("date")
-            .args(["-jf", "%Y-%m-%dT%H:%M:%S", &ts.replace(".000Z", ""), "+%s"])
-            .output();
-
-        let Ok(parsed) = parse_result else {
-            return true;
-        };
-        let then_secs: i64 = String::from_utf8_lossy(&parsed.stdout)
-            .trim()
-            .parse()
-            .unwrap_or(0);
-
-        if then_secs == 0 {
-            return true;
-        }
-
         let eight_days_secs: i64 = 8 * 24 * 60 * 60;
-        (now_secs - then_secs) > eight_days_secs
+        time_utils::is_older_than(ts, eight_days_secs)
     }
 
     /// Refresh the OAuth token via OpenAI's auth endpoint.
@@ -96,25 +70,10 @@ impl CodexProvider {
             refresh_token
         );
 
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-X",
-                "POST",
-                "-H",
-                "Content-Type: application/x-www-form-urlencoded",
-                "-d",
-                &body,
-                "https://auth.openai.com/oauth/token",
-            ])
-            .output()
-            .context("Failed to execute curl for token refresh")?;
+        let response_str =
+            http_client::curl_post_form("https://auth.openai.com/oauth/token", &[], &body)?;
 
-        if !output.status.success() {
-            bail!("Token refresh request failed");
-        }
-
-        let resp: serde_json::Value = serde_json::from_slice(&output.stdout)
+        let resp: serde_json::Value = serde_json::from_str(&response_str)
             .context("Failed to parse token refresh response")?;
 
         let new_access = resp
@@ -157,15 +116,14 @@ impl CodexProvider {
             });
         }
 
-        // Update last_refresh to now (ISO 8601)
-        if let Ok(output) = Command::new("date")
-            .arg("-u")
-            .arg("+%Y-%m-%dT%H:%M:%S.000Z")
-            .output()
-        {
-            let now_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            json["last_refresh"] = serde_json::json!(now_str);
-        }
+        // Update last_refresh to now (ISO 8601) using pure Rust
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        // Simple epoch → ISO 8601 UTC conversion
+        let now_str = epoch_to_iso8601(now);
+        json["last_refresh"] = serde_json::json!(now_str);
 
         let serialized = serde_json::to_string_pretty(&json)?;
         std::fs::write(&path, serialized).context("Failed to write updated auth.json")?;
@@ -192,26 +150,15 @@ impl CodexProvider {
 
     /// Call the ChatGPT backend API and return raw response (headers + body).
     fn call_usage_api(access_token: &str) -> Result<String> {
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-i",
-                "-H",
-                &format!("Authorization: Bearer {}", access_token),
-                "-H",
+        let auth_header = format!("Authorization: Bearer {}", access_token);
+        http_client::curl_get_with_headers(
+            "https://chatgpt.com/backend-api/wham/usage",
+            &[
+                &auth_header,
                 "Accept: application/json",
-                "-H",
                 "User-Agent: OpenUsage",
-                "https://chatgpt.com/backend-api/wham/usage",
-            ])
-            .output()
-            .context("Failed to execute curl for Codex usage API")?;
-
-        if !output.status.success() {
-            bail!("curl to Codex usage API failed");
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            ],
+        )
     }
 
     /// Parse quota information from the API response (headers + body).
@@ -311,7 +258,7 @@ impl CodexProvider {
                     used,
                     100.0,
                     QuotaType::Session,
-                    reset_at.map(format_reset_timestamp),
+                    reset_at.map(time_utils::format_reset_from_epoch),
                 ));
             }
 
@@ -327,7 +274,7 @@ impl CodexProvider {
                     used,
                     100.0,
                     QuotaType::Weekly,
-                    reset_at.map(format_reset_timestamp),
+                    reset_at.map(time_utils::format_reset_from_epoch),
                 ));
             }
         }
@@ -340,26 +287,48 @@ impl CodexProvider {
     }
 }
 
-/// Convert a unix timestamp to a human-readable "Resets in Xh Ym" string.
-fn format_reset_timestamp(ts: i64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+/// Convert Unix epoch seconds to a simple ISO 8601 UTC string.
+fn epoch_to_iso8601(epoch: u64) -> String {
+    let secs = epoch;
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hour = time_of_day / 3600;
+    let min = (time_of_day % 3600) / 60;
+    let sec = time_of_day % 60;
 
-    let diff = ts - now;
-    if diff <= 0 {
-        return "Resets soon".to_string();
+    // Convert days since 1970-01-01 to y/m/d
+    let mut remaining_days = days as i64;
+    let mut year: i64 = 1970;
+    loop {
+        let days_in_year: i64 = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+            366
+        } else {
+            365
+        };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        year += 1;
     }
 
-    let hours = diff / 3600;
-    let minutes = (diff % 3600) / 60;
-
-    if hours > 0 {
-        format!("Resets in {}h {}m", hours, minutes)
-    } else {
-        format!("Resets in {}m", minutes)
+    let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let mut month: i64 = 1;
+    loop {
+        let dim = days_in_month[month as usize] + if month == 2 && is_leap { 1 } else { 0 };
+        if remaining_days < dim {
+            break;
+        }
+        remaining_days -= dim;
+        month += 1;
     }
+    let day = remaining_days + 1;
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
+        year, month, day, hour, min, sec
+    )
 }
 
 #[async_trait]

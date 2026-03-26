@@ -1,3 +1,5 @@
+use super::http_client;
+use super::time_utils;
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{Context, Result};
@@ -22,47 +24,26 @@ impl KimiProvider {
         let auth_header = format!("Authorization: Bearer {}", token);
         let cookie_header = format!("Cookie: kimi-auth={}", token);
 
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-X",
-                "POST",
-                "-H",
-                "Content-Type: application/json",
-                "-H",
+        let response_str = http_client::curl_post_json(
+            "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
+            &[
                 &auth_header,
-                "-H",
                 &cookie_header,
-                "-H",
                 "Origin: https://www.kimi.com",
-                "-H",
                 "Referer: https://www.kimi.com/code/console",
-                "-H",
                 "Accept: */*",
-                "-H",
                 "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                "-H",
                 "connect-protocol-version: 1",
-                "-H",
                 "x-language: en-US",
-                "-H",
                 "x-msh-platform: web",
-                "-d",
-                r#"{"scope":["FEATURE_CODING"]}"#,
-                "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
-            ])
-            .output()
-            .context("Failed to execute curl for Kimi API")?;
+            ],
+            r#"{"scope":["FEATURE_CODING"]}"#,
+        )?;
 
-        if !output.status.success() {
-            anyhow::bail!("Failed to fetch Kimi usage data. Check your auth token.");
-        }
-
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        let resp: KimiUsageResponse = serde_json::from_str(&output_str).with_context(|| {
+        let resp: KimiUsageResponse = serde_json::from_str(&response_str).with_context(|| {
             format!(
                 "Failed to parse Kimi API response: {}",
-                output_str.chars().take(200).collect::<String>()
+                response_str.chars().take(200).collect::<String>()
             )
         })?;
 
@@ -84,7 +65,10 @@ impl KimiProvider {
                 Some(t) => format!("Weekly ({})", t),
                 None => "Weekly".to_string(),
             };
-            let reset_at = detail.reset_time.as_deref().map(format_reset_time);
+            let reset_at = detail
+                .reset_time
+                .as_deref()
+                .and_then(time_utils::format_reset_countdown);
 
             quotas.push(QuotaInfo::with_details(
                 label,
@@ -111,7 +95,10 @@ impl KimiProvider {
                     if let Some(detail) = &lim.detail {
                         let used = parse_num(&detail.used);
                         let limit = parse_num(&detail.limit);
-                        let reset_at = detail.reset_time.as_deref().map(format_reset_time);
+                        let reset_at = detail
+                            .reset_time
+                            .as_deref()
+                            .and_then(time_utils::format_reset_countdown);
 
                         quotas.push(QuotaInfo::with_details(
                             "Session (5h)",
@@ -215,16 +202,5 @@ fn detect_tier(weekly_limit: f64) -> Option<&'static str> {
         2048 => Some("Moderato"),
         7168 => Some("Allegretto"),
         _ => None,
-    }
-}
-
-fn format_reset_time(iso: &str) -> String {
-    // Parse ISO8601 like "2025-01-20T12:00:00Z" into human-readable
-    if iso.len() >= 16 {
-        let date = &iso[0..10];
-        let time = &iso[11..16];
-        format!("{} {} UTC", date, time)
-    } else {
-        iso.to_string()
     }
 }

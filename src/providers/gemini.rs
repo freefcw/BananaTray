@@ -1,3 +1,5 @@
+use super::http_client;
+use super::time_utils;
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
 use anyhow::{Context, Result};
@@ -59,30 +61,11 @@ impl GeminiProvider {
     /// Fetch quota from Google Cloud Code API
     fn fetch_quota_via_api(&self, access_token: &str) -> Result<Vec<QuotaInfo>> {
         let url = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
+        let auth_header = format!("Authorization: Bearer {}", access_token);
 
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-X",
-                "POST",
-                "-H",
-                &format!("Authorization: Bearer {}", access_token),
-                "-H",
-                "Content-Type: application/json",
-                "-H",
-                "Accept: application/json",
-                "-d",
-                "{}",
-                url,
-            ])
-            .output()
-            .context("Failed to execute curl command")?;
+        let response_str =
+            http_client::curl_post_json(url, &[&auth_header, "Accept: application/json"], "{}")?;
 
-        if !output.status.success() {
-            anyhow::bail!("curl to Gemini API failed with status {:?}", output.status);
-        }
-
-        let response_str = String::from_utf8_lossy(&output.stdout);
         let response: QuotaResponse = serde_json::from_str(&response_str)
             .with_context(|| format!("Failed to parse API response: {}", response_str))?;
 
@@ -112,7 +95,9 @@ impl GeminiProvider {
         let mut quotas: Vec<QuotaInfo> = label_quotas
             .into_iter()
             .map(|(label, (used_percent, reset))| {
-                let reset_text = reset.as_ref().and_then(|r| Self::format_reset_time(r));
+                let reset_text = reset
+                    .as_deref()
+                    .and_then(time_utils::format_reset_countdown);
                 QuotaInfo::with_details(
                     label.clone(),
                     used_percent,
@@ -130,99 +115,6 @@ impl GeminiProvider {
         }
 
         Ok(quotas)
-    }
-
-    /// Format ISO8601 reset time to human-readable countdown
-    fn format_reset_time(iso_str: &str) -> Option<String> {
-        // Parse ISO8601 timestamp like "2025-03-25T12:00:00Z" or "2025-03-25T12:00:00+00:00"
-        // Extract date and time parts
-        let clean = iso_str.trim_end_matches('Z');
-        // Strip timezone offset if present (e.g. +08:00)
-        let clean = if let Some(pos) = clean.rfind('+') {
-            if pos > 10 {
-                &clean[..pos]
-            } else {
-                clean
-            }
-        } else if let Some(pos) = clean.rfind('-') {
-            // Avoid stripping the date separator; only strip if after index 10
-            if pos > 10 {
-                &clean[..pos]
-            } else {
-                clean
-            }
-        } else {
-            clean
-        };
-
-        let parts: Vec<&str> = clean.split('T').collect();
-        if parts.len() != 2 {
-            return Some("Resets in ?".to_string());
-        }
-
-        let date_parts: Vec<&str> = parts[0].split('-').collect();
-        let time_parts: Vec<&str> = parts[1].split(':').collect();
-        if date_parts.len() != 3 || time_parts.len() < 2 {
-            return Some("Resets in ?".to_string());
-        }
-
-        let year: i64 = date_parts[0].parse().unwrap_or(0);
-        let month: i64 = date_parts[1].parse().unwrap_or(0);
-        let day: i64 = date_parts[2].parse().unwrap_or(0);
-        let hour: i64 = time_parts[0].parse().unwrap_or(0);
-        let min: i64 = time_parts[1].parse().unwrap_or(0);
-
-        // Rough epoch conversion (good enough for relative delta)
-        let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        let mut total_days: i64 = 0;
-        for y in 1970..year {
-            total_days += if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
-                366
-            } else {
-                365
-            };
-        }
-        let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-        for m in 1..month {
-            total_days += days_in_month[m as usize];
-            if m == 2 && is_leap {
-                total_days += 1;
-            }
-        }
-        total_days += day - 1;
-        let reset_epoch_secs = total_days * 86400 + hour * 3600 + min * 60;
-
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-
-        let delta = reset_epoch_secs - now_secs;
-        if delta <= 0 {
-            return Some("Resets soon".to_string());
-        }
-
-        let days = delta / 86400;
-        let hours = (delta % 86400) / 3600;
-        let mins = (delta % 3600) / 60;
-
-        let text = if days > 0 {
-            if hours > 0 {
-                format!("Resets in {}d {}h", days, hours)
-            } else {
-                format!("Resets in {}d", days)
-            }
-        } else if hours > 0 {
-            if mins > 0 {
-                format!("Resets in {}h {}m", hours, mins)
-            } else {
-                format!("Resets in {}h", hours)
-            }
-        } else {
-            format!("Resets in {}m", mins.max(1))
-        };
-
-        Some(text)
     }
 
     fn simplify_model_name(name: &str) -> String {
@@ -343,11 +235,7 @@ impl AiProvider for GeminiProvider {
         // Check if token is expired (expiry_date is in milliseconds since epoch)
         let token_expired = if let Some(expiry_ms) = creds.expiry_date_ms {
             let expiry_secs = expiry_ms / 1000.0;
-            let now_secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs_f64())
-                .unwrap_or(0.0);
-            expiry_secs < now_secs
+            time_utils::is_expired_epoch_secs(expiry_secs)
         } else {
             false
         };
