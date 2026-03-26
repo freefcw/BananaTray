@@ -341,8 +341,9 @@ impl AppView {
         let settings_state = state.clone();
         menu.child(
             self.render_menu_item("Settings...", None, theme, move |_, window, cx| {
+                let display_id = window.display(cx).map(|d| d.id());
                 window.remove_window();
-                schedule_open_settings_window(settings_state.clone(), cx);
+                schedule_open_settings_window(settings_state.clone(), display_id, cx);
             }),
         )
         .child(self.render_menu_item("Quit", None, theme, |_, _, cx| {
