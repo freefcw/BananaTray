@@ -1,6 +1,5 @@
 use super::{persist_settings, AppView};
 use crate::theme::Theme;
-use crate::views::settings::SettingsPanel;
 use gpui::*;
 
 const AUTO_HIDE_ICON: &str = "src/icons/display.svg";
@@ -38,7 +37,7 @@ impl AppView {
                             .flex()
                             .items_center()
                             .gap(px(10.0))
-                            .child(self.render_footer_glyph(AUTO_HIDE_ICON, theme))
+                            .child(super::widgets::render_footer_glyph(AUTO_HIDE_ICON, theme))
                             .child(
                                 div()
                                     .flex_col()
@@ -60,7 +59,7 @@ impl AppView {
                                     ),
                             ),
                     )
-                    .child(self.render_toggle_switch(settings.auto_hide_window, theme))
+                    .child(self.render_toggle_switch_small(settings.auto_hide_window, theme))
                     .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                         let settings = {
                             let mut app_state = auto_hide_state.borrow_mut();
@@ -144,7 +143,6 @@ impl AppView {
                             })
                     }))),
             )
-            .child(SettingsPanel::new(settings))
             .child(
                 div()
                     .rounded(px(14.0))

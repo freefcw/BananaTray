@@ -4,7 +4,6 @@ mod models;
 mod providers;
 mod settings_store;
 mod theme;
-mod views;
 
 use app::{schedule_open_settings_window, AppState};
 use gpui::*;

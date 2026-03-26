@@ -2,6 +2,7 @@ mod general_tab;
 mod providers_tab;
 
 use super::AppState;
+use crate::app::widgets::render_icon_tab;
 use crate::theme::Theme;
 use gpui::*;
 use log::{error, info};
@@ -145,113 +146,6 @@ impl SettingsView {
         }
     }
 
-    fn render_icon_tab(
-        &self,
-        icon_path: &'static str,
-        label: &str,
-        active: bool,
-        _theme: &Theme,
-    ) -> Div {
-        let active_color: Hsla = rgb(0x007aff).into();
-        let inactive_color: Hsla = rgb(0x8e8e93).into();
-        let active_bg: Hsla = rgb(0xe3eefa).into();
-
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap(px(2.0))
-            .px(px(14.0))
-            .pt(px(4.0))
-            .pb(px(8.0))
-            .cursor_pointer()
-            .border_b_2()
-            .border_color(if active {
-                active_color
-            } else {
-                transparent_black()
-            })
-            .child(
-                div()
-                    .w(px(30.0))
-                    .h(px(30.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(8.0))
-                    .bg(if active {
-                        active_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .child(svg().path(icon_path).size(px(17.0)).text_color(if active {
-                        active_color
-                    } else {
-                        inactive_color
-                    })),
-            )
-            .child(
-                div()
-                    .text_size(px(11.5))
-                    .font_weight(if active {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if active { active_color } else { inactive_color })
-                    .child(label.to_string()),
-            )
-    }
-
-    pub(super) fn render_settings_checkbox(&self, checked: bool, theme: &Theme) -> Div {
-        let blue: Hsla = rgb(0x007aff).into();
-        div()
-            .mt(px(1.0))
-            .w(px(18.0))
-            .h(px(18.0))
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .justify_center()
-            .rounded(px(4.0))
-            .border_1()
-            .border_color(if checked { blue } else { theme.border_strong })
-            .bg(if checked { blue } else { transparent_black() })
-            .text_size(px(11.0))
-            .font_weight(FontWeight::BOLD)
-            .text_color(if checked {
-                theme.element_active
-            } else {
-                transparent_black()
-            })
-            .child(if checked { "✓" } else { "" })
-    }
-
-    /// A section label like "SYSTEM", "USAGE", etc.
-    pub(super) fn render_section_label(title: &str, theme: &Theme) -> Div {
-        div()
-            .text_size(px(12.0))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.text_muted)
-            .px(px(4.0))
-            .pb(px(6.0))
-            .child(title.to_string())
-    }
-
-    /// A white rounded card that groups settings rows (macOS grouped-style)
-    pub(super) fn render_card() -> Div {
-        div()
-            .flex_col()
-            .rounded(px(10.0))
-            .bg(rgb(0xffffff))
-            .overflow_hidden()
-    }
-
-    /// Horizontal 1px divider inside a card (with left indent)
-    pub(super) fn render_card_separator() -> Div {
-        div().h(px(0.5)).w_full().ml(px(14.0)).bg(rgb(0xe5e5ea))
-    }
-
     /// Render a placeholder page for unimplemented tabs
     fn render_placeholder_tab(tab: SettingsTab, theme: &Theme) -> Div {
         let title = match tab {
@@ -337,11 +231,13 @@ impl Render for SettingsView {
         for &(icon, label, tab) in tabs {
             let state = self.state.clone();
             tab_bar = tab_bar.child(
-                self.render_icon_tab(icon, label, active_tab == tab, &theme)
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                render_icon_tab(icon, label, active_tab == tab, &theme).on_mouse_down(
+                    MouseButton::Left,
+                    move |_, window, _| {
                         state.borrow_mut().settings_tab = tab;
                         window.refresh();
-                    }),
+                    },
+                ),
             );
         }
 
