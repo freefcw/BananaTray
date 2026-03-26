@@ -28,8 +28,14 @@ pub struct AppState {
     pub active_tab: NavTab,
     pub last_provider_kind: ProviderKind,
     pub manager: Arc<crate::providers::ProviderManager>,
-    pub refreshed: bool,
+    /// When the last refresh cycle was started (None = never).
+    /// Replaces a boolean flag so we can debounce and detect stale loops.
+    pub last_refresh_started: Option<std::time::Instant>,
     pub settings_tab: SettingsTab,
+    /// 设置窗口中当前选中的 Provider（用于 Providers tab）
+    pub settings_selected_provider: ProviderKind,
+    /// 刷新间隔下拉框是否展开
+    pub cadence_dropdown_open: bool,
 }
 
 impl AppState {
@@ -45,15 +51,27 @@ impl AppState {
             }
         };
         let manager = Arc::new(crate::providers::ProviderManager::new());
-        let providers = manager.initial_statuses();
+        let mut providers = manager.initial_statuses();
+        // 从配置中恢复各 Provider 的启用状态
+        for p in &mut providers {
+            p.enabled = settings.is_provider_enabled(p.kind);
+        }
+        // 默认选第一个已启用的 Provider，否则 fallback 到 Claude
+        let first_enabled = ProviderKind::all()
+            .iter()
+            .find(|k| settings.is_provider_enabled(**k))
+            .copied()
+            .unwrap_or(ProviderKind::Claude);
         Self {
             providers,
             settings,
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(first_enabled),
+            last_provider_kind: first_enabled,
             manager,
-            refreshed: false,
+            last_refresh_started: None,
             settings_tab: SettingsTab::General,
+            settings_selected_provider: ProviderKind::Claude,
+            cadence_dropdown_open: false,
         }
     }
 }
@@ -86,12 +104,19 @@ impl AppView {
         };
         cx.set_global(theme);
 
-        // 只在首次打开时刷新 provider 数据
-        if !state.borrow().refreshed {
-            info!(target: "providers", "starting first background refresh pass");
-            state.borrow_mut().refreshed = true;
-            let refresh_mins = state.borrow().settings.refresh_interval_mins;
-            Self::start_background_refresh(state.borrow().manager.clone(), refresh_mins, cx);
+        // 后台 refresh 循环绑定在 AppView 生命周期上，窗口关闭后循环会停。
+        // 每次新建窗口需要重启循环，但不应立即重新拉取——
+        // do_refresh_all 内部会用 per-provider 防抖跳过还在有效期内的 Provider。
+        let should_restart_loop = state
+            .borrow()
+            .last_refresh_started
+            .map(|t| t.elapsed() > Duration::from_secs(5))
+            .unwrap_or(true);
+
+        if should_restart_loop {
+            info!(target: "providers", "starting background refresh loop");
+            state.borrow_mut().last_refresh_started = Some(std::time::Instant::now());
+            Self::start_background_refresh(state.borrow().manager.clone(), cx);
         }
 
         Self {
@@ -108,6 +133,27 @@ impl AppView {
     ) {
         let all_kinds = ProviderKind::all().to_vec();
         for kind in all_kinds {
+            // 跳过未启用的 Provider
+            let enabled = view
+                .update(async_cx, |view, _| {
+                    view.state.borrow().settings.is_provider_enabled(kind)
+                })
+                .unwrap_or(false);
+            if !enabled {
+                continue;
+            }
+
+            // 跳过最近刚刷新过的 Provider（防抖）
+            let recently_refreshed = view
+                .update(async_cx, |view, _| {
+                    Self::is_recently_refreshed(&view.state.borrow(), kind)
+                })
+                .unwrap_or(false);
+            if recently_refreshed {
+                info!(target: "providers", "skipping provider {:?} (refreshed within cooldown)", kind);
+                continue;
+            }
+
             let mgr = manager.clone();
 
             // Check availability first (runs on background thread)
@@ -179,7 +225,6 @@ impl AppView {
 
     fn start_background_refresh(
         manager: Arc<crate::providers::ProviderManager>,
-        refresh_interval_mins: u64,
         cx: &mut Context<Self>,
     ) {
         cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
@@ -188,23 +233,141 @@ impl AppView {
                 // 首次刷新
                 Self::do_refresh_all(&manager, &this, &mut async_cx).await;
 
-                // 定时刷新（0 表示禁用）
-                if refresh_interval_mins > 0 {
-                    let interval = Duration::from_secs(refresh_interval_mins * 60);
-                    loop {
-                        smol::Timer::after(interval).await;
-                        // 如果 view 已销毁，退出循环
+                // 定时刷新：每次循环动态读取最新间隔
+                loop {
+                    let interval_mins = this
+                        .update(&mut async_cx, |view, _| {
+                            view.state.borrow().settings.refresh_interval_mins
+                        })
+                        .unwrap_or(0);
+
+                    // 0 表示禁用自动刷新，短暂休眠后重新检查（设置可能被改回来）
+                    if interval_mins == 0 {
+                        smol::Timer::after(Duration::from_secs(5)).await;
                         if this.upgrade().is_none() {
-                            info!(target: "providers", "view dropped, stopping periodic refresh");
                             break;
                         }
-                        info!(target: "providers", "periodic refresh triggered (every {} min)", refresh_interval_mins);
-                        Self::do_refresh_all(&manager, &this, &mut async_cx).await;
+                        continue;
                     }
+
+                    let interval = Duration::from_secs(interval_mins * 60);
+                    smol::Timer::after(interval).await;
+
+                    if this.upgrade().is_none() {
+                        info!(target: "providers", "view dropped, stopping periodic refresh");
+                        break;
+                    }
+                    info!(target: "providers", "periodic refresh triggered (every {} min)", interval_mins);
+                    Self::do_refresh_all(&manager, &this, &mut async_cx).await;
                 }
             }
         })
         .detach();
+    }
+
+    /// 手动刷新的最小冷却时间（防止连续点击）
+    const MANUAL_REFRESH_COOLDOWN: Duration = Duration::from_secs(10);
+
+    /// 获取 per-provider 防抖冷却时间：取刷新间隔的一半，但不低于 30 秒
+    fn refresh_cooldown(state: &AppState) -> Duration {
+        let interval_secs = state.settings.refresh_interval_mins * 60;
+        let half = interval_secs / 2;
+        Duration::from_secs(half.max(30))
+    }
+
+    /// 检查某个 Provider 是否在冷却期内（最近刚刷新过）
+    fn is_recently_refreshed(state: &AppState, kind: ProviderKind) -> bool {
+        if let Some(p) = state.providers.iter().find(|p| p.kind == kind) {
+            if let Some(instant) = p.last_refreshed_instant {
+                return instant.elapsed() < Self::refresh_cooldown(state);
+            }
+        }
+        false
+    }
+
+    /// Trigger a manual refresh for a single provider (with debounce)
+    pub(crate) fn trigger_single_refresh(
+        state: Rc<RefCell<AppState>>,
+        entity: Entity<AppView>,
+        kind: ProviderKind,
+        cx: &mut App,
+    ) {
+        // 防抖：短冷却防连点
+        {
+            let s = state.borrow();
+            if let Some(p) = s.providers.iter().find(|p| p.kind == kind) {
+                if let Some(instant) = p.last_refreshed_instant {
+                    if instant.elapsed() < Self::MANUAL_REFRESH_COOLDOWN {
+                        info!(target: "providers", "manual refresh {:?} skipped (within {}s cooldown)",
+                            kind, Self::MANUAL_REFRESH_COOLDOWN.as_secs());
+                        return;
+                    }
+                }
+            }
+        }
+
+        let manager = state.borrow().manager.clone();
+        entity
+            .update(cx, |_, cx| {
+                cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
+                    let mut async_cx = cx.clone();
+                    async move {
+                        // Set Refreshing state
+                        let _ = this.update(&mut async_cx, |view, cx| {
+                            let mut s = view.state.borrow_mut();
+                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                                p.connection = ConnectionStatus::Refreshing;
+                            }
+                            cx.notify();
+                        });
+
+                        let mgr = manager.clone();
+                        let result =
+                            smol::unblock(move || smol::block_on(mgr.refresh_provider(kind)))
+                                .await;
+
+                        match result {
+                            Ok(quotas) => {
+                                info!(target: "providers", "manual refresh {:?} succeeded with {} quotas", kind, quotas.len());
+                                let _ = this.update(&mut async_cx, |view, cx| {
+                                    let mut s = view.state.borrow_mut();
+                                    if let Some(p) =
+                                        s.providers.iter_mut().find(|p| p.kind == kind)
+                                    {
+                                        p.quotas = quotas;
+                                        p.connection = ConnectionStatus::Connected;
+                                        p.last_refreshed_instant =
+                                            Some(std::time::Instant::now());
+                                        p.last_updated_at = None;
+                                        p.error_message = None;
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                            Err(err) => {
+                                warn!(target: "providers", "manual refresh {:?} failed: {err}", kind);
+                                let _ = this.update(&mut async_cx, |view, cx| {
+                                    let mut s = view.state.borrow_mut();
+                                    if let Some(p) =
+                                        s.providers.iter_mut().find(|p| p.kind == kind)
+                                    {
+                                        if p.quotas.is_empty() {
+                                            p.connection = ConnectionStatus::Error;
+                                        } else {
+                                            p.connection = ConnectionStatus::Connected;
+                                        }
+                                        p.last_updated_at =
+                                            Some("Update failed".to_string());
+                                        p.error_message = Some(err.to_string());
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                        }
+                    }
+                })
+                .detach();
+            });
     }
 }
 

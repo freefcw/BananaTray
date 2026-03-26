@@ -77,6 +77,52 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
     }
 }
 
+pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
+    if !provider.enabled {
+        return format!("Disabled — {}", provider.kind.source_label());
+    }
+    match provider.connection {
+        ConnectionStatus::Connected => {
+            if let Some(ref email) = provider.account_email {
+                email.clone()
+            } else {
+                provider.kind.source_label().to_string()
+            }
+        }
+        ConnectionStatus::Disconnected => {
+            format!("{} not detected...", provider.kind.source_label())
+        }
+        ConnectionStatus::Refreshing => "refreshing...".to_string(),
+        ConnectionStatus::Error => {
+            let base = provider.kind.source_label();
+            if provider.error_message.is_some() {
+                format!("{}\nlast fetch failed", base)
+            } else {
+                format!("{}\nfetch failed", base)
+            }
+        }
+    }
+}
+
+pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
+    let source = provider.kind.source_label();
+    match provider.connection {
+        ConnectionStatus::Error => format!("{} · last fetch failed", source),
+        ConnectionStatus::Refreshing => format!("{} · refreshing", source),
+        ConnectionStatus::Connected => {
+            if provider.last_refreshed_instant.is_some() {
+                let time = provider.format_last_updated().to_lowercase();
+                format!("{} · {}", source, time)
+            } else {
+                format!("{} · usage not fetched yet", source)
+            }
+        }
+        ConnectionStatus::Disconnected => {
+            format!("{} · not detected", source)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,6 @@
 use super::SettingsView;
-use crate::models::AppSettings;
+use crate::app::{persist_settings, provider_logic};
+use crate::models::{AppSettings, ConnectionStatus, ProviderKind, StatusLevel};
 use crate::theme::Theme;
 use gpui::*;
 
@@ -18,257 +19,638 @@ impl SettingsView {
 }
 
 impl SettingsView {
-    /// Render Providers settings tab
-    pub(super) fn render_providers_tab(&self, _settings: &AppSettings, theme: &Theme) -> Div {
-        // Read the actual token from config file (same source as CopilotProvider)
-        let github_token = Self::read_github_token_from_config().unwrap_or_default();
-        let env_token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
-        let has_token = !github_token.is_empty() || env_token.is_some();
-        let display_token = if !github_token.is_empty() {
-            github_token.clone()
+    /// Render Providers settings tab — CodeBar-style two-column layout
+    pub(super) fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        let selected = self.state.borrow().settings_selected_provider;
+        let providers = self.state.borrow().providers.clone();
+
+        div()
+            .flex()
+            .flex_1()
+            .min_h(px(540.0))
+            .child(self.render_provider_sidebar(&providers, selected, settings, theme))
+            .child(self.render_provider_detail_panel(&providers, selected, settings, theme))
+    }
+
+    // ══════ Left sidebar ══════
+
+    fn render_provider_sidebar(
+        &self,
+        providers: &[crate::models::ProviderStatus],
+        selected: ProviderKind,
+        settings: &AppSettings,
+        theme: &Theme,
+    ) -> Div {
+        let mut card = Self::render_card().py(px(4.0));
+
+        for (i, kind) in ProviderKind::all().iter().enumerate() {
+            let provider = providers.iter().find(|p| p.kind == *kind);
+            let is_selected = *kind == selected;
+            let is_enabled = settings.is_provider_enabled(*kind);
+            let subtitle = if let Some(p) = provider {
+                provider_logic::provider_list_subtitle(p)
+            } else {
+                format!("Disabled — {}", kind.source_label())
+            };
+
+            let state = self.state.clone();
+            let kind_copy = *kind;
+
+            if i > 0 {
+                card = card.child(Self::render_card_separator());
+            }
+
+            let mut item = div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .px(px(10.0))
+                .py(px(8.0))
+                .cursor_pointer();
+
+            if is_selected {
+                item = item.mx(px(4.0)).rounded(px(8.0)).bg(theme.element_selected);
+            }
+
+            item = item
+                // Provider icon
+                .child(
+                    svg()
+                        .path(kind.icon_asset())
+                        .size(px(22.0))
+                        .flex_shrink_0()
+                        .text_color(if is_selected {
+                            theme.element_active
+                        } else {
+                            theme.text_secondary
+                        }),
+                )
+                // Name + subtitle column
+                .child(
+                    div()
+                        .flex_col()
+                        .flex_1()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(if is_selected {
+                                            theme.element_active
+                                        } else {
+                                            theme.text_primary
+                                        })
+                                        .child(kind.display_name()),
+                                )
+                                // Green dot
+                                .child(
+                                    div()
+                                        .w(px(6.0))
+                                        .h(px(6.0))
+                                        .rounded_full()
+                                        .bg(theme.status_success),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.5))
+                                .line_height(relative(1.3))
+                                .text_color(if is_selected {
+                                    theme.element_active
+                                } else {
+                                    theme.text_muted
+                                })
+                                .overflow_hidden()
+                                .child(subtitle),
+                        ),
+                );
+
+            // Enabled badge (blue checkbox)
+            if is_enabled {
+                item = item.child(Self::render_enabled_badge(theme));
+            }
+
+            item = item.on_mouse_down(MouseButton::Left, move |_, window, _| {
+                state.borrow_mut().settings_selected_provider = kind_copy;
+                window.refresh();
+            });
+
+            card = card.child(item);
+        }
+
+        div()
+            .flex_col()
+            .w(px(190.0))
+            .pl(px(8.0))
+            .pr(px(4.0))
+            .pt(px(8.0))
+            .child(card)
+    }
+
+    // ══════ Right detail panel ══════
+
+    fn render_provider_detail_panel(
+        &self,
+        providers: &[crate::models::ProviderStatus],
+        selected: ProviderKind,
+        settings: &AppSettings,
+        theme: &Theme,
+    ) -> Div {
+        let provider = providers.iter().find(|p| p.kind == selected).cloned();
+        let is_enabled = settings.is_provider_enabled(selected);
+        let subtitle = if let Some(ref p) = provider {
+            provider_logic::provider_detail_subtitle(p)
         } else {
-            env_token.unwrap_or_default()
+            format!("{} · not available", selected.source_label())
         };
-        let token_source = if !github_token.is_empty() {
-            "config file"
-        } else if has_token {
-            "GITHUB_TOKEN env"
-        } else {
-            ""
-        };
+
+        let state_toggle = self.state.clone();
+        let toggle_kind = selected;
 
         div()
             .flex_col()
             .flex_1()
-            .px(px(16.0))
-            .pt(px(16.0))
-            .pb(px(20.0))
-            // ═══════ COPILOT ═══════
+            .pl(px(8.0))
+            .pr(px(12.0))
+            .pt(px(8.0))
+            .gap(px(16.0))
+            // ── Header: icon + name + refresh + toggle ──
             .child(
                 div()
-                    .flex_col()
-                    .child(Self::render_section_label("GITHUB COPILOT", theme))
+                    .flex()
+                    .items_start()
+                    .justify_between()
                     .child(
-                        Self::render_card()
-                            // GitHub Token
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.0))
                             .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .flex_1()
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("GitHub Token"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("Classic PAT with 'copilot' scope. Auto-detects plan & quota."),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_shrink_0()
-                                            .items_center()
-                                            .ml(px(12.0))
-                                            .px(px(10.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .border_1()
-                                            .border_color(theme.border_strong)
-                                            .bg(theme.element_active)
-                                            .text_size(px(12.0))
-                                            .text_color(if display_token.is_empty() {
-                                                theme.text_muted
-                                            } else {
-                                                theme.text_primary
-                                            })
-                                            .child(if display_token.is_empty() {
-                                                "Not set".to_string()
-                                            } else {
-                                                format!("{}…", &display_token[..8.min(display_token.len())])
-                                            }),
-                                    ),
+                                svg()
+                                    .path(selected.icon_asset())
+                                    .size(px(28.0))
+                                    .text_color(theme.text_primary),
                             )
-                            .child(Self::render_card_separator())
-                            // Status
                             .child(
                                 div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .px(px(14.0))
-                                    .py(px(10.0))
+                                    .flex_col()
                                     .child(
                                         div()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Status"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child(if has_token {
-                                                        format!("Token configured via {}. Copilot quota will be auto-detected.", token_source)
-                                                    } else {
-                                                        "Set your GitHub token to enable Copilot monitoring.".to_string()
-                                                    }),
-                                            ),
+                                            .text_size(px(16.0))
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(theme.text_primary)
+                                            .child(selected.display_name()),
                                     )
                                     .child(
                                         div()
-                                            .px(px(8.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .bg(if has_token {
-                                                theme.status_success
-                                            } else {
-                                                theme.status_warning
-                                            })
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(theme.element_active)
-                                            .child(if has_token { "Ready" } else { "Not Configured" }),
+                                            .text_size(px(11.5))
+                                            .text_color(theme.text_muted)
+                                            .child(subtitle),
                                     ),
                             ),
-                    ),
-            )
-            // ═══════ CONFIG FILE INFO ═══════
-            .child(
-                div()
-                    .flex_col()
-                    .mt(px(12.0))
-                    .child(Self::render_section_label("CONFIGURATION", theme))
+                    )
                     .child(
-                        Self::render_card()
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            // Refresh button
                             .child(
                                 div()
+                                    .w(px(28.0))
+                                    .h(px(28.0))
                                     .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(4.0))
-                                            .flex_1()
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Config File Location"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.5))
-                                                    .text_color(theme.text_muted)
-                                                    .child("~/Library/Application Support/BananaTray/settings.json"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .mt(px(4.0))
-                                                    .child("Click 'Edit Config' to open the file in your default editor."),
-                                            ),
-                                    ),
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(6.0))
+                                    .border_1()
+                                    .border_color(theme.border_strong)
+                                    .cursor_pointer()
+                                    .text_size(px(14.0))
+                                    .text_color(theme.text_muted)
+                                    .child("⟳"),
                             )
-                            .child(Self::render_card_separator())
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .child(
-                                        div()
-                                            .text_size(px(12.5))
-                                            .text_color(theme.text_secondary)
-                                            .child("Example format:"),
-                                    )
-                                    .child(
-                                        div()
-                                            .px(px(12.0))
-                                            .py(px(6.0))
-                                            .rounded(px(8.0))
-                                            .bg(theme.text_accent)
-                                            .text_size(px(12.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme.element_active)
-                                            .cursor_pointer()
-                                            .child("Edit Config")
-                                            .on_mouse_down(MouseButton::Left, |_, _, _| {
-                                                let path = dirs::config_dir()
-                                                    .unwrap_or_else(|| std::path::PathBuf::from("."))
-                                                    .join("BananaTray")
-                                                    .join("settings.json");
-                                                if let Some(parent) = path.parent() {
-                                                    let _ = std::fs::create_dir_all(parent);
-                                                }
-                                                let _ = std::process::Command::new("open")
-                                                    .arg(&path)
-                                                    .spawn();
-                                            }),
-                                    ),
-                            ),
+                            // Toggle switch
+                            .child(Self::render_toggle(is_enabled, theme).on_mouse_down(
+                                MouseButton::Left,
+                                move |_, window, _| {
+                                    let settings = {
+                                        let mut s = state_toggle.borrow_mut();
+                                        let new_val = !s.settings.is_provider_enabled(toggle_kind);
+                                        s.settings.set_provider_enabled(toggle_kind, new_val);
+                                        if let Some(p) =
+                                            s.providers.iter_mut().find(|p| p.kind == toggle_kind)
+                                        {
+                                            p.enabled = new_val;
+                                        }
+                                        // Force a fresh refresh when the popup next opens
+                                        if new_val {
+                                            s.last_refresh_started = None;
+                                        }
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                },
+                            )),
                     ),
             )
-            // ═══════ ENV VARIABLES INFO ═══════
+            // ── Info table ──
+            .child(self.render_info_table(provider.as_ref(), is_enabled, theme))
+            // ── Usage section ──
+            .child(self.render_usage_section(provider.as_ref(), is_enabled, theme))
+            // ── Settings section ──
+            .child(self.render_settings_section(selected, settings, theme))
+    }
+
+    // ══════ Info table ══════
+
+    fn render_info_table(
+        &self,
+        provider: Option<&crate::models::ProviderStatus>,
+        enabled: bool,
+        theme: &Theme,
+    ) -> Div {
+        let state_text = if enabled { "Enabled" } else { "Disabled" };
+        let source_text = "auto";
+        let updated_text = provider
+            .map(|p| p.format_last_updated())
+            .unwrap_or_else(|| "Not fetched yet".to_string());
+        let status_text = provider
+            .map(|p| match p.connection {
+                ConnectionStatus::Connected => "All Systems Operational".to_string(),
+                ConnectionStatus::Disconnected => "Not detected".to_string(),
+                ConnectionStatus::Refreshing => "Refreshing…".to_string(),
+                ConnectionStatus::Error => "Error".to_string(),
+            })
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        div()
+            .flex_col()
+            .gap(px(6.0))
+            .child(Self::render_info_row("State", state_text, theme))
+            .child(Self::render_info_row("Source", source_text, theme))
+            .child(Self::render_info_row("Updated", &updated_text, theme))
+            .child(Self::render_info_row("Status", &status_text, theme))
+    }
+
+    fn render_info_row(label: &str, value: &str, theme: &Theme) -> Div {
+        div()
+            .flex()
+            .items_center()
             .child(
                 div()
-                    .flex_col()
-                    .mt(px(12.0))
-                    .child(Self::render_section_label("ALTERNATIVE", theme))
+                    .w(px(70.0))
+                    .text_size(px(12.0))
+                    .text_color(theme.text_muted)
+                    .child(label.to_string()),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_primary)
+                    .child(value.to_string()),
+            )
+    }
+
+    // ══════ Usage section ══════
+
+    fn render_usage_section(
+        &self,
+        provider: Option<&crate::models::ProviderStatus>,
+        enabled: bool,
+        theme: &Theme,
+    ) -> Div {
+        let mut section = div().flex_col().gap(px(8.0)).child(
+            div()
+                .text_size(px(14.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text_primary)
+                .child("Usage"),
+        );
+
+        if !enabled {
+            return section.child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .child("Enable this provider to start tracking usage."),
+            );
+        }
+
+        if let Some(p) = provider {
+            if !p.quotas.is_empty() {
+                for quota in &p.quotas {
+                    section = section.child(Self::render_quota_bar_light(quota, theme));
+                }
+            } else if p.connection == ConnectionStatus::Error {
+                let title = format!("Last {} fetch failed:", p.kind.display_name());
+                let msg = p
+                    .error_message
+                    .clone()
+                    .unwrap_or_else(|| "Unknown error".to_string());
+                section = section
                     .child(
-                        Self::render_card()
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_muted)
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .px(px(10.0))
+                            .py(px(8.0))
+                            .rounded(px(6.0))
+                            .bg(theme.bg_subtle)
                             .child(
                                 div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(10.0))
-                                    .px(px(14.0))
-                                    .py(px(10.0))
-                                    .child(
-                                        div()
-                                            .flex_col()
-                                            .gap(px(4.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child("Environment Variables"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .line_height(relative(1.4))
-                                                    .text_color(theme.text_secondary)
-                                                    .child("You can also set GITHUB_USERNAME and GITHUB_TOKEN environment variables instead of using the config file."),
-                                            ),
-                                    ),
+                                    .text_size(px(11.5))
+                                    .line_height(relative(1.4))
+                                    .text_color(theme.text_secondary)
+                                    .child(msg),
                             ),
+                    );
+            } else {
+                section = section.child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.text_secondary)
+                        .child("No usage yet"),
+                );
+            }
+        } else {
+            section = section.child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .child("Provider not available"),
+            );
+        }
+
+        section
+    }
+
+    // ══════ Quota bar (light theme) ══════
+
+    fn render_quota_bar_light(quota: &crate::models::QuotaInfo, theme: &Theme) -> Div {
+        let pct = quota.percentage();
+        let remaining = (100.0 - pct).max(0.0);
+        let bar_color = match quota.status_level() {
+            StatusLevel::Green => theme.status_success,
+            StatusLevel::Yellow => theme.status_warning,
+            StatusLevel::Red => theme.status_error,
+        };
+
+        div()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text_primary)
+                            .child(quota.label.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(theme.text_muted)
+                            .child(if let Some(ref reset) = quota.reset_at {
+                                reset.clone()
+                            } else {
+                                String::new()
+                            }),
                     ),
             )
+            .child(
+                div()
+                    .w_full()
+                    .h(px(8.0))
+                    .bg(theme.progress_track)
+                    .rounded_full()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .w(relative(pct as f32 / 100.0))
+                            .h_full()
+                            .bg(bar_color)
+                            .rounded_full(),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .text_color(theme.text_muted)
+                            .child(format!("{:.0}% left", remaining)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .text_color(theme.text_muted)
+                            .child(provider_logic::format_quota_usage(quota)),
+                    ),
+            )
+    }
+
+    // ══════ Provider-specific settings ══════
+
+    fn render_settings_section(
+        &self,
+        kind: ProviderKind,
+        settings: &AppSettings,
+        theme: &Theme,
+    ) -> Div {
+        let mut section = div().flex_col().gap(px(8.0)).child(
+            div()
+                .text_size(px(14.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text_primary)
+                .child("Settings"),
+        );
+
+        match kind {
+            ProviderKind::Copilot => {
+                section = section.child(self.render_copilot_settings(settings, theme));
+            }
+            _ => {
+                section = section.child(
+                    div()
+                        .text_size(px(12.0))
+                        .line_height(relative(1.4))
+                        .text_color(theme.text_secondary)
+                        .child(format!(
+                            "{} is configured automatically. No additional settings required.",
+                            kind.display_name()
+                        )),
+                );
+            }
+        }
+
+        section
+    }
+
+    fn render_copilot_settings(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        // Check token from multiple sources: in-memory (loaded at startup), disk, env var
+        let mem_token = settings
+            .providers
+            .github_token
+            .clone()
+            .filter(|s| !s.is_empty());
+        let disk_token = Self::read_github_token_from_config();
+        let env_token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
+
+        let (effective_token, source) = if let Some(t) = mem_token {
+            (Some(t), "config file")
+        } else if let Some(t) = disk_token {
+            // Sync disk token into memory so future persist_settings won't overwrite it
+            self.state.borrow_mut().settings.providers.github_token = Some(t.clone());
+            (Some(t), "config file")
+        } else if let Some(t) = env_token {
+            (Some(t), "GITHUB_TOKEN env")
+        } else {
+            (None, "")
+        };
+
+        let has_token = effective_token.is_some();
+        let masked = effective_token.as_ref().map(|t| {
+            if t.len() <= 8 {
+                "••••••••".to_string()
+            } else {
+                format!("{}••••{}", &t[..4], &t[t.len() - 4..])
+            }
+        });
+
+        div()
+            .flex_col()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_primary)
+                    .child("GitHub Login"),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .line_height(relative(1.4))
+                    .text_color(theme.text_secondary)
+                    .child("Requires authentication via GitHub Token."),
+            )
+            .child(if has_token {
+                div()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(6.0))
+                            .bg(theme.status_success)
+                            .text_size(px(11.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.element_active)
+                            .child("Token configured"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(theme.text_muted)
+                            .child(format!("{} · via {}", masked.unwrap_or_default(), source)),
+                    )
+            } else {
+                div()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(theme.text_muted)
+                            .child("Set token via config file or GITHUB_TOKEN env var"),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .py(px(8.0))
+                            .rounded(px(8.0))
+                            .bg(theme.text_primary)
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .flex()
+                            .justify_center()
+                            .child("Sign in with GitHub")
+                            .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                let path = crate::settings_store::config_path();
+                                if let Some(parent) = path.parent() {
+                                    let _ = std::fs::create_dir_all(parent);
+                                }
+                                let _ = std::process::Command::new("open").arg(&path).spawn();
+                            }),
+                    )
+            })
+    }
+
+    // ══════ Widget helpers ══════
+
+    fn render_toggle(enabled: bool, theme: &Theme) -> Div {
+        div()
+            .w(px(44.0))
+            .h(px(24.0))
+            .flex()
+            .items_center()
+            .rounded_full()
+            .px(px(2.0))
+            .cursor_pointer()
+            .bg(if enabled {
+                theme.element_selected
+            } else {
+                theme.bg_subtle
+            })
+            .border_1()
+            .border_color(if enabled {
+                theme.text_accent_soft
+            } else {
+                theme.border_strong
+            })
+            .child(
+                div()
+                    .w(px(18.0))
+                    .h(px(18.0))
+                    .rounded_full()
+                    .bg(theme.element_active)
+                    .ml(if enabled { px(20.0) } else { px(0.0) }),
+            )
+    }
+
+    fn render_enabled_badge(theme: &Theme) -> Div {
+        let blue: Hsla = rgb(0x007aff).into();
+        div()
+            .w(px(20.0))
+            .h(px(20.0))
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .justify_center()
+            .rounded(px(5.0))
+            .bg(blue)
+            .text_size(px(11.0))
+            .font_weight(FontWeight::BOLD)
+            .text_color(theme.element_active)
+            .child("✓")
     }
 }
