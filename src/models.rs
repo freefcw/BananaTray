@@ -16,6 +16,21 @@ pub enum ProviderKind {
     Amp,
 }
 
+/// 配额类型
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QuotaType {
+    /// 5h 滑动窗口会话配额
+    Session,
+    /// 周配额（所有模型合计）
+    Weekly,
+    /// 按模型的周配额（如 Opus / Sonnet）
+    ModelSpecific(String),
+    /// 基于金额的信用额度
+    Credit,
+    /// 通用/不确定类型
+    General,
+}
+
 impl ProviderKind {
     /// 获取 Provider 显示名称
     pub fn display_name(&self) -> &'static str {
@@ -94,8 +109,17 @@ pub struct QuotaInfo {
     pub used: f64,
     /// 总配额
     pub limit: f64,
-    /// 配额类型标签（如 "Session", "Daily", "Weekly"）
+    /// 配额类型标签（如 "Session (5h)", "Weekly", "Pro"）
     pub label: String,
+    /// 配额类型
+    #[serde(default = "default_quota_type")]
+    pub quota_type: QuotaType,
+    /// 重置时间描述（如 "Resets in 2h 15m"）
+    pub reset_at: Option<String>,
+}
+
+fn default_quota_type() -> QuotaType {
+    QuotaType::General
 }
 
 impl QuotaInfo {
@@ -104,6 +128,25 @@ impl QuotaInfo {
             used,
             limit,
             label: label.into(),
+            quota_type: QuotaType::General,
+            reset_at: None,
+        }
+    }
+
+    /// 创建带完整信息的配额
+    pub fn with_details(
+        label: impl Into<String>,
+        used: f64,
+        limit: f64,
+        quota_type: QuotaType,
+        reset_at: Option<String>,
+    ) -> Self {
+        Self {
+            used,
+            limit,
+            label: label.into(),
+            quota_type,
+            reset_at,
         }
     }
 
@@ -115,12 +158,17 @@ impl QuotaInfo {
         (self.used / self.limit * 100.0).min(100.0)
     }
 
+    /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
+    pub fn is_percentage_mode(&self) -> bool {
+        (self.limit - 100.0).abs() < f64::EPSILON
+    }
+
     /// 状态等级：Green / Yellow / Red
     pub fn status_level(&self) -> StatusLevel {
         let pct = self.percentage();
-        if pct < 60.0 {
+        if pct < 50.0 {
             StatusLevel::Green
-        } else if pct < 85.0 {
+        } else if pct < 80.0 {
             StatusLevel::Yellow
         } else {
             StatusLevel::Red
@@ -149,6 +197,7 @@ pub enum StatusLevel {
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
+    Refreshing,
     Error,
 }
 
@@ -163,6 +212,8 @@ pub struct ProviderStatus {
     pub account_email: Option<String>,
     /// 是否为付费版
     pub is_paid: bool,
+    /// 账号层级（如 "Pro", "Max", "Free", "Business"）
+    pub account_tier: Option<String>,
     /// 上次更新时间描述（仅用于错误/断连状态的静态文案）
     pub last_updated_at: Option<String>,
     /// 最近一次刷新失败时的提示文案
@@ -189,6 +240,7 @@ impl ProviderStatus {
         } else {
             match self.connection {
                 ConnectionStatus::Connected => "Waiting for data".to_string(),
+                ConnectionStatus::Refreshing => "Refreshing…".to_string(),
                 ConnectionStatus::Error => "Needs attention".to_string(),
                 ConnectionStatus::Disconnected => "Not connected".to_string(),
             }
@@ -237,8 +289,24 @@ pub struct AppSettings {
     pub global_hotkey: String,
     pub auto_hide_window: bool,
     pub visible_provider_count: usize,
+    /// 开机自启动
+    #[serde(default)]
+    pub start_at_login: bool,
+    /// 显示消费概览
+    #[serde(default = "default_true")]
+    pub show_cost_summary: bool,
+    /// 检查 Provider 状态页
+    #[serde(default = "default_true")]
+    pub check_provider_status: bool,
+    /// Session 配额变更通知
+    #[serde(default = "default_true")]
+    pub session_quota_notifications: bool,
     /// Provider 特定配置
     pub providers: ProviderSettings,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -249,6 +317,10 @@ impl Default for AppSettings {
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
             visible_provider_count: 4,
+            start_at_login: false,
+            show_cost_summary: true,
+            check_provider_status: true,
+            session_quota_notifications: true,
             providers: ProviderSettings::default(),
         }
     }

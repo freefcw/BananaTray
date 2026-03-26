@@ -109,6 +109,35 @@ impl AppView {
         let all_kinds = ProviderKind::all().to_vec();
         for kind in all_kinds {
             let mgr = manager.clone();
+
+            // Check availability first (runs on background thread)
+            let mgr_check = mgr.clone();
+            let available =
+                smol::unblock(move || smol::block_on(mgr_check.is_provider_available(kind))).await;
+
+            if !available {
+                info!(target: "providers", "skipping provider {:?} (unavailable)", kind);
+                let _ = view.update(async_cx, |view, cx| {
+                    let mut s = view.state.borrow_mut();
+                    if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                        if p.connection != ConnectionStatus::Connected {
+                            p.connection = ConnectionStatus::Disconnected;
+                        }
+                    }
+                    cx.notify();
+                });
+                continue;
+            }
+
+            // Set Refreshing state before starting
+            let _ = view.update(async_cx, |view, cx| {
+                let mut s = view.state.borrow_mut();
+                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                    p.connection = ConnectionStatus::Refreshing;
+                }
+                cx.notify();
+            });
+
             info!(target: "providers", "refreshing provider {:?}", kind);
             let result = smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
 
@@ -134,6 +163,9 @@ impl AppView {
                         if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
                             if p.quotas.is_empty() {
                                 p.connection = ConnectionStatus::Error;
+                            } else {
+                                // Keep Connected if we have stale data
+                                p.connection = ConnectionStatus::Connected;
                             }
                             p.last_updated_at = Some("Update failed".to_string());
                             p.error_message = Some(err.to_string());

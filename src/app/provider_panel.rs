@@ -46,6 +46,33 @@ impl AppView {
         let sub_color = theme.text_secondary;
         let account_text = provider_logic::provider_account_label(provider, highlighted);
         let last_updated = provider.format_last_updated();
+        let tier_badge = provider.account_tier.clone();
+
+        let header_right = div().flex().items_center().gap(px(6.0));
+
+        // Add tier badge if available
+        let header_right = if let Some(ref tier) = tier_badge {
+            header_right.child(
+                div()
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(theme.text_accent_soft)
+                    .text_color(theme.text_accent)
+                    .child(tier.clone()),
+            )
+        } else {
+            header_right
+        };
+
+        let header_right = header_right.child(
+            div()
+                .text_size(px(12.0))
+                .text_color(sub_color)
+                .child(account_text),
+        );
 
         let shell = div()
             .flex()
@@ -57,7 +84,7 @@ impl AppView {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            // Row 1: Provider name (left) + account email (right)
+            // Row 1: Provider name (left) + tier badge + account (right)
             .child(
                 div()
                     .flex()
@@ -70,12 +97,7 @@ impl AppView {
                             .text_color(title_color)
                             .child(provider.kind.display_name()),
                     )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(sub_color)
-                            .child(account_text),
-                    ),
+                    .child(header_right),
             )
             // Row 2: Updated time
             .child(
@@ -149,6 +171,7 @@ impl AppView {
     ) -> impl IntoElement {
         let title = match provider.connection {
             ConnectionStatus::Connected => "Waiting for usage data",
+            ConnectionStatus::Refreshing => "Refreshing…",
             ConnectionStatus::Disconnected => "Connection required",
             ConnectionStatus::Error => "Refresh failed",
         };
@@ -243,7 +266,7 @@ impl AppView {
                             .rounded_full(),
                     ),
             )
-            // Bottom info row: "XX% left" on left, reset info on right
+            // Bottom info row: "XX% left" on left, usage/reset info on right
             .child(
                 div()
                     .flex()
@@ -262,6 +285,22 @@ impl AppView {
                             .child(provider_logic::format_quota_usage(q)),
                     ),
             );
+
+        // Add reset time if available
+        let row = if let Some(ref reset) = q.reset_at {
+            row.child(
+                div()
+                    .text_size(px(10.0))
+                    .text_color(theme.text_muted)
+                    .child(if reset.starts_with("Resets") {
+                        reset.clone()
+                    } else {
+                        format!("Resets {}", reset)
+                    }),
+            )
+        } else {
+            row
+        };
 
         if show_divider {
             row.mt(px(6.0))
