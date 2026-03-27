@@ -519,7 +519,12 @@ impl SettingsView {
                                 if let Some(parent) = path.parent() {
                                     let _ = std::fs::create_dir_all(parent);
                                 }
-                                let _ = std::process::Command::new("open").arg(&path).spawn();
+                                let cmd = if cfg!(target_os = "linux") {
+                                    "xdg-open"
+                                } else {
+                                    "open"
+                                };
+                                let _ = std::process::Command::new(cmd).arg(&path).spawn();
                             }),
                     )
             })

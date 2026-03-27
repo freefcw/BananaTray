@@ -330,9 +330,12 @@ impl AppView {
                     Some("src/icons/usage.svg"),
                     theme,
                     move |_, _, _| {
-                        let _ = std::process::Command::new("open")
-                            .arg(dashboard_url)
-                            .spawn();
+                        let cmd = if cfg!(target_os = "linux") {
+                            "xdg-open"
+                        } else {
+                            "open"
+                        };
+                        let _ = std::process::Command::new(cmd).arg(dashboard_url).spawn();
                     },
                 ))
                 .child(div().h(px(1.0)).bg(theme.border_subtle).my(px(3.0)));

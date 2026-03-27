@@ -34,12 +34,21 @@ pub fn save(settings: &AppSettings) -> Result<PathBuf> {
 }
 
 pub fn config_path() -> PathBuf {
-    if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home)
-            .join("Library")
-            .join("Application Support")
-            .join("BananaTray")
-            .join("settings.json");
+    if cfg!(target_os = "macos") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("BananaTray")
+                .join("settings.json");
+        }
+    } else if cfg!(target_os = "linux") {
+        // XDG Base Directory: $XDG_CONFIG_HOME 或 ~/.config
+        let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+            .unwrap_or_else(|| PathBuf::from("."));
+        return config_dir.join("bananatray").join("settings.json");
     }
 
     std::env::current_dir()
