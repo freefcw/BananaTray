@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{bail, Context, Result};
@@ -283,12 +283,20 @@ impl CodexProvider {
 
 #[async_trait]
 impl AiProvider for CodexProvider {
-    fn id(&self) -> &'static str {
-        "codex:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Codex,
+            display_name: "Codex",
+            brand_name: "OpenAI",
+            icon_asset: "src/icons/provider-codex.svg",
+            dashboard_url: "https://platform.openai.com/usage",
+            account_hint: "OpenAI account",
+            source_label: "openai api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Codex
+    fn id(&self) -> &'static str {
+        "codex:api"
     }
 
     async fn is_available(&self) -> bool {

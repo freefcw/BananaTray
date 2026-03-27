@@ -1,11 +1,18 @@
 use crate::theme::Theme;
 use gpui::*;
 
-pub(crate) fn render_svg_icon(path: &'static str, size: Pixels, color: Hsla) -> impl IntoElement {
+pub(crate) fn render_svg_icon(
+    path: impl Into<SharedString>,
+    size: Pixels,
+    color: Hsla,
+) -> impl IntoElement {
     svg().path(path).size(size).text_color(color)
 }
 
-pub(crate) fn render_footer_glyph(icon_path: &'static str, theme: &Theme) -> impl IntoElement {
+pub(crate) fn render_footer_glyph(
+    icon_path: impl Into<SharedString>,
+    theme: &Theme,
+) -> impl IntoElement {
     div()
         .w(px(18.0))
         .h(px(18.0))

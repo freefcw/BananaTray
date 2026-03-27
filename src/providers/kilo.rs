@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
@@ -35,12 +35,20 @@ impl KiloProvider {
 
 #[async_trait]
 impl AiProvider for KiloProvider {
-    fn id(&self) -> &'static str {
-        "kilo:ext"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Kilo,
+            display_name: "Kilo",
+            brand_name: "Kilo",
+            icon_asset: "src/icons/provider-kilo.svg",
+            dashboard_url: "https://kilo.dev",
+            account_hint: "Kilo account",
+            source_label: "kilo api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Kilo
+    fn id(&self) -> &'static str {
+        "kilo:ext"
     }
 
     async fn is_available(&self) -> bool {

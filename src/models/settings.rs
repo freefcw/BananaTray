@@ -78,15 +78,14 @@ impl AppSettings {
     /// 检查指定 Provider 是否已启用
     pub fn is_provider_enabled(&self, kind: ProviderKind) -> bool {
         self.enabled_providers
-            .get(kind.id_key())
+            .get(&kind.id_key())
             .copied()
             .unwrap_or(false)
     }
 
     /// 设置指定 Provider 的启用状态
     pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
-        self.enabled_providers
-            .insert(kind.id_key().to_string(), enabled);
+        self.enabled_providers.insert(kind.id_key(), enabled);
     }
 
     /// 按用户自定义顺序返回所有 Provider。未在 provider_order 中出现的 Provider 追加到末尾。
@@ -116,7 +115,7 @@ impl AppSettings {
     /// 将指定 Provider 在排序中上移一位。返回 true 表示发生了移动。
     pub fn move_provider_up(&mut self, kind: ProviderKind) -> bool {
         self.ensure_provider_order();
-        let key = kind.id_key().to_string();
+        let key = kind.id_key();
         if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
             if pos > 0 {
                 self.provider_order.swap(pos, pos - 1);
@@ -129,7 +128,7 @@ impl AppSettings {
     /// 将指定 Provider 在排序中下移一位。返回 true 表示发生了移动。
     pub fn move_provider_down(&mut self, kind: ProviderKind) -> bool {
         self.ensure_provider_order();
-        let key = kind.id_key().to_string();
+        let key = kind.id_key();
         if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
             if pos + 1 < self.provider_order.len() {
                 self.provider_order.swap(pos, pos + 1);
@@ -142,14 +141,11 @@ impl AppSettings {
     /// 确保 provider_order 包含所有 Provider
     fn ensure_provider_order(&mut self) {
         if self.provider_order.is_empty() {
-            self.provider_order = ProviderKind::all()
-                .iter()
-                .map(|k| k.id_key().to_string())
-                .collect();
+            self.provider_order = ProviderKind::all().iter().map(|k| k.id_key()).collect();
         } else {
             // 补全缺失的 Provider
             for kind in ProviderKind::all() {
-                let key = kind.id_key().to_string();
+                let key = kind.id_key();
                 if !self.provider_order.contains(&key) {
                     self.provider_order.push(key);
                 }

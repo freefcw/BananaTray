@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
@@ -36,12 +36,20 @@ impl VertexAiProvider {
 
 #[async_trait]
 impl AiProvider for VertexAiProvider {
-    fn id(&self) -> &'static str {
-        "vertexai:gcloud"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::VertexAi,
+            display_name: "Vertex AI",
+            brand_name: "Google Cloud",
+            icon_asset: "src/icons/provider-vertexai.svg",
+            dashboard_url: "https://console.cloud.google.com/vertex-ai",
+            account_hint: "Google Cloud account",
+            source_label: "vertex ai api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::VertexAi
+    fn id(&self) -> &'static str {
+        "vertexai:gcloud"
     }
 
     async fn is_available(&self) -> bool {

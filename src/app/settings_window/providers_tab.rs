@@ -50,6 +50,14 @@ impl SettingsView {
             let is_selected = *kind == selected;
             let is_enabled = settings.is_provider_enabled(*kind);
 
+            let status = _providers.iter().find(|p| p.kind == *kind);
+            let icon = status
+                .map(|p| p.icon_asset.clone())
+                .unwrap_or_else(|| "src/icons/provider-unknown.svg".to_string());
+            let display_name = status
+                .map(|p| p.display_name.clone())
+                .unwrap_or_else(|| format!("{:?}", kind));
+
             let state = self.state.clone();
             let kind_copy = *kind;
 
@@ -69,44 +77,41 @@ impl SettingsView {
                 item = item.mx(px(4.0)).rounded(px(8.0)).bg(theme.element_selected);
             }
 
-            item = item
-                // Provider icon
-                .child(
-                    svg()
-                        .path(kind.icon_asset())
-                        .size(px(22.0))
-                        .flex_shrink_0()
-                        .text_color(if is_selected {
+            item =
+                item
+                    // Provider icon
+                    .child(svg().path(icon).size(px(22.0)).flex_shrink_0().text_color(
+                        if is_selected {
                             theme.element_active
                         } else {
                             theme.text_secondary
-                        }),
-                )
-                // Name + green dot (enabled indicator)
-                .child({
-                    let name_row = div().flex().items_center().gap(px(4.0)).flex_1().child(
-                        div()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if is_selected {
-                                theme.element_active
-                            } else {
-                                theme.text_primary
-                            })
-                            .child(kind.display_name()),
-                    );
-                    if is_enabled {
-                        name_row.child(
+                        },
+                    ))
+                    // Name + green dot (enabled indicator)
+                    .child({
+                        let name_row = div().flex().items_center().gap(px(4.0)).flex_1().child(
                             div()
-                                .w(px(6.0))
-                                .h(px(6.0))
-                                .rounded_full()
-                                .bg(theme.status_success),
-                        )
-                    } else {
-                        name_row
-                    }
-                });
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(if is_selected {
+                                    theme.element_active
+                                } else {
+                                    theme.text_primary
+                                })
+                                .child(display_name),
+                        );
+                        if is_enabled {
+                            name_row.child(
+                                div()
+                                    .w(px(6.0))
+                                    .h(px(6.0))
+                                    .rounded_full()
+                                    .bg(theme.status_success),
+                            )
+                        } else {
+                            name_row
+                        }
+                    });
 
             // Reorder arrows — always reserve space, only interactive when selected
             {
@@ -224,10 +229,19 @@ impl SettingsView {
     ) -> Div {
         let provider = providers.iter().find(|p| p.kind == selected).cloned();
         let is_enabled = settings.is_provider_enabled(selected);
-        let subtitle = if let Some(ref p) = provider {
-            provider_logic::provider_detail_subtitle(p)
+
+        let (icon, display_name, subtitle) = if let Some(ref p) = provider {
+            (
+                p.icon_asset.clone(),
+                p.display_name.clone(),
+                provider_logic::provider_detail_subtitle(p),
+            )
         } else {
-            format!("{} · not available", selected.source_label())
+            (
+                "src/icons/provider-unknown.svg".to_string(),
+                format!("{:?}", selected),
+                format!("{:?} · not available", selected),
+            )
         };
 
         let state_toggle = self.state.clone();
@@ -254,7 +268,7 @@ impl SettingsView {
                             .gap(px(10.0))
                             .child(
                                 svg()
-                                    .path(selected.icon_asset())
+                                    .path(icon)
                                     .size(px(28.0))
                                     .text_color(theme.text_primary),
                             )
@@ -266,7 +280,7 @@ impl SettingsView {
                                             .text_size(px(16.0))
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(theme.text_primary)
-                                            .child(selected.display_name()),
+                                            .child(display_name),
                                     )
                                     .child(
                                         div()
@@ -405,7 +419,7 @@ impl SettingsView {
                         section.child(crate::app::widgets::render_quota_bar(quota, false, theme));
                 }
             } else if p.connection == ConnectionStatus::Error {
-                let title = format!("Last {} fetch failed:", p.kind.display_name());
+                let title = format!("Last {} fetch failed:", p.display_name);
                 let msg = p
                     .error_message
                     .clone()
@@ -481,6 +495,15 @@ impl SettingsView {
                 ));
             }
             _ => {
+                let display_name = self
+                    .state
+                    .borrow()
+                    .providers
+                    .iter()
+                    .find(|p| p.kind == kind)
+                    .map(|p| p.display_name.clone())
+                    .unwrap_or_else(|| format!("{:?}", kind));
+
                 section = section.child(
                     div()
                         .text_size(px(12.0))
@@ -488,7 +511,7 @@ impl SettingsView {
                         .text_color(theme.text_secondary)
                         .child(format!(
                             "{} is configured automatically. No additional settings required.",
-                            kind.display_name()
+                            display_name
                         )),
                 );
             }

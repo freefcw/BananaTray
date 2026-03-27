@@ -154,6 +154,12 @@ pub enum ConnectionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
     pub kind: ProviderKind,
+    pub display_name: String,
+    pub brand_name: String,
+    pub source_label: String,
+    pub account_hint: String,
+    pub icon_asset: String,
+    pub dashboard_url: String,
     pub enabled: bool,
     pub connection: ConnectionStatus,
     pub quotas: Vec<QuotaInfo>,

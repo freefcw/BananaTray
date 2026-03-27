@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
@@ -207,12 +207,20 @@ struct QuotaBucket {
 
 #[async_trait]
 impl AiProvider for GeminiProvider {
-    fn id(&self) -> &'static str {
-        "gemini:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Gemini,
+            display_name: "Gemini",
+            brand_name: "Google",
+            icon_asset: "src/icons/provider-gemini.svg",
+            dashboard_url: "https://aistudio.google.com/billing",
+            account_hint: "Google account",
+            source_label: "gemini api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Gemini
+    fn id(&self) -> &'static str {
+        "gemini:api"
     }
 
     async fn is_available(&self) -> bool {

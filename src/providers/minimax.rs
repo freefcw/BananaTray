@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
@@ -84,12 +84,20 @@ impl MiniMaxProvider {
 
 #[async_trait]
 impl AiProvider for MiniMaxProvider {
-    fn id(&self) -> &'static str {
-        "minimax:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::MiniMax,
+            display_name: "MiniMax",
+            brand_name: "MiniMax",
+            icon_asset: "src/icons/provider-minimax.svg",
+            dashboard_url: "https://platform.minimaxi.com",
+            account_hint: "MiniMax account",
+            source_label: "minimax api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::MiniMax
+    fn id(&self) -> &'static str {
+        "minimax:api"
     }
 
     async fn is_available(&self) -> bool {

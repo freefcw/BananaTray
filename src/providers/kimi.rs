@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
@@ -122,12 +122,20 @@ impl KimiProvider {
 
 #[async_trait]
 impl AiProvider for KimiProvider {
-    fn id(&self) -> &'static str {
-        "kimi:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Kimi,
+            display_name: "Kimi",
+            brand_name: "Moonshot",
+            icon_asset: "src/icons/provider-kimi.svg",
+            dashboard_url: "https://platform.moonshot.cn/console/account",
+            account_hint: "Moonshot account",
+            source_label: "kimi api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Kimi
+    fn id(&self) -> &'static str {
+        "kimi:api"
     }
 
     async fn is_available(&self) -> bool {
