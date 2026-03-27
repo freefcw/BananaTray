@@ -1,7 +1,5 @@
 use super::SettingsView;
-use crate::app::widgets::{
-    render_card, render_card_separator, render_detail_section_title, render_info_row,
-};
+use crate::app::widgets::{render_card_separator, render_detail_section_title, render_info_row};
 use crate::app::{persist_settings, provider_logic, AppState};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 use crate::theme::Theme;
@@ -9,16 +7,23 @@ use gpui::*;
 
 impl SettingsView {
     /// Render Providers settings tab — two-column layout
-    pub(super) fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
+    pub(super) fn render_providers_tab(
+        &self,
+        settings: &AppSettings,
+        theme: &Theme,
+        viewport: Size<Pixels>,
+    ) -> Div {
         let selected = self.state.borrow().settings_selected_provider;
         let providers = self.state.borrow().providers.clone();
 
         div()
             .flex()
-            .flex_1()
-            .min_h(px(540.0))
-            .child(self.render_provider_sidebar(&providers, selected, settings, theme))
-            .child(self.render_provider_detail_panel(&providers, selected, settings, theme))
+            .h_full()
+            .overflow_hidden()
+            .child(self.render_provider_sidebar(&providers, selected, settings, theme, viewport))
+            .child(
+                self.render_provider_detail_panel(&providers, selected, settings, theme, viewport),
+            )
     }
 
     // ══════ Left sidebar ══════
@@ -29,8 +34,16 @@ impl SettingsView {
         selected: ProviderKind,
         settings: &AppSettings,
         theme: &Theme,
+        viewport: Size<Pixels>,
     ) -> Div {
-        let mut card = render_card().py(px(4.0));
+        // NOTE: 不使用 render_card()，因为它带有 overflow_hidden()，
+        // 会让 Taffy 将 card 的 min-height 设为 0，导致 card 在 Scrollable
+        // 内部被压缩到容器高度，永远不会溢出，滚动条无法触发。
+        let mut card = div()
+            .flex_col()
+            .rounded(px(10.0))
+            .bg(rgb(0xffffff))
+            .py(px(4.0));
         let ordered = settings.ordered_providers();
 
         for (i, kind) in ordered.iter().enumerate() {
@@ -178,13 +191,27 @@ impl SettingsView {
             card = card.child(item);
         }
 
+        // Tab bar ≈ 65px, sidebar top-padding = 8px
+        let sidebar_scroll_h = viewport.height - px(65.0) - px(8.0);
+
         div()
             .flex_col()
-            .w(px(190.0))
+            .flex_none()
+            .flex_basis(px(190.0))
             .pl(px(8.0))
             .pr(px(4.0))
             .pt(px(8.0))
-            .child(card)
+            .overflow_hidden()
+            .border_1()
+            .border_color(rgb(0xff0000)) // DEBUG: red = sidebar outer
+            .child(
+                div()
+                    .id("provider-sidebar-scroll")
+                    .flex_col()
+                    .h(sidebar_scroll_h)
+                    .overflow_y_scroll()
+                    .child(card),
+            )
     }
 
     // ══════ Right detail panel ══════
@@ -195,6 +222,7 @@ impl SettingsView {
         selected: ProviderKind,
         settings: &AppSettings,
         theme: &Theme,
+        viewport: Size<Pixels>,
     ) -> Div {
         let provider = providers.iter().find(|p| p.kind == selected).cloned();
         let is_enabled = settings.is_provider_enabled(selected);
@@ -207,12 +235,13 @@ impl SettingsView {
         let state_toggle = self.state.clone();
         let toggle_kind = selected;
 
-        div()
+        let inner = div()
+            .id("provider-detail-scroll")
             .flex_col()
-            .flex_1()
             .pl(px(8.0))
             .pr(px(12.0))
             .pt(px(8.0))
+            .pb(px(12.0))
             .gap(px(16.0))
             // ── Header: icon + name + refresh + toggle ──
             .child(
@@ -304,7 +333,24 @@ impl SettingsView {
             // ── Usage section ──
             .child(self.render_usage_section(provider.as_ref(), is_enabled, theme))
             // ── Settings section ──
-            .child(self.render_settings_section(selected, settings, theme))
+            .child(self.render_settings_section(selected, settings, theme));
+
+        let detail_scroll_h = viewport.height - px(65.0);
+
+        div()
+            .flex_col()
+            .flex_1()
+            .overflow_hidden()
+            .border_1()
+            .border_color(rgb(0x00ff00)) // DEBUG: green = detail outer
+            .child(
+                div()
+                    .id("provider-detail-scroll")
+                    .flex_col()
+                    .h(detail_scroll_h)
+                    .overflow_y_scroll()
+                    .child(inner),
+            )
     }
 
     // ══════ Info table ══════
