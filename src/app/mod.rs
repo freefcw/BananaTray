@@ -116,6 +116,37 @@ impl AppState {
         (self.settings.clone(), new_val)
     }
 
+    /// Refresh all enabled providers at startup (before any window is opened).
+    pub fn spawn_startup_refresh(state: Rc<RefCell<Self>>, cx: &App) {
+        let kinds: Vec<_> = {
+            let s = state.borrow();
+            ProviderKind::all()
+                .iter()
+                .filter(|k| s.settings.is_provider_enabled(**k))
+                .copied()
+                .collect()
+        };
+
+        if kinds.is_empty() {
+            return;
+        }
+
+        info!(target: "providers", "startup refresh for {} enabled providers", kinds.len());
+        {
+            let mut s = state.borrow_mut();
+            for kind in &kinds {
+                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == *kind) {
+                    p.connection = ConnectionStatus::Refreshing;
+                }
+            }
+            s.last_refresh_started = Some(std::time::Instant::now());
+        }
+
+        for kind in kinds {
+            Self::spawn_provider_refresh(state.clone(), kind, cx);
+        }
+    }
+
     /// Spawn an async task to refresh a single provider's data.
     /// Works from any window context (SettingsView, AppView, etc).
     pub fn spawn_provider_refresh(state: Rc<RefCell<Self>>, kind: ProviderKind, cx: &App) {

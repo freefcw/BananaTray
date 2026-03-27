@@ -251,7 +251,13 @@ fn main() {
             // 3. 窗口控制器
             let controller = Rc::new(RefCell::new(TrayController::new()));
 
-            // 4. 托盘点击
+            // 4. 启动时立即刷新所有已启用 Provider
+            {
+                let state = controller.borrow().state.clone();
+                AppState::spawn_startup_refresh(state, cx);
+            }
+
+            // 5. 托盘点击
             let tray_ctrl = controller.clone();
             cx.on_tray_icon_event(move |event, cx| {
                 info!(target: "tray", "received tray event: {:?}", event);
@@ -262,7 +268,7 @@ fn main() {
                 }
             });
 
-            // 5. 全局热键 Cmd+Shift+S
+            // 6. 全局热键 Cmd+Shift+S
             if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
                 let _ = cx.register_global_hotkey(1, &keystroke);
             }

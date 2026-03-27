@@ -46,6 +46,9 @@ pub struct AppSettings {
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
     #[serde(default)]
     pub enabled_providers: HashMap<String, bool>,
+    /// Provider 在导航栏中的排列顺序（存储 id_key 列表）
+    #[serde(default)]
+    pub provider_order: Vec<String>,
 }
 
 fn default_true() -> bool {
@@ -66,6 +69,7 @@ impl Default for AppSettings {
             session_quota_notifications: true,
             providers: ProviderSettings::default(),
             enabled_providers: HashMap::new(),
+            provider_order: Vec::new(),
         }
     }
 }
@@ -83,5 +87,73 @@ impl AppSettings {
     pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
         self.enabled_providers
             .insert(kind.id_key().to_string(), enabled);
+    }
+
+    /// 按用户自定义顺序返回所有 Provider。未在 provider_order 中出现的 Provider 追加到末尾。
+    pub fn ordered_providers(&self) -> Vec<ProviderKind> {
+        let all = ProviderKind::all();
+        let mut result: Vec<ProviderKind> = Vec::with_capacity(all.len());
+
+        // 先按保存的顺序添加
+        for key in &self.provider_order {
+            if let Some(kind) = all.iter().find(|k| k.id_key() == key.as_str()) {
+                if !result.contains(kind) {
+                    result.push(*kind);
+                }
+            }
+        }
+
+        // 再追加未出现的 Provider（保持默认顺序）
+        for kind in all {
+            if !result.contains(kind) {
+                result.push(*kind);
+            }
+        }
+
+        result
+    }
+
+    /// 将指定 Provider 在排序中上移一位。返回 true 表示发生了移动。
+    pub fn move_provider_up(&mut self, kind: ProviderKind) -> bool {
+        self.ensure_provider_order();
+        let key = kind.id_key().to_string();
+        if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
+            if pos > 0 {
+                self.provider_order.swap(pos, pos - 1);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 将指定 Provider 在排序中下移一位。返回 true 表示发生了移动。
+    pub fn move_provider_down(&mut self, kind: ProviderKind) -> bool {
+        self.ensure_provider_order();
+        let key = kind.id_key().to_string();
+        if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
+            if pos + 1 < self.provider_order.len() {
+                self.provider_order.swap(pos, pos + 1);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 确保 provider_order 包含所有 Provider
+    fn ensure_provider_order(&mut self) {
+        if self.provider_order.is_empty() {
+            self.provider_order = ProviderKind::all()
+                .iter()
+                .map(|k| k.id_key().to_string())
+                .collect();
+        } else {
+            // 补全缺失的 Provider
+            for kind in ProviderKind::all() {
+                let key = kind.id_key().to_string();
+                if !self.provider_order.contains(&key) {
+                    self.provider_order.push(key);
+                }
+            }
+        }
     }
 }
