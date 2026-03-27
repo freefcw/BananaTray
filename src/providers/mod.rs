@@ -1,20 +1,9 @@
-pub mod amp;
-pub mod claude;
-pub mod codex;
-pub mod copilot;
-pub mod cursor;
-pub mod gemini;
-pub mod kilo;
-pub mod kimi;
-pub mod kiro;
 pub mod manager;
-pub mod minimax;
-pub mod opencode;
-pub mod vertex_ai;
 
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 pub use manager::ProviderManager;
 
@@ -40,3 +29,31 @@ pub trait AiProvider: Send + Sync {
     /// 核心方法：拉取最新的配额/用量情况
     async fn refresh(&self) -> Result<Vec<QuotaInfo>>;
 }
+
+macro_rules! register_providers {
+    ($($mod_name:ident => $struct_name:ident),* $(,)?) => {
+        $(pub mod $mod_name;)*
+
+        /// 注册所有可用的 Provider 实现
+        pub fn register_all(manager: &mut ProviderManager) {
+            $(
+                manager.register(Arc::new($mod_name::$struct_name::new()));
+            )*
+        }
+    };
+}
+
+register_providers!(
+    amp => AmpProvider,
+    claude => ClaudeProvider,
+    codex => CodexProvider,
+    copilot => CopilotProvider,
+    cursor => CursorProvider,
+    gemini => GeminiProvider,
+    kilo => KiloProvider,
+    kimi => KimiProvider,
+    kiro => KiroProvider,
+    minimax => MiniMaxProvider,
+    opencode => OpenCodeProvider,
+    vertex_ai => VertexAiProvider,
+);

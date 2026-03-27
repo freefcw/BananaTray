@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
 pub struct ProviderManager {
-    providers: Vec<Arc<dyn AiProvider>>,
+    pub(crate) providers: Vec<Arc<dyn AiProvider>>,
 }
 
 impl ProviderManager {
@@ -14,19 +14,8 @@ impl ProviderManager {
             providers: Vec::new(),
         };
 
-        // 注册已有的真实 Provider (比如 claude)
-        manager.register(Arc::new(super::claude::ClaudeProvider::new()));
-        manager.register(Arc::new(super::gemini::GeminiProvider::new()));
-        manager.register(Arc::new(super::amp::AmpProvider::new()));
-        manager.register(Arc::new(super::copilot::CopilotProvider::new()));
-        manager.register(Arc::new(super::codex::CodexProvider::new()));
-        manager.register(Arc::new(super::kimi::KimiProvider::new()));
-        manager.register(Arc::new(super::cursor::CursorProvider::new()));
-        manager.register(Arc::new(super::opencode::OpenCodeProvider::new()));
-        manager.register(Arc::new(super::minimax::MiniMaxProvider::new()));
-        manager.register(Arc::new(super::vertex_ai::VertexAiProvider::new()));
-        manager.register(Arc::new(super::kilo::KiloProvider::new()));
-        manager.register(Arc::new(super::kiro::KiroProvider::new()));
+        // 注册所有已实现的 Provider
+        super::register_all(&mut manager);
 
         manager
     }
@@ -107,5 +96,34 @@ impl ProviderManager {
             }
         }
         bail!("No implementation registered for provider {:?}", kind)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_provider_kinds_have_implementation() {
+        let manager = ProviderManager::new();
+        for kind in ProviderKind::all() {
+            let found = manager.providers.iter().any(|p| p.kind() == *kind);
+            assert!(
+                found,
+                "ProviderKind::{:?} is defined in models but NOT registered in ProviderManager.
+                Please add it to register_providers! macro in src/providers/mod.rs",
+                kind
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_duplicate_provider_ids() {
+        let manager = ProviderManager::new();
+        let mut ids = std::collections::HashSet::new();
+        for p in &manager.providers {
+            let id = p.id();
+            assert!(ids.insert(id), "Duplicate provider id: {}", id);
+        }
     }
 }
