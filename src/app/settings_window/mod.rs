@@ -341,7 +341,7 @@ impl SettingsView {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::preferences_theme();
         let settings = self.state.borrow().settings.clone();
         let active_tab = self.state.borrow().settings_tab;
@@ -379,16 +379,23 @@ impl Render for SettingsView {
         }
 
         // ── Content area (depends on active tab) ─────────────
-        let content = div()
-            .id("settings-content")
-            .flex_col()
-            .flex_1()
-            .overflow_y_scroll()
-            .child(match active_tab {
-                SettingsTab::General => self.render_general_tab(&settings, &theme),
-                SettingsTab::Providers => self.render_providers_tab(&settings, &theme),
-                _ => Self::render_placeholder_tab(active_tab, &theme),
-            });
+        // Providers tab handles its own scrolling (sidebar + detail panel
+        // scroll independently), so the content wrapper must NOT be a scroll
+        // container — otherwise the inner flex_1 children can grow unbounded
+        // and never overflow.  Other tabs keep the outer scroll.
+        let content = div().id("settings-content").flex_col().flex_1();
+        let content = if active_tab == SettingsTab::Providers {
+            content.overflow_hidden()
+        } else {
+            content.overflow_y_scroll()
+        };
+        let content = content.child(match active_tab {
+            SettingsTab::General => self.render_general_tab(&settings, &theme),
+            SettingsTab::Providers => {
+                self.render_providers_tab(&settings, &theme, window.viewport_size())
+            }
+            _ => Self::render_placeholder_tab(active_tab, &theme),
+        });
 
         div()
             .size_full()
