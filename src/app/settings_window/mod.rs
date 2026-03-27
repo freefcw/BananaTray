@@ -136,10 +136,36 @@ pub fn schedule_open_settings_window(
 fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<DisplayId>, cx: &mut App) {
     info!(target: "settings", "requested settings window");
 
+    // Determine target display: prefer provided display_id, then mouse cursor display
+    let target_display_id = display_id.or_else(|| platform_display::find_mouse_display(cx));
+
     // Try to activate an existing settings window first
     let activated_existing = SETTINGS_WINDOW.with(|slot| {
         if let Some(handle) = slot.borrow().as_ref() {
             info!(target: "settings", "existing settings window found, attempting to activate it");
+
+            // Check if window is on a different display than the target;
+            // if so, close and reopen on the correct display.
+            if let Some(target_id) = target_display_id {
+                let on_different_display = handle
+                    .update(cx, |_, window, cx| {
+                        // window.display() returns the display the window is currently on
+                        window
+                            .display(cx)
+                            .map(|d| d.id() != target_id)
+                            .unwrap_or(true)
+                    })
+                    .unwrap_or(false);
+
+                if on_different_display {
+                    info!(target: "settings", "window on different display, closing to reopen on target display");
+                    let _ = handle.update(cx, |_, window, _| {
+                        window.remove_window();
+                    });
+                    return false;
+                }
+            }
+
             let ok = handle
                 .update(cx, |_, window, _| {
                     window.show_window();
@@ -166,10 +192,24 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     });
 
     let settings_state = state.clone();
-    // Use the provided display_id, or fall back to detecting the mouse cursor's display.
-    let display_id = display_id.or_else(|| platform_display::find_mouse_display(cx));
+    let display_id = target_display_id;
     let window_size = size(px(640.0), px(700.0));
-    let window_bounds = WindowBounds::Windowed(Bounds::centered(display_id, window_size, cx));
+    // Calculate display-local centered bounds. Bounds::centered() returns global
+    // coordinates, but the macOS platform layer adds screen_frame.origin on top,
+    // causing double-offset on secondary displays.
+    let display_bounds = display_id
+        .and_then(|id| cx.find_display(id))
+        .or_else(|| cx.primary_display())
+        .map(|d| d.bounds().size)
+        .unwrap_or(window_size);
+    let origin = point(
+        (display_bounds.width - window_size.width) / 2.0,
+        (display_bounds.height - window_size.height) / 2.0,
+    );
+    let window_bounds = WindowBounds::Windowed(Bounds {
+        origin,
+        size: window_size,
+    });
     let result = cx.open_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
@@ -191,6 +231,12 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
         let _ = handle.update(cx, |_, window, _| {
             window.show_window();
             window.activate_window();
+            // Force a resize cycle to sync viewport/renderer on secondary displays.
+            // The Metal layer drawable size may not match the GPUI viewport after
+            // cross-display window creation; triggering a resize corrects this.
+            let vp = window.viewport_size();
+            window.resize(size(vp.width + px(1.0), vp.height));
+            window.resize(vp);
         });
         info!(target: "settings", "requested app/window activation for settings window");
         SETTINGS_WINDOW.with(|slot| {
