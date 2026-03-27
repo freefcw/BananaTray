@@ -38,12 +38,12 @@ impl AiProvider for KiloProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Kilo,
-            display_name: "Kilo",
-            brand_name: "Kilo",
-            icon_asset: "src/icons/provider-kilo.svg",
-            dashboard_url: "https://kilo.dev",
-            account_hint: "Kilo account",
-            source_label: "kilo api",
+            display_name: "Kilo".into(),
+            brand_name: "Kilo".into(),
+            icon_asset: "src/icons/provider-kilo.svg".into(),
+            dashboard_url: "https://kilo.dev".into(),
+            account_hint: "Kilo account".into(),
+            source_label: "kilo api".into(),
         }
     }
 

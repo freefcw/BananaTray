@@ -18,12 +18,12 @@ impl AiProvider for AmpProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Amp,
-            display_name: "Amp",
-            brand_name: "Amp",
-            icon_asset: "src/icons/provider-amp.svg",
-            dashboard_url: "https://app.amphq.com/usage",
-            account_hint: "Amp CLI",
-            source_label: "amp cli",
+            display_name: "Amp".into(),
+            brand_name: "Amp".into(),
+            icon_asset: "src/icons/provider-amp.svg".into(),
+            dashboard_url: "https://app.amphq.com/usage".into(),
+            account_hint: "Amp CLI".into(),
+            source_label: "amp cli".into(),
         }
     }
 

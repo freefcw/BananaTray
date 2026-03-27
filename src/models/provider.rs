@@ -22,14 +22,15 @@ pub enum ProviderKind {
 }
 
 /// Provider 元数据
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProviderMetadata {
     pub kind: ProviderKind,
-    pub display_name: &'static str,
-    pub brand_name: &'static str,
-    pub icon_asset: &'static str,
-    pub dashboard_url: &'static str,
-    pub account_hint: &'static str,
-    pub source_label: &'static str,
+    pub display_name: String,
+    pub brand_name: String,
+    pub icon_asset: String,
+    pub dashboard_url: String,
+    pub account_hint: String,
+    pub source_label: String,
 }
 
 impl ProviderKind {

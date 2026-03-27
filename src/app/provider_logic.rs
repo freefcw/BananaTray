@@ -29,7 +29,7 @@ pub fn provider_empty_message(provider: &ProviderStatus) -> String {
         if error.contains("Missing environment variable") {
             return format!(
                 "Connect {} credentials before quota tracking can start.",
-                provider.display_name
+                provider.display_name()
             );
         }
 
@@ -44,14 +44,17 @@ pub fn provider_empty_message(provider: &ProviderStatus) -> String {
         ConnectionStatus::Error => {
             format!(
                 "{} usage could not be refreshed right now.",
-                provider.display_name
+                provider.display_name()
             )
         }
         ConnectionStatus::Refreshing => {
-            format!("Fetching {} usage data…", provider.display_name)
+            format!("Fetching {} usage data…", provider.display_name())
         }
         ConnectionStatus::Disconnected => {
-            format!("Connect {} to start tracking quota.", provider.display_name)
+            format!(
+                "Connect {} to start tracking quota.",
+                provider.display_name()
+            )
         }
         ConnectionStatus::Connected => "No usage details available yet.".to_string(),
     }
@@ -64,31 +67,31 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
     }
 
     if compact {
-        provider.brand_name.clone()
+        provider.brand_name().to_string()
     } else {
-        provider.account_hint.clone()
+        provider.account_hint().to_string()
     }
 }
 
 #[allow(dead_code)]
 pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
     if !provider.enabled {
-        return format!("Disabled — {}", provider.source_label);
+        return format!("Disabled — {}", provider.source_label());
     }
     match provider.connection {
         ConnectionStatus::Connected => {
             if let Some(ref email) = provider.account_email {
                 email.clone()
             } else {
-                provider.source_label.clone()
+                provider.source_label().to_string()
             }
         }
         ConnectionStatus::Disconnected => {
-            format!("{} not detected...", provider.source_label)
+            format!("{} not detected...", provider.source_label())
         }
         ConnectionStatus::Refreshing => "refreshing...".to_string(),
         ConnectionStatus::Error => {
-            let base = &provider.source_label;
+            let base = provider.source_label();
             if provider.error_message.is_some() {
                 format!("{}\nlast fetch failed", base)
             } else {
@@ -99,7 +102,7 @@ pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
 }
 
 pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
-    let source = &provider.source_label;
+    let source = provider.source_label();
     match provider.connection {
         ConnectionStatus::Error => format!("{} · last fetch failed", source),
         ConnectionStatus::Refreshing => format!("{} · refreshing", source),
@@ -120,17 +123,22 @@ pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus, QuotaInfo};
+    use crate::models::{
+        ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus, QuotaInfo,
+    };
 
     fn make_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
         ProviderStatus {
             kind,
-            display_name: format!("{:?}", kind),
-            brand_name: "Test Brand".to_string(),
-            source_label: "test source".to_string(),
-            account_hint: "test account".to_string(),
-            icon_asset: "src/icons/usage.svg".to_string(),
-            dashboard_url: "https://example.com".to_string(),
+            metadata: ProviderMetadata {
+                kind,
+                display_name: format!("{:?}", kind),
+                brand_name: "Test Brand".to_string(),
+                source_label: "test source".to_string(),
+                account_hint: "test account".to_string(),
+                icon_asset: "src/icons/usage.svg".to_string(),
+                dashboard_url: "https://example.com".to_string(),
+            },
             enabled: true,
             connection,
             quotas: vec![],
@@ -190,14 +198,14 @@ mod tests {
     #[test]
     fn account_label_compact_without_email() {
         let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
-        p.brand_name = "GitHub".to_string();
+        p.metadata.brand_name = "GitHub".to_string();
         assert_eq!(provider_account_label(&p, true), "GitHub");
     }
 
     #[test]
     fn account_label_verbose_without_email() {
         let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
-        p.account_hint = "GitHub account".to_string();
+        p.metadata.account_hint = "GitHub account".to_string();
         assert_eq!(provider_account_label(&p, false), "GitHub account");
     }
 
@@ -213,7 +221,7 @@ mod tests {
         ];
         for (kind, expected) in cases {
             let mut p = make_provider(kind, ConnectionStatus::Connected);
-            p.brand_name = expected.to_string();
+            p.metadata.brand_name = expected.to_string();
             assert_eq!(provider_account_label(&p, true), expected);
         }
     }

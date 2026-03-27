@@ -158,12 +158,12 @@ impl AiProvider for CopilotProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Copilot,
-            display_name: "Copilot",
-            brand_name: "GitHub",
-            icon_asset: "src/icons/provider-copilot.svg",
-            dashboard_url: "https://github.com/settings/copilot",
-            account_hint: "GitHub account",
-            source_label: "github api",
+            display_name: "Copilot".into(),
+            brand_name: "GitHub".into(),
+            icon_asset: "src/icons/provider-copilot.svg".into(),
+            dashboard_url: "https://github.com/settings/copilot".into(),
+            account_hint: "GitHub account".into(),
+            source_label: "github api".into(),
         }
     }
 

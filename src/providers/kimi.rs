@@ -125,12 +125,12 @@ impl AiProvider for KimiProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Kimi,
-            display_name: "Kimi",
-            brand_name: "Moonshot",
-            icon_asset: "src/icons/provider-kimi.svg",
-            dashboard_url: "https://platform.moonshot.cn/console/account",
-            account_hint: "Moonshot account",
-            source_label: "kimi api",
+            display_name: "Kimi".into(),
+            brand_name: "Moonshot".into(),
+            icon_asset: "src/icons/provider-kimi.svg".into(),
+            dashboard_url: "https://platform.moonshot.cn/console/account".into(),
+            account_hint: "Moonshot account".into(),
+            source_label: "kimi api".into(),
         }
     }
 

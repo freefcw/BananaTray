@@ -210,12 +210,12 @@ impl AiProvider for GeminiProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Gemini,
-            display_name: "Gemini",
-            brand_name: "Google",
-            icon_asset: "src/icons/provider-gemini.svg",
-            dashboard_url: "https://aistudio.google.com/billing",
-            account_hint: "Google account",
-            source_label: "gemini api",
+            display_name: "Gemini".into(),
+            brand_name: "Google".into(),
+            icon_asset: "src/icons/provider-gemini.svg".into(),
+            dashboard_url: "https://aistudio.google.com/billing".into(),
+            account_hint: "Google account".into(),
+            source_label: "gemini api".into(),
         }
     }
 

@@ -162,12 +162,12 @@ impl AiProvider for ClaudeProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Claude,
-            display_name: "Claude",
-            brand_name: "Anthropic",
-            icon_asset: "src/icons/provider-claude.svg",
-            dashboard_url: "https://console.anthropic.com/settings/usage",
-            account_hint: "Anthropic workspace",
-            source_label: "claude cli",
+            display_name: "Claude".into(),
+            brand_name: "Anthropic".into(),
+            icon_asset: "src/icons/provider-claude.svg".into(),
+            dashboard_url: "https://console.anthropic.com/settings/usage".into(),
+            account_hint: "Anthropic workspace".into(),
+            source_label: "claude cli".into(),
         }
     }
 

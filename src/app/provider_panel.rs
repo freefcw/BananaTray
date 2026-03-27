@@ -46,7 +46,7 @@ impl AppView {
             .cloned();
 
         let (icon, display_name) = if let Some(p) = provider {
-            (p.icon_asset, p.display_name)
+            (p.icon_asset().to_string(), p.display_name().to_string())
         } else {
             (
                 "src/icons/provider-unknown.svg".to_string(),
@@ -165,7 +165,7 @@ impl AppView {
                             .text_size(px(15.0))
                             .font_weight(FontWeight::BOLD)
                             .text_color(title_color)
-                            .child(provider.display_name.clone()),
+                            .child(provider.display_name().to_string()),
                     )
                     .child(header_right),
             )

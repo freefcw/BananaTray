@@ -286,12 +286,12 @@ impl AiProvider for CodexProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Codex,
-            display_name: "Codex",
-            brand_name: "OpenAI",
-            icon_asset: "src/icons/provider-codex.svg",
-            dashboard_url: "https://platform.openai.com/usage",
-            account_hint: "OpenAI account",
-            source_label: "openai api",
+            display_name: "Codex".into(),
+            brand_name: "OpenAI".into(),
+            icon_asset: "src/icons/provider-codex.svg".into(),
+            dashboard_url: "https://platform.openai.com/usage".into(),
+            account_hint: "OpenAI account".into(),
+            source_label: "openai api".into(),
         }
     }
 

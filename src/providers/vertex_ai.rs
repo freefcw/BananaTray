@@ -39,12 +39,12 @@ impl AiProvider for VertexAiProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::VertexAi,
-            display_name: "Vertex AI",
-            brand_name: "Google Cloud",
-            icon_asset: "src/icons/provider-vertexai.svg",
-            dashboard_url: "https://console.cloud.google.com/vertex-ai",
-            account_hint: "Google Cloud account",
-            source_label: "vertex ai api",
+            display_name: "Vertex AI".into(),
+            brand_name: "Google Cloud".into(),
+            icon_asset: "src/icons/provider-vertexai.svg".into(),
+            dashboard_url: "https://console.cloud.google.com/vertex-ai".into(),
+            account_hint: "Google Cloud account".into(),
+            source_label: "vertex ai api".into(),
         }
     }
 

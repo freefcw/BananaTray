@@ -87,12 +87,12 @@ impl AiProvider for MiniMaxProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::MiniMax,
-            display_name: "MiniMax",
-            brand_name: "MiniMax",
-            icon_asset: "src/icons/provider-minimax.svg",
-            dashboard_url: "https://platform.minimaxi.com",
-            account_hint: "MiniMax account",
-            source_label: "minimax api",
+            display_name: "MiniMax".into(),
+            brand_name: "MiniMax".into(),
+            icon_asset: "src/icons/provider-minimax.svg".into(),
+            dashboard_url: "https://platform.minimaxi.com".into(),
+            account_hint: "MiniMax account".into(),
+            source_label: "minimax api".into(),
         }
     }
 

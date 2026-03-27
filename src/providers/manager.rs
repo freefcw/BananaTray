@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
+use crate::models::{ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus};
 use anyhow::{bail, Result};
 use std::sync::Arc;
 
@@ -47,36 +47,23 @@ impl ProviderManager {
     pub fn initial_statuses(&self) -> Vec<ProviderStatus> {
         let mut statuses = Vec::new();
         for kind in ProviderKind::all() {
-            let (display_name, brand_name, source_label, account_hint, icon_asset, dashboard_url) =
-                if let Some(p) = self.providers.iter().find(|p| p.kind() == *kind) {
-                    let m = p.metadata();
-                    (
-                        m.display_name.to_string(),
-                        m.brand_name.to_string(),
-                        m.source_label.to_string(),
-                        m.account_hint.to_string(),
-                        m.icon_asset.to_string(),
-                        m.dashboard_url.to_string(),
-                    )
-                } else {
-                    (
-                        format!("{:?}", kind),
-                        format!("{:?}", kind),
-                        "unknown".to_string(),
-                        "account".to_string(),
-                        "src/icons/provider-unknown.svg".to_string(),
-                        "".to_string(),
-                    )
-                };
+            let metadata = if let Some(p) = self.providers.iter().find(|p| p.kind() == *kind) {
+                p.metadata()
+            } else {
+                ProviderMetadata {
+                    kind: *kind,
+                    display_name: format!("{:?}", kind),
+                    brand_name: format!("{:?}", kind),
+                    source_label: "unknown".to_string(),
+                    account_hint: "account".to_string(),
+                    icon_asset: "src/icons/provider-unknown.svg".to_string(),
+                    dashboard_url: "".to_string(),
+                }
+            };
 
             statuses.push(ProviderStatus {
                 kind: *kind,
-                display_name,
-                brand_name,
-                source_label,
-                account_hint,
-                icon_asset,
-                dashboard_url,
+                metadata,
                 enabled: true,
                 connection: ConnectionStatus::Disconnected,
                 quotas: vec![],

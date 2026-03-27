@@ -1,4 +1,4 @@
-use super::provider::ProviderKind;
+use super::provider::{ProviderKind, ProviderMetadata};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -154,12 +154,9 @@ pub enum ConnectionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
     pub kind: ProviderKind,
-    pub display_name: String,
-    pub brand_name: String,
-    pub source_label: String,
-    pub account_hint: String,
-    pub icon_asset: String,
-    pub dashboard_url: String,
+    /// 静态元数据（名称、图标、链接等）
+    pub metadata: ProviderMetadata,
+    /// 启用状态（从设置读取）
     pub enabled: bool,
     pub connection: ConnectionStatus,
     pub quotas: Vec<QuotaInfo>,
@@ -179,6 +176,31 @@ pub struct ProviderStatus {
 }
 
 impl ProviderStatus {
+    /// 兼容旧的扁平化访问接口
+    pub fn display_name(&self) -> &str {
+        &self.metadata.display_name
+    }
+
+    pub fn icon_asset(&self) -> &str {
+        &self.metadata.icon_asset
+    }
+
+    pub fn dashboard_url(&self) -> &str {
+        &self.metadata.dashboard_url
+    }
+
+    pub fn brand_name(&self) -> &str {
+        &self.metadata.brand_name
+    }
+
+    pub fn account_hint(&self) -> &str {
+        &self.metadata.account_hint
+    }
+
+    pub fn source_label(&self) -> &str {
+        &self.metadata.source_label
+    }
+
     /// 格式化上次刷新的相对时间
     pub fn format_last_updated(&self) -> String {
         if let Some(instant) = self.last_refreshed_instant {

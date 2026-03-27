@@ -129,12 +129,12 @@ impl AiProvider for KiroProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Kiro,
-            display_name: "Kiro",
-            brand_name: "AWS",
-            icon_asset: "src/icons/provider-kiro.svg",
-            dashboard_url: "https://kiro.dev",
-            account_hint: "AWS account",
-            source_label: "kiro cli",
+            display_name: "Kiro".into(),
+            brand_name: "AWS".into(),
+            icon_asset: "src/icons/provider-kiro.svg".into(),
+            dashboard_url: "https://kiro.dev".into(),
+            account_hint: "AWS account".into(),
+            source_label: "kiro cli".into(),
         }
     }
 
