@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::text_utils;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -126,12 +126,20 @@ impl KiroProvider {
 
 #[async_trait]
 impl AiProvider for KiroProvider {
-    fn id(&self) -> &'static str {
-        "kiro:cli"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Kiro,
+            display_name: "Kiro",
+            brand_name: "AWS",
+            icon_asset: "src/icons/provider-kiro.svg",
+            dashboard_url: "https://kiro.dev",
+            account_hint: "AWS account",
+            source_label: "kiro cli",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Kiro
+    fn id(&self) -> &'static str {
+        "kiro:cli"
     }
 
     async fn is_available(&self) -> bool {

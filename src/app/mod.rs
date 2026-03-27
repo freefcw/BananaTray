@@ -441,7 +441,13 @@ impl AppView {
             .border_color(theme.border_subtle);
 
         if let NavTab::Provider(kind) = active_tab {
-            let dashboard_url = kind.dashboard_url();
+            let dashboard_url = state
+                .borrow()
+                .providers
+                .iter()
+                .find(|p| p.kind == kind)
+                .map(|p| p.dashboard_url.clone())
+                .unwrap_or_default();
             menu = menu
                 .child(self.render_menu_item(
                     "Status Page",
@@ -453,7 +459,7 @@ impl AppView {
                         } else {
                             "open"
                         };
-                        let _ = std::process::Command::new(cmd).arg(dashboard_url).spawn();
+                        let _ = std::process::Command::new(cmd).arg(&dashboard_url).spawn();
                     },
                 ))
                 .child(div().h(px(1.0)).bg(theme.border_subtle).my(px(3.0)));

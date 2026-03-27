@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{bail, Context, Result};
@@ -235,12 +235,20 @@ impl CursorProvider {
 
 #[async_trait]
 impl AiProvider for CursorProvider {
-    fn id(&self) -> &'static str {
-        "cursor:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Cursor,
+            display_name: "Cursor",
+            brand_name: "Cursor",
+            icon_asset: "src/icons/provider-cursor.svg",
+            dashboard_url: "https://www.cursor.com/settings",
+            account_hint: "Cursor account",
+            source_label: "cursor api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Cursor
+    fn id(&self) -> &'static str {
+        "cursor:api"
     }
 
     async fn is_available(&self) -> bool {

@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
@@ -15,12 +15,20 @@ impl AmpProvider {
 
 #[async_trait]
 impl AiProvider for AmpProvider {
-    fn id(&self) -> &'static str {
-        "amp:cli"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Amp,
+            display_name: "Amp",
+            brand_name: "Amp",
+            icon_asset: "src/icons/provider-amp.svg",
+            dashboard_url: "https://app.amphq.com/usage",
+            account_hint: "Amp CLI",
+            source_label: "amp cli",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Amp
+    fn id(&self) -> &'static str {
+        "amp:cli"
     }
 
     async fn is_available(&self) -> bool {

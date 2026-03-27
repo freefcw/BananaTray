@@ -38,6 +38,21 @@ impl AppView {
     ) -> AnyElement {
         let theme = cx.global::<Theme>();
         let state = self.state.clone();
+        let provider = state
+            .borrow()
+            .providers
+            .iter()
+            .find(|p| p.kind == kind)
+            .cloned();
+
+        let (icon, display_name) = if let Some(p) = provider {
+            (p.icon_asset, p.display_name)
+        } else {
+            (
+                "src/icons/provider-unknown.svg".to_string(),
+                format!("{:?}", kind),
+            )
+        };
 
         div()
             .flex_col()
@@ -50,18 +65,13 @@ impl AppView {
             .bg(theme.bg_card)
             .border_1()
             .border_color(theme.border_subtle)
-            .child(
-                svg()
-                    .path(kind.icon_asset())
-                    .size(px(32.0))
-                    .text_color(theme.text_muted),
-            )
+            .child(svg().path(icon).size(px(32.0)).text_color(theme.text_muted))
             .child(
                 div()
                     .text_size(px(14.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text_primary)
-                    .child(format!("{} is not enabled", kind.display_name())),
+                    .child(format!("{} is not enabled", display_name)),
             )
             .child(
                 div()
@@ -155,7 +165,7 @@ impl AppView {
                             .text_size(px(15.0))
                             .font_weight(FontWeight::BOLD)
                             .text_color(title_color)
-                            .child(provider.kind.display_name()),
+                            .child(provider.display_name.clone()),
                     )
                     .child(header_right),
             )

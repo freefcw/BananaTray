@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::process::Command;
@@ -14,12 +14,20 @@ impl OpenCodeProvider {
 
 #[async_trait]
 impl AiProvider for OpenCodeProvider {
-    fn id(&self) -> &'static str {
-        "opencode:cli"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::OpenCode,
+            display_name: "OpenCode",
+            brand_name: "OpenCode",
+            icon_asset: "src/icons/provider-opencode.svg",
+            dashboard_url: "https://opencode.ai",
+            account_hint: "OpenCode account",
+            source_label: "opencode api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::OpenCode
+    fn id(&self) -> &'static str {
+        "opencode:cli"
     }
 
     async fn is_available(&self) -> bool {

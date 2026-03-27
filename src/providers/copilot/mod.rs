@@ -1,7 +1,7 @@
 pub mod settings_ui;
 
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -155,12 +155,20 @@ struct InteractionQuota {
 
 #[async_trait]
 impl AiProvider for CopilotProvider {
-    fn id(&self) -> &'static str {
-        "copilot:api"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Copilot,
+            display_name: "Copilot",
+            brand_name: "GitHub",
+            icon_asset: "src/icons/provider-copilot.svg",
+            dashboard_url: "https://github.com/settings/copilot",
+            account_hint: "GitHub account",
+            source_label: "github api",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Copilot
+    fn id(&self) -> &'static str {
+        "copilot:api"
     }
 
     async fn is_available(&self) -> bool {

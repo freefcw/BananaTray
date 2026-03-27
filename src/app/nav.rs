@@ -13,6 +13,7 @@ impl AppView {
         let state_ref = self.state.borrow();
         let visible_provider_count = state_ref.settings.visible_provider_count.clamp(3, 6);
         let settings = state_ref.settings.clone();
+        let providers = state_ref.providers.clone();
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
@@ -21,12 +22,14 @@ impl AppView {
             .into_iter()
             .filter(|kind| settings.is_provider_enabled(*kind))
             .take(visible_provider_count)
-            .map(|kind| {
-                (
-                    kind.icon_asset(),
-                    kind.display_name(),
-                    NavTab::Provider(kind),
-                )
+            .filter_map(|kind| {
+                providers.iter().find(|p| p.kind == kind).map(|p| {
+                    (
+                        p.icon_asset.clone(),
+                        p.display_name.clone(),
+                        NavTab::Provider(kind),
+                    )
+                })
             })
             .collect();
 
@@ -51,8 +54,8 @@ impl AppView {
 
     fn render_nav_item(
         &self,
-        icon_path: &'static str,
-        label: &'static str,
+        icon_path: String,
+        label: String,
         tab: NavTab,
         active_tab: NavTab,
         cx: &mut Context<Self>,

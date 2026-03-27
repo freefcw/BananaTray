@@ -1,5 +1,5 @@
 use super::AiProvider;
-use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::text_utils;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -159,12 +159,20 @@ impl ClaudeProvider {
 
 #[async_trait]
 impl AiProvider for ClaudeProvider {
-    fn id(&self) -> &'static str {
-        "claude:cli"
+    fn metadata(&self) -> ProviderMetadata {
+        ProviderMetadata {
+            kind: ProviderKind::Claude,
+            display_name: "Claude",
+            brand_name: "Anthropic",
+            icon_asset: "src/icons/provider-claude.svg",
+            dashboard_url: "https://console.anthropic.com/settings/usage",
+            account_hint: "Anthropic workspace",
+            source_label: "claude cli",
+        }
     }
 
-    fn kind(&self) -> ProviderKind {
-        ProviderKind::Claude
+    fn id(&self) -> &'static str {
+        "claude:cli"
     }
 
     async fn is_available(&self) -> bool {

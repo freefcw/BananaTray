@@ -47,8 +47,36 @@ impl ProviderManager {
     pub fn initial_statuses(&self) -> Vec<ProviderStatus> {
         let mut statuses = Vec::new();
         for kind in ProviderKind::all() {
+            let (display_name, brand_name, source_label, account_hint, icon_asset, dashboard_url) =
+                if let Some(p) = self.providers.iter().find(|p| p.kind() == *kind) {
+                    let m = p.metadata();
+                    (
+                        m.display_name.to_string(),
+                        m.brand_name.to_string(),
+                        m.source_label.to_string(),
+                        m.account_hint.to_string(),
+                        m.icon_asset.to_string(),
+                        m.dashboard_url.to_string(),
+                    )
+                } else {
+                    (
+                        format!("{:?}", kind),
+                        format!("{:?}", kind),
+                        "unknown".to_string(),
+                        "account".to_string(),
+                        "src/icons/provider-unknown.svg".to_string(),
+                        "".to_string(),
+                    )
+                };
+
             statuses.push(ProviderStatus {
                 kind: *kind,
+                display_name,
+                brand_name,
+                source_label,
+                account_hint,
+                icon_asset,
+                dashboard_url,
                 enabled: true,
                 connection: ConnectionStatus::Disconnected,
                 quotas: vec![],
@@ -83,9 +111,10 @@ impl ProviderManager {
                 if p.is_available().await {
                     return p.refresh().await;
                 } else {
+                    let meta = p.metadata();
                     bail!(
                         "Provider {} is currently unavailable in this environment.",
-                        kind.display_name()
+                        meta.display_name
                     );
                 }
             }
