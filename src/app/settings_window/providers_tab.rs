@@ -3,25 +3,13 @@ use crate::app::widgets::{
     render_card, render_card_separator, render_checkbox, render_detail_section_title,
     render_info_row,
 };
-use crate::app::{persist_settings, provider_logic};
+use crate::app::{persist_settings, provider_logic, AppState};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 use crate::theme::Theme;
 use gpui::*;
 
 impl SettingsView {
-    /// Read github_token from the actual config file on disk
-    fn read_github_token_from_config() -> Option<String> {
-        let path = crate::settings_store::config_path();
-        let content = std::fs::read_to_string(path).ok()?;
-        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-        json.get("providers")
-            .and_then(|p| p.get("github_token"))
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-    }
-
-    /// Render Providers settings tab — CodeBar-style two-column layout
+    /// Render Providers settings tab — two-column layout
     pub(super) fn render_providers_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let selected = self.state.borrow().settings_selected_provider;
         let providers = self.state.borrow().providers.clone();
@@ -248,27 +236,19 @@ impl SettingsView {
                                 )
                                 .on_mouse_down(
                                     MouseButton::Left,
-                                    move |_, window, _| {
-                                        let settings = {
-                                            let mut s = state_toggle.borrow_mut();
-                                            let new_val =
-                                                !s.settings.is_provider_enabled(toggle_kind);
-                                            s.settings.set_provider_enabled(toggle_kind, new_val);
-                                            if let Some(p) = s
-                                                .providers
-                                                .iter_mut()
-                                                .find(|p| p.kind == toggle_kind)
-                                            {
-                                                p.enabled = new_val;
-                                            }
-                                            // Force a fresh refresh when the popup next opens
-                                            if new_val {
-                                                s.last_refresh_started = None;
-                                            }
-                                            s.settings.clone()
-                                        };
+                                    move |_, window, cx| {
+                                        let (settings, should_refresh) =
+                                            state_toggle.borrow_mut().toggle_provider(toggle_kind);
                                         persist_settings(&settings);
                                         window.refresh();
+
+                                        if should_refresh {
+                                            AppState::spawn_provider_refresh(
+                                                state_toggle.clone(),
+                                                toggle_kind,
+                                                cx,
+                                            );
+                                        }
                                     },
                                 ),
                             ),
@@ -403,7 +383,19 @@ impl SettingsView {
 
         match kind {
             ProviderKind::Copilot => {
-                section = section.child(self.render_copilot_settings(settings, theme));
+                // 1. 解析 token（纯数据，由 provider 层处理）
+                let mem_token = settings.providers.github_token.as_deref();
+                let status = crate::providers::copilot::resolve_token(mem_token);
+
+                // 2. 回写：若从磁盘/环境变量发现了 token，同步到内存状态
+                if status.token.is_some() && settings.providers.github_token.is_none() {
+                    self.state.borrow_mut().settings.providers.github_token = status.token.clone();
+                }
+
+                // 3. 委托 provider 渲染
+                section = section.child(crate::providers::copilot::settings_ui::render_settings(
+                    &status, theme,
+                ));
             }
             _ => {
                 section = section.child(
@@ -420,113 +412,5 @@ impl SettingsView {
         }
 
         section
-    }
-
-    fn render_copilot_settings(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        // Check token from multiple sources: in-memory (loaded at startup), disk, env var
-        let mem_token = settings
-            .providers
-            .github_token
-            .clone()
-            .filter(|s| !s.is_empty());
-        let disk_token = Self::read_github_token_from_config();
-        let env_token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
-
-        let (effective_token, source) = if let Some(t) = mem_token {
-            (Some(t), "config file")
-        } else if let Some(t) = disk_token {
-            // Sync disk token into memory so future persist_settings won't overwrite it
-            self.state.borrow_mut().settings.providers.github_token = Some(t.clone());
-            (Some(t), "config file")
-        } else if let Some(t) = env_token {
-            (Some(t), "GITHUB_TOKEN env")
-        } else {
-            (None, "")
-        };
-
-        let has_token = effective_token.is_some();
-        let masked = effective_token.as_ref().map(|t| {
-            if t.len() <= 8 {
-                "••••••••".to_string()
-            } else {
-                format!("{}••••{}", &t[..4], &t[t.len() - 4..])
-            }
-        });
-
-        div()
-            .flex_col()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text_primary)
-                    .child("GitHub Login"),
-            )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .line_height(relative(1.4))
-                    .text_color(theme.text_secondary)
-                    .child("Requires authentication via GitHub Token."),
-            )
-            .child(if has_token {
-                div()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .rounded(px(6.0))
-                            .bg(theme.status_success)
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.element_active)
-                            .child("Token configured"),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(theme.text_muted)
-                            .child(format!("{} · via {}", masked.unwrap_or_default(), source)),
-                    )
-            } else {
-                div()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(theme.text_muted)
-                            .child("Set token via config file or GITHUB_TOKEN env var"),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .py(px(8.0))
-                            .rounded(px(8.0))
-                            .bg(theme.text_primary)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.element_active)
-                            .cursor_pointer()
-                            .flex()
-                            .justify_center()
-                            .child("Sign in with GitHub")
-                            .on_mouse_down(MouseButton::Left, |_, _, _| {
-                                let path = crate::settings_store::config_path();
-                                if let Some(parent) = path.parent() {
-                                    let _ = std::fs::create_dir_all(parent);
-                                }
-                                let cmd = if cfg!(target_os = "linux") {
-                                    "xdg-open"
-                                } else {
-                                    "open"
-                                };
-                                let _ = std::process::Command::new(cmd).arg(&path).spawn();
-                            }),
-                    )
-            })
     }
 }

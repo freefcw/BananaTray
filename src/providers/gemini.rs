@@ -1,7 +1,7 @@
-use super::http_client;
-use super::time_utils;
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::utils::http_client;
+use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;

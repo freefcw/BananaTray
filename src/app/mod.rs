@@ -56,23 +56,110 @@ impl AppState {
         for p in &mut providers {
             p.enabled = settings.is_provider_enabled(p.kind);
         }
-        // 默认选第一个已启用的 Provider，否则 fallback 到 Claude
+        // 默认选第一个已启用的 Provider。如果都没有启用，直接切到设置 Tab
         let first_enabled = ProviderKind::all()
             .iter()
             .find(|k| settings.is_provider_enabled(**k))
-            .copied()
-            .unwrap_or(ProviderKind::Claude);
+            .copied();
+
+        let active_tab = if let Some(kind) = first_enabled {
+            NavTab::Provider(kind)
+        } else {
+            NavTab::Settings
+        };
+
         Self {
             providers,
             settings,
-            active_tab: NavTab::Provider(first_enabled),
-            last_provider_kind: first_enabled,
+            active_tab,
+            last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
             manager,
             last_refresh_started: None,
             settings_tab: SettingsTab::General,
             settings_selected_provider: ProviderKind::Claude,
             cadence_dropdown_open: false,
         }
+    }
+
+    /// Toggle a provider on/off and update all related state.
+    /// Returns `(updated_settings, should_refresh)`.
+    pub fn toggle_provider(&mut self, kind: ProviderKind) -> (AppSettings, bool) {
+        let new_val = !self.settings.is_provider_enabled(kind);
+        self.settings.set_provider_enabled(kind, new_val);
+
+        if let Some(p) = self.providers.iter_mut().find(|p| p.kind == kind) {
+            p.enabled = new_val;
+            if new_val {
+                p.connection = ConnectionStatus::Refreshing;
+            }
+        }
+
+        if new_val {
+            self.last_refresh_started = None;
+            self.active_tab = NavTab::Provider(kind);
+            self.last_provider_kind = kind;
+        } else {
+            // 如果禁用的恰好是当前活跃 provider，切到下一个已启用的
+            let is_current = matches!(self.active_tab, NavTab::Provider(k) if k == kind);
+            if is_current {
+                if let Some(next) = ProviderKind::all()
+                    .iter()
+                    .find(|k| **k != kind && self.settings.is_provider_enabled(**k))
+                    .copied()
+                {
+                    self.active_tab = NavTab::Provider(next);
+                    self.last_provider_kind = next;
+                }
+            }
+        }
+
+        (self.settings.clone(), new_val)
+    }
+
+    /// Spawn an async task to refresh a single provider's data.
+    /// Works from any window context (SettingsView, AppView, etc).
+    pub fn spawn_provider_refresh(state: Rc<RefCell<Self>>, kind: ProviderKind, cx: &App) {
+        let async_cx = cx.to_async();
+        async_cx
+            .foreground_executor()
+            .spawn(async move {
+                let manager = state.borrow().manager.clone();
+                let mgr = manager.clone();
+
+                let available =
+                    smol::unblock(move || smol::block_on(mgr.is_provider_available(kind))).await;
+
+                if !available {
+                    let mut s = state.borrow_mut();
+                    if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                        p.connection = ConnectionStatus::Disconnected;
+                        p.error_message = Some("Provider is currently unavailable.".to_string());
+                    }
+                    return;
+                }
+
+                let result =
+                    smol::unblock(move || smol::block_on(manager.refresh_provider(kind))).await;
+
+                let mut s = state.borrow_mut();
+                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                    match result {
+                        Ok(quotas) => {
+                            p.quotas = quotas;
+                            p.connection = ConnectionStatus::Connected;
+                            p.last_refreshed_instant = Some(std::time::Instant::now());
+                            p.last_updated_at = None;
+                            p.error_message = None;
+                        }
+                        Err(err) => {
+                            p.connection = ConnectionStatus::Error;
+                            p.last_updated_at = Some("Update failed".to_string());
+                            p.error_message = Some(err.to_string());
+                        }
+                    }
+                }
+            })
+            .detach();
     }
 }
 

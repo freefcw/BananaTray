@@ -1,10 +1,87 @@
-use super::http_client;
+pub mod settings_ui;
+
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::path::PathBuf;
+
+// ============================================================================
+// Token 解析
+// ============================================================================
+
+/// Copilot Token 解析结果
+pub struct CopilotTokenStatus {
+    /// 有效的 token（可能来自内存/磁盘/环境变量）
+    pub token: Option<String>,
+    /// token 来源描述
+    pub source: &'static str,
+}
+
+impl CopilotTokenStatus {
+    /// 返回脱敏后的 token 字符串
+    pub fn masked(&self) -> Option<String> {
+        self.token.as_ref().map(|t| {
+            if t.len() <= 8 {
+                "••••••••".to_string()
+            } else {
+                format!("{}••••{}", &t[..4], &t[t.len() - 4..])
+            }
+        })
+    }
+}
+
+/// 从多个来源解析 GitHub Token
+///
+/// 优先级：内存设置 > 磁盘配置文件 > 环境变量 GITHUB_TOKEN
+pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
+    // 1. 内存中的设置（已加载的 AppSettings）
+    if let Some(t) = memory_token.filter(|s| !s.is_empty()) {
+        return CopilotTokenStatus {
+            token: Some(t.to_string()),
+            source: "config file",
+        };
+    }
+
+    // 2. 从磁盘配置文件读取
+    if let Some(t) = read_github_token_from_config() {
+        return CopilotTokenStatus {
+            token: Some(t),
+            source: "config file",
+        };
+    }
+
+    // 3. 环境变量
+    if let Some(t) = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()) {
+        return CopilotTokenStatus {
+            token: Some(t),
+            source: "GITHUB_TOKEN env",
+        };
+    }
+
+    CopilotTokenStatus {
+        token: None,
+        source: "",
+    }
+}
+
+/// 从磁盘配置文件读取 github_token
+fn read_github_token_from_config() -> Option<String> {
+    let path = crate::settings_store::config_path();
+    let content = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    json.get("providers")
+        .and_then(|p| p.get("github_token"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
+// ============================================================================
+// AiProvider 实现
+// ============================================================================
 
 pub struct CopilotProvider {}
 
