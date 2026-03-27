@@ -17,12 +17,12 @@ impl AiProvider for OpenCodeProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::OpenCode,
-            display_name: "OpenCode",
-            brand_name: "OpenCode",
-            icon_asset: "src/icons/provider-opencode.svg",
-            dashboard_url: "https://opencode.ai",
-            account_hint: "OpenCode account",
-            source_label: "opencode api",
+            display_name: "OpenCode".into(),
+            brand_name: "OpenCode".into(),
+            icon_asset: "src/icons/provider-opencode.svg".into(),
+            dashboard_url: "https://opencode.ai".into(),
+            account_hint: "OpenCode account".into(),
+            source_label: "opencode api".into(),
         }
     }
 

@@ -446,7 +446,7 @@ impl AppView {
                 .providers
                 .iter()
                 .find(|p| p.kind == kind)
-                .map(|p| p.dashboard_url.clone())
+                .map(|p| p.dashboard_url().to_string())
                 .unwrap_or_default();
             menu = menu
                 .child(self.render_menu_item(

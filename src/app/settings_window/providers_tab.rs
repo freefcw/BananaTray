@@ -52,10 +52,10 @@ impl SettingsView {
 
             let status = _providers.iter().find(|p| p.kind == *kind);
             let icon = status
-                .map(|p| p.icon_asset.clone())
+                .map(|p| p.icon_asset().to_string())
                 .unwrap_or_else(|| "src/icons/provider-unknown.svg".to_string());
             let display_name = status
-                .map(|p| p.display_name.clone())
+                .map(|p| p.display_name().to_string())
                 .unwrap_or_else(|| format!("{:?}", kind));
 
             let state = self.state.clone();
@@ -232,8 +232,8 @@ impl SettingsView {
 
         let (icon, display_name, subtitle) = if let Some(ref p) = provider {
             (
-                p.icon_asset.clone(),
-                p.display_name.clone(),
+                p.icon_asset().to_string(),
+                p.display_name().to_string(),
                 provider_logic::provider_detail_subtitle(p),
             )
         } else {
@@ -419,7 +419,7 @@ impl SettingsView {
                         section.child(crate::app::widgets::render_quota_bar(quota, false, theme));
                 }
             } else if p.connection == ConnectionStatus::Error {
-                let title = format!("Last {} fetch failed:", p.display_name);
+                let title = format!("Last {} fetch failed:", p.display_name());
                 let msg = p
                     .error_message
                     .clone()
@@ -501,7 +501,7 @@ impl SettingsView {
                     .providers
                     .iter()
                     .find(|p| p.kind == kind)
-                    .map(|p| p.display_name.clone())
+                    .map(|p| p.display_name().to_string())
                     .unwrap_or_else(|| format!("{:?}", kind));
 
                 section = section.child(

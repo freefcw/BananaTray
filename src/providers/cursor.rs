@@ -238,12 +238,12 @@ impl AiProvider for CursorProvider {
     fn metadata(&self) -> ProviderMetadata {
         ProviderMetadata {
             kind: ProviderKind::Cursor,
-            display_name: "Cursor",
-            brand_name: "Cursor",
-            icon_asset: "src/icons/provider-cursor.svg",
-            dashboard_url: "https://www.cursor.com/settings",
-            account_hint: "Cursor account",
-            source_label: "cursor api",
+            display_name: "Cursor".into(),
+            brand_name: "Cursor".into(),
+            icon_asset: "src/icons/provider-cursor.svg".into(),
+            dashboard_url: "https://www.cursor.com/settings".into(),
+            account_hint: "Cursor account".into(),
+            source_label: "cursor api".into(),
         }
     }
 

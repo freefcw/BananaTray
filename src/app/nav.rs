@@ -25,8 +25,8 @@ impl AppView {
             .filter_map(|kind| {
                 providers.iter().find(|p| p.kind == kind).map(|p| {
                     (
-                        p.icon_asset.clone(),
-                        p.display_name.clone(),
+                        p.icon_asset().to_string(),
+                        p.display_name().to_string(),
                         NavTab::Provider(kind),
                     )
                 })
