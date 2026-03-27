@@ -19,5 +19,5 @@ serde_json = "1"
 smol = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
-[patch.crates-io]
-adabraka-gpui = { path = "vendor/adabraka-gpui-0.5.1" }
+# [patch.crates-io]
+# adabraka-gpui = { path = "vendor/adabraka-gpui-0.5.1" }
