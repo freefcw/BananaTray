@@ -4,79 +4,40 @@
 //! human-readable countdown formatting that were previously duplicated
 //! across `gemini.rs`, `codex.rs`, and `kimi.rs`.
 
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
+
 /// Parse an ISO 8601 timestamp (e.g. "2025-03-25T12:00:00Z" or with offset)
 /// into Unix epoch seconds.  Returns `None` on malformed input.
+///
+/// When a timezone offset is present (e.g. `+08:00`), the result is the true
+/// UTC epoch — i.e. `"2025-01-01T08:00:00+08:00"` equals `"2025-01-01T00:00:00Z"`.
+/// Naive timestamps (no offset) are assumed to be UTC.
 pub fn parse_iso8601_to_epoch(iso: &str) -> Option<i64> {
-    // Strip trailing 'Z'
-    let clean = iso.trim_end_matches('Z');
-
-    // Strip timezone offset like +08:00 / -05:00 (only after the date part)
-    let clean = if let Some(pos) = clean.rfind('+') {
-        if pos > 10 {
-            &clean[..pos]
-        } else {
-            clean
-        }
-    } else if let Some(pos) = clean.rfind('-') {
-        if pos > 10 {
-            &clean[..pos]
-        } else {
-            clean
-        }
-    } else {
-        clean
-    };
-
-    // Strip fractional seconds (e.g. ".000")
-    let clean = if let Some(dot_pos) = clean.rfind('.') {
-        if dot_pos > 10 {
-            &clean[..dot_pos]
-        } else {
-            clean
-        }
-    } else {
-        clean
-    };
-
-    let parts: Vec<&str> = clean.split('T').collect();
-    if parts.len() != 2 {
-        return None;
+    // Try parsing with timezone info first (e.g. "2025-01-01T08:00:00+08:00" or "...Z")
+    if let Ok(dt) = DateTime::<FixedOffset>::parse_from_rfc3339(iso) {
+        return Some(dt.timestamp());
     }
 
-    let date_parts: Vec<&str> = parts[0].split('-').collect();
-    let time_parts: Vec<&str> = parts[1].split(':').collect();
-    if date_parts.len() != 3 || time_parts.len() < 2 {
-        return None;
-    }
-
-    let year: i64 = date_parts[0].parse().ok()?;
-    let month: i64 = date_parts[1].parse().ok()?;
-    let day: i64 = date_parts[2].parse().ok()?;
-    let hour: i64 = time_parts[0].parse().ok()?;
-    let min: i64 = time_parts[1].parse().ok()?;
-    let sec: i64 = time_parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-
-    let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let mut total_days: i64 = 0;
-
-    for y in 1970..year {
-        total_days += if is_leap_year(y) { 366 } else { 365 };
-    }
-
-    let leap = is_leap_year(year);
-    for m in 1..month {
-        total_days += days_in_month[m as usize];
-        if m == 2 && leap {
-            total_days += 1;
+    // Try as naive datetime without timezone suffix — assume UTC
+    let formats = [
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+    ];
+    for fmt in &formats {
+        if let Ok(ndt) = NaiveDateTime::parse_from_str(iso, fmt) {
+            return Some(ndt.and_utc().timestamp());
         }
     }
-    total_days += day - 1;
 
-    Some(total_days * 86400 + hour * 3600 + min * 60 + sec)
+    None
 }
 
-fn is_leap_year(y: i64) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+/// Convert Unix epoch seconds to an ISO 8601 UTC string (e.g. `"2025-01-01T00:00:00.000Z"`).
+pub fn epoch_to_iso8601(epoch: u64) -> String {
+    chrono::DateTime::from_timestamp(epoch as i64, 0)
+        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
+        .unwrap_or_default()
 }
 
 /// Return the current time as Unix epoch seconds.
@@ -167,10 +128,11 @@ mod tests {
 
     #[test]
     fn test_parse_iso8601_with_offset() {
-        // Offset should be stripped; result is the naive datetime as-if UTC
+        // "2025-01-01T08:00:00+08:00" is midnight UTC → same as "2025-01-01T00:00:00Z"
         let a = parse_iso8601_to_epoch("2025-01-01T08:00:00+08:00").unwrap();
-        let b = parse_iso8601_to_epoch("2025-01-01T08:00:00Z").unwrap();
+        let b = parse_iso8601_to_epoch("2025-01-01T00:00:00Z").unwrap();
         assert_eq!(a, b);
+        assert_eq!(a, 1735689600); // 2025-01-01T00:00:00Z
     }
 
     #[test]
@@ -209,5 +171,32 @@ mod tests {
         assert!(is_expired_epoch_secs(1000.0));
         // An expiry far in the future
         assert!(!is_expired_epoch_secs(9999999999.0));
+    }
+
+    #[test]
+    fn test_epoch_to_iso8601() {
+        assert_eq!(epoch_to_iso8601(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(epoch_to_iso8601(1735689600), "2025-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn test_epoch_round_trip() {
+        let epoch: u64 = 1735689600;
+        let iso = epoch_to_iso8601(epoch);
+        let parsed = parse_iso8601_to_epoch(&iso).unwrap();
+        assert_eq!(parsed, epoch as i64);
+    }
+
+    #[test]
+    fn test_parse_iso8601_naive_without_tz() {
+        // No timezone suffix — assumed UTC
+        let epoch = parse_iso8601_to_epoch("2025-01-01T00:00:00").unwrap();
+        assert_eq!(epoch, 1735689600);
+    }
+
+    #[test]
+    fn test_parse_iso8601_minute_precision() {
+        let epoch = parse_iso8601_to_epoch("2025-01-01T00:00").unwrap();
+        assert_eq!(epoch, 1735689600);
     }
 }

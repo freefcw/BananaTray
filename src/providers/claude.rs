@@ -1,5 +1,6 @@
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::utils::text_utils;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
@@ -25,17 +26,9 @@ impl ClaudeProvider {
             .map(|s| s.to_string())
     }
 
-    /// Strip ANSI escape sequences from text.
-    fn strip_ansi(text: &str) -> String {
-        // CSI sequences: \x1b[ ... letter
-        // OSC sequences: \x1b] ... BEL
-        let re = Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07").unwrap();
-        re.replace_all(text, "").to_string()
-    }
-
     /// Parse the output of `claude /usage` into quota entries.
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
-        let clean = Self::strip_ansi(raw);
+        let clean = text_utils::strip_ansi(raw);
 
         let pct_re = Regex::new(r"(\d+)%\s+(left|used)").unwrap();
         let reset_re = Regex::new(r"(?i)^Resets?\s+(.+)").unwrap();

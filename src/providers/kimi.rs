@@ -24,7 +24,7 @@ impl KimiProvider {
         let auth_header = format!("Authorization: Bearer {}", token);
         let cookie_header = format!("Cookie: kimi-auth={}", token);
 
-        let response_str = http_client::curl_post_json(
+        let response_str = http_client::post_json(
             "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
             &[
                 &auth_header,

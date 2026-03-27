@@ -1,138 +1,182 @@
 //! Shared HTTP client utilities for providers.
 //!
-//! Wraps `curl` invocations into ergonomic helpers so each provider
-//! doesn't have to duplicate the Command::new("curl") boilerplate.
-use anyhow::{bail, Context, Result};
-use std::process::Command;
+//! Uses `ureq` for type-safe HTTP requests instead of shelling out to `curl`.
 
-/// Perform an HTTP GET via curl and return the response body as a String.
+use anyhow::{bail, Context, Result};
+use std::sync::LazyLock;
+use ureq::Agent;
+
+static AGENT: LazyLock<Agent> = LazyLock::new(|| {
+    Agent::new_with_config(
+        ureq::config::Config::builder()
+            .http_status_as_error(false)
+            .build(),
+    )
+});
+
+/// Parse a raw header string like `"Authorization: Bearer xxx"` into (name, value).
+///
+/// Uses `split_once(':')` so that colons in the *value* part are preserved
+/// (e.g. `"Authorization: Bearer abc:def"` → `("Authorization", "Bearer abc:def")`).
+fn parse_header(h: &str) -> Option<(&str, &str)> {
+    let (name, value) = h.split_once(':')?;
+    Some((name.trim(), value.trim()))
+}
+
+macro_rules! set_headers {
+    ($req:expr, $headers:expr) => {{
+        let mut req = $req;
+        for h in $headers {
+            if let Some((name, value)) = parse_header(h) {
+                req = req.header(name, value);
+            }
+        }
+        req
+    }};
+}
+
+/// Perform an HTTP GET and return the response body as a String.
 ///
 /// `headers` is a list of header strings like `"Authorization: Bearer xxx"`.
 #[allow(dead_code)]
-pub fn curl_get(url: &str, headers: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("curl");
-    cmd.args(["-s"]);
+pub fn get(url: &str, headers: &[&str]) -> Result<String> {
+    let response = set_headers!(AGENT.get(url), headers)
+        .call()
+        .with_context(|| format!("HTTP GET {url} failed"))?;
 
-    for h in headers {
-        cmd.args(["-H", h]);
+    let status = response.status().as_u16();
+    if status >= 400 {
+        bail!("HTTP GET {url} returned status {status}");
     }
 
-    cmd.arg(url);
-
-    let output = cmd
-        .output()
-        .with_context(|| format!("Failed to execute curl GET {}", url))?;
-
-    if !output.status.success() {
-        bail!("curl GET {} failed with status {:?}", url, output.status);
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    response
+        .into_body()
+        .read_to_string()
+        .with_context(|| format!("Failed to read response body from {url}"))
 }
 
-/// Perform an HTTP GET via curl and return the full raw output (headers + body).
+/// Perform an HTTP GET and return the full raw output (headers + body).
 ///
-/// Useful when status codes need to be inspected (e.g. Codex checks for 401/403).
-pub fn curl_get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("curl");
-    cmd.args(["-s", "-i"]); // -i includes response headers
+/// The response is formatted as `"HTTP/1.1 <status>\r\n<headers>\r\n\r\n<body>"`
+/// to maintain compatibility with callers that parse raw HTTP responses (e.g. Codex).
+pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
+    let response = set_headers!(AGENT.get(url), headers)
+        .call()
+        .with_context(|| format!("HTTP GET {url} failed"))?;
 
-    for h in headers {
-        cmd.args(["-H", h]);
+    let status = response.status().as_u16();
+
+    let mut raw = format!("HTTP/1.1 {status}\r\n");
+    for name in response.headers().keys() {
+        if let Some(value) = response.headers().get(name) {
+            raw.push_str(&format!(
+                "{}: {}\r\n",
+                name.as_str(),
+                value.to_str().unwrap_or("")
+            ));
+        }
     }
+    raw.push_str("\r\n");
 
-    cmd.arg(url);
+    let body = response
+        .into_body()
+        .read_to_string()
+        .with_context(|| format!("Failed to read response body from {url}"))?;
+    raw.push_str(&body);
 
-    let output = cmd
-        .output()
-        .with_context(|| format!("Failed to execute curl GET {}", url))?;
-
-    if !output.status.success() {
-        bail!("curl GET {} failed with status {:?}", url, output.status);
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    Ok(raw)
 }
 
-/// Perform an HTTP GET via curl and return `(body, http_status_code)`.
-///
-/// Uses curl's `-w` flag to append the status code.
-pub fn curl_get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> {
-    let mut cmd = Command::new("curl");
-    cmd.args(["-s", "-w", "\n%{http_code}"]);
+/// Perform an HTTP GET and return `(body, http_status_code)`.
+pub fn get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> {
+    let response = set_headers!(AGENT.get(url), headers)
+        .call()
+        .with_context(|| format!("HTTP GET {url} failed"))?;
 
-    for h in headers {
-        cmd.args(["-H", h]);
-    }
+    let status = response.status().as_u16().to_string();
 
-    cmd.arg(url);
+    let body = response
+        .into_body()
+        .read_to_string()
+        .with_context(|| format!("Failed to read response body from {url}"))?;
 
-    let output = cmd
-        .output()
-        .with_context(|| format!("Failed to execute curl GET {}", url))?;
-
-    if !output.status.success() {
-        bail!("curl GET {} failed with status {:?}", url, output.status);
-    }
-
-    let output_str = String::from_utf8_lossy(&output.stdout);
-    let trimmed = output_str.trim();
-
-    if let Some(pos) = trimmed.rfind('\n') {
-        let code = trimmed[pos + 1..].trim().to_string();
-        let body = trimmed[..pos].to_string();
-        Ok((body, code))
-    } else {
-        Ok((trimmed.to_string(), String::new()))
-    }
+    Ok((body, status))
 }
 
-/// Perform an HTTP POST via curl with a JSON body (Content-Type: application/json).
-pub fn curl_post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
-    let mut cmd = Command::new("curl");
-    cmd.args(["-s", "-X", "POST", "-H", "Content-Type: application/json"]);
+/// Perform an HTTP POST with a JSON body (Content-Type: application/json).
+pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
+    let response = set_headers!(
+        AGENT.post(url).header("Content-Type", "application/json"),
+        headers
+    )
+    .send(body.as_bytes())
+    .with_context(|| format!("HTTP POST {url} failed"))?;
 
-    for h in headers {
-        cmd.args(["-H", h]);
+    let status = response.status().as_u16();
+    if status >= 400 {
+        bail!("HTTP POST {url} returned status {status}");
     }
 
-    cmd.args(["-d", body, url]);
-
-    let output = cmd
-        .output()
-        .with_context(|| format!("Failed to execute curl POST {}", url))?;
-
-    if !output.status.success() {
-        bail!("curl POST {} failed with status {:?}", url, output.status);
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    response
+        .into_body()
+        .read_to_string()
+        .with_context(|| format!("Failed to read response body from POST {url}"))
 }
 
-/// Perform an HTTP POST via curl with a form-urlencoded body.
-pub fn curl_post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
-    let mut cmd = Command::new("curl");
-    cmd.args([
-        "-s",
-        "-X",
-        "POST",
-        "-H",
-        "Content-Type: application/x-www-form-urlencoded",
-    ]);
+/// Perform an HTTP POST with a form-urlencoded body.
+pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
+    let response = set_headers!(
+        AGENT
+            .post(url)
+            .header("Content-Type", "application/x-www-form-urlencoded"),
+        headers
+    )
+    .send(body.as_bytes())
+    .with_context(|| format!("HTTP POST {url} failed"))?;
 
-    for h in headers {
-        cmd.args(["-H", h]);
+    let status = response.status().as_u16();
+    if status >= 400 {
+        bail!("HTTP POST {url} returned status {status}");
     }
 
-    cmd.args(["-d", body, url]);
+    response
+        .into_body()
+        .read_to_string()
+        .with_context(|| format!("Failed to read response body from POST {url}"))
+}
 
-    let output = cmd
-        .output()
-        .with_context(|| format!("Failed to execute curl POST {}", url))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    if !output.status.success() {
-        bail!("curl POST {} failed with status {:?}", url, output.status);
+    #[test]
+    fn test_parse_header_basic() {
+        let (name, value) = parse_header("Authorization: Bearer token123").unwrap();
+        assert_eq!(name, "Authorization");
+        assert_eq!(value, "Bearer token123");
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    #[test]
+    fn test_parse_header_value_with_colons() {
+        let (name, value) = parse_header("Authorization: Bearer abc:def:ghi").unwrap();
+        assert_eq!(name, "Authorization");
+        assert_eq!(value, "Bearer abc:def:ghi");
+    }
+
+    #[test]
+    fn test_parse_header_trims_whitespace() {
+        let (name, value) = parse_header("  Accept  :   application/json  ").unwrap();
+        assert_eq!(name, "Accept");
+        assert_eq!(value, "application/json");
+    }
+
+    #[test]
+    fn test_parse_header_no_colon() {
+        assert!(parse_header("no-colon-here").is_none());
+    }
+
+    #[test]
+    fn test_parse_header_empty() {
+        assert!(parse_header("").is_none());
+    }
 }

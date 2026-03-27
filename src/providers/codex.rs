@@ -71,7 +71,7 @@ impl CodexProvider {
         );
 
         let response_str =
-            http_client::curl_post_form("https://auth.openai.com/oauth/token", &[], &body)?;
+            http_client::post_form("https://auth.openai.com/oauth/token", &[], &body)?;
 
         let resp: serde_json::Value = serde_json::from_str(&response_str)
             .context("Failed to parse token refresh response")?;
@@ -116,13 +116,7 @@ impl CodexProvider {
             });
         }
 
-        // Update last_refresh to now (ISO 8601) using pure Rust
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        // Simple epoch → ISO 8601 UTC conversion
-        let now_str = epoch_to_iso8601(now);
+        let now_str = time_utils::epoch_to_iso8601(time_utils::now_epoch_secs() as u64);
         json["last_refresh"] = serde_json::json!(now_str);
 
         let serialized = serde_json::to_string_pretty(&json)?;
@@ -151,7 +145,7 @@ impl CodexProvider {
     /// Call the ChatGPT backend API and return raw response (headers + body).
     fn call_usage_api(access_token: &str) -> Result<String> {
         let auth_header = format!("Authorization: Bearer {}", access_token);
-        http_client::curl_get_with_headers(
+        http_client::get_with_headers(
             "https://chatgpt.com/backend-api/wham/usage",
             &[
                 &auth_header,
@@ -285,50 +279,6 @@ impl CodexProvider {
 
         Ok(quotas)
     }
-}
-
-/// Convert Unix epoch seconds to a simple ISO 8601 UTC string.
-fn epoch_to_iso8601(epoch: u64) -> String {
-    let secs = epoch;
-    let days = secs / 86400;
-    let time_of_day = secs % 86400;
-    let hour = time_of_day / 3600;
-    let min = (time_of_day % 3600) / 60;
-    let sec = time_of_day % 60;
-
-    // Convert days since 1970-01-01 to y/m/d
-    let mut remaining_days = days as i64;
-    let mut year: i64 = 1970;
-    loop {
-        let days_in_year: i64 = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
-            366
-        } else {
-            365
-        };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    let mut month: i64 = 1;
-    loop {
-        let dim = days_in_month[month as usize] + if month == 2 && is_leap { 1 } else { 0 };
-        if remaining_days < dim {
-            break;
-        }
-        remaining_days -= dim;
-        month += 1;
-    }
-    let day = remaining_days + 1;
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
-        year, month, day, hour, min, sec
-    )
 }
 
 #[async_trait]
