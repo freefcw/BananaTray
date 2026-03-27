@@ -6,6 +6,7 @@ mod models;
 mod providers;
 mod settings_store;
 mod theme;
+mod utils;
 
 use app::{schedule_open_settings_window, AppState};
 use gpui::*;
@@ -62,9 +63,35 @@ impl TrayController {
     }
 
     fn toggle_provider(&mut self, cx: &mut App) {
-        let provider_tab = {
+        let has_any_enabled = {
             let state = self.state.borrow();
-            NavTab::Provider(state.last_provider_kind)
+            crate::models::ProviderKind::all()
+                .iter()
+                .any(|k| state.settings.is_provider_enabled(*k))
+        };
+
+        if !has_any_enabled {
+            info!(target: "tray", "no providers enabled, opening settings directly");
+            self.show_settings(cx);
+            return;
+        }
+
+        let provider_tab = {
+            let mut state = self.state.borrow_mut();
+            let last = state.last_provider_kind;
+            // 如果上次选中的 provider 已经被禁用了，切到第一个可用的
+            let kind = if state.settings.is_provider_enabled(last) {
+                last
+            } else {
+                let fallback = crate::models::ProviderKind::all()
+                    .iter()
+                    .find(|k| state.settings.is_provider_enabled(**k))
+                    .copied()
+                    .unwrap_or(last);
+                state.last_provider_kind = fallback;
+                fallback
+            };
+            NavTab::Provider(kind)
         };
         info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
 

@@ -3,10 +3,8 @@ pub mod claude;
 pub mod codex;
 pub mod copilot;
 pub mod gemini;
-pub mod http_client;
 pub mod kimi;
 pub mod manager;
-pub mod time_utils;
 
 use crate::models::{ProviderKind, QuotaInfo};
 use anyhow::Result;

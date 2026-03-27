@@ -143,50 +143,6 @@ impl AppView {
                             })
                     }))),
             )
-            .child(
-                div()
-                    .rounded(px(14.0))
-                    .bg(theme.bg_card)
-                    .border_1()
-                    .border_color(theme.border_subtle)
-                    .p(px(14.0))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.0))
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(3.0))
-                            .child(
-                                div()
-                                    .text_size(px(14.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_primary)
-                                    .child("Quit BananaTray"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .text_color(theme.text_secondary)
-                                    .child("Stop tray monitoring and close the app completely."),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(8.0))
-                            .rounded(px(12.0))
-                            .bg(theme.status_error)
-                            .text_color(theme.element_active)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .cursor_pointer()
-                            .child("Quit")
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                cx.quit();
-                            }),
-                    ),
-            )
             .into_any_element()
     }
 }

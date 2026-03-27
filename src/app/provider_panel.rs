@@ -108,43 +108,34 @@ impl AppView {
         let tier_badge = provider.account_tier.clone();
         let account_email = provider.account_email.clone();
 
-        let header_right = div().flex().items_center().gap(px(6.0));
+        let mut header_right = div().flex().items_center().gap(px(6.0));
 
-        // 只有当有 email 时展示账号信息
-        let has_account_info = account_email.is_some() || tier_badge.is_some();
+        if let Some(ref email) = account_email {
+            header_right = header_right.child(
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_secondary)
+                    .child(email.clone()),
+            );
+        }
+        if let Some(ref tier) = tier_badge {
+            header_right = header_right.child(
+                div()
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(theme.bg_subtle)
+                    .border_1()
+                    .border_color(theme.border_subtle)
+                    .text_color(theme.text_primary)
+                    .child(tier.clone()),
+            );
+        }
 
-        let header_right = if has_account_info {
-            let mut right = header_right;
-            if let Some(ref email) = account_email {
-                right = right.child(
-                    div()
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme.text_secondary)
-                        .child(email.clone()),
-                );
-            }
-            if let Some(ref tier) = tier_badge {
-                right = right.child(
-                    div()
-                        .text_size(px(10.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .px(px(6.0))
-                        .py(px(2.0))
-                        .rounded(px(4.0))
-                        .bg(theme.bg_subtle)
-                        .border_1()
-                        .border_color(theme.border_subtle)
-                        .text_color(theme.text_primary)
-                        .child(tier.clone()),
-                );
-            }
-            right
-        } else {
-            header_right
-        };
-
-        let shell = div()
+        let mut shell = div()
             .flex()
             .flex_col()
             .gap(px(2.0)) // 极大减小留白 (1-2 pixels)
@@ -176,14 +167,14 @@ impl AppView {
                     .child(last_updated),
             );
 
-        let shell = if has_quotas {
-            shell.children(provider.quotas.iter().enumerate().map(|(index, quota)| {
+        if has_quotas {
+            shell = shell.children(provider.quotas.iter().enumerate().map(|(index, quota)| {
                 // 不再强调反色效果 (highlighted = false)
                 super::widgets::render_quota_bar(quota, index > 0, theme)
-            }))
+            }));
         } else {
-            shell.child(self.render_provider_empty_state(provider, cx))
-        };
+            shell = shell.child(self.render_provider_empty_state(provider, cx));
+        }
 
         shell.into_any_element()
     }
@@ -255,20 +246,26 @@ impl AppView {
         container
     }
 
-    /// Trigger a refresh for a single provider (used by the retry button).
-    fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
-        let state = self.state.clone();
-        let manager = state.borrow().manager.clone();
-
-        // Mark as Refreshing
-        {
-            let mut s = state.borrow_mut();
-            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
-                p.connection = ConnectionStatus::Refreshing;
-                p.error_message = None;
-            }
+    /// Helper to concisely update the state for a single provider and trigger a view update.
+    pub(crate) fn update_provider_state<F>(&self, kind: ProviderKind, cx: &mut Context<Self>, f: F)
+    where
+        F: FnOnce(&mut ProviderStatus),
+    {
+        let mut s = self.state.borrow_mut();
+        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+            f(p);
         }
         cx.notify();
+    }
+
+    /// Trigger a refresh for a single provider (used by the retry button).
+    fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
+        let manager = self.state.borrow().manager.clone();
+
+        self.update_provider_state(kind, cx, |p| {
+            p.connection = ConnectionStatus::Refreshing;
+            p.error_message = None;
+        });
 
         cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
             let mut async_cx = cx.clone();
@@ -284,13 +281,10 @@ impl AppView {
                 if !available {
                     info!(target: "providers", "retry: provider {:?} unavailable", kind);
                     let _ = this.update(&mut async_cx, |view, cx| {
-                        let mut s = view.state.borrow_mut();
-                        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                        view.update_provider_state(kind, cx, |p| {
                             p.connection = ConnectionStatus::Disconnected;
-                            p.error_message =
-                                Some("Provider is currently unavailable.".to_string());
-                        }
-                        cx.notify();
+                            p.error_message = Some("Provider is currently unavailable.".to_string());
+                        });
                     });
                     return;
                 }
@@ -303,28 +297,23 @@ impl AppView {
                     Ok(quotas) => {
                         info!(target: "providers", "retry: provider {:?} succeeded with {} quotas", kind, quotas.len());
                         let _ = this.update(&mut async_cx, |view, cx| {
-                            let mut s = view.state.borrow_mut();
-                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                            view.update_provider_state(kind, cx, |p| {
                                 p.quotas = quotas;
                                 p.connection = ConnectionStatus::Connected;
-                                p.last_refreshed_instant =
-                                    Some(std::time::Instant::now());
+                                p.last_refreshed_instant = Some(std::time::Instant::now());
                                 p.last_updated_at = None;
                                 p.error_message = None;
-                            }
-                            cx.notify();
+                            });
                         });
                     }
                     Err(err) => {
                         warn!(target: "providers", "retry: provider {:?} failed: {err}", kind);
                         let _ = this.update(&mut async_cx, |view, cx| {
-                            let mut s = view.state.borrow_mut();
-                            if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                            view.update_provider_state(kind, cx, |p| {
                                 p.connection = ConnectionStatus::Error;
                                 p.last_updated_at = Some("Update failed".to_string());
                                 p.error_message = Some(err.to_string());
-                            }
-                            cx.notify();
+                            });
                         });
                     }
                 }
