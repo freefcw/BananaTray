@@ -13,6 +13,12 @@ pub enum ProviderKind {
     Codex,
     Kimi,
     Amp,
+    Cursor,
+    OpenCode,
+    MiniMax,
+    VertexAi,
+    Kilo,
+    Kiro,
 }
 
 impl ProviderKind {
@@ -25,6 +31,12 @@ impl ProviderKind {
             Self::Codex => "Codex",
             Self::Kimi => "Kimi",
             Self::Amp => "Amp",
+            Self::Cursor => "Cursor",
+            Self::OpenCode => "OpenCode",
+            Self::MiniMax => "MiniMax",
+            Self::VertexAi => "Vertex AI",
+            Self::Kilo => "Kilo",
+            Self::Kiro => "Kiro",
         }
     }
 
@@ -36,6 +48,12 @@ impl ProviderKind {
             Self::Codex => "src/icons/provider-codex.svg",
             Self::Kimi => "src/icons/provider-kimi.svg",
             Self::Amp => "src/icons/provider-amp.svg",
+            Self::Cursor => "src/icons/provider-cursor.svg",
+            Self::OpenCode => "src/icons/provider-opencode.svg",
+            Self::MiniMax => "src/icons/provider-minimax.svg",
+            Self::VertexAi => "src/icons/provider-vertexai.svg",
+            Self::Kilo => "src/icons/provider-kilo.svg",
+            Self::Kiro => "src/icons/provider-kiro.svg",
         }
     }
 
@@ -48,6 +66,12 @@ impl ProviderKind {
             Self::Codex => "OpenAI account",
             Self::Kimi => "Moonshot account",
             Self::Amp => "Amp CLI",
+            Self::Cursor => "Cursor account",
+            Self::OpenCode => "OpenCode account",
+            Self::MiniMax => "MiniMax account",
+            Self::VertexAi => "Google Cloud account",
+            Self::Kilo => "Kilo account",
+            Self::Kiro => "AWS account",
         }
     }
 
@@ -60,6 +84,12 @@ impl ProviderKind {
             Self::Codex => "https://platform.openai.com/usage",
             Self::Kimi => "https://platform.moonshot.cn/console/account",
             Self::Amp => "https://app.amphq.com/usage",
+            Self::Cursor => "https://www.cursor.com/settings",
+            Self::OpenCode => "https://opencode.ai",
+            Self::MiniMax => "https://platform.minimaxi.com",
+            Self::VertexAi => "https://console.cloud.google.com/vertex-ai",
+            Self::Kilo => "https://kilo.dev",
+            Self::Kiro => "https://kiro.dev",
         }
     }
 
@@ -72,6 +102,12 @@ impl ProviderKind {
             Self::Codex,
             Self::Kimi,
             Self::Amp,
+            Self::Cursor,
+            Self::OpenCode,
+            Self::MiniMax,
+            Self::VertexAi,
+            Self::Kilo,
+            Self::Kiro,
         ]
     }
 
@@ -84,6 +120,12 @@ impl ProviderKind {
             Self::Codex => "codex",
             Self::Kimi => "kimi",
             Self::Amp => "amp",
+            Self::Cursor => "cursor",
+            Self::OpenCode => "opencode",
+            Self::MiniMax => "minimax",
+            Self::VertexAi => "vertexai",
+            Self::Kilo => "kilo",
+            Self::Kiro => "kiro",
         }
     }
 
@@ -96,6 +138,12 @@ impl ProviderKind {
             Self::Codex => "openai api",
             Self::Kimi => "kimi api",
             Self::Amp => "amp cli",
+            Self::Cursor => "cursor api",
+            Self::OpenCode => "opencode api",
+            Self::MiniMax => "minimax api",
+            Self::VertexAi => "vertex ai api",
+            Self::Kilo => "kilo api",
+            Self::Kiro => "kiro api",
         }
     }
 }
