@@ -80,6 +80,7 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
     }
 }
 
+#[allow(dead_code)]
 pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
     if !provider.enabled {
         return format!("Disabled — {}", provider.kind.source_label());

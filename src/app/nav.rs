@@ -1,5 +1,5 @@
 use super::AppView;
-use crate::models::{NavTab, ProviderKind};
+use crate::models::NavTab;
 use crate::theme::Theme;
 use gpui::*;
 
@@ -15,14 +15,7 @@ impl AppView {
         let settings = state_ref.settings.clone();
         drop(state_ref);
 
-        let provider_order = [
-            ProviderKind::Claude,
-            ProviderKind::Gemini,
-            ProviderKind::Copilot,
-            ProviderKind::Amp,
-            ProviderKind::Kimi,
-            ProviderKind::Codex,
-        ];
+        let provider_order = settings.ordered_providers();
         // 仅显示已启用的 Provider tab
         let nav_items: Vec<_> = provider_order
             .into_iter()
