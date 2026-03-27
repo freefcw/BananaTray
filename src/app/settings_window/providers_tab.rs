@@ -202,8 +202,6 @@ impl SettingsView {
             .pr(px(4.0))
             .pt(px(8.0))
             .overflow_hidden()
-            .border_1()
-            .border_color(rgb(0xff0000)) // DEBUG: red = sidebar outer
             .child(
                 div()
                     .id("provider-sidebar-scroll")
@@ -337,20 +335,14 @@ impl SettingsView {
 
         let detail_scroll_h = viewport.height - px(65.0);
 
-        div()
-            .flex_col()
-            .flex_1()
-            .overflow_hidden()
-            .border_1()
-            .border_color(rgb(0x00ff00)) // DEBUG: green = detail outer
-            .child(
-                div()
-                    .id("provider-detail-scroll")
-                    .flex_col()
-                    .h(detail_scroll_h)
-                    .overflow_y_scroll()
-                    .child(inner),
-            )
+        div().flex_col().flex_1().overflow_hidden().child(
+            div()
+                .id("provider-detail-scroll")
+                .flex_col()
+                .h(detail_scroll_h)
+                .overflow_y_scroll()
+                .child(inner),
+        )
     }
 
     // ══════ Info table ══════

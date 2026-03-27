@@ -83,7 +83,7 @@ impl CursorProvider {
     /// Fetch usage summary from Cursor API.
     fn fetch_usage_summary(cookie: &str) -> Result<String> {
         let cookie_header = format!("Cookie: {}", cookie);
-        http_client::curl_get(
+        http_client::get(
             "https://cursor.com/api/usage-summary",
             &[&cookie_header, "Content-Type: application/json"],
         )

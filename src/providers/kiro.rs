@@ -1,5 +1,6 @@
 use super::AiProvider;
 use crate::models::{ProviderKind, QuotaInfo, QuotaType};
+use crate::utils::text_utils;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
@@ -12,12 +13,6 @@ pub struct KiroProvider {}
 impl KiroProvider {
     pub fn new() -> Self {
         Self {}
-    }
-
-    /// Strip ANSI escape sequences from text.
-    fn strip_ansi(text: &str) -> String {
-        let re = Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07").unwrap();
-        re.replace_all(text, "").to_string()
     }
 
     /// Run `kiro-cli` interactively, sending `/usage` and `/quit` via stdin,
@@ -74,7 +69,7 @@ impl KiroProvider {
     /// ████████████████████████████████████████████████████████████████ 0%
     /// ```
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
-        let clean = Self::strip_ansi(raw);
+        let clean = text_utils::strip_ansi(raw);
         let mut quotas = Vec::new();
 
         // Parse bonus credits: "Bonus credits: 122.54/500 credits used, expires in 29 days"
@@ -219,7 +214,7 @@ Credits (0.00 of 50 covered in plan)
     #[test]
     fn test_strip_ansi() {
         let input = "\x1b[31mhello\x1b[0m world";
-        let clean = KiroProvider::strip_ansi(input);
+        let clean = text_utils::strip_ansi(input);
         assert_eq!(clean, "hello world");
     }
 }

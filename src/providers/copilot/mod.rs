@@ -6,7 +6,6 @@ use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
-use std::path::PathBuf;
 
 // ============================================================================
 // Token 解析
@@ -35,7 +34,7 @@ impl CopilotTokenStatus {
 
 /// 从多个来源解析 GitHub Token
 ///
-/// 优先级：内存设置 > 磁盘配置文件 > 环境变量 GITHUB_TOKEN
+/// 优先级：内存设置 > 磁盘配置文件 > Copilot OAuth > 环境变量 GITHUB_TOKEN
 pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
     // 1. 内存中的设置（已加载的 AppSettings）
     if let Some(t) = memory_token.filter(|s| !s.is_empty()) {
@@ -53,7 +52,15 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
         };
     }
 
-    // 3. 环境变量
+    // 3. 从 GitHub Copilot 扩展配置读取 OAuth token
+    if let Some(t) = read_copilot_oauth_token() {
+        return CopilotTokenStatus {
+            token: Some(t),
+            source: "Copilot OAuth",
+        };
+    }
+
+    // 4. 环境变量
     if let Some(t) = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()) {
         return CopilotTokenStatus {
             token: Some(t),
@@ -79,6 +86,34 @@ fn read_github_token_from_config() -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// 从 ~/.config/github-copilot/ 读取已有的 OAuth token
+fn read_copilot_oauth_token() -> Option<String> {
+    let home = dirs::home_dir()?;
+    let copilot_dir = home.join(".config").join("github-copilot");
+
+    for filename in &["hosts.json", "apps.json"] {
+        let path = copilot_dir.join(filename);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(obj) = json.as_object() {
+                    for (key, value) in obj {
+                        if key.contains("github.com") {
+                            if let Some(token) = value
+                                .get("oauth_token")
+                                .and_then(|v| v.as_str())
+                                .filter(|s| !s.is_empty())
+                            {
+                                return Some(token.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 // ============================================================================
 // AiProvider 实现
 // ============================================================================
@@ -90,68 +125,9 @@ impl CopilotProvider {
         Self {}
     }
 
-    /// 获取配置文件路径（与 settings_store 保持一致）
-    fn settings_path() -> PathBuf {
-        crate::settings_store::config_path()
-    }
-
-    /// 从配置文件、GitHub Copilot 扩展配置或环境变量读取 GitHub Token
+    /// Resolve the GitHub token using the shared `resolve_token` logic.
     fn get_token(&self) -> Option<String> {
-        // 1. 优先从 BananaTray 配置文件读取
-        if let Ok(content) = std::fs::read_to_string(Self::settings_path()) {
-            if let Ok(settings) = serde_json::from_str::<serde_json::Value>(&content) {
-                let token = settings
-                    .get("providers")
-                    .and_then(|p| p.get("github_token"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if let Some(t) = token {
-                    if !t.is_empty() {
-                        return Some(t);
-                    }
-                }
-            }
-        }
-
-        // 2. 从 GitHub Copilot 扩展配置读取 OAuth token
-        if let Some(token) = Self::read_copilot_oauth_token() {
-            return Some(token);
-        }
-
-        // 3. 后备：从环境变量读取
-        std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty())
-    }
-
-    /// 从 ~/.config/github-copilot/ 读取已有的 OAuth token
-    fn read_copilot_oauth_token() -> Option<String> {
-        let home = dirs::home_dir()?;
-        let copilot_dir = home.join(".config").join("github-copilot");
-
-        // 尝试 hosts.json（旧版）和 apps.json（新版）
-        for filename in &["hosts.json", "apps.json"] {
-            let path = copilot_dir.join(filename);
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                    // 格式: { "github.com": { "oauth_token": "gho_xxx", ... } }
-                    // 或: { "github.com:copilot": { "oauth_token": "gho_xxx", ... } }
-                    if let Some(obj) = json.as_object() {
-                        for (key, value) in obj {
-                            if key.contains("github.com") {
-                                if let Some(token) = value
-                                    .get("oauth_token")
-                                    .and_then(|v| v.as_str())
-                                    .filter(|s| !s.is_empty())
-                                {
-                                    return Some(token.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        None
+        resolve_token(None).token
     }
 }
 
@@ -197,7 +173,7 @@ impl AiProvider for CopilotProvider {
             .context("GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.")?;
 
         let auth_header = format!("Authorization: Bearer {}", token);
-        let (body, status_code) = http_client::curl_get_with_status(
+        let (body, status_code) = http_client::get_with_status(
             "https://api.github.com/copilot_internal/user",
             &[&auth_header, "Accept: application/json"],
         )?;

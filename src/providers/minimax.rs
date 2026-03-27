@@ -30,7 +30,7 @@ impl MiniMaxProvider {
     fn fetch_quota(&self, api_key: &str) -> Result<Vec<QuotaInfo>> {
         let auth_header = format!("Authorization: Bearer {}", api_key);
 
-        let response_str = http_client::curl_get(self.api_url(), &[&auth_header])?;
+        let response_str = http_client::get(self.api_url(), &[&auth_header])?;
 
         let resp: MiniMaxRemainsResponse =
             serde_json::from_str(&response_str).with_context(|| {

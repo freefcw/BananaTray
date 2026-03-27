@@ -64,7 +64,7 @@ impl GeminiProvider {
         let auth_header = format!("Authorization: Bearer {}", access_token);
 
         let response_str =
-            http_client::curl_post_json(url, &[&auth_header, "Accept: application/json"], "{}")?;
+            http_client::post_json(url, &[&auth_header, "Accept: application/json"], "{}")?;
 
         let response: QuotaResponse = serde_json::from_str(&response_str)
             .with_context(|| format!("Failed to parse API response: {}", response_str))?;
