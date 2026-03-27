@@ -2,9 +2,15 @@ pub mod amp;
 pub mod claude;
 pub mod codex;
 pub mod copilot;
+pub mod cursor;
 pub mod gemini;
+pub mod kilo;
 pub mod kimi;
+pub mod kiro;
 pub mod manager;
+pub mod minimax;
+pub mod opencode;
+pub mod vertex_ai;
 
 use crate::models::{ProviderKind, QuotaInfo};
 use anyhow::Result;

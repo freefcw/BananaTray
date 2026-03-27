@@ -74,6 +74,12 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
             ProviderKind::Codex => "OpenAI".to_string(),
             ProviderKind::Kimi => "Moonshot".to_string(),
             ProviderKind::Amp => "Amp CLI".to_string(),
+            ProviderKind::Cursor => "Cursor".to_string(),
+            ProviderKind::OpenCode => "OpenCode".to_string(),
+            ProviderKind::MiniMax => "MiniMax".to_string(),
+            ProviderKind::VertexAi => "Google Cloud".to_string(),
+            ProviderKind::Kilo => "Kilo".to_string(),
+            ProviderKind::Kiro => "AWS".to_string(),
         }
     } else {
         provider.kind.account_hint().to_string()

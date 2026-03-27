@@ -21,6 +21,12 @@ impl ProviderManager {
         manager.register(Arc::new(super::copilot::CopilotProvider::new()));
         manager.register(Arc::new(super::codex::CodexProvider::new()));
         manager.register(Arc::new(super::kimi::KimiProvider::new()));
+        manager.register(Arc::new(super::cursor::CursorProvider::new()));
+        manager.register(Arc::new(super::opencode::OpenCodeProvider::new()));
+        manager.register(Arc::new(super::minimax::MiniMaxProvider::new()));
+        manager.register(Arc::new(super::vertex_ai::VertexAiProvider::new()));
+        manager.register(Arc::new(super::kilo::KiloProvider::new()));
+        manager.register(Arc::new(super::kiro::KiroProvider::new()));
 
         manager
     }
