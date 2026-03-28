@@ -1,23 +1,32 @@
 use crate::models::AppSettings;
 use anyhow::{Context, Result};
+use log::debug;
 use std::fs;
 use std::path::PathBuf;
 
 pub fn load() -> Result<AppSettings> {
     let path = config_path();
+    debug!(target: "settings", "loading settings from {}", path.display());
+
     if !path.exists() {
+        debug!(target: "settings", "settings file not found, using defaults");
         return Ok(AppSettings::default());
     }
 
     let content = fs::read_to_string(&path)
         .with_context(|| format!("failed to read settings file at {}", path.display()))?;
+
     let settings = serde_json::from_str::<AppSettings>(&content)
         .with_context(|| format!("failed to parse settings file at {}", path.display()))?;
+
+    debug!(target: "settings", "loaded settings from {}", path.display());
     Ok(settings)
 }
 
 pub fn save(settings: &AppSettings) -> Result<PathBuf> {
     let path = config_path();
+    debug!(target: "settings", "saving settings to {}", path.display());
+
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(
@@ -28,8 +37,11 @@ pub fn save(settings: &AppSettings) -> Result<PathBuf> {
     }
 
     let content = serde_json::to_string_pretty(settings)?;
+
     fs::write(&path, content)
         .with_context(|| format!("failed to write settings file at {}", path.display()))?;
+
+    debug!(target: "settings", "settings saved to {}", path.display());
     Ok(path)
 }
 

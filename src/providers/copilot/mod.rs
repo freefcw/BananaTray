@@ -5,6 +5,7 @@ use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
+use log::debug;
 use serde::Deserialize;
 
 // ============================================================================
@@ -130,11 +131,6 @@ impl CopilotProvider {
     pub fn new() -> Self {
         Self {}
     }
-
-    /// Resolve the GitHub token using the shared `resolve_token` logic.
-    fn get_token(&self) -> Option<String> {
-        resolve_token(None).token
-    }
 }
 
 /// Copilot Internal API 响应结构
@@ -178,12 +174,17 @@ impl AiProvider for CopilotProvider {
     }
 
     async fn is_available(&self) -> bool {
-        self.get_token().is_some()
+        let token_status = resolve_token(None);
+        let available = token_status.token.is_some();
+        debug!(target: "providers", "Copilot availability: {} (token source: {})",
+            available, token_status.source);
+        available
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        let token = self
-            .get_token()
+        let token_status = resolve_token(None);
+
+        let token = token_status.token
             .context("GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.")?;
 
         let auth_header = format!("Authorization: Bearer {}", token);
@@ -191,6 +192,8 @@ impl AiProvider for CopilotProvider {
             "https://api.github.com/copilot_internal/user",
             &[&auth_header, "Accept: application/json"],
         )?;
+
+        debug!(target: "providers", "Copilot API response status: {}", status_code);
 
         match status_code.as_str() {
             "401" => bail!(
@@ -208,6 +211,9 @@ impl AiProvider for CopilotProvider {
         // 解析响应
         let resp: CopilotInternalResponse = serde_json::from_str(&body)
             .context("Failed to parse Copilot Internal API response.")?;
+
+        debug!(target: "providers", "Copilot response parsed: plan={:?}",
+            resp.copilot_plan);
 
         let plan = resp.copilot_plan.unwrap_or_else(|| "unknown".to_string());
         let plan_label = capitalize_first(&plan);
