@@ -3,6 +3,7 @@
 //! Uses `ureq` for type-safe HTTP requests instead of shelling out to `curl`.
 
 use anyhow::{bail, Context, Result};
+use log::debug;
 use std::sync::LazyLock;
 use ureq::Agent;
 
@@ -40,11 +41,15 @@ macro_rules! set_headers {
 /// `headers` is a list of header strings like `"Authorization: Bearer xxx"`.
 #[allow(dead_code)]
 pub fn get(url: &str, headers: &[&str]) -> Result<String> {
+    debug!(target: "http", "GET {}", url);
+
     let response = set_headers!(AGENT.get(url), headers)
         .call()
         .with_context(|| format!("HTTP GET {url} failed"))?;
 
     let status = response.status().as_u16();
+    debug!(target: "http", "GET {} -> {}", url, status);
+
     if status >= 400 {
         bail!("HTTP GET {url} returned status {status}");
     }
@@ -60,6 +65,8 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
 /// The response is formatted as `"HTTP/1.1 <status>\r\n<headers>\r\n\r\n<body>"`
 /// to maintain compatibility with callers that parse raw HTTP responses (e.g. Codex).
 pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
+    debug!(target: "http", "GET {} (with headers)", url);
+
     let response = set_headers!(AGENT.get(url), headers)
         .call()
         .with_context(|| format!("HTTP GET {url} failed"))?;
@@ -89,11 +96,14 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
 
 /// Perform an HTTP GET and return `(body, http_status_code)`.
 pub fn get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> {
+    debug!(target: "http", "GET {}", url);
+
     let response = set_headers!(AGENT.get(url), headers)
         .call()
         .with_context(|| format!("HTTP GET {url} failed"))?;
 
     let status = response.status().as_u16().to_string();
+    debug!(target: "http", "GET {} -> {}", url, status);
 
     let body = response
         .into_body()
@@ -105,6 +115,8 @@ pub fn get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> 
 
 /// Perform an HTTP POST with a JSON body (Content-Type: application/json).
 pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
+    debug!(target: "http", "POST {} ({} bytes)", url, body.len());
+
     let response = set_headers!(
         AGENT.post(url).header("Content-Type", "application/json"),
         headers
@@ -113,6 +125,8 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
     .with_context(|| format!("HTTP POST {url} failed"))?;
 
     let status = response.status().as_u16();
+    debug!(target: "http", "POST {} -> {}", url, status);
+
     if status >= 400 {
         bail!("HTTP POST {url} returned status {status}");
     }
@@ -125,6 +139,8 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
 
 /// Perform an HTTP POST with a form-urlencoded body.
 pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
+    debug!(target: "http", "POST {} (form, {} bytes)", url, body.len());
+
     let response = set_headers!(
         AGENT
             .post(url)
@@ -135,6 +151,8 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
     .with_context(|| format!("HTTP POST {url} failed"))?;
 
     let status = response.status().as_u16();
+    debug!(target: "http", "POST {} -> {}", url, status);
+
     if status >= 400 {
         bail!("HTTP POST {url} returned status {status}");
     }

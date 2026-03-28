@@ -54,8 +54,9 @@ struct TrayController {
 
 impl TrayController {
     fn new() -> Self {
+        info!(target: "tray", "initializing tray controller");
         let state = Rc::new(RefCell::new(AppState::new()));
-        info!(target: "tray", "initialized tray controller");
+        info!(target: "tray", "tray controller initialized");
         Self {
             window: None,
             state,
@@ -176,6 +177,7 @@ impl TrayController {
 
     fn open(&mut self, cx: &mut App) {
         let dynamic_height = app::compute_popup_height(&self.state.borrow());
+        info!(target: "tray", "opening window with dynamic height: {}px", dynamic_height);
         let window_size = size(px(app::PopupLayout::WIDTH), px(dynamic_height));
         let bounds = Self::preferred_window_bounds(cx, window_size);
         let kind = Self::preferred_window_kind();
@@ -266,6 +268,7 @@ fn main() {
             });
 
             // 6. 全局热键 Cmd+Shift+S
+            info!(target: "hotkey", "registering global hotkey Cmd+Shift+S");
             if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
                 let _ = cx.register_global_hotkey(1, &keystroke);
             }

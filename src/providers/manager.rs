@@ -1,6 +1,7 @@
 use super::AiProvider;
 use crate::models::{ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus};
 use anyhow::{bail, Result};
+use log::{debug, info, warn};
 use std::sync::Arc;
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
@@ -28,6 +29,7 @@ impl ProviderManager {
 
     pub fn register(&mut self, provider: Arc<dyn AiProvider>) {
         let provider_id = provider.id();
+        let kind = provider.kind();
         if self
             .providers
             .iter()
@@ -35,6 +37,7 @@ impl ProviderManager {
         {
             return;
         }
+        info!(target: "providers", "registering provider: {} ({:?})", provider_id, kind);
         self.providers.push(provider);
     }
 
@@ -88,12 +91,14 @@ impl ProviderManager {
         &self,
         kind: ProviderKind,
     ) -> Result<Vec<crate::models::QuotaInfo>> {
+        debug!(target: "providers", "manager: refreshing provider {:?}", kind);
         for p in &self.providers {
             if p.kind() == kind {
                 if p.is_available().await {
                     return p.refresh().await;
                 } else {
                     let meta = p.metadata();
+                    warn!(target: "providers", "provider {} is unavailable", meta.display_name);
                     bail!(
                         "Provider {} is currently unavailable in this environment.",
                         meta.display_name

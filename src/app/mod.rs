@@ -11,7 +11,7 @@ use settings_window::SettingsTab;
 use crate::models::{AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind};
 use crate::theme::Theme;
 use gpui::*;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -104,16 +104,11 @@ impl Default for AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let settings = match crate::settings_store::load() {
-            Ok(settings) => {
-                info!(target: "settings", "loaded settings from {}", crate::settings_store::config_path().display());
-                settings
-            }
-            Err(err) => {
-                warn!(target: "settings", "failed to load saved settings: {err}");
-                AppSettings::default()
-            }
-        };
+        debug!(target: "app", "initializing AppState");
+        let settings = crate::settings_store::load().unwrap_or_else(|err| {
+            warn!(target: "settings", "failed to load saved settings: {err}");
+            AppSettings::default()
+        });
         let manager = Arc::new(crate::providers::ProviderManager::new());
         let mut providers = manager.initial_statuses();
         // 从配置中恢复各 Provider 的启用状态
@@ -127,8 +122,10 @@ impl AppState {
             .copied();
 
         let active_tab = if let Some(kind) = first_enabled {
+            debug!(target: "app", "default active tab: Provider {:?}", kind);
             NavTab::Provider(kind)
         } else {
+            debug!(target: "app", "default active tab: Settings (no providers enabled)");
             NavTab::Settings
         };
 
@@ -155,6 +152,8 @@ impl AppState {
     /// Returns `(updated_settings, should_refresh)`.
     pub fn toggle_provider(&mut self, kind: ProviderKind) -> (AppSettings, bool) {
         let new_val = !self.settings.is_provider_enabled(kind);
+        info!(target: "providers", "toggling provider {:?} from {} to {}",
+            kind, !new_val, new_val);
         self.settings.set_provider_enabled(kind, new_val);
 
         if let Some(p) = self.provider_store.find_mut(kind) {
@@ -207,6 +206,7 @@ impl AppState {
     /// Spawn an async task to refresh a single provider's data.
     /// Works from any window context (SettingsView, AppView, etc).
     pub fn spawn_provider_refresh(state: Rc<RefCell<Self>>, kind: ProviderKind, cx: &App) {
+        info!(target: "providers", "spawning refresh task for provider {:?}", kind);
         let async_cx = cx.to_async();
         async_cx
             .foreground_executor()
@@ -218,6 +218,7 @@ impl AppState {
                     smol::unblock(move || smol::block_on(mgr.is_provider_available(kind))).await;
 
                 if !available {
+                    debug!(target: "providers", "provider {:?} is not available, skipping refresh", kind);
                     let mut s = state.borrow_mut();
                     if let Some(p) = s.provider_store.find_mut(kind) {
                         p.connection = ConnectionStatus::Disconnected;
@@ -233,6 +234,7 @@ impl AppState {
                 if let Some(p) = s.provider_store.find_mut(kind) {
                     match result {
                         Ok(quotas) => {
+                            info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", kind, quotas.len());
                             p.quotas = quotas;
                             p.connection = ConnectionStatus::Connected;
                             p.last_refreshed_instant = Some(std::time::Instant::now());
@@ -240,6 +242,7 @@ impl AppState {
                             p.error_message = None;
                         }
                         Err(err) => {
+                            warn!(target: "providers", "provider {:?} refresh failed: {err}", kind);
                             p.connection = ConnectionStatus::Error;
                             p.last_updated_at = Some("Update failed".to_string());
                             p.error_message = Some(err.to_string());
@@ -274,13 +277,8 @@ pub(crate) fn compute_popup_height(state: &AppState) -> f32 {
 }
 
 pub(crate) fn persist_settings(settings: &AppSettings) {
-    match crate::settings_store::save(settings) {
-        Ok(path) => {
-            info!(target: "settings", "saved settings to {}", path.display());
-        }
-        Err(err) => {
-            warn!(target: "settings", "failed to save settings: {err}");
-        }
+    if let Err(err) = crate::settings_store::save(settings) {
+        warn!(target: "settings", "failed to save settings: {err}");
     }
 }
 
@@ -316,6 +314,8 @@ impl AppView {
             state.borrow_mut().provider_store.last_refresh_started =
                 Some(std::time::Instant::now());
             Self::start_background_refresh(state.borrow().provider_store.manager.clone(), cx);
+        } else {
+            info!(target: "providers", "background refresh loop already active, skipping");
         }
 
         Self {
@@ -441,12 +441,14 @@ impl AppView {
                         })
                         .unwrap_or(0);
 
-                    // 0 表示禁用自动刷新，短暂休眠后重新检查（设置可能被改回来）
+                // 0 表示禁用自动刷新，短暂休眠后重新检查（设置可能被改回来）
                     if interval_mins == 0 {
                         smol::Timer::after(Duration::from_secs(5)).await;
                         if this.upgrade().is_none() {
+                            info!(target: "providers", "view dropped, stopping periodic refresh (disabled)");
                             break;
                         }
+
                         continue;
                     }
 

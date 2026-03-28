@@ -3,6 +3,7 @@ use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::text_utils;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
+use log::debug;
 use regex::Regex;
 use std::process::Command;
 
@@ -197,6 +198,8 @@ impl AiProvider for ClaudeProvider {
         let combined = format!("{}\n{}", stdout, stderr);
         let combined_lower = combined.to_lowercase();
 
+        debug!(target: "providers", "claude command exit code: {:?}", output.status.code());
+
         if !output.status.success() && stdout.trim().is_empty() {
             if combined_lower.contains("not logged in") || combined_lower.contains("authentication")
             {
@@ -212,6 +215,7 @@ impl AiProvider for ClaudeProvider {
             );
         }
 
+        debug!(target: "providers", "parsing claude usage output ({} bytes)", stdout.len());
         let quotas = Self::parse_usage_output(&stdout)?;
 
         if quotas.is_empty() {
