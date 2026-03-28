@@ -18,24 +18,88 @@ use std::sync::Arc;
 use std::time::Duration;
 
 // ============================================================================
-// 外部持久状态 (不随窗口销毁)
+// 子状态结构 (SRP: 每个结构体负责一个独立职责)
 // ============================================================================
 
-/// 应用持久状态，在窗口生命周期之外保持
-pub struct AppState {
+/// Provider 数据与刷新调度
+pub struct ProviderStore {
     pub providers: Vec<crate::models::ProviderStatus>,
-    pub settings: AppSettings,
-    pub active_tab: NavTab,
-    pub last_provider_kind: ProviderKind,
     pub manager: Arc<crate::providers::ProviderManager>,
     /// When the last refresh cycle was started (None = never).
     /// Replaces a boolean flag so we can debounce and detect stale loops.
     pub last_refresh_started: Option<std::time::Instant>,
-    pub settings_tab: SettingsTab,
-    /// 设置窗口中当前选中的 Provider（用于 Providers tab）
-    pub settings_selected_provider: ProviderKind,
-    /// 刷新间隔下拉框是否展开
+}
+
+impl ProviderStore {
+    pub fn find(&self, kind: ProviderKind) -> Option<&crate::models::ProviderStatus> {
+        self.providers.iter().find(|p| p.kind == kind)
+    }
+
+    pub fn find_mut(&mut self, kind: ProviderKind) -> Option<&mut crate::models::ProviderStatus> {
+        self.providers.iter_mut().find(|p| p.kind == kind)
+    }
+
+    pub fn set_connection(&mut self, kind: ProviderKind, status: ConnectionStatus) {
+        if let Some(p) = self.find_mut(kind) {
+            p.connection = status;
+        }
+    }
+}
+
+/// Tray 弹出窗口的导航状态
+pub struct NavigationState {
+    pub active_tab: NavTab,
+    pub last_provider_kind: ProviderKind,
+}
+
+impl NavigationState {
+    /// 切换到指定 tab，若为 Provider 则同步 last_provider_kind
+    pub fn switch_to(&mut self, tab: NavTab) {
+        self.active_tab = tab;
+        if let NavTab::Provider(kind) = tab {
+            self.last_provider_kind = kind;
+        }
+    }
+
+    /// 当某个 provider 被禁用时，若它是当前活跃 tab 则回退到下一个已启用的 provider
+    pub fn fallback_on_disable(&mut self, disabled: ProviderKind, settings: &AppSettings) {
+        let is_current = matches!(self.active_tab, NavTab::Provider(k) if k == disabled);
+        if !is_current {
+            return;
+        }
+        if let Some(next) = ProviderKind::all()
+            .iter()
+            .find(|k| **k != disabled && settings.is_provider_enabled(**k))
+            .copied()
+        {
+            self.switch_to(NavTab::Provider(next));
+        }
+    }
+}
+
+/// 设置窗口的临时 UI 状态
+pub struct SettingsUiState {
+    pub active_tab: SettingsTab,
+    pub selected_provider: ProviderKind,
     pub cadence_dropdown_open: bool,
+}
+
+// ============================================================================
+// 外部持久状态 (不随窗口销毁) — 纯组合容器
+// ============================================================================
+
+/// 应用持久状态，在窗口生命周期之外保持
+pub struct AppState {
+    pub provider_store: ProviderStore,
+    pub nav: NavigationState,
+    pub settings_ui: SettingsUiState,
+    pub settings: AppSettings,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AppState {
@@ -69,15 +133,21 @@ impl AppState {
         };
 
         Self {
-            providers,
+            provider_store: ProviderStore {
+                providers,
+                manager,
+                last_refresh_started: None,
+            },
+            nav: NavigationState {
+                active_tab,
+                last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
+            },
+            settings_ui: SettingsUiState {
+                active_tab: SettingsTab::General,
+                selected_provider: ProviderKind::Claude,
+                cadence_dropdown_open: false,
+            },
             settings,
-            active_tab,
-            last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
-            manager,
-            last_refresh_started: None,
-            settings_tab: SettingsTab::General,
-            settings_selected_provider: ProviderKind::Claude,
-            cadence_dropdown_open: false,
         }
     }
 
@@ -87,7 +157,7 @@ impl AppState {
         let new_val = !self.settings.is_provider_enabled(kind);
         self.settings.set_provider_enabled(kind, new_val);
 
-        if let Some(p) = self.providers.iter_mut().find(|p| p.kind == kind) {
+        if let Some(p) = self.provider_store.find_mut(kind) {
             p.enabled = new_val;
             if new_val {
                 p.connection = ConnectionStatus::Refreshing;
@@ -95,22 +165,10 @@ impl AppState {
         }
 
         if new_val {
-            self.last_refresh_started = None;
-            self.active_tab = NavTab::Provider(kind);
-            self.last_provider_kind = kind;
+            self.provider_store.last_refresh_started = None;
+            self.nav.switch_to(NavTab::Provider(kind));
         } else {
-            // 如果禁用的恰好是当前活跃 provider，切到下一个已启用的
-            let is_current = matches!(self.active_tab, NavTab::Provider(k) if k == kind);
-            if is_current {
-                if let Some(next) = ProviderKind::all()
-                    .iter()
-                    .find(|k| **k != kind && self.settings.is_provider_enabled(**k))
-                    .copied()
-                {
-                    self.active_tab = NavTab::Provider(next);
-                    self.last_provider_kind = next;
-                }
-            }
+            self.nav.fallback_on_disable(kind, &self.settings);
         }
 
         (self.settings.clone(), new_val)
@@ -135,11 +193,10 @@ impl AppState {
         {
             let mut s = state.borrow_mut();
             for kind in &kinds {
-                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == *kind) {
-                    p.connection = ConnectionStatus::Refreshing;
-                }
+                s.provider_store
+                    .set_connection(*kind, ConnectionStatus::Refreshing);
             }
-            s.last_refresh_started = Some(std::time::Instant::now());
+            s.provider_store.last_refresh_started = Some(std::time::Instant::now());
         }
 
         for kind in kinds {
@@ -154,7 +211,7 @@ impl AppState {
         async_cx
             .foreground_executor()
             .spawn(async move {
-                let manager = state.borrow().manager.clone();
+                let manager = state.borrow().provider_store.manager.clone();
                 let mgr = manager.clone();
 
                 let available =
@@ -162,7 +219,7 @@ impl AppState {
 
                 if !available {
                     let mut s = state.borrow_mut();
-                    if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                    if let Some(p) = s.provider_store.find_mut(kind) {
                         p.connection = ConnectionStatus::Disconnected;
                         p.error_message = Some("Provider is currently unavailable.".to_string());
                     }
@@ -173,7 +230,7 @@ impl AppState {
                     smol::unblock(move || smol::block_on(manager.refresh_provider(kind))).await;
 
                 let mut s = state.borrow_mut();
-                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                if let Some(p) = s.provider_store.find_mut(kind) {
                     match result {
                         Ok(quotas) => {
                             p.quotas = quotas;
@@ -202,15 +259,14 @@ pub(crate) use crate::models::PopupLayout;
 
 /// 根据活跃 Provider 的 quota 数量动态计算弹出窗口高度
 pub(crate) fn compute_popup_height(state: &AppState) -> f32 {
-    let kind = if let NavTab::Provider(k) = state.active_tab {
+    let kind = if let NavTab::Provider(k) = state.nav.active_tab {
         k
     } else {
-        state.last_provider_kind
+        state.nav.last_provider_kind
     };
     let quota_count = state
-        .providers
-        .iter()
-        .find(|p| p.kind == kind)
+        .provider_store
+        .find(kind)
         .map(|p| p.quotas.len())
         .unwrap_or(1)
         .max(1);
@@ -250,14 +306,16 @@ impl AppView {
         // do_refresh_all 内部会用 per-provider 防抖跳过还在有效期内的 Provider。
         let should_restart_loop = state
             .borrow()
+            .provider_store
             .last_refresh_started
             .map(|t| t.elapsed() > Duration::from_secs(5))
             .unwrap_or(true);
 
         if should_restart_loop {
             info!(target: "providers", "starting background refresh loop");
-            state.borrow_mut().last_refresh_started = Some(std::time::Instant::now());
-            Self::start_background_refresh(state.borrow().manager.clone(), cx);
+            state.borrow_mut().provider_store.last_refresh_started =
+                Some(std::time::Instant::now());
+            Self::start_background_refresh(state.borrow().provider_store.manager.clone(), cx);
         }
 
         Self {
@@ -287,7 +345,8 @@ impl AppView {
             // 跳过最近刚刷新过的 Provider（防抖）
             let recently_refreshed = view
                 .update(async_cx, |view, _| {
-                    Self::is_recently_refreshed(&view.state.borrow(), kind)
+                    let s = view.state.borrow();
+                    Self::is_recently_refreshed(&s.provider_store, &s.settings, kind)
                 })
                 .unwrap_or(false);
             if recently_refreshed {
@@ -306,7 +365,7 @@ impl AppView {
                 info!(target: "providers", "skipping provider {:?} (unavailable)", kind);
                 let _ = view.update(async_cx, |view, cx| {
                     let mut s = view.state.borrow_mut();
-                    if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                    if let Some(p) = s.provider_store.find_mut(kind) {
                         if p.connection != ConnectionStatus::Connected {
                             p.connection = ConnectionStatus::Disconnected;
                         }
@@ -318,10 +377,10 @@ impl AppView {
 
             // Set Refreshing state before starting
             let _ = view.update(async_cx, |view, cx| {
-                let mut s = view.state.borrow_mut();
-                if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
-                    p.connection = ConnectionStatus::Refreshing;
-                }
+                view.state
+                    .borrow_mut()
+                    .provider_store
+                    .set_connection(kind, ConnectionStatus::Refreshing);
                 cx.notify();
             });
 
@@ -333,7 +392,7 @@ impl AppView {
                     info!(target: "providers", "provider {:?} refresh succeeded with {} quotas", kind, quotas.len());
                     let _ = view.update(async_cx, |view, cx| {
                         let mut s = view.state.borrow_mut();
-                        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                        if let Some(p) = s.provider_store.find_mut(kind) {
                             p.quotas = quotas;
                             p.connection = ConnectionStatus::Connected;
                             p.last_refreshed_instant = Some(std::time::Instant::now());
@@ -347,7 +406,7 @@ impl AppView {
                     warn!(target: "providers", "provider {:?} refresh failed: {err}", kind);
                     let _ = view.update(async_cx, |view, cx| {
                         let mut s = view.state.borrow_mut();
-                        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+                        if let Some(p) = s.provider_store.find_mut(kind) {
                             if p.quotas.is_empty() {
                                 p.connection = ConnectionStatus::Error;
                             } else {
@@ -407,17 +466,21 @@ impl AppView {
     }
 
     /// 获取 per-provider 防抖冷却时间：取刷新间隔的一半，但不低于 30 秒
-    fn refresh_cooldown(state: &AppState) -> Duration {
-        let interval_secs = state.settings.refresh_interval_mins * 60;
+    fn refresh_cooldown(settings: &AppSettings) -> Duration {
+        let interval_secs = settings.refresh_interval_mins * 60;
         let half = interval_secs / 2;
         Duration::from_secs(half.max(30))
     }
 
     /// 检查某个 Provider 是否在冷却期内（最近刚刷新过）
-    fn is_recently_refreshed(state: &AppState, kind: ProviderKind) -> bool {
-        if let Some(p) = state.providers.iter().find(|p| p.kind == kind) {
+    fn is_recently_refreshed(
+        store: &ProviderStore,
+        settings: &AppSettings,
+        kind: ProviderKind,
+    ) -> bool {
+        if let Some(p) = store.find(kind) {
             if let Some(instant) = p.last_refreshed_instant {
-                return instant.elapsed() < Self::refresh_cooldown(state);
+                return instant.elapsed() < Self::refresh_cooldown(settings);
             }
         }
         false
@@ -443,9 +506,8 @@ impl AppView {
         if let NavTab::Provider(kind) = active_tab {
             let dashboard_url = state
                 .borrow()
-                .providers
-                .iter()
-                .find(|p| p.kind == kind)
+                .provider_store
+                .find(kind)
                 .map(|p| p.dashboard_url().to_string())
                 .unwrap_or_default();
             menu = menu
@@ -522,7 +584,7 @@ impl Render for AppView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let state = self.state.borrow();
-        let active_tab = state.active_tab;
+        let active_tab = state.nav.active_tab;
         // 在每次渲染时动态调整窗口高度
         let desired_height = compute_popup_height(&state);
         drop(state);

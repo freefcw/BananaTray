@@ -10,6 +10,12 @@ use std::time::{Duration, Instant};
 
 pub struct KiroProvider {}
 
+impl Default for KiroProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KiroProvider {
     pub fn new() -> Self {
         Self {}

@@ -120,6 +120,12 @@ fn read_copilot_oauth_token() -> Option<String> {
 
 pub struct CopilotProvider {}
 
+impl Default for CopilotProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CopilotProvider {
     pub fn new() -> Self {
         Self {}

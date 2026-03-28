@@ -8,6 +8,12 @@ use std::process::Command;
 
 pub struct ClaudeProvider {}
 
+impl Default for ClaudeProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaudeProvider {
     pub fn new() -> Self {
         Self {}

@@ -13,7 +13,7 @@ impl AppView {
         let state_ref = self.state.borrow();
         let visible_provider_count = state_ref.settings.visible_provider_count.clamp(3, 6);
         let settings = state_ref.settings.clone();
-        let providers = state_ref.providers.clone();
+        let providers = state_ref.provider_store.providers.clone();
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
@@ -106,11 +106,7 @@ impl AppView {
                 );
 
         item.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            let mut app_state = state.borrow_mut();
-            app_state.active_tab = tab;
-            if let NavTab::Provider(kind) = tab {
-                app_state.last_provider_kind = kind;
-            }
+            state.borrow_mut().nav.switch_to(tab);
             entity.update(cx, |_, cx| {
                 cx.notify();
             });

@@ -10,6 +10,12 @@ use std::process::Command;
 
 pub struct GeminiProvider {}
 
+impl Default for GeminiProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GeminiProvider {
     pub fn new() -> Self {
         Self {}

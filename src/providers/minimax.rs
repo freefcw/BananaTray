@@ -8,6 +8,12 @@ use serde::Deserialize;
 
 pub struct MiniMaxProvider {}
 
+impl Default for MiniMaxProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MiniMaxProvider {
     pub fn new() -> Self {
         Self {}

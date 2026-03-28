@@ -109,7 +109,7 @@ impl SettingsView {
                         render_card()
                             // Refresh cadence (dropdown)
                             .child({
-                                let dropdown_open = self.state.borrow().cadence_dropdown_open;
+                                let dropdown_open = self.state.borrow().settings_ui.cadence_dropdown_open;
                                 let toggle_state = state.clone();
 
                                 let mut cadence_row = div()
@@ -170,7 +170,7 @@ impl SettingsView {
                                                     )
                                                     .on_mouse_down(MouseButton::Left, move |_, window, _| {
                                                         let mut s = toggle_state.borrow_mut();
-                                                        s.cadence_dropdown_open = !s.cadence_dropdown_open;
+                                                        s.settings_ui.cadence_dropdown_open = !s.settings_ui.cadence_dropdown_open;
                                                         drop(s);
                                                         window.refresh();
                                                     }),
@@ -219,7 +219,7 @@ impl SettingsView {
                                                         let settings = {
                                                             let mut s = opt_state.borrow_mut();
                                                             s.settings.refresh_interval_mins = mins;
-                                                            s.cadence_dropdown_open = false;
+                                                            s.settings_ui.cadence_dropdown_open = false;
                                                             s.settings.clone()
                                                         };
                                                         persist_settings(&settings);

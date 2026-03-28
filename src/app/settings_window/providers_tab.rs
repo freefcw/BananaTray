@@ -13,8 +13,8 @@ impl SettingsView {
         theme: &Theme,
         viewport: Size<Pixels>,
     ) -> Div {
-        let selected = self.state.borrow().settings_selected_provider;
-        let providers = self.state.borrow().providers.clone();
+        let selected = self.state.borrow().settings_ui.selected_provider;
+        let providers = self.state.borrow().provider_store.providers.clone();
 
         div()
             .flex()
@@ -189,7 +189,7 @@ impl SettingsView {
             }
 
             item = item.on_mouse_down(MouseButton::Left, move |_, window, _| {
-                state.borrow_mut().settings_selected_provider = kind_copy;
+                state.borrow_mut().settings_ui.selected_provider = kind_copy;
                 window.refresh();
             });
 
@@ -498,9 +498,8 @@ impl SettingsView {
                 let display_name = self
                     .state
                     .borrow()
-                    .providers
-                    .iter()
-                    .find(|p| p.kind == kind)
+                    .provider_store
+                    .find(kind)
                     .map(|p| p.display_name().to_string())
                     .unwrap_or_else(|| format!("{:?}", kind));
 

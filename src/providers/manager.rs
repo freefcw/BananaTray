@@ -8,6 +8,12 @@ pub struct ProviderManager {
     pub(crate) providers: Vec<Arc<dyn AiProvider>>,
 }
 
+impl Default for ProviderManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProviderManager {
     pub fn new() -> Self {
         let mut manager = Self {

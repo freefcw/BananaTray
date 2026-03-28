@@ -17,7 +17,7 @@ impl AppView {
     ) -> AnyElement {
         let state = self.state.borrow();
         let is_enabled = state.settings.is_provider_enabled(kind);
-        let provider = state.providers.iter().find(|p| p.kind == kind).cloned();
+        let provider = state.provider_store.find(kind).cloned();
         drop(state);
 
         if !is_enabled {
@@ -38,12 +38,7 @@ impl AppView {
     ) -> AnyElement {
         let theme = cx.global::<Theme>();
         let state = self.state.clone();
-        let provider = state
-            .borrow()
-            .providers
-            .iter()
-            .find(|p| p.kind == kind)
-            .cloned();
+        let provider = state.borrow().provider_store.find(kind).cloned();
 
         let (icon, display_name) = if let Some(p) = provider {
             (p.icon_asset().to_string(), p.display_name().to_string())
@@ -262,7 +257,7 @@ impl AppView {
         F: FnOnce(&mut ProviderStatus),
     {
         let mut s = self.state.borrow_mut();
-        if let Some(p) = s.providers.iter_mut().find(|p| p.kind == kind) {
+        if let Some(p) = s.provider_store.find_mut(kind) {
             f(p);
         }
         cx.notify();
@@ -270,7 +265,7 @@ impl AppView {
 
     /// Trigger a refresh for a single provider (used by the retry button).
     fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
-        let manager = self.state.borrow().manager.clone();
+        let manager = self.state.borrow().provider_store.manager.clone();
 
         self.update_provider_state(kind, cx, |p| {
             p.connection = ConnectionStatus::Refreshing;

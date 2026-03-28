@@ -344,7 +344,7 @@ impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::preferences_theme();
         let settings = self.state.borrow().settings.clone();
-        let active_tab = self.state.borrow().settings_tab;
+        let active_tab = self.state.borrow().settings_ui.active_tab;
 
         let tabs: &[(&str, &str, SettingsTab)] = &[
             ("src/icons/settings.svg", "General", SettingsTab::General),
@@ -371,7 +371,7 @@ impl Render for SettingsView {
                 render_icon_tab(icon, label, active_tab == tab, &theme).on_mouse_down(
                     MouseButton::Left,
                     move |_, window, _| {
-                        state.borrow_mut().settings_tab = tab;
+                        state.borrow_mut().settings_ui.active_tab = tab;
                         window.refresh();
                     },
                 ),
