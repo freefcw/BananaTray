@@ -6,6 +6,12 @@ use std::process::Command;
 
 pub struct OpenCodeProvider {}
 
+impl Default for OpenCodeProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenCodeProvider {
     pub fn new() -> Self {
         Self {}

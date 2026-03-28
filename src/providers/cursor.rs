@@ -9,6 +9,12 @@ use std::process::Command;
 
 pub struct CursorProvider {}
 
+impl Default for CursorProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CursorProvider {
     pub fn new() -> Self {
         Self {}

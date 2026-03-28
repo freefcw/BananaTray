@@ -6,6 +6,12 @@ use std::path::PathBuf;
 
 pub struct KiloProvider {}
 
+impl Default for KiloProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KiloProvider {
     pub fn new() -> Self {
         Self {}

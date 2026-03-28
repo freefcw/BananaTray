@@ -2,7 +2,7 @@
 
 mod app;
 mod logging;
-mod models;
+pub mod models;
 mod providers;
 mod settings_store;
 mod theme;
@@ -78,7 +78,7 @@ impl TrayController {
 
         let provider_tab = {
             let mut state = self.state.borrow_mut();
-            let last = state.last_provider_kind;
+            let last = state.nav.last_provider_kind;
             // 如果上次选中的 provider 已经被禁用了，切到第一个可用的
             let kind = if state.settings.is_provider_enabled(last) {
                 last
@@ -88,7 +88,7 @@ impl TrayController {
                     .find(|k| state.settings.is_provider_enabled(**k))
                     .copied()
                     .unwrap_or(last);
-                state.last_provider_kind = fallback;
+                state.nav.last_provider_kind = fallback;
                 fallback
             };
             NavTab::Provider(kind)
@@ -96,7 +96,7 @@ impl TrayController {
         info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
 
         if let Some(window) = self.window.take() {
-            let active_tab = self.state.borrow().active_tab;
+            let active_tab = self.state.borrow().nav.active_tab;
             if matches!(active_tab, NavTab::Provider(_)) {
                 info!(target: "tray", "provider panel already open, closing existing panel");
                 let result = window.update(cx, |_, window, _| {
@@ -134,10 +134,7 @@ impl TrayController {
         info!(target: "tray", "show window for tab {:?}", tab);
         {
             let mut state = self.state.borrow_mut();
-            state.active_tab = tab;
-            if let NavTab::Provider(kind) = tab {
-                state.last_provider_kind = kind;
-            }
+            state.nav.switch_to(tab);
         }
 
         if let Some(window) = self.window.as_ref() {

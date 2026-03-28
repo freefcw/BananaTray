@@ -6,6 +6,12 @@ use std::path::PathBuf;
 
 pub struct VertexAiProvider {}
 
+impl Default for VertexAiProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VertexAiProvider {
     pub fn new() -> Self {
         Self {}

@@ -8,6 +8,12 @@ use std::path::PathBuf;
 
 pub struct CodexProvider {}
 
+impl Default for CodexProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodexProvider {
     pub fn new() -> Self {
         Self {}

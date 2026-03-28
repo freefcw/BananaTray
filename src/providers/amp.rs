@@ -7,6 +7,12 @@ use std::process::Command;
 
 pub struct AmpProvider {}
 
+impl Default for AmpProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AmpProvider {
     pub fn new() -> Self {
         Self {}
