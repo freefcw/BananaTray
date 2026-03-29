@@ -457,6 +457,7 @@ impl AppView {
             ))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 let display_id = window.display(cx).map(|d| d.id());
+                state.borrow_mut().view_entity = None;
                 window.remove_window();
                 schedule_open_settings_window(state.clone(), display_id, cx);
             })
@@ -527,5 +528,13 @@ impl Render for AppView {
                     }),
             )
             .child(self.render_global_actions(active_tab, cx))
+    }
+}
+
+impl Drop for AppView {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.state.try_borrow_mut() {
+            state.view_entity = None;
+        }
     }
 }

@@ -86,9 +86,9 @@ impl AppView {
                     .child("Open Settings")
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         let display_id = window.display(cx).map(|d| d.id());
+                        state.borrow_mut().view_entity = None;
                         window.remove_window();
-                        let settings_state = state.clone();
-                        schedule_open_settings_window(settings_state, display_id, cx);
+                        schedule_open_settings_window(state.clone(), display_id, cx);
                     }),
             )
             .into_any_element()
