@@ -45,20 +45,95 @@ impl SettingsView {
                 card = card.child(render_card_separator());
             }
 
-            let mut item = div()
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .px(px(10.0))
-                .py(px(8.0))
-                .cursor_pointer();
+            let is_first = i == 0;
+            let is_last = i == ordered.len() - 1;
+            let state_up = self.state.clone();
+            let state_down = self.state.clone();
+            let kind_up = *kind;
+            let kind_down = *kind;
 
-            if is_selected {
-                item = item.mx(px(4.0)).rounded(px(8.0)).bg(theme.element_selected);
-            }
+            // 排序按钮
+            let arrows = div()
+                .flex_col()
+                .flex_shrink_0()
+                .gap(px(2.0))
+                .child({
+                    let mut up_btn = div()
+                        .w(px(16.0))
+                        .h(px(12.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(3.0))
+                        .text_size(px(8.0));
 
-            item =
-                item
+                    if !is_selected {
+                        // 未选中：白色文字，不可点击
+                        up_btn = up_btn.text_color(theme.element_active).child("▲");
+                    } else if is_first {
+                        // 选中但禁用：白色文字
+                        up_btn = up_btn.text_color(theme.element_active).child("▲");
+                    } else {
+                        // 选中且可用：白色文字，可点击
+                        up_btn = up_btn
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.7))
+                            .child("▲")
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                let mut s = state_up.borrow_mut();
+                                if s.settings.move_provider_up(kind_up) {
+                                    persist_settings(&s.settings);
+                                }
+                                drop(s);
+                                window.refresh();
+                            });
+                    }
+                    up_btn
+                })
+                .child({
+                    let mut down_btn = div()
+                        .w(px(16.0))
+                        .h(px(12.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(3.0))
+                        .text_size(px(8.0));
+
+                    if !is_selected {
+                        // 未选中：白色文字，不可点击
+                        down_btn = down_btn.text_color(theme.element_active).child("▼");
+                    } else if is_last {
+                        // 选中但禁用：白色文字
+                        down_btn = down_btn.text_color(theme.element_active).child("▼");
+                    } else {
+                        // 选中且可用：白色文字，可点击
+                        down_btn = down_btn
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.7))
+                            .child("▼")
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                let mut s = state_down.borrow_mut();
+                                if s.settings.move_provider_down(kind_down) {
+                                    persist_settings(&s.settings);
+                                }
+                                drop(s);
+                                window.refresh();
+                            });
+                    }
+                    down_btn
+                });
+
+            let item_content =
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .px(px(10.0))
+                    .py(px(8.0))
+                    .w_full()
                     // Provider icon
                     .child(svg().path(icon).size(px(22.0)).flex_shrink_0().text_color(
                         if is_selected {
@@ -91,87 +166,27 @@ impl SettingsView {
                         } else {
                             name_row
                         }
-                    });
+                    })
+                    // Arrows
+                    .child(arrows);
 
-            // Reorder arrows — always reserve space, only interactive when selected
-            {
-                let is_first = i == 0;
-                let is_last = i == ordered.len() - 1;
-                let state_up = self.state.clone();
-                let state_down = self.state.clone();
-                let kind_up = *kind;
-                let kind_down = *kind;
-
-                let mut arrows = div().flex_col().flex_shrink_0();
-
-                let mut up_btn = div()
-                    .w(px(16.0))
-                    .h(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(3.0))
-                    .text_size(px(8.0));
-
-                let mut down_btn = div()
-                    .w(px(16.0))
-                    .h(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(3.0))
-                    .text_size(px(8.0));
-
-                if !is_selected {
-                    // Invisible placeholder to keep height stable
-                    up_btn = up_btn.text_color(transparent_black()).child("▲");
-                    down_btn = down_btn.text_color(transparent_black()).child("▼");
+            let item = div()
+                .flex()
+                .items_center()
+                .cursor_pointer()
+                .child(if is_selected {
+                    div()
+                        .rounded(px(8.0))
+                        .bg(theme.element_selected)
+                        .w_full()
+                        .child(item_content)
                 } else {
-                    if is_first {
-                        up_btn = up_btn.text_color(theme.border_subtle).child("▲");
-                    } else {
-                        up_btn = up_btn
-                            .cursor_pointer()
-                            .text_color(theme.element_active)
-                            .hover(|s| s.bg(theme.border_subtle))
-                            .child("▲")
-                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                let mut s = state_up.borrow_mut();
-                                if s.settings.move_provider_up(kind_up) {
-                                    persist_settings(&s.settings);
-                                }
-                                drop(s);
-                                window.refresh();
-                            });
-                    }
-
-                    if is_last {
-                        down_btn = down_btn.text_color(theme.border_subtle).child("▼");
-                    } else {
-                        down_btn = down_btn
-                            .cursor_pointer()
-                            .text_color(theme.element_active)
-                            .hover(|s| s.bg(theme.border_subtle))
-                            .child("▼")
-                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                let mut s = state_down.borrow_mut();
-                                if s.settings.move_provider_down(kind_down) {
-                                    persist_settings(&s.settings);
-                                }
-                                drop(s);
-                                window.refresh();
-                            });
-                    }
-                }
-
-                arrows = arrows.child(up_btn).child(down_btn);
-                item = item.child(arrows);
-            }
-
-            item = item.on_mouse_down(MouseButton::Left, move |_, window, _| {
-                state.borrow_mut().settings_ui.selected_provider = kind_copy;
-                window.refresh();
-            });
+                    item_content
+                })
+                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                    state.borrow_mut().settings_ui.selected_provider = kind_copy;
+                    window.refresh();
+                });
 
             card = card.child(item);
         }
