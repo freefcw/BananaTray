@@ -25,7 +25,6 @@ use std::sync::Arc;
 /// Provider 数据存储
 pub struct ProviderStore {
     pub providers: Vec<crate::models::ProviderStatus>,
-    pub manager: Arc<crate::providers::ProviderManager>,
 }
 
 impl ProviderStore {
@@ -37,9 +36,9 @@ impl ProviderStore {
         self.providers.iter_mut().find(|p| p.kind == kind)
     }
 
-    pub fn set_connection(&mut self, kind: ProviderKind, status: ConnectionStatus) {
-        if let Some(p) = self.find_mut(kind) {
-            p.connection = status;
+    pub fn mark_refreshing(&mut self, kind: ProviderKind) {
+        if let Some(provider) = self.find_mut(kind) {
+            provider.mark_refreshing();
         }
     }
 }
@@ -124,7 +123,7 @@ impl AppState {
         };
 
         Self {
-            provider_store: ProviderStore { providers, manager },
+            provider_store: ProviderStore { providers },
             nav: NavigationState {
                 active_tab,
                 last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
@@ -141,10 +140,11 @@ impl AppState {
     }
 
     /// 向 RefreshCoordinator 发送请求（非阻塞）
-    pub fn send_refresh(&self, request: RefreshRequest) {
-        if let Err(err) = self.refresh_tx.try_send(request) {
-            warn!(target: "refresh", "failed to send refresh request: {}", err);
-        }
+    pub fn send_refresh(
+        &self,
+        request: RefreshRequest,
+    ) -> Result<(), smol::channel::TrySendError<RefreshRequest>> {
+        self.refresh_tx.try_send(request)
     }
 
     /// 选择新的刷新频率并同步到协调器
@@ -161,7 +161,7 @@ impl AppState {
             .filter(|k| self.settings.is_provider_enabled(**k))
             .copied()
             .collect();
-        self.send_refresh(RefreshRequest::UpdateConfig {
+        let _ = self.send_refresh(RefreshRequest::UpdateConfig {
             interval_mins: self.settings.refresh_interval_mins,
             enabled,
         });
@@ -172,8 +172,7 @@ impl AppState {
     pub fn apply_refresh_event(&mut self, event: RefreshEvent) {
         match event {
             RefreshEvent::Started { kind } => {
-                self.provider_store
-                    .set_connection(kind, ConnectionStatus::Refreshing);
+                self.provider_store.mark_refreshing(kind);
             }
             RefreshEvent::Finished(outcome) => {
                 let Some(p) = self.provider_store.find_mut(outcome.kind) else {
@@ -182,33 +181,35 @@ impl AppState {
                 match outcome.result {
                     RefreshResult::Success { quotas } => {
                         info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", outcome.kind, quotas.len());
-                        p.quotas = quotas;
-                        p.connection = ConnectionStatus::Connected;
-                        p.last_refreshed_instant = Some(std::time::Instant::now());
-                        p.last_updated_at = None;
-                        p.error_message = None;
+                        p.mark_refresh_succeeded(quotas);
                     }
                     RefreshResult::Unavailable { message } => {
                         debug!(target: "providers", "provider {:?} unavailable: {}", outcome.kind, message);
-                        if p.connection != ConnectionStatus::Connected {
-                            p.connection = ConnectionStatus::Disconnected;
-                        }
-                        p.error_message = Some(message);
+                        p.mark_unavailable(message);
                     }
                     RefreshResult::Failed { error } => {
                         warn!(target: "providers", "provider {:?} refresh failed: {}", outcome.kind, error);
-                        if p.quotas.is_empty() {
-                            p.connection = ConnectionStatus::Error;
-                        } else {
-                            p.connection = ConnectionStatus::Connected;
-                        }
-                        p.last_updated_at = Some("Update failed".to_string());
-                        p.error_message = Some(error);
+                        p.mark_refresh_failed(error);
                     }
                     RefreshResult::SkippedCooldown
                     | RefreshResult::SkippedInFlight
                     | RefreshResult::SkippedDisabled => {}
                 }
+            }
+        }
+    }
+
+    pub fn request_provider_refresh(&mut self, kind: ProviderKind, reason: RefreshReason) {
+        if !self.settings.is_provider_enabled(kind) {
+            debug!(target: "refresh", "ignoring refresh request for disabled provider {:?}", kind);
+            return;
+        }
+
+        self.provider_store.mark_refreshing(kind);
+        if let Err(err) = self.send_refresh(RefreshRequest::RefreshOne { kind, reason }) {
+            warn!(target: "refresh", "failed to send refresh request: {}", err);
+            if let Some(provider) = self.provider_store.find_mut(kind) {
+                provider.connection = ConnectionStatus::Disconnected;
             }
         }
     }
@@ -223,9 +224,6 @@ impl AppState {
 
         if let Some(p) = self.provider_store.find_mut(kind) {
             p.enabled = new_val;
-            if new_val {
-                p.connection = ConnectionStatus::Refreshing;
-            }
         }
 
         if new_val {
@@ -237,10 +235,7 @@ impl AppState {
         // 通知协调器配置变更，并请求刷新
         self.sync_config_to_coordinator();
         if new_val {
-            self.send_refresh(RefreshRequest::RefreshOne {
-                kind,
-                reason: RefreshReason::ProviderToggled,
-            });
+            self.request_provider_refresh(kind, RefreshReason::ProviderToggled);
         }
 
         self.settings.clone()

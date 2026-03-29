@@ -1,12 +1,16 @@
 use super::AiProvider;
-use crate::models::{ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus};
+use crate::models::{ProviderKind, ProviderMetadata, ProviderStatus};
 use anyhow::{bail, Result};
 use log::{debug, info, warn};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
 pub struct ProviderManager {
     pub(crate) providers: Vec<Arc<dyn AiProvider>>,
+    providers_by_kind: HashMap<ProviderKind, Arc<dyn AiProvider>>,
+    metadata_by_kind: HashMap<ProviderKind, ProviderMetadata>,
+    provider_ids: HashSet<&'static str>,
 }
 
 impl Default for ProviderManager {
@@ -19,6 +23,9 @@ impl ProviderManager {
     pub fn new() -> Self {
         let mut manager = Self {
             providers: Vec::new(),
+            providers_by_kind: HashMap::new(),
+            metadata_by_kind: HashMap::new(),
+            provider_ids: HashSet::new(),
         };
 
         // 注册所有已实现的 Provider
@@ -30,60 +37,49 @@ impl ProviderManager {
     pub fn register(&mut self, provider: Arc<dyn AiProvider>) {
         let provider_id = provider.id();
         let kind = provider.kind();
-        if self
-            .providers
-            .iter()
-            .any(|existing| existing.id() == provider_id)
-        {
+        if self.provider_ids.contains(provider_id) {
+            warn!(
+                target: "providers",
+                "provider id already registered, skipping duplicate: {}",
+                provider_id
+            );
+            return;
+        }
+        if self.providers_by_kind.contains_key(&kind) {
+            warn!(
+                target: "providers",
+                "provider kind already registered, skipping duplicate: {:?}",
+                kind
+            );
             return;
         }
         info!(target: "providers", "registering provider: {} ({:?})", provider_id, kind);
+        let metadata = provider.metadata();
+        debug_assert_eq!(metadata.kind, kind);
+
+        self.provider_ids.insert(provider_id);
+        self.metadata_by_kind.insert(kind, metadata);
+        self.providers_by_kind.insert(kind, provider.clone());
         self.providers.push(provider);
+    }
+
+    fn provider_for_kind(&self, kind: ProviderKind) -> Option<&(dyn AiProvider + '_)> {
+        self.providers_by_kind.get(&kind).map(Arc::as_ref)
+    }
+
+    pub fn metadata_for(&self, kind: ProviderKind) -> ProviderMetadata {
+        self.metadata_by_kind
+            .get(&kind)
+            .cloned()
+            .unwrap_or_else(|| ProviderMetadata::fallback(kind))
     }
 
     /// 为 App 提供所有的预设状态，未支持的 Provider 默认为 Disconnected
     pub fn initial_statuses(&self) -> Vec<ProviderStatus> {
-        let mut statuses = Vec::new();
-        for kind in ProviderKind::all() {
-            let metadata = if let Some(p) = self.providers.iter().find(|p| p.kind() == *kind) {
-                p.metadata()
-            } else {
-                ProviderMetadata {
-                    kind: *kind,
-                    display_name: format!("{:?}", kind),
-                    brand_name: format!("{:?}", kind),
-                    source_label: "unknown".to_string(),
-                    account_hint: "account".to_string(),
-                    icon_asset: "src/icons/provider-unknown.svg".to_string(),
-                    dashboard_url: "".to_string(),
-                }
-            };
-
-            statuses.push(ProviderStatus {
-                kind: *kind,
-                metadata,
-                enabled: true,
-                connection: ConnectionStatus::Disconnected,
-                quotas: vec![],
-                account_email: None,
-                is_paid: false,
-                account_tier: None,
-                last_updated_at: None,
-                error_message: None,
-                last_refreshed_instant: None,
-            });
-        }
-        statuses
-    }
-
-    /// 检查指定 Provider 是否可用
-    pub async fn is_provider_available(&self, kind: ProviderKind) -> bool {
-        for p in &self.providers {
-            if p.kind() == kind {
-                return p.is_available().await;
-            }
-        }
-        false
+        ProviderKind::all()
+            .iter()
+            .map(|kind| ProviderStatus::new(self.metadata_for(*kind)))
+            .collect()
     }
 
     /// 刷新指定的 Provider
@@ -92,19 +88,21 @@ impl ProviderManager {
         kind: ProviderKind,
     ) -> Result<Vec<crate::models::QuotaInfo>> {
         debug!(target: "providers", "manager: refreshing provider {:?}", kind);
-        for p in &self.providers {
-            if p.kind() == kind {
-                if p.is_available().await {
-                    return p.refresh().await;
-                } else {
-                    let meta = p.metadata();
-                    warn!(target: "providers", "provider {} is unavailable", meta.display_name);
-                    bail!(
-                        "Provider {} is currently unavailable in this environment.",
-                        meta.display_name
-                    );
-                }
+        if let Some(provider) = self.provider_for_kind(kind) {
+            if provider.is_available().await {
+                return provider.refresh().await;
             }
+
+            let metadata = self.metadata_for(kind);
+            warn!(
+                target: "providers",
+                "provider {} is unavailable",
+                metadata.display_name
+            );
+            bail!(
+                "Provider {} is currently unavailable in this environment.",
+                metadata.display_name
+            );
         }
         bail!("No implementation registered for provider {:?}", kind)
     }
@@ -136,5 +134,16 @@ mod tests {
             let id = p.id();
             assert!(ids.insert(id), "Duplicate provider id: {}", id);
         }
+    }
+
+    #[test]
+    fn test_no_duplicate_provider_kinds() {
+        let manager = ProviderManager::new();
+        let mut kinds = std::collections::HashSet::new();
+        for provider in &manager.providers {
+            let kind = provider.kind();
+            assert!(kinds.insert(kind), "Duplicate provider kind: {:?}", kind);
+        }
+        assert_eq!(manager.providers.len(), manager.providers_by_kind.len());
     }
 }

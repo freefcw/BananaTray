@@ -1,6 +1,6 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::path::PathBuf;
 
@@ -53,6 +53,10 @@ impl AiProvider for VertexAiProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        bail!("Vertex AI quota monitoring uses the same quota system as Gemini CLI. Enable the Gemini provider with Vertex AI auth mode in your Gemini CLI settings.")
+        Err(ProviderError::Unavailable(
+            "Vertex AI quota monitoring uses the same quota system as Gemini CLI. Enable the Gemini provider with Vertex AI auth mode in your Gemini CLI settings."
+                .to_string(),
+        )
+        .into())
     }
 }

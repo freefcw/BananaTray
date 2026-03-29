@@ -39,8 +39,55 @@ pub struct ProviderMetadata {
 
 impl ProviderKind {
     /// 配置文件中使用的小写标识符
-    pub fn id_key(&self) -> String {
-        format!("{:?}", self).to_lowercase()
+    pub fn id_key(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Gemini => "gemini",
+            Self::Copilot => "copilot",
+            Self::Codex => "codex",
+            Self::Kimi => "kimi",
+            Self::Amp => "amp",
+            Self::Cursor => "cursor",
+            Self::OpenCode => "opencode",
+            Self::MiniMax => "minimax",
+            Self::VertexAi => "vertexai",
+            Self::Kilo => "kilo",
+            Self::Kiro => "kiro",
+        }
+    }
+
+    pub fn from_id_key(key: &str) -> Option<Self> {
+        match key {
+            "claude" => Some(Self::Claude),
+            "gemini" => Some(Self::Gemini),
+            "copilot" => Some(Self::Copilot),
+            "codex" => Some(Self::Codex),
+            "kimi" => Some(Self::Kimi),
+            "amp" => Some(Self::Amp),
+            "cursor" => Some(Self::Cursor),
+            "opencode" => Some(Self::OpenCode),
+            "minimax" => Some(Self::MiniMax),
+            "vertexai" => Some(Self::VertexAi),
+            "kilo" => Some(Self::Kilo),
+            "kiro" => Some(Self::Kiro),
+            _ => None,
+        }
+    }
+}
+
+impl ProviderMetadata {
+    /// 用于兜底场景的占位元数据，避免在多个调用点重复构造默认值。
+    pub fn fallback(kind: ProviderKind) -> Self {
+        let display_name = format!("{:?}", kind);
+        Self {
+            kind,
+            display_name: display_name.clone(),
+            brand_name: display_name,
+            source_label: "unknown".to_string(),
+            account_hint: "account".to_string(),
+            icon_asset: "src/icons/provider-unknown.svg".to_string(),
+            dashboard_url: String::new(),
+        }
     }
 }
 
@@ -68,6 +115,19 @@ mod tests {
         assert_eq!(ProviderKind::Claude.id_key(), "claude");
         assert_eq!(ProviderKind::Gemini.id_key(), "gemini");
         assert_eq!(ProviderKind::VertexAi.id_key(), "vertexai");
+    }
+
+    #[test]
+    fn test_from_id_key() {
+        assert_eq!(
+            ProviderKind::from_id_key(ProviderKind::Codex.id_key()),
+            Some(ProviderKind::Codex)
+        );
+        assert_eq!(
+            ProviderKind::from_id_key(ProviderKind::OpenCode.id_key()),
+            Some(ProviderKind::OpenCode)
+        );
+        assert_eq!(ProviderKind::from_id_key("unknown"), None);
     }
 }
 
