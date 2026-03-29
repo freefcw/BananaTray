@@ -176,6 +176,51 @@ pub struct ProviderStatus {
 }
 
 impl ProviderStatus {
+    pub fn new(metadata: ProviderMetadata) -> Self {
+        Self {
+            kind: metadata.kind,
+            metadata,
+            enabled: true,
+            connection: ConnectionStatus::Disconnected,
+            quotas: vec![],
+            account_email: None,
+            is_paid: false,
+            account_tier: None,
+            last_updated_at: None,
+            error_message: None,
+            last_refreshed_instant: None,
+        }
+    }
+
+    pub fn mark_refreshing(&mut self) {
+        self.connection = ConnectionStatus::Refreshing;
+    }
+
+    pub fn mark_refresh_succeeded(&mut self, quotas: Vec<QuotaInfo>) {
+        self.quotas = quotas;
+        self.connection = ConnectionStatus::Connected;
+        self.last_refreshed_instant = Some(Instant::now());
+        self.last_updated_at = None;
+        self.error_message = None;
+    }
+
+    pub fn mark_unavailable(&mut self, message: String) {
+        if self.connection != ConnectionStatus::Connected {
+            self.connection = ConnectionStatus::Disconnected;
+        }
+        self.error_message = Some(message);
+    }
+
+    pub fn mark_refresh_failed(&mut self, error: String) {
+        if self.quotas.is_empty() {
+            self.connection = ConnectionStatus::Error;
+        } else {
+            self.connection = ConnectionStatus::Connected;
+        }
+        self.last_updated_at = Some("Update failed".to_string());
+        self.error_message = Some(error);
+    }
+
     /// 兼容旧的扁平化访问接口
     pub fn display_name(&self) -> &str {
         &self.metadata.display_name

@@ -1,6 +1,6 @@
 use super::provider::ProviderKind;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // ============================================================================
 // 应用设置
@@ -78,34 +78,35 @@ impl AppSettings {
     /// 检查指定 Provider 是否已启用
     pub fn is_provider_enabled(&self, kind: ProviderKind) -> bool {
         self.enabled_providers
-            .get(&kind.id_key())
+            .get(kind.id_key())
             .copied()
             .unwrap_or(false)
     }
 
     /// 设置指定 Provider 的启用状态
     pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
-        self.enabled_providers.insert(kind.id_key(), enabled);
+        self.enabled_providers
+            .insert(kind.id_key().to_string(), enabled);
     }
 
     /// 按用户自定义顺序返回所有 Provider。未在 provider_order 中出现的 Provider 追加到末尾。
     pub fn ordered_providers(&self) -> Vec<ProviderKind> {
-        let all = ProviderKind::all();
-        let mut result: Vec<ProviderKind> = Vec::with_capacity(all.len());
+        let mut result = Vec::with_capacity(ProviderKind::all().len());
+        let mut seen = HashSet::with_capacity(ProviderKind::all().len());
 
         // 先按保存的顺序添加
         for key in &self.provider_order {
-            if let Some(kind) = all.iter().find(|k| k.id_key() == key.as_str()) {
-                if !result.contains(kind) {
-                    result.push(*kind);
+            if let Some(kind) = ProviderKind::from_id_key(key) {
+                if seen.insert(kind) {
+                    result.push(kind);
                 }
             }
         }
 
         // 再追加未出现的 Provider（保持默认顺序）
-        for kind in all {
-            if !result.contains(kind) {
-                result.push(*kind);
+        for &kind in ProviderKind::all() {
+            if seen.insert(kind) {
+                result.push(kind);
             }
         }
 
@@ -116,7 +117,7 @@ impl AppSettings {
     pub fn move_provider_up(&mut self, kind: ProviderKind) -> bool {
         self.ensure_provider_order();
         let key = kind.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
+        if let Some(pos) = self.provider_order.iter().position(|k| k == key) {
             if pos > 0 {
                 self.provider_order.swap(pos, pos - 1);
                 return true;
@@ -129,7 +130,7 @@ impl AppSettings {
     pub fn move_provider_down(&mut self, kind: ProviderKind) -> bool {
         self.ensure_provider_order();
         let key = kind.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| k == &key) {
+        if let Some(pos) = self.provider_order.iter().position(|k| k == key) {
             if pos + 1 < self.provider_order.len() {
                 self.provider_order.swap(pos, pos + 1);
                 return true;
@@ -140,16 +141,48 @@ impl AppSettings {
 
     /// 确保 provider_order 包含所有 Provider
     fn ensure_provider_order(&mut self) {
-        if self.provider_order.is_empty() {
-            self.provider_order = ProviderKind::all().iter().map(|k| k.id_key()).collect();
-        } else {
-            // 补全缺失的 Provider
-            for kind in ProviderKind::all() {
-                let key = kind.id_key();
-                if !self.provider_order.contains(&key) {
-                    self.provider_order.push(key);
-                }
-            }
-        }
+        self.provider_order = self
+            .ordered_providers()
+            .into_iter()
+            .map(|kind| kind.id_key().to_string())
+            .collect();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordered_providers_ignores_invalid_and_duplicate_keys() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec![
+            "gemini".into(),
+            "invalid".into(),
+            "claude".into(),
+            "gemini".into(),
+        ];
+
+        let ordered = settings.ordered_providers();
+
+        assert_eq!(ordered[0], ProviderKind::Gemini);
+        assert_eq!(ordered[1], ProviderKind::Claude);
+        assert_eq!(ordered.len(), ProviderKind::all().len());
+    }
+
+    #[test]
+    fn move_provider_up_normalizes_provider_order() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec![
+            "invalid".into(),
+            "gemini".into(),
+            "gemini".into(),
+            "claude".into(),
+        ];
+
+        assert!(settings.move_provider_up(ProviderKind::Claude));
+        assert_eq!(settings.provider_order[0], ProviderKind::Claude.id_key());
+        assert_eq!(settings.provider_order[1], ProviderKind::Gemini.id_key());
+        assert_eq!(settings.provider_order.len(), ProviderKind::all().len());
     }
 }

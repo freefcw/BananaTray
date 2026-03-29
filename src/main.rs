@@ -295,7 +295,7 @@ fn main() {
                 let state = controller.borrow().state.clone();
                 let s = state.borrow();
                 s.sync_config_to_coordinator();
-                s.send_refresh(RefreshRequest::RefreshAll {
+                let _ = s.send_refresh(RefreshRequest::RefreshAll {
                     reason: RefreshReason::Startup,
                 });
             }

@@ -2,7 +2,7 @@ use super::SettingsView;
 use crate::app::widgets::{render_detail_section_title, render_info_row};
 use crate::app::{persist_settings, provider_logic};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
-use crate::refresh::{RefreshReason, RefreshRequest};
+use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
 
@@ -103,14 +103,10 @@ impl SettingsView {
                                     .child("⟳")
                                     .on_mouse_down(MouseButton::Left, move |_, window, _| {
                                         let mut s = state_refresh.borrow_mut();
-                                        s.provider_store.set_connection(
+                                        s.request_provider_refresh(
                                             refresh_kind,
-                                            ConnectionStatus::Refreshing,
+                                            RefreshReason::Manual,
                                         );
-                                        s.send_refresh(RefreshRequest::RefreshOne {
-                                            kind: refresh_kind,
-                                            reason: RefreshReason::Manual,
-                                        });
                                         drop(s);
                                         window.refresh();
                                     }),

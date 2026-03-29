@@ -1,6 +1,6 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::path::PathBuf;
 
@@ -52,6 +52,10 @@ impl AiProvider for KiloProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        bail!("Kilo Code usage monitoring is not yet supported. Kilo Code runs as a VS Code extension without a public usage API.")
+        Err(ProviderError::Unavailable(
+            "Kilo Code usage monitoring is not yet supported. Kilo Code runs as a VS Code extension without a public usage API."
+                .to_string(),
+        )
+        .into())
     }
 }

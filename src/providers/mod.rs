@@ -60,6 +60,15 @@ impl std::error::Error for ProviderError {}
 impl ProviderError {
     /// 从 anyhow::Error 推断错误类型（向后兼容已有 provider 实现）
     pub fn classify(err: &anyhow::Error) -> Self {
+        if let Some(provider_error) = err.downcast_ref::<Self>() {
+            return match provider_error {
+                Self::Unavailable(message) => Self::Unavailable(message.clone()),
+                Self::AuthRequired(message) => Self::AuthRequired(message.clone()),
+                Self::ConfigMissing(message) => Self::ConfigMissing(message.clone()),
+                Self::FetchFailed(message) => Self::FetchFailed(message.clone()),
+            };
+        }
+
         let msg = err.to_string();
         let lower = msg.to_lowercase();
         if lower.contains("unavailable") || lower.contains("not found") {

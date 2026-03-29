@@ -2,9 +2,9 @@ use super::provider_logic;
 use super::settings_window::schedule_open_settings_window;
 use super::AppView;
 use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
+use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
-use log::{info, warn};
 
 impl AppView {
     pub(crate) fn render_provider_detail(
@@ -295,79 +295,11 @@ impl AppView {
         container
     }
 
-    /// Helper to concisely update the state for a single provider and trigger a view update.
-    pub(crate) fn update_provider_state<F>(&self, kind: ProviderKind, cx: &mut Context<Self>, f: F)
-    where
-        F: FnOnce(&mut ProviderStatus),
-    {
-        let mut s = self.state.borrow_mut();
-        if let Some(p) = s.provider_store.find_mut(kind) {
-            f(p);
-        }
-        cx.notify();
-    }
-
     /// Trigger a refresh for a single provider (used by the retry button).
     pub(crate) fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
-        let manager = self.state.borrow().provider_store.manager.clone();
-
-        self.update_provider_state(kind, cx, |p| {
-            p.connection = ConnectionStatus::Refreshing;
-            p.error_message = None;
-        });
-
-        cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
-            let mut async_cx = cx.clone();
-            async move {
-                let mgr = manager.clone();
-
-                let mgr_check = mgr.clone();
-                let available = smol::unblock(move || {
-                    smol::block_on(mgr_check.is_provider_available(kind))
-                })
-                .await;
-
-                if !available {
-                    info!(target: "providers", "retry: provider {:?} unavailable", kind);
-                    let _ = this.update(&mut async_cx, |view, cx| {
-                        view.update_provider_state(kind, cx, |p| {
-                            p.connection = ConnectionStatus::Disconnected;
-                            p.error_message = Some("Provider is currently unavailable.".to_string());
-                        });
-                    });
-                    return;
-                }
-
-                info!(target: "providers", "retry: refreshing provider {:?}", kind);
-                let result =
-                    smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
-
-                match result {
-                    Ok(quotas) => {
-                        info!(target: "providers", "retry: provider {:?} succeeded with {} quotas", kind, quotas.len());
-                        let _ = this.update(&mut async_cx, |view, cx| {
-                            view.update_provider_state(kind, cx, |p| {
-                                p.quotas = quotas;
-                                p.connection = ConnectionStatus::Connected;
-                                p.last_refreshed_instant = Some(std::time::Instant::now());
-                                p.last_updated_at = None;
-                                p.error_message = None;
-                            });
-                        });
-                    }
-                    Err(err) => {
-                        warn!(target: "providers", "retry: provider {:?} failed: {err}", kind);
-                        let _ = this.update(&mut async_cx, |view, cx| {
-                            view.update_provider_state(kind, cx, |p| {
-                                p.connection = ConnectionStatus::Error;
-                                p.last_updated_at = Some("Update failed".to_string());
-                                p.error_message = Some(err.to_string());
-                            });
-                        });
-                    }
-                }
-            }
-        })
-        .detach();
+        self.state
+            .borrow_mut()
+            .request_provider_refresh(kind, RefreshReason::Manual);
+        cx.notify();
     }
 }

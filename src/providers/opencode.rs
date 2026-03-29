@@ -1,6 +1,6 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::process::Command;
 
@@ -29,6 +29,10 @@ impl AiProvider for OpenCodeProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        bail!("OpenCode usage monitoring requires a running opencode session. No public API available yet.")
+        Err(ProviderError::Unavailable(
+            "OpenCode usage monitoring requires a running opencode session. No public API is available yet."
+                .to_string(),
+        )
+        .into())
     }
 }
