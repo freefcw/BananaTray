@@ -11,7 +11,7 @@ mod utils;
 
 use app::{schedule_open_settings_window, AppState};
 use gpui::*;
-use log::{error, info, warn};
+use log::{error, info};
 use models::NavTab;
 use refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use std::borrow::Cow;
@@ -65,6 +65,19 @@ impl TrayController {
         }
     }
 
+    /// Close the tray popup window and clear the view entity reference.
+    /// Returns the display ID the popup was on, if available.
+    fn close_popup(&mut self, cx: &mut App) -> Option<DisplayId> {
+        let window = self.window.take()?;
+        self.state.borrow_mut().view_entity = None;
+        let mut display_id = None;
+        let _ = window.update(cx, |_, window, cx| {
+            display_id = window.display(cx).map(|d| d.id());
+            window.remove_window();
+        });
+        display_id
+    }
+
     fn toggle_provider(&mut self, cx: &mut App) {
         let has_any_enabled = {
             let state = self.state.borrow();
@@ -98,20 +111,13 @@ impl TrayController {
         };
         info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
 
-        if let Some(window) = self.window.take() {
+        if self.window.is_some() {
             let active_tab = self.state.borrow().nav.active_tab;
             if matches!(active_tab, NavTab::Provider(_)) {
                 info!(target: "tray", "provider panel already open, closing existing panel");
-                let result = window.update(cx, |_, window, _| {
-                    window.remove_window();
-                });
-                if result.is_err() {
-                    warn!(target: "tray", "failed to close existing panel cleanly, reopening provider panel");
-                    self.show(provider_tab, cx);
-                }
+                self.close_popup(cx);
             } else {
                 info!(target: "tray", "reusing existing window handle for provider panel");
-                self.window = Some(window);
                 self.show(provider_tab, cx);
             }
         } else {
@@ -122,14 +128,7 @@ impl TrayController {
 
     fn show_settings(&mut self, cx: &mut App) {
         info!(target: "tray", "requested settings window from tray controller");
-        let mut display_id = None;
-        if let Some(window) = self.window.take() {
-            info!(target: "tray", "closing existing tray panel before opening settings window");
-            let _ = window.update(cx, |_, window, cx| {
-                display_id = window.display(cx).map(|d| d.id());
-                window.remove_window();
-            });
-        }
+        let display_id = self.close_popup(cx);
         schedule_open_settings_window(self.state.clone(), display_id, cx);
     }
 
@@ -212,6 +211,7 @@ impl TrayController {
                     let should_auto_hide = auto_hide_state.borrow().settings.auto_hide_window;
                     if should_auto_hide && !window.is_window_active() {
                         info!(target: "tray", "auto-hide closing inactive tray popup");
+                        auto_hide_state.borrow_mut().view_entity = None;
                         window.remove_window();
                     }
                 });
