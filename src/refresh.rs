@@ -123,64 +123,40 @@ impl RefreshCoordinator {
         self.in_flight.get(&kind).copied().unwrap_or(false)
     }
 
-    /// Refresh a single provider — the core execution path
-    async fn execute_refresh(&mut self, kind: ProviderKind, reason: RefreshReason) {
-        // Skip disabled providers
+    /// Check if a provider is eligible for refresh, returning the skip reason if not.
+    fn check_eligibility(
+        &self,
+        kind: ProviderKind,
+        reason: RefreshReason,
+    ) -> Option<RefreshResult> {
         if !self.enabled_providers.contains(&kind) {
-            let _ = self
-                .event_tx
-                .send(RefreshEvent::Finished(RefreshOutcome {
-                    kind,
-                    result: RefreshResult::SkippedDisabled,
-                }))
-                .await;
-            return;
+            return Some(RefreshResult::SkippedDisabled);
         }
-
-        // Skip if in-flight (dedupe)
         if self.is_in_flight(kind) {
-            let _ = self
-                .event_tx
-                .send(RefreshEvent::Finished(RefreshOutcome {
-                    kind,
-                    result: RefreshResult::SkippedInFlight,
-                }))
-                .await;
-            return;
+            return Some(RefreshResult::SkippedInFlight);
         }
-
-        // Skip if on cooldown (Manual and ProviderToggled bypass cooldown)
         if matches!(reason, RefreshReason::Periodic | RefreshReason::Startup)
             && self.is_on_cooldown(kind)
         {
             log::info!(target: "refresh", "skipping {:?} (cooldown)", kind);
-            let _ = self
-                .event_tx
-                .send(RefreshEvent::Finished(RefreshOutcome {
-                    kind,
-                    result: RefreshResult::SkippedCooldown,
-                }))
-                .await;
-            return;
+            return Some(RefreshResult::SkippedCooldown);
         }
+        None
+    }
 
-        // Mark in-flight
-        self.in_flight.insert(kind, true);
+    /// Send a skip event for an ineligible provider.
+    async fn send_skip(&self, kind: ProviderKind, result: RefreshResult) {
+        let _ = self
+            .event_tx
+            .send(RefreshEvent::Finished(RefreshOutcome { kind, result }))
+            .await;
+    }
 
-        // Send Started event
-        let _ = self.event_tx.send(RefreshEvent::Started { kind }).await;
-
-        // Execute on background thread to avoid blocking
-        let mgr = self.manager.clone();
-        let result = smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
-
-        // Clear in-flight
-        self.in_flight.insert(kind, false);
-
-        let outcome = match result {
+    /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
+    fn build_outcome(kind: ProviderKind, result: anyhow::Result<Vec<QuotaInfo>>) -> RefreshOutcome {
+        match result {
             Ok(quotas) => {
                 log::info!(target: "refresh", "provider {:?} refreshed: {} quotas", kind, quotas.len());
-                self.last_refreshed.insert(kind, Instant::now());
                 RefreshOutcome {
                     kind,
                     result: RefreshResult::Success { quotas },
@@ -202,9 +178,84 @@ impl RefreshCoordinator {
                     }
                 }
             }
-        };
+        }
+    }
 
+    /// Record a completed outcome: clear in-flight, update last_refreshed, emit event.
+    async fn record_outcome(&mut self, outcome: RefreshOutcome) {
+        let kind = outcome.kind;
+        self.in_flight.insert(kind, false);
+        if matches!(outcome.result, RefreshResult::Success { .. }) {
+            self.last_refreshed.insert(kind, Instant::now());
+        }
         let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+    }
+
+    /// Mark a provider as in-flight and notify UI.
+    async fn begin_refresh(&mut self, kind: ProviderKind) {
+        self.in_flight.insert(kind, true);
+        let _ = self.event_tx.send(RefreshEvent::Started { kind }).await;
+    }
+
+    /// Refresh a single provider (used by RefreshOne).
+    async fn execute_refresh(&mut self, kind: ProviderKind, reason: RefreshReason) {
+        if let Some(skip) = self.check_eligibility(kind, reason) {
+            self.send_skip(kind, skip).await;
+            return;
+        }
+
+        self.begin_refresh(kind).await;
+
+        let mgr = self.manager.clone();
+        let result = smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
+        self.record_outcome(Self::build_outcome(kind, result)).await;
+    }
+
+    /// Refresh multiple providers concurrently.
+    /// Sends Started events for all eligible providers upfront, then executes
+    /// network requests in parallel threads, collecting results via a channel.
+    async fn execute_refresh_concurrent(
+        &mut self,
+        kinds: Vec<ProviderKind>,
+        reason: RefreshReason,
+    ) {
+        // Phase 1: Filter eligible providers, send Started events
+        let mut to_refresh = Vec::new();
+        for kind in kinds {
+            if let Some(skip) = self.check_eligibility(kind, reason) {
+                self.send_skip(kind, skip).await;
+                continue;
+            }
+            self.begin_refresh(kind).await;
+            to_refresh.push(kind);
+        }
+
+        if to_refresh.is_empty() {
+            return;
+        }
+
+        // Phase 2: Spawn concurrent refresh threads
+        let (result_tx, result_rx) = smol::channel::bounded::<RefreshOutcome>(to_refresh.len());
+
+        for &kind in &to_refresh {
+            let mgr = self.manager.clone();
+            let tx = result_tx.clone();
+            std::thread::spawn(move || {
+                let result = smol::block_on(mgr.refresh_provider(kind));
+                let outcome = RefreshCoordinator::build_outcome(kind, result);
+                let _ = smol::block_on(tx.send(outcome));
+            });
+        }
+        drop(result_tx);
+
+        // Phase 3: Collect results as they arrive
+        let expected = to_refresh.len();
+        for _ in 0..expected {
+            match result_rx.recv().await {
+                Ok(outcome) => self.record_outcome(outcome).await,
+                Err(_) => break,
+            }
+        }
     }
 
     /// Run the coordinator event loop. This is the main entry point.
@@ -235,18 +286,15 @@ impl RefreshCoordinator {
                     }
                     log::info!(target: "refresh", "periodic refresh triggered (every {} min)", self.interval_mins);
                     let kinds: Vec<_> = self.enabled_providers.clone();
-                    for kind in kinds {
-                        self.execute_refresh(kind, RefreshReason::Periodic).await;
-                    }
+                    self.execute_refresh_concurrent(kinds, RefreshReason::Periodic)
+                        .await;
                 }
                 // Request received
                 Some(Ok(req)) => match req {
                     RefreshRequest::RefreshAll { reason } => {
                         log::info!(target: "refresh", "refresh all requested ({:?})", reason);
                         let kinds: Vec<_> = self.enabled_providers.clone();
-                        for kind in kinds {
-                            self.execute_refresh(kind, reason).await;
-                        }
+                        self.execute_refresh_concurrent(kinds, reason).await;
                     }
                     RefreshRequest::RefreshOne { kind, reason } => {
                         log::info!(target: "refresh", "refresh one requested: {:?} ({:?})", kind, reason);
