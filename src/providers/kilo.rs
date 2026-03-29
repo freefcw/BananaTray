@@ -4,19 +4,9 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 
-pub struct KiloProvider {}
-
-impl Default for KiloProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(KiloProvider);
 
 impl KiloProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     fn extensions_dir() -> PathBuf {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))

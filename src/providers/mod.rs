@@ -7,6 +7,80 @@ use std::sync::Arc;
 
 pub use manager::ProviderManager;
 
+/// 消除零字段 Provider 的重复样板代码（struct + Default + new）
+macro_rules! define_unit_provider {
+    ($name:ident) => {
+        pub struct $name;
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self
+            }
+        }
+
+        impl $name {
+            pub fn new() -> Self {
+                Self
+            }
+        }
+    };
+}
+pub(crate) use define_unit_provider;
+
+// ============================================================================
+// Provider 错误分类（替代字符串匹配，符合 OCP）
+// ============================================================================
+
+/// Provider 刷新失败的结构化错误类型
+#[derive(Debug)]
+pub enum ProviderError {
+    /// Provider 在当前环境不可用（CLI 未安装、文件不存在等）
+    Unavailable(String),
+    /// 需要认证（token 过期、未登录等）
+    AuthRequired(String),
+    /// 需要配置（缺少环境变量、配置文件等）
+    ConfigMissing(String),
+    /// 网络或 API 调用失败
+    FetchFailed(String),
+}
+
+impl std::fmt::Display for ProviderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable(msg) => write!(f, "{}", msg),
+            Self::AuthRequired(msg) => write!(f, "{}", msg),
+            Self::ConfigMissing(msg) => write!(f, "{}", msg),
+            Self::FetchFailed(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ProviderError {}
+
+impl ProviderError {
+    /// 从 anyhow::Error 推断错误类型（向后兼容已有 provider 实现）
+    pub fn classify(err: &anyhow::Error) -> Self {
+        let msg = err.to_string();
+        let lower = msg.to_lowercase();
+        if lower.contains("unavailable") || lower.contains("not found") {
+            Self::Unavailable(msg)
+        } else if lower.contains("authentication")
+            || lower.contains("not logged in")
+            || lower.contains("token expired")
+            || lower.contains("re-authenticate")
+            || lower.contains("session expired")
+            || lower.contains("session cookie expired")
+        {
+            Self::AuthRequired(msg)
+        } else if lower.contains("missing environment variable") || lower.contains("not configured")
+        {
+            Self::ConfigMissing(msg)
+        } else {
+            Self::FetchFailed(msg)
+        }
+    }
+}
+
 /// AI Provider 的核心接口
 #[async_trait]
 pub trait AiProvider: Send + Sync {

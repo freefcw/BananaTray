@@ -7,19 +7,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::process::Command;
 
-pub struct KimiProvider {}
-
-impl Default for KimiProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(KimiProvider);
 
 impl KimiProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     fn get_token(&self) -> Option<String> {
         std::env::var("KIMI_AUTH_TOKEN")
             .ok()
@@ -210,11 +200,16 @@ fn parse_num(val: &Option<String>) -> f64 {
         .unwrap_or(0.0)
 }
 
+// Kimi tier 阈值（按周配额限制识别账号等级）
+const KIMI_TIER_ANDANTE: u64 = 1024;
+const KIMI_TIER_MODERATO: u64 = 2048;
+const KIMI_TIER_ALLEGRETTO: u64 = 7168;
+
 fn detect_tier(weekly_limit: f64) -> Option<&'static str> {
     match weekly_limit as u64 {
-        1024 => Some("Andante"),
-        2048 => Some("Moderato"),
-        7168 => Some("Allegretto"),
+        KIMI_TIER_ANDANTE => Some("Andante"),
+        KIMI_TIER_MODERATO => Some("Moderato"),
+        KIMI_TIER_ALLEGRETTO => Some("Allegretto"),
         _ => None,
     }
 }

@@ -6,19 +6,9 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-pub struct MiniMaxProvider {}
-
-impl Default for MiniMaxProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(MiniMaxProvider);
 
 impl MiniMaxProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     fn get_api_key(&self) -> Option<String> {
         std::env::var("MINIMAX_API_KEY")
             .ok()

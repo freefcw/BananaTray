@@ -4,19 +4,9 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 
-pub struct VertexAiProvider {}
-
-impl Default for VertexAiProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(VertexAiProvider);
 
 impl VertexAiProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     fn settings_path() -> PathBuf {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
