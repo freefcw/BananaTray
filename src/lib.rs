@@ -4,6 +4,7 @@
 
 pub mod models;
 pub mod providers;
+pub mod refresh;
 pub mod settings_store;
 pub mod theme;
 pub mod utils;

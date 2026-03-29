@@ -9,25 +9,23 @@ pub use settings_window::schedule_open_settings_window;
 use settings_window::SettingsTab;
 
 use crate::models::{AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind};
+use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use crate::theme::Theme;
 use gpui::*;
 use log::{debug, info, warn};
+use smol::channel::Sender;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 // ============================================================================
 // 子状态结构 (SRP: 每个结构体负责一个独立职责)
 // ============================================================================
 
-/// Provider 数据与刷新调度
+/// Provider 数据存储
 pub struct ProviderStore {
     pub providers: Vec<crate::models::ProviderStatus>,
     pub manager: Arc<crate::providers::ProviderManager>,
-    /// When the last refresh cycle was started (None = never).
-    /// Replaces a boolean flag so we can debounce and detect stale loops.
-    pub last_refresh_started: Option<std::time::Instant>,
 }
 
 impl ProviderStore {
@@ -94,16 +92,12 @@ pub struct AppState {
     pub nav: NavigationState,
     pub settings_ui: SettingsUiState,
     pub settings: AppSettings,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// 向 RefreshCoordinator 发送请求的通道
+    pub refresh_tx: Sender<RefreshRequest>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(refresh_tx: Sender<RefreshRequest>) -> Self {
         debug!(target: "app", "initializing AppState");
         let settings = crate::settings_store::load().unwrap_or_else(|err| {
             warn!(target: "settings", "failed to load saved settings: {err}");
@@ -111,11 +105,9 @@ impl AppState {
         });
         let manager = Arc::new(crate::providers::ProviderManager::new());
         let mut providers = manager.initial_statuses();
-        // 从配置中恢复各 Provider 的启用状态
         for p in &mut providers {
             p.enabled = settings.is_provider_enabled(p.kind);
         }
-        // 默认选第一个已启用的 Provider。如果都没有启用，直接切到设置 Tab
         let first_enabled = ProviderKind::all()
             .iter()
             .find(|k| settings.is_provider_enabled(**k))
@@ -130,11 +122,7 @@ impl AppState {
         };
 
         Self {
-            provider_store: ProviderStore {
-                providers,
-                manager,
-                last_refresh_started: None,
-            },
+            provider_store: ProviderStore { providers, manager },
             nav: NavigationState {
                 active_tab,
                 last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
@@ -145,12 +133,79 @@ impl AppState {
                 cadence_dropdown_open: false,
             },
             settings,
+            refresh_tx,
+        }
+    }
+
+    /// 向 RefreshCoordinator 发送请求（非阻塞）
+    pub fn send_refresh(&self, request: RefreshRequest) {
+        if let Err(err) = self.refresh_tx.try_send(request) {
+            warn!(target: "refresh", "failed to send refresh request: {}", err);
+        }
+    }
+
+    /// 通知协调器配置已变更
+    pub fn sync_config_to_coordinator(&self) {
+        let enabled: Vec<ProviderKind> = ProviderKind::all()
+            .iter()
+            .filter(|k| self.settings.is_provider_enabled(**k))
+            .copied()
+            .collect();
+        self.send_refresh(RefreshRequest::UpdateConfig {
+            interval_mins: self.settings.refresh_interval_mins,
+            enabled,
+        });
+    }
+
+    /// 统一处理来自 RefreshCoordinator 的事件，更新 Provider 状态
+    /// 这是 **唯一** 修改 provider 连接状态的入口
+    pub fn apply_refresh_event(&mut self, event: RefreshEvent) {
+        match event {
+            RefreshEvent::Started { kind } => {
+                self.provider_store
+                    .set_connection(kind, ConnectionStatus::Refreshing);
+            }
+            RefreshEvent::Finished(outcome) => {
+                let Some(p) = self.provider_store.find_mut(outcome.kind) else {
+                    return;
+                };
+                match outcome.result {
+                    RefreshResult::Success { quotas } => {
+                        info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", outcome.kind, quotas.len());
+                        p.quotas = quotas;
+                        p.connection = ConnectionStatus::Connected;
+                        p.last_refreshed_instant = Some(std::time::Instant::now());
+                        p.last_updated_at = None;
+                        p.error_message = None;
+                    }
+                    RefreshResult::Unavailable { message } => {
+                        debug!(target: "providers", "provider {:?} unavailable: {}", outcome.kind, message);
+                        if p.connection != ConnectionStatus::Connected {
+                            p.connection = ConnectionStatus::Disconnected;
+                        }
+                        p.error_message = Some(message);
+                    }
+                    RefreshResult::Failed { error } => {
+                        warn!(target: "providers", "provider {:?} refresh failed: {}", outcome.kind, error);
+                        if p.quotas.is_empty() {
+                            p.connection = ConnectionStatus::Error;
+                        } else {
+                            p.connection = ConnectionStatus::Connected;
+                        }
+                        p.last_updated_at = Some("Update failed".to_string());
+                        p.error_message = Some(error);
+                    }
+                    RefreshResult::SkippedCooldown
+                    | RefreshResult::SkippedInFlight
+                    | RefreshResult::SkippedDisabled => {}
+                }
+            }
         }
     }
 
     /// Toggle a provider on/off and update all related state.
-    /// Returns `(updated_settings, should_refresh)`.
-    pub fn toggle_provider(&mut self, kind: ProviderKind) -> (AppSettings, bool) {
+    /// Returns updated settings.
+    pub fn toggle_provider(&mut self, kind: ProviderKind) -> AppSettings {
         let new_val = !self.settings.is_provider_enabled(kind);
         info!(target: "providers", "toggling provider {:?} from {} to {}",
             kind, !new_val, new_val);
@@ -164,93 +219,21 @@ impl AppState {
         }
 
         if new_val {
-            self.provider_store.last_refresh_started = None;
             self.nav.switch_to(NavTab::Provider(kind));
         } else {
             self.nav.fallback_on_disable(kind, &self.settings);
         }
 
-        (self.settings.clone(), new_val)
-    }
-
-    /// Refresh all enabled providers at startup (before any window is opened).
-    pub fn spawn_startup_refresh(state: Rc<RefCell<Self>>, cx: &App) {
-        let kinds: Vec<_> = {
-            let s = state.borrow();
-            ProviderKind::all()
-                .iter()
-                .filter(|k| s.settings.is_provider_enabled(**k))
-                .copied()
-                .collect()
-        };
-
-        if kinds.is_empty() {
-            return;
+        // 通知协调器配置变更，并请求刷新
+        self.sync_config_to_coordinator();
+        if new_val {
+            self.send_refresh(RefreshRequest::RefreshOne {
+                kind,
+                reason: RefreshReason::ProviderToggled,
+            });
         }
 
-        info!(target: "providers", "startup refresh for {} enabled providers", kinds.len());
-        {
-            let mut s = state.borrow_mut();
-            for kind in &kinds {
-                s.provider_store
-                    .set_connection(*kind, ConnectionStatus::Refreshing);
-            }
-            s.provider_store.last_refresh_started = Some(std::time::Instant::now());
-        }
-
-        for kind in kinds {
-            Self::spawn_provider_refresh(state.clone(), kind, cx);
-        }
-    }
-
-    /// Spawn an async task to refresh a single provider's data.
-    /// Works from any window context (SettingsView, AppView, etc).
-    pub fn spawn_provider_refresh(state: Rc<RefCell<Self>>, kind: ProviderKind, cx: &App) {
-        info!(target: "providers", "spawning refresh task for provider {:?}", kind);
-        let async_cx = cx.to_async();
-        async_cx
-            .foreground_executor()
-            .spawn(async move {
-                let manager = state.borrow().provider_store.manager.clone();
-                let mgr = manager.clone();
-
-                let available =
-                    smol::unblock(move || smol::block_on(mgr.is_provider_available(kind))).await;
-
-                if !available {
-                    debug!(target: "providers", "provider {:?} is not available, skipping refresh", kind);
-                    let mut s = state.borrow_mut();
-                    if let Some(p) = s.provider_store.find_mut(kind) {
-                        p.connection = ConnectionStatus::Disconnected;
-                        p.error_message = Some("Provider is currently unavailable.".to_string());
-                    }
-                    return;
-                }
-
-                let result =
-                    smol::unblock(move || smol::block_on(manager.refresh_provider(kind))).await;
-
-                let mut s = state.borrow_mut();
-                if let Some(p) = s.provider_store.find_mut(kind) {
-                    match result {
-                        Ok(quotas) => {
-                            info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", kind, quotas.len());
-                            p.quotas = quotas;
-                            p.connection = ConnectionStatus::Connected;
-                            p.last_refreshed_instant = Some(std::time::Instant::now());
-                            p.last_updated_at = None;
-                            p.error_message = None;
-                        }
-                        Err(err) => {
-                            warn!(target: "providers", "provider {:?} refresh failed: {err}", kind);
-                            p.connection = ConnectionStatus::Error;
-                            p.last_updated_at = Some("Update failed".to_string());
-                            p.error_message = Some(err.to_string());
-                        }
-                    }
-                }
-            })
-            .detach();
+        self.settings.clone()
     }
 }
 
@@ -299,193 +282,10 @@ impl AppView {
         };
         cx.set_global(theme);
 
-        // 后台 refresh 循环绑定在 AppView 生命周期上，窗口关闭后循环会停。
-        // 每次新建窗口需要重启循环，但不应立即重新拉取——
-        // do_refresh_all 内部会用 per-provider 防抖跳过还在有效期内的 Provider。
-        let should_restart_loop = state
-            .borrow()
-            .provider_store
-            .last_refresh_started
-            .map(|t| t.elapsed() > Duration::from_secs(5))
-            .unwrap_or(true);
-
-        if should_restart_loop {
-            info!(target: "providers", "starting background refresh loop");
-            state.borrow_mut().provider_store.last_refresh_started =
-                Some(std::time::Instant::now());
-            Self::start_background_refresh(state.borrow().provider_store.manager.clone(), cx);
-        } else {
-            info!(target: "providers", "background refresh loop already active, skipping");
-        }
-
         Self {
             state,
             _activation_sub: None,
         }
-    }
-
-    /// 执行一轮完整的 provider 刷新
-    async fn do_refresh_all(
-        manager: &Arc<crate::providers::ProviderManager>,
-        view: &gpui::WeakEntity<AppView>,
-        async_cx: &mut gpui::AsyncApp,
-    ) {
-        let all_kinds = ProviderKind::all().to_vec();
-        for kind in all_kinds {
-            // 跳过未启用的 Provider
-            let enabled = view
-                .update(async_cx, |view, _| {
-                    view.state.borrow().settings.is_provider_enabled(kind)
-                })
-                .unwrap_or(false);
-            if !enabled {
-                continue;
-            }
-
-            // 跳过最近刚刷新过的 Provider（防抖）
-            let recently_refreshed = view
-                .update(async_cx, |view, _| {
-                    let s = view.state.borrow();
-                    Self::is_recently_refreshed(&s.provider_store, &s.settings, kind)
-                })
-                .unwrap_or(false);
-            if recently_refreshed {
-                info!(target: "providers", "skipping provider {:?} (refreshed within cooldown)", kind);
-                continue;
-            }
-
-            let mgr = manager.clone();
-
-            // Check availability first (runs on background thread)
-            let mgr_check = mgr.clone();
-            let available =
-                smol::unblock(move || smol::block_on(mgr_check.is_provider_available(kind))).await;
-
-            if !available {
-                info!(target: "providers", "skipping provider {:?} (unavailable)", kind);
-                let _ = view.update(async_cx, |view, cx| {
-                    let mut s = view.state.borrow_mut();
-                    if let Some(p) = s.provider_store.find_mut(kind) {
-                        if p.connection != ConnectionStatus::Connected {
-                            p.connection = ConnectionStatus::Disconnected;
-                        }
-                    }
-                    cx.notify();
-                });
-                continue;
-            }
-
-            // Set Refreshing state before starting
-            let _ = view.update(async_cx, |view, cx| {
-                view.state
-                    .borrow_mut()
-                    .provider_store
-                    .set_connection(kind, ConnectionStatus::Refreshing);
-                cx.notify();
-            });
-
-            info!(target: "providers", "refreshing provider {:?}", kind);
-            let result = smol::unblock(move || smol::block_on(mgr.refresh_provider(kind))).await;
-
-            match result {
-                Ok(quotas) => {
-                    info!(target: "providers", "provider {:?} refresh succeeded with {} quotas", kind, quotas.len());
-                    let _ = view.update(async_cx, |view, cx| {
-                        let mut s = view.state.borrow_mut();
-                        if let Some(p) = s.provider_store.find_mut(kind) {
-                            p.quotas = quotas;
-                            p.connection = ConnectionStatus::Connected;
-                            p.last_refreshed_instant = Some(std::time::Instant::now());
-                            p.last_updated_at = None;
-                            p.error_message = None;
-                        }
-                        cx.notify();
-                    });
-                }
-                Err(err) => {
-                    warn!(target: "providers", "provider {:?} refresh failed: {err}", kind);
-                    let _ = view.update(async_cx, |view, cx| {
-                        let mut s = view.state.borrow_mut();
-                        if let Some(p) = s.provider_store.find_mut(kind) {
-                            if p.quotas.is_empty() {
-                                p.connection = ConnectionStatus::Error;
-                            } else {
-                                // Keep Connected if we have stale data
-                                p.connection = ConnectionStatus::Connected;
-                            }
-                            p.last_updated_at = Some("Update failed".to_string());
-                            p.error_message = Some(err.to_string());
-                        }
-                        cx.notify();
-                    });
-                }
-            }
-        }
-    }
-
-    fn start_background_refresh(
-        manager: Arc<crate::providers::ProviderManager>,
-        cx: &mut Context<Self>,
-    ) {
-        cx.spawn(move |this: gpui::WeakEntity<AppView>, cx: &mut gpui::AsyncApp| {
-            let mut async_cx = cx.clone();
-            async move {
-                // 首次刷新
-                Self::do_refresh_all(&manager, &this, &mut async_cx).await;
-
-                // 定时刷新：每次循环动态读取最新间隔
-                loop {
-                    let interval_mins = this
-                        .update(&mut async_cx, |view, _| {
-                            view.state.borrow().settings.refresh_interval_mins
-                        })
-                        .unwrap_or(0);
-
-                // 0 表示禁用自动刷新，短暂休眠后重新检查（设置可能被改回来）
-                    if interval_mins == 0 {
-                        smol::Timer::after(Duration::from_secs(5)).await;
-                        if this.upgrade().is_none() {
-                            info!(target: "providers", "view dropped, stopping periodic refresh (disabled)");
-                            break;
-                        }
-
-                        continue;
-                    }
-
-                    let interval = Duration::from_secs(interval_mins * 60);
-                    smol::Timer::after(interval).await;
-
-                    if this.upgrade().is_none() {
-                        info!(target: "providers", "view dropped, stopping periodic refresh");
-                        break;
-                    }
-                    info!(target: "providers", "periodic refresh triggered (every {} min)", interval_mins);
-                    Self::do_refresh_all(&manager, &this, &mut async_cx).await;
-                }
-            }
-        })
-        .detach();
-    }
-
-    /// 获取 per-provider 防抖冷却时间：取刷新间隔的一半，但不低于 30 秒
-    fn refresh_cooldown(settings: &AppSettings) -> Duration {
-        let interval_secs = settings.refresh_interval_mins * 60;
-        let half = interval_secs / 2;
-        Duration::from_secs(half.max(30))
-    }
-
-    /// 检查某个 Provider 是否在冷却期内（最近刚刷新过）
-    fn is_recently_refreshed(
-        store: &ProviderStore,
-        settings: &AppSettings,
-        kind: ProviderKind,
-    ) -> bool {
-        if let Some(p) = store.find(kind) {
-            if let Some(instant) = p.last_refreshed_instant {
-                return instant.elapsed() < Self::refresh_cooldown(settings);
-            }
-        }
-        false
     }
 
     fn render_global_actions(

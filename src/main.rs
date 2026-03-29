@@ -4,6 +4,7 @@ mod app;
 mod logging;
 pub mod models;
 mod providers;
+mod refresh;
 mod settings_store;
 mod theme;
 mod utils;
@@ -12,6 +13,7 @@ use app::{schedule_open_settings_window, AppState};
 use gpui::*;
 use log::{error, info, warn};
 use models::NavTab;
+use refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -53,9 +55,9 @@ struct TrayController {
 }
 
 impl TrayController {
-    fn new() -> Self {
+    fn new(refresh_tx: smol::channel::Sender<RefreshRequest>) -> Self {
         info!(target: "tray", "initializing tray controller");
-        let state = Rc::new(RefCell::new(AppState::new()));
+        let state = Rc::new(RefCell::new(AppState::new(refresh_tx)));
         info!(target: "tray", "tray controller initialized");
         Self {
             window: None,
@@ -247,16 +249,48 @@ fn main() {
             cx.set_tray_tooltip("BananaTray - AI Quota Monitor");
             cx.set_tray_panel_mode(true);
 
-            // 3. 窗口控制器
-            let controller = Rc::new(RefCell::new(TrayController::new()));
+            // 3. 启动 RefreshCoordinator（后台事件循环）
+            let (event_tx, event_rx) = smol::channel::bounded::<refresh::RefreshEvent>(64);
+            let coordinator = {
+                let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
+                RefreshCoordinator::new(manager, event_tx)
+            };
+            let refresh_tx = coordinator.sender();
 
-            // 4. 启动时立即刷新所有已启用 Provider
+            // 在后台线程运行协调器事件循环
+            std::thread::Builder::new()
+                .name("refresh-coordinator".into())
+                .spawn(move || smol::block_on(coordinator.run()))
+                .expect("failed to spawn refresh coordinator thread");
+
+            // 4. 窗口控制器
+            let controller = Rc::new(RefCell::new(TrayController::new(refresh_tx)));
+
+            // 5. 启动事件泵：从协调器接收事件，更新 AppState
             {
                 let state = controller.borrow().state.clone();
-                AppState::spawn_startup_refresh(state, cx);
+                let async_cx = cx.to_async();
+                async_cx
+                    .foreground_executor()
+                    .spawn(async move {
+                        while let Ok(event) = event_rx.recv().await {
+                            state.borrow_mut().apply_refresh_event(event);
+                        }
+                    })
+                    .detach();
             }
 
-            // 5. 托盘点击
+            // 6. 初始配置同步 + 启动刷新
+            {
+                let state = controller.borrow().state.clone();
+                let s = state.borrow();
+                s.sync_config_to_coordinator();
+                s.send_refresh(RefreshRequest::RefreshAll {
+                    reason: RefreshReason::Startup,
+                });
+            }
+
+            // 7. 托盘点击
             let tray_ctrl = controller.clone();
             cx.on_tray_icon_event(move |event, cx| {
                 info!(target: "tray", "received tray event: {:?}", event);
@@ -267,7 +301,7 @@ fn main() {
                 }
             });
 
-            // 6. 全局热键 Cmd+Shift+S
+            // 8. 全局热键 Cmd+Shift+S
             info!(target: "hotkey", "registering global hotkey Cmd+Shift+S");
             if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
                 let _ = cx.register_global_hotkey(1, &keystroke);
