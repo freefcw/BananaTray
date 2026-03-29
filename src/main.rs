@@ -266,15 +266,25 @@ fn main() {
             // 4. 窗口控制器
             let controller = Rc::new(RefCell::new(TrayController::new(refresh_tx)));
 
-            // 5. 启动事件泵：从协调器接收事件，更新 AppState
+            // 5. 启动事件泵：从协调器接收事件，更新 AppState，并通知 UI 刷新
             {
                 let state = controller.borrow().state.clone();
                 let async_cx = cx.to_async();
+                let mut pump_cx = cx.to_async();
                 async_cx
                     .foreground_executor()
                     .spawn(async move {
                         while let Ok(event) = event_rx.recv().await {
-                            state.borrow_mut().apply_refresh_event(event);
+                            let view_entity = {
+                                let mut s = state.borrow_mut();
+                                s.apply_refresh_event(event);
+                                s.view_entity.clone()
+                            };
+                            if let Some(entity) = view_entity {
+                                let _ = entity.update(&mut pump_cx, |_, cx| {
+                                    cx.notify();
+                                });
+                            }
                         }
                     })
                     .detach();

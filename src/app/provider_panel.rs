@@ -103,6 +103,7 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = cx.global::<Theme>();
+        let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
         let has_quotas = !provider.quotas.is_empty();
 
         let card_bg = transparent_black(); // 彻底移除蓝底
@@ -172,7 +173,10 @@ impl AppView {
                     .child(last_updated),
             );
 
-        if has_quotas {
+        if is_refreshing {
+            // 刷新中 → 显示加载视图，替换 quota bars
+            shell = shell.child(self.render_refreshing_state(provider, theme));
+        } else if has_quotas {
             shell = shell.children(provider.quotas.iter().enumerate().map(|(index, quota)| {
                 // 不再强调反色效果 (highlighted = false)
                 super::widgets::render_quota_bar(quota, index > 0, theme)
@@ -182,6 +186,43 @@ impl AppView {
         }
 
         shell.into_any_element()
+    }
+
+    fn render_refreshing_state(
+        &self,
+        provider: &ProviderStatus,
+        theme: &Theme,
+    ) -> impl IntoElement {
+        div()
+            .w_full()
+            .gap(px(12.0))
+            .py(px(32.0))
+            .rounded(px(8.0))
+            .bg(theme.bg_subtle)
+            // spinner 居中行
+            .child(
+                div().w_full().flex().justify_center().child(
+                    div()
+                        .w(px(36.0))
+                        .h(px(36.0))
+                        .rounded_full()
+                        .border_3()
+                        .border_color(theme.border_subtle)
+                        .border_t_3()
+                        .border_r_3()
+                        .border_color(theme.text_accent),
+                ),
+            )
+            // 文字居中行
+            .child(
+                div()
+                    .w_full()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_secondary)
+                    .text_align(TextAlign::Center)
+                    .child(format!("Fetching {} usage data…", provider.display_name())),
+            )
     }
 
     fn render_provider_empty_state(
@@ -205,30 +246,36 @@ impl AppView {
         let entity = cx.entity().clone();
 
         let mut container = div()
-            .flex_col()
+            .w_full()
             .gap(px(8.0))
             .rounded(px(8.0))
             .bg(theme.bg_subtle)
-            .px(px(12.0))
-            .py(px(10.0))
+            .py(px(24.0))
+            // 标题居中
             .child(
                 div()
+                    .w_full()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text_primary)
+                    .text_align(TextAlign::Center)
                     .child(title),
             )
+            // 说明文字居中
             .child(
                 div()
+                    .w_full()
+                    .px(px(16.0))
                     .text_size(px(12.0))
                     .line_height(relative(1.4))
                     .text_color(theme.text_secondary)
+                    .text_align(TextAlign::Center)
                     .child(message),
             );
 
         if show_refresh {
             container = container.child(
-                div().flex().mt(px(4.0)).child(
+                div().w_full().flex().justify_center().mt(px(4.0)).child(
                     div()
                         .px(px(12.0))
                         .py(px(6.0))
@@ -264,7 +311,7 @@ impl AppView {
     }
 
     /// Trigger a refresh for a single provider (used by the retry button).
-    fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
+    pub(crate) fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
         let manager = self.state.borrow().provider_store.manager.clone();
 
         self.update_provider_state(kind, cx, |p| {
