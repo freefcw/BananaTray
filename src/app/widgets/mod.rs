@@ -1,3 +1,4 @@
+mod cadence_dropdown;
 mod card;
 mod checkbox;
 mod icon;
@@ -5,6 +6,7 @@ mod quota_bar;
 mod tab;
 mod toggle;
 
+pub(crate) use cadence_dropdown::render_cadence_dropdown;
 pub(crate) use card::{
     render_card, render_card_separator, render_checkbox_row, render_detail_section_title,
     render_info_row, render_section_label,
