@@ -147,6 +147,13 @@ impl AppState {
         }
     }
 
+    /// 选择新的刷新频率并同步到协调器
+    pub fn select_cadence(&mut self, mins: u64) {
+        self.settings.refresh_interval_mins = mins;
+        self.settings_ui.cadence_dropdown_open = false;
+        self.sync_config_to_coordinator();
+    }
+
     /// 通知协调器配置已变更
     pub fn sync_config_to_coordinator(&self) {
         let enabled: Vec<ProviderKind> = ProviderKind::all()
