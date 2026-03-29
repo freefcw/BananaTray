@@ -8,19 +8,9 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub struct GeminiProvider {}
-
-impl Default for GeminiProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(GeminiProvider);
 
 impl GeminiProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     fn credentials_path() -> PathBuf {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("~"))

@@ -119,19 +119,7 @@ fn read_copilot_oauth_token() -> Option<String> {
 // AiProvider 实现
 // ============================================================================
 
-pub struct CopilotProvider {}
-
-impl Default for CopilotProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CopilotProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+super::define_unit_provider!(CopilotProvider);
 
 /// Copilot Internal API 响应结构
 #[derive(Debug, Deserialize)]

@@ -6,21 +6,21 @@ use async_trait::async_trait;
 use regex::Regex;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-pub struct KiroProvider {}
+// 预编译的正则表达式
+static BONUS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Bonus credits:\s*([\d.]+)/([\d.]+)\s*credits used").unwrap());
+static EXPIRY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"expires in (\d+) days").unwrap());
+static CREDITS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Credits \(([\d.]+) of ([\d.]+)").unwrap());
+static KIRO_RESET_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"resets on (\d{2}/\d{2})").unwrap());
 
-impl Default for KiroProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(KiroProvider);
 
 impl KiroProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     /// Run `kiro-cli` interactively, sending `/usage` and `/quit` via stdin,
     /// and return the combined stdout output.
     fn run_kiro_cli() -> Result<String> {
@@ -78,18 +78,14 @@ impl KiroProvider {
         let clean = text_utils::strip_ansi(raw);
         let mut quotas = Vec::new();
 
-        // Parse bonus credits: "Bonus credits: 122.54/500 credits used, expires in 29 days"
-        let bonus_re = Regex::new(r"Bonus credits:\s*([\d.]+)/([\d.]+)\s*credits used").unwrap();
-        if let Some(caps) = bonus_re.captures(&clean) {
+        // Parse bonus credits
+        if let Some(caps) = BONUS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
 
-            let reset_text = {
-                let expiry_re = Regex::new(r"expires in (\d+) days").unwrap();
-                expiry_re
-                    .captures(&clean)
-                    .map(|c| format!("Expires in {} days", &c[1]))
-            };
+            let reset_text = EXPIRY_RE
+                .captures(&clean)
+                .map(|c| format!("Expires in {} days", &c[1]));
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(
@@ -102,18 +98,14 @@ impl KiroProvider {
             }
         }
 
-        // Parse regular credits: "Credits (0.00 of 50 covered in plan)"
-        let credits_re = Regex::new(r"Credits \(([\d.]+) of ([\d.]+)").unwrap();
-        if let Some(caps) = credits_re.captures(&clean) {
+        // Parse regular credits
+        if let Some(caps) = CREDITS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
 
-            let reset_text = {
-                let reset_re = Regex::new(r"resets on (\d{2}/\d{2})").unwrap();
-                reset_re
-                    .captures(&clean)
-                    .map(|c| format!("Resets on {}", &c[1]))
-            };
+            let reset_text = KIRO_RESET_RE
+                .captures(&clean)
+                .map(|c| format!("Resets on {}", &c[1]));
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(

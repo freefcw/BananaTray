@@ -4,19 +4,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::process::Command;
 
-pub struct OpenCodeProvider {}
-
-impl Default for OpenCodeProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl OpenCodeProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+super::define_unit_provider!(OpenCodeProvider);
 
 #[async_trait]
 impl AiProvider for OpenCodeProvider {

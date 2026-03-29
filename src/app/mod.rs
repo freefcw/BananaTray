@@ -306,14 +306,11 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
-        let state = self.state.clone();
-        let entity = cx.entity().clone();
+        let border_color = theme.border_subtle;
 
-        // ── 左侧胶囊按钮组 ──
         let mut left = div().flex().items_center().gap(px(6.0));
-
         if let NavTab::Provider(kind) = active_tab {
-            let borrowed = state.borrow();
+            let borrowed = self.state.borrow();
             let dashboard_url = borrowed
                 .provider_store
                 .find(kind)
@@ -326,140 +323,22 @@ impl AppView {
                 .unwrap_or(false);
             drop(borrowed);
 
-            // Dashboard 胶囊按钮
-            left = left.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.0))
-                    .px(px(10.0))
-                    .py(px(5.0))
-                    .rounded(px(8.0))
-                    .border_1()
-                    .border_color(theme.border_subtle)
-                    .bg(theme.bg_panel)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.bg_subtle))
-                    .child(crate::app::widgets::render_svg_icon(
-                        "src/icons/usage.svg",
-                        px(13.0),
-                        theme.text_accent,
-                    ))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text_primary)
-                            .child("Dashboard"),
-                    )
-                    .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                        let cmd = if cfg!(target_os = "linux") {
-                            "xdg-open"
-                        } else {
-                            "open"
-                        };
-                        let _ = std::process::Command::new(cmd).arg(&dashboard_url).spawn();
-                    }),
-            );
-
-            // Refresh / Syncing 胶囊按钮
-            let refresh_entity = entity.clone();
-            let (refresh_label, refresh_icon_color, refresh_text_color) = if is_refreshing {
-                ("Syncing", theme.text_accent, theme.text_accent)
-            } else {
-                ("Refresh", theme.text_accent, theme.text_primary)
-            };
-            let mut refresh_btn = div()
-                .flex()
-                .items_center()
-                .gap(px(5.0))
-                .px(px(10.0))
-                .py(px(5.0))
-                .rounded(px(8.0))
-                .border_1()
-                .border_color(theme.border_subtle)
-                .bg(theme.bg_panel)
-                .child(crate::app::widgets::render_svg_icon(
-                    "src/icons/refresh.svg",
-                    px(13.0),
-                    refresh_icon_color,
-                ))
-                .child(
-                    div()
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(refresh_text_color)
-                        .child(refresh_label),
-                );
-            if !is_refreshing {
-                refresh_btn = refresh_btn
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.bg_subtle))
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        refresh_entity.update(cx, |view, cx| {
-                            view.refresh_single_provider(kind, cx);
-                        });
-                    });
-            }
-            left = left.child(refresh_btn);
+            left = left
+                .child(Self::render_dashboard_button(dashboard_url, theme))
+                .child(self.render_refresh_button(kind, is_refreshing, cx));
         }
 
-        // ── 右侧图标按钮组 ──
-        let settings_state = state.clone();
-        let right = div()
-            .flex()
-            .items_center()
-            .gap(px(4.0))
-            // Settings 齿轮按钮
-            .child(
-                div()
-                    .w(px(30.0))
-                    .h(px(30.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(8.0))
-                    .border_1()
-                    .border_color(theme.border_subtle)
-                    .bg(theme.bg_panel)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.bg_subtle))
-                    .child(crate::app::widgets::render_svg_icon(
-                        "src/icons/settings.svg",
-                        px(15.0),
-                        theme.text_secondary,
-                    ))
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        let display_id = window.display(cx).map(|d| d.id());
-                        window.remove_window();
-                        schedule_open_settings_window(settings_state.clone(), display_id, cx);
-                    }),
-            )
-            // Close X 按钮
-            .child(
-                div()
-                    .w(px(30.0))
-                    .h(px(30.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(8.0))
-                    .border_1()
-                    .border_color(theme.border_subtle)
-                    .bg(theme.bg_panel)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.bg_subtle))
-                    .child(crate::app::widgets::render_svg_icon(
-                        "src/icons/close.svg",
-                        px(15.0),
-                        theme.text_secondary,
-                    ))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                        cx.quit();
-                    }),
-            );
+        let right = {
+            let settings_btn = self.render_settings_icon_button(cx);
+            let theme = cx.global::<Theme>();
+            div()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .child(settings_btn)
+                .child(Self::render_close_button(theme))
+        };
 
-        // ── 组合底栏 ──
         div()
             .w_full()
             .flex()
@@ -468,9 +347,147 @@ impl AppView {
             .px(px(8.0))
             .py(px(6.0))
             .border_t_1()
-            .border_color(theme.border_subtle)
+            .border_color(border_color)
             .child(left)
             .child(right)
+    }
+
+    fn render_dashboard_button(url: String, theme: &Theme) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(5.0))
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(theme.border_subtle)
+            .bg(theme.bg_panel)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.bg_subtle))
+            .child(crate::app::widgets::render_svg_icon(
+                "src/icons/usage.svg",
+                px(13.0),
+                theme.text_accent,
+            ))
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_primary)
+                    .child("Dashboard"),
+            )
+            .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                let cmd = if cfg!(target_os = "linux") {
+                    "xdg-open"
+                } else {
+                    "open"
+                };
+                let _ = std::process::Command::new(cmd).arg(&url).spawn();
+            })
+    }
+
+    fn render_refresh_button(
+        &self,
+        kind: ProviderKind,
+        is_refreshing: bool,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let theme = cx.global::<Theme>();
+        let entity = cx.entity().clone();
+
+        let (label, icon_color, text_color) = if is_refreshing {
+            ("Syncing", theme.text_accent, theme.text_accent)
+        } else {
+            ("Refresh", theme.text_accent, theme.text_primary)
+        };
+
+        let mut btn = div()
+            .flex()
+            .items_center()
+            .gap(px(5.0))
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(theme.border_subtle)
+            .bg(theme.bg_panel)
+            .child(crate::app::widgets::render_svg_icon(
+                "src/icons/refresh.svg",
+                px(13.0),
+                icon_color,
+            ))
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(text_color)
+                    .child(label),
+            );
+
+        if !is_refreshing {
+            btn = btn
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.bg_subtle))
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    entity.update(cx, |view, cx| {
+                        view.refresh_single_provider(kind, cx);
+                    });
+                });
+        }
+
+        btn
+    }
+
+    fn render_settings_icon_button(&self, cx: &mut Context<Self>) -> Div {
+        let theme = cx.global::<Theme>();
+        let state = self.state.clone();
+
+        div()
+            .w(px(30.0))
+            .h(px(30.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(theme.border_subtle)
+            .bg(theme.bg_panel)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.bg_subtle))
+            .child(crate::app::widgets::render_svg_icon(
+                "src/icons/settings.svg",
+                px(15.0),
+                theme.text_secondary,
+            ))
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                let display_id = window.display(cx).map(|d| d.id());
+                window.remove_window();
+                schedule_open_settings_window(state.clone(), display_id, cx);
+            })
+    }
+
+    fn render_close_button(theme: &Theme) -> Div {
+        div()
+            .w(px(30.0))
+            .h(px(30.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(theme.border_subtle)
+            .bg(theme.bg_panel)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.bg_subtle))
+            .child(crate::app::widgets::render_svg_icon(
+                "src/icons/close.svg",
+                px(15.0),
+                theme.text_secondary,
+            ))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.quit();
+            })
     }
 }
 

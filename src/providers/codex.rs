@@ -6,18 +6,11 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 
-pub struct CodexProvider {}
-
-impl Default for CodexProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(CodexProvider);
 
 impl CodexProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
+    /// Codex token 刷新阈值（8 天，单位秒）
+    const TOKEN_MAX_AGE_SECS: i64 = 8 * 24 * 60 * 60;
 
     fn auth_path() -> PathBuf {
         dirs::home_dir()
@@ -58,14 +51,13 @@ impl CodexProvider {
         Ok((access_token, refresh_token, last_refresh))
     }
 
-    /// Check if the token is older than 8 days and needs refresh.
+    /// Check if the token is older than TOKEN_MAX_AGE_SECS and needs refresh.
     fn token_needs_refresh(last_refresh: &Option<String>) -> bool {
         let Some(ts) = last_refresh else {
             return true;
         };
 
-        let eight_days_secs: i64 = 8 * 24 * 60 * 60;
-        time_utils::is_older_than(ts, eight_days_secs)
+        time_utils::is_older_than(ts, Self::TOKEN_MAX_AGE_SECS)
     }
 
     /// Refresh the OAuth token via OpenAI's auth endpoint.

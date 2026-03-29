@@ -7,19 +7,9 @@ use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub struct CursorProvider {}
-
-impl Default for CursorProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(CursorProvider);
 
 impl CursorProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     /// Path to Cursor's SQLite database.
     fn db_path() -> PathBuf {
         dirs::home_dir()

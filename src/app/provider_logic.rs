@@ -26,18 +26,20 @@ pub fn format_quota_usage(quota: &QuotaInfo) -> String {
 
 pub fn provider_empty_message(provider: &ProviderStatus) -> String {
     if let Some(error) = &provider.error_message {
-        if error.contains("Missing environment variable") {
-            return format!(
-                "Connect {} credentials before quota tracking can start.",
-                provider.display_name()
-            );
-        }
-
-        if error.contains("session cookie expired") {
-            return "Session expired. Sign in again to refresh usage.".to_string();
-        }
-
-        return error.clone();
+        let anyhow_err = anyhow::anyhow!("{}", error);
+        let classified = crate::providers::ProviderError::classify(&anyhow_err);
+        return match classified {
+            crate::providers::ProviderError::ConfigMissing(_) => {
+                format!(
+                    "Connect {} credentials before quota tracking can start.",
+                    provider.display_name()
+                )
+            }
+            crate::providers::ProviderError::AuthRequired(_) => {
+                "Session expired. Sign in again to refresh usage.".to_string()
+            }
+            _ => error.clone(),
+        };
     }
 
     match provider.connection {

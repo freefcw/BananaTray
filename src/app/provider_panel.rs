@@ -6,9 +6,6 @@ use crate::theme::Theme;
 use gpui::*;
 use log::{info, warn};
 
-// const USAGE_ICON: &str = "src/icons/usage.svg";  // This is now used in mod.rs
-// const REFRESH_ICON: &str = "src/icons/settings.svg";
-
 impl AppView {
     pub(crate) fn render_provider_detail(
         &self,

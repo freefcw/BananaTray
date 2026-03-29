@@ -6,20 +6,18 @@ use async_trait::async_trait;
 use log::debug;
 use regex::Regex;
 use std::process::Command;
+use std::sync::LazyLock;
 
-pub struct ClaudeProvider {}
+// 预编译的正则表达式（避免每次调用时重复编译）
+static PCT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)%\s+(left|used)").unwrap());
+static RESET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^Resets?\s+(.+)").unwrap());
+static COST_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$([0-9,]+\.?\d*)\s*/\s*\$([0-9,]+\.?\d*)").unwrap());
+static MODEL_NAME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([^)]+)\)").unwrap());
 
-impl Default for ClaudeProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+super::define_unit_provider!(ClaudeProvider);
 
 impl ClaudeProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     /// Read account email from ~/.claude.json if available.
     #[allow(dead_code)]
     pub fn read_account_email() -> Option<String> {
@@ -36,10 +34,6 @@ impl ClaudeProvider {
     /// Parse the output of `claude /usage` into quota entries.
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
         let clean = text_utils::strip_ansi(raw);
-
-        let pct_re = Regex::new(r"(\d+)%\s+(left|used)").unwrap();
-        let reset_re = Regex::new(r"(?i)^Resets?\s+(.+)").unwrap();
-        let cost_re = Regex::new(r"\$([0-9,]+\.?\d*)\s*/\s*\$([0-9,]+\.?\d*)").unwrap();
 
         // Split into sections by blank lines
         let sections = Self::split_sections(&clean);
@@ -77,7 +71,7 @@ impl ClaudeProvider {
             let section_text = lines.join("\n");
 
             // Extract percentage
-            let (used_pct, _percent_left) = if let Some(caps) = pct_re.captures(&section_text) {
+            let (used_pct, _percent_left) = if let Some(caps) = PCT_RE.captures(&section_text) {
                 let value: f64 = caps[1].parse().unwrap_or(0.0);
                 let direction = &caps[2];
                 if direction == "used" {
@@ -92,14 +86,14 @@ impl ClaudeProvider {
 
             // Extract reset time
             let reset_at = lines.iter().find_map(|line| {
-                reset_re
+                RESET_RE
                     .captures(line)
                     .map(|caps| caps[1].trim().to_string())
             });
 
             // For credit/extra usage, try to extract dollar amounts
             if quota_type == QuotaType::Credit {
-                if let Some(caps) = cost_re.captures(&section_text) {
+                if let Some(caps) = COST_RE.captures(&section_text) {
                     let spent: f64 = caps[1].replace(',', "").parse().unwrap_or(0.0);
                     let budget: f64 = caps[2].replace(',', "").parse().unwrap_or(0.0);
                     quotas.push(QuotaInfo::with_details(
@@ -151,8 +145,7 @@ impl ClaudeProvider {
 
     /// Extract model name from headers like "Current week (Opus)".
     fn extract_model_name(header: &str) -> Option<String> {
-        let re = Regex::new(r"\(([^)]+)\)").unwrap();
-        let caps = re.captures(header)?;
+        let caps = MODEL_NAME_RE.captures(header)?;
         let name = caps[1].trim().to_string();
         let lower = name.to_lowercase();
         // "all models" is the aggregate weekly, not a specific model

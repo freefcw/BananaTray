@@ -4,20 +4,17 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
 use std::process::Command;
+use std::sync::LazyLock;
 
-pub struct AmpProvider {}
+// 预编译的正则表达式
+static CREDIT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s*/\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining")
+        .unwrap()
+});
+static BALANCE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap());
 
-impl Default for AmpProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl AmpProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+super::define_unit_provider!(AmpProvider);
 
 #[async_trait]
 impl AiProvider for AmpProvider {
@@ -57,23 +54,16 @@ impl AiProvider for AmpProvider {
         let output_str = String::from_utf8_lossy(&output.stdout);
         let mut quotas = Vec::new();
 
-        // 匹配类似于: "Amp Free: $17.59/$20 remaining" 或者 "Individual credits: $0 remaining"
-        let credit_re = Regex::new(
-            r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s*/\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining",
-        )
-        .unwrap();
-        let balance_re = Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap();
-
         for line in output_str.lines() {
             let line = line.trim();
-            if let Some(caps) = credit_re.captures(line) {
+            if let Some(caps) = CREDIT_RE.captures(line) {
                 let label = caps.get(1).unwrap().as_str().trim();
                 let remaining: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
                 let total: f64 = caps.get(3).unwrap().as_str().parse().unwrap_or(0.0);
 
                 let used = total - remaining;
                 quotas.push(QuotaInfo::new(label, used.max(0.0), total));
-            } else if let Some(caps) = balance_re.captures(line) {
+            } else if let Some(caps) = BALANCE_RE.captures(line) {
                 let label = caps.get(1).unwrap().as_str().trim();
                 let balance: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
 

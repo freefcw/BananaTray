@@ -82,6 +82,11 @@ pub struct RefreshCoordinator {
     enabled_providers: Vec<ProviderKind>,
 }
 
+/// 最小 cooldown 时间（秒），防止过于频繁的刷新
+const MIN_COOLDOWN_SECS: u64 = 30;
+/// 自动刷新禁用时的检查间隔（秒）
+const DISABLED_CHECK_INTERVAL_SECS: u64 = 3600;
+
 impl RefreshCoordinator {
     pub fn new(manager: Arc<ProviderManager>, event_tx: Sender<RefreshEvent>) -> Self {
         let (request_tx, request_rx) = smol::channel::bounded(32);
@@ -102,11 +107,11 @@ impl RefreshCoordinator {
         self.request_tx.clone()
     }
 
-    /// Compute cooldown duration: half the interval, minimum 30 seconds
+    /// Compute cooldown duration: half the interval, minimum MIN_COOLDOWN_SECS
     fn cooldown(&self) -> Duration {
         let interval_secs = self.interval_mins * 60;
         let half = interval_secs / 2;
-        Duration::from_secs(half.max(30))
+        Duration::from_secs(half.max(MIN_COOLDOWN_SECS))
     }
 
     /// Check if a provider was recently refreshed (within cooldown)
@@ -163,18 +168,25 @@ impl RefreshCoordinator {
                 }
             }
             Err(err) => {
-                let msg = err.to_string();
-                if msg.contains("unavailable") {
-                    log::info!(target: "refresh", "provider {:?} unavailable: {}", kind, msg);
-                    RefreshOutcome {
-                        kind,
-                        result: RefreshResult::Unavailable { message: msg },
+                let classified = crate::providers::ProviderError::classify(&err);
+                match &classified {
+                    crate::providers::ProviderError::Unavailable(_) => {
+                        log::info!(target: "refresh", "provider {:?} unavailable: {}", kind, classified);
+                        RefreshOutcome {
+                            kind,
+                            result: RefreshResult::Unavailable {
+                                message: classified.to_string(),
+                            },
+                        }
                     }
-                } else {
-                    log::warn!(target: "refresh", "provider {:?} failed: {}", kind, msg);
-                    RefreshOutcome {
-                        kind,
-                        result: RefreshResult::Failed { error: msg },
+                    _ => {
+                        log::warn!(target: "refresh", "provider {:?} failed: {}", kind, classified);
+                        RefreshOutcome {
+                            kind,
+                            result: RefreshResult::Failed {
+                                error: classified.to_string(),
+                            },
+                        }
                     }
                 }
             }
@@ -268,7 +280,7 @@ impl RefreshCoordinator {
             let interval = if self.interval_mins > 0 {
                 Duration::from_secs(self.interval_mins * 60)
             } else {
-                Duration::from_secs(3600) // if disabled, check config every hour
+                Duration::from_secs(DISABLED_CHECK_INTERVAL_SECS)
             };
 
             // Wait for either a request or the periodic timer
