@@ -40,7 +40,6 @@ impl SettingsView {
         let toggle_kind = selected;
 
         let inner = div()
-            .id("provider-detail-scroll")
             .flex_col()
             .pl(px(8.0))
             .pr(px(12.0))

@@ -6,31 +6,11 @@ use crate::theme::Theme;
 use gpui::*;
 
 impl SettingsView {
-    /// Render Providers settings tab — two-column layout
-    pub(super) fn render_providers_tab(
-        &self,
-        settings: &AppSettings,
-        theme: &Theme,
-        viewport: Size<Pixels>,
-    ) -> Div {
-        let selected = self.state.borrow().settings_ui.selected_provider;
-        let providers = self.state.borrow().provider_store.providers.clone();
-
-        div()
-            .flex()
-            .h_full()
-            .overflow_hidden()
-            .child(self.render_provider_sidebar(&providers, selected, settings, theme, viewport))
-            .child(
-                self.render_provider_detail_panel(&providers, selected, settings, theme, viewport),
-            )
-    }
-
     // ══════ Left sidebar ══════
 
-    fn render_provider_sidebar(
+    pub(super) fn render_provider_sidebar(
         &self,
-        _providers: &[crate::models::ProviderStatus],
+        providers: &[crate::models::ProviderStatus],
         selected: ProviderKind,
         settings: &AppSettings,
         theme: &Theme,
@@ -50,7 +30,7 @@ impl SettingsView {
             let is_selected = *kind == selected;
             let is_enabled = settings.is_provider_enabled(*kind);
 
-            let status = _providers.iter().find(|p| p.kind == *kind);
+            let status = providers.iter().find(|p| p.kind == *kind);
             let icon = status
                 .map(|p| p.icon_asset().to_string())
                 .unwrap_or_else(|| "src/icons/provider-unknown.svg".to_string());
