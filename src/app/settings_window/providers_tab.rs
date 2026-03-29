@@ -2,6 +2,7 @@ use super::SettingsView;
 use crate::app::widgets::{render_card_separator, render_detail_section_title, render_info_row};
 use crate::app::{persist_settings, provider_logic};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
+use crate::refresh::{RefreshReason, RefreshRequest};
 use crate::theme::Theme;
 use gpui::*;
 
@@ -244,6 +245,8 @@ impl SettingsView {
             )
         };
 
+        let state_refresh = self.state.clone();
+        let refresh_kind = selected;
         let state_toggle = self.state.clone();
         let toggle_kind = selected;
 
@@ -309,7 +312,20 @@ impl SettingsView {
                                     .cursor_pointer()
                                     .text_size(px(14.0))
                                     .text_color(theme.text_muted)
-                                    .child("⟳"),
+                                    .child("⟳")
+                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                        let mut s = state_refresh.borrow_mut();
+                                        s.provider_store.set_connection(
+                                            refresh_kind,
+                                            ConnectionStatus::Refreshing,
+                                        );
+                                        s.send_refresh(RefreshRequest::RefreshOne {
+                                            kind: refresh_kind,
+                                            reason: RefreshReason::Manual,
+                                        });
+                                        drop(s);
+                                        window.refresh();
+                                    }),
                             )
                             // Toggle switch
                             .child(
