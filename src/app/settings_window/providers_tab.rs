@@ -1,6 +1,6 @@
 use super::SettingsView;
 use crate::app::widgets::{render_card_separator, render_detail_section_title, render_info_row};
-use crate::app::{persist_settings, provider_logic, AppState};
+use crate::app::{persist_settings, provider_logic};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 use crate::theme::Theme;
 use gpui::*;
@@ -322,19 +322,11 @@ impl SettingsView {
                                 )
                                 .on_mouse_down(
                                     MouseButton::Left,
-                                    move |_, window, cx| {
-                                        let (settings, should_refresh) =
+                                    move |_, window, _cx| {
+                                        let settings =
                                             state_toggle.borrow_mut().toggle_provider(toggle_kind);
                                         persist_settings(&settings);
                                         window.refresh();
-
-                                        if should_refresh {
-                                            AppState::spawn_provider_refresh(
-                                                state_toggle.clone(),
-                                                toggle_kind,
-                                                cx,
-                                            );
-                                        }
                                     },
                                 ),
                             ),

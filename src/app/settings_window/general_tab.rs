@@ -220,6 +220,7 @@ impl SettingsView {
                                                             let mut s = opt_state.borrow_mut();
                                                             s.settings.refresh_interval_mins = mins;
                                                             s.settings_ui.cadence_dropdown_open = false;
+                                                            s.sync_config_to_coordinator();
                                                             s.settings.clone()
                                                         };
                                                         persist_settings(&settings);

@@ -14,7 +14,6 @@ use bananatray::models::{
 pub struct ProviderStore {
     pub providers: Vec<ProviderStatus>,
     pub manager: Arc<bananatray::providers::ProviderManager>,
-    pub last_refresh_started: Option<std::time::Instant>,
 }
 
 impl ProviderStore {
@@ -61,18 +60,6 @@ impl NavigationState {
     }
 }
 
-pub struct SettingsUiState {
-    pub active_tab: SettingsTab,
-    pub selected_provider: ProviderKind,
-    pub cadence_dropdown_open: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SettingsTab {
-    General,
-    Providers,
-}
-
 // 测试辅助函数
 fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
     ProviderStatus {
@@ -105,7 +92,6 @@ fn make_store(kinds: &[(ProviderKind, bool)]) -> ProviderStore {
             .map(|(k, enabled)| make_provider(*k, *enabled))
             .collect(),
         manager: Arc::new(bananatray::providers::ProviderManager::new()),
-        last_refresh_started: None,
     }
 }
 
