@@ -44,6 +44,12 @@ pub struct AppSettings {
     /// 通知是否带声音
     #[serde(default = "default_true")]
     pub notification_sound: bool,
+    /// 工具栏显示 Dashboard 按钮
+    #[serde(default = "default_true")]
+    pub show_toolbar_dashboard: bool,
+    /// 工具栏显示 Refresh 按钮
+    #[serde(default = "default_true")]
+    pub show_toolbar_refresh: bool,
     /// Provider 特定配置
     pub providers: ProviderSettings,
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
@@ -71,6 +77,8 @@ impl Default for AppSettings {
             check_provider_status: true,
             session_quota_notifications: true,
             notification_sound: true,
+            show_toolbar_dashboard: true,
+            show_toolbar_refresh: true,
             providers: ProviderSettings::default(),
             enabled_providers: HashMap::new(),
             provider_order: Vec::new(),

@@ -5,6 +5,7 @@ mod icon;
 mod quota_bar;
 mod tab;
 mod toggle;
+mod tooltip;
 
 pub(crate) use cadence_dropdown::render_cadence_dropdown;
 pub(crate) use card::{
@@ -16,6 +17,7 @@ pub(crate) use icon::{render_footer_glyph, render_svg_icon};
 pub(crate) use quota_bar::render_quota_bar;
 pub(crate) use tab::render_icon_tab;
 pub(crate) use toggle::render_toggle_switch;
+pub(crate) use tooltip::with_tooltip;
 
 use super::AppView;
 use crate::theme::Theme;
