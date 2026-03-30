@@ -27,6 +27,8 @@ impl SettingsView {
         let status_checked = settings.check_provider_status;
         let notif_state = state.clone();
         let notif_checked = settings.session_quota_notifications;
+        let sound_state = state.clone();
+        let sound_checked = settings.notification_sound;
 
         div()
             .flex_col()
@@ -129,6 +131,25 @@ impl SettingsView {
                                     let settings = {
                                         let mut s = notif_state.borrow_mut();
                                         s.settings.session_quota_notifications = !s.settings.session_quota_notifications;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
+                            )
+                            .child(render_card_separator())
+                            // Notification sound
+                            .child(
+                                render_checkbox_row(
+                                    "Notification sound",
+                                    "Play a sound when sending quota notifications.",
+                                    sound_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = sound_state.borrow_mut();
+                                        s.settings.notification_sound = !s.settings.notification_sound;
                                         s.settings.clone()
                                     };
                                     persist_settings(&settings);

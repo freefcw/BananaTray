@@ -15,3 +15,5 @@ pub mod utils;
 pub mod app;
 #[cfg(feature = "app")]
 pub mod logging;
+#[cfg(feature = "app")]
+pub mod notification;
