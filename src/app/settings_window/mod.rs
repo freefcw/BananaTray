@@ -5,6 +5,7 @@ mod window_mgr;
 
 use super::AppState;
 use crate::app::widgets::render_icon_tab;
+use crate::app_state::SettingsTab;
 use crate::theme::Theme;
 use gpui::*;
 use log::info;
@@ -12,19 +13,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use window_mgr::schedule_open_settings_window;
-
-// ============================================================================
-// Settings Tab 枚举
-// ============================================================================
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum SettingsTab {
-    General,
-    Providers,
-    Display,
-    Advanced,
-    About,
-}
 
 // ============================================================================
 // 设置视图

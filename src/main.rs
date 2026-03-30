@@ -1,6 +1,7 @@
 #![recursion_limit = "512"]
 
 mod app;
+mod app_state;
 mod logging;
 pub mod models;
 pub mod notification;
