@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BananaTray
+Comment=AI Coding Assistant Quota Monitor
+Exec=bananatray
+Icon=bananatray
+Categories=Utility;System;Monitor;
+Keywords=AI;Quota;Tray;Monitor;
+Terminal=false
+StartupNotify=false
