@@ -17,6 +17,12 @@ impl SettingsView {
         let login_state = state.clone();
         let login_checked = settings.start_at_login;
 
+        // ── TOOLBAR section ─────────────────────────────────
+        let dash_state = state.clone();
+        let dash_checked = settings.show_toolbar_dashboard;
+        let refresh_btn_state = state.clone();
+        let refresh_checked = settings.show_toolbar_refresh;
+
         // ── USAGE section ────────────────────────────────────
         let cost_state = state.clone();
         let cost_checked = settings.show_cost_summary;
@@ -54,6 +60,53 @@ impl SettingsView {
                                     let settings = {
                                         let mut s = login_state.borrow_mut();
                                         s.settings.start_at_login = !s.settings.start_at_login;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
+                            ),
+                    ),
+            )
+            // ═══════ TOOLBAR ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .mt(px(12.0))
+                    .child(render_section_label("TOOLBAR", theme))
+                    .child(
+                        render_card()
+                            .child(
+                                render_checkbox_row(
+                                    "Show Dashboard button",
+                                    "Display the Dashboard button in the popup toolbar.",
+                                    dash_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = dash_state.borrow_mut();
+                                        s.settings.show_toolbar_dashboard =
+                                            !s.settings.show_toolbar_dashboard;
+                                        s.settings.clone()
+                                    };
+                                    persist_settings(&settings);
+                                    window.refresh();
+                                }),
+                            )
+                            .child(render_card_separator())
+                            .child(
+                                render_checkbox_row(
+                                    "Show Refresh button",
+                                    "Display the Refresh button in the popup toolbar.",
+                                    refresh_checked,
+                                    theme,
+                                )
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    let settings = {
+                                        let mut s = refresh_btn_state.borrow_mut();
+                                        s.settings.show_toolbar_refresh =
+                                            !s.settings.show_toolbar_refresh;
                                         s.settings.clone()
                                     };
                                     persist_settings(&settings);

@@ -269,22 +269,45 @@ impl AppView {
                 .find(kind)
                 .map(|p| p.connection == crate::models::ConnectionStatus::Refreshing)
                 .unwrap_or(false);
+            let show_dashboard = borrowed.settings.show_toolbar_dashboard;
+            let show_refresh = borrowed.settings.show_toolbar_refresh;
             drop(borrowed);
 
-            left = left
-                .child(Self::render_dashboard_button(dashboard_url, theme))
-                .child(self.render_refresh_button(kind, is_refreshing, cx));
+            if show_dashboard {
+                left = left.child(widgets::with_tooltip(
+                    "tt-dashboard",
+                    "Dashboard",
+                    theme,
+                    Self::render_dashboard_button(dashboard_url, theme),
+                ));
+            }
+            if show_refresh {
+                let refresh_btn = self.render_refresh_button(kind, is_refreshing, cx);
+                let theme = cx.global::<Theme>();
+                left = left.child(widgets::with_tooltip(
+                    "tt-refresh",
+                    "Refresh",
+                    theme,
+                    refresh_btn,
+                ));
+            }
         }
 
         let right = {
             let settings_btn = self.render_settings_icon_button(cx);
             let theme = cx.global::<Theme>();
+            let close_btn = Self::render_close_button(theme);
             div()
                 .flex()
                 .items_center()
                 .gap(px(4.0))
-                .child(settings_btn)
-                .child(Self::render_close_button(theme))
+                .child(widgets::with_tooltip(
+                    "tt-settings",
+                    "Settings",
+                    theme,
+                    settings_btn,
+                ))
+                .child(widgets::with_tooltip("tt-quit", "Quit", theme, close_btn))
         };
 
         div()
@@ -304,9 +327,9 @@ impl AppView {
         div()
             .flex()
             .items_center()
-            .gap(px(5.0))
-            .px(px(10.0))
-            .py(px(5.0))
+            .justify_center()
+            .w(px(30.0))
+            .h(px(30.0))
             .rounded(px(8.0))
             .border_1()
             .border_color(theme.border_subtle)
@@ -314,17 +337,10 @@ impl AppView {
             .cursor_pointer()
             .hover(|style| style.bg(theme.bg_subtle))
             .child(crate::app::widgets::render_svg_icon(
-                "src/icons/usage.svg",
-                px(13.0),
+                "src/icons/compass.svg",
+                px(15.0),
                 theme.text_accent,
             ))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text_primary)
-                    .child("Dashboard"),
-            )
             .on_mouse_down(MouseButton::Left, move |_, _, _| {
                 let cmd = if cfg!(target_os = "linux") {
                     "xdg-open"
@@ -344,34 +360,23 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let entity = cx.entity().clone();
 
-        let (label, icon_color, text_color) = if is_refreshing {
-            ("Syncing", theme.text_accent, theme.text_accent)
-        } else {
-            ("Refresh", theme.text_accent, theme.text_primary)
-        };
+        let icon_color = theme.text_accent;
 
         let mut btn = div()
             .flex()
             .items_center()
-            .gap(px(5.0))
-            .px(px(10.0))
-            .py(px(5.0))
+            .justify_center()
+            .w(px(30.0))
+            .h(px(30.0))
             .rounded(px(8.0))
             .border_1()
             .border_color(theme.border_subtle)
             .bg(theme.bg_panel)
             .child(crate::app::widgets::render_svg_icon(
                 "src/icons/refresh.svg",
-                px(13.0),
+                px(15.0),
                 icon_color,
-            ))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(text_color)
-                    .child(label),
-            );
+            ));
 
         if !is_refreshing {
             btn = btn
