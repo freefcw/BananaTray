@@ -116,16 +116,32 @@ impl QuotaInfo {
         (self.used / self.limit * 100.0).min(100.0)
     }
 
+    /// 剩余百分比 (0.0 - 100.0)
+    pub fn percent_remaining(&self) -> f64 {
+        if self.limit <= 0.0 {
+            return 0.0;
+        }
+        ((self.limit - self.used) / self.limit * 100.0).clamp(0.0, 100.0)
+    }
+
     /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
     #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
         (self.limit - 100.0).abs() < f64::EPSILON
     }
 
-    /// 状态等级：Green / Yellow / Red (基于剩余量)
+    // ========================================================================
+    // 状态判断（基于 status_level 单一真理来源）
+    // ========================================================================
+
+    /// 状态等级：Green / Yellow / Red
+    ///
+    /// 阈值定义：
+    /// - Green: 剩余 > 50%
+    /// - Yellow: 剩余 20% ~ 50%（包含边界）
+    /// - Red: 剩余 < 20%
     pub fn status_level(&self) -> StatusLevel {
-        let pct = self.percentage();
-        let remaining_pct = (100.0 - pct).max(0.0);
+        let remaining_pct = self.percent_remaining();
 
         if remaining_pct > 50.0 {
             StatusLevel::Green
@@ -134,6 +150,98 @@ impl QuotaInfo {
         } else {
             StatusLevel::Red
         }
+    }
+
+    /// 是否已耗尽（已使用 >= 配额）
+    pub fn is_depleted(&self) -> bool {
+        self.used >= self.limit && self.limit > 0.0
+    }
+
+    /// 是否健康（Green 状态）
+    pub fn is_healthy(&self) -> bool {
+        self.status_level() == StatusLevel::Green
+    }
+
+    /// 是否需要警告（Yellow 状态）
+    pub fn is_warning(&self) -> bool {
+        self.status_level() == StatusLevel::Yellow
+    }
+
+    /// 是否紧急（Red 状态且未耗尽）
+    pub fn is_critical(&self) -> bool {
+        self.status_level() == StatusLevel::Red && !self.is_depleted()
+    }
+
+    // ========================================================================
+    // 类型判断
+    // ========================================================================
+
+    /// 按配额类型查找会话配额
+    pub fn is_session(&self) -> bool {
+        self.quota_type == QuotaType::Session
+    }
+
+    /// 按配额类型查找周配额
+    pub fn is_weekly(&self) -> bool {
+        self.quota_type == QuotaType::Weekly
+    }
+
+    /// 按配额类型查找信用配额
+    pub fn is_credit(&self) -> bool {
+        self.quota_type == QuotaType::Credit
+    }
+
+    // ========================================================================
+    // 格式化输出
+    // ========================================================================
+
+    /// 剩余量摘要文本（用于 UI 主显示）
+    /// - Credit 类型: "$X.XX left"
+    /// - 其他类型: "X% left"
+    pub fn remaining_text(&self) -> String {
+        match self.quota_type {
+            QuotaType::Credit => {
+                let remaining = self.limit - self.used;
+                if remaining > 0.0 {
+                    format!("${:.2} left", remaining)
+                } else {
+                    "$0.00 left".to_string()
+                }
+            }
+            _ => {
+                format!("{:.0}% left", self.percent_remaining())
+            }
+        }
+    }
+
+    /// 使用详情文本（用于 UI 详细展示）
+    /// - Credit 类型: "$X.XX / $Y.YY"
+    /// - 其他类型: "X% used"
+    pub fn usage_detail_text(&self) -> String {
+        match self.quota_type {
+            QuotaType::Credit => {
+                format!("${:.2} / ${:.2}", self.used, self.limit)
+            }
+            _ => {
+                format!("{:.0}% used", self.percentage())
+            }
+        }
+    }
+
+    // ========================================================================
+    // 兼容旧 API（deprecated，将在未来版本移除）
+    // ========================================================================
+
+    /// 格式化显示文本
+    #[deprecated(note = "Use remaining_text() instead")]
+    pub fn display_text(&self) -> String {
+        self.remaining_text()
+    }
+
+    /// 格式化详情文本
+    #[deprecated(note = "Use usage_detail_text() instead")]
+    pub fn detail_text(&self) -> String {
+        self.usage_detail_text()
     }
 }
 
@@ -288,6 +396,10 @@ impl ProviderStatus {
 mod tests {
     use super::*;
 
+    // ========================================================================
+    // 基础计算测试
+    // ========================================================================
+
     #[test]
     fn test_quota_percentage() {
         let q1 = QuotaInfo::new("test", 50.0, 100.0);
@@ -301,18 +413,120 @@ mod tests {
     }
 
     #[test]
-    fn test_quota_status_level() {
-        let q_green = QuotaInfo::new("green", 40.0, 100.0);
-        assert_eq!(q_green.status_level(), StatusLevel::Green);
+    fn test_quota_percent_remaining() {
+        let q1 = QuotaInfo::new("test", 30.0, 100.0);
+        assert_eq!(q1.percent_remaining(), 70.0);
 
-        let q_yellow_edge = QuotaInfo::new("yellow", 50.0, 100.0);
-        assert_eq!(q_yellow_edge.status_level(), StatusLevel::Yellow);
+        let q2 = QuotaInfo::new("test", 100.0, 100.0); // 已用完
+        assert_eq!(q2.percent_remaining(), 0.0);
 
-        let q_yellow_20 = QuotaInfo::new("yellow", 80.0, 100.0);
-        assert_eq!(q_yellow_20.status_level(), StatusLevel::Yellow);
+        let q3 = QuotaInfo::new("test", 150.0, 100.0); // 超出
+        assert_eq!(q3.percent_remaining(), 0.0); // clamp 到 0
 
-        let q_red = QuotaInfo::new("red", 81.0, 100.0);
-        assert_eq!(q_red.status_level(), StatusLevel::Red);
+        let q4 = QuotaInfo::new("test", 0.0, 0.0); // 除零
+        assert_eq!(q4.percent_remaining(), 0.0);
+    }
+
+    #[test]
+    fn test_quota_percent_remaining_precision() {
+        // 测试浮点精度
+        let q = QuotaInfo::new("test", 33.333, 100.0);
+        assert!((q.percent_remaining() - 66.667).abs() < 0.01);
+    }
+
+    // ========================================================================
+    // 状态判断测试（基于 status_level 单一真理来源）
+    // ========================================================================
+
+    #[test]
+    fn test_status_level_green() {
+        let q = QuotaInfo::new("green", 40.0, 100.0);
+        assert_eq!(q.status_level(), StatusLevel::Green);
+        assert!(q.is_healthy());
+        assert!(!q.is_warning());
+        assert!(!q.is_critical());
+        assert!(!q.is_depleted());
+    }
+
+    #[test]
+    fn test_status_level_green_boundary() {
+        // 正好 50% 剩余 = Yellow（因为 > 50 才是 Green）
+        let q_50_remaining = QuotaInfo::new("boundary", 50.0, 100.0);
+        assert_eq!(q_50_remaining.status_level(), StatusLevel::Yellow);
+
+        // 49.9% 剩余 = Yellow
+        let q_49_9 = QuotaInfo::new("almost_green", 50.1, 100.0);
+        assert_eq!(q_49_9.status_level(), StatusLevel::Yellow);
+
+        // 50.1% 剩余 = Green
+        let q_50_1 = QuotaInfo::new("just_green", 49.9, 100.0);
+        assert_eq!(q_50_1.status_level(), StatusLevel::Green);
+    }
+
+    #[test]
+    fn test_status_level_yellow() {
+        // 50% 使用 = 50% 剩余 -> Yellow 边界
+        let q_50 = QuotaInfo::new("yellow", 50.0, 100.0);
+        assert_eq!(q_50.status_level(), StatusLevel::Yellow);
+        assert!(!q_50.is_healthy());
+        assert!(q_50.is_warning());
+        assert!(!q_50.is_critical());
+
+        // 80% 使用 = 20% 剩余 -> Yellow 边界
+        let q_80 = QuotaInfo::new("yellow_edge", 80.0, 100.0);
+        assert_eq!(q_80.status_level(), StatusLevel::Yellow);
+        assert!(!q_80.is_critical()); // 20% 是 Yellow 边界，不是 critical
+    }
+
+    #[test]
+    fn test_status_level_red() {
+        // 81% 使用 = 19% 剩余 -> Red
+        let q = QuotaInfo::new("red", 81.0, 100.0);
+        assert_eq!(q.status_level(), StatusLevel::Red);
+        assert!(!q.is_healthy());
+        assert!(!q.is_warning());
+        assert!(q.is_critical()); // Red 但未耗尽
+        assert!(!q.is_depleted());
+    }
+
+    #[test]
+    fn test_status_level_red_boundary() {
+        // 正好 20% 剩余 = Yellow（因为 >= 20 是 Yellow）
+        let q_20 = QuotaInfo::new("boundary", 80.0, 100.0);
+        assert_eq!(q_20.status_level(), StatusLevel::Yellow);
+
+        // 19.9% 剩余 = Red
+        let q_19_9 = QuotaInfo::new("just_red", 80.1, 100.0);
+        assert_eq!(q_19_9.status_level(), StatusLevel::Red);
+    }
+
+    #[test]
+    fn test_depletion() {
+        let q_normal = QuotaInfo::new("normal", 50.0, 100.0);
+        assert!(!q_normal.is_depleted());
+
+        let q_exact = QuotaInfo::new("exact", 100.0, 100.0);
+        assert!(q_exact.is_depleted());
+
+        let q_exceeded = QuotaInfo::new("exceeded", 150.0, 100.0);
+        assert!(q_exceeded.is_depleted());
+
+        // 耗尽时 critical 为 false（因为耗尽不是"接近耗尽"）
+        assert!(!q_exact.is_critical());
+        assert!(!q_exceeded.is_critical());
+    }
+
+    #[test]
+    fn test_critical_vs_depleted() {
+        // critical 是 Red 且未耗尽
+        let q_critical = QuotaInfo::new("critical", 85.0, 100.0);
+        assert!(q_critical.is_critical());
+        assert!(!q_critical.is_depleted());
+
+        // 耗尽不是 critical
+        let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
+        assert!(!q_depleted.is_critical());
+        assert!(q_depleted.is_depleted());
     }
 
     #[test]
@@ -325,5 +539,119 @@ mod tests {
                 .max(),
             Some(&StatusLevel::Red)
         );
+    }
+
+    // ========================================================================
+    // 类型判断测试
+    // ========================================================================
+
+    #[test]
+    fn test_quota_type_checks() {
+        let q_session = QuotaInfo::with_details("Session", 50.0, 100.0, QuotaType::Session, None);
+        assert!(q_session.is_session());
+        assert!(!q_session.is_weekly());
+        assert!(!q_session.is_credit());
+
+        let q_weekly = QuotaInfo::with_details("Weekly", 50.0, 100.0, QuotaType::Weekly, None);
+        assert!(q_weekly.is_weekly());
+
+        let q_credit = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
+        assert!(q_credit.is_credit());
+
+        let q_model = QuotaInfo::with_details(
+            "Opus",
+            50.0,
+            100.0,
+            QuotaType::ModelSpecific("Opus".into()),
+            None,
+        );
+        assert!(!q_model.is_session());
+        assert!(!q_model.is_weekly());
+        assert!(!q_model.is_credit());
+    }
+
+    // ========================================================================
+    // 格式化输出测试
+    // ========================================================================
+
+    #[test]
+    fn test_remaining_text_percentage() {
+        let q = QuotaInfo::new("test", 30.0, 100.0);
+        assert_eq!(q.remaining_text(), "70% left");
+
+        let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
+        assert_eq!(q_depleted.remaining_text(), "0% left");
+    }
+
+    #[test]
+    fn test_remaining_text_credit() {
+        let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(q.remaining_text(), "$15.00 left");
+
+        let q_zero = QuotaInfo::with_details("Credit", 20.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(q_zero.remaining_text(), "$0.00 left");
+
+        let q_exceeded = QuotaInfo::with_details("Credit", 25.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(q_exceeded.remaining_text(), "$0.00 left");
+    }
+
+    #[test]
+    fn test_usage_detail_text_percentage() {
+        let q = QuotaInfo::new("test", 30.0, 100.0);
+        assert_eq!(q.usage_detail_text(), "30% used");
+
+        let q_full = QuotaInfo::new("full", 100.0, 100.0);
+        assert_eq!(q_full.usage_detail_text(), "100% used");
+    }
+
+    #[test]
+    fn test_usage_detail_text_credit() {
+        let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(q.usage_detail_text(), "$5.00 / $20.00");
+
+        let q_zero = QuotaInfo::with_details("Credit", 0.0, 100.0, QuotaType::Credit, None);
+        assert_eq!(q_zero.usage_detail_text(), "$0.00 / $100.00");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_api_compatibility() {
+        // 验证 deprecated API 仍然工作
+        let q = QuotaInfo::new("test", 30.0, 100.0);
+        assert_eq!(q.display_text(), q.remaining_text());
+        assert_eq!(q.detail_text(), q.usage_detail_text());
+    }
+
+    // ========================================================================
+    // 边界条件测试
+    // ========================================================================
+
+    #[test]
+    fn test_edge_cases() {
+        // limit 为 0
+        let q_zero_limit = QuotaInfo::new("zero", 10.0, 0.0);
+        assert_eq!(q_zero_limit.percentage(), 0.0);
+        assert_eq!(q_zero_limit.percent_remaining(), 0.0);
+        assert!(!q_zero_limit.is_depleted()); // limit 为 0 时不算耗尽
+
+        // used 和 limit 都为 0
+        let q_both_zero = QuotaInfo::new("both_zero", 0.0, 0.0);
+        assert_eq!(q_both_zero.percentage(), 0.0);
+        assert!(!q_both_zero.is_depleted());
+
+        // 负数 used（理论上不应该出现，但测试健壮性）
+        // percent_remaining 会 clamp 到 100.0 以内
+        let q_negative = QuotaInfo::new("negative", -10.0, 100.0);
+        assert!(q_negative.percentage() < 0.0); // percentage 返回负数（-10%）
+        assert_eq!(q_negative.percent_remaining(), 100.0); // clamp 到最大值
+    }
+
+    #[test]
+    fn test_percentage_mode() {
+        let q_pct = QuotaInfo::new("percentage", 50.0, 100.0);
+        assert!(q_pct.is_percentage_mode());
+
+        let q_real = QuotaInfo::new("real", 5.0, 10.0);
+        assert!(!q_real.is_percentage_mode());
     }
 }
