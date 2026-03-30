@@ -49,11 +49,7 @@ pub(crate) fn render_icon_tab(
         .child(
             div()
                 .text_size(px(11.5))
-                .font_weight(if active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(if active { active_color } else { inactive_color })
                 .child(label.to_string()),
         )
