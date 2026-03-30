@@ -33,6 +33,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22.1"
 ureq = "3"
 notify-rust = "4"
+portable-pty = "0.8"
+which = "6"
 
 # [patch.crates-io]
 # adabraka-gpui = { path = "vendor/adabraka-gpui-0.5.1" }

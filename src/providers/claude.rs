@@ -1,12 +1,15 @@
 use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
+use crate::utils::interactive_runner::{InteractiveOptions, InteractiveRunner};
 use crate::utils::text_utils;
 use anyhow::Result;
 use async_trait::async_trait;
 use log::debug;
 use regex::Regex;
-use std::process::Command;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 // 预编译的正则表达式（避免每次调用时重复编译）
 static PCT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)%\s+(left|used)").unwrap());
@@ -29,6 +32,35 @@ impl ClaudeProvider {
             .and_then(|a| a.get("emailAddress"))
             .and_then(|e| e.as_str())
             .map(|s| s.to_string())
+    }
+
+    /// Get the working directory for probing (dedicated directory for trust)
+    fn probe_working_directory() -> PathBuf {
+        let base = dirs::cache_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(std::env::temp_dir);
+        let dir = base.join("bananatray").join("claude-probe");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    }
+
+    /// Get auto-response map for Claude CLI prompts
+    fn auto_responses() -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        // Trust prompts - send Enter to accept
+        map.insert("Esc to cancel".to_string(), "\r".to_string());
+        map.insert("Ready to code here?".to_string(), "\r".to_string());
+        map.insert("Press Enter to continue".to_string(), "\r".to_string());
+        map.insert("ctrl+t to disable".to_string(), "\r".to_string());
+        map.insert("Yes, I trust this folder".to_string(), "\r".to_string());
+        map.insert(
+            "Do you trust the files in this folder?".to_string(),
+            "y\r".to_string(),
+        );
+        // Command palette actions for /usage
+        map.insert("Show plan".to_string(), "\r".to_string());
+        map.insert("Show plan usage limits".to_string(), "\r".to_string());
+        map
     }
 
     /// Parse the output of `claude /usage` into quota entries.
@@ -176,53 +208,58 @@ impl AiProvider for ClaudeProvider {
     }
 
     async fn is_available(&self) -> bool {
-        Command::new("claude").arg("--version").output().is_ok()
+        // Use which to check if claude is available
+        which::which("claude").is_ok()
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        let output = Command::new("claude")
-            .args(["/usage", "--allowed-tools", ""])
-            .env_remove("CLAUDE_CODE_OAUTH_TOKEN")
-            .output()
-            .map_err(|_| ProviderError::cli_not_found("claude"))?;
+        let runner = InteractiveRunner::new();
+        let options = InteractiveOptions {
+            timeout: Duration::from_secs(25),
+            idle_timeout: Duration::from_secs(4),
+            working_directory: Some(Self::probe_working_directory()),
+            arguments: vec!["--allowed-tools".to_string(), "".to_string()],
+            auto_responses: Self::auto_responses(),
+            environment_exclusions: vec!["CLAUDE_CODE_OAUTH_TOKEN".to_string()],
+            send_enter_every: Some(Duration::from_millis(500)), // Periodic Enter for /usage rendering
+        };
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let combined = format!("{}\n{}", stdout, stderr);
-        let combined_lower = combined.to_lowercase();
+        let result = runner.run("claude", "/usage", options)?;
 
-        debug!(target: "providers", "claude command exit code: {:?}", output.status.code());
+        debug!(target: "providers", "claude command completed, output length: {} bytes", result.output.len());
 
-        if !output.status.success() && stdout.trim().is_empty() {
-            if combined_lower.contains("not logged in") || combined_lower.contains("authentication")
-            {
-                return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
-            }
-            if combined_lower.contains("update") {
-                return Err(ProviderError::update_required(None).into());
-            }
-            return Err(ProviderError::fetch_failed(&format!(
-                "命令失败 (exit {:?})",
-                output.status.code()
-            ))
-            .into());
+        // Check for error conditions
+        let output_lower = result.output.to_lowercase();
+
+        if output_lower.contains("not logged in") || output_lower.contains("authentication") {
+            return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
+        }
+        if output_lower.contains("update") && output_lower.contains("required") {
+            return Err(ProviderError::update_required(None).into());
         }
 
-        debug!(target: "providers", "parsing claude usage output ({} bytes)", stdout.len());
-        let quotas = Self::parse_usage_output(&stdout)?;
+        // Parse quotas
+        let quotas = Self::parse_usage_output(&result.output)?;
 
         if quotas.is_empty() {
-            // Try to detect specific issues from the output
-            if combined_lower.contains("not logged in") || combined_lower.contains("authentication")
-            {
+            // Check for specific issues
+            if output_lower.contains("not logged in") || output_lower.contains("authentication") {
                 return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
             }
-            if combined_lower.contains("update") {
+            if output_lower.contains("update") && output_lower.contains("required") {
                 return Err(ProviderError::update_required(None).into());
+            }
+            // Check if trust prompt is blocking
+            if output_lower.contains("trust the files") && !output_lower.contains("current session")
+            {
+                return Err(ProviderError::unavailable(
+                    "需要信任文件夹，请在终端中运行 `claude` 并确认信任提示",
+                )
+                .into());
             }
             return Err(ProviderError::parse_failed(&format!(
                 "无法解析配额数据，原始输出:\n{}",
-                stdout.trim()
+                result.output.trim()
             ))
             .into());
         }
