@@ -1,8 +1,8 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 
@@ -23,24 +23,24 @@ impl CodexProvider {
     fn load_credentials() -> Result<(String, String, Option<String>)> {
         let path = Self::auth_path();
         let content = std::fs::read_to_string(&path)
-            .context("Codex CLI not configured. Run `codex` to authenticate.")?;
+            .map_err(|_| ProviderError::config_missing("~/.codex/auth.json"))?;
         let json: serde_json::Value =
-            serde_json::from_str(&content).context("Failed to parse ~/.codex/auth.json")?;
+            serde_json::from_str(&content).map_err(|_| ProviderError::parse_failed("auth.json"))?;
 
         let tokens = json
             .get("tokens")
-            .context("No 'tokens' field in auth.json")?;
+            .ok_or_else(|| ProviderError::config_missing("tokens in auth.json"))?;
 
         let access_token = tokens
             .get("access_token")
             .and_then(|v| v.as_str())
-            .context("No access_token in auth.json")?
+            .ok_or_else(|| ProviderError::config_missing("access_token"))?
             .to_string();
 
         let refresh_token = tokens
             .get("refresh_token")
             .and_then(|v| v.as_str())
-            .context("No refresh_token in auth.json")?
+            .ok_or_else(|| ProviderError::config_missing("refresh_token"))?
             .to_string();
 
         let last_refresh = json
@@ -169,7 +169,7 @@ impl CodexProvider {
         // Check for 401/403 in the status line
         let first_line = headers.lines().next().unwrap_or("");
         if first_line.contains("401") || first_line.contains("403") {
-            bail!("Token expired. Run `codex` to re-authenticate.");
+            return Err(ProviderError::session_expired(Some("请运行 `codex` 重新登录")).into());
         }
 
         // Try parsing from custom headers first
@@ -231,11 +231,11 @@ impl CodexProvider {
 
         // Fall back to JSON body parsing
         if body.is_empty() {
-            bail!("No usage data available from Codex API.");
+            return Err(ProviderError::no_data().into());
         }
 
-        let json: serde_json::Value =
-            serde_json::from_str(body).context("Failed to parse Codex usage API response")?;
+        let json: serde_json::Value = serde_json::from_str(body)
+            .map_err(|_| ProviderError::parse_failed("usage API response"))?;
 
         if let Some(rate_limit) = json.get("rate_limit") {
             if let Some(primary) = rate_limit.get("primary_window") {
@@ -272,7 +272,7 @@ impl CodexProvider {
         }
 
         if quotas.is_empty() {
-            bail!("No usage data available from Codex API.");
+            return Err(ProviderError::no_data().into());
         }
 
         Ok(quotas)

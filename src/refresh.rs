@@ -170,7 +170,7 @@ impl RefreshCoordinator {
             Err(err) => {
                 let classified = crate::providers::ProviderError::classify(&err);
                 match &classified {
-                    crate::providers::ProviderError::Unavailable(_) => {
+                    crate::providers::ProviderError::Unavailable { .. } => {
                         log::info!(target: "refresh", "provider {:?} unavailable: {}", kind, classified);
                         RefreshOutcome {
                             kind,

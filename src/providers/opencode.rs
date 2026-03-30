@@ -29,10 +29,6 @@ impl AiProvider for OpenCodeProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        Err(ProviderError::Unavailable(
-            "OpenCode usage monitoring requires a running opencode session. No public API is available yet."
-                .to_string(),
-        )
-        .into())
+        Err(ProviderError::unavailable("OpenCode 需要运行中的会话，暂不支持用量监控").into())
     }
 }

@@ -52,9 +52,8 @@ impl AiProvider for KiloProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        Err(ProviderError::Unavailable(
-            "Kilo Code usage monitoring is not yet supported. Kilo Code runs as a VS Code extension without a public usage API."
-                .to_string(),
+        Err(ProviderError::unavailable(
+            "Kilo Code 暂不支持用量监控，它作为 VS Code 扩展运行，无公开 API",
         )
         .into())
     }
