@@ -10,6 +10,7 @@ pub mod notification;
 mod providers;
 mod refresh;
 mod settings_store;
+mod single_instance;
 mod theme;
 mod utils;
 
@@ -209,6 +210,16 @@ fn main() {
         }
     }
 
+    // Single-instance check: must run before Application::new() so that a
+    // secondary process exits immediately without initializing the UI toolkit.
+    let show_rx = match single_instance::ensure_single_instance() {
+        single_instance::InstanceRole::Primary(rx) => rx,
+        single_instance::InstanceRole::Secondary => {
+            info!(target: "app", "another instance is already running, exiting");
+            std::process::exit(0);
+        }
+    };
+
     Application::new()
         .with_assets(Assets::new())
         .run(|cx: &mut App| {
@@ -299,6 +310,37 @@ fn main() {
                     });
                 }
             });
+
+            // 9. Listen for "SHOW" commands from secondary instances.
+            //    Bridge std::sync::mpsc → smol::channel so we can await on the
+            //    foreground executor (std Receiver is !Sync).
+            {
+                let (show_async_tx, show_async_rx) = smol::channel::bounded::<()>(4);
+                std::thread::Builder::new()
+                    .name("single-instance-bridge".into())
+                    .spawn(move || {
+                        while show_rx.recv().is_ok() {
+                            if show_async_tx.send_blocking(()).is_err() {
+                                break;
+                            }
+                        }
+                    })
+                    .expect("failed to spawn single-instance bridge thread");
+
+                let show_ctrl = controller.clone();
+                let show_async_cx = cx.to_async();
+                cx.to_async()
+                    .foreground_executor()
+                    .spawn(async move {
+                        while show_async_rx.recv().await.is_ok() {
+                            info!(target: "app", "secondary instance requested SHOW");
+                            let _ = show_async_cx.update(|cx| {
+                                show_ctrl.borrow_mut().toggle_provider(cx);
+                            });
+                        }
+                    })
+                    .detach();
+            }
 
             info!(target: "app", "BananaTray is running - look for the tray icon");
         });
