@@ -45,6 +45,7 @@ impl AppState {
             warn!(target: "settings", "failed to load saved settings: {err}");
             AppSettings::default()
         });
+        crate::auto_launch::sync(settings.start_at_login);
         let manager = Arc::new(crate::providers::ProviderManager::new());
         let mut providers = manager.initial_statuses();
         for p in &mut providers {

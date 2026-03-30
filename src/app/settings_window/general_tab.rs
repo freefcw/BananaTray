@@ -4,6 +4,7 @@ use crate::app::widgets::{
     render_cadence_dropdown, render_card, render_card_separator, render_checkbox_row,
     render_section_label,
 };
+use crate::auto_launch;
 use crate::models::AppSettings;
 use crate::theme::Theme;
 use gpui::*;
@@ -52,7 +53,7 @@ impl SettingsView {
                             .child(
                                 render_checkbox_row(
                                     "Start at Login",
-                                    "Automatically opens BananaTray when you start your Mac.",
+                                    "Automatically opens BananaTray when you log in.",
                                     login_checked,
                                     theme,
                                 )
@@ -62,6 +63,7 @@ impl SettingsView {
                                         s.settings.start_at_login = !s.settings.start_at_login;
                                         s.settings.clone()
                                     };
+                                    auto_launch::sync(settings.start_at_login);
                                     persist_settings(&settings);
                                     window.refresh();
                                 }),

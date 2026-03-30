@@ -3,6 +3,7 @@
 mod app;
 mod app_state;
 mod assets;
+mod auto_launch;
 mod logging;
 pub mod models;
 pub mod notification;
