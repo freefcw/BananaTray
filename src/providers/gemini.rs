@@ -209,7 +209,7 @@ impl AiProvider for GeminiProvider {
             display_name: "Gemini".into(),
             brand_name: "Google".into(),
             icon_asset: "src/icons/provider-gemini.svg".into(),
-            dashboard_url: "https://aistudio.google.com/billing".into(),
+            dashboard_url: "https://gemini.google.com".into(),
             account_hint: "Google account".into(),
             source_label: "gemini api".into(),
         }

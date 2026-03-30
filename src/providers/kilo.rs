@@ -37,7 +37,7 @@ impl AiProvider for KiloProvider {
             display_name: "Kilo".into(),
             brand_name: "Kilo".into(),
             icon_asset: "src/icons/provider-kilo.svg".into(),
-            dashboard_url: "https://kilo.dev".into(),
+            dashboard_url: "https://app.kilo.ai/usage".into(),
             account_hint: "Kilo account".into(),
             source_label: "kilo api".into(),
         }

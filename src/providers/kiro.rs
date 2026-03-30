@@ -130,7 +130,7 @@ impl AiProvider for KiroProvider {
             display_name: "Kiro".into(),
             brand_name: "AWS".into(),
             icon_asset: "src/icons/provider-kiro.svg".into(),
-            dashboard_url: "https://kiro.dev".into(),
+            dashboard_url: "https://app.kiro.dev/account/usage".into(),
             account_hint: "AWS account".into(),
             source_label: "kiro cli".into(),
         }
