@@ -27,6 +27,28 @@ struct Assets {
     base: PathBuf,
 }
 
+impl Assets {
+    /// 解析资源根目录：
+    /// 1. 在 .app bundle 中 -> Contents/Resources/
+    /// 2. 开发模式 -> CARGO_MANIFEST_DIR
+    fn resolve_base() -> PathBuf {
+        if let Ok(exe) = std::env::current_exe() {
+            // .app/Contents/MacOS/bananatray -> .app/Contents/Resources/
+            if let Some(macos_dir) = exe.parent() {
+                let contents_dir = macos_dir.parent().unwrap_or(macos_dir);
+                let resources_dir = contents_dir.join("Resources");
+                if resources_dir.is_dir() {
+                    log::info!(target: "assets", "using bundle resources: {}", resources_dir.display());
+                    return resources_dir;
+                }
+            }
+        }
+        let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        log::info!(target: "assets", "using dev resources: {}", dev_dir.display());
+        dev_dir
+    }
+}
+
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         fs::read(self.base.join(path))
@@ -238,7 +260,7 @@ fn main() {
 
     Application::new()
         .with_assets(Assets {
-            base: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            base: Assets::resolve_base(),
         })
         .run(|cx: &mut App| {
             // 1. 初始化
