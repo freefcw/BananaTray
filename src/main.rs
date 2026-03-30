@@ -54,6 +54,16 @@ impl TrayController {
         display_id
     }
 
+    /// Check if the window handle is actually valid (window still exists).
+    fn is_window_alive(&self, cx: &mut App) -> bool {
+        if let Some(handle) = self.window.as_ref() {
+            // Try to update the window - if this fails, the handle is stale
+            handle.update(cx, |_, _, _| {}).is_ok()
+        } else {
+            false
+        }
+    }
+
     fn toggle_provider(&mut self, cx: &mut App) {
         let has_any_enabled = {
             let state = self.state.borrow();
@@ -87,7 +97,8 @@ impl TrayController {
         };
         info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
 
-        if self.window.is_some() {
+        // Check if window is actually alive, not just if handle exists
+        if self.is_window_alive(cx) {
             let active_tab = self.state.borrow().nav.active_tab;
             if matches!(active_tab, NavTab::Provider(_)) {
                 info!(target: "tray", "provider panel already open, closing existing panel");
@@ -97,7 +108,9 @@ impl TrayController {
                 self.show(provider_tab, cx);
             }
         } else {
-            info!(target: "tray", "no open panel, opening provider panel");
+            // Handle is stale, clear it
+            info!(target: "tray", "window handle is stale, clearing and opening fresh panel");
+            self.window = None;
             self.show(provider_tab, cx);
         }
     }

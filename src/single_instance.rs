@@ -52,8 +52,34 @@ pub fn ensure_single_instance() -> InstanceRole {
         }
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             info!(target: "single_instance", "another instance detected, sending SHOW command");
-            notify_existing_instance();
-            InstanceRole::Secondary
+            if notify_existing_instance() {
+                // Successfully sent SHOW command, another instance is running.
+                InstanceRole::Secondary
+            } else {
+                // Failed to connect - stale socket file from dead instance.
+                // Clean up and become primary.
+                warn!(target: "single_instance", "stale socket detected, cleaning up and becoming primary");
+                cleanup_stale_socket();
+                // Retry becoming primary
+                let listener = ListenerOptions::new().name(socket_name()).create_sync();
+                match listener {
+                    Ok(listener) => {
+                        info!(target: "single_instance", "became primary after cleanup");
+                        let (tx, rx) = mpsc::channel();
+                        std::thread::Builder::new()
+                            .name("single-instance-listener".into())
+                            .spawn(move || accept_loop(listener, tx))
+                            .expect("failed to spawn single-instance listener thread");
+                        InstanceRole::Primary(rx)
+                    }
+                    Err(e) => {
+                        // Unexpected error after cleanup - proceed anyway
+                        warn!(target: "single_instance", "failed to bind after cleanup ({e}), proceeding as primary");
+                        let (_tx, rx) = mpsc::channel();
+                        InstanceRole::Primary(rx)
+                    }
+                }
+            }
         }
         Err(e) => {
             // Unexpected error (e.g. permission denied). Log and proceed as primary
@@ -95,16 +121,40 @@ fn handle_client(stream: Stream, tx: &mpsc::Sender<()>) {
     }
 }
 
-fn notify_existing_instance() {
+fn notify_existing_instance() -> bool {
     let name = socket_name();
     match Stream::connect(name) {
         Ok(mut stream) => {
             if let Err(e) = stream.write_all(SHOW_CMD) {
                 error!(target: "single_instance", "failed to send SHOW: {e}");
+                false
+            } else {
+                true
             }
         }
         Err(e) => {
             error!(target: "single_instance", "failed to connect to primary instance: {e}");
+            false
         }
     }
+}
+
+/// Clean up stale socket file from a dead instance.
+/// On macOS, the socket file is at /tmp/bananatray.
+/// On Linux, abstract sockets don't leave files, so no cleanup needed.
+/// On Windows, named pipes don't leave files either.
+#[cfg(target_os = "macos")]
+fn cleanup_stale_socket() {
+    let socket_path = std::path::Path::new("/tmp/bananatray");
+    if socket_path.exists() {
+        if let Err(e) = std::fs::remove_file(socket_path) {
+            warn!(target: "single_instance", "failed to remove stale socket file: {e}");
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cleanup_stale_socket() {
+    // On Linux (abstract sockets) and Windows (named pipes),
+    // there are no persistent files to clean up.
 }
