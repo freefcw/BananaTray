@@ -1,4 +1,4 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
@@ -40,13 +40,13 @@ impl MiniMaxProvider {
             let msg = resp
                 .base_resp
                 .status_msg
-                .unwrap_or_else(|| "Unknown error".to_string());
-            anyhow::bail!("MiniMax API error: {}", msg);
+                .unwrap_or_else(|| "未知错误".to_string());
+            return Err(ProviderError::fetch_failed(&format!("API 错误: {}", msg)).into());
         }
 
         let model_remains = resp.model_remains.unwrap_or_default();
         if model_remains.is_empty() {
-            anyhow::bail!("MiniMax: Empty model_remains in response");
+            return Err(ProviderError::no_data().into());
         }
 
         let quotas = model_remains
@@ -104,7 +104,7 @@ impl AiProvider for MiniMaxProvider {
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
         let api_key = self
             .get_api_key()
-            .context("Set MINIMAX_API_KEY environment variable to enable MiniMax monitoring.")?;
+            .ok_or_else(|| ProviderError::config_missing("请设置 MINIMAX_API_KEY 环境变量"))?;
 
         self.fetch_quota(&api_key)
     }

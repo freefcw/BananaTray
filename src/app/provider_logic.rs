@@ -25,21 +25,9 @@ pub fn format_quota_usage(quota: &QuotaInfo) -> String {
 }
 
 pub fn provider_empty_message(provider: &ProviderStatus) -> String {
+    // 如果有错误消息，直接返回（已经是用户友好的格式）
     if let Some(error) = &provider.error_message {
-        let anyhow_err = anyhow::anyhow!("{}", error);
-        let classified = crate::providers::ProviderError::classify(&anyhow_err);
-        return match classified {
-            crate::providers::ProviderError::ConfigMissing(_) => {
-                format!(
-                    "Connect {} credentials before quota tracking can start.",
-                    provider.display_name()
-                )
-            }
-            crate::providers::ProviderError::AuthRequired(_) => {
-                "Session expired. Sign in again to refresh usage.".to_string()
-            }
-            _ => error.clone(),
-        };
+        return error.clone();
     }
 
     match provider.connection {
@@ -260,21 +248,17 @@ mod tests {
     #[test]
     fn empty_message_missing_env_var() {
         let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
-        p.error_message = Some("Missing environment variable GITHUB_TOKEN".into());
-        assert_eq!(
-            provider_empty_message(&p),
-            "Connect Copilot credentials before quota tracking can start."
-        );
+        p.error_message = Some("配置缺失: GITHUB_TOKEN".into());
+        // 错误消息直接返回，不再尝试分类
+        assert_eq!(provider_empty_message(&p), "配置缺失: GITHUB_TOKEN");
     }
 
     #[test]
     fn empty_message_session_expired() {
         let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.error_message = Some("session cookie expired".into());
-        assert_eq!(
-            provider_empty_message(&p),
-            "Session expired. Sign in again to refresh usage."
-        );
+        p.error_message = Some("登录已过期: 请重新登录".into());
+        // 错误消息直接返回，不再尝试分类
+        assert_eq!(provider_empty_message(&p), "登录已过期: 请重新登录");
     }
 
     #[test]

@@ -1,7 +1,7 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::text_utils;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
 use std::io::Write;
@@ -29,7 +29,7 @@ impl KiroProvider {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .context("Failed to spawn 'kiro-cli'. Is Kiro CLI installed?")?;
+            .map_err(|_| ProviderError::cli_not_found("kiro-cli"))?;
 
         // Write commands to stdin
         if let Some(mut stdin) = child.stdin.take() {
@@ -47,11 +47,13 @@ impl KiroProvider {
                 Ok(None) => {
                     if start.elapsed() > timeout {
                         let _ = child.kill();
-                        bail!("kiro-cli timed out after 30 seconds");
+                        return Err(ProviderError::Timeout.into());
                     }
                     std::thread::sleep(Duration::from_millis(200));
                 }
-                Err(e) => bail!("Error waiting for kiro-cli: {}", e),
+                Err(e) => {
+                    return Err(ProviderError::fetch_failed(&format!("等待进程失败: {}", e)).into())
+                }
             }
         }
 
@@ -150,10 +152,11 @@ impl AiProvider for KiroProvider {
         let quotas = Self::parse_usage_output(&stdout)?;
 
         if quotas.is_empty() {
-            bail!(
-                "No quota data found in kiro-cli /usage output. Raw output:\n{}",
+            return Err(ProviderError::parse_failed(&format!(
+                "无法解析 kiro-cli 输出:\n{}",
                 stdout.trim()
-            );
+            ))
+            .into());
         }
 
         Ok(quotas)

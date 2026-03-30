@@ -1,8 +1,8 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
@@ -28,18 +28,19 @@ impl CursorProvider {
                 "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'",
             ])
             .output()
-            .context("Failed to run sqlite3 to read Cursor auth token")?;
+            .map_err(|_| ProviderError::cli_not_found("sqlite3"))?;
 
         if !output.status.success() {
-            bail!(
-                "sqlite3 exited with status {}",
-                output.status.code().unwrap_or(-1)
-            );
+            return Err(ProviderError::fetch_failed(&format!(
+                "sqlite3 退出码 {:?}",
+                output.status.code()
+            ))
+            .into());
         }
 
         let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if token.is_empty() {
-            bail!("No access token found in Cursor database (not logged in?)");
+            return Err(ProviderError::auth_required(Some("请先登录 Cursor")).into());
         }
 
         Ok(token)
@@ -49,7 +50,7 @@ impl CursorProvider {
     fn extract_user_id_from_jwt(token: &str) -> Result<String> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() < 2 {
-            bail!("Invalid JWT format");
+            return Err(ProviderError::parse_failed("JWT 格式无效").into());
         }
 
         // Base64url decode the payload
@@ -62,16 +63,16 @@ impl CursorProvider {
         use base64::Engine;
         let payload_bytes = base64::engine::general_purpose::STANDARD
             .decode(&b64)
-            .context("Failed to base64-decode JWT payload")?;
+            .map_err(|_| ProviderError::parse_failed("JWT payload Base64 解码失败"))?;
 
         let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
-            .context("Failed to parse JWT payload as JSON")?;
+            .map_err(|_| ProviderError::parse_failed("JWT payload JSON 解析失败"))?;
 
         let sub = payload
             .get("sub")
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
-            .context("JWT payload missing 'sub' claim")?;
+            .ok_or_else(|| ProviderError::parse_failed("JWT 缺少 'sub' 字段"))?;
 
         Ok(sub.to_string())
     }
@@ -87,8 +88,8 @@ impl CursorProvider {
 
     /// Parse the usage-summary JSON response into QuotaInfo entries.
     fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
-        let json: serde_json::Value =
-            serde_json::from_str(body).context("Failed to parse Cursor usage-summary response")?;
+        let json: serde_json::Value = serde_json::from_str(body)
+            .map_err(|_| ProviderError::parse_failed("usage-summary 响应"))?;
 
         let mut quotas = Vec::new();
 
@@ -222,7 +223,7 @@ impl CursorProvider {
         }
 
         if quotas.is_empty() {
-            bail!("No usage data found in Cursor response");
+            return Err(ProviderError::no_data().into());
         }
 
         Ok(quotas)

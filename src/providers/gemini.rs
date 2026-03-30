@@ -1,4 +1,4 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
@@ -27,9 +27,9 @@ impl GeminiProvider {
     fn load_credentials(&self) -> Result<OAuthCredentials> {
         let path = Self::credentials_path();
         let content = std::fs::read_to_string(&path)
-            .context("Failed to read ~/.gemini/oauth_creds.json. Are you logged in?")?;
-        let creds: OAuthCredentials =
-            serde_json::from_str(&content).context("Failed to parse oauth_creds.json")?;
+            .map_err(|_| ProviderError::config_missing("~/.gemini/oauth_creds.json"))?;
+        let creds: OAuthCredentials = serde_json::from_str(&content)
+            .map_err(|_| ProviderError::parse_failed("oauth_creds.json"))?;
         Ok(creds)
     }
 
@@ -37,16 +37,18 @@ impl GeminiProvider {
     fn check_auth_type(&self) -> Result<()> {
         let path = Self::settings_path();
         if let Ok(content) = std::fs::read_to_string(&path) {
-            let settings: GeminiSettings =
-                serde_json::from_str(&content).context("Failed to parse settings.json")?;
+            let settings: GeminiSettings = serde_json::from_str(&content)
+                .map_err(|_| ProviderError::parse_failed("settings.json"))?;
             match settings.security.auth.selected_type.as_str() {
                 "oauth-personal" | "unknown" => Ok(()),
-                "api-key" => anyhow::bail!(
-                    "Gemini API key auth not supported. Use Google account (OAuth) instead."
-                ),
-                "vertex-ai" => anyhow::bail!(
-                    "Gemini Vertex AI auth not supported. Use Google account (OAuth) instead."
-                ),
+                "api-key" => Err(ProviderError::config_missing(
+                    "Gemini API key 不支持，请使用 Google 账户 (OAuth) 登录",
+                )
+                .into()),
+                "vertex-ai" => Err(ProviderError::config_missing(
+                    "Gemini Vertex AI 不支持，请使用 Google 账户 (OAuth) 登录",
+                )
+                .into()),
                 _ => Ok(()),
             }
         } else {
@@ -107,7 +109,7 @@ impl GeminiProvider {
         quotas.sort_by(|a, b| a.label.cmp(&b.label));
 
         if quotas.is_empty() {
-            anyhow::bail!("No quota data found in API response");
+            return Err(ProviderError::no_data().into());
         }
 
         Ok(quotas)
@@ -143,7 +145,7 @@ impl GeminiProvider {
         let output = Command::new("gemini").args(["--version"]).output();
 
         if output.is_err() {
-            anyhow::bail!("gemini CLI not found. Install it to enable automatic token refresh.");
+            return Err(ProviderError::cli_not_found("gemini").into());
         }
 
         // Run `gemini` with `/quit` input to trigger token refresh without interactive session
@@ -234,7 +236,7 @@ impl AiProvider for GeminiProvider {
         let access_token = creds
             .access_token
             .filter(|t| !t.is_empty())
-            .context("No access token found. Please login with 'gemini' CLI first.")?;
+            .ok_or_else(|| ProviderError::auth_required(Some("请运行 `gemini` CLI 登录")))?;
 
         // Check if token is expired (expiry_date is in milliseconds since epoch)
         let token_expired = if let Some(expiry_ms) = creds.expiry_date_ms {
@@ -249,7 +251,9 @@ impl AiProvider for GeminiProvider {
             log::info!(target: "providers", "Gemini token expired, attempting CLI refresh");
             if let Err(e) = self.refresh_token_via_cli() {
                 log::warn!(target: "providers", "Gemini CLI token refresh failed: {e}");
-                anyhow::bail!("Gemini token expired. Please run 'gemini' CLI to refresh. ({e})");
+                return Err(
+                    ProviderError::session_expired(Some("请运行 `gemini` CLI 刷新")).into(),
+                );
             }
 
             // Reload credentials after CLI refresh
@@ -257,7 +261,7 @@ impl AiProvider for GeminiProvider {
             let new_token = refreshed_creds
                 .access_token
                 .filter(|t| !t.is_empty())
-                .context("Token still empty after CLI refresh.")?;
+                .ok_or_else(|| ProviderError::session_expired(Some("刷新后仍无有效 token")))?;
 
             return self.fetch_quota_via_api(&new_token);
         }

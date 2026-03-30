@@ -53,9 +53,8 @@ impl AiProvider for VertexAiProvider {
     }
 
     async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
-        Err(ProviderError::Unavailable(
-            "Vertex AI quota monitoring uses the same quota system as Gemini CLI. Enable the Gemini provider with Vertex AI auth mode in your Gemini CLI settings."
-                .to_string(),
+        Err(ProviderError::unavailable(
+            "Vertex AI 使用与 Gemini CLI 相同的配额系统，请在 Gemini CLI 设置中启用 Vertex AI 认证模式",
         )
         .into())
     }

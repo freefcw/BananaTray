@@ -1,7 +1,7 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::text_utils;
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use log::debug;
 use regex::Regex;
@@ -184,7 +184,7 @@ impl AiProvider for ClaudeProvider {
             .args(["/usage", "--allowed-tools", ""])
             .env_remove("CLAUDE_CODE_OAUTH_TOKEN")
             .output()
-            .context("Failed to execute 'claude /usage'. Is Claude CLI installed?")?;
+            .map_err(|_| ProviderError::cli_not_found("claude"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -196,16 +196,16 @@ impl AiProvider for ClaudeProvider {
         if !output.status.success() && stdout.trim().is_empty() {
             if combined_lower.contains("not logged in") || combined_lower.contains("authentication")
             {
-                bail!("Claude CLI: authentication required. Run `claude` to log in.");
+                return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
             }
             if combined_lower.contains("update") {
-                bail!("Claude CLI: update required. Run `claude update` to update.");
+                return Err(ProviderError::update_required(None).into());
             }
-            bail!(
-                "'claude /usage' failed (exit {:?}): {}",
-                output.status.code(),
-                combined.trim()
-            );
+            return Err(ProviderError::fetch_failed(&format!(
+                "命令失败 (exit {:?})",
+                output.status.code()
+            ))
+            .into());
         }
 
         debug!(target: "providers", "parsing claude usage output ({} bytes)", stdout.len());
@@ -215,15 +215,16 @@ impl AiProvider for ClaudeProvider {
             // Try to detect specific issues from the output
             if combined_lower.contains("not logged in") || combined_lower.contains("authentication")
             {
-                bail!("Claude CLI: authentication required. Run `claude` to log in.");
+                return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
             }
             if combined_lower.contains("update") {
-                bail!("Claude CLI: update required. Run `claude update` to update.");
+                return Err(ProviderError::update_required(None).into());
             }
-            bail!(
-                "No quota data found in 'claude /usage' output. Raw output:\n{}",
+            return Err(ProviderError::parse_failed(&format!(
+                "无法解析配额数据，原始输出:\n{}",
                 stdout.trim()
-            );
+            ))
+            .into());
         }
 
         Ok(quotas)

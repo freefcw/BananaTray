@@ -1,6 +1,6 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
 use std::process::Command;
@@ -42,13 +42,14 @@ impl AiProvider for AmpProvider {
         let output = Command::new("amp")
             .args(["usage", "--no-color"])
             .output()
-            .context("Failed to execute 'amp usage' correctly.")?;
+            .map_err(|_| ProviderError::cli_not_found("amp"))?;
 
         if !output.status.success() {
-            anyhow::bail!(
-                "'amp usage' command failed with exit status {:?}",
-                output.status
-            );
+            return Err(ProviderError::fetch_failed(&format!(
+                "命令失败 (exit {:?})",
+                output.status.code()
+            ))
+            .into());
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
@@ -72,7 +73,7 @@ impl AiProvider for AmpProvider {
         }
 
         if quotas.is_empty() {
-            anyhow::bail!("No valid Amp usage data matched in the command output.");
+            return Err(ProviderError::parse_failed("无法解析 amp usage 输出").into());
         }
 
         Ok(quotas)

@@ -1,4 +1,4 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
 use crate::utils::http_client;
 use crate::utils::time_utils;
@@ -109,7 +109,7 @@ impl KimiProvider {
         }
 
         if quotas.is_empty() {
-            anyhow::bail!("No FEATURE_CODING usage data found.");
+            return Err(ProviderError::no_data().into());
         }
 
         Ok(quotas)
@@ -148,10 +148,10 @@ impl AiProvider for KimiProvider {
 
         // Fallback: check if CLI exists but we can't use it for quota
         if Command::new("kimi").arg("--version").output().is_ok() {
-            anyhow::bail!("Set KIMI_AUTH_TOKEN environment variable to enable Kimi monitoring.");
+            return Err(ProviderError::config_missing("请设置 KIMI_AUTH_TOKEN 环境变量").into());
         }
 
-        anyhow::bail!("Set KIMI_AUTH_TOKEN environment variable to enable Kimi monitoring.")
+        Err(ProviderError::config_missing("请设置 KIMI_AUTH_TOKEN 环境变量").into())
     }
 }
 
