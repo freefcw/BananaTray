@@ -18,6 +18,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::notification::{send_system_notification, QuotaAlertTracker};
+
 // ============================================================================
 // 子状态结构 (SRP: 每个结构体负责一个独立职责)
 // ============================================================================
@@ -93,6 +95,8 @@ pub struct AppState {
     pub settings: AppSettings,
     /// 向 RefreshCoordinator 发送请求的通道
     pub refresh_tx: Sender<RefreshRequest>,
+    /// 配额告警追踪器
+    pub alert_tracker: QuotaAlertTracker,
     /// 当前 AppView 的弱引用，用于事件泵通知 UI 刷新
     pub view_entity: Option<gpui::WeakEntity<AppView>>,
 }
@@ -135,6 +139,7 @@ impl AppState {
             },
             settings,
             refresh_tx,
+            alert_tracker: QuotaAlertTracker::new(),
             view_entity: None,
         }
     }
@@ -181,6 +186,17 @@ impl AppState {
                 match outcome.result {
                     RefreshResult::Success { quotas } => {
                         info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", outcome.kind, quotas.len());
+                        // 检测配额告警状态变化
+                        let provider_name = p.display_name().to_string();
+                        if let Some(alert) =
+                            self.alert_tracker
+                                .update(outcome.kind, &provider_name, &quotas)
+                        {
+                            if self.settings.session_quota_notifications {
+                                let with_sound = self.settings.notification_sound;
+                                send_system_notification(&alert, with_sound);
+                            }
+                        }
                         p.mark_refresh_succeeded(quotas);
                     }
                     RefreshResult::Unavailable { message } => {

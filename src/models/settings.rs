@@ -41,6 +41,9 @@ pub struct AppSettings {
     /// Session 配额变更通知
     #[serde(default = "default_true")]
     pub session_quota_notifications: bool,
+    /// 通知是否带声音
+    #[serde(default = "default_true")]
+    pub notification_sound: bool,
     /// Provider 特定配置
     pub providers: ProviderSettings,
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
@@ -67,6 +70,7 @@ impl Default for AppSettings {
             show_cost_summary: true,
             check_provider_status: true,
             session_quota_notifications: true,
+            notification_sound: true,
             providers: ProviderSettings::default(),
             enabled_providers: HashMap::new(),
             provider_order: Vec::new(),

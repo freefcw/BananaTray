@@ -3,6 +3,7 @@
 mod app;
 mod logging;
 pub mod models;
+pub mod notification;
 mod providers;
 mod refresh;
 mod settings_store;
