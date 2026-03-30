@@ -2,6 +2,7 @@
 //!
 //! 注意：这是一个 bin + lib 混合 crate，lib 部分主要供测试使用。
 
+pub mod app_state;
 pub mod models;
 pub mod providers;
 pub mod refresh;

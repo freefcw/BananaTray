@@ -6,8 +6,8 @@ mod tray_settings;
 mod widgets;
 
 pub use settings_window::schedule_open_settings_window;
-use settings_window::SettingsTab;
 
+use crate::app_state::{NavigationState, ProviderStore, SettingsTab, SettingsUiState};
 use crate::models::{AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use crate::theme::Theme;
@@ -19,69 +19,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::notification::{send_system_notification, QuotaAlertTracker};
-
-// ============================================================================
-// 子状态结构 (SRP: 每个结构体负责一个独立职责)
-// ============================================================================
-
-/// Provider 数据存储
-pub struct ProviderStore {
-    pub providers: Vec<crate::models::ProviderStatus>,
-}
-
-impl ProviderStore {
-    pub fn find(&self, kind: ProviderKind) -> Option<&crate::models::ProviderStatus> {
-        self.providers.iter().find(|p| p.kind == kind)
-    }
-
-    pub fn find_mut(&mut self, kind: ProviderKind) -> Option<&mut crate::models::ProviderStatus> {
-        self.providers.iter_mut().find(|p| p.kind == kind)
-    }
-
-    pub fn mark_refreshing(&mut self, kind: ProviderKind) {
-        if let Some(provider) = self.find_mut(kind) {
-            provider.mark_refreshing();
-        }
-    }
-}
-
-/// Tray 弹出窗口的导航状态
-pub struct NavigationState {
-    pub active_tab: NavTab,
-    pub last_provider_kind: ProviderKind,
-}
-
-impl NavigationState {
-    /// 切换到指定 tab，若为 Provider 则同步 last_provider_kind
-    pub fn switch_to(&mut self, tab: NavTab) {
-        self.active_tab = tab;
-        if let NavTab::Provider(kind) = tab {
-            self.last_provider_kind = kind;
-        }
-    }
-
-    /// 当某个 provider 被禁用时，若它是当前活跃 tab 则回退到下一个已启用的 provider
-    pub fn fallback_on_disable(&mut self, disabled: ProviderKind, settings: &AppSettings) {
-        let is_current = matches!(self.active_tab, NavTab::Provider(k) if k == disabled);
-        if !is_current {
-            return;
-        }
-        if let Some(next) = ProviderKind::all()
-            .iter()
-            .find(|k| **k != disabled && settings.is_provider_enabled(**k))
-            .copied()
-        {
-            self.switch_to(NavTab::Provider(next));
-        }
-    }
-}
-
-/// 设置窗口的临时 UI 状态
-pub struct SettingsUiState {
-    pub active_tab: SettingsTab,
-    pub selected_provider: ProviderKind,
-    pub cadence_dropdown_open: bool,
-}
 
 // ============================================================================
 // 外部持久状态 (不随窗口销毁) — 纯组合容器
