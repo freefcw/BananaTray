@@ -124,7 +124,7 @@ impl AiProvider for KimiProvider {
             display_name: "Kimi".into(),
             brand_name: "Moonshot".into(),
             icon_asset: "src/icons/provider-kimi.svg".into(),
-            dashboard_url: "https://platform.moonshot.cn/console/account".into(),
+            dashboard_url: "https://www.kimi.com/code/console".into(),
             account_hint: "Moonshot account".into(),
             source_label: "kimi api".into(),
         }

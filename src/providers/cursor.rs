@@ -237,7 +237,7 @@ impl AiProvider for CursorProvider {
             display_name: "Cursor".into(),
             brand_name: "Cursor".into(),
             icon_asset: "src/icons/provider-cursor.svg".into(),
-            dashboard_url: "https://www.cursor.com/settings".into(),
+            dashboard_url: "https://cursor.com/dashboard?tab=usage".into(),
             account_hint: "Cursor account".into(),
             source_label: "cursor api".into(),
         }

@@ -165,7 +165,7 @@ impl AiProvider for ClaudeProvider {
             display_name: "Claude".into(),
             brand_name: "Anthropic".into(),
             icon_asset: "src/icons/provider-claude.svg".into(),
-            dashboard_url: "https://console.anthropic.com/settings/usage".into(),
+            dashboard_url: "https://console.anthropic.com/settings/billing".into(),
             account_hint: "Anthropic workspace".into(),
             source_label: "claude cli".into(),
         }

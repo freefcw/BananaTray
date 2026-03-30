@@ -86,7 +86,8 @@ impl AiProvider for MiniMaxProvider {
             display_name: "MiniMax".into(),
             brand_name: "MiniMax".into(),
             icon_asset: "src/icons/provider-minimax.svg".into(),
-            dashboard_url: "https://platform.minimaxi.com".into(),
+            dashboard_url:
+                "https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3".into(),
             account_hint: "MiniMax account".into(),
             source_label: "minimax api".into(),
         }

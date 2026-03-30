@@ -24,7 +24,7 @@ impl AiProvider for AmpProvider {
             display_name: "Amp".into(),
             brand_name: "Amp".into(),
             icon_asset: "src/icons/provider-amp.svg".into(),
-            dashboard_url: "https://app.amphq.com/usage".into(),
+            dashboard_url: "https://ampcode.com/settings".into(),
             account_hint: "Amp CLI".into(),
             source_label: "amp cli".into(),
         }
