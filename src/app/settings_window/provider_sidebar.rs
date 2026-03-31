@@ -198,7 +198,7 @@ impl SettingsView {
             .flex_col()
             .flex_none()
             .flex_basis(px(190.0))
-            .pl(px(8.0))
+            .pl(px(16.0))
             .pr(px(4.0))
             .pt(px(8.0))
             .overflow_hidden()
