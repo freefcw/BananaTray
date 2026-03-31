@@ -183,7 +183,15 @@ impl AppView {
         let theme = Theme::clone(cx.global::<Theme>());
         let provider = provider.clone();
         let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
+        let is_error = provider.connection == ConnectionStatus::Error;
         let has_quotas = !provider.quotas.is_empty();
+
+        // 错误状态：不显示账户卡片，直接显示错误空状态
+        if is_error && !has_quotas {
+            return self
+                .render_provider_empty_state(&provider, cx)
+                .into_any_element();
+        }
 
         // 创建账户信息卡片（不需要 cx，因为 entity 已经 clone）
         let account_card = self.render_account_info_card(&provider, &theme, entity);
@@ -252,13 +260,26 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = cx.global::<Theme>();
-        let title = match provider.connection {
-            ConnectionStatus::Connected => t!("provider.waiting").to_string(),
-            ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
-            ConnectionStatus::Disconnected => t!("provider.connection_required").to_string(),
-            ConnectionStatus::Error => t!("provider.refresh_failed").to_string(),
+        let is_error = provider.connection == ConnectionStatus::Error;
+
+        let (title, message) = if is_error {
+            // 错误状态：优先显示错误消息作为标题
+            let error_msg = provider.error_message.as_deref().unwrap_or("");
+            (
+                t!("provider.refresh_failed").to_string(),
+                error_msg.to_string(),
+            )
+        } else {
+            let title = match provider.connection {
+                ConnectionStatus::Connected => t!("provider.waiting").to_string(),
+                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
+                ConnectionStatus::Disconnected => t!("provider.connection_required").to_string(),
+                ConnectionStatus::Error => unreachable!(),
+            };
+            let message = provider_logic::provider_empty_message(provider);
+            (title, message)
         };
-        let message = provider_logic::provider_empty_message(provider);
+
         let show_refresh = matches!(
             provider.connection,
             ConnectionStatus::Error | ConnectionStatus::Disconnected
@@ -278,12 +299,18 @@ impl AppView {
                     .w_full()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text_primary)
+                    .text_color(if is_error {
+                        theme.text_accent
+                    } else {
+                        theme.text_primary
+                    })
                     .text_align(TextAlign::Center)
-                    .child(title.clone()),
-            )
-            // 说明文字居中
-            .child(
+                    .child(title),
+            );
+
+        // 错误状态：显示错误消息（如果有）
+        if !message.is_empty() {
+            container = container.child(
                 div()
                     .w_full()
                     .px(px(16.0))
@@ -293,6 +320,7 @@ impl AppView {
                     .text_align(TextAlign::Center)
                     .child(message),
             );
+        }
 
         if show_refresh {
             container = container.child(
