@@ -81,7 +81,7 @@ impl AiProvider for ClaudeProvider {
         self.cli_probe.is_available() || self.api_probe.is_available()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         match self.probe_mode {
             ProbeMode::Cli => {
                 debug!("Claude: 强制使用 CLI 模式");

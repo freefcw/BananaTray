@@ -1,5 +1,5 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData};
 use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
@@ -115,6 +115,18 @@ impl GeminiProvider {
         Ok(quotas)
     }
 
+    /// Fetch user info from Google userinfo API
+    fn fetch_user_info(&self, access_token: &str) -> Option<String> {
+        let url = "https://www.googleapis.com/oauth2/v2/userinfo";
+        let auth_header = format!("Authorization: Bearer {}", access_token);
+
+        let response_str =
+            http_client::get(url, &[&auth_header, "Accept: application/json"]).ok()?;
+
+        let user_info: UserInfo = serde_json::from_str(&response_str).ok()?;
+        user_info.email
+    }
+
     fn simplify_model_name(name: &str) -> String {
         // Convert "gemini-2.5-pro" -> "Pro", "gemini-2.5-flash" -> "Flash", etc.
         let lower = name.to_lowercase();
@@ -203,6 +215,11 @@ struct QuotaBucket {
     reset_time: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct UserInfo {
+    email: Option<String>,
+}
+
 #[async_trait]
 impl AiProvider for GeminiProvider {
     fn metadata(&self) -> ProviderMetadata {
@@ -226,7 +243,7 @@ impl AiProvider for GeminiProvider {
         Self::credentials_path().exists()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh(&self) -> Result<RefreshData> {
         // Check auth type first
         self.check_auth_type()?;
 
@@ -263,12 +280,17 @@ impl AiProvider for GeminiProvider {
                 .filter(|t| !t.is_empty())
                 .ok_or_else(|| ProviderError::session_expired(Some("刷新后仍无有效 token")))?;
 
-            return self.fetch_quota_via_api(&new_token);
+            let quotas = self.fetch_quota_via_api(&new_token)?;
+            let account_email = self.fetch_user_info(&new_token);
+            return Ok(RefreshData::with_account(quotas, account_email, None));
         }
 
         // Fetch quota via API
         match self.fetch_quota_via_api(&access_token) {
-            Ok(quotas) => Ok(quotas),
+            Ok(quotas) => {
+                let account_email = self.fetch_user_info(&access_token);
+                Ok(RefreshData::with_account(quotas, account_email, None))
+            }
             Err(e) => {
                 let err_str = e.to_string();
                 // If the error looks like an auth issue, try CLI refresh once
@@ -282,7 +304,9 @@ impl AiProvider for GeminiProvider {
                         if let Some(new_token) =
                             refreshed_creds.access_token.filter(|t| !t.is_empty())
                         {
-                            return self.fetch_quota_via_api(&new_token);
+                            let quotas = self.fetch_quota_via_api(&new_token)?;
+                            let account_email = self.fetch_user_info(&new_token);
+                            return Ok(RefreshData::with_account(quotas, account_email, None));
                         }
                     }
                 }

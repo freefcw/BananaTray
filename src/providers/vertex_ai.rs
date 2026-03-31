@@ -52,7 +52,7 @@ impl AiProvider for VertexAiProvider {
         Self::is_vertex_ai_configured()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         Err(ProviderError::unavailable(
             "Vertex AI 使用与 Gemini CLI 相同的配额系统，请在 Gemini CLI 设置中启用 Vertex AI 认证模式",
         )

@@ -122,20 +122,20 @@ impl AppState {
                     return;
                 };
                 match outcome.result {
-                    RefreshResult::Success { quotas } => {
-                        info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", outcome.kind, quotas.len());
+                    RefreshResult::Success { data } => {
+                        info!(target: "providers", "provider {:?} refresh succeeded: {} quotas", outcome.kind, data.quotas.len());
                         // 检测配额告警状态变化
                         let provider_name = p.display_name().to_string();
                         if let Some(alert) =
                             self.alert_tracker
-                                .update(outcome.kind, &provider_name, &quotas)
+                                .update(outcome.kind, &provider_name, &data.quotas)
                         {
                             if self.settings.session_quota_notifications {
                                 let with_sound = self.settings.notification_sound;
                                 send_system_notification(&alert, with_sound);
                             }
                         }
-                        p.mark_refresh_succeeded(quotas);
+                        p.mark_refresh_succeeded(data);
                     }
                     RefreshResult::Unavailable { message } => {
                         debug!(target: "providers", "provider {:?} unavailable: {}", outcome.kind, message);

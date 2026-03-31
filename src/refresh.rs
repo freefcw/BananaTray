@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use smol::channel::{Receiver, Sender};
 
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, RefreshData};
 use crate::providers::ProviderManager;
 
 // ============================================================================
@@ -56,7 +56,7 @@ pub struct RefreshOutcome {
 /// 刷新结果类型
 #[derive(Debug)]
 pub enum RefreshResult {
-    Success { quotas: Vec<QuotaInfo> },
+    Success { data: RefreshData },
     Unavailable { message: String },
     Failed { error: String },
     SkippedCooldown,
@@ -158,13 +158,13 @@ impl RefreshCoordinator {
     }
 
     /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
-    fn build_outcome(kind: ProviderKind, result: anyhow::Result<Vec<QuotaInfo>>) -> RefreshOutcome {
+    fn build_outcome(kind: ProviderKind, result: anyhow::Result<RefreshData>) -> RefreshOutcome {
         match result {
-            Ok(quotas) => {
-                log::info!(target: "refresh", "provider {:?} refreshed: {} quotas", kind, quotas.len());
+            Ok(data) => {
+                log::info!(target: "refresh", "provider {:?} refreshed: {} quotas", kind, data.quotas.len());
                 RefreshOutcome {
                     kind,
-                    result: RefreshResult::Success { quotas },
+                    result: RefreshResult::Success { data },
                 }
             }
             Err(err) => {

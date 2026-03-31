@@ -108,20 +108,22 @@ impl QuotaInfo {
         }
     }
 
-    /// 使用百分比 (0.0 - 100.0)
+    /// 使用百分比 (可负数，当超出配额时)
     pub fn percentage(&self) -> f64 {
         if self.limit <= 0.0 {
             return 0.0;
         }
-        (self.used / self.limit * 100.0).min(100.0)
+        // 不 clamp，允许负数（超出配额的情况）
+        self.used / self.limit * 100.0
     }
 
-    /// 剩余百分比 (0.0 - 100.0)
+    /// 剩余百分比 (可负数，当超出配额时)
     pub fn percent_remaining(&self) -> f64 {
         if self.limit <= 0.0 {
             return 0.0;
         }
-        ((self.limit - self.used) / self.limit * 100.0).clamp(0.0, 100.0)
+        // 不 clamp，允许负数（超出配额的情况）
+        (self.limit - self.used) / self.limit * 100.0
     }
 
     /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
@@ -196,34 +198,45 @@ impl QuotaInfo {
     // ========================================================================
 
     /// 剩余量摘要文本（用于 UI 主显示）
-    /// - Credit 类型: "$X.XX left"
-    /// - 其他类型: "X% left"
+    /// - Credit 类型: "$X.XX left" 或 "$X.XX over"（负数）
+    /// - 其他类型: "X% left" 或 "X% over"（负数）
     pub fn remaining_text(&self) -> String {
         match self.quota_type {
             QuotaType::Credit => {
                 let remaining = self.limit - self.used;
-                if remaining > 0.0 {
+                if remaining >= 0.0 {
                     format!("${:.2} left", remaining)
                 } else {
-                    "$0.00 left".to_string()
+                    format!("${:.2} over", -remaining)
                 }
             }
             _ => {
-                format!("{:.0}% left", self.percent_remaining())
+                let pct = self.percent_remaining();
+                if pct >= 0.0 {
+                    format!("{:.0}% left", pct)
+                } else {
+                    format!("{:.0}% over", -pct)
+                }
             }
         }
     }
 
     /// 使用详情文本（用于 UI 详细展示）
     /// - Credit 类型: "$X.XX / $Y.YY"
-    /// - 其他类型: "X% used"
+    /// - 其他类型: "X used / Y total" 或 "X% used"
     pub fn usage_detail_text(&self) -> String {
         match self.quota_type {
             QuotaType::Credit => {
                 format!("${:.2} / ${:.2}", self.used, self.limit)
             }
             _ => {
-                format!("{:.0}% used", self.percentage())
+                // 如果 limit 是 100.0，说明数据本身就是百分比
+                if self.is_percentage_mode() {
+                    format!("{:.0}% used", self.used)
+                } else {
+                    // 显示实际用量和总量
+                    format!("{:.0} used / {:.0} total", self.used, self.limit)
+                }
             }
         }
     }
@@ -242,6 +255,45 @@ impl QuotaInfo {
     #[deprecated(note = "Use usage_detail_text() instead")]
     pub fn detail_text(&self) -> String {
         self.usage_detail_text()
+    }
+}
+
+// ============================================================================
+// 刷新结果数据
+// ============================================================================
+
+/// Provider 刷新返回的完整数据
+#[derive(Debug, Clone)]
+pub struct RefreshData {
+    /// 配额信息列表
+    pub quotas: Vec<QuotaInfo>,
+    /// 账户邮箱（可选）
+    pub account_email: Option<String>,
+    /// 账户套餐等级（可选）
+    pub account_tier: Option<String>,
+}
+
+impl RefreshData {
+    /// 仅包含配额信息
+    pub fn quotas_only(quotas: Vec<QuotaInfo>) -> Self {
+        Self {
+            quotas,
+            account_email: None,
+            account_tier: None,
+        }
+    }
+
+    /// 包含完整信息
+    pub fn with_account(
+        quotas: Vec<QuotaInfo>,
+        account_email: Option<String>,
+        account_tier: Option<String>,
+    ) -> Self {
+        Self {
+            quotas,
+            account_email,
+            account_tier,
+        }
     }
 }
 
@@ -304,8 +356,10 @@ impl ProviderStatus {
         self.connection = ConnectionStatus::Refreshing;
     }
 
-    pub fn mark_refresh_succeeded(&mut self, quotas: Vec<QuotaInfo>) {
-        self.quotas = quotas;
+    pub fn mark_refresh_succeeded(&mut self, data: RefreshData) {
+        self.quotas = data.quotas;
+        self.account_email = data.account_email;
+        self.account_tier = data.account_tier;
         self.connection = ConnectionStatus::Connected;
         self.last_refreshed_instant = Some(Instant::now());
         self.last_updated_at = None;
@@ -406,7 +460,7 @@ mod tests {
         assert_eq!(q1.percentage(), 50.0);
 
         let q2 = QuotaInfo::new("test", 150.0, 100.0); // 溢出
-        assert_eq!(q2.percentage(), 100.0);
+        assert_eq!(q2.percentage(), 150.0); // 不 clamp，返回实际值
 
         let q3 = QuotaInfo::new("test", 0.0, 0.0); // 除零
         assert_eq!(q3.percentage(), 0.0);
@@ -421,7 +475,7 @@ mod tests {
         assert_eq!(q2.percent_remaining(), 0.0);
 
         let q3 = QuotaInfo::new("test", 150.0, 100.0); // 超出
-        assert_eq!(q3.percent_remaining(), 0.0); // clamp 到 0
+        assert_eq!(q3.percent_remaining(), -50.0); // 返回负数
 
         let q4 = QuotaInfo::new("test", 0.0, 0.0); // 除零
         assert_eq!(q4.percent_remaining(), 0.0);
@@ -581,6 +635,10 @@ mod tests {
 
         let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
         assert_eq!(q_depleted.remaining_text(), "0% left");
+
+        // 测试负数（超出配额）
+        let q_over = QuotaInfo::new("over", 120.0, 100.0);
+        assert_eq!(q_over.remaining_text(), "20% over");
     }
 
     #[test]
@@ -592,7 +650,7 @@ mod tests {
         assert_eq!(q_zero.remaining_text(), "$0.00 left");
 
         let q_exceeded = QuotaInfo::with_details("Credit", 25.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(q_exceeded.remaining_text(), "$0.00 left");
+        assert_eq!(q_exceeded.remaining_text(), "$5.00 over"); // 显示超出
     }
 
     #[test]
@@ -602,6 +660,10 @@ mod tests {
 
         let q_full = QuotaInfo::new("full", 100.0, 100.0);
         assert_eq!(q_full.usage_detail_text(), "100% used");
+
+        // 非 percentage mode（limit != 100）
+        let q_real = QuotaInfo::new("real", 30.0, 50.0);
+        assert_eq!(q_real.usage_detail_text(), "30 used / 50 total");
     }
 
     #[test]
@@ -640,10 +702,11 @@ mod tests {
         assert!(!q_both_zero.is_depleted());
 
         // 负数 used（理论上不应该出现，但测试健壮性）
-        // percent_remaining 会 clamp 到 100.0 以内
+        // percent_remaining 会返回 > 100（因为剩余量是负的负数）
         let q_negative = QuotaInfo::new("negative", -10.0, 100.0);
-        assert!(q_negative.percentage() < 0.0); // percentage 返回负数（-10%）
-        assert_eq!(q_negative.percent_remaining(), 100.0); // clamp 到最大值
+        assert_eq!(q_negative.percentage(), -10.0); // 返回负数百分比
+                                                    // 浮点数精度：使用 approx_eq
+        assert!((q_negative.percent_remaining() - 110.0).abs() < 0.01); // 剩余 110%
     }
 
     #[test]

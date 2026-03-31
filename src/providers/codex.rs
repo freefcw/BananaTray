@@ -301,7 +301,7 @@ impl AiProvider for CodexProvider {
         Self::auth_path().exists()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         let access_token = Self::get_valid_token()?;
 
         let raw = match Self::call_usage_api(&access_token) {

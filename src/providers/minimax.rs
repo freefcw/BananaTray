@@ -101,7 +101,7 @@ impl AiProvider for MiniMaxProvider {
         self.get_api_key().is_some()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         let api_key = self
             .get_api_key()
             .ok_or_else(|| ProviderError::config_missing("请设置 MINIMAX_API_KEY 环境变量"))?;

@@ -28,7 +28,7 @@ impl AiProvider for OpenCodeProvider {
         Command::new("opencode").arg("--version").output().is_ok()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         Err(ProviderError::unavailable("OpenCode 需要运行中的会话，暂不支持用量监控").into())
     }
 }

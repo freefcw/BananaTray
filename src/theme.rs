@@ -1,5 +1,6 @@
 use gpui::*;
 
+#[derive(Clone)]
 pub struct Theme {
     pub bg_base: Hsla,
     pub bg_panel: Hsla,
