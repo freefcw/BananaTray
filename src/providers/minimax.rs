@@ -4,6 +4,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rust_i18n::t;
 use serde::Deserialize;
 
 super::define_unit_provider!(MiniMaxProvider);
@@ -41,7 +42,7 @@ impl MiniMaxProvider {
                 .base_resp
                 .status_msg
                 .unwrap_or_else(|| "unknown error".to_string());
-            return Err(ProviderError::fetch_failed(&format!("API error: {}", msg)).into());
+            return Err(ProviderError::fetch_failed(&t!("hint.api_error", msg = msg)).into());
         }
 
         let model_remains = resp.model_remains.unwrap_or_default();

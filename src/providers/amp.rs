@@ -3,6 +3,7 @@ use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
+use rust_i18n::t;
 use std::process::Command;
 use std::sync::LazyLock;
 
@@ -47,9 +48,9 @@ impl AiProvider for AmpProvider {
             .map_err(|_| ProviderError::cli_not_found("amp"))?;
 
         if !output.status.success() {
-            return Err(ProviderError::fetch_failed(&format!(
-                "command failed (exit {:?})",
-                output.status.code()
+            return Err(ProviderError::fetch_failed(&t!(
+                "hint.cli_exit_failed",
+                code = output.status.code().unwrap_or(-1)
             ))
             .into());
         }
@@ -75,7 +76,11 @@ impl AiProvider for AmpProvider {
         }
 
         if quotas.is_empty() {
-            return Err(ProviderError::parse_failed("cannot parse amp usage output").into());
+            return Err(ProviderError::parse_failed(&format!(
+                "cannot parse amp usage output:\n{}",
+                output_str.trim()
+            ))
+            .into());
         }
 
         Ok(quotas)
@@ -88,9 +93,9 @@ impl AiProvider for AmpProvider {
             .map_err(|_| ProviderError::cli_not_found("amp"))?;
 
         if !output.status.success() {
-            return Err(ProviderError::fetch_failed(&format!(
-                "command failed (exit {:?})",
-                output.status.code()
+            return Err(ProviderError::fetch_failed(&t!(
+                "hint.cli_exit_failed",
+                code = output.status.code().unwrap_or(-1)
             ))
             .into());
         }
@@ -126,7 +131,11 @@ impl AiProvider for AmpProvider {
         }
 
         if quotas.is_empty() {
-            return Err(ProviderError::parse_failed("cannot parse amp usage output").into());
+            return Err(ProviderError::parse_failed(&format!(
+                "cannot parse amp usage output:\n{}",
+                output_str.trim()
+            ))
+            .into());
         }
 
         Ok(RefreshData::with_account(quotas, account_email, None))
