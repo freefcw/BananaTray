@@ -30,7 +30,11 @@ impl SettingsView {
         let cost_checked = settings.show_cost_summary;
 
         // ── AUTOMATION section ───────────────────────────────
-        let cadence_mins = settings.refresh_interval_mins;
+        let cadence_mins = if settings.refresh_interval_mins == 0 {
+            None
+        } else {
+            Some(settings.refresh_interval_mins)
+        };
         let status_state = state.clone();
         let status_checked = settings.check_provider_status;
         let notif_state = state.clone();
@@ -43,7 +47,6 @@ impl SettingsView {
 
         div()
             .flex_col()
-            .flex_1()
             .px(px(16.0))
             .pt(px(16.0))
             .pb(px(20.0))
