@@ -11,17 +11,15 @@ impl AppView {
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let state_ref = self.state.borrow();
-        let visible_provider_count = state_ref.settings.visible_provider_count.clamp(3, 6);
         let settings = state_ref.settings.clone();
         let providers = state_ref.provider_store.providers.clone();
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
-        // 仅显示已启用的 Provider tab
+        // 显示所有已启用的 Provider tab，超出宽度时横向滚动
         let nav_items: Vec<_> = provider_order
             .into_iter()
             .filter(|kind| settings.is_provider_enabled(*kind))
-            .take(visible_provider_count)
             .filter_map(|kind| {
                 providers.iter().find(|p| p.kind == kind).map(|p| {
                     (
@@ -38,14 +36,17 @@ impl AppView {
             .border_b_1()
             .border_color(theme.border_subtle)
             .px(px(8.0))
-            .pt(px(2.0)) // 减小上边距
+            .pt(px(2.0))
             .pb(px(0.0))
+            .overflow_hidden()
             .child(
                 div()
+                    .id("nav-provider-scroll")
+                    .overflow_x_scroll()
+                    .scrollbar_width(px(0.0)) // 隐藏滚动条，保持视觉简洁
                     .flex()
                     .items_center()
                     .gap(px(4.0))
-                    // 不需要背景色了，直接放在透明背景上
                     .children(nav_items.into_iter().map(|(icon, label, tab)| {
                         self.render_nav_item(icon, label, tab, active_tab, cx)
                     })),
