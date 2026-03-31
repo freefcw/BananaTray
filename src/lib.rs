@@ -2,6 +2,8 @@
 //!
 //! 注意：这是一个 bin + lib 混合 crate，lib 部分主要供测试使用。
 
+rust_i18n::i18n!("locales", fallback = "en");
+
 pub mod app_state;
 pub mod auto_launch;
 pub mod models;

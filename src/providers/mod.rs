@@ -240,6 +240,7 @@ macro_rules! register_providers {
 
 register_providers!(
     amp => AmpProvider,
+    antigravity => AntigravityProvider,
     claude => ClaudeProvider,
     codex => CodexProvider,
     copilot => CopilotProvider,

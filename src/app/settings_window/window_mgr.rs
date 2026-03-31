@@ -2,6 +2,7 @@ use super::SettingsView;
 use crate::app::AppState;
 use gpui::*;
 use log::{error, info};
+use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -198,7 +199,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
             window_bounds: Some(window_bounds),
             window_min_size: Some(size(px(560.0), px(500.0))),
             titlebar: Some(TitlebarOptions {
-                title: Some("BananaTray Settings".into()),
+                title: Some(t!("settings.title").to_string().into()),
                 ..Default::default()
             }),
             kind: WindowKind::Normal,

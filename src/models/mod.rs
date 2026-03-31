@@ -7,4 +7,4 @@ mod settings;
 pub use layout::{compute_popup_height_for_quotas, PopupLayout};
 pub use provider::{NavTab, ProviderKind, ProviderMetadata};
 pub use quota::{ConnectionStatus, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel};
-pub use settings::{AppSettings, AppTheme};
+pub use settings::{apply_locale, AppSettings, AppTheme, SUPPORTED_LANGUAGES};

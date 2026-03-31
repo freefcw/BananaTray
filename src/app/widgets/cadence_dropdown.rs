@@ -2,6 +2,7 @@ use crate::app::{persist_settings, AppState};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -33,9 +34,9 @@ const LABEL_GAP: f32 = 2.0;
 /// Format a cadence option for display
 fn format_cadence(mins: u64) -> String {
     if mins == 1 {
-        "1 minute".to_string()
+        t!("cadence.1_minute").to_string()
     } else {
-        format!("{} minutes", mins)
+        t!("cadence.n_minutes", n = mins).to_string()
     }
 }
 
@@ -69,14 +70,14 @@ fn render_cadence_label(theme: &Theme) -> Div {
             div()
                 .text_size(px(FONT_SIZE_LABEL))
                 .font_weight(FontWeight::MEDIUM)
-                .child("Refresh cadence"),
+                .child(t!("settings.refresh_cadence").to_string()),
         )
         .child(
             div()
                 .text_size(px(FONT_SIZE_DESC))
                 .line_height(relative(1.4))
                 .text_color(theme.text_secondary)
-                .child("How often BananaTray polls providers in the background."),
+                .child(t!("settings.refresh_cadence.desc").to_string()),
         )
 }
 

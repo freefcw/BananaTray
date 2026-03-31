@@ -5,6 +5,7 @@ use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
+use rust_i18n::t;
 
 impl SettingsView {
     // ══════ Right detail panel ══════
@@ -30,7 +31,7 @@ impl SettingsView {
             (
                 "src/icons/provider-unknown.svg".to_string(),
                 format!("{:?}", selected),
-                format!("{:?} · not available", selected),
+                format!("{:?} · {}", selected, t!("provider.not_available")),
             )
         };
 
@@ -159,27 +160,47 @@ impl SettingsView {
         enabled: bool,
         theme: &Theme,
     ) -> Div {
-        let state_text = if enabled { "Enabled" } else { "Disabled" };
-        let source_text = "auto";
+        let state_text = if enabled {
+            t!("provider.state.enabled").to_string()
+        } else {
+            t!("provider.state.disabled").to_string()
+        };
+        let source_text = t!("provider.source.auto").to_string();
         let updated_text = provider
             .map(|p| p.format_last_updated())
-            .unwrap_or_else(|| "Not fetched yet".to_string());
+            .unwrap_or_else(|| t!("provider.not_fetched").to_string());
         let status_text = provider
             .map(|p| match p.connection {
-                ConnectionStatus::Connected => "All Systems Operational".to_string(),
-                ConnectionStatus::Disconnected => "Not detected".to_string(),
-                ConnectionStatus::Refreshing => "Refreshing…".to_string(),
-                ConnectionStatus::Error => "Error".to_string(),
+                ConnectionStatus::Connected => t!("provider.status.operational").to_string(),
+                ConnectionStatus::Disconnected => t!("provider.status.not_detected").to_string(),
+                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
+                ConnectionStatus::Error => t!("provider.status.error").to_string(),
             })
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_else(|| t!("provider.status.unknown").to_string());
 
         div()
             .flex_col()
             .gap(px(6.0))
-            .child(render_info_row("State", state_text, theme))
-            .child(render_info_row("Source", source_text, theme))
-            .child(render_info_row("Updated", &updated_text, theme))
-            .child(render_info_row("Status", &status_text, theme))
+            .child(render_info_row(
+                &t!("provider.info.state"),
+                &state_text,
+                theme,
+            ))
+            .child(render_info_row(
+                &t!("provider.info.source"),
+                &source_text,
+                theme,
+            ))
+            .child(render_info_row(
+                &t!("provider.info.updated"),
+                &updated_text,
+                theme,
+            ))
+            .child(render_info_row(
+                &t!("provider.info.status"),
+                &status_text,
+                theme,
+            ))
     }
 
     // ══════ Usage section ══════
@@ -193,14 +214,17 @@ impl SettingsView {
         let mut section = div()
             .flex_col()
             .gap(px(8.0))
-            .child(render_detail_section_title("Usage", theme));
+            .child(render_detail_section_title(
+                &t!("provider.section.usage"),
+                theme,
+            ));
 
         if !enabled {
             return section.child(
                 div()
                     .text_size(px(12.0))
                     .text_color(theme.text_secondary)
-                    .child("Enable this provider to start tracking usage."),
+                    .child(t!("provider.enable_tracking").to_string()),
             );
         }
 
@@ -211,11 +235,11 @@ impl SettingsView {
                         section.child(crate::app::widgets::render_quota_bar(quota, false, theme));
                 }
             } else if p.connection == ConnectionStatus::Error {
-                let title = format!("Last {} fetch failed:", p.display_name());
+                let title = t!("provider.last_fetch_failed", name = p.display_name()).to_string();
                 let msg = p
                     .error_message
                     .clone()
-                    .unwrap_or_else(|| "Unknown error".to_string());
+                    .unwrap_or_else(|| t!("provider.unknown_error").to_string());
                 section = section
                     .child(
                         div()
@@ -242,7 +266,7 @@ impl SettingsView {
                     div()
                         .text_size(px(12.0))
                         .text_color(theme.text_secondary)
-                        .child("No usage yet"),
+                        .child(t!("provider.no_usage").to_string()),
                 );
             }
         } else {
@@ -250,7 +274,7 @@ impl SettingsView {
                 div()
                     .text_size(px(12.0))
                     .text_color(theme.text_secondary)
-                    .child("Provider not available"),
+                    .child(t!("provider.not_available").to_string()),
             );
         }
 
@@ -268,7 +292,10 @@ impl SettingsView {
         let mut section = div()
             .flex_col()
             .gap(px(8.0))
-            .child(render_detail_section_title("Settings", theme));
+            .child(render_detail_section_title(
+                &t!("provider.section.settings"),
+                theme,
+            ));
 
         match kind {
             ProviderKind::Copilot => {
@@ -300,10 +327,7 @@ impl SettingsView {
                         .text_size(px(12.0))
                         .line_height(relative(1.4))
                         .text_color(theme.text_secondary)
-                        .child(format!(
-                            "{} is configured automatically. No additional settings required.",
-                            display_name
-                        )),
+                        .child(t!("provider.auto_configured", name = display_name).to_string()),
                 );
             }
         }

@@ -1,5 +1,6 @@
 use crate::models::{ProviderKind, QuotaInfo};
 use log::{info, warn};
+use rust_i18n::t;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -144,19 +145,27 @@ pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
             provider_name,
             remaining_pct,
         } => (
-            format!("⚠️ {} 余量不足", provider_name),
-            format!("剩余配额仅 {:.0}%，请注意用量。", remaining_pct),
+            t!("notification.low_quota.title", name = provider_name).to_string(),
+            t!(
+                "notification.low_quota.body",
+                pct = format!("{:.0}", remaining_pct)
+            )
+            .to_string(),
         ),
         QuotaAlert::Exhausted { provider_name } => (
-            format!("🔴 {} 余额已耗尽", provider_name),
-            "配额已用完，请等待恢复或升级套餐。".to_string(),
+            t!("notification.exhausted.title", name = provider_name).to_string(),
+            t!("notification.exhausted.body").to_string(),
         ),
         QuotaAlert::Recovered {
             provider_name,
             remaining_pct,
         } => (
-            format!("✅ {} 配额已恢复", provider_name),
-            format!("配额已恢复，当前余量 {:.0}%。", remaining_pct),
+            t!("notification.recovered.title", name = provider_name).to_string(),
+            t!(
+                "notification.recovered.body",
+                pct = format!("{:.0}", remaining_pct)
+            )
+            .to_string(),
         ),
     };
 

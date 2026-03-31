@@ -5,6 +5,7 @@ use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
 use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
+use rust_i18n::t;
 
 impl AppView {
     pub(crate) fn render_provider_detail(
@@ -24,7 +25,9 @@ impl AppView {
         if let Some(provider) = provider {
             self.render_provider_panel(&provider, cx)
         } else {
-            div().child("Provider not found").into_any_element()
+            div()
+                .child(t!("provider.not_found").to_string())
+                .into_any_element()
         }
     }
 
@@ -63,7 +66,10 @@ impl AppView {
                     .text_size(px(14.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text_primary)
-                    .child(format!("{} is not enabled", display_name)),
+                    .child(format!(
+                        "{}",
+                        t!("provider.not_enabled", name = display_name)
+                    )),
             )
             .child(
                 div()
@@ -71,7 +77,7 @@ impl AppView {
                     .text_color(theme.text_secondary)
                     .text_align(TextAlign::Center)
                     .line_height(relative(1.4))
-                    .child("Enable it in Settings → Providers to start tracking quota."),
+                    .child(t!("provider.enable_hint").to_string()),
             )
             .child(
                 div()
@@ -83,7 +89,7 @@ impl AppView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.element_active)
                     .cursor_pointer()
-                    .child("Open Settings")
+                    .child(t!("provider.open_settings").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         let display_id = window.display(cx).map(|d| d.id());
                         state.borrow_mut().view_entity = None;
@@ -233,7 +239,10 @@ impl AppView {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.text_secondary)
                     .text_align(TextAlign::Center)
-                    .child(format!("Fetching {} usage data…", provider.display_name())),
+                    .child(format!(
+                        "{}",
+                        t!("provider.fetching", name = provider.display_name())
+                    )),
             )
     }
 
@@ -244,10 +253,10 @@ impl AppView {
     ) -> Div {
         let theme = cx.global::<Theme>();
         let title = match provider.connection {
-            ConnectionStatus::Connected => "Waiting for usage data",
-            ConnectionStatus::Refreshing => "Refreshing…",
-            ConnectionStatus::Disconnected => "Connection required",
-            ConnectionStatus::Error => "Refresh failed",
+            ConnectionStatus::Connected => t!("provider.waiting").to_string(),
+            ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
+            ConnectionStatus::Disconnected => t!("provider.connection_required").to_string(),
+            ConnectionStatus::Error => t!("provider.refresh_failed").to_string(),
         };
         let message = provider_logic::provider_empty_message(provider);
         let show_refresh = matches!(
@@ -271,7 +280,7 @@ impl AppView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text_primary)
                     .text_align(TextAlign::Center)
-                    .child(title),
+                    .child(title.clone()),
             )
             // 说明文字居中
             .child(
@@ -297,7 +306,7 @@ impl AppView {
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.element_active)
                         .cursor_pointer()
-                        .child("Retry")
+                        .child(t!("provider.retry").to_string())
                         .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                             entity.update(cx, |view, cx| {
                                 view.refresh_single_provider(kind, cx);

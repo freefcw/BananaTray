@@ -1,0 +1,162 @@
+_version: 1
+
+# ── Tray ──────────────────────────────────────────────────
+tray.tooltip: "BananaTray - AI Quota Monitor"
+
+# ── Tooltips ──────────────────────────────────────────────
+tooltip.dashboard: "Dashboard"
+tooltip.refresh: "Refresh"
+tooltip.settings: "Settings"
+tooltip.quit: "Quit"
+
+# ── Settings window ──────────────────────────────────────
+settings.title: "BananaTray Settings"
+
+# Settings tabs
+settings.tab.general: "General"
+settings.tab.providers: "Providers"
+settings.tab.display: "Display"
+settings.tab.advanced: "Advanced"
+settings.tab.about: "About"
+
+# General tab — section labels
+settings.section.system: "SYSTEM"
+settings.section.toolbar: "TOOLBAR"
+settings.section.usage: "USAGE"
+settings.section.automation: "AUTOMATION"
+settings.section.language: "LANGUAGE"
+
+# General tab — items
+settings.start_at_login: "Start at Login"
+settings.start_at_login.desc: "Automatically opens BananaTray when you log in."
+settings.show_dashboard: "Show Dashboard button"
+settings.show_dashboard.desc: "Display the Dashboard button in the popup toolbar."
+settings.show_refresh: "Show Refresh button"
+settings.show_refresh.desc: "Display the Refresh button in the popup toolbar."
+settings.show_cost_summary: "Show cost summary"
+settings.show_cost_summary.desc: "Reads local usage logs. Shows today + last 30 days cost in the menu."
+settings.refresh_cadence: "Refresh cadence"
+settings.refresh_cadence.desc: "How often BananaTray polls providers in the background."
+settings.check_provider_status: "Check provider status"
+settings.check_provider_status.desc: "Polls provider status pages, surfacing incidents in the icon and menu."
+settings.session_quota_notifications: "Session quota notifications"
+settings.session_quota_notifications.desc: "Notifies when the 5-hour session quota hits 0% and when it becomes available again."
+settings.notification_sound: "Notification sound"
+settings.notification_sound.desc: "Play a sound when sending quota notifications."
+settings.quit: "Quit BananaTray"
+settings.language: "Language"
+settings.language.desc: "Choose the display language for BananaTray. Changes take effect after restart."
+
+# Tray settings (popup)
+settings.auto_hide: "Auto-hide window"
+settings.auto_hide.desc: "Close the tray popover when focus leaves the app."
+settings.visible_providers: "Visible providers"
+settings.visible_providers.desc: "Show only the providers you care about in the tray header."
+
+# Placeholder tabs
+settings.display.desc: "Customize appearance, menu bar icon style, and notification preferences."
+settings.advanced.desc: "Debug logging, network proxy, and other advanced options."
+settings.about.desc: "BananaTray version info, licenses, and acknowledgements."
+settings.coming_soon: "Coming soon"
+
+# ── Provider detail (settings window) ─────────────────────
+provider.info.state: "State"
+provider.info.source: "Source"
+provider.info.updated: "Updated"
+provider.info.status: "Status"
+provider.state.enabled: "Enabled"
+provider.state.disabled: "Disabled"
+provider.source.auto: "auto"
+provider.not_fetched: "Not fetched yet"
+provider.status.operational: "All Systems Operational"
+provider.status.not_detected: "Not detected"
+provider.status.refreshing: "Refreshing…"
+provider.status.error: "Error"
+provider.status.unknown: "Unknown"
+provider.section.usage: "Usage"
+provider.section.settings: "Settings"
+provider.enable_tracking: "Enable this provider to start tracking usage."
+provider.last_fetch_failed: "Last %{name} fetch failed:"
+provider.unknown_error: "Unknown error"
+provider.no_usage: "No usage yet"
+provider.not_available: "Provider not available"
+provider.auto_configured: "%{name} is configured automatically. No additional settings required."
+provider.not_found: "Provider not found"
+
+# ── Provider panel (popup) ────────────────────────────────
+provider.not_enabled: "%{name} is not enabled"
+provider.enable_hint: "Enable it in Settings → Providers to start tracking quota."
+provider.open_settings: "Open Settings"
+provider.fetching: "Fetching %{name} usage data…"
+provider.waiting: "Waiting for usage data"
+provider.connection_required: "Connection required"
+provider.refresh_failed: "Refresh failed"
+provider.retry: "Retry"
+
+# ── Provider logic (subtitles / empty states) ─────────────
+provider.remaining_pct: "%{pct}% remaining"
+provider.used_of_total: "%{used} / %{total} used"
+provider.no_usage_details: "No usage details available yet."
+provider.cannot_refresh: "%{name} usage could not be refreshed right now."
+provider.connect_to_track: "Connect %{name} to start tracking quota."
+provider.disabled_source: "Disabled — %{source}"
+provider.refreshing_label: "refreshing..."
+provider.source_last_failed: "%{source}\nlast fetch failed"
+provider.source_failed: "%{source}\nfetch failed"
+provider.detail.last_failed: "%{source} · last fetch failed"
+provider.detail.refreshing: "%{source} · refreshing"
+provider.detail.updated: "%{source} · %{time}"
+provider.detail.not_fetched: "%{source} · usage not fetched yet"
+provider.detail.not_detected: "%{source} · not detected"
+provider.source_not_detected: "%{source} not detected..."
+
+# ── Cadence dropdown ──────────────────────────────────────
+cadence.1_minute: "1 minute"
+cadence.n_minutes: "%{n} minutes"
+
+# ── Notifications ─────────────────────────────────────────
+notification.low_quota.title: "⚠️ %{name} Quota Low"
+notification.low_quota.body: "Only %{pct}% remaining. Watch your usage."
+notification.exhausted.title: "🔴 %{name} Quota Exhausted"
+notification.exhausted.body: "Quota depleted. Wait for recovery or upgrade your plan."
+notification.recovered.title: "✅ %{name} Quota Recovered"
+notification.recovered.body: "Quota recovered. Currently at %{pct}%."
+
+# ── Time utils ────────────────────────────────────────────
+time.resets_soon: "Resets soon"
+time.resets_in_days_hours: "Resets in %{d}d %{h}h"
+time.resets_in_days: "Resets in %{d}d"
+time.resets_in_hours_mins: "Resets in %{h}h %{m}m"
+time.resets_in_hours: "Resets in %{h}h"
+time.resets_in_mins: "Resets in %{m}m"
+
+# ── Quota display ─────────────────────────────────────────
+quota.pct_left: "%{pct}% left"
+quota.pct_over: "%{pct}% over"
+quota.credit_left: "$%{amount} left"
+quota.credit_over: "$%{amount} over"
+quota.credit_detail: "$%{used} / $%{limit}"
+quota.pct_used: "%{pct}% used"
+quota.count_detail: "%{used} used / %{total} total"
+quota.update_failed: "Update failed"
+
+# ── Provider status (format_last_updated) ─────────────────
+provider.updated_just_now: "Updated just now"
+provider.updated_min_ago: "Updated %{n} min ago"
+provider.updated_hr_ago: "Updated %{n} hr ago"
+provider.waiting_for_data: "Waiting for data"
+provider.needs_attention: "Needs attention"
+provider.not_connected: "Not connected"
+
+# ── Copilot settings UI ──────────────────────────────────
+copilot.github_login: "GitHub Login"
+copilot.requires_auth: "Requires authentication via GitHub Token."
+copilot.token_configured: "Token configured"
+copilot.token_via: "%{masked} · via %{source}"
+copilot.token_hint: "Set token via config file or GITHUB_TOKEN env var"
+copilot.sign_in: "Sign in with GitHub"
+
+# ── Language names ────────────────────────────────────────
+lang.system: "System Default"
+lang.en: "English"
+lang.zh_CN: "简体中文"

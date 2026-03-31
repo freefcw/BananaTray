@@ -1,6 +1,7 @@
 /// Pure formatting and business logic, free of any UI dependencies.
 /// Extracted for testability (GPUI proc macros crash during test compilation).
 use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo};
+use rust_i18n::t;
 
 #[allow(dead_code)]
 pub fn format_amount(value: f64) -> String {
@@ -14,39 +15,37 @@ pub fn format_amount(value: f64) -> String {
 #[allow(dead_code)]
 pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     if quota.is_percentage_mode() {
-        format!("{}% remaining", format_amount(quota.limit - quota.used))
-    } else {
-        format!(
-            "{} / {} used",
-            format_amount(quota.used),
-            format_amount(quota.limit)
+        t!(
+            "provider.remaining_pct",
+            pct = format_amount(quota.limit - quota.used)
         )
+        .to_string()
+    } else {
+        t!(
+            "provider.used_of_total",
+            used = format_amount(quota.used),
+            total = format_amount(quota.limit)
+        )
+        .to_string()
     }
 }
 
 pub fn provider_empty_message(provider: &ProviderStatus) -> String {
-    // 如果有错误消息，直接返回（已经是用户友好的格式）
     if let Some(error) = &provider.error_message {
         return error.clone();
     }
 
     match provider.connection {
         ConnectionStatus::Error => {
-            format!(
-                "{} usage could not be refreshed right now.",
-                provider.display_name()
-            )
+            t!("provider.cannot_refresh", name = provider.display_name()).to_string()
         }
         ConnectionStatus::Refreshing => {
-            format!("Fetching {} usage data…", provider.display_name())
+            t!("provider.fetching", name = provider.display_name()).to_string()
         }
         ConnectionStatus::Disconnected => {
-            format!(
-                "Connect {} to start tracking quota.",
-                provider.display_name()
-            )
+            t!("provider.connect_to_track", name = provider.display_name()).to_string()
         }
-        ConnectionStatus::Connected => "No usage details available yet.".to_string(),
+        ConnectionStatus::Connected => t!("provider.no_usage_details").to_string(),
     }
 }
 
@@ -66,7 +65,7 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
 #[allow(dead_code)]
 pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
     if !provider.enabled {
-        return format!("Disabled — {}", provider.source_label());
+        return t!("provider.disabled_source", source = provider.source_label()).to_string();
     }
     match provider.connection {
         ConnectionStatus::Connected => {
@@ -76,16 +75,18 @@ pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
                 provider.source_label().to_string()
             }
         }
-        ConnectionStatus::Disconnected => {
-            format!("{} not detected...", provider.source_label())
-        }
-        ConnectionStatus::Refreshing => "refreshing...".to_string(),
+        ConnectionStatus::Disconnected => t!(
+            "provider.source_not_detected",
+            source = provider.source_label()
+        )
+        .to_string(),
+        ConnectionStatus::Refreshing => t!("provider.refreshing_label").to_string(),
         ConnectionStatus::Error => {
             let base = provider.source_label();
             if provider.error_message.is_some() {
-                format!("{}\nlast fetch failed", base)
+                t!("provider.source_last_failed", source = base).to_string()
             } else {
-                format!("{}\nfetch failed", base)
+                t!("provider.source_failed", source = base).to_string()
             }
         }
     }
@@ -94,18 +95,20 @@ pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
 pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
     let source = provider.source_label();
     match provider.connection {
-        ConnectionStatus::Error => format!("{} · last fetch failed", source),
-        ConnectionStatus::Refreshing => format!("{} · refreshing", source),
+        ConnectionStatus::Error => t!("provider.detail.last_failed", source = source).to_string(),
+        ConnectionStatus::Refreshing => {
+            t!("provider.detail.refreshing", source = source).to_string()
+        }
         ConnectionStatus::Connected => {
             if provider.last_refreshed_instant.is_some() {
                 let time = provider.format_last_updated().to_lowercase();
-                format!("{} · {}", source, time)
+                t!("provider.detail.updated", source = source, time = time).to_string()
             } else {
-                format!("{} · usage not fetched yet", source)
+                t!("provider.detail.not_fetched", source = source).to_string()
             }
         }
         ConnectionStatus::Disconnected => {
-            format!("{} · not detected", source)
+            t!("provider.detail.not_detected", source = source).to_string()
         }
     }
 }

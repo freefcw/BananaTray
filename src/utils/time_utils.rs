@@ -5,6 +5,7 @@
 //! across `gemini.rs`, `codex.rs`, and `kimi.rs`.
 
 use chrono::{DateTime, FixedOffset, NaiveDateTime};
+use rust_i18n::t;
 
 /// Parse an ISO 8601 timestamp (e.g. "2025-03-25T12:00:00Z" or with offset)
 /// into Unix epoch seconds.  Returns `None` on malformed input.
@@ -53,7 +54,7 @@ pub fn now_epoch_secs() -> i64 {
 /// Examples: "Resets in 2d 5h", "Resets in 3h 12m", "Resets in 45m", "Resets soon".
 pub fn format_countdown(delta_secs: i64) -> String {
     if delta_secs <= 0 {
-        return "Resets soon".to_string();
+        return t!("time.resets_soon").to_string();
     }
 
     let days = delta_secs / 86400;
@@ -62,18 +63,18 @@ pub fn format_countdown(delta_secs: i64) -> String {
 
     if days > 0 {
         if hours > 0 {
-            format!("Resets in {}d {}h", days, hours)
+            t!("time.resets_in_days_hours", d = days, h = hours).to_string()
         } else {
-            format!("Resets in {}d", days)
+            t!("time.resets_in_days", d = days).to_string()
         }
     } else if hours > 0 {
         if mins > 0 {
-            format!("Resets in {}h {}m", hours, mins)
+            t!("time.resets_in_hours_mins", h = hours, m = mins).to_string()
         } else {
-            format!("Resets in {}h", hours)
+            t!("time.resets_in_hours", h = hours).to_string()
         }
     } else {
-        format!("Resets in {}m", mins.max(1))
+        t!("time.resets_in_mins", m = mins.max(1)).to_string()
     }
 }
 

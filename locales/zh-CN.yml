@@ -1,0 +1,162 @@
+_version: 1
+
+# ── 托盘 ──────────────────────────────────────────────────
+tray.tooltip: "BananaTray - AI 配额监控"
+
+# ── 提示文本 ──────────────────────────────────────────────
+tooltip.dashboard: "仪表盘"
+tooltip.refresh: "刷新"
+tooltip.settings: "设置"
+tooltip.quit: "退出"
+
+# ── 设置窗口 ──────────────────────────────────────────────
+settings.title: "BananaTray 设置"
+
+# 设置选项卡
+settings.tab.general: "通用"
+settings.tab.providers: "服务商"
+settings.tab.display: "显示"
+settings.tab.advanced: "高级"
+settings.tab.about: "关于"
+
+# 通用 — 分区标签
+settings.section.system: "系统"
+settings.section.toolbar: "工具栏"
+settings.section.usage: "用量"
+settings.section.automation: "自动化"
+settings.section.language: "语言"
+
+# 通用 — 选项
+settings.start_at_login: "开机启动"
+settings.start_at_login.desc: "登录时自动启动 BananaTray。"
+settings.show_dashboard: "显示仪表盘按钮"
+settings.show_dashboard.desc: "在弹出工具栏中显示仪表盘按钮。"
+settings.show_refresh: "显示刷新按钮"
+settings.show_refresh.desc: "在弹出工具栏中显示刷新按钮。"
+settings.show_cost_summary: "显示消费概览"
+settings.show_cost_summary.desc: "读取本地使用日志，在菜单中显示今日及近 30 天的消费。"
+settings.refresh_cadence: "刷新频率"
+settings.refresh_cadence.desc: "BananaTray 在后台轮询服务商的间隔时间。"
+settings.check_provider_status: "检查服务商状态"
+settings.check_provider_status.desc: "轮询服务商状态页，在图标和菜单中展示故障信息。"
+settings.session_quota_notifications: "会话配额通知"
+settings.session_quota_notifications.desc: "当 5 小时会话配额归零或恢复可用时发送通知。"
+settings.notification_sound: "通知声音"
+settings.notification_sound.desc: "发送配额通知时播放声音。"
+settings.quit: "退出 BananaTray"
+settings.language: "语言"
+settings.language.desc: "选择 BananaTray 的界面语言。更改后重启生效。"
+
+# 托盘设置 (弹出窗口)
+settings.auto_hide: "自动隐藏窗口"
+settings.auto_hide.desc: "焦点离开应用时自动关闭托盘弹出窗口。"
+settings.visible_providers: "可见服务商数量"
+settings.visible_providers.desc: "在托盘顶部只显示你关注的服务商。"
+
+# 占位选项卡
+settings.display.desc: "自定义外观、菜单栏图标样式和通知偏好。"
+settings.advanced.desc: "调试日志、网络代理和其他高级选项。"
+settings.about.desc: "BananaTray 版本信息、许可证和致谢。"
+settings.coming_soon: "即将推出"
+
+# ── 服务商详情（设置窗口）─────────────────────────────────
+provider.info.state: "状态"
+provider.info.source: "来源"
+provider.info.updated: "更新时间"
+provider.info.status: "服务状态"
+provider.state.enabled: "已启用"
+provider.state.disabled: "已禁用"
+provider.source.auto: "自动"
+provider.not_fetched: "尚未获取"
+provider.status.operational: "系统运行正常"
+provider.status.not_detected: "未检测到"
+provider.status.refreshing: "刷新中…"
+provider.status.error: "错误"
+provider.status.unknown: "未知"
+provider.section.usage: "用量"
+provider.section.settings: "设置"
+provider.enable_tracking: "启用此服务商以开始跟踪用量。"
+provider.last_fetch_failed: "上次获取 %{name} 失败："
+provider.unknown_error: "未知错误"
+provider.no_usage: "暂无用量数据"
+provider.not_available: "服务商不可用"
+provider.auto_configured: "%{name} 已自动配置，无需额外设置。"
+provider.not_found: "未找到服务商"
+
+# ── 服务商面板（弹出窗口）────────────────────────────────
+provider.not_enabled: "%{name} 尚未启用"
+provider.enable_hint: "在 设置 → 服务商 中启用以开始跟踪配额。"
+provider.open_settings: "打开设置"
+provider.fetching: "正在获取 %{name} 用量数据…"
+provider.waiting: "等待用量数据"
+provider.connection_required: "需要连接"
+provider.refresh_failed: "刷新失败"
+provider.retry: "重试"
+
+# ── 服务商逻辑（副标题 / 空状态）─────────────────────────
+provider.remaining_pct: "剩余 %{pct}%"
+provider.used_of_total: "已用 %{used} / 共 %{total}"
+provider.no_usage_details: "暂无用量详情。"
+provider.cannot_refresh: "%{name} 暂时无法刷新用量。"
+provider.connect_to_track: "连接 %{name} 以开始跟踪配额。"
+provider.disabled_source: "已禁用 — %{source}"
+provider.refreshing_label: "刷新中..."
+provider.source_last_failed: "%{source}\n上次获取失败"
+provider.source_failed: "%{source}\n获取失败"
+provider.detail.last_failed: "%{source} · 上次获取失败"
+provider.detail.refreshing: "%{source} · 刷新中"
+provider.detail.updated: "%{source} · %{time}"
+provider.detail.not_fetched: "%{source} · 尚未获取"
+provider.detail.not_detected: "%{source} · 未检测到"
+provider.source_not_detected: "%{source} 未检测到..."
+
+# ── 刷新频率下拉 ─────────────────────────────────────────
+cadence.1_minute: "1 分钟"
+cadence.n_minutes: "%{n} 分钟"
+
+# ── 通知 ──────────────────────────────────────────────────
+notification.low_quota.title: "⚠️ %{name} 余量不足"
+notification.low_quota.body: "剩余配额仅 %{pct}%，请注意用量。"
+notification.exhausted.title: "🔴 %{name} 余额已耗尽"
+notification.exhausted.body: "配额已用完，请等待恢复或升级套餐。"
+notification.recovered.title: "✅ %{name} 配额已恢复"
+notification.recovered.body: "配额已恢复，当前余量 %{pct}%。"
+
+# ── 时间工具 ─────────────────────────────────────────────
+time.resets_soon: "即将重置"
+time.resets_in_days_hours: "%{d}天%{h}小时后重置"
+time.resets_in_days: "%{d}天后重置"
+time.resets_in_hours_mins: "%{h}小时%{m}分钟后重置"
+time.resets_in_hours: "%{h}小时后重置"
+time.resets_in_mins: "%{m}分钟后重置"
+
+# ── 配额显示 ─────────────────────────────────────────────
+quota.pct_left: "剩余 %{pct}%"
+quota.pct_over: "超出 %{pct}%"
+quota.credit_left: "剩余 $%{amount}"
+quota.credit_over: "超出 $%{amount}"
+quota.credit_detail: "$%{used} / $%{limit}"
+quota.pct_used: "已用 %{pct}%"
+quota.count_detail: "已用 %{used} / 共 %{total}"
+quota.update_failed: "更新失败"
+
+# ── 服务商状态 (format_last_updated) ─────────────────────
+provider.updated_just_now: "刚刚更新"
+provider.updated_min_ago: "%{n} 分钟前更新"
+provider.updated_hr_ago: "%{n} 小时前更新"
+provider.waiting_for_data: "等待数据"
+provider.needs_attention: "需要注意"
+provider.not_connected: "未连接"
+
+# ── Copilot 设置 UI ──────────────────────────────────────
+copilot.github_login: "GitHub 登录"
+copilot.requires_auth: "需要通过 GitHub Token 认证。"
+copilot.token_configured: "Token 已配置"
+copilot.token_via: "%{masked} · 来自 %{source}"
+copilot.token_hint: "通过配置文件或 GITHUB_TOKEN 环境变量设置 Token"
+copilot.sign_in: "通过 GitHub 登录"
+
+# ── 语言名称 ─────────────────────────────────────────────
+lang.system: "跟随系统"
+lang.en: "English"
+lang.zh_CN: "简体中文"
