@@ -3,7 +3,7 @@
 //! Uses `ureq` for type-safe HTTP requests instead of shelling out to `curl`.
 
 use anyhow::{bail, Context, Result};
-use log::debug;
+use log::{debug, warn};
 use std::sync::LazyLock;
 use ureq::Agent;
 
@@ -51,6 +51,7 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
     debug!(target: "http", "GET {} -> {}", url, status);
 
     if status >= 400 {
+        warn!(target: "http", "GET {} failed with status {}", url, status);
         bail!("HTTP GET {url} returned status {status}");
     }
 
@@ -128,6 +129,7 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
     debug!(target: "http", "POST {} -> {}", url, status);
 
     if status >= 400 {
+        warn!(target: "http", "POST {} failed with status {}", url, status);
         bail!("HTTP POST {url} returned status {status}");
     }
 
@@ -154,6 +156,7 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
     debug!(target: "http", "POST {} -> {}", url, status);
 
     if status >= 400 {
+        warn!(target: "http", "POST {} (form) failed with status {}", url, status);
         bail!("HTTP POST {url} returned status {status}");
     }
 
