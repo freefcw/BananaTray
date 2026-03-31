@@ -51,7 +51,7 @@ impl AiProvider for KiloProvider {
         Self::has_kilo_extension()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         Err(ProviderError::unavailable(
             "Kilo Code 暂不支持用量监控，它作为 VS Code 扩展运行，无公开 API",
         )

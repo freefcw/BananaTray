@@ -83,10 +83,7 @@ impl ProviderManager {
     }
 
     /// 刷新指定的 Provider
-    pub async fn refresh_provider(
-        &self,
-        kind: ProviderKind,
-    ) -> Result<Vec<crate::models::QuotaInfo>> {
+    pub async fn refresh_provider(&self, kind: ProviderKind) -> Result<crate::models::RefreshData> {
         debug!(target: "providers", "manager: refreshing provider {:?}", kind);
         if let Some(provider) = self.provider_for_kind(kind) {
             if provider.is_available().await {

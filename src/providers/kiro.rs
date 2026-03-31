@@ -146,7 +146,7 @@ impl AiProvider for KiroProvider {
         Command::new("kiro-cli").arg("--version").output().is_ok()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         let stdout = Self::run_kiro_cli()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;

@@ -94,102 +94,117 @@ impl AppView {
             .into_any_element()
     }
 
-    fn render_provider_panel(
+    fn render_account_info_card(
         &self,
         provider: &ProviderStatus,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = cx.global::<Theme>();
-        let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
-        let has_quotas = !provider.quotas.is_empty();
-
-        let card_bg = transparent_black(); // 彻底移除蓝底
-        let card_border = transparent_black();
-        let title_color = theme.text_primary;
-
+        theme: &Theme,
+        _entity: Entity<AppView>,
+    ) -> Div {
         let last_updated = provider.format_last_updated();
         let tier_badge = provider.account_tier.clone();
         let account_email = provider.account_email.clone();
 
-        let mut header_right = div().flex().items_center().gap(px(6.0));
-
-        if let Some(ref email) = account_email {
-            header_right = header_right.child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text_secondary)
-                    .child(email.clone()),
-            );
-        }
-        if let Some(ref tier) = tier_badge {
-            header_right = header_right.child(
-                div()
-                    .text_size(px(10.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .px(px(6.0))
-                    .py(px(2.0))
-                    .rounded(px(4.0))
-                    .bg(theme.bg_subtle)
-                    .border_1()
-                    .border_color(theme.border_subtle)
-                    .text_color(theme.text_primary)
-                    .child(tier.clone()),
-            );
+        // 如果既没有邮箱也没有套餐等级，只显示更新时间
+        if account_email.is_none() && tier_badge.is_none() {
+            return div()
+                .flex()
+                .justify_end()
+                .items_center()
+                .px(px(12.0))
+                .py(px(6.0))
+                .rounded(px(10.0))
+                .bg(theme.bg_card)
+                .border_1()
+                .border_color(theme.border_subtle)
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(theme.text_secondary)
+                        .child(last_updated),
+                );
         }
 
-        let mut shell = div()
+        // 有账户信息时，显示邮箱 + 套餐等级 + 更新时间
+        div()
             .flex()
-            .flex_col()
-            .gap(px(2.0)) // 极大减小留白 (1-2 pixels)
-            .px(px(4.0)) // 极大减小留白
-            .py(px(4.0)) // 极大减小留白
-            .rounded(px(8.0))
-            .bg(card_bg)
+            .justify_between()
+            .items_baseline()
+            .px(px(12.0))
+            .py(px(8.0))
+            .rounded(px(10.0))
+            .bg(theme.bg_card)
             .border_1()
-            .border_color(card_border)
+            .border_color(theme.border_subtle)
             .child(
                 div()
                     .flex()
-                    .justify_between()
                     .items_center()
-                    .child(
+                    .gap(px(8.0))
+                    .children(account_email.clone().map(|email| {
                         div()
-                            .text_size(px(15.0))
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(title_color)
-                            .child(provider.display_name().to_string()),
-                    )
-                    .child(header_right),
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_primary)
+                            .child(email)
+                    }))
+                    .children(tier_badge.map(|tier| {
+                        div()
+                            .text_size(px(10.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .rounded(px(4.0))
+                            .bg(theme.text_accent)
+                            .text_color(theme.element_active)
+                            .child(tier)
+                    })),
             )
             .child(
                 div()
                     .text_size(px(11.0))
                     .text_color(theme.text_secondary)
-                    .mt(px(-2.0))
                     .child(last_updated),
-            );
-
-        if is_refreshing {
-            // 刷新中 → 显示加载视图，替换 quota bars
-            shell = shell.child(self.render_refreshing_state(provider, theme));
-        } else if has_quotas {
-            shell = shell.children(provider.quotas.iter().enumerate().map(|(index, quota)| {
-                // 不再强调反色效果 (highlighted = false)
-                super::widgets::render_quota_bar(quota, index > 0, theme)
-            }));
-        } else {
-            shell = shell.child(self.render_provider_empty_state(provider, cx));
-        }
-
-        shell.into_any_element()
+            )
     }
 
-    fn render_refreshing_state(
+    fn render_provider_panel(
         &self,
         provider: &ProviderStatus,
-        theme: &Theme,
-    ) -> impl IntoElement {
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // 先获取所有需要的数据，避免借用冲突
+        let entity = cx.entity().clone();
+        let theme = Theme::clone(cx.global::<Theme>());
+        let provider = provider.clone();
+        let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
+        let has_quotas = !provider.quotas.is_empty();
+
+        // 创建账户信息卡片（不需要 cx，因为 entity 已经 clone）
+        let account_card = self.render_account_info_card(&provider, &theme, entity);
+
+        // 创建配额信息容器
+        let quotas_container = if is_refreshing {
+            self.render_refreshing_state(&provider, &theme)
+        } else if has_quotas {
+            div().flex_col().gap(px(8.0)).children(
+                provider.quotas.iter().enumerate().map(|(index, quota)| {
+                    super::widgets::render_quota_bar(quota, index > 0, &theme)
+                }),
+            )
+        } else {
+            self.render_provider_empty_state(&provider, cx)
+        };
+
+        // 整体布局：账户卡片 + 配额容器
+        div()
+            .flex_col()
+            .gap(px(12.0))
+            .child(account_card)
+            .child(quotas_container)
+            .into_any_element()
+    }
+
+    fn render_refreshing_state(&self, provider: &ProviderStatus, theme: &Theme) -> Div {
         div()
             .w_full()
             .gap(px(12.0))
@@ -226,7 +241,7 @@ impl AppView {
         &self,
         provider: &ProviderStatus,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> Div {
         let theme = cx.global::<Theme>();
         let title = match provider.connection {
             ConnectionStatus::Connected => "Waiting for usage data",

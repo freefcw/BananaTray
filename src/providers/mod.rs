@@ -1,6 +1,6 @@
 pub mod manager;
 
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -210,7 +210,19 @@ pub trait AiProvider: Send + Sync {
     }
 
     /// 核心方法：拉取最新的配额/用量情况
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>>;
+    async fn refresh(&self) -> Result<RefreshData> {
+        // 默认实现：调用 refresh_quotas 并包装为 RefreshData
+        let quotas = self.refresh_quotas().await?;
+        Ok(RefreshData::quotas_only(quotas))
+    }
+
+    /// 辅助方法：只返回配额列表（向后兼容）
+    /// 如果 Provider 没有账户信息需求，可以实现这个方法
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
+        Err(anyhow::anyhow!(
+            "Provider must implement either refresh or refresh_quotas"
+        ))
+    }
 }
 
 macro_rules! register_providers {

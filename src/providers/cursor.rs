@@ -252,7 +252,7 @@ impl AiProvider for CursorProvider {
         Self::db_path().exists()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         let access_token =
             Self::read_access_token().context("Failed to read Cursor access token")?;
 

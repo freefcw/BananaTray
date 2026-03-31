@@ -141,7 +141,7 @@ impl AiProvider for KimiProvider {
         Command::new("kimi").arg("--version").output().is_ok()
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         if let Some(token) = self.get_token() {
             return self.fetch_quota_via_api(&token);
         }

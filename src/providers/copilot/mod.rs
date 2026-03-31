@@ -1,7 +1,7 @@
 pub mod settings_ui;
 
 use super::AiProvider;
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData};
 use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -169,7 +169,7 @@ impl AiProvider for CopilotProvider {
         available
     }
 
-    async fn refresh(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh(&self) -> Result<RefreshData> {
         let token_status = resolve_token(None);
 
         let token = token_status.token
@@ -241,7 +241,11 @@ impl AiProvider for CopilotProvider {
             bail!("No quota data found in Copilot API response.");
         };
 
-        Ok(vec![quota])
+        Ok(RefreshData::with_account(
+            vec![quota],
+            None, // GitHub Copilot 不提供账户邮箱
+            Some(plan_label),
+        ))
     }
 }
 
