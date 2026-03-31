@@ -1,86 +1,138 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
-use crate::utils::interactive_runner::{InteractiveOptions, InteractiveRunner};
+use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData};
 use crate::utils::text_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
 use std::process::Command;
 use std::sync::LazyLock;
-use std::time::Duration;
+
+const KIRO_CLI: &str = "kiro-cli";
 
 // 预编译的正则表达式
 static CREDITS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Credits \(([0-9.]+) of ([0-9.]+) covered in plan\)").unwrap());
+// "Bonus credits: 122.54/500 credits used, expires in 29 days"
+static BONUS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Bonus credits:\s*([0-9.]+)/([0-9.]+)\s*credits used,\s*expires in (\d+) days")
+        .unwrap()
+});
+// "resets on 2026-04-01" or "resets on 03/01"
 static RESET_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"resets on (\d{4}-\d{2}-\d{2})").unwrap());
+    LazyLock::new(|| Regex::new(r"resets on (\d{2,4}[-/]\d{2}(?:[-/]\d{2})?)").unwrap());
+static TIER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\|\s*(KIRO\s+\w+)").unwrap());
+static WHOAMI_EMAIL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^Email:\s*(.+)$").unwrap());
 
 super::define_unit_provider!(KiroProvider);
 
 impl KiroProvider {
-    /// Run `kiro-cli chat` interactively and send `/usage` command.
+    /// Run `kiro-cli chat --no-interactive "/usage"` to get usage data.
     ///
-    /// kiro-cli chat initializes MCP servers first (shows a spinner for several
-    /// seconds), then displays a prompt. We must wait for that init to finish
-    /// before sending `/usage`, otherwise the command gets lost.
-    fn run_kiro_cli() -> Result<String> {
+    /// `--no-interactive` mode outputs usage directly to stdout without
+    /// requiring a PTY, logo, or MCP initialization.
+    fn run_usage() -> Result<String> {
         let start = std::time::Instant::now();
-        log::info!(target: "providers::kiro", "Starting kiro-cli chat for /usage");
+        log::info!(target: "providers::kiro", "Running kiro-cli chat --no-interactive /usage");
 
-        let runner = InteractiveRunner::new();
-
-        // Phase 1: Start `kiro-cli chat` with no input, wait for MCP init to finish.
-        // The ready signal is the chat prompt (e.g. "(/usage for more detail)").
-        // We use a long init but short idle timeout so the spinner doesn't block.
-        let mut opts_init = InteractiveOptions {
-            timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(2),
-            init_delay: Duration::from_millis(200),
-            arguments: vec!["chat".to_string()],
-            ..Default::default()
-        };
-        // Don't send input yet - let the MCP init complete first
-        // Use auto_response: when the prompt line appears, send /usage
-        opts_init
-            .auto_responses
-            .insert("/usage for more detail".to_string(), "/usage\r".to_string());
-
-        let result = runner
-            .run("kiro-cli", "", opts_init)
+        let output = Command::new(KIRO_CLI)
+            .args(["chat", "--no-interactive", "/usage"])
+            .output()
             .context("Failed to run kiro-cli")?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // kiro-cli writes usage output to stderr, so merge both streams
+        let combined = if stdout.trim().is_empty() {
+            stderr.to_string()
+        } else {
+            stdout.to_string()
+        };
 
         log::info!(
             target: "providers::kiro",
-            "kiro-cli completed in {:.2}s, exit_code={:?}, output_len={}, output_preview={:?}",
+            "kiro-cli completed in {:.2}s, exit_code={}, stdout_len={}, stderr_len={}, using={}",
             start.elapsed().as_secs_f64(),
-            result.exit_code,
-            result.output.len(),
-            &result.output[..result.output.len().min(500)]
+            output.status,
+            stdout.len(),
+            stderr.len(),
+            if stdout.trim().is_empty() { "stderr" } else { "stdout" },
         );
 
-        Ok(result.output)
+        Ok(combined)
     }
 
-    /// Parse the output of `kiro-cli /usage` into quota entries.
+    /// Run `kiro-cli whoami` to get account email.
     ///
     /// Sample output:
     /// ```text
-    /// Estimated Usage | resets on 2026-04-01 | KIRO FREE
-    /// Credits (5.13 of 50 covered in plan)
-    /// ████████████████ 10%
+    /// Logged in with GitHub
+    /// Email: freefcw@gmail.com
     /// ```
+    fn read_account_email() -> Option<String> {
+        let output = Command::new(KIRO_CLI).arg("whoami").output().ok()?;
+
+        if !output.status.success() {
+            log::warn!(target: "providers::kiro", "kiro-cli whoami failed: {:?}", output.status);
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Self::parse_whoami_email(&stdout)
+    }
+
+    /// Parse email from `kiro-cli whoami` output.
+    fn parse_whoami_email(raw: &str) -> Option<String> {
+        for line in raw.lines() {
+            let line = line.trim();
+            if let Some(caps) = WHOAMI_EMAIL_RE.captures(line) {
+                let email = caps[1].trim().to_string();
+                if !email.is_empty() {
+                    return Some(email);
+                }
+            }
+        }
+        None
+    }
+
+    /// Parse the output of `kiro-cli chat --no-interactive "/usage"`.
+    ///
+    /// Handles two quota types:
+    /// - **Regular credits**: `Credits (12.39 of 50 covered in plan)`
+    /// - **Bonus credits**: `Bonus credits: 122.54/500 credits used, expires in 29 days`
+    ///
+    /// Reset date formats: `resets on 2026-04-01` or `resets on 03/01`
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
-        let clean = text_utils::strip_ansi(raw);
+        let clean = text_utils::strip_terminal_noise(raw);
         let mut quotas = Vec::new();
 
-        // Parse credits
+        let reset_text = RESET_RE
+            .captures(&clean)
+            .map(|c| format!("Resets on {}", &c[1]));
+
+        // Bonus credits (e.g. "Bonus credits: 122.54/500 credits used, expires in 29 days")
+        if let Some(caps) = BONUS_RE.captures(&clean) {
+            let used: f64 = caps[1].parse().unwrap_or(0.0);
+            let total: f64 = caps[2].parse().unwrap_or(0.0);
+            let days: u32 = caps[3].parse().unwrap_or(0);
+
+            if total > 0.0 {
+                let expiry = format!("Expires in {} days", days);
+                quotas.push(QuotaInfo::with_details(
+                    "Bonus Credits",
+                    used,
+                    total,
+                    QuotaType::Credit,
+                    Some(expiry),
+                ));
+            }
+        }
+
+        // Regular credits (e.g. "Credits (12.39 of 50 covered in plan)")
         if let Some(caps) = CREDITS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
-
-            let reset_text = RESET_RE
-                .captures(&clean)
-                .map(|c| format!("Resets on {}", &c[1]));
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(
@@ -94,6 +146,17 @@ impl KiroProvider {
         }
 
         Ok(quotas)
+    }
+
+    /// Extract account tier (e.g. "KIRO FREE", "KIRO PRO") from usage output.
+    fn parse_account_tier(raw: &str) -> Option<String> {
+        let clean = text_utils::strip_terminal_noise(raw);
+        for line in clean.lines() {
+            if let Some(caps) = TIER_RE.captures(line.trim()) {
+                return Some(caps[1].trim().to_string());
+            }
+        }
+        None
     }
 }
 
@@ -116,19 +179,24 @@ impl AiProvider for KiroProvider {
     }
 
     async fn is_available(&self) -> bool {
-        Command::new("kiro-cli").arg("--version").output().is_ok()
+        Command::new(KIRO_CLI).arg("--version").output().is_ok()
     }
 
-    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
+    async fn refresh(&self) -> Result<RefreshData> {
         let start = std::time::Instant::now();
-        let stdout = Self::run_kiro_cli()?;
+        let stdout = Self::run_usage()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;
+        let account_tier = Self::parse_account_tier(&stdout);
+        let account_email = Self::read_account_email();
+
         log::info!(
             target: "providers::kiro",
-            "Parsed {} quota(s) in {:.2}s total",
+            "Parsed {} quota(s) in {:.2}s, tier={:?}, email={:?}",
             quotas.len(),
-            start.elapsed().as_secs_f64()
+            start.elapsed().as_secs_f64(),
+            account_tier,
+            account_email,
         );
 
         if quotas.is_empty() {
@@ -139,7 +207,11 @@ impl AiProvider for KiroProvider {
             .into());
         }
 
-        Ok(quotas)
+        Ok(RefreshData::with_account(
+            quotas,
+            account_email,
+            account_tier,
+        ))
     }
 }
 
@@ -147,36 +219,88 @@ impl AiProvider for KiroProvider {
 mod tests {
     use super::*;
 
-    const SAMPLE_OUTPUT: &str = r#"
-Estimated Usage | resets on 2026-04-01 | KIRO FREE
-Credits (5.13 of 50 covered in plan)
-████████████████ 10%
+    const SAMPLE_OUTPUT: &str = "\
+\x1b[1mEstimated Usage\x1b[0m | resets on 2026-04-01 | \x1b[38;5;141mKIRO FREE\x1b[0m
+\x1b[1mCredits\x1b[0m (12.39 of 50 covered in plan)
+\x1b[38;5;141m███████████████████\x1b[38;5;244m█████████████████████████████████████████████████████████████\x1b[0m 24%
+
+Overages: \x1b[1mDisabled\x1b[0m
+
+To manage your plan or configure overages navigate to \x1b[38;5;141mhttps://app.kiro.dev/account/usage\x1b[0m
+";
+
+    const SAMPLE_WITH_BONUS: &str = "\
+Estimated Usage | resets on 03/01 | KIRO FREE
+
+\u{1f381} Bonus credits: 122.54/500 credits used, expires in 29 days
+
+Credits (0.00 of 50 covered in plan)
+\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588} 0%
 
 Overages: Disabled
-"#;
+";
 
     #[test]
-    fn test_parse_credits() {
+    fn test_parse_credits_from_real_output() {
         let quotas = KiroProvider::parse_usage_output(SAMPLE_OUTPUT).unwrap();
         assert_eq!(quotas.len(), 1);
 
         let credits = &quotas[0];
         assert_eq!(credits.label, "Credits");
-        assert!((credits.used - 5.13).abs() < 0.01);
+        assert!((credits.used - 12.39).abs() < 0.01);
         assert!((credits.limit - 50.0).abs() < 0.01);
         assert_eq!(credits.quota_type, QuotaType::General);
         assert_eq!(credits.reset_at.as_deref(), Some("Resets on 2026-04-01"));
     }
 
     #[test]
-    fn test_parse_with_ansi_codes() {
-        let output = "\x1b[32mEstimated Usage | resets on 2026-05-15 | KIRO FREE\x1b[0m\nCredits (25.50 of 100 covered in plan)\n████████████ 26%\n";
+    fn test_parse_credits_plain() {
+        let output = "Estimated Usage | resets on 2026-05-15 | KIRO FREE\nCredits (25.50 of 100 covered in plan)\n";
         let quotas = KiroProvider::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 1);
-
         assert!((quotas[0].used - 25.50).abs() < 0.01);
         assert!((quotas[0].limit - 100.0).abs() < 0.01);
         assert_eq!(quotas[0].reset_at.as_deref(), Some("Resets on 2026-05-15"));
+    }
+
+    #[test]
+    fn test_parse_reset_date_mm_dd() {
+        let output =
+            "Estimated Usage | resets on 03/01 | KIRO FREE\nCredits (5.0 of 50 covered in plan)\n";
+        let quotas = KiroProvider::parse_usage_output(output).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert_eq!(quotas[0].reset_at.as_deref(), Some("Resets on 03/01"));
+    }
+
+    #[test]
+    fn test_parse_bonus_and_regular_credits() {
+        let quotas = KiroProvider::parse_usage_output(SAMPLE_WITH_BONUS).unwrap();
+        assert_eq!(quotas.len(), 2);
+
+        let bonus = &quotas[0];
+        assert_eq!(bonus.label, "Bonus Credits");
+        assert!((bonus.used - 122.54).abs() < 0.01);
+        assert!((bonus.limit - 500.0).abs() < 0.01);
+        assert_eq!(bonus.quota_type, QuotaType::Credit);
+        assert_eq!(bonus.reset_at.as_deref(), Some("Expires in 29 days"));
+
+        let regular = &quotas[1];
+        assert_eq!(regular.label, "Credits");
+        assert!((regular.used - 0.0).abs() < 0.01);
+        assert!((regular.limit - 50.0).abs() < 0.01);
+        assert_eq!(regular.quota_type, QuotaType::General);
+        assert_eq!(regular.reset_at.as_deref(), Some("Resets on 03/01"));
+    }
+
+    #[test]
+    fn test_parse_bonus_only() {
+        let output = "Bonus credits: 10.5/100 credits used, expires in 5 days\n";
+        let quotas = KiroProvider::parse_usage_output(output).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert_eq!(quotas[0].label, "Bonus Credits");
+        assert!((quotas[0].used - 10.5).abs() < 0.01);
+        assert!((quotas[0].limit - 100.0).abs() < 0.01);
+        assert_eq!(quotas[0].reset_at.as_deref(), Some("Expires in 5 days"));
     }
 
     #[test]
@@ -186,9 +310,48 @@ Overages: Disabled
     }
 
     #[test]
-    fn test_strip_ansi() {
-        let input = "\x1b[31mhello\x1b[0m world";
-        let clean = text_utils::strip_ansi(input);
-        assert_eq!(clean, "hello world");
+    fn test_parse_tier_from_real_output() {
+        let tier = KiroProvider::parse_account_tier(SAMPLE_OUTPUT);
+        assert_eq!(tier.as_deref(), Some("KIRO FREE"));
+    }
+
+    #[test]
+    fn test_parse_tier_pro() {
+        let output = "Estimated Usage | resets on 2026-04-01 | KIRO PRO\nCredits (10.0 of 200 covered in plan)\n";
+        let tier = KiroProvider::parse_account_tier(output);
+        assert_eq!(tier.as_deref(), Some("KIRO PRO"));
+    }
+
+    #[test]
+    fn test_parse_tier_with_ansi() {
+        let output = "Estimated Usage | resets on 2026-04-01 | \x1b[38;5;141mKIRO FREE\x1b[0m\n";
+        let tier = KiroProvider::parse_account_tier(output);
+        assert_eq!(tier.as_deref(), Some("KIRO FREE"));
+    }
+
+    #[test]
+    fn test_parse_tier_not_found() {
+        let tier = KiroProvider::parse_account_tier("some random output");
+        assert!(tier.is_none());
+    }
+
+    #[test]
+    fn test_parse_whoami_email() {
+        let output = "Logged in with GitHub\nEmail: freefcw@gmail.com\n";
+        let email = KiroProvider::parse_whoami_email(output);
+        assert_eq!(email.as_deref(), Some("freefcw@gmail.com"));
+    }
+
+    #[test]
+    fn test_parse_whoami_email_with_spaces() {
+        let output = "Logged in with GitHub\n  Email:   user@example.com  \n";
+        let email = KiroProvider::parse_whoami_email(output);
+        assert_eq!(email.as_deref(), Some("user@example.com"));
+    }
+
+    #[test]
+    fn test_parse_whoami_no_email() {
+        let email = KiroProvider::parse_whoami_email("Not logged in\n");
+        assert!(email.is_none());
     }
 }
