@@ -32,9 +32,9 @@ impl CursorProvider {
             .map_err(|_| ProviderError::cli_not_found("sqlite3"))?;
 
         if !output.status.success() {
-            return Err(ProviderError::fetch_failed(&format!(
-                "sqlite3 exit code {:?}",
-                output.status.code()
+            return Err(ProviderError::fetch_failed(&t!(
+                "hint.cli_exit_failed",
+                code = output.status.code().unwrap_or(-1)
             ))
             .into());
         }

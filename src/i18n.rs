@@ -186,4 +186,43 @@ mod tests {
             );
         }
     }
+
+    // ── i18n key coverage ────────────────────────────────────
+
+    #[test]
+    fn all_hint_keys_exist_in_locales() {
+        // 代码中使用的所有 hint key（仅包含面向用户的提示）
+        let required_keys = [
+            "hint.set_env_var",
+            "hint.login_cli",
+            "hint.relogin_cli",
+            "hint.refresh_cli",
+            "hint.login_app",
+            "hint.cli_exit_failed",
+            "hint.api_http_error",
+            "hint.api_error",
+            "hint.no_oauth_creds",
+            "hint.both_unavailable",
+            "hint.trust_folder",
+            "hint.cannot_parse_quota",
+            "hint.token_still_invalid",
+        ];
+
+        // 测试每个 locale
+        for locale in ["en", "zh-CN"] {
+            rust_i18n::set_locale(locale);
+            for key in &required_keys {
+                let result = rust_i18n::t!(*key);
+                // 如果 key 不存在，rust_i18n 会返回 key 本身
+                assert_ne!(
+                    result, *key,
+                    "Missing i18n key '{}' in locale '{}'",
+                    key, locale
+                );
+            }
+        }
+
+        // 恢复到 en
+        rust_i18n::set_locale("en");
+    }
 }
