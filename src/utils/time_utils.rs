@@ -151,6 +151,7 @@ mod tests {
 
     #[test]
     fn test_format_countdown_values() {
+        rust_i18n::set_locale("en");
         assert_eq!(format_countdown(0), "Resets soon");
         assert_eq!(format_countdown(-100), "Resets soon");
         assert_eq!(format_countdown(60), "Resets in 1m");

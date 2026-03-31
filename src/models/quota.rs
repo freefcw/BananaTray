@@ -457,6 +457,11 @@ impl ProviderStatus {
 mod tests {
     use super::*;
 
+    /// 确保 i18n 测试使用英语 locale
+    fn setup_locale() {
+        rust_i18n::set_locale("en");
+    }
+
     // ========================================================================
     // 基础计算测试
     // ========================================================================
@@ -637,6 +642,7 @@ mod tests {
 
     #[test]
     fn test_remaining_text_percentage() {
+        setup_locale();
         let q = QuotaInfo::new("test", 30.0, 100.0);
         assert_eq!(q.remaining_text(), "70% left");
 
@@ -650,6 +656,7 @@ mod tests {
 
     #[test]
     fn test_remaining_text_credit() {
+        setup_locale();
         let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
         assert_eq!(q.remaining_text(), "$15.00 left");
 
@@ -662,6 +669,7 @@ mod tests {
 
     #[test]
     fn test_usage_detail_text_percentage() {
+        setup_locale();
         let q = QuotaInfo::new("test", 30.0, 100.0);
         assert_eq!(q.usage_detail_text(), "30% used");
 
@@ -675,6 +683,7 @@ mod tests {
 
     #[test]
     fn test_usage_detail_text_credit() {
+        setup_locale();
         let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
         assert_eq!(q.usage_detail_text(), "$5.00 / $20.00");
 
@@ -685,6 +694,7 @@ mod tests {
     #[test]
     #[allow(deprecated)]
     fn test_deprecated_api_compatibility() {
+        setup_locale();
         // 验证 deprecated API 仍然工作
         let q = QuotaInfo::new("test", 30.0, 100.0);
         assert_eq!(q.display_text(), q.remaining_text());
@@ -723,5 +733,87 @@ mod tests {
 
         let q_real = QuotaInfo::new("real", 5.0, 10.0);
         assert!(!q_real.is_percentage_mode());
+    }
+
+    // ========================================================================
+    // format_last_updated 测试
+    // ========================================================================
+
+    fn make_test_provider(connection: ConnectionStatus) -> ProviderStatus {
+        ProviderStatus {
+            kind: ProviderKind::Claude,
+            metadata: ProviderMetadata {
+                kind: ProviderKind::Claude,
+                display_name: "Claude".to_string(),
+                brand_name: "Anthropic".to_string(),
+                source_label: "test".to_string(),
+                account_hint: "test".to_string(),
+                icon_asset: "test.svg".to_string(),
+                dashboard_url: "https://example.com".to_string(),
+            },
+            enabled: true,
+            connection,
+            quotas: vec![],
+            account_email: None,
+            is_paid: false,
+            account_tier: None,
+            last_updated_at: None,
+            error_message: None,
+            last_refreshed_instant: None,
+        }
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_connected() {
+        setup_locale();
+        let p = make_test_provider(ConnectionStatus::Connected);
+        assert_eq!(p.format_last_updated(), "Waiting for data");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_refreshing() {
+        setup_locale();
+        let p = make_test_provider(ConnectionStatus::Refreshing);
+        assert_eq!(p.format_last_updated(), "Refreshing…");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_error() {
+        setup_locale();
+        let p = make_test_provider(ConnectionStatus::Error);
+        assert_eq!(p.format_last_updated(), "Needs attention");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_disconnected() {
+        setup_locale();
+        let p = make_test_provider(ConnectionStatus::Disconnected);
+        assert_eq!(p.format_last_updated(), "Not connected");
+    }
+
+    #[test]
+    fn format_last_updated_with_text_fallback() {
+        setup_locale();
+        let mut p = make_test_provider(ConnectionStatus::Connected);
+        p.last_updated_at = Some("Custom text".to_string());
+        assert_eq!(p.format_last_updated(), "Custom text");
+    }
+
+    #[test]
+    fn format_last_updated_just_now() {
+        setup_locale();
+        let mut p = make_test_provider(ConnectionStatus::Connected);
+        p.last_refreshed_instant = Some(std::time::Instant::now());
+        assert_eq!(p.format_last_updated(), "Updated just now");
+    }
+
+    #[test]
+    fn mark_refresh_failed_sets_update_text() {
+        setup_locale();
+        let mut p = make_test_provider(ConnectionStatus::Connected);
+        p.mark_refresh_failed("timeout".to_string());
+        assert_eq!(p.last_updated_at.as_deref(), Some("Update failed"));
+        assert_eq!(p.error_message.as_deref(), Some("timeout"));
+        assert_eq!(p.connection, ConnectionStatus::Error);
     }
 }

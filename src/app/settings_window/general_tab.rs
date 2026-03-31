@@ -281,7 +281,7 @@ impl SettingsView {
 
     /// Render language selector card with radio-button style options
     fn render_language_selector(&self, current: &str, theme: &Theme) -> Div {
-        use crate::models::SUPPORTED_LANGUAGES;
+        use crate::i18n::SUPPORTED_LANGUAGES;
 
         let mut card = render_card()
             .flex_col()
@@ -346,7 +346,7 @@ impl SettingsView {
                         let settings = {
                             let mut s = state.borrow_mut();
                             s.settings.language = code_owned.clone();
-                            crate::models::apply_locale(&s.settings.language);
+                            crate::i18n::apply_locale(&s.settings.language);
                             s.settings.clone()
                         };
                         persist_settings(&settings);
