@@ -308,6 +308,19 @@ impl RefreshData {
 // 连接状态 & Provider 状态
 // ============================================================================
 
+/// 错误类型分类（用于 UI 决定操作）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ErrorKind {
+    #[default]
+    Unknown,
+    /// 配置缺失 → 显示"打开配置"
+    ConfigMissing,
+    /// 认证问题 → 显示"打开配置"
+    AuthRequired,
+    /// 网络问题 → 显示"重试"
+    NetworkError,
+}
+
 /// 连接状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionStatus {
@@ -337,6 +350,9 @@ pub struct ProviderStatus {
     pub last_updated_at: Option<String>,
     /// 最近一次刷新失败时的提示文案
     pub error_message: Option<String>,
+    /// 错误类型分类（用于 UI 决定操作）
+    #[serde(default)]
+    pub error_kind: ErrorKind,
     /// 上次成功刷新的时刻（不序列化，用于计算相对时间）
     #[serde(skip)]
     pub last_refreshed_instant: Option<Instant>,
@@ -355,6 +371,7 @@ impl ProviderStatus {
             account_tier: None,
             last_updated_at: None,
             error_message: None,
+            error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
         }
     }
@@ -371,6 +388,7 @@ impl ProviderStatus {
         self.last_refreshed_instant = Some(Instant::now());
         self.last_updated_at = None;
         self.error_message = None;
+        self.error_kind = ErrorKind::default();
     }
 
     pub fn mark_unavailable(&mut self, message: String) {
@@ -380,7 +398,8 @@ impl ProviderStatus {
         self.error_message = Some(message);
     }
 
-    pub fn mark_refresh_failed(&mut self, error: String) {
+    /// 标记刷新失败，同时设置错误类型
+    pub fn mark_refresh_failed(&mut self, error: String, error_kind: ErrorKind) {
         if self.quotas.is_empty() {
             self.connection = ConnectionStatus::Error;
         } else {
@@ -388,6 +407,7 @@ impl ProviderStatus {
         }
         self.last_updated_at = Some(t!("quota.update_failed").to_string());
         self.error_message = Some(error);
+        self.error_kind = error_kind;
     }
 
     /// 兼容旧的扁平化访问接口
@@ -759,6 +779,7 @@ mod tests {
             account_tier: None,
             last_updated_at: None,
             error_message: None,
+            error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
         }
     }
@@ -811,9 +832,10 @@ mod tests {
     fn mark_refresh_failed_sets_update_text() {
         setup_locale();
         let mut p = make_test_provider(ConnectionStatus::Connected);
-        p.mark_refresh_failed("timeout".to_string());
+        p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
         assert_eq!(p.last_updated_at.as_deref(), Some("Update failed"));
         assert_eq!(p.error_message.as_deref(), Some("timeout"));
         assert_eq!(p.connection, ConnectionStatus::Error);
+        assert_eq!(p.error_kind, ErrorKind::NetworkError);
     }
 }

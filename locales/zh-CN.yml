@@ -92,6 +92,7 @@ provider.waiting: "等待用量数据"
 provider.connection_required: "需要连接"
 provider.refresh_failed: "刷新失败"
 provider.retry: "重试"
+provider.open_config: "打开配置"
 
 # ── 服务商逻辑（副标题 / 空状态）─────────────────────────
 provider.remaining_pct: "剩余 %{pct}%"
@@ -154,8 +155,9 @@ copilot.github_login: "GitHub 登录"
 copilot.requires_auth: "需要通过 GitHub Token 认证。"
 copilot.token_configured: "Token 已配置"
 copilot.token_via: "%{masked} · 来自 %{source}"
-copilot.token_hint: "通过配置文件或 GITHUB_TOKEN 环境变量设置 Token"
-copilot.sign_in: "通过 GitHub 登录"
+copilot.token_hint: "点击下方按钮创建 Classic PAT（需要 copilot 权限），创建后自动检测。"
+copilot.create_token: "创建 GitHub Token"
+copilot.clear_token: "清除 Token"
 
 # ── 语言名称 ─────────────────────────────────────────────
 lang.system: "跟随系统"

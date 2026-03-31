@@ -1,7 +1,9 @@
 use super::provider_logic;
-use super::settings_window::schedule_open_settings_window;
+use super::settings_window::{
+    schedule_open_settings_window, schedule_open_settings_window_with_provider,
+};
 use super::AppView;
-use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
+use crate::models::{ConnectionStatus, ErrorKind, ProviderKind, ProviderStatus};
 use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
@@ -262,6 +264,12 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let is_error = provider.connection == ConnectionStatus::Error;
 
+        // 检测是否为配置错误（需要显示"打开配置"而非"重试"）
+        let is_config_error = matches!(
+            provider.error_kind,
+            ErrorKind::ConfigMissing | ErrorKind::AuthRequired
+        );
+
         let (title, message) = if is_error {
             // 错误状态：优先显示错误消息作为标题
             let error_msg = provider.error_message.as_deref().unwrap_or("");
@@ -280,12 +288,13 @@ impl AppView {
             (title, message)
         };
 
-        let show_refresh = matches!(
+        let show_action = matches!(
             provider.connection,
             ConnectionStatus::Error | ConnectionStatus::Disconnected
         );
         let kind = provider.kind;
         let entity = cx.entity().clone();
+        let state = self.state.clone();
 
         let mut container = div()
             .w_full()
@@ -322,26 +331,54 @@ impl AppView {
             );
         }
 
-        if show_refresh {
-            container = container.child(
-                div().w_full().flex().justify_center().mt(px(4.0)).child(
-                    div()
-                        .px(px(12.0))
-                        .py(px(6.0))
-                        .rounded(px(8.0))
-                        .bg(theme.text_accent)
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.element_active)
-                        .cursor_pointer()
-                        .child(t!("provider.retry").to_string())
-                        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                            entity.update(cx, |view, cx| {
-                                view.refresh_single_provider(kind, cx);
-                            });
-                        }),
-                ),
-            );
+        if show_action {
+            // 配置错误：显示"打开配置"按钮
+            if is_config_error {
+                let state_for_action = state.clone();
+                container = container.child(
+                    div().w_full().flex().justify_center().mt(px(4.0)).child(
+                        div()
+                            .px(px(12.0))
+                            .py(px(6.0))
+                            .rounded(px(8.0))
+                            .bg(theme.text_accent)
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .child(t!("provider.open_config").to_string())
+                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                schedule_open_settings_window_with_provider(
+                                    state_for_action.clone(),
+                                    kind,
+                                    window.display(cx).map(|d| d.id()),
+                                    cx,
+                                );
+                            }),
+                    ),
+                );
+            } else {
+                // 其他错误：显示"重试"按钮
+                container = container.child(
+                    div().w_full().flex().justify_center().mt(px(4.0)).child(
+                        div()
+                            .px(px(12.0))
+                            .py(px(6.0))
+                            .rounded(px(8.0))
+                            .bg(theme.text_accent)
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.element_active)
+                            .cursor_pointer()
+                            .child(t!("provider.retry").to_string())
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                entity.update(cx, |view, cx| {
+                                    view.refresh_single_provider(kind, cx);
+                                });
+                            }),
+                    ),
+                );
+            }
         }
 
         container

@@ -83,7 +83,9 @@ pub struct SettingsUiState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus};
+    use crate::models::{
+        ConnectionStatus, ErrorKind, ProviderKind, ProviderMetadata, ProviderStatus,
+    };
 
     fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
         ProviderStatus {
@@ -105,6 +107,7 @@ mod tests {
             account_tier: None,
             last_updated_at: None,
             error_message: None,
+            error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
         }
     }

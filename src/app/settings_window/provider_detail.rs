@@ -311,10 +311,13 @@ impl SettingsView {
                     self.state.borrow_mut().settings.providers.github_token = status.token.clone();
                 }
 
-                // 3. 委托 provider 渲染
-                section = section.child(crate::providers::copilot::settings_ui::render_settings(
-                    &status, theme,
-                ));
+                // 3. 使用交互式 UI（支持 Token 输入和保存）
+                section = section.child(
+                    crate::providers::copilot::settings_ui::render_settings_interactive(
+                        self.state.clone(),
+                        theme,
+                    ),
+                );
             }
             _ => {
                 let display_name = self
