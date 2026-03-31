@@ -13,6 +13,7 @@ use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult}
 use crate::theme::Theme;
 use gpui::*;
 use log::{debug, info, warn};
+use rust_i18n::t;
 use smol::channel::Sender;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -277,7 +278,7 @@ impl AppView {
             if show_dashboard {
                 left = left.child(widgets::with_tooltip(
                     "tt-dashboard",
-                    "Dashboard",
+                    &t!("tooltip.dashboard"),
                     theme,
                     Self::render_dashboard_button(dashboard_url, theme),
                 ));
@@ -287,7 +288,7 @@ impl AppView {
                 let theme = cx.global::<Theme>();
                 left = left.child(widgets::with_tooltip(
                     "tt-refresh",
-                    "Refresh",
+                    &t!("tooltip.refresh"),
                     theme,
                     refresh_btn,
                 ));
@@ -304,11 +305,16 @@ impl AppView {
                 .gap(px(4.0))
                 .child(widgets::with_tooltip(
                     "tt-settings",
-                    "Settings",
+                    &t!("tooltip.settings"),
                     theme,
                     settings_btn,
                 ))
-                .child(widgets::with_tooltip("tt-quit", "Quit", theme, close_btn))
+                .child(widgets::with_tooltip(
+                    "tt-quit",
+                    &t!("tooltip.quit"),
+                    theme,
+                    close_btn,
+                ))
         };
 
         div()

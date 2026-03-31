@@ -1,6 +1,7 @@
 use super::{persist_settings, AppView};
 use crate::theme::Theme;
 use gpui::*;
+use rust_i18n::t;
 
 const AUTO_HIDE_ICON: &str = "src/icons/display.svg";
 
@@ -47,15 +48,13 @@ impl AppView {
                                             .text_size(px(14.0))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(theme.text_primary)
-                                            .child("Auto-hide window"),
+                                            .child(t!("settings.auto_hide").to_string()),
                                     )
                                     .child(
                                         div()
                                             .text_size(px(12.0))
                                             .text_color(theme.text_secondary)
-                                            .child(
-                                                "Close the tray popover when focus leaves the app.",
-                                            ),
+                                            .child(t!("settings.auto_hide.desc").to_string()),
                                     ),
                             ),
                     )
@@ -94,15 +93,13 @@ impl AppView {
                                     .text_size(px(14.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme.text_primary)
-                                    .child("Visible providers"),
+                                    .child(t!("settings.visible_providers").to_string()),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.0))
                                     .text_color(theme.text_secondary)
-                                    .child(
-                                    "Show only the providers you care about in the tray header.",
-                                ),
+                                    .child(t!("settings.visible_providers.desc").to_string()),
                             ),
                     )
                     .child(div().flex().gap(px(6.0)).children((3..=5).map(|count| {

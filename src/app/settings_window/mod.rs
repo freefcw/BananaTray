@@ -9,6 +9,7 @@ use crate::app_state::SettingsTab;
 use crate::theme::Theme;
 use gpui::*;
 use log::info;
+use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -73,18 +74,16 @@ impl SettingsView {
     /// Render a placeholder page for unimplemented tabs
     fn render_placeholder_tab(tab: SettingsTab, theme: &Theme) -> Div {
         let title = match tab {
-            SettingsTab::Display => "Display",
-            SettingsTab::Advanced => "Advanced",
-            SettingsTab::About => "About",
-            _ => "",
+            SettingsTab::Display => t!("settings.tab.display").to_string(),
+            SettingsTab::Advanced => t!("settings.tab.advanced").to_string(),
+            SettingsTab::About => t!("settings.tab.about").to_string(),
+            _ => String::new(),
         };
         let desc = match tab {
-            SettingsTab::Display => {
-                "Customize appearance, menu bar icon style, and notification preferences."
-            }
-            SettingsTab::Advanced => "Debug logging, network proxy, and other advanced options.",
-            SettingsTab::About => "BananaTray version info, licenses, and acknowledgements.",
-            _ => "",
+            SettingsTab::Display => t!("settings.display.desc").to_string(),
+            SettingsTab::Advanced => t!("settings.advanced.desc").to_string(),
+            SettingsTab::About => t!("settings.about.desc").to_string(),
+            _ => String::new(),
         };
         div()
             .flex_col()
@@ -102,7 +101,7 @@ impl SettingsView {
                             .text_size(px(15.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text_primary)
-                            .child(title.to_string()),
+                            .child(title),
                     )
                     .child(
                         div()
@@ -110,7 +109,7 @@ impl SettingsView {
                             .text_color(theme.text_muted)
                             .text_align(TextAlign::Center)
                             .line_height(relative(1.5))
-                            .child(desc.to_string()),
+                            .child(desc),
                     )
                     .child(
                         div()
@@ -121,7 +120,7 @@ impl SettingsView {
                             .bg(theme.bg_subtle)
                             .text_size(px(11.5))
                             .text_color(theme.text_secondary)
-                            .child("Coming soon"),
+                            .child(t!("settings.coming_soon").to_string()),
                     ),
             )
     }
@@ -133,16 +132,32 @@ impl Render for SettingsView {
         let settings = self.state.borrow().settings.clone();
         let active_tab = self.state.borrow().settings_ui.active_tab;
 
-        let tabs: &[(&str, &str, SettingsTab)] = &[
-            ("src/icons/settings.svg", "General", SettingsTab::General),
+        let tabs: Vec<(&str, String, SettingsTab)> = vec![
+            (
+                "src/icons/settings.svg",
+                t!("settings.tab.general").to_string(),
+                SettingsTab::General,
+            ),
             (
                 "src/icons/overview.svg",
-                "Providers",
+                t!("settings.tab.providers").to_string(),
                 SettingsTab::Providers,
             ),
-            ("src/icons/display.svg", "Display", SettingsTab::Display),
-            ("src/icons/advanced.svg", "Advanced", SettingsTab::Advanced),
-            ("src/icons/about.svg", "About", SettingsTab::About),
+            (
+                "src/icons/display.svg",
+                t!("settings.tab.display").to_string(),
+                SettingsTab::Display,
+            ),
+            (
+                "src/icons/advanced.svg",
+                t!("settings.tab.advanced").to_string(),
+                SettingsTab::Advanced,
+            ),
+            (
+                "src/icons/about.svg",
+                t!("settings.tab.about").to_string(),
+                SettingsTab::About,
+            ),
         ];
 
         let mut tab_bar = div()
@@ -152,8 +167,9 @@ impl Render for SettingsView {
             .border_b_1()
             .border_color(theme.border_subtle);
 
-        for &(icon, label, tab) in tabs {
+        for (icon, label, tab) in &tabs {
             let state = self.state.clone();
+            let tab = *tab;
             tab_bar = tab_bar.child(
                 render_icon_tab(icon, label, active_tab == tab, &theme).on_mouse_down(
                     MouseButton::Left,

@@ -1,5 +1,7 @@
 #![recursion_limit = "512"]
 
+rust_i18n::i18n!("locales", fallback = "en");
+
 mod app;
 mod app_state;
 mod assets;
@@ -20,6 +22,7 @@ use gpui::*;
 use log::{error, info};
 use models::NavTab;
 use refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
+use rust_i18n::t;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -236,6 +239,12 @@ fn main() {
     Application::new()
         .with_assets(Assets::new())
         .run(|cx: &mut App| {
+            // 0. 初始化 i18n locale
+            {
+                let settings = crate::settings_store::load().unwrap_or_default();
+                crate::models::apply_locale(&settings.language);
+            }
+
             // 1. 初始化
             adabraka_ui::init(cx);
             adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
@@ -243,7 +252,7 @@ fn main() {
 
             // 2. 配置系统托盘
             cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
-            cx.set_tray_tooltip("BananaTray - AI Quota Monitor");
+            cx.set_tray_tooltip(&t!("tray.tooltip"));
             cx.set_tray_panel_mode(true);
 
             // 3. 启动 RefreshCoordinator（后台事件循环）

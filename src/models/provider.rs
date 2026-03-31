@@ -22,7 +22,19 @@ macro_rules! define_provider_kind {
 }
 
 define_provider_kind!(
-    Claude, Gemini, Copilot, Codex, Kimi, Amp, Cursor, OpenCode, MiniMax, VertexAi, Kilo, Kiro,
+    Claude,
+    Gemini,
+    Copilot,
+    Codex,
+    Kimi,
+    Amp,
+    Cursor,
+    OpenCode,
+    MiniMax,
+    VertexAi,
+    Kilo,
+    Kiro,
+    Antigravity,
 );
 
 /// Provider 元数据
@@ -53,6 +65,7 @@ impl ProviderKind {
             Self::VertexAi => "vertexai",
             Self::Kilo => "kilo",
             Self::Kiro => "kiro",
+            Self::Antigravity => "antigravity",
         }
     }
 
@@ -70,6 +83,7 @@ impl ProviderKind {
             "vertexai" => Some(Self::VertexAi),
             "kilo" => Some(Self::Kilo),
             "kiro" => Some(Self::Kiro),
+            "antigravity" => Some(Self::Antigravity),
             _ => None,
         }
     }

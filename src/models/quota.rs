@@ -1,4 +1,5 @@
 use super::provider::{ProviderKind, ProviderMetadata};
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -205,17 +206,17 @@ impl QuotaInfo {
             QuotaType::Credit => {
                 let remaining = self.limit - self.used;
                 if remaining >= 0.0 {
-                    format!("${:.2} left", remaining)
+                    t!("quota.credit_left", amount = format!("{:.2}", remaining)).to_string()
                 } else {
-                    format!("${:.2} over", -remaining)
+                    t!("quota.credit_over", amount = format!("{:.2}", -remaining)).to_string()
                 }
             }
             _ => {
                 let pct = self.percent_remaining();
                 if pct >= 0.0 {
-                    format!("{:.0}% left", pct)
+                    t!("quota.pct_left", pct = format!("{:.0}", pct)).to_string()
                 } else {
-                    format!("{:.0}% over", -pct)
+                    t!("quota.pct_over", pct = format!("{:.0}", -pct)).to_string()
                 }
             }
         }
@@ -226,16 +227,22 @@ impl QuotaInfo {
     /// - 其他类型: "X used / Y total" 或 "X% used"
     pub fn usage_detail_text(&self) -> String {
         match self.quota_type {
-            QuotaType::Credit => {
-                format!("${:.2} / ${:.2}", self.used, self.limit)
-            }
+            QuotaType::Credit => t!(
+                "quota.credit_detail",
+                used = format!("{:.2}", self.used),
+                limit = format!("{:.2}", self.limit)
+            )
+            .to_string(),
             _ => {
-                // 如果 limit 是 100.0，说明数据本身就是百分比
                 if self.is_percentage_mode() {
-                    format!("{:.0}% used", self.used)
+                    t!("quota.pct_used", pct = format!("{:.0}", self.used)).to_string()
                 } else {
-                    // 显示实际用量和总量
-                    format!("{:.0} used / {:.0} total", self.used, self.limit)
+                    t!(
+                        "quota.count_detail",
+                        used = format!("{:.0}", self.used),
+                        total = format!("{:.0}", self.limit)
+                    )
+                    .to_string()
                 }
             }
         }
@@ -379,7 +386,7 @@ impl ProviderStatus {
         } else {
             self.connection = ConnectionStatus::Connected;
         }
-        self.last_updated_at = Some("Update failed".to_string());
+        self.last_updated_at = Some(t!("quota.update_failed").to_string());
         self.error_message = Some(error);
     }
 
@@ -413,20 +420,20 @@ impl ProviderStatus {
         if let Some(instant) = self.last_refreshed_instant {
             let secs = instant.elapsed().as_secs();
             if secs < 60 {
-                "Updated just now".to_string()
+                t!("provider.updated_just_now").to_string()
             } else if secs < 3600 {
-                format!("Updated {} min ago", secs / 60)
+                t!("provider.updated_min_ago", n = secs / 60).to_string()
             } else {
-                format!("Updated {} hr ago", secs / 3600)
+                t!("provider.updated_hr_ago", n = secs / 3600).to_string()
             }
         } else if let Some(ref text) = self.last_updated_at {
             text.clone()
         } else {
             match self.connection {
-                ConnectionStatus::Connected => "Waiting for data".to_string(),
-                ConnectionStatus::Refreshing => "Refreshing…".to_string(),
-                ConnectionStatus::Error => "Needs attention".to_string(),
-                ConnectionStatus::Disconnected => "Not connected".to_string(),
+                ConnectionStatus::Connected => t!("provider.waiting_for_data").to_string(),
+                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
+                ConnectionStatus::Error => t!("provider.needs_attention").to_string(),
+                ConnectionStatus::Disconnected => t!("provider.not_connected").to_string(),
             }
         }
     }

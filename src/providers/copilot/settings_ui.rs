@@ -5,6 +5,7 @@
 use super::CopilotTokenStatus;
 use crate::theme::Theme;
 use gpui::*;
+use rust_i18n::t;
 
 /// 渲染 Copilot 特有的设置面板
 pub fn render_settings(status: &CopilotTokenStatus, theme: &Theme) -> Div {
@@ -19,14 +20,14 @@ pub fn render_settings(status: &CopilotTokenStatus, theme: &Theme) -> Div {
                 .text_size(px(13.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text_primary)
-                .child("GitHub Login"),
+                .child(t!("copilot.github_login").to_string()),
         )
         .child(
             div()
                 .text_size(px(12.0))
                 .line_height(relative(1.4))
                 .text_color(theme.text_secondary)
-                .child("Requires authentication via GitHub Token."),
+                .child(t!("copilot.requires_auth").to_string()),
         )
         .child(if has_token {
             div()
@@ -41,17 +42,20 @@ pub fn render_settings(status: &CopilotTokenStatus, theme: &Theme) -> Div {
                         .text_size(px(11.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme.element_active)
-                        .child("Token configured"),
+                        .child(t!("copilot.token_configured").to_string()),
                 )
                 .child(
                     div()
                         .text_size(px(11.0))
                         .text_color(theme.text_muted)
-                        .child(format!(
-                            "{} · via {}",
-                            masked.unwrap_or_default(),
-                            status.source
-                        )),
+                        .child(
+                            t!(
+                                "copilot.token_via",
+                                masked = masked.unwrap_or_default(),
+                                source = &status.source
+                            )
+                            .to_string(),
+                        ),
                 )
         } else {
             div()
@@ -61,7 +65,7 @@ pub fn render_settings(status: &CopilotTokenStatus, theme: &Theme) -> Div {
                     div()
                         .text_size(px(11.5))
                         .text_color(theme.text_muted)
-                        .child("Set token via config file or GITHUB_TOKEN env var"),
+                        .child(t!("copilot.token_hint").to_string()),
                 )
                 .child(
                     div()
@@ -75,7 +79,7 @@ pub fn render_settings(status: &CopilotTokenStatus, theme: &Theme) -> Div {
                         .cursor_pointer()
                         .flex()
                         .justify_center()
-                        .child("Sign in with GitHub")
+                        .child(t!("copilot.sign_in").to_string())
                         .on_mouse_down(MouseButton::Left, |_, _, _| {
                             let path = crate::settings_store::config_path();
                             if let Some(parent) = path.parent() {
