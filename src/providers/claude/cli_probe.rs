@@ -192,6 +192,7 @@ impl UsageProbe for ClaudeCliProbe {
             auto_responses: Self::auto_responses(),
             environment_exclusions: vec!["CLAUDE_CODE_OAUTH_TOKEN".to_string()],
             send_enter_every: Some(Duration::from_millis(500)), // 周期性发送 Enter 以渲染 /usage
+            ..Default::default()
         };
 
         let result = runner.run("claude", "/usage", options)?;
