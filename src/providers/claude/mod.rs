@@ -13,6 +13,7 @@ use api_probe::ClaudeApiProbe;
 use async_trait::async_trait;
 use cli_probe::ClaudeCliProbe;
 use log::debug;
+use rust_i18n::t;
 
 use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo};
@@ -97,9 +98,10 @@ impl AiProvider for ClaudeProvider {
                 if self.api_probe.is_available() {
                     self.api_probe.probe()
                 } else {
-                    Err(ProviderError::auth_required(Some(
-                        "OAuth credentials not found, run `claude` to login",
-                    ))
+                    Err(ProviderError::auth_required(Some(&t!(
+                        "hint.no_oauth_creds",
+                        cli = "claude"
+                    )))
                     .into())
                 }
             }
@@ -133,7 +135,7 @@ impl AiProvider for ClaudeProvider {
                     Err(e)
                 } else {
                     Err(
-                        ProviderError::unavailable("Claude API and CLI are both unavailable")
+                        ProviderError::unavailable(&t!("hint.both_unavailable", name = "Claude"))
                             .into(),
                     )
                 }

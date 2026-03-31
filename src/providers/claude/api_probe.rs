@@ -57,12 +57,16 @@ impl ClaudeApiProbe {
 
         let status_code: u16 = status.parse().unwrap_or(0);
         if status_code == 401 || status_code == 403 {
-            return Err(ProviderError::session_expired(Some("run `claude` to re-login")).into());
+            return Err(ProviderError::session_expired(Some(&t!(
+                "hint.relogin_cli",
+                cli = "claude"
+            )))
+            .into());
         }
         if status_code >= 400 {
-            return Err(ProviderError::fetch_failed(&format!(
-                "Usage API returned HTTP {}",
-                status_code
+            return Err(ProviderError::fetch_failed(&t!(
+                "hint.api_http_error",
+                status = status_code
             ))
             .into());
         }

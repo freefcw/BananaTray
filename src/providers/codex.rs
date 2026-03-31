@@ -170,7 +170,11 @@ impl CodexProvider {
         // Check for 401/403 in the status line
         let first_line = headers.lines().next().unwrap_or("");
         if first_line.contains("401") || first_line.contains("403") {
-            return Err(ProviderError::session_expired(Some("run `codex` to re-login")).into());
+            return Err(ProviderError::session_expired(Some(&t!(
+                "hint.relogin_cli",
+                cli = "codex"
+            )))
+            .into());
         }
 
         // Try parsing from custom headers first

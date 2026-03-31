@@ -85,7 +85,7 @@ provider.not_found: "未找到服务商"
 
 # ── 服务商面板（弹出窗口）────────────────────────────────
 provider.not_enabled: "%{name} 尚未启用"
-provider.enable_hint: "在 设置 → 服务商 中启用以开始跟踪配额。"
+provider.enable_hint: "在「设置 → 服务商」中启用以开始跟踪配额。"
 provider.open_settings: "打开设置"
 provider.fetching: "正在获取 %{name} 用量数据…"
 provider.waiting: "等待用量数据"
@@ -100,7 +100,7 @@ provider.no_usage_details: "暂无用量详情。"
 provider.cannot_refresh: "%{name} 暂时无法刷新用量。"
 provider.connect_to_track: "连接 %{name} 以开始跟踪配额。"
 provider.disabled_source: "已禁用 — %{source}"
-provider.refreshing_label: "刷新中..."
+provider.refreshing_label: "刷新中…"
 provider.source_last_failed: "%{source}\n上次获取失败"
 provider.source_failed: "%{source}\n获取失败"
 provider.detail.last_failed: "%{source} · 上次获取失败"
@@ -108,9 +108,10 @@ provider.detail.refreshing: "%{source} · 刷新中"
 provider.detail.updated: "%{source} · %{time}"
 provider.detail.not_fetched: "%{source} · 尚未获取"
 provider.detail.not_detected: "%{source} · 未检测到"
-provider.source_not_detected: "%{source} 未检测到..."
+provider.source_not_detected: "%{source} 未检测到…"
 
 # ── 刷新频率下拉 ─────────────────────────────────────────
+cadence.manual: "手动刷新"
 cadence.1_minute: "1 分钟"
 cadence.n_minutes: "%{n} 分钟"
 
@@ -124,11 +125,11 @@ notification.recovered.body: "配额已恢复，当前余量 %{pct}%。"
 
 # ── 时间工具 ─────────────────────────────────────────────
 time.resets_soon: "即将重置"
-time.resets_in_days_hours: "%{d}天%{h}小时后重置"
-time.resets_in_days: "%{d}天后重置"
-time.resets_in_hours_mins: "%{h}小时%{m}分钟后重置"
-time.resets_in_hours: "%{h}小时后重置"
-time.resets_in_mins: "%{m}分钟后重置"
+time.resets_in_days_hours: "%{d} 天 %{h} 小时后重置"
+time.resets_in_days: "%{d} 天后重置"
+time.resets_in_hours_mins: "%{h} 小时 %{m} 分钟后重置"
+time.resets_in_hours: "%{h} 小时后重置"
+time.resets_in_mins: "%{m} 分钟后重置"
 
 # ── 配额显示 ─────────────────────────────────────────────
 quota.pct_left: "剩余 %{pct}%"

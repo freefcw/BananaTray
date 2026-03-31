@@ -204,7 +204,9 @@ impl UsageProbe for ClaudeCliProbe {
         let output_lower = result.output.to_lowercase();
 
         if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-            return Err(ProviderError::auth_required(Some("run `claude` to login")).into());
+            return Err(
+                ProviderError::auth_required(Some(&t!("hint.login_cli", cli = "claude"))).into(),
+            );
         }
         if output_lower.contains("update") && output_lower.contains("required") {
             return Err(ProviderError::update_required(None).into());
@@ -216,7 +218,11 @@ impl UsageProbe for ClaudeCliProbe {
         if quotas.is_empty() {
             // 检查特定问题
             if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-                return Err(ProviderError::auth_required(Some("run `claude` to login")).into());
+                return Err(ProviderError::auth_required(Some(&t!(
+                    "hint.login_cli",
+                    cli = "claude"
+                )))
+                .into());
             }
             if output_lower.contains("update") && output_lower.contains("required") {
                 return Err(ProviderError::update_required(None).into());
@@ -224,16 +230,11 @@ impl UsageProbe for ClaudeCliProbe {
             // 检查信任提示是否阻塞
             if output_lower.contains("trust the files") && !output_lower.contains("current session")
             {
-                return Err(ProviderError::unavailable(
-                    "folder trust required, run `claude` in terminal and confirm trust prompt",
-                )
-                .into());
+                return Err(
+                    ProviderError::unavailable(&t!("hint.trust_folder", cli = "claude")).into(),
+                );
             }
-            return Err(ProviderError::parse_failed(&format!(
-                "cannot parse quota data, raw output:\n{}",
-                result.output.trim()
-            ))
-            .into());
+            return Err(ProviderError::parse_failed(&t!("hint.cannot_parse_quota")).into());
         }
 
         Ok(quotas)

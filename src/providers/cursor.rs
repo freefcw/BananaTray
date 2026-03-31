@@ -41,7 +41,9 @@ impl CursorProvider {
 
         let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if token.is_empty() {
-            return Err(ProviderError::auth_required(Some("please login to Cursor first")).into());
+            return Err(
+                ProviderError::auth_required(Some(&t!("hint.login_app", app = "Cursor"))).into(),
+            );
         }
 
         Ok(token)
