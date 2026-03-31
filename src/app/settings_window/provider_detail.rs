@@ -42,11 +42,9 @@ impl SettingsView {
 
         let inner = div()
             .flex_col()
-            .pl(px(8.0))
-            .pr(px(12.0))
-            .pt(px(8.0))
-            .pb(px(12.0))
-            .gap(px(16.0))
+            .px(px(24.0))
+            .py(px(20.0))
+            .gap(px(0.0))
             // ── Header: icon + name + refresh + toggle ──
             .child(
                 div()
@@ -180,7 +178,8 @@ impl SettingsView {
 
         div()
             .flex_col()
-            .gap(px(6.0))
+            .gap(px(10.0))
+            .mt(px(16.0))
             .child(render_info_row(
                 &t!("provider.info.state"),
                 &state_text,
@@ -211,13 +210,15 @@ impl SettingsView {
         enabled: bool,
         theme: &Theme,
     ) -> Div {
-        let mut section = div()
-            .flex_col()
-            .gap(px(8.0))
-            .child(render_detail_section_title(
-                &t!("provider.section.usage"),
-                theme,
-            ));
+        let mut section =
+            div()
+                .flex_col()
+                .gap(px(12.0))
+                .mt(px(16.0))
+                .child(render_detail_section_title(
+                    &t!("provider.section.usage"),
+                    theme,
+                ));
 
         if !enabled {
             return section.child(
@@ -289,13 +290,15 @@ impl SettingsView {
         settings: &AppSettings,
         theme: &Theme,
     ) -> Div {
-        let mut section = div()
-            .flex_col()
-            .gap(px(8.0))
-            .child(render_detail_section_title(
-                &t!("provider.section.settings"),
-                theme,
-            ));
+        let mut section =
+            div()
+                .flex_col()
+                .gap(px(12.0))
+                .mt(px(16.0))
+                .child(render_detail_section_title(
+                    &t!("provider.section.settings"),
+                    theme,
+                ));
 
         match kind {
             ProviderKind::Copilot => {
