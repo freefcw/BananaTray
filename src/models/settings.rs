@@ -28,7 +28,6 @@ pub struct AppSettings {
     pub refresh_interval_mins: u64,
     pub global_hotkey: String,
     pub auto_hide_window: bool,
-    pub visible_provider_count: usize,
     /// 开机自启动
     #[serde(default)]
     pub start_at_login: bool,
@@ -78,7 +77,6 @@ impl Default for AppSettings {
             refresh_interval_mins: 5,
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
-            visible_provider_count: 4,
             start_at_login: false,
             show_cost_summary: true,
             check_provider_status: true,
