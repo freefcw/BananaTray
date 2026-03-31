@@ -29,13 +29,18 @@ macro_rules! define_unit_provider {
 pub(crate) use define_unit_provider;
 
 /// Provider 刷新失败的结构化错误类型
+///
+/// 设计原则：
+/// - **面向用户的提示**（CliNotFound, AuthRequired, SessionExpired, FolderTrustRequired,
+///   UpdateRequired, ConfigMissing）→ 在 `format_for_display()` 中国际化
+/// - **技术性错误**（Unavailable, ParseFailed, Timeout, NoData, NetworkFailed,
+///   FetchFailed）→ 保留英文 reason，便于调试
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // 某些变体预留给未来使用
 pub enum ProviderError {
+    // ── 面向用户的提示（国际化）──────────────────────────
     /// CLI 未安装或找不到
     CliNotFound { cli_name: String },
-    /// Provider 在当前环境不可用（文件不存在、服务未运行等）
-    Unavailable { reason: String },
     /// 需要登录认证
     AuthRequired { hint: Option<String> },
     /// OAuth 会话已过期
@@ -44,6 +49,12 @@ pub enum ProviderError {
     FolderTrustRequired,
     /// CLI 需要更新
     UpdateRequired { version: Option<String> },
+    /// 配置缺失（环境变量、配置文件、Token 等）
+    ConfigMissing { key: String },
+
+    // ── 技术性错误（不国际化，保留英文）────────────────────
+    /// Provider 在当前环境不可用（文件不存在、服务未运行等）
+    Unavailable { reason: String },
     /// 解析响应失败
     ParseFailed { reason: String },
     /// 网络请求超时
@@ -52,8 +63,6 @@ pub enum ProviderError {
     NoData,
     /// 网络请求失败
     NetworkFailed { reason: String },
-    /// 配置缺失（环境变量、配置文件、Token 等）
-    ConfigMissing { key: String },
     /// 其他获取失败
     FetchFailed { reason: String },
 }
@@ -191,17 +200,21 @@ impl ProviderError {
         }
     }
 
-    /// 返回国际化后的用户友好消息（UI 展示用）
+    /// 返回用户友好的错误消息（UI 展示用）
+    ///
+    /// 设计原则：
+    /// - 面向用户的提示 → 国际化
+    /// - 技术性错误 → 直接返回英文 reason（便于调试和搜索）
     pub fn format_for_display(&self) -> String {
         match self {
+            // ── 面向用户的提示（国际化）──────────────────────────
             Self::CliNotFound { cli_name } => t!("error.cli_not_found", cli = cli_name).to_string(),
-            Self::Unavailable { reason } => t!("error.unavailable", reason = reason).to_string(),
             Self::AuthRequired { hint } => match hint {
-                Some(h) => t!("error.auth_required", hint = h).to_string(),
+                Some(h) => h.clone(), // hint 已经是国际化的文本
                 None => t!("error.auth_required_default").to_string(),
             },
             Self::SessionExpired { hint } => match hint {
-                Some(h) => t!("error.session_expired", hint = h).to_string(),
+                Some(h) => h.clone(), // hint 已经是国际化的文本
                 None => t!("error.session_expired_default").to_string(),
             },
             Self::FolderTrustRequired => t!("error.folder_trust").to_string(),
@@ -209,14 +222,15 @@ impl ProviderError {
                 Some(v) => t!("error.update_required_ver", version = v).to_string(),
                 None => t!("error.update_required").to_string(),
             },
-            Self::ParseFailed { reason } => t!("error.parse_failed", reason = reason).to_string(),
-            Self::Timeout => t!("error.timeout").to_string(),
-            Self::NoData => t!("error.no_data").to_string(),
-            Self::NetworkFailed { reason } => {
-                t!("error.network_failed", reason = reason).to_string()
-            }
             Self::ConfigMissing { key } => t!("error.config_missing", key = key).to_string(),
-            Self::FetchFailed { reason } => t!("error.fetch_failed", reason = reason).to_string(),
+
+            // ── 技术性错误（保留英文，便于调试）────────────────────
+            Self::Unavailable { reason } => reason.clone(),
+            Self::ParseFailed { reason } => reason.clone(),
+            Self::Timeout => "Request timeout".to_string(),
+            Self::NoData => "No quota data available".to_string(),
+            Self::NetworkFailed { reason } => format!("Network error: {}", reason),
+            Self::FetchFailed { reason } => reason.clone(),
         }
     }
 }
