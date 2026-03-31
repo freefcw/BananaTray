@@ -38,7 +38,6 @@ impl TrayController {
     fn new(refresh_tx: smol::channel::Sender<RefreshRequest>) -> Self {
         info!(target: "tray", "initializing tray controller");
         let state = Rc::new(RefCell::new(AppState::new(refresh_tx)));
-        info!(target: "tray", "tray controller initialized");
         Self {
             window: None,
             state,
