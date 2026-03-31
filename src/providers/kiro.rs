@@ -1,117 +1,90 @@
 use super::{AiProvider, ProviderError};
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType};
+use crate::utils::interactive_runner::{InteractiveOptions, InteractiveRunner};
 use crate::utils::text_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
-use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::LazyLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // 预编译的正则表达式
-static BONUS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Bonus credits:\s*([\d.]+)/([\d.]+)\s*credits used").unwrap());
-static EXPIRY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"expires in (\d+) days").unwrap());
 static CREDITS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Credits \(([\d.]+) of ([\d.]+)").unwrap());
-static KIRO_RESET_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"resets on (\d{2}/\d{2})").unwrap());
+    LazyLock::new(|| Regex::new(r"Credits \(([0-9.]+) of ([0-9.]+) covered in plan\)").unwrap());
+static RESET_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"resets on (\d{4}-\d{2}-\d{2})").unwrap());
 
 super::define_unit_provider!(KiroProvider);
 
 impl KiroProvider {
-    /// Run `kiro-cli` interactively, sending `/usage` and `/quit` via stdin,
-    /// and return the combined stdout output.
+    /// Run `kiro-cli chat` interactively and send `/usage` command.
+    ///
+    /// kiro-cli chat initializes MCP servers first (shows a spinner for several
+    /// seconds), then displays a prompt. We must wait for that init to finish
+    /// before sending `/usage`, otherwise the command gets lost.
     fn run_kiro_cli() -> Result<String> {
-        let mut child = Command::new("kiro-cli")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|_| ProviderError::cli_not_found("kiro-cli"))?;
+        let start = std::time::Instant::now();
+        log::info!(target: "providers::kiro", "Starting kiro-cli chat for /usage");
 
-        // Write commands to stdin
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(b"/usage\n/quit\n")
-                .context("Failed to write to kiro-cli stdin")?;
-        }
+        let runner = InteractiveRunner::new();
 
-        // Wait for process with timeout
-        let timeout = Duration::from_secs(30);
-        let start = Instant::now();
-        loop {
-            match child.try_wait() {
-                Ok(Some(_status)) => break,
-                Ok(None) => {
-                    if start.elapsed() > timeout {
-                        let _ = child.kill();
-                        return Err(ProviderError::Timeout.into());
-                    }
-                    std::thread::sleep(Duration::from_millis(200));
-                }
-                Err(e) => {
-                    return Err(ProviderError::fetch_failed(&format!("等待进程失败: {}", e)).into())
-                }
-            }
-        }
+        // Phase 1: Start `kiro-cli chat` with no input, wait for MCP init to finish.
+        // The ready signal is the chat prompt (e.g. "(/usage for more detail)").
+        // We use a long init but short idle timeout so the spinner doesn't block.
+        let mut opts_init = InteractiveOptions {
+            timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(2),
+            init_delay: Duration::from_millis(200),
+            arguments: vec!["chat".to_string()],
+            ..Default::default()
+        };
+        // Don't send input yet - let the MCP init complete first
+        // Use auto_response: when the prompt line appears, send /usage
+        opts_init
+            .auto_responses
+            .insert("/usage for more detail".to_string(), "/usage\r".to_string());
 
-        let output = child
-            .wait_with_output()
-            .context("Failed to read kiro-cli output")?;
+        let result = runner
+            .run("kiro-cli", "", opts_init)
+            .context("Failed to run kiro-cli")?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(stdout)
+        log::info!(
+            target: "providers::kiro",
+            "kiro-cli completed in {:.2}s, exit_code={:?}, output_len={}, output_preview={:?}",
+            start.elapsed().as_secs_f64(),
+            result.exit_code,
+            result.output.len(),
+            &result.output[..result.output.len().min(500)]
+        );
+
+        Ok(result.output)
     }
 
     /// Parse the output of `kiro-cli /usage` into quota entries.
     ///
     /// Sample output:
     /// ```text
-    /// Estimated Usage | resets on 03/01 | KIRO FREE
-    ///
-    /// 🎁 Bonus credits: 122.54/500 credits used, expires in 29 days
-    ///
-    /// Credits (0.00 of 50 covered in plan)
-    /// ████████████████████████████████████████████████████████████████ 0%
+    /// Estimated Usage | resets on 2026-04-01 | KIRO FREE
+    /// Credits (5.13 of 50 covered in plan)
+    /// ████████████████ 10%
     /// ```
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
         let clean = text_utils::strip_ansi(raw);
         let mut quotas = Vec::new();
 
-        // Parse bonus credits
-        if let Some(caps) = BONUS_RE.captures(&clean) {
-            let used: f64 = caps[1].parse().unwrap_or(0.0);
-            let total: f64 = caps[2].parse().unwrap_or(0.0);
-
-            let reset_text = EXPIRY_RE
-                .captures(&clean)
-                .map(|c| format!("Expires in {} days", &c[1]));
-
-            if total > 0.0 {
-                quotas.push(QuotaInfo::with_details(
-                    "Bonus Credits",
-                    used,
-                    total,
-                    QuotaType::Weekly,
-                    reset_text,
-                ));
-            }
-        }
-
-        // Parse regular credits
+        // Parse credits
         if let Some(caps) = CREDITS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
 
-            let reset_text = KIRO_RESET_RE
+            let reset_text = RESET_RE
                 .captures(&clean)
                 .map(|c| format!("Resets on {}", &c[1]));
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(
-                    "Monthly Credits",
+                    "Credits",
                     used,
                     total,
                     QuotaType::General,
@@ -147,9 +120,16 @@ impl AiProvider for KiroProvider {
     }
 
     async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
+        let start = std::time::Instant::now();
         let stdout = Self::run_kiro_cli()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;
+        log::info!(
+            target: "providers::kiro",
+            "Parsed {} quota(s) in {:.2}s total",
+            quotas.len(),
+            start.elapsed().as_secs_f64()
+        );
 
         if quotas.is_empty() {
             return Err(ProviderError::parse_failed(&format!(
@@ -168,50 +148,35 @@ mod tests {
     use super::*;
 
     const SAMPLE_OUTPUT: &str = r#"
-Estimated Usage | resets on 03/01 | KIRO FREE
+Estimated Usage | resets on 2026-04-01 | KIRO FREE
+Credits (5.13 of 50 covered in plan)
+████████████████ 10%
 
-🎁 Bonus credits: 122.54/500 credits used, expires in 29 days
-
-Credits (0.00 of 50 covered in plan)
-████████████████████████████████████████████████████████████████████████████████ 0%
+Overages: Disabled
 "#;
 
     #[test]
-    fn test_parse_bonus_credits() {
+    fn test_parse_credits() {
         let quotas = KiroProvider::parse_usage_output(SAMPLE_OUTPUT).unwrap();
-        assert!(!quotas.is_empty());
+        assert_eq!(quotas.len(), 1);
 
-        let bonus = &quotas[0];
-        assert_eq!(bonus.label, "Bonus Credits");
-        assert!((bonus.used - 122.54).abs() < 0.01);
-        assert!((bonus.limit - 500.0).abs() < 0.01);
-        assert_eq!(bonus.quota_type, QuotaType::Weekly);
-        assert_eq!(bonus.reset_at.as_deref(), Some("Expires in 29 days"));
-    }
-
-    #[test]
-    fn test_parse_monthly_credits() {
-        let quotas = KiroProvider::parse_usage_output(SAMPLE_OUTPUT).unwrap();
-        assert_eq!(quotas.len(), 2);
-
-        let monthly = &quotas[1];
-        assert_eq!(monthly.label, "Monthly Credits");
-        assert!((monthly.used - 0.0).abs() < 0.01);
-        assert!((monthly.limit - 50.0).abs() < 0.01);
-        assert_eq!(monthly.quota_type, QuotaType::General);
-        assert_eq!(monthly.reset_at.as_deref(), Some("Resets on 03/01"));
+        let credits = &quotas[0];
+        assert_eq!(credits.label, "Credits");
+        assert!((credits.used - 5.13).abs() < 0.01);
+        assert!((credits.limit - 50.0).abs() < 0.01);
+        assert_eq!(credits.quota_type, QuotaType::General);
+        assert_eq!(credits.reset_at.as_deref(), Some("Resets on 2026-04-01"));
     }
 
     #[test]
     fn test_parse_with_ansi_codes() {
-        let output = "\x1b[32mEstimated Usage | resets on 04/15 | KIRO FREE\x1b[0m\n\n\x1b[33m🎁 Bonus credits: 200.00/500 credits used, expires in 10 days\x1b[0m\n\nCredits (25.50 of 100 covered in plan)\n████████████ 26%\n";
+        let output = "\x1b[32mEstimated Usage | resets on 2026-05-15 | KIRO FREE\x1b[0m\nCredits (25.50 of 100 covered in plan)\n████████████ 26%\n";
         let quotas = KiroProvider::parse_usage_output(output).unwrap();
-        assert_eq!(quotas.len(), 2);
+        assert_eq!(quotas.len(), 1);
 
-        assert!((quotas[0].used - 200.0).abs() < 0.01);
-        assert!((quotas[1].used - 25.50).abs() < 0.01);
-        assert!((quotas[1].limit - 100.0).abs() < 0.01);
-        assert_eq!(quotas[1].reset_at.as_deref(), Some("Resets on 04/15"));
+        assert!((quotas[0].used - 25.50).abs() < 0.01);
+        assert!((quotas[0].limit - 100.0).abs() < 0.01);
+        assert_eq!(quotas[0].reset_at.as_deref(), Some("Resets on 2026-05-15"));
     }
 
     #[test]

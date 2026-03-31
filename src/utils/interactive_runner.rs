@@ -9,14 +9,9 @@ use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize, PtySystem};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
-use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use super::text_utils;
-
-/// Regex for detecting meaningful data vs OSC/escape sequences
-static OSC_REGEX: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\x1B\].*?(?:\x07|\x1B\\)").unwrap());
 
 /// Result of running an interactive command
 #[derive(Debug)]
@@ -46,6 +41,8 @@ pub struct InteractiveOptions {
     pub environment_exclusions: Vec<String>,
     /// Send periodic Enter key to keep output flowing (useful for some CLIs)
     pub send_enter_every: Option<Duration>,
+    /// Time to wait after spawning before sending input (process init delay)
+    pub init_delay: Duration,
 }
 
 impl Default for InteractiveOptions {
@@ -58,6 +55,7 @@ impl Default for InteractiveOptions {
             auto_responses: HashMap::new(),
             environment_exclusions: Vec::new(),
             send_enter_every: None,
+            init_delay: Duration::from_millis(400),
         }
     }
 }
@@ -136,20 +134,35 @@ impl InteractiveRunner {
 
         // Find executable
         let executable_path = self.find_executable(binary)?;
+        log::info!(
+            target: "interactive_runner",
+            "[{}] Found executable at '{}' ({:.0}ms)",
+            binary, executable_path, start.elapsed().as_millis()
+        );
 
         // Create PTY
         let pair = self.create_pty()?;
 
         // Spawn process
         let mut child = self.spawn_process(&pair, &executable_path, &options)?;
+        log::info!(
+            target: "interactive_runner",
+            "[{}] Process spawned ({:.0}ms), waiting {:.0}ms init delay",
+            binary, start.elapsed().as_millis(), options.init_delay.as_millis()
+        );
 
         // Allow process to initialize
-        std::thread::sleep(Duration::from_millis(400));
+        std::thread::sleep(options.init_delay);
 
         // Send input command
         if !input.trim().is_empty() {
             let mut writer = pair.master.take_writer()?;
             let input_data = format!("{}\r", input.trim());
+            log::info!(
+                target: "interactive_runner",
+                "[{}] Sending input ({} bytes): {:?} ({:.0}ms)",
+                binary, input_data.len(), input_data, start.elapsed().as_millis()
+            );
             writer.write_all(input_data.as_bytes())?;
         }
 
@@ -297,7 +310,10 @@ impl InteractiveRunner {
         components.join(":")
     }
 
-    /// Capture output from the PTY, automatically responding to prompts
+    /// Capture output from the PTY, automatically responding to prompts.
+    ///
+    /// Uses a dedicated reader thread to avoid blocking on PTY read, which would
+    /// prevent timeout and idle checks from running.
     fn capture_output(
         &self,
         pair: &PtyPair,
@@ -305,6 +321,24 @@ impl InteractiveRunner {
         options: &InteractiveOptions,
     ) -> Result<Vec<u8>> {
         let mut reader = pair.master.try_clone_reader()?;
+
+        // Spawn a reader thread that sends chunks via channel, avoiding blocking read
+        // in the main loop which would prevent timeout/idle checks from executing.
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        let reader_handle = std::thread::spawn(move || {
+            let mut chunk = [0u8; 8192];
+            loop {
+                match reader.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if tx.send(chunk[..n].to_vec()).is_err() {
+                            break; // receiver dropped
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
 
         let deadline = Instant::now() + options.timeout;
         let mut buffer = Vec::new();
@@ -320,17 +354,14 @@ impl InteractiveRunner {
             .collect();
 
         while Instant::now() < deadline {
-            // Read available data
-            let mut chunk = [0u8; 8192];
-            match reader.read(&mut chunk) {
-                Ok(0) => break, // EOF
-                Ok(n) => {
-                    buffer.extend_from_slice(&chunk[..n]);
-
+            // Non-blocking receive from reader thread
+            match rx.recv_timeout(Duration::from_millis(60)) {
+                Ok(data) => {
                     // Check if this is meaningful data
-                    if self.is_meaningful_data(&chunk[..n]) {
+                    if self.is_meaningful_data(&data) {
                         last_meaningful_data = Instant::now();
                     }
+                    buffer.extend_from_slice(&data);
 
                     // Check for auto-response triggers
                     let text = String::from_utf8_lossy(&buffer);
@@ -338,40 +369,54 @@ impl InteractiveRunner {
 
                     for (prompt, response) in &prompt_responses {
                         if !responded_prompts.contains(prompt) && normalized.contains(prompt) {
-                            // Send response
-                            if let Ok(mut writer) = pair.master.take_writer() {
-                                let _ = writer.write_all(response.as_bytes());
+                            match pair.master.take_writer() {
+                                Ok(mut writer) => {
+                                    let _ = writer.write_all(response.as_bytes());
+                                    log::info!(
+                                        target: "interactive_runner",
+                                        "Auto-responded to prompt '{}' with '{}'",
+                                        prompt,
+                                        response.trim()
+                                    );
+                                }
+                                Err(e) => {
+                                    log::warn!(
+                                        target: "interactive_runner",
+                                        "Auto-response matched '{}' but take_writer failed: {}",
+                                        prompt, e
+                                    );
+                                }
                             }
                             responded_prompts.insert(prompt.clone());
                             last_meaningful_data = Instant::now();
-                            log::debug!(
-                                target: "interactive_runner",
-                                "Auto-responded to prompt '{}' with '{}'",
-                                prompt,
-                                response.trim()
-                            );
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // No data available, continue
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // No data received in this interval, fall through to checks
                 }
-                Err(e) => {
-                    log::warn!(target: "interactive_runner", "Read error: {}", e);
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    log::info!(target: "interactive_runner", "Reader thread ended (EOF or error)");
                     break;
                 }
             }
 
             // Check if process has exited
             if let Some(_status) = child.try_wait()? {
-                break; // Process exited
+                log::info!(target: "interactive_runner", "Process exited");
+                break;
             }
 
             // Check idle timeout
             if !buffer.is_empty()
                 && Instant::now().duration_since(last_meaningful_data) > options.idle_timeout
             {
-                log::debug!(target: "interactive_runner", "Idle timeout reached");
+                log::info!(
+                    target: "interactive_runner",
+                    "Idle timeout reached after {:.1}s without new data, buffer: {} bytes",
+                    options.idle_timeout.as_secs_f64(),
+                    buffer.len()
+                );
                 break;
             }
 
@@ -384,43 +429,34 @@ impl InteractiveRunner {
                     last_enter = Instant::now();
                 }
             }
-
-            // Brief sleep to avoid busy-waiting
-            std::thread::sleep(Duration::from_millis(60));
         }
 
-        // Final read to capture any remaining output
-        let mut final_chunk = [0u8; 8192];
-        while let Ok(n) = reader.read(&mut final_chunk) {
-            if n == 0 {
-                break;
-            }
-            buffer.extend_from_slice(&final_chunk[..n]);
+        if Instant::now() >= deadline {
+            log::warn!(
+                target: "interactive_runner",
+                "Overall timeout ({:.0}s) reached, buffer: {} bytes",
+                options.timeout.as_secs_f64(),
+                buffer.len()
+            );
         }
+
+        // Drain any remaining data from channel (non-blocking)
+        while let Ok(data) = rx.try_recv() {
+            buffer.extend_from_slice(&data);
+        }
+
+        // Don't wait for reader thread — it will be cleaned up when the PTY master is dropped
+        drop(reader_handle);
 
         Ok(buffer)
     }
 
-    /// Normalize text for prompt matching (lowercase, no whitespace)
     fn normalize_for_matching(text: &str) -> String {
-        text.to_lowercase()
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .collect()
+        text_utils::normalize_for_matching(text)
     }
 
-    /// Check if data contains meaningful content (not just escape sequences)
     fn is_meaningful_data(&self, data: &[u8]) -> bool {
-        if let Ok(text) = std::str::from_utf8(data) {
-            // Strip OSC sequences
-            let stripped = OSC_REGEX.replace_all(text, "");
-
-            // Check for non-whitespace content
-            !stripped.trim().is_empty()
-        } else {
-            // Non-UTF8 is considered meaningful
-            !data.is_empty()
-        }
+        text_utils::has_meaningful_content(data)
     }
 }
 
@@ -429,14 +465,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_normalize_for_matching() {
+    fn test_normalize_delegates_to_text_utils() {
+        // Verify the delegation works correctly
         assert_eq!(
-            InteractiveRunner::normalize_for_matching("Do you trust the files?"),
-            "doyoutrustthefiles?"
-        );
-        assert_eq!(
-            InteractiveRunner::normalize_for_matching("  Ready  to  code  "),
-            "readytocode"
+            InteractiveRunner::normalize_for_matching("Hello World"),
+            text_utils::normalize_for_matching("Hello World")
         );
     }
 
