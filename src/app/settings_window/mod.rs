@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use window_mgr::schedule_open_settings_window;
+pub use window_mgr::schedule_open_settings_window_with_provider;
 
 // ============================================================================
 // 设置视图

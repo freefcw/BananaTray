@@ -117,7 +117,7 @@ pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
 mod tests {
     use super::*;
     use crate::models::{
-        ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus, QuotaInfo,
+        ConnectionStatus, ErrorKind, ProviderKind, ProviderMetadata, ProviderStatus, QuotaInfo,
     };
 
     /// 确保 i18n 测试使用英语 locale
@@ -145,6 +145,7 @@ mod tests {
             account_tier: None,
             last_updated_at: None,
             error_message: None,
+            error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
         }
     }

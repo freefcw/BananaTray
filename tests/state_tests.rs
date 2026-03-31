@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 // 只引入与 GPUI 无关的模型类型
 use bananatray::models::{
-    AppSettings, ConnectionStatus, NavTab, ProviderKind, ProviderMetadata, ProviderStatus,
+    AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderKind, ProviderMetadata,
+    ProviderStatus,
 };
 
 // 从 app/mod.rs 复制子状态结构（只复制数据部分，不涉及 GPUI）
@@ -81,6 +82,7 @@ fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
         account_tier: None,
         last_updated_at: None,
         error_message: None,
+        error_kind: ErrorKind::default(),
         last_refreshed_instant: None,
     }
 }

@@ -142,8 +142,8 @@ impl AppState {
                         debug!(target: "providers", "provider {:?} unavailable: {}", outcome.kind, message);
                         p.mark_unavailable(message);
                     }
-                    RefreshResult::Failed { error } => {
-                        p.mark_refresh_failed(error);
+                    RefreshResult::Failed { error, error_kind } => {
+                        p.mark_refresh_failed(error, error_kind);
                     }
                     RefreshResult::SkippedCooldown
                     | RefreshResult::SkippedInFlight

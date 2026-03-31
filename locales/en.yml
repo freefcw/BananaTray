@@ -92,6 +92,7 @@ provider.waiting: "Waiting for usage data"
 provider.connection_required: "Connection required"
 provider.refresh_failed: "Refresh failed"
 provider.retry: "Retry"
+provider.open_config: "Open Settings"
 
 # ── Provider logic (subtitles / empty states) ─────────────
 provider.remaining_pct: "%{pct}% remaining"
@@ -154,8 +155,9 @@ copilot.github_login: "GitHub Login"
 copilot.requires_auth: "Requires authentication via GitHub Token."
 copilot.token_configured: "Token configured"
 copilot.token_via: "%{masked} · via %{source}"
-copilot.token_hint: "Set token via config file or GITHUB_TOKEN env var"
-copilot.sign_in: "Sign in with GitHub"
+copilot.token_hint: "Click the button below to create a Classic PAT with 'copilot' scope. Token will be auto-detected."
+copilot.create_token: "Create GitHub Token"
+copilot.clear_token: "Clear Token"
 
 # ── Language names ────────────────────────────────────────
 lang.system: "System Default"

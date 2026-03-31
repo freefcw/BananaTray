@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use smol::channel::{Receiver, Sender};
 
-use crate::models::{ProviderKind, RefreshData};
+use crate::models::{ErrorKind, ProviderKind, RefreshData};
 use crate::providers::ProviderManager;
 
 // ============================================================================
@@ -56,9 +56,16 @@ pub struct RefreshOutcome {
 /// 刷新结果类型
 #[derive(Debug)]
 pub enum RefreshResult {
-    Success { data: RefreshData },
-    Unavailable { message: String },
-    Failed { error: String },
+    Success {
+        data: RefreshData,
+    },
+    Unavailable {
+        message: String,
+    },
+    Failed {
+        error: String,
+        error_kind: ErrorKind,
+    },
     SkippedCooldown,
     SkippedInFlight,
     SkippedDisabled,
@@ -157,6 +164,19 @@ impl RefreshCoordinator {
             .await;
     }
 
+    /// Convert ProviderError to ErrorKind for UI decision
+    fn classify_error_kind(error: &crate::providers::ProviderError) -> ErrorKind {
+        use crate::providers::ProviderError;
+        match error {
+            ProviderError::ConfigMissing { .. } => ErrorKind::ConfigMissing,
+            ProviderError::AuthRequired { .. } | ProviderError::SessionExpired { .. } => {
+                ErrorKind::AuthRequired
+            }
+            ProviderError::Timeout | ProviderError::NetworkFailed { .. } => ErrorKind::NetworkError,
+            _ => ErrorKind::Unknown,
+        }
+    }
+
     /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
     fn build_outcome(kind: ProviderKind, result: anyhow::Result<RefreshData>) -> RefreshOutcome {
         match result {
@@ -181,10 +201,12 @@ impl RefreshCoordinator {
                     }
                     _ => {
                         log::warn!(target: "refresh", "provider {:?} failed: {}", kind, classified);
+                        let error_kind = Self::classify_error_kind(&classified);
                         RefreshOutcome {
                             kind,
                             result: RefreshResult::Failed {
                                 error: classified.format_for_display(),
+                                error_kind,
                             },
                         }
                     }
@@ -332,5 +354,77 @@ impl RefreshCoordinator {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_classify_error_kind_config_missing() {
+        let error = crate::providers::ProviderError::ConfigMissing {
+            key: "github_token".to_string(),
+        };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::ConfigMissing
+        );
+    }
+
+    #[test]
+    fn test_classify_error_kind_auth_required() {
+        let error = crate::providers::ProviderError::AuthRequired { hint: None };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::AuthRequired
+        );
+    }
+
+    #[test]
+    fn test_classify_error_kind_session_expired() {
+        let error = crate::providers::ProviderError::SessionExpired {
+            hint: Some("re-login".to_string()),
+        };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::AuthRequired
+        );
+    }
+
+    #[test]
+    fn test_classify_error_kind_network_error() {
+        let error = crate::providers::ProviderError::Timeout;
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::NetworkError
+        );
+
+        let error = crate::providers::ProviderError::NetworkFailed {
+            reason: "timeout".to_string(),
+        };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::NetworkError
+        );
+    }
+
+    #[test]
+    fn test_classify_error_kind_unknown() {
+        let error = crate::providers::ProviderError::CliNotFound {
+            cli_name: "claude".to_string(),
+        };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::Unknown
+        );
+
+        let error = crate::providers::ProviderError::ParseFailed {
+            reason: "invalid json".to_string(),
+        };
+        assert_eq!(
+            RefreshCoordinator::classify_error_kind(&error),
+            ErrorKind::Unknown
+        );
     }
 }
