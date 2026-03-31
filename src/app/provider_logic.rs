@@ -261,18 +261,23 @@ mod tests {
 
     #[test]
     fn empty_message_missing_env_var() {
+        setup_locale();
         let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
-        p.error_message = Some("配置缺失: GITHUB_TOKEN".into());
+        p.error_message = Some("Config missing: GITHUB_TOKEN".into());
         // 错误消息直接返回，不再尝试分类
-        assert_eq!(provider_empty_message(&p), "配置缺失: GITHUB_TOKEN");
+        assert_eq!(provider_empty_message(&p), "Config missing: GITHUB_TOKEN");
     }
 
     #[test]
     fn empty_message_session_expired() {
+        setup_locale();
         let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.error_message = Some("登录已过期: 请重新登录".into());
+        p.error_message = Some("Session expired: please re-login".into());
         // 错误消息直接返回，不再尝试分类
-        assert_eq!(provider_empty_message(&p), "登录已过期: 请重新登录");
+        assert_eq!(
+            provider_empty_message(&p),
+            "Session expired: please re-login"
+        );
     }
 
     #[test]

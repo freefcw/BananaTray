@@ -29,6 +29,9 @@ impl AiProvider for OpenCodeProvider {
     }
 
     async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
-        Err(ProviderError::unavailable("OpenCode 需要运行中的会话，暂不支持用量监控").into())
+        Err(ProviderError::unavailable(
+            "OpenCode requires an active session, usage monitoring not supported yet",
+        )
+        .into())
     }
 }

@@ -175,7 +175,7 @@ impl RefreshCoordinator {
                         RefreshOutcome {
                             kind,
                             result: RefreshResult::Unavailable {
-                                message: classified.to_string(),
+                                message: classified.format_for_display(),
                             },
                         }
                     }
@@ -184,7 +184,7 @@ impl RefreshCoordinator {
                         RefreshOutcome {
                             kind,
                             result: RefreshResult::Failed {
-                                error: classified.to_string(),
+                                error: classified.format_for_display(),
                             },
                         }
                     }

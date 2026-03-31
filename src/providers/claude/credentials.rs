@@ -23,23 +23,23 @@ impl ClaudeOAuthCredentials {
         let path = Self::credentials_path();
 
         let content = std::fs::read_to_string(&path)
-            .with_context(|| format!("无法读取凭证文件: {:?}", path))?;
+            .with_context(|| format!("failed to read credentials file: {:?}", path))?;
 
         let json: serde_json::Value =
-            serde_json::from_str(&content).with_context(|| "无法解析凭证文件 JSON")?;
+            serde_json::from_str(&content).with_context(|| "failed to parse credentials JSON")?;
 
         let oauth = json
             .get("claudeAiOauth")
-            .with_context(|| "凭证文件中缺少 claudeAiOauth 字段")?;
+            .with_context(|| "missing 'claudeAiOauth' field in credentials")?;
 
         let raw_access_token = oauth
             .get("accessToken")
             .and_then(|v| v.as_str())
-            .with_context(|| "缺少 accessToken")?;
+            .with_context(|| "missing accessToken")?;
 
         let access_token = raw_access_token.trim().to_string();
         if access_token.is_empty() {
-            anyhow::bail!("accessToken 为空");
+            anyhow::bail!("accessToken is empty");
         }
 
         Ok(ClaudeOAuthCredentials {
@@ -128,8 +128,8 @@ pub fn refresh_oauth_token(refresh_token: &str) -> Result<TokenRefreshResponse> 
         &body.to_string(),
     )?;
 
-    let refresh_response: TokenRefreshResponse =
-        serde_json::from_str(&response).with_context(|| "无法解析 Token 刷新响应")?;
+    let refresh_response: TokenRefreshResponse = serde_json::from_str(&response)
+        .with_context(|| "failed to parse token refresh response")?;
 
     Ok(refresh_response)
 }
@@ -139,10 +139,10 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
     let path = ClaudeOAuthCredentials::credentials_path();
 
     // 读取现有文件，解析失败则报错（不覆盖损坏文件）
-    let existing =
-        std::fs::read_to_string(&path).with_context(|| format!("无法读取凭证文件: {:?}", path))?;
-    let mut json: serde_json::Value =
-        serde_json::from_str(&existing).with_context(|| "凭证文件 JSON 格式损坏，拒绝覆写")?;
+    let existing = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read credentials file: {:?}", path))?;
+    let mut json: serde_json::Value = serde_json::from_str(&existing)
+        .with_context(|| "credentials JSON corrupted, refusing to overwrite")?;
 
     json["claudeAiOauth"] = serde_json::json!({
         "accessToken": creds.access_token,
@@ -156,7 +156,7 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
     // 原子写入：先写临时文件再 rename
     let tmp_path = path.with_extension("json.tmp");
     std::fs::write(&tmp_path, &serialized)
-        .with_context(|| format!("无法写入临时凭证文件: {:?}", tmp_path))?;
+        .with_context(|| format!("failed to write temp credentials file: {:?}", tmp_path))?;
 
     // 在 Unix 上设置权限 0600
     #[cfg(unix)]
@@ -167,9 +167,9 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
     }
 
     std::fs::rename(&tmp_path, &path)
-        .with_context(|| format!("无法原子替换凭证文件: {:?}", path))?;
+        .with_context(|| format!("failed to atomically replace credentials file: {:?}", path))?;
 
-    debug!("Claude: 凭证文件已更新");
+    debug!("Claude: credentials file updated");
     Ok(())
 }
 

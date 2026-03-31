@@ -4,6 +4,7 @@ use crate::utils::text_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
+use rust_i18n::t;
 use std::process::Command;
 use std::sync::LazyLock;
 
@@ -109,7 +110,7 @@ impl KiroProvider {
 
         let reset_text = RESET_RE
             .captures(&clean)
-            .map(|c| format!("Resets on {}", &c[1]));
+            .map(|c| t!("quota.label.resets_on", date = &c[1]).to_string());
 
         // Bonus credits (e.g. "Bonus credits: 122.54/500 credits used, expires in 29 days")
         if let Some(caps) = BONUS_RE.captures(&clean) {
@@ -118,9 +119,9 @@ impl KiroProvider {
             let days: u32 = caps[3].parse().unwrap_or(0);
 
             if total > 0.0 {
-                let expiry = format!("Expires in {} days", days);
+                let expiry = t!("quota.label.expires_in_days", days = days).to_string();
                 quotas.push(QuotaInfo::with_details(
-                    "Bonus Credits",
+                    t!("quota.label.bonus_credits").to_string(),
                     used,
                     total,
                     QuotaType::Credit,
@@ -136,7 +137,7 @@ impl KiroProvider {
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(
-                    "Credits",
+                    t!("quota.label.credits").to_string(),
                     used,
                     total,
                     QuotaType::General,
@@ -201,7 +202,7 @@ impl AiProvider for KiroProvider {
 
         if quotas.is_empty() {
             return Err(ProviderError::parse_failed(&format!(
-                "无法解析 kiro-cli 输出:\n{}",
+                "cannot parse kiro-cli output:\n{}",
                 stdout.trim()
             ))
             .into());

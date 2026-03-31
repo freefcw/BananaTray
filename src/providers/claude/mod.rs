@@ -84,7 +84,7 @@ impl AiProvider for ClaudeProvider {
     async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         match self.probe_mode {
             ProbeMode::Cli => {
-                debug!("Claude: 强制使用 CLI 模式");
+                debug!("Claude: forcing CLI mode");
                 if self.cli_probe.is_available() {
                     self.cli_probe.probe()
                 } else {
@@ -93,12 +93,12 @@ impl AiProvider for ClaudeProvider {
             }
 
             ProbeMode::Api => {
-                debug!("Claude: 强制使用 API 模式");
+                debug!("Claude: forcing API mode");
                 if self.api_probe.is_available() {
                     self.api_probe.probe()
                 } else {
                     Err(ProviderError::auth_required(Some(
-                        "未找到 OAuth 凭证，请运行 `claude` 登录",
+                        "OAuth credentials not found, run `claude` to login",
                     ))
                     .into())
                 }
@@ -109,14 +109,14 @@ impl AiProvider for ClaudeProvider {
 
                 // 优先尝试 API
                 if self.api_probe.is_available() {
-                    debug!("Claude: Auto 模式，尝试 API...");
+                    debug!("Claude: Auto mode, trying API...");
                     match self.api_probe.probe() {
                         Ok(quotas) => {
-                            debug!("Claude: API 成功，返回 {} 个配额", quotas.len());
+                            debug!("Claude: API succeeded, {} quotas", quotas.len());
                             return Ok(quotas);
                         }
                         Err(e) => {
-                            debug!("Claude: API 失败: {}，回退到 CLI", e);
+                            debug!("Claude: API failed: {}, falling back to CLI", e);
                             api_err = Some(e);
                         }
                     }
@@ -124,7 +124,7 @@ impl AiProvider for ClaudeProvider {
 
                 // 回退到 CLI
                 if self.cli_probe.is_available() {
-                    debug!("Claude: Auto 模式，使用 CLI...");
+                    debug!("Claude: Auto mode, using CLI...");
                     return self.cli_probe.probe();
                 }
 
@@ -132,7 +132,10 @@ impl AiProvider for ClaudeProvider {
                 if let Some(e) = api_err {
                     Err(e)
                 } else {
-                    Err(ProviderError::unavailable("Claude API 和 CLI 都不可用").into())
+                    Err(
+                        ProviderError::unavailable("Claude API and CLI are both unavailable")
+                            .into(),
+                    )
                 }
             }
         }

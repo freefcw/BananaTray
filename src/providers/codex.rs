@@ -4,6 +4,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rust_i18n::t;
 use std::path::PathBuf;
 
 super::define_unit_provider!(CodexProvider);
@@ -169,7 +170,7 @@ impl CodexProvider {
         // Check for 401/403 in the status line
         let first_line = headers.lines().next().unwrap_or("");
         if first_line.contains("401") || first_line.contains("403") {
-            return Err(ProviderError::session_expired(Some("请运行 `codex` 重新登录")).into());
+            return Err(ProviderError::session_expired(Some("run `codex` to re-login")).into());
         }
 
         // Try parsing from custom headers first
@@ -201,7 +202,7 @@ impl CodexProvider {
         if found_headers {
             if let Some(primary) = primary_percent {
                 quotas.push(QuotaInfo::with_details(
-                    "Session (5h)",
+                    t!("quota.label.session").to_string(),
                     primary,
                     100.0,
                     QuotaType::Session,
@@ -210,7 +211,7 @@ impl CodexProvider {
             }
             if let Some(secondary) = secondary_percent {
                 quotas.push(QuotaInfo::with_details(
-                    "Weekly",
+                    t!("quota.label.weekly").to_string(),
                     secondary,
                     100.0,
                     QuotaType::Weekly,
@@ -219,7 +220,7 @@ impl CodexProvider {
             }
             if let Some(credits) = credits_balance {
                 quotas.push(QuotaInfo::with_details(
-                    "Credits",
+                    t!("quota.label.credits").to_string(),
                     0.0,
                     credits,
                     QuotaType::Credit,
@@ -246,7 +247,7 @@ impl CodexProvider {
                 let reset_at = primary.get("reset_at").and_then(|v| v.as_i64());
 
                 quotas.push(QuotaInfo::with_details(
-                    "Session (5h)",
+                    t!("quota.label.session").to_string(),
                     used,
                     100.0,
                     QuotaType::Session,
@@ -262,7 +263,7 @@ impl CodexProvider {
                 let reset_at = secondary.get("reset_at").and_then(|v| v.as_i64());
 
                 quotas.push(QuotaInfo::with_details(
-                    "Weekly",
+                    t!("quota.label.weekly").to_string(),
                     used,
                     100.0,
                     QuotaType::Weekly,
