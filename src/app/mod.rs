@@ -143,7 +143,6 @@ impl AppState {
                         p.mark_unavailable(message);
                     }
                     RefreshResult::Failed { error } => {
-                        warn!(target: "providers", "provider {:?} refresh failed: {}", outcome.kind, error);
                         p.mark_refresh_failed(error);
                     }
                     RefreshResult::SkippedCooldown
