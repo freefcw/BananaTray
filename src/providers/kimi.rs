@@ -4,6 +4,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rust_i18n::t;
 use serde::Deserialize;
 use std::process::Command;
 
@@ -58,8 +59,11 @@ impl KimiProvider {
             let limit = parse_num(&detail.limit);
             let tier = detect_tier(limit);
             let label = match tier {
-                Some(t) => format!("Weekly ({})", t),
-                None => "Weekly".to_string(),
+                Some(t_name) => {
+                    let weekly = t!("quota.label.weekly").to_string();
+                    format!("{} ({})", weekly, t_name)
+                }
+                None => t!("quota.label.weekly").to_string(),
             };
             let reset_at = detail
                 .reset_time
@@ -97,7 +101,7 @@ impl KimiProvider {
                             .and_then(time_utils::format_reset_countdown);
 
                         quotas.push(QuotaInfo::with_details(
-                            "Session (5h)",
+                            t!("quota.label.session").to_string(),
                             used,
                             limit,
                             QuotaType::Session,
@@ -148,10 +152,10 @@ impl AiProvider for KimiProvider {
 
         // Fallback: check if CLI exists but we can't use it for quota
         if Command::new("kimi").arg("--version").output().is_ok() {
-            return Err(ProviderError::config_missing("请设置 KIMI_AUTH_TOKEN 环境变量").into());
+            return Err(ProviderError::config_missing("KIMI_AUTH_TOKEN").into());
         }
 
-        Err(ProviderError::config_missing("请设置 KIMI_AUTH_TOKEN 环境变量").into())
+        Err(ProviderError::config_missing("KIMI_AUTH_TOKEN").into())
     }
 }
 

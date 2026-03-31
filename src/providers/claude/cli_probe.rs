@@ -10,6 +10,7 @@ use crate::utils::text_utils;
 use anyhow::Result;
 use log::debug;
 use regex::Regex;
+use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -76,17 +77,17 @@ impl ClaudeCliProbe {
 
             // 确定配额类型和显示标签
             let (quota_type, label) = if header_lower.contains("extra usage") {
-                (QuotaType::Credit, "Extra Usage".to_string())
+                (QuotaType::Credit, t!("quota.label.extra_usage").to_string())
             } else if header_lower.contains("session") {
-                (QuotaType::Session, "Session (5h)".to_string())
+                (QuotaType::Session, t!("quota.label.session").to_string())
             } else if header_lower.contains("week") {
                 if let Some(model) = Self::extract_model_name(header) {
                     (
                         QuotaType::ModelSpecific(model.clone()),
-                        format!("Weekly ({})", model),
+                        t!("quota.label.weekly_model", model = model).to_string(),
                     )
                 } else {
-                    (QuotaType::Weekly, "Weekly".to_string())
+                    (QuotaType::Weekly, t!("quota.label.weekly").to_string())
                 }
             } else {
                 continue;
@@ -203,7 +204,7 @@ impl UsageProbe for ClaudeCliProbe {
         let output_lower = result.output.to_lowercase();
 
         if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-            return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
+            return Err(ProviderError::auth_required(Some("run `claude` to login")).into());
         }
         if output_lower.contains("update") && output_lower.contains("required") {
             return Err(ProviderError::update_required(None).into());
@@ -215,7 +216,7 @@ impl UsageProbe for ClaudeCliProbe {
         if quotas.is_empty() {
             // 检查特定问题
             if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-                return Err(ProviderError::auth_required(Some("请运行 `claude` 登录")).into());
+                return Err(ProviderError::auth_required(Some("run `claude` to login")).into());
             }
             if output_lower.contains("update") && output_lower.contains("required") {
                 return Err(ProviderError::update_required(None).into());
@@ -224,12 +225,12 @@ impl UsageProbe for ClaudeCliProbe {
             if output_lower.contains("trust the files") && !output_lower.contains("current session")
             {
                 return Err(ProviderError::unavailable(
-                    "需要信任文件夹，请在终端中运行 `claude` 并确认信任提示",
+                    "folder trust required, run `claude` in terminal and confirm trust prompt",
                 )
                 .into());
             }
             return Err(ProviderError::parse_failed(&format!(
-                "无法解析配额数据，原始输出:\n{}",
+                "cannot parse quota data, raw output:\n{}",
                 result.output.trim()
             ))
             .into());

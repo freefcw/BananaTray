@@ -42,11 +42,11 @@ impl GeminiProvider {
             match settings.security.auth.selected_type.as_str() {
                 "oauth-personal" | "unknown" => Ok(()),
                 "api-key" => Err(ProviderError::config_missing(
-                    "Gemini API key 不支持，请使用 Google 账户 (OAuth) 登录",
+                    "Gemini API key is not supported, please use Google account (OAuth) login",
                 )
                 .into()),
                 "vertex-ai" => Err(ProviderError::config_missing(
-                    "Gemini Vertex AI 不支持，请使用 Google 账户 (OAuth) 登录",
+                    "Gemini Vertex AI is not supported, please use Google account (OAuth) login",
                 )
                 .into()),
                 _ => Ok(()),
@@ -169,7 +169,9 @@ impl GeminiProvider {
         let token = creds
             .access_token
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| ProviderError::session_expired(Some("刷新后仍无有效 token")))?;
+            .ok_or_else(|| {
+                ProviderError::session_expired(Some("token still invalid after refresh"))
+            })?;
         let quotas = self.fetch_quota_via_api(&token)?;
         Ok(RefreshData::with_account(quotas, email, None))
     }
@@ -288,7 +290,7 @@ impl AiProvider for GeminiProvider {
             .access_token
             .as_deref()
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| ProviderError::auth_required(Some("请运行 `gemini` CLI 登录")))?
+            .ok_or_else(|| ProviderError::auth_required(Some("run `gemini` CLI to login")))?
             .to_string();
 
         let account_email = Self::extract_email_from_id_token(&creds);
@@ -302,7 +304,7 @@ impl AiProvider for GeminiProvider {
             log::info!(target: "providers", "Gemini token expired, attempting CLI refresh");
             self.refresh_token_via_cli().map_err(|e| {
                 log::warn!(target: "providers", "Gemini CLI token refresh failed: {e}");
-                ProviderError::session_expired(Some("请运行 `gemini` CLI 刷新"))
+                ProviderError::session_expired(Some("run `gemini` CLI to refresh"))
             })?;
             return self.fetch_quota_from_current_creds(account_email);
         }

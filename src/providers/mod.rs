@@ -3,6 +3,7 @@ pub mod manager;
 use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
+use rust_i18n::t;
 use std::sync::Arc;
 
 pub use manager::ProviderManager;
@@ -58,46 +59,47 @@ pub enum ProviderError {
 }
 
 impl std::fmt::Display for ProviderError {
+    /// 英文技术描述，面向日志和开发者调试
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CliNotFound { cli_name } => {
-                write!(f, "未找到 {}: 请先安装 CLI", cli_name)
+                write!(f, "CLI not found: {}", cli_name)
             }
             Self::Unavailable { reason } => {
-                write!(f, "不可用: {}", reason)
+                write!(f, "unavailable: {}", reason)
             }
             Self::AuthRequired { hint } => {
-                let msg = hint.as_deref().unwrap_or("请运行登录命令");
-                write!(f, "需要登录: {}", msg)
+                let msg = hint.as_deref().unwrap_or("please run login command");
+                write!(f, "auth required: {}", msg)
             }
             Self::SessionExpired { hint } => {
-                let msg = hint.as_deref().unwrap_or("请重新登录");
-                write!(f, "登录已过期: {}", msg)
+                let msg = hint.as_deref().unwrap_or("please re-login");
+                write!(f, "session expired: {}", msg)
             }
             Self::FolderTrustRequired => {
-                write!(f, "需要信任文件夹: 请在 CLI 中确认信任此目录")
+                write!(f, "folder trust required")
             }
             Self::UpdateRequired { version } => match version {
-                Some(v) => write!(f, "需要更新: 请更新 CLI 到版本 {}", v),
-                None => write!(f, "需要更新: 请更新 CLI 到最新版本"),
+                Some(v) => write!(f, "update required: version {}", v),
+                None => write!(f, "update required: latest version"),
             },
             Self::ParseFailed { reason } => {
-                write!(f, "解析失败: {}", reason)
+                write!(f, "parse failed: {}", reason)
             }
             Self::Timeout => {
-                write!(f, "请求超时: 请检查网络连接")
+                write!(f, "request timeout")
             }
             Self::NoData => {
-                write!(f, "无配额数据: 可能尚未开始使用")
+                write!(f, "no quota data")
             }
             Self::NetworkFailed { reason } => {
-                write!(f, "网络错误: {}", reason)
+                write!(f, "network error: {}", reason)
             }
             Self::ConfigMissing { key } => {
-                write!(f, "配置缺失: {}", key)
+                write!(f, "config missing: {}", key)
             }
             Self::FetchFailed { reason } => {
-                write!(f, "获取失败: {}", reason)
+                write!(f, "fetch failed: {}", reason)
             }
         }
     }
@@ -115,7 +117,7 @@ impl ProviderError {
     /// 注意：此方法不再进行字符串匹配，因为：
     /// 1. 所有 Provider 都已直接返回 `ProviderError`
     /// 2. 字符串匹配不可靠且违反 OCP
-    /// 3. Display 输出是中文，无法匹配英文关键词
+    /// 3. Display 输出是英文技术描述，不适合直接展示给用户
     pub fn classify(err: &anyhow::Error) -> Self {
         // 只检查是否已经是 ProviderError
         if let Some(provider_error) = err.downcast_ref::<Self>() {
@@ -188,6 +190,35 @@ impl ProviderError {
             reason: reason.to_string(),
         }
     }
+
+    /// 返回国际化后的用户友好消息（UI 展示用）
+    pub fn format_for_display(&self) -> String {
+        match self {
+            Self::CliNotFound { cli_name } => t!("error.cli_not_found", cli = cli_name).to_string(),
+            Self::Unavailable { reason } => t!("error.unavailable", reason = reason).to_string(),
+            Self::AuthRequired { hint } => match hint {
+                Some(h) => t!("error.auth_required", hint = h).to_string(),
+                None => t!("error.auth_required_default").to_string(),
+            },
+            Self::SessionExpired { hint } => match hint {
+                Some(h) => t!("error.session_expired", hint = h).to_string(),
+                None => t!("error.session_expired_default").to_string(),
+            },
+            Self::FolderTrustRequired => t!("error.folder_trust").to_string(),
+            Self::UpdateRequired { version } => match version {
+                Some(v) => t!("error.update_required_ver", version = v).to_string(),
+                None => t!("error.update_required").to_string(),
+            },
+            Self::ParseFailed { reason } => t!("error.parse_failed", reason = reason).to_string(),
+            Self::Timeout => t!("error.timeout").to_string(),
+            Self::NoData => t!("error.no_data").to_string(),
+            Self::NetworkFailed { reason } => {
+                t!("error.network_failed", reason = reason).to_string()
+            }
+            Self::ConfigMissing { key } => t!("error.config_missing", key = key).to_string(),
+            Self::FetchFailed { reason } => t!("error.fetch_failed", reason = reason).to_string(),
+        }
+    }
 }
 
 /// AI Provider 的核心接口
@@ -258,77 +289,81 @@ register_providers!(
 mod tests {
     use super::*;
 
+    // ── Display（英文技术描述） ────────────────────────────
+
     #[test]
     fn test_display_cli_not_found() {
         let err = ProviderError::cli_not_found("claude");
-        assert_eq!(err.to_string(), "未找到 claude: 请先安装 CLI");
+        assert_eq!(err.to_string(), "CLI not found: claude");
     }
 
     #[test]
     fn test_display_auth_required_with_hint() {
-        let err = ProviderError::auth_required(Some("请运行 `claude` 登录"));
-        assert_eq!(err.to_string(), "需要登录: 请运行 `claude` 登录");
+        let err = ProviderError::auth_required(Some("run `claude` to login"));
+        assert_eq!(err.to_string(), "auth required: run `claude` to login");
     }
 
     #[test]
     fn test_display_auth_required_without_hint() {
         let err = ProviderError::auth_required(None);
-        assert_eq!(err.to_string(), "需要登录: 请运行登录命令");
+        assert_eq!(err.to_string(), "auth required: please run login command");
     }
 
     #[test]
     fn test_display_session_expired() {
-        let err = ProviderError::session_expired(Some("请重新登录"));
-        assert_eq!(err.to_string(), "登录已过期: 请重新登录");
+        let err = ProviderError::session_expired(Some("run `codex` to re-login"));
+        assert_eq!(err.to_string(), "session expired: run `codex` to re-login");
     }
 
     #[test]
     fn test_display_config_missing() {
         let err = ProviderError::config_missing("KIMI_AUTH_TOKEN");
-        assert_eq!(err.to_string(), "配置缺失: KIMI_AUTH_TOKEN");
+        assert_eq!(err.to_string(), "config missing: KIMI_AUTH_TOKEN");
     }
 
     #[test]
     fn test_display_parse_failed() {
-        let err = ProviderError::parse_failed("无效的 JSON");
-        assert_eq!(err.to_string(), "解析失败: 无效的 JSON");
+        let err = ProviderError::parse_failed("invalid JSON");
+        assert_eq!(err.to_string(), "parse failed: invalid JSON");
     }
 
     #[test]
     fn test_display_update_required() {
         let err = ProviderError::update_required(Some("v2.0.0"));
-        assert_eq!(err.to_string(), "需要更新: 请更新 CLI 到版本 v2.0.0");
+        assert_eq!(err.to_string(), "update required: version v2.0.0");
     }
 
     #[test]
     fn test_display_update_required_no_version() {
         let err = ProviderError::update_required(None);
-        assert_eq!(err.to_string(), "需要更新: 请更新 CLI 到最新版本");
+        assert_eq!(err.to_string(), "update required: latest version");
     }
 
     #[test]
     fn test_display_unavailable() {
-        let err = ProviderError::unavailable("服务未运行");
-        assert_eq!(err.to_string(), "不可用: 服务未运行");
+        let err = ProviderError::unavailable("service not running");
+        assert_eq!(err.to_string(), "unavailable: service not running");
     }
 
     #[test]
     fn test_display_no_data() {
         let err = ProviderError::no_data();
-        assert_eq!(err.to_string(), "无配额数据: 可能尚未开始使用");
+        assert_eq!(err.to_string(), "no quota data");
     }
 
     #[test]
     fn test_display_timeout() {
         let err = ProviderError::Timeout;
-        assert_eq!(err.to_string(), "请求超时: 请检查网络连接");
+        assert_eq!(err.to_string(), "request timeout");
     }
 
     #[test]
     fn test_display_fetch_failed() {
-        let err = ProviderError::fetch_failed("网络错误");
-        assert_eq!(err.to_string(), "获取失败: 网络错误");
+        let err = ProviderError::fetch_failed("network error");
+        assert_eq!(err.to_string(), "fetch failed: network error");
     }
+
+    // ── classify ──────────────────────────────────────────
 
     #[test]
     fn test_classify_provider_error() {
@@ -348,7 +383,7 @@ mod tests {
     #[test]
     fn test_error_chain() {
         // 测试错误可以正确转换为 anyhow::Error 并恢复
-        let original = ProviderError::session_expired(Some("测试"));
+        let original = ProviderError::session_expired(Some("test"));
         let anyhow_err: anyhow::Error = original.into();
         let classified = ProviderError::classify(&anyhow_err);
         assert!(matches!(classified, ProviderError::SessionExpired { .. }));

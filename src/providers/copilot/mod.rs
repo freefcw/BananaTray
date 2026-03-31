@@ -6,6 +6,7 @@ use crate::utils::http_client;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use log::debug;
+use rust_i18n::t;
 use serde::Deserialize;
 
 // ============================================================================
@@ -211,17 +212,17 @@ impl AiProvider for CopilotProvider {
             if let Some(interactions) = snapshots.premium_interactions {
                 if interactions.unlimited.unwrap_or(false) {
                     QuotaInfo::with_details(
-                        format!("Premium Requests ({})", plan_label),
+                        t!("quota.label.premium_requests", plan = plan_label).to_string(),
                         0.0,
                         0.0,
                         QuotaType::General,
-                        Some("Unlimited".to_string()),
+                        Some(t!("quota.label.unlimited").to_string()),
                     )
                 } else {
                     let used = (interactions.entitlement - interactions.remaining).max(0) as f64;
                     let limit = interactions.entitlement as f64;
                     QuotaInfo::with_details(
-                        format!("Premium Requests ({})", plan_label),
+                        t!("quota.label.premium_requests", plan = plan_label).to_string(),
                         used,
                         limit,
                         QuotaType::Weekly,
@@ -230,11 +231,11 @@ impl AiProvider for CopilotProvider {
                 }
             } else {
                 QuotaInfo::with_details(
-                    format!("Chat & Completions ({})", plan_label),
+                    t!("quota.label.chat_completions", plan = plan_label).to_string(),
                     0.0,
                     0.0,
                     QuotaType::General,
-                    Some("Unlimited".to_string()),
+                    Some(t!("quota.label.unlimited").to_string()),
                 )
             }
         } else {

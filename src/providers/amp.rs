@@ -48,7 +48,7 @@ impl AiProvider for AmpProvider {
 
         if !output.status.success() {
             return Err(ProviderError::fetch_failed(&format!(
-                "命令失败 (exit {:?})",
+                "command failed (exit {:?})",
                 output.status.code()
             ))
             .into());
@@ -75,7 +75,7 @@ impl AiProvider for AmpProvider {
         }
 
         if quotas.is_empty() {
-            return Err(ProviderError::parse_failed("无法解析 amp usage 输出").into());
+            return Err(ProviderError::parse_failed("cannot parse amp usage output").into());
         }
 
         Ok(quotas)
@@ -89,7 +89,7 @@ impl AiProvider for AmpProvider {
 
         if !output.status.success() {
             return Err(ProviderError::fetch_failed(&format!(
-                "命令失败 (exit {:?})",
+                "command failed (exit {:?})",
                 output.status.code()
             ))
             .into());
@@ -126,7 +126,7 @@ impl AiProvider for AmpProvider {
         }
 
         if quotas.is_empty() {
-            return Err(ProviderError::parse_failed("无法解析 amp usage 输出").into());
+            return Err(ProviderError::parse_failed("cannot parse amp usage output").into());
         }
 
         Ok(RefreshData::with_account(quotas, account_email, None))

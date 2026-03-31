@@ -4,6 +4,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rust_i18n::t;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -32,7 +33,7 @@ impl CursorProvider {
 
         if !output.status.success() {
             return Err(ProviderError::fetch_failed(&format!(
-                "sqlite3 退出码 {:?}",
+                "sqlite3 exit code {:?}",
                 output.status.code()
             ))
             .into());
@@ -40,7 +41,7 @@ impl CursorProvider {
 
         let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if token.is_empty() {
-            return Err(ProviderError::auth_required(Some("请先登录 Cursor")).into());
+            return Err(ProviderError::auth_required(Some("please login to Cursor first")).into());
         }
 
         Ok(token)
@@ -50,7 +51,7 @@ impl CursorProvider {
     fn extract_user_id_from_jwt(token: &str) -> Result<String> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() < 2 {
-            return Err(ProviderError::parse_failed("JWT 格式无效").into());
+            return Err(ProviderError::parse_failed("invalid JWT format").into());
         }
 
         // Base64url decode the payload
@@ -63,16 +64,16 @@ impl CursorProvider {
         use base64::Engine;
         let payload_bytes = base64::engine::general_purpose::STANDARD
             .decode(&b64)
-            .map_err(|_| ProviderError::parse_failed("JWT payload Base64 解码失败"))?;
+            .map_err(|_| ProviderError::parse_failed("JWT payload Base64 decode failed"))?;
 
         let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
-            .map_err(|_| ProviderError::parse_failed("JWT payload JSON 解析失败"))?;
+            .map_err(|_| ProviderError::parse_failed("JWT payload JSON parse failed"))?;
 
         let sub = payload
             .get("sub")
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| ProviderError::parse_failed("JWT 缺少 'sub' 字段"))?;
+            .ok_or_else(|| ProviderError::parse_failed("JWT missing 'sub' field"))?;
 
         Ok(sub.to_string())
     }
@@ -89,7 +90,7 @@ impl CursorProvider {
     /// Parse the usage-summary JSON response into QuotaInfo entries.
     fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
         let json: serde_json::Value = serde_json::from_str(body)
-            .map_err(|_| ProviderError::parse_failed("usage-summary 响应"))?;
+            .map_err(|_| ProviderError::parse_failed("usage-summary response"))?;
 
         let mut quotas = Vec::new();
 
@@ -114,11 +115,11 @@ impl CursorProvider {
         // Handle unlimited plans
         if is_unlimited {
             quotas.push(QuotaInfo::with_details(
-                format!("Monthly ({})", tier_label),
+                t!("quota.label.monthly_tier", tier = tier_label).to_string(),
                 0.0,
                 1.0,
                 QuotaType::General,
-                Some("Unlimited".to_string()),
+                Some(t!("quota.label.unlimited").to_string()),
             ));
             return Ok(quotas);
         }
@@ -156,7 +157,7 @@ impl CursorProvider {
                     };
 
                     quotas.push(QuotaInfo::with_details(
-                        format!("Monthly ({})", tier_label),
+                        t!("quota.label.monthly_tier", tier = tier_label).to_string(),
                         effective_used,
                         effective_limit,
                         QuotaType::General,
@@ -183,7 +184,7 @@ impl CursorProvider {
                     .unwrap_or(0.0);
                 if limit > 0.0 {
                     quotas.push(QuotaInfo::with_details(
-                        "On-Demand",
+                        t!("quota.label.on_demand").to_string(),
                         used,
                         limit,
                         QuotaType::Credit,
@@ -211,7 +212,7 @@ impl CursorProvider {
                         .unwrap_or(0.0);
                     if limit > 0.0 {
                         quotas.push(QuotaInfo::with_details(
-                            "Team",
+                            t!("quota.label.team").to_string(),
                             used,
                             limit,
                             QuotaType::Credit,

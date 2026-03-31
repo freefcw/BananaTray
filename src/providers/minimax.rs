@@ -40,8 +40,8 @@ impl MiniMaxProvider {
             let msg = resp
                 .base_resp
                 .status_msg
-                .unwrap_or_else(|| "未知错误".to_string());
-            return Err(ProviderError::fetch_failed(&format!("API 错误: {}", msg)).into());
+                .unwrap_or_else(|| "unknown error".to_string());
+            return Err(ProviderError::fetch_failed(&format!("API error: {}", msg)).into());
         }
 
         let model_remains = resp.model_remains.unwrap_or_default();
@@ -104,7 +104,7 @@ impl AiProvider for MiniMaxProvider {
     async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
         let api_key = self
             .get_api_key()
-            .ok_or_else(|| ProviderError::config_missing("请设置 MINIMAX_API_KEY 环境变量"))?;
+            .ok_or_else(|| ProviderError::config_missing("MINIMAX_API_KEY"))?;
 
         self.fetch_quota(&api_key)
     }

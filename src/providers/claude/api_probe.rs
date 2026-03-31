@@ -11,6 +11,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use log::debug;
+use rust_i18n::t;
 use serde::Deserialize;
 
 /// Claude API 获取方式（无状态）
@@ -28,13 +29,13 @@ impl ClaudeApiProbe {
         let rt = creds
             .refresh_token
             .as_deref()
-            .context("缺少 refresh token，无法刷新")?;
+            .context("missing refresh token, cannot refresh")?;
 
-        debug!("Claude API: Token 需要刷新，正在刷新...");
+        debug!("Claude API: token needs refresh, refreshing...");
         let response = refresh_oauth_token(rt)?;
         creds.apply_refresh(&response);
         save_credentials_atomic(creds)?;
-        debug!("Claude API: Token 刷新成功");
+        debug!("Claude API: token refresh succeeded");
         Ok(creds.access_token.clone())
     }
 
@@ -56,18 +57,18 @@ impl ClaudeApiProbe {
 
         let status_code: u16 = status.parse().unwrap_or(0);
         if status_code == 401 || status_code == 403 {
-            return Err(ProviderError::session_expired(Some("请运行 `claude` 重新登录")).into());
+            return Err(ProviderError::session_expired(Some("run `claude` to re-login")).into());
         }
         if status_code >= 400 {
             return Err(ProviderError::fetch_failed(&format!(
-                "Usage API 返回 HTTP {}",
+                "Usage API returned HTTP {}",
                 status_code
             ))
             .into());
         }
 
         let usage: UsageResponse =
-            serde_json::from_str(&body).with_context(|| "无法解析 Usage API 响应")?;
+            serde_json::from_str(&body).with_context(|| "cannot parse Usage API response")?;
 
         Ok(usage)
     }
@@ -99,23 +100,32 @@ impl ClaudeApiProbe {
     fn parse_usage(usage: UsageResponse) -> Vec<QuotaInfo> {
         let mut quotas = Vec::new();
 
+        let session_label = t!("quota.label.session").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.five_hour,
-            "Session (5h)",
+            &session_label,
             QuotaType::Session,
         );
-        Self::push_percent_quota(&mut quotas, usage.seven_day, "Weekly", QuotaType::Weekly);
+        let weekly_label = t!("quota.label.weekly").to_string();
+        Self::push_percent_quota(
+            &mut quotas,
+            usage.seven_day,
+            &weekly_label,
+            QuotaType::Weekly,
+        );
+        let sonnet_label = t!("quota.label.weekly_model", model = "Sonnet").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.seven_day_sonnet,
-            "Weekly (Sonnet)",
+            &sonnet_label,
             QuotaType::ModelSpecific("Sonnet".to_string()),
         );
+        let opus_label = t!("quota.label.weekly_model", model = "Opus").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.seven_day_opus,
-            "Weekly (Opus)",
+            &opus_label,
             QuotaType::ModelSpecific("Opus".to_string()),
         );
 
@@ -126,7 +136,7 @@ impl ClaudeApiProbe {
                     (extra.used_credits, extra.monthly_limit)
                 {
                     quotas.push(QuotaInfo::with_details(
-                        "Extra Usage",
+                        t!("quota.label.extra_usage").to_string(),
                         used_credits / 100.0,
                         monthly_limit / 100.0,
                         QuotaType::Credit,
