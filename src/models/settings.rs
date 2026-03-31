@@ -71,48 +71,6 @@ fn default_language() -> String {
     "system".to_string()
 }
 
-/// 支持的语言列表：(locale_code, display_name_key)
-pub const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
-    ("system", "lang.system"),
-    ("en", "lang.en"),
-    ("zh-CN", "lang.zh_CN"),
-];
-
-/// 将系统 locale 标准化为支持的 locale code
-fn normalize_locale(raw: &str) -> &'static str {
-    let lower = raw.to_lowercase().replace('_', "-");
-    if lower.starts_with("zh") {
-        "zh-CN"
-    } else {
-        "en"
-    }
-}
-
-/// 根据语言设置初始化 i18n locale
-pub fn apply_locale(language: &str) {
-    let locale = if language == "system" {
-        let sys = sys_locale::get_locale().unwrap_or_else(|| "en".to_string());
-        normalize_locale(&sys)
-    } else {
-        // 验证是否为支持的语言，不支持则回退到 en
-        if SUPPORTED_LANGUAGES
-            .iter()
-            .any(|(code, _)| *code == language)
-            && language != "system"
-        {
-            // 返回精确匹配
-            match language {
-                "zh-CN" => "zh-CN",
-                "en" => "en",
-                _ => "en",
-            }
-        } else {
-            "en"
-        }
-    };
-    rust_i18n::set_locale(locale);
-}
-
 impl Default for AppSettings {
     fn default() -> Self {
         Self {

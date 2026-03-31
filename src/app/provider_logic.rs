@@ -120,6 +120,11 @@ mod tests {
         ConnectionStatus, ProviderKind, ProviderMetadata, ProviderStatus, QuotaInfo,
     };
 
+    /// 确保 i18n 测试使用英语 locale
+    fn setup_locale() {
+        rust_i18n::set_locale("en");
+    }
+
     fn make_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
         ProviderStatus {
             kind,
@@ -162,18 +167,21 @@ mod tests {
 
     #[test]
     fn format_quota_usage_integers() {
+        setup_locale();
         let q = QuotaInfo::new("Daily", 50.0, 200.0);
         assert_eq!(format_quota_usage(&q), "50 / 200 used");
     }
 
     #[test]
     fn format_quota_usage_percentage_mode() {
+        setup_locale();
         let q = QuotaInfo::new("Model", 65.0, 100.0);
         assert_eq!(format_quota_usage(&q), "35% remaining");
     }
 
     #[test]
     fn format_quota_usage_decimals() {
+        setup_locale();
         let q = QuotaInfo::new("Session", 3.5, 10.0);
         assert_eq!(format_quota_usage(&q), "3.5 / 10 used");
     }
@@ -223,6 +231,7 @@ mod tests {
 
     #[test]
     fn empty_message_connected() {
+        setup_locale();
         let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
         assert_eq!(
             provider_empty_message(&p),
@@ -232,6 +241,7 @@ mod tests {
 
     #[test]
     fn empty_message_disconnected() {
+        setup_locale();
         let p = make_provider(ProviderKind::Gemini, ConnectionStatus::Disconnected);
         assert_eq!(
             provider_empty_message(&p),
@@ -241,6 +251,7 @@ mod tests {
 
     #[test]
     fn empty_message_error() {
+        setup_locale();
         let p = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
         assert_eq!(
             provider_empty_message(&p),

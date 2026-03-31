@@ -6,6 +6,7 @@ mod app;
 mod app_state;
 mod assets;
 mod auto_launch;
+mod i18n;
 mod logging;
 pub mod models;
 pub mod notification;
@@ -242,7 +243,7 @@ fn main() {
             // 0. 初始化 i18n locale
             {
                 let settings = crate::settings_store::load().unwrap_or_default();
-                crate::models::apply_locale(&settings.language);
+                crate::i18n::apply_locale(&settings.language);
             }
 
             // 1. 初始化
