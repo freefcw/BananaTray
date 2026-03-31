@@ -4,6 +4,7 @@ use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rust_i18n::t;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
@@ -169,9 +170,7 @@ impl GeminiProvider {
         let token = creds
             .access_token
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| {
-                ProviderError::session_expired(Some("token still invalid after refresh"))
-            })?;
+            .ok_or_else(|| ProviderError::session_expired(Some(&t!("hint.token_still_invalid"))))?;
         let quotas = self.fetch_quota_via_api(&token)?;
         Ok(RefreshData::with_account(quotas, email, None))
     }
@@ -290,7 +289,9 @@ impl AiProvider for GeminiProvider {
             .access_token
             .as_deref()
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| ProviderError::auth_required(Some("run `gemini` CLI to login")))?
+            .ok_or_else(|| {
+                ProviderError::auth_required(Some(&t!("hint.login_cli", cli = "gemini")))
+            })?
             .to_string();
 
         let account_email = Self::extract_email_from_id_token(&creds);
@@ -304,7 +305,7 @@ impl AiProvider for GeminiProvider {
             log::info!(target: "providers", "Gemini token expired, attempting CLI refresh");
             self.refresh_token_via_cli().map_err(|e| {
                 log::warn!(target: "providers", "Gemini CLI token refresh failed: {e}");
-                ProviderError::session_expired(Some("run `gemini` CLI to refresh"))
+                ProviderError::session_expired(Some(&t!("hint.refresh_cli", cli = "gemini")))
             })?;
             return self.fetch_quota_from_current_creds(account_email);
         }
