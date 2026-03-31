@@ -92,8 +92,8 @@ impl AppState {
     }
 
     /// 选择新的刷新频率并同步到协调器
-    pub fn select_cadence(&mut self, mins: u64) {
-        self.settings.refresh_interval_mins = mins;
+    pub fn select_cadence(&mut self, mins: Option<u64>) {
+        self.settings.refresh_interval_mins = mins.unwrap_or(0);
         self.settings_ui.cadence_dropdown_open = false;
         self.sync_config_to_coordinator();
     }

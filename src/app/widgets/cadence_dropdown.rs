@@ -4,10 +4,20 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use rust_i18n::t;
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
-/// Available refresh cadence options (in minutes)
-const REFRESH_OPTIONS: &[u64] = &[1, 2, 3, 5, 10, 15, 30];
+/// Available refresh cadence options (None = Manual, Some(mins) = Auto)
+const REFRESH_OPTIONS: &[Option<u64>] = &[
+    None,
+    Some(1),
+    Some(2),
+    Some(3),
+    Some(5),
+    Some(10),
+    Some(15),
+    Some(30),
+];
 
 // Layout constants
 const TRIGGER_PADDING_X: f32 = 10.0;
@@ -16,8 +26,8 @@ const TRIGGER_RADIUS: f32 = 6.0;
 const TRIGGER_GAP: f32 = 4.0;
 const TRIGGER_MARGIN_LEFT: f32 = 12.0;
 const DROPDOWN_TOP_OFFSET: f32 = 32.0;
-const DROPDOWN_MIN_WIDTH: f32 = 160.0;
-const DROPDOWN_MAX_HEIGHT: f32 = 220.0;
+const DROPDOWN_MIN_WIDTH: f32 = 100.0;
+const DROPDOWN_MAX_HEIGHT: f32 = 180.0;
 const DROPDOWN_RADIUS: f32 = 8.0;
 const OPTION_PADDING_X: f32 = 12.0;
 const OPTION_PADDING_Y: f32 = 7.0;
@@ -32,11 +42,11 @@ const ROW_PADDING_Y: f32 = 10.0;
 const LABEL_GAP: f32 = 2.0;
 
 /// Format a cadence option for display
-fn format_cadence(mins: u64) -> String {
-    if mins == 1 {
-        t!("cadence.1_minute").to_string()
-    } else {
-        t!("cadence.n_minutes", n = mins).to_string()
+fn format_cadence(mins: Option<u64>) -> String {
+    match mins {
+        None => t!("cadence.manual").to_string(),
+        Some(1) => t!("cadence.1_minute").to_string(),
+        Some(m) => t!("cadence.n_minutes", n = m).to_string(),
     }
 }
 
@@ -45,7 +55,7 @@ fn format_cadence(mins: u64) -> String {
 /// Returns a `Div` that can be placed inside a card.
 pub(crate) fn render_cadence_dropdown(
     state: &Rc<RefCell<AppState>>,
-    cadence_mins: u64,
+    cadence_mins: Option<u64>,
     theme: &Theme,
 ) -> Div {
     let trigger = render_trigger_button(state, cadence_mins, theme);
@@ -82,7 +92,11 @@ fn render_cadence_label(theme: &Theme) -> Div {
 }
 
 /// Right-side trigger button that toggles the dropdown.
-fn render_trigger_button(state: &Rc<RefCell<AppState>>, cadence_mins: u64, theme: &Theme) -> Div {
+fn render_trigger_button(
+    state: &Rc<RefCell<AppState>>,
+    cadence_mins: Option<u64>,
+    theme: &Theme,
+) -> Div {
     let dropdown_open = state.borrow().settings_ui.cadence_dropdown_open;
     let toggle_state = state.clone();
 
@@ -133,33 +147,43 @@ fn render_trigger_button(state: &Rc<RefCell<AppState>>, cadence_mins: u64, theme
 }
 
 /// Floating option list shown when the dropdown is open.
-fn render_option_list(state: &Rc<RefCell<AppState>>, cadence_mins: u64, theme: &Theme) -> Deferred {
+fn render_option_list(
+    state: &Rc<RefCell<AppState>>,
+    cadence_mins: Option<u64>,
+    theme: &Theme,
+) -> Deferred {
     let bg = theme.bg_base;
     let border = theme.border_strong;
-    let scroll_handle = ScrollHandle::new();
+    let state = state.clone();
+    let theme = theme.clone();
 
     deferred(
         div()
             .occlude()
-            .id("cadence-dropdown-list")
             .absolute()
             .top(px(DROPDOWN_TOP_OFFSET))
             .right(px(0.0))
-            .min_w(px(DROPDOWN_MIN_WIDTH))
-            .max_h(px(DROPDOWN_MAX_HEIGHT))
-            .overflow_y_scroll()
-            .track_scroll(&scroll_handle)
-            .flex_col()
+            .w(px(DROPDOWN_MIN_WIDTH))
+            .h(px(DROPDOWN_MAX_HEIGHT))
             .rounded(px(DROPDOWN_RADIUS))
             .bg(bg)
             .border_1()
             .border_color(border)
             .shadow_lg()
-            .children(
-                REFRESH_OPTIONS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &mins)| render_option_row(i, mins, cadence_mins, state, bg, theme)),
+            .child(
+                uniform_list(
+                    "cadence-options-list",
+                    REFRESH_OPTIONS.len(),
+                    move |range: Range<usize>, _window: &mut Window, _cx: &mut App| {
+                        range
+                            .map(|i| {
+                                let mins = REFRESH_OPTIONS[i];
+                                render_option_row(i, mins, cadence_mins, &state, bg, &theme)
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                )
+                .size_full(),
             ),
     )
     .with_priority(1)
@@ -168,8 +192,8 @@ fn render_option_list(state: &Rc<RefCell<AppState>>, cadence_mins: u64, theme: &
 /// Single selectable row inside the option list.
 fn render_option_row(
     index: usize,
-    mins: u64,
-    cadence_mins: u64,
+    mins: Option<u64>,
+    cadence_mins: Option<u64>,
     state: &Rc<RefCell<AppState>>,
     bg: Hsla,
     theme: &Theme,
@@ -178,6 +202,7 @@ fn render_option_row(
     let opt_state = state.clone();
 
     let mut row = div()
+        .w_full()
         .flex()
         .items_center()
         .justify_between()

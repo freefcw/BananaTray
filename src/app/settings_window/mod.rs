@@ -131,6 +131,7 @@ impl Render for SettingsView {
         let theme = Self::preferences_theme();
         let settings = self.state.borrow().settings.clone();
         let active_tab = self.state.borrow().settings_ui.active_tab;
+        let viewport = window.viewport_size();
 
         let tabs: Vec<(&str, String, SettingsTab)> = vec![
             (
@@ -182,23 +183,28 @@ impl Render for SettingsView {
         }
 
         // ── Content area (depends on active tab) ─────────────
-        // Providers tab handles its own scrolling (sidebar + detail panel
-        // scroll independently), so the content wrapper must NOT be a scroll
-        // container — otherwise the inner flex_1 children can grow unbounded
-        // and never overflow.  Other tabs keep the outer scroll.
-        let content = div().id("settings-content").flex_col().flex_1();
+        // Tab bar 高度约 65px；给 content 确定高度以便 overflow_y_scroll 正确触发
+        let content_h = viewport.height - px(65.0);
+
         let content = if active_tab == SettingsTab::Providers {
-            content.overflow_hidden()
+            // Providers tab 内部 sidebar/detail 各自管理滚动
+            div()
+                .id("settings-content-providers")
+                .flex_col()
+                .h(content_h)
+                .overflow_hidden()
+                .child(self.render_providers_tab(&settings, &theme, viewport))
         } else {
-            content.overflow_y_scroll()
+            div()
+                .id("settings-content")
+                .flex_col()
+                .h(content_h)
+                .overflow_y_scroll()
+                .child(match active_tab {
+                    SettingsTab::General => self.render_general_tab(&settings, &theme),
+                    _ => Self::render_placeholder_tab(active_tab, &theme),
+                })
         };
-        let content = content.child(match active_tab {
-            SettingsTab::General => self.render_general_tab(&settings, &theme),
-            SettingsTab::Providers => {
-                self.render_providers_tab(&settings, &theme, window.viewport_size())
-            }
-            _ => Self::render_placeholder_tab(active_tab, &theme),
-        });
 
         div()
             .size_full()
