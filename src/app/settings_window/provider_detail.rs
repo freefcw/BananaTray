@@ -6,6 +6,96 @@ use crate::refresh::RefreshReason;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::app::AppState;
+
+// ══════ 可复用的 detail 区域组件 ══════
+
+/// Provider 标题区：图标 + 名称 + 副标题
+fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.0))
+        .child(
+            svg()
+                .path(icon.to_string())
+                .size(px(28.0))
+                .text_color(theme.text_primary),
+        )
+        .child(
+            div()
+                .flex_col()
+                .child(
+                    div()
+                        .text_size(px(16.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme.text_primary)
+                        .child(display_name.to_string()),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text_muted)
+                        .child(subtitle.to_string()),
+                ),
+        )
+}
+
+/// 刷新按钮（⟳）
+fn render_refresh_button(state: Rc<RefCell<AppState>>, kind: ProviderKind, theme: &Theme) -> Div {
+    div()
+        .w(px(28.0))
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(theme.border_strong)
+        .cursor_pointer()
+        .text_size(px(14.0))
+        .text_color(theme.text_muted)
+        .child("⟳")
+        .on_mouse_down(MouseButton::Left, move |_, window, _| {
+            let mut s = state.borrow_mut();
+            s.request_provider_refresh(kind, RefreshReason::Manual);
+            drop(s);
+            window.refresh();
+        })
+}
+
+/// Header 右侧操作区：刷新按钮 + 启用/禁用开关
+fn render_detail_action_buttons(
+    state: Rc<RefCell<AppState>>,
+    kind: ProviderKind,
+    is_enabled: bool,
+    theme: &Theme,
+) -> Div {
+    let state_toggle = state.clone();
+
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .child(render_refresh_button(state, kind, theme))
+        .child(
+            crate::app::widgets::render_toggle_switch(
+                is_enabled,
+                px(44.0),
+                px(24.0),
+                px(18.0),
+                theme,
+            )
+            .on_mouse_down(MouseButton::Left, move |_, window, _cx| {
+                let settings = state_toggle.borrow_mut().toggle_provider(kind);
+                persist_settings(&settings);
+                window.refresh();
+            }),
+        )
+}
 
 impl SettingsView {
     // ══════ Right detail panel ══════
@@ -35,11 +125,6 @@ impl SettingsView {
             )
         };
 
-        let state_refresh = self.state.clone();
-        let refresh_kind = selected;
-        let state_toggle = self.state.clone();
-        let toggle_kind = selected;
-
         let inner = div()
             .flex_col()
             .px(px(24.0))
@@ -51,85 +136,18 @@ impl SettingsView {
                     .flex()
                     .items_start()
                     .justify_between()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(10.0))
-                            .child(
-                                svg()
-                                    .path(icon)
-                                    .size(px(28.0))
-                                    .text_color(theme.text_primary),
-                            )
-                            .child(
-                                div()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(px(16.0))
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(theme.text_primary)
-                                            .child(display_name),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(theme.text_muted)
-                                            .child(subtitle),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            // Refresh button
-                            .child(
-                                div()
-                                    .w(px(28.0))
-                                    .h(px(28.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded(px(6.0))
-                                    .border_1()
-                                    .border_color(theme.border_strong)
-                                    .cursor_pointer()
-                                    .text_size(px(14.0))
-                                    .text_color(theme.text_muted)
-                                    .child("⟳")
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        let mut s = state_refresh.borrow_mut();
-                                        s.request_provider_refresh(
-                                            refresh_kind,
-                                            RefreshReason::Manual,
-                                        );
-                                        drop(s);
-                                        window.refresh();
-                                    }),
-                            )
-                            // Toggle switch
-                            .child(
-                                crate::app::widgets::render_toggle_switch(
-                                    is_enabled,
-                                    px(44.0),
-                                    px(24.0),
-                                    px(18.0),
-                                    theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    move |_, window, _cx| {
-                                        let settings =
-                                            state_toggle.borrow_mut().toggle_provider(toggle_kind);
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    },
-                                ),
-                            ),
-                    ),
+                    .child(render_detail_header_info(
+                        &icon,
+                        &display_name,
+                        &subtitle,
+                        theme,
+                    ))
+                    .child(render_detail_action_buttons(
+                        self.state.clone(),
+                        selected,
+                        is_enabled,
+                        theme,
+                    )),
             )
             // ── Info table ──
             .child(self.render_info_table(provider.as_ref(), is_enabled, theme))
