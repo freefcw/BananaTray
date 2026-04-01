@@ -1,4 +1,5 @@
-use super::{render_dark_card, render_divider, render_section_header, SettingsView};
+use super::components::{render_dark_card, render_divider, render_section_header};
+use super::SettingsView;
 use crate::app::persist_settings;
 use crate::app::widgets::render_svg_icon;
 use crate::auto_launch;

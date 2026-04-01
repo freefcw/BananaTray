@@ -1,4 +1,4 @@
-use super::SettingsView;
+use super::super::SettingsView;
 use crate::app::widgets::{render_detail_section_title, render_svg_icon};
 use crate::app::{persist_settings, provider_logic};
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
@@ -139,7 +139,7 @@ fn render_info_cell(label: &str, value: &str, value_color: Hsla, theme: &Theme) 
 impl SettingsView {
     // ══════ Right detail panel ══════
 
-    pub(super) fn render_provider_detail_panel(
+    pub(in crate::app::settings_window) fn render_provider_detail_panel(
         &self,
         providers: &[crate::models::ProviderStatus],
         selected: ProviderKind,
