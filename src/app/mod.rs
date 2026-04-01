@@ -249,6 +249,27 @@ impl AppView {
         }
     }
 
+    /// Toolbar 按钮基础样式：30×30 圆角边框按钮
+    fn render_toolbar_button(icon: &'static str, icon_color: Hsla, theme: &Theme) -> Div {
+        div()
+            .w(px(30.0))
+            .h(px(30.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(theme.border_subtle)
+            .bg(theme.bg_panel)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.bg_subtle))
+            .child(crate::app::widgets::render_svg_icon(
+                icon,
+                px(15.0),
+                icon_color,
+            ))
+    }
+
     fn render_global_actions(
         &self,
         active_tab: NavTab,
@@ -330,23 +351,7 @@ impl AppView {
     }
 
     fn render_dashboard_button(url: String, theme: &Theme) -> Div {
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(30.0))
-            .h(px(30.0))
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(theme.border_subtle)
-            .bg(theme.bg_panel)
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.bg_subtle))
-            .child(crate::app::widgets::render_svg_icon(
-                "src/icons/compass.svg",
-                px(15.0),
-                theme.text_accent,
-            ))
+        Self::render_toolbar_button("src/icons/compass.svg", theme.text_accent, theme)
             .on_mouse_down(MouseButton::Left, move |_, _, _| {
                 let cmd = if cfg!(target_os = "linux") {
                     "xdg-open"
@@ -366,33 +371,18 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let entity = cx.entity().clone();
 
-        let icon_color = theme.text_accent;
+        let mut btn =
+            Self::render_toolbar_button("src/icons/refresh.svg", theme.text_accent, theme);
 
-        let mut btn = div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(30.0))
-            .h(px(30.0))
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(theme.border_subtle)
-            .bg(theme.bg_panel)
-            .child(crate::app::widgets::render_svg_icon(
-                "src/icons/refresh.svg",
-                px(15.0),
-                icon_color,
-            ));
-
-        if !is_refreshing {
-            btn = btn
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.bg_subtle))
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    entity.update(cx, |view, cx| {
-                        view.refresh_single_provider(kind, cx);
-                    });
+        if is_refreshing {
+            // 刷新中：移除交互样式
+            btn = btn.cursor_default();
+        } else {
+            btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                entity.update(cx, |view, cx| {
+                    view.refresh_single_provider(kind, cx);
                 });
+            });
         }
 
         btn
@@ -402,23 +392,7 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let state = self.state.clone();
 
-        div()
-            .w(px(30.0))
-            .h(px(30.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(theme.border_subtle)
-            .bg(theme.bg_panel)
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.bg_subtle))
-            .child(crate::app::widgets::render_svg_icon(
-                "src/icons/settings.svg",
-                px(15.0),
-                theme.text_secondary,
-            ))
+        Self::render_toolbar_button("src/icons/settings.svg", theme.text_secondary, theme)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 let display_id = window.display(cx).map(|d| d.id());
                 state.borrow_mut().view_entity = None;
@@ -428,23 +402,7 @@ impl AppView {
     }
 
     fn render_close_button(theme: &Theme) -> Div {
-        div()
-            .w(px(30.0))
-            .h(px(30.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(theme.border_subtle)
-            .bg(theme.bg_panel)
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.bg_subtle))
-            .child(crate::app::widgets::render_svg_icon(
-                "src/icons/close.svg",
-                px(15.0),
-                theme.text_secondary,
-            ))
+        Self::render_toolbar_button("src/icons/close.svg", theme.text_secondary, theme)
             .on_mouse_down(MouseButton::Left, |_, _, cx| {
                 cx.quit();
             })

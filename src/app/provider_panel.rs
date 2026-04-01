@@ -9,6 +9,27 @@ use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
 
+/// 通用操作按钮（蓝底白字圆角），用于空状态的"重试"/"打开配置"等场景
+fn render_action_button(
+    label: &str,
+    theme: &Theme,
+    handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    div().w_full().flex().justify_center().mt(px(4.0)).child(
+        div()
+            .px(px(12.0))
+            .py(px(6.0))
+            .rounded(px(8.0))
+            .bg(theme.text_accent)
+            .text_size(px(12.0))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.element_active)
+            .cursor_pointer()
+            .child(label.to_string())
+            .on_mouse_down(MouseButton::Left, handler),
+    )
+}
+
 impl AppView {
     pub(crate) fn render_provider_detail(
         &self,
@@ -332,52 +353,31 @@ impl AppView {
         }
 
         if show_action {
-            // 配置错误：显示"打开配置"按钮
             if is_config_error {
-                let state_for_action = state.clone();
-                container = container.child(
-                    div().w_full().flex().justify_center().mt(px(4.0)).child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(6.0))
-                            .rounded(px(8.0))
-                            .bg(theme.text_accent)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.element_active)
-                            .cursor_pointer()
-                            .child(t!("provider.open_config").to_string())
-                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                schedule_open_settings_window_with_provider(
-                                    state_for_action.clone(),
-                                    kind,
-                                    window.display(cx).map(|d| d.id()),
-                                    cx,
-                                );
-                            }),
-                    ),
-                );
+                // 配置错误：显示"打开配置"按钮
+                container = container.child(render_action_button(
+                    &t!("provider.open_config"),
+                    theme,
+                    move |_, window, cx| {
+                        schedule_open_settings_window_with_provider(
+                            state.clone(),
+                            kind,
+                            window.display(cx).map(|d| d.id()),
+                            cx,
+                        );
+                    },
+                ));
             } else {
                 // 其他错误：显示"重试"按钮
-                container = container.child(
-                    div().w_full().flex().justify_center().mt(px(4.0)).child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(6.0))
-                            .rounded(px(8.0))
-                            .bg(theme.text_accent)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.element_active)
-                            .cursor_pointer()
-                            .child(t!("provider.retry").to_string())
-                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                entity.update(cx, |view, cx| {
-                                    view.refresh_single_provider(kind, cx);
-                                });
-                            }),
-                    ),
-                );
+                container = container.child(render_action_button(
+                    &t!("provider.retry"),
+                    theme,
+                    move |_, _, cx| {
+                        entity.update(cx, |view, cx| {
+                            view.refresh_single_provider(kind, cx);
+                        });
+                    },
+                ));
             }
         }
 
