@@ -20,10 +20,18 @@ impl SettingsView {
             .px(px(16.0))
             .pt(px(16.0))
             .pb(px(20.0))
+            // ═══════ THEME ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .child(render_section_label(&t!("settings.section.theme"), theme))
+                    .child(self.render_theme_selector(settings.theme, theme)),
+            )
             // ═══════ LANGUAGE ═══════
             .child(
                 div()
                     .flex_col()
+                    .mt(px(12.0))
                     .child(render_section_label(
                         &t!("settings.section.language"),
                         theme,

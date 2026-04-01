@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::theme::Theme;
 use gpui::*;
 

@@ -7,15 +7,15 @@ pub struct PopupLayout;
 
 impl PopupLayout {
     /// 弹出窗口固定宽度（px）
-    pub const WIDTH: f32 = 308.0;
-    /// 基础高度：nav_bar(~46) + header(~40) + footer(~42) + padding(~44)
-    pub const BASE_HEIGHT: f32 = 172.0;
-    /// 每个 quota bar 的预估高度
-    pub const PER_QUOTA_HEIGHT: f32 = 42.0;
+    pub const WIDTH: f32 = 380.0;
+    /// 基础高度：header(~64) + nav_bar(~44) + footer(~56) + padding(~52)
+    pub const BASE_HEIGHT: f32 = 216.0;
+    /// 每个 quota 卡片的预估高度（卡片化后更高）
+    pub const PER_QUOTA_HEIGHT: f32 = 140.0;
     /// 最小窗口高度
-    pub const MIN_HEIGHT: f32 = 300.0;
+    pub const MIN_HEIGHT: f32 = 380.0;
     /// 最大窗口高度
-    pub const MAX_HEIGHT: f32 = 548.0;
+    pub const MAX_HEIGHT: f32 = 720.0;
 }
 
 /// 根据 quota 数量计算弹出窗口高度（纯函数，适合测试）

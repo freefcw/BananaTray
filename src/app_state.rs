@@ -32,11 +32,14 @@ impl ProviderStore {
 pub struct NavigationState {
     pub active_tab: NavTab,
     pub last_provider_kind: ProviderKind,
+    /// 每次 switch_to 递增，用于让进度条动画在切换时重播
+    pub generation: u64,
 }
 
 impl NavigationState {
     /// 切换到指定 tab，若为 Provider 则同步 last_provider_kind
     pub fn switch_to(&mut self, tab: NavTab) {
+        self.generation += 1;
         self.active_tab = tab;
         if let NavTab::Provider(kind) = tab {
             self.last_provider_kind = kind;
@@ -197,6 +200,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -208,6 +212,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         nav.switch_to(NavTab::Settings);
         assert_eq!(nav.active_tab, NavTab::Settings);
@@ -220,6 +225,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -234,6 +240,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -247,6 +254,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Gemini),
             last_provider_kind: ProviderKind::Gemini,
+            generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -260,6 +268,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -272,6 +281,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         // Only Claude is enabled, and we're disabling it — no fallback target
         let settings = make_settings(&[ProviderKind::Claude]);
@@ -286,6 +296,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            generation: 0,
         };
         // Enable Copilot and Gemini; fallback should pick based on ProviderKind::all() order
         let settings = make_settings(&[
