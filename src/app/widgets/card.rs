@@ -37,6 +37,9 @@ pub(crate) fn render_detail_section_title(title: &str, theme: &Theme) -> Div {
 }
 
 /// 设置项行：checkbox + 标题 + 描述（不含事件处理，调用方通过 .on_mouse_down 添加）
+/// Render a checkbox row with title and description.
+/// Currently unused but kept for potential future use.
+#[allow(dead_code)]
 pub(crate) fn render_checkbox_row(
     title: &str,
     description: &str,
@@ -68,6 +71,50 @@ pub(crate) fn render_checkbox_row(
                         .text_color(theme.text_secondary)
                         .child(description.to_string()),
                 ),
+        )
+}
+
+/// Render a row with a toggle switch on the right.
+/// Only the switch is clickable, not the entire row.
+pub(crate) fn render_switch_row<F>(
+    title: &str,
+    description: &str,
+    enabled: bool,
+    theme: &Theme,
+    on_click: F,
+) -> Div
+where
+    F: Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+{
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(12.0))
+        .px(px(14.0))
+        .py(px(10.0))
+        .child(
+            div()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(title.to_string()),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .line_height(relative(1.4))
+                        .text_color(theme.text_secondary)
+                        .child(description.to_string()),
+                ),
+        )
+        .child(
+            super::render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, on_click),
         )
 }
 

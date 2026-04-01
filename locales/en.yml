@@ -123,6 +123,10 @@ notification.exhausted.title: "🔴 %{name} Quota Exhausted"
 notification.exhausted.body: "Quota depleted. Wait for recovery or upgrade your plan."
 notification.recovered.title: "✅ %{name} Quota Recovered"
 notification.recovered.body: "Quota recovered. Currently at %{pct}%."
+notification.auto_launch.enabled.title: "✅ Launch at Login Enabled"
+notification.auto_launch.enabled.body: "BananaTray will start automatically when you log in."
+notification.auto_launch.disabled.title: "🔴 Launch at Login Disabled"
+notification.auto_launch.disabled.body: "BananaTray will not start automatically."
 
 # ── Time utils ────────────────────────────────────────────
 time.resets_soon: "Resets soon"

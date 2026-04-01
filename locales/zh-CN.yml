@@ -123,6 +123,10 @@ notification.exhausted.title: "🔴 %{name} 余额已耗尽"
 notification.exhausted.body: "配额已用完，请等待恢复或升级套餐。"
 notification.recovered.title: "✅ %{name} 配额已恢复"
 notification.recovered.body: "配额已恢复，当前余量 %{pct}%。"
+notification.auto_launch.enabled.title: "✅ 已启用开机启动"
+notification.auto_launch.enabled.body: "BananaTray 将在登录时自动启动。"
+notification.auto_launch.disabled.title: "🔴 已禁用开机启动"
+notification.auto_launch.disabled.body: "BananaTray 不会自动启动。"
 
 # ── 时间工具 ─────────────────────────────────────────────
 time.resets_soon: "即将重置"
