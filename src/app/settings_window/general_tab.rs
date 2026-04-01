@@ -1,8 +1,8 @@
 use super::SettingsView;
 use crate::app::persist_settings;
 use crate::app::widgets::{
-    render_cadence_dropdown, render_card, render_card_separator, render_checkbox_row,
-    render_section_label,
+    render_cadence_dropdown, render_card, render_card_separator, render_section_label,
+    render_switch_row,
 };
 use crate::auto_launch;
 use crate::models::AppSettings;
@@ -24,10 +24,6 @@ impl SettingsView {
         let dash_checked = settings.show_toolbar_dashboard;
         let refresh_btn_state = state.clone();
         let refresh_checked = settings.show_toolbar_refresh;
-
-        // ── USAGE section ────────────────────────────────────
-        let cost_state = state.clone();
-        let cost_checked = settings.show_cost_summary;
 
         // ── AUTOMATION section ───────────────────────────────
         let cadence_mins = if settings.refresh_interval_mins == 0 {
@@ -57,23 +53,41 @@ impl SettingsView {
                     .child(render_section_label(&t!("settings.section.system"), theme))
                     .child(
                         render_card().child(
-                            render_checkbox_row(
+                            render_switch_row(
                                 &t!("settings.start_at_login"),
                                 &t!("settings.start_at_login.desc"),
                                 login_checked,
                                 theme,
-                            )
-                            .on_mouse_down(
-                                MouseButton::Left,
                                 move |_, window, _| {
-                                    let settings = {
+                                    let desired = {
                                         let mut s = login_state.borrow_mut();
                                         s.settings.start_at_login = !s.settings.start_at_login;
-                                        s.settings.clone()
+                                        persist_settings(&s.settings);
+                                        s.settings.start_at_login
                                     };
-                                    auto_launch::sync(settings.start_at_login);
-                                    persist_settings(&settings);
                                     window.refresh();
+
+                                    // 后台线程处理系统调用，避免阻塞UI
+                                    std::thread::spawn(move || {
+                                        auto_launch::sync(desired);
+
+                                        let (title, body) = if desired {
+                                            (t!("notification.auto_launch.enabled.title"),
+                                             t!("notification.auto_launch.enabled.body"))
+                                        } else {
+                                            (t!("notification.auto_launch.disabled.title"),
+                                             t!("notification.auto_launch.disabled.body"))
+                                        };
+
+                                        if let Err(e) = notify_rust::Notification::new()
+                                            .appname("BananaTray")
+                                            .summary(title.as_ref())
+                                            .body(body.as_ref())
+                                            .show()
+                                        {
+                                            log::warn!(target: "settings", "failed to show auto-launch notification: {}", e);
+                                        }
+                                    });
                                 },
                             ),
                         ),
@@ -99,14 +113,11 @@ impl SettingsView {
                     .child(
                         render_card()
                             .child(
-                                render_checkbox_row(
+                                render_switch_row(
                                     &t!("settings.show_dashboard"),
                                     &t!("settings.show_dashboard.desc"),
                                     dash_checked,
                                     theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
                                     move |_, window, _| {
                                         let settings = {
                                             let mut s = dash_state.borrow_mut();
@@ -121,14 +132,11 @@ impl SettingsView {
                             )
                             .child(render_card_separator())
                             .child(
-                                render_checkbox_row(
+                                render_switch_row(
                                     &t!("settings.show_refresh"),
                                     &t!("settings.show_refresh.desc"),
                                     refresh_checked,
                                     theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
                                     move |_, window, _| {
                                         let settings = {
                                             let mut s = refresh_btn_state.borrow_mut();
@@ -141,36 +149,6 @@ impl SettingsView {
                                     },
                                 ),
                             ),
-                    ),
-            )
-            // ═══════ USAGE ═══════
-            .child(
-                div()
-                    .flex_col()
-                    .mt(px(12.0))
-                    .child(render_section_label(&t!("settings.section.usage"), theme))
-                    .child(
-                        render_card().child(
-                            render_checkbox_row(
-                                &t!("settings.show_cost_summary"),
-                                &t!("settings.show_cost_summary.desc"),
-                                cost_checked,
-                                theme,
-                            )
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                move |_, window, _| {
-                                    let settings = {
-                                        let mut s = cost_state.borrow_mut();
-                                        s.settings.show_cost_summary =
-                                            !s.settings.show_cost_summary;
-                                        s.settings.clone()
-                                    };
-                                    persist_settings(&settings);
-                                    window.refresh();
-                                },
-                            ),
-                        ),
                     ),
             )
             // ═══════ AUTOMATION ═══════
@@ -189,14 +167,11 @@ impl SettingsView {
                             .child(render_card_separator())
                             // Check provider status
                             .child(
-                                render_checkbox_row(
+                                render_switch_row(
                                     &t!("settings.check_provider_status"),
                                     &t!("settings.check_provider_status.desc"),
                                     status_checked,
                                     theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
                                     move |_, window, _| {
                                         let settings = {
                                             let mut s = status_state.borrow_mut();
@@ -212,14 +187,11 @@ impl SettingsView {
                             .child(render_card_separator())
                             // Session quota notifications
                             .child(
-                                render_checkbox_row(
+                                render_switch_row(
                                     &t!("settings.session_quota_notifications"),
                                     &t!("settings.session_quota_notifications.desc"),
                                     notif_checked,
                                     theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
                                     move |_, window, _| {
                                         let settings = {
                                             let mut s = notif_state.borrow_mut();
@@ -235,14 +207,11 @@ impl SettingsView {
                             .child(render_card_separator())
                             // Notification sound
                             .child(
-                                render_checkbox_row(
+                                render_switch_row(
                                     &t!("settings.notification_sound"),
                                     &t!("settings.notification_sound.desc"),
                                     sound_checked,
                                     theme,
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
                                     move |_, window, _| {
                                         let settings = {
                                             let mut s = sound_state.borrow_mut();

@@ -31,9 +31,6 @@ pub struct AppSettings {
     /// 开机自启动
     #[serde(default)]
     pub start_at_login: bool,
-    /// 显示消费概览
-    #[serde(default = "default_true")]
-    pub show_cost_summary: bool,
     /// 检查 Provider 状态页
     #[serde(default = "default_true")]
     pub check_provider_status: bool,
@@ -78,7 +75,6 @@ impl Default for AppSettings {
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
             start_at_login: false,
-            show_cost_summary: true,
             check_provider_status: true,
             session_quota_notifications: true,
             notification_sound: true,

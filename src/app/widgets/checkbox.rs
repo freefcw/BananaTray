@@ -1,6 +1,9 @@
 use crate::theme::Theme;
 use gpui::*;
 
+/// Render a checkbox element.
+/// Currently unused but kept for potential future use.
+#[allow(dead_code)]
 pub(crate) fn render_checkbox(checked: bool, size: Pixels, theme: &Theme) -> Div {
     let blue: Hsla = rgb(0x007aff).into();
     div()
