@@ -1,3 +1,5 @@
+mod components;
+mod display_tab;
 mod general_tab;
 mod provider_detail;
 mod provider_sidebar;
@@ -75,13 +77,11 @@ impl SettingsView {
     /// Render a placeholder page for unimplemented tabs
     fn render_placeholder_tab(tab: SettingsTab, theme: &Theme) -> Div {
         let title = match tab {
-            SettingsTab::Display => t!("settings.tab.display").to_string(),
             SettingsTab::Advanced => t!("settings.tab.advanced").to_string(),
             SettingsTab::About => t!("settings.tab.about").to_string(),
             _ => String::new(),
         };
         let desc = match tab {
-            SettingsTab::Display => t!("settings.display.desc").to_string(),
             SettingsTab::Advanced => t!("settings.advanced.desc").to_string(),
             SettingsTab::About => t!("settings.about.desc").to_string(),
             _ => String::new(),
@@ -203,6 +203,7 @@ impl Render for SettingsView {
                 .overflow_y_scroll()
                 .child(match active_tab {
                     SettingsTab::General => self.render_general_tab(&settings, &theme),
+                    SettingsTab::Display => self.render_display_tab(&settings, &theme),
                     _ => Self::render_placeholder_tab(active_tab, &theme),
                 })
         };
