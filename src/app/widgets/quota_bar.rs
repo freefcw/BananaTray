@@ -32,12 +32,7 @@ fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
 }
 
 /// Lumina Bar 风格的 quota 卡片
-pub(crate) fn render_quota_bar(
-    q: &QuotaInfo,
-    show_gap: bool,
-    theme: &Theme,
-    generation: u64,
-) -> impl IntoElement {
+pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) -> impl IntoElement {
     let remaining_pct = q.percent_remaining();
     let is_over_limit = remaining_pct < 0.0;
     let status = q.status_level();
@@ -77,7 +72,7 @@ pub(crate) fn render_quota_bar(
     let gradient_mid: Hsla = rgb(0x06b6d4).into(); // cyan
     let gradient_end = fill_color; // 状态色（绿/黄/红）
 
-    let mut card = div()
+    let card = div()
         .w_full()
         .flex_col()
         .gap(px(6.0))
@@ -87,11 +82,6 @@ pub(crate) fn render_quota_bar(
         .bg(theme.bg_card_inner)
         .border_1()
         .border_color(theme.border_strong);
-
-    // 非首张卡片加顶部间距
-    if show_gap {
-        card = card.mt(px(12.0));
-    }
 
     card
         // ── 第一行：● MODEL-NAME + [HEALTHY] ──
