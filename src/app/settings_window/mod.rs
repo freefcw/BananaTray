@@ -35,7 +35,7 @@ impl SettingsView {
     pub(super) fn preferences_theme() -> Theme {
         Theme {
             bg_base: rgb(0xf2f2f7).into(),
-            bg_panel: rgb(0xffffff).into(),
+            bg_panel: rgb(0xf9f9fb).into(),
             bg_subtle: rgb(0xebebf0).into(),
             bg_card: rgb(0xe0ecfb).into(),
             text_primary: rgb(0x1c1c1e).into(),
@@ -45,7 +45,7 @@ impl SettingsView {
             text_accent_soft: rgb(0xc2dcf7).into(),
             border_subtle: rgb(0xdcdce2).into(),
             border_strong: rgb(0xc7c7cc).into(),
-            element_active: rgb(0xffffff).into(),
+            element_active: rgb(0xffffff).into(), // 保持纯白用于开关等元素
             element_selected: rgb(0x007aff).into(),
             status_success: rgb(0x34c759).into(),
             status_error: rgb(0xff3b30).into(),
@@ -184,8 +184,8 @@ impl Render for SettingsView {
         }
 
         // ── Content area (depends on active tab) ─────────────
-        // Tab bar 高度约 65px；给 content 确定高度以便 overflow_y_scroll 正确触发
-        let content_h = viewport.height - px(65.0);
+        // Tab bar 高度约 50px；给 content 确定高度以便 overflow_y_scroll 正确触发
+        let content_h = viewport.height - px(50.0);
 
         let content = if active_tab == SettingsTab::Providers {
             // Providers tab 内部 sidebar/detail 各自管理滚动

@@ -6,51 +6,51 @@ pub(crate) fn render_icon_tab(
     icon_path: &'static str,
     label: &str,
     active: bool,
-    _theme: &Theme,
+    theme: &Theme,
 ) -> Div {
-    let active_color: Hsla = rgb(0x007aff).into();
-    let inactive_color: Hsla = rgb(0x8e8e93).into();
-    let active_bg: Hsla = rgb(0xe3eefa).into();
-
     div()
         .flex()
         .flex_col()
         .items_center()
-        .gap(px(2.0))
-        .px(px(14.0))
-        .pt(px(4.0))
-        .pb(px(8.0))
+        .gap(px(1.0))
+        .px(px(10.0))
+        .pt(px(2.0))
+        .pb(px(6.0))
         .cursor_pointer()
         .border_b_2()
         .border_color(if active {
-            active_color
+            theme.text_accent
         } else {
             transparent_black()
         })
         .child(
             div()
-                .w(px(30.0))
-                .h(px(30.0))
+                .w(px(22.0))
+                .h(px(22.0))
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(8.0))
+                .rounded(px(5.0))
                 .bg(if active {
-                    active_bg
+                    theme.bg_card
                 } else {
                     transparent_black()
                 })
-                .child(svg().path(icon_path).size(px(17.0)).text_color(if active {
-                    active_color
+                .child(svg().path(icon_path).size(px(15.0)).text_color(if active {
+                    theme.text_accent
                 } else {
-                    inactive_color
+                    theme.text_muted
                 })),
         )
         .child(
             div()
                 .text_size(px(11.5))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(if active { active_color } else { inactive_color })
+                .text_color(if active {
+                    theme.text_accent
+                } else {
+                    theme.text_muted
+                })
                 .child(label.to_string()),
         )
 }

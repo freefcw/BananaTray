@@ -20,13 +20,24 @@ impl SettingsView {
             .px(px(16.0))
             .pt(px(16.0))
             .pb(px(20.0))
+            // ═══════ LANGUAGE ═══════
+            .child(
+                div()
+                    .flex_col()
+                    .child(render_section_label(
+                        &t!("settings.section.language"),
+                        theme,
+                    ))
+                    .child(self.render_language_selector(&settings.language, theme)),
+            )
             // ═══════ TOOLBAR ═══════
             .child(
                 div()
                     .flex_col()
+                    .mt(px(12.0))
                     .child(render_section_label(&t!("settings.section.toolbar"), theme))
                     .child(
-                        render_card()
+                        render_card(theme)
                             .child(render_switch_row(
                                 &t!("settings.show_dashboard"),
                                 &t!("settings.show_dashboard.desc"),
@@ -43,7 +54,7 @@ impl SettingsView {
                                     window.refresh();
                                 },
                             ))
-                            .child(render_card_separator())
+                            .child(render_card_separator(theme))
                             .child(render_switch_row(
                                 &t!("settings.show_refresh"),
                                 &t!("settings.show_refresh.desc"),
@@ -61,17 +72,6 @@ impl SettingsView {
                                 },
                             )),
                     ),
-            )
-            // ═══════ LANGUAGE ═══════
-            .child(
-                div()
-                    .flex_col()
-                    .mt(px(12.0))
-                    .child(render_section_label(
-                        &t!("settings.section.language"),
-                        theme,
-                    ))
-                    .child(self.render_language_selector(&settings.language, theme)),
             )
     }
 }
