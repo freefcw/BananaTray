@@ -3,6 +3,7 @@ use crate::theme::Theme;
 use gpui::*;
 
 /// macOS grouped-style 圆角卡片
+#[allow(dead_code)]
 pub(crate) fn render_card(theme: &Theme) -> Div {
     div()
         .flex_col()
@@ -21,6 +22,7 @@ pub(crate) fn render_card_separator(theme: &Theme) -> Div {
 }
 
 /// 小号段落标签（如 "SYSTEM"、"USAGE"），12px muted
+#[allow(dead_code)]
 pub(crate) fn render_section_label(title: &str, theme: &Theme) -> Div {
     div()
         .text_size(px(12.0))
@@ -80,6 +82,7 @@ pub(crate) fn render_checkbox_row(
 
 /// Render a row with a toggle switch on the right.
 /// Only the switch is clickable, not the entire row.
+#[allow(dead_code)]
 pub(crate) fn render_switch_row<F>(
     title: &str,
     description: &str,

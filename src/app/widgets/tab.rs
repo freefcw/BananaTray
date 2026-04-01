@@ -2,6 +2,7 @@ use crate::theme::Theme;
 use gpui::*;
 
 /// 设置窗口顶部 tab 栏项（icon + label + 下划线指示器）
+#[allow(dead_code)]
 pub(crate) fn render_icon_tab(
     icon_path: &'static str,
     label: &str,

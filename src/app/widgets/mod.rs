@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod cadence_dropdown;
 mod card;
 mod checkbox;
@@ -7,15 +8,12 @@ mod tab;
 mod toggle;
 mod tooltip;
 
-pub(crate) use cadence_dropdown::render_cadence_dropdown;
 pub(crate) use card::{
     render_card, render_card_separator, render_detail_section_title, render_info_row,
-    render_section_label, render_switch_row,
 };
 pub(crate) use checkbox::render_checkbox;
 pub(crate) use icon::{render_footer_glyph, render_svg_icon};
 pub(crate) use quota_bar::render_quota_bar;
-pub(crate) use tab::render_icon_tab;
 pub(crate) use toggle::render_toggle_switch;
 #[allow(unused_imports)]
 pub(crate) use tooltip::with_tooltip;

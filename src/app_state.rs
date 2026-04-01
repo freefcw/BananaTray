@@ -68,7 +68,6 @@ pub enum SettingsTab {
     General,
     Providers,
     Display,
-    Advanced,
     About,
 }
 
