@@ -11,6 +11,7 @@
 | Kimi | `kimi:api` | HTTP API | `providers/kimi.rs` |
 | Amp | `amp:cli` | CLI (`amp usage`) | `providers/amp.rs` |
 | Cursor | `cursor:api` | HTTP API + local SQLite | `providers/cursor.rs` |
+| Antigravity | `antigravity:api` | Local language server API | `providers/antigravity.rs` ([API 文档](antigravity-api.md)) |
 | MiniMax | `minimax:api` | HTTP API | `providers/minimax.rs` |
 | Kiro | `kiro:cli` | CLI (interactive PTY) | `providers/kiro.rs` |
 | Kilo | `kilo:ext` | — (placeholder) | `providers/kilo.rs` |
