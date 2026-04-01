@@ -25,8 +25,6 @@ impl SettingsView {
         } else {
             Some(settings.refresh_interval_mins)
         };
-        let status_state = state.clone();
-        let status_checked = settings.check_provider_status;
         let notif_state = state.clone();
         let notif_checked = settings.session_quota_notifications;
         let sound_state = state.clone();
@@ -43,7 +41,7 @@ impl SettingsView {
                     .flex_col()
                     .child(render_section_label(&t!("settings.section.system"), theme))
                     .child(
-                        render_card().child(
+                        render_card(theme).child(
                             render_switch_row(
                                 &t!("settings.start_at_login"),
                                 &t!("settings.start_at_login.desc"),
@@ -94,30 +92,10 @@ impl SettingsView {
                         theme,
                     ))
                     .child(
-                        render_card()
+                        render_card(theme)
                             // Refresh cadence (dropdown)
                             .child(render_cadence_dropdown(&state, cadence_mins, theme))
-                            .child(render_card_separator())
-                            // Check provider status
-                            .child(
-                                render_switch_row(
-                                    &t!("settings.check_provider_status"),
-                                    &t!("settings.check_provider_status.desc"),
-                                    status_checked,
-                                    theme,
-                                    move |_, window, _| {
-                                        let settings = {
-                                            let mut s = status_state.borrow_mut();
-                                            s.settings.check_provider_status =
-                                                !s.settings.check_provider_status;
-                                            s.settings.clone()
-                                        };
-                                        persist_settings(&settings);
-                                        window.refresh();
-                                    },
-                                ),
-                            )
-                            .child(render_card_separator())
+                            .child(render_card_separator(theme))
                             // Session quota notifications
                             .child(
                                 render_switch_row(
@@ -137,7 +115,7 @@ impl SettingsView {
                                     },
                                 ),
                             )
-                            .child(render_card_separator())
+                            .child(render_card_separator(theme))
                             // Notification sound
                             .child(
                                 render_switch_row(
@@ -163,19 +141,19 @@ impl SettingsView {
             .child(
                 div()
                     .flex()
-                    .justify_center()
-                    .mt(px(12.0))
+                    .justify_end()
+                    .mt(px(16.0))
                     .pb(px(4.0))
                     .child(
                         div()
-                            .px(px(22.0))
-                            .py(px(8.0))
-                            .rounded_full()
-                            .bg(theme.status_error)
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.element_active)
+                            .px(px(16.0))
+                            .py(px(6.0))
+                            .rounded(px(6.0))
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.status_error)
                             .cursor_pointer()
+                            .hover(|s| s.bg(theme.border_subtle))
                             .child(t!("settings.quit").to_string())
                             .on_mouse_down(MouseButton::Left, |_, _, cx| {
                                 cx.quit();

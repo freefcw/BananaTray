@@ -10,7 +10,7 @@ impl SettingsView {
     pub(super) fn render_language_selector(&self, current: &str, theme: &Theme) -> Div {
         use crate::i18n::SUPPORTED_LANGUAGES;
 
-        let card = render_card()
+        let card = render_card(theme)
             .flex_col()
             .px(px(14.0))
             .py(px(10.0))

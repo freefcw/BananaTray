@@ -2,18 +2,22 @@ use super::render_checkbox;
 use crate::theme::Theme;
 use gpui::*;
 
-/// macOS grouped-style 白色圆角卡片
-pub(crate) fn render_card() -> Div {
+/// macOS grouped-style 圆角卡片
+pub(crate) fn render_card(theme: &Theme) -> Div {
     div()
         .flex_col()
         .rounded(px(10.0))
-        .bg(rgb(0xffffff))
+        .bg(theme.bg_panel)
         .overflow_hidden()
 }
 
 /// 卡片内部水平分隔线（左缩进）
-pub(crate) fn render_card_separator() -> Div {
-    div().h(px(0.5)).w_full().ml(px(14.0)).bg(rgb(0xe5e5ea))
+pub(crate) fn render_card_separator(theme: &Theme) -> Div {
+    div()
+        .h(px(0.5))
+        .w_full()
+        .ml(px(14.0))
+        .bg(theme.progress_track)
 }
 
 /// 小号段落标签（如 "SYSTEM"、"USAGE"），12px muted

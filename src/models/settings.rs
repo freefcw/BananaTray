@@ -31,9 +31,6 @@ pub struct AppSettings {
     /// 开机自启动
     #[serde(default)]
     pub start_at_login: bool,
-    /// 检查 Provider 状态页
-    #[serde(default = "default_true")]
-    pub check_provider_status: bool,
     /// Session 配额变更通知
     #[serde(default = "default_true")]
     pub session_quota_notifications: bool,
@@ -75,7 +72,6 @@ impl Default for AppSettings {
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,
             start_at_login: false,
-            check_provider_status: true,
             session_quota_notifications: true,
             notification_sound: true,
             show_toolbar_dashboard: true,

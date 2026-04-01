@@ -22,7 +22,7 @@ impl SettingsView {
         let mut card = div()
             .flex_col()
             .rounded(px(10.0))
-            .bg(rgb(0xffffff))
+            .bg(theme.bg_panel)
             .py(px(4.0));
         let ordered = settings.ordered_providers();
 
@@ -42,7 +42,7 @@ impl SettingsView {
             let kind_copy = *kind;
 
             if i > 0 {
-                card = card.child(render_card_separator());
+                card = card.child(render_card_separator(theme));
             }
 
             let is_first = i == 0;
@@ -52,30 +52,27 @@ impl SettingsView {
             let kind_up = *kind;
             let kind_down = *kind;
 
-            // 排序按钮
-            let arrows = div()
-                .flex_col()
-                .flex_shrink_0()
-                .gap(px(2.0))
-                .child({
-                    let mut up_btn = div()
-                        .w(px(16.0))
-                        .h(px(12.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(3.0))
-                        .text_size(px(8.0));
+            // 排序箭头：仅选中行渲染，默认隐藏，hover 时显示
+            let arrows = if is_selected {
+                let group_name = format!("sidebar-item-{i}");
+                let mut arrow_col = div()
+                    .flex_col()
+                    .flex_shrink_0()
+                    .gap(px(2.0))
+                    .opacity(0.0)
+                    .group_hover(&group_name, |s| s.opacity(1.0));
 
-                    if !is_selected {
-                        // 未选中：白色文字，不可点击
-                        up_btn = up_btn.text_color(theme.element_active).child("▲");
-                    } else if is_first {
-                        // 选中但禁用：白色文字
-                        up_btn = up_btn.text_color(theme.element_active).child("▲");
-                    } else {
-                        // 选中且可用：白色文字，可点击
-                        up_btn = up_btn
+                // 上移按钮（非首项才渲染）
+                if !is_first {
+                    arrow_col = arrow_col.child(
+                        div()
+                            .w(px(16.0))
+                            .h(px(12.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(3.0))
+                            .text_size(px(8.0))
                             .text_color(theme.element_active)
                             .cursor_pointer()
                             .hover(|s| s.opacity(0.7))
@@ -87,29 +84,21 @@ impl SettingsView {
                                 }
                                 drop(s);
                                 window.refresh();
-                            });
-                    }
-                    up_btn
-                })
-                .child({
-                    let mut down_btn = div()
-                        .w(px(16.0))
-                        .h(px(12.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(3.0))
-                        .text_size(px(8.0));
+                            }),
+                    );
+                }
 
-                    if !is_selected {
-                        // 未选中：白色文字，不可点击
-                        down_btn = down_btn.text_color(theme.element_active).child("▼");
-                    } else if is_last {
-                        // 选中但禁用：白色文字
-                        down_btn = down_btn.text_color(theme.element_active).child("▼");
-                    } else {
-                        // 选中且可用：白色文字，可点击
-                        down_btn = down_btn
+                // 下移按钮（非末项才渲染）
+                if !is_last {
+                    arrow_col = arrow_col.child(
+                        div()
+                            .w(px(16.0))
+                            .h(px(12.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(3.0))
+                            .text_size(px(8.0))
                             .text_color(theme.element_active)
                             .cursor_pointer()
                             .hover(|s| s.opacity(0.7))
@@ -121,12 +110,18 @@ impl SettingsView {
                                 }
                                 drop(s);
                                 window.refresh();
-                            });
-                    }
-                    down_btn
-                });
+                            }),
+                    );
+                }
 
-            let item_content =
+                Some((group_name, arrow_col))
+            } else {
+                None
+            };
+
+            let group_name = arrows.as_ref().map(|(g, _)| g.clone());
+
+            let mut item_content =
                 div()
                     .flex()
                     .items_center()
@@ -166,14 +161,21 @@ impl SettingsView {
                         } else {
                             name_row
                         }
-                    })
-                    // Arrows
-                    .child(arrows);
+                    });
 
-            let item = div()
-                .flex()
-                .items_center()
-                .cursor_pointer()
+            // 追加箭头（仅选中行）
+            if let Some((_, arrow_el)) = arrows {
+                item_content = item_content.child(arrow_el);
+            }
+
+            let mut item = div().flex().items_center().cursor_pointer();
+
+            // 给行设置 group 标记以触发箭头的 group_hover
+            if let Some(g) = group_name {
+                item = item.group(g);
+            }
+
+            item = item
                 .child(if is_selected {
                     div()
                         .rounded(px(8.0))
@@ -191,8 +193,8 @@ impl SettingsView {
             card = card.child(item);
         }
 
-        // Tab bar ≈ 65px, sidebar top-padding = 8px
-        let sidebar_scroll_h = viewport.height - px(65.0) - px(8.0);
+        // Tab bar ≈ 50px, sidebar top-padding = 8px
+        let sidebar_scroll_h = viewport.height - px(50.0) - px(8.0);
 
         div()
             .flex_col()
