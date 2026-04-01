@@ -214,45 +214,6 @@ impl SettingsView {
     }
 
     // ========================================================================
-    // 底部 "Save & Return" 按钮
-    // ========================================================================
-
-    fn render_save_button(theme: &Theme) -> Div {
-        // 渐变紫蓝色
-        let gradient_start: Hsla = rgb(0x6366f1).into(); // indigo
-        let gradient_end: Hsla = rgb(0x3b82f6).into(); // blue
-
-        div().w_full().px(px(16.0)).pb(px(16.0)).pt(px(8.0)).child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .py(px(14.0))
-                .rounded(px(12.0))
-                .bg(multi_stop_linear_gradient(
-                    90.,
-                    &[
-                        linear_color_stop(gradient_start, 0.),
-                        linear_color_stop(gradient_end, 1.),
-                    ],
-                ))
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.85))
-                .child(
-                    div()
-                        .text_size(px(15.0))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme.element_active)
-                        .child(t!("settings.save_return").to_string()),
-                )
-                .on_mouse_down(MouseButton::Left, |_, window, _| {
-                    window.remove_window();
-                }),
-        )
-    }
-
-    // ========================================================================
     // Providers tab (保留双栏布局)
     // ========================================================================
 
@@ -490,8 +451,8 @@ impl Render for SettingsView {
         let viewport = window.viewport_size();
 
         // ── Content area ─────────────
-        // 头部 + tab 合计约 100px, 底部 Save 按钮约 60px
-        let content_h = viewport.height - px(160.0);
+        // 头部 + tab 合计约 100px
+        let content_h = viewport.height - px(100.0);
 
         let content = if active_tab == SettingsTab::Providers {
             div()
@@ -550,7 +511,5 @@ impl Render for SettingsView {
             .child(div().w_full().h(px(0.5)).bg(theme.border_subtle))
             // 内容区
             .child(content)
-            // 底部 "Save & Return"
-            .child(Self::render_save_button(&theme))
     }
 }

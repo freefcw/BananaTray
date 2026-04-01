@@ -123,35 +123,38 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     // Determine target display: prefer provided display_id, then mouse cursor display
     let target_display_id = display_id.or_else(|| platform_display::find_mouse_display(cx));
 
-    // Try to activate an existing settings window first
-    let activated_existing = SETTINGS_WINDOW.with(|slot| {
-        if let Some(handle) = slot.borrow().as_ref() {
-            info!(target: "settings", "existing settings window found, attempting to activate it");
+    // Try to activate an existing settings window first.
+    // NOTE: 先 clone handle 出来再操作，避免在 slot.borrow() 活着时调用 borrow_mut() 导致 panic。
+    let existing_handle = SETTINGS_WINDOW.with(|slot| *slot.borrow());
+    let activated_existing = if let Some(handle) = existing_handle {
+        info!(target: "settings", "existing settings window found, attempting to activate it");
 
-            // Check if window is on a different display than the target;
-            // if so, close and reopen on the correct display.
-            if let Some(target_id) = target_display_id {
-                let on_different_display = handle
-                    .update(cx, |_, window, cx| {
-                        // window.display() returns the display the window is currently on
-                        window
-                            .display(cx)
-                            .map(|d| d.id() != target_id)
-                            .unwrap_or(true)
-                    })
-                    .unwrap_or(false);
+        // Check if window is on a different display than the target;
+        // if so, close and reopen on the correct display.
+        let mut should_reopen = false;
+        if let Some(target_id) = target_display_id {
+            let on_different_display = handle
+                .update(cx, |_, window, cx| {
+                    window
+                        .display(cx)
+                        .map(|d| d.id() != target_id)
+                        .unwrap_or(true)
+                })
+                .unwrap_or(false);
 
-                if on_different_display {
-                    info!(target: "settings", "window on different display, closing to reopen on target display");
-                    let _ = handle.update(cx, |_, window, _| {
-                        window.remove_window();
-                    });
-                    // 即时清理 slot，避免留下 stale handle
-                    *slot.borrow_mut() = None;
-                    return false;
-                }
+            if on_different_display {
+                info!(target: "settings", "window on different display, closing to reopen on target display");
+                let _ = handle.update(cx, |_, window, _| {
+                    window.remove_window();
+                });
+                SETTINGS_WINDOW.with(|slot| *slot.borrow_mut() = None);
+                should_reopen = true;
             }
+        }
 
+        if should_reopen {
+            false
+        } else {
             let ok = handle
                 .update(cx, |_, window, _| {
                     window.show_window();
@@ -160,13 +163,13 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
                 .is_ok();
             if !ok {
                 info!(target: "settings", "existing handle is stale, clearing");
-                *slot.borrow_mut() = None;
+                SETTINGS_WINDOW.with(|slot| *slot.borrow_mut() = None);
             }
             ok
-        } else {
-            false
         }
-    });
+    } else {
+        false
+    };
 
     if activated_existing {
         cx.activate(true);
@@ -180,7 +183,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
 
     let settings_state = state.clone();
     let display_id = target_display_id;
-    let window_size = size(px(430.0), px(640.0));
+    let window_size = size(px(680.0), px(720.0));
     // Calculate display-local centered bounds. Bounds::centered() returns global
     // coordinates, but the macOS platform layer adds screen_frame.origin on top,
     // causing double-offset on secondary displays.
@@ -200,7 +203,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     let result = cx.open_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
-            window_min_size: Some(size(px(380.0), px(480.0))),
+            window_min_size: Some(size(px(520.0), px(520.0))),
             titlebar: None,
             kind: WindowKind::Normal,
             display_id,

@@ -21,6 +21,13 @@ pub fn init() -> Result<LoggingInit> {
         .level(level)
         .level_for("wgpu", LevelFilter::Warn)
         .level_for("naga", LevelFilter::Warn)
+        // GPUI 框架内部 display link 回调在窗口关闭后仍可能触发，产生无害的
+        // "window not found" ERROR 日志（空 target）。过滤掉这类噪音。
+        .filter(|metadata| {
+            // 空 target 的 ERROR 来自 GPUI 内部（registry crate 路径无 "crates/" 前缀
+            // 导致 target 为空），降级过滤
+            !(metadata.target().is_empty() && metadata.level() == log::Level::Error)
+        })
         .format(|out, message, record| {
             out.finish(format_args!(
                 "{} [{}] {:<12} {}",
