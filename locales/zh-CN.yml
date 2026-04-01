@@ -81,6 +81,8 @@ provider.unknown_error: "未知错误"
 provider.no_usage: "暂无用量数据"
 provider.not_available: "服务商不可用"
 provider.auto_configured: "%{name} 已自动配置，无需额外设置。"
+provider.settings.auto_title: "此服务商由系统自动配置"
+provider.settings.auto_desc: "无需额外设置"
 provider.not_found: "未找到服务商"
 
 # ── 服务商面板（弹出窗口）────────────────────────────────

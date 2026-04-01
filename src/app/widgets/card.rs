@@ -13,6 +13,7 @@ pub(crate) fn render_card(theme: &Theme) -> Div {
 }
 
 /// 卡片内部水平分隔线（左缩进）
+#[allow(dead_code)]
 pub(crate) fn render_card_separator(theme: &Theme) -> Div {
     div()
         .h(px(0.5))
@@ -126,6 +127,7 @@ where
 }
 
 /// 键值信息行
+#[allow(dead_code)]
 pub(crate) fn render_info_row(label: &str, value: &str, theme: &Theme) -> Div {
     div()
         .flex()

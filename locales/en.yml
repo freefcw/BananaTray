@@ -81,6 +81,8 @@ provider.unknown_error: "Unknown error"
 provider.no_usage: "No usage yet"
 provider.not_available: "Provider not available"
 provider.auto_configured: "%{name} is configured automatically. No additional settings required."
+provider.settings.auto_title: "This provider is automatically configured"
+provider.settings.auto_desc: "No additional settings required"
 provider.not_found: "Provider not found"
 
 # ── Provider panel (popup) ────────────────────────────────

@@ -1,6 +1,5 @@
 use super::SettingsView;
 use crate::app::persist_settings;
-use crate::app::widgets::render_card_separator;
 use crate::models::{AppSettings, ProviderKind};
 use crate::theme::Theme;
 use gpui::*;
@@ -90,30 +89,31 @@ fn render_sidebar_item_content(
     theme: &Theme,
     arrows: Option<Div>,
 ) -> Div {
+    // 设计稿：选中项图标和文字为亮色/紫色，未选中为灰色
     let icon_color = if is_selected {
-        theme.element_active
+        theme.text_primary
     } else {
-        theme.text_secondary
+        theme.text_muted
     };
     let name_color = if is_selected {
-        theme.element_active
-    } else {
         theme.text_primary
+    } else {
+        theme.text_muted
     };
 
     // 名称行：名字 + 启用圆点
-    let name_row = div().flex().items_center().gap(px(4.0)).flex_1().child(
+    let name_row = div().flex().items_center().gap(px(8.0)).flex_1().child(
         div()
-            .text_size(px(12.5))
-            .font_weight(FontWeight::SEMIBOLD)
+            .text_size(px(13.0))
+            .font_weight(FontWeight::MEDIUM)
             .text_color(name_color)
             .child(display_name),
     );
     let name_row = if is_enabled {
         name_row.child(
             div()
-                .w(px(6.0))
-                .h(px(6.0))
+                .w(px(7.0))
+                .h(px(7.0))
                 .rounded_full()
                 .bg(theme.status_success),
         )
@@ -124,14 +124,14 @@ fn render_sidebar_item_content(
     let mut content = div()
         .flex()
         .items_center()
-        .gap(px(8.0))
-        .px(px(10.0))
-        .py(px(8.0))
+        .gap(px(10.0))
+        .px(px(12.0))
+        .h(px(40.0)) // 固定高度，防止箭头(▲/▼)出现时撑高整行
         .w_full()
         .child(
             svg()
                 .path(icon)
-                .size(px(22.0))
+                .size(px(20.0))
                 .flex_shrink_0()
                 .text_color(icon_color),
         )
@@ -159,19 +159,32 @@ fn render_sidebar_item(
         item = item.group(g);
     }
 
-    item.child(if is_selected {
+    // 设计稿：选中项有半透明紫色背景 + 紫色边框，未选中无背景。
+    // 将两者统一为一个 div，避免由于节点变化或边框有无造成的 1px 跳动。
+    // 将两者统一为一个带 border_1() 的 div，避免边框切换造成的 1px 跳动。
+    let styled_wrapper = if is_selected {
         div()
             .rounded(px(8.0))
-            .bg(theme.element_selected)
             .w_full()
+            .border_1()
+            .border_color(hsla(250.0 / 360.0, 0.6, 0.5, 0.4))
+            .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.2))
             .child(item_content)
     } else {
-        item_content
-    })
-    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-        state.borrow_mut().settings_ui.selected_provider = kind;
-        window.refresh();
-    })
+        div()
+            .rounded(px(8.0))
+            .w_full()
+            .border_1()
+            .border_color(gpui::transparent_black())
+            .hover(|s| s.bg(theme.bg_subtle))
+            .child(item_content)
+    };
+
+    item.child(styled_wrapper)
+        .on_mouse_down(MouseButton::Left, move |_, window, _| {
+            state.borrow_mut().settings_ui.selected_provider = kind;
+            window.refresh();
+        })
 }
 
 impl SettingsView {
@@ -185,14 +198,8 @@ impl SettingsView {
         theme: &Theme,
         viewport: Size<Pixels>,
     ) -> Div {
-        // NOTE: 不使用 render_card()，因为它带有 overflow_hidden()，
-        // 会让 Taffy 将 card 的 min-height 设为 0，导致 card 在 Scrollable
-        // 内部被压缩到容器高度，永远不会溢出，滚动条无法触发。
-        let mut card = div()
-            .flex_col()
-            .rounded(px(10.0))
-            .bg(theme.bg_panel)
-            .py(px(4.0));
+        // 设计稿：sidebar 无背景色，直接在暗色底上列出 provider
+        let mut list = div().flex_col().py(px(4.0));
 
         let ordered = settings.ordered_providers();
 
@@ -207,10 +214,6 @@ impl SettingsView {
             let display_name = status
                 .map(|p| p.display_name().to_string())
                 .unwrap_or_else(|| format!("{:?}", kind));
-
-            if i > 0 {
-                card = card.child(render_card_separator(theme));
-            }
 
             let is_first = i == 0;
             let is_last = i == ordered.len() - 1;
@@ -243,7 +246,7 @@ impl SettingsView {
                 *kind,
             );
 
-            card = card.child(item);
+            list = list.child(item);
         }
 
         // Tab bar ≈ 50px, sidebar top-padding = 8px
@@ -263,7 +266,7 @@ impl SettingsView {
                     .flex_col()
                     .h(sidebar_scroll_h)
                     .overflow_y_scroll()
-                    .child(card),
+                    .child(list),
             )
     }
 }
