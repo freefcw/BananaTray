@@ -147,19 +147,15 @@ impl AppView {
             self.render_refreshing_state(&provider, &theme)
         } else if has_quotas {
             let gen = self.state.borrow().nav.generation;
-            let theme_clone = theme.clone();
-            div()
-                .flex_col()
-                .gap(px(16.0))
-                .children(
-                    provider
-                        .quotas
-                        .iter()
-                        .enumerate()
-                        .map(move |(index, quota)| {
-                            super::widgets::render_quota_bar(quota, index > 0, &theme_clone, gen)
-                        }),
-                )
+            let mut cards = div().flex_col();
+            for (i, quota) in provider.quotas.iter().enumerate() {
+                if i > 0 {
+                    // 卡片之间的显式间距（不依赖 gap，GPUI 对 gap 支持不稳定）
+                    cards = cards.child(div().h(px(8.0)));
+                }
+                cards = cards.child(super::widgets::render_quota_bar(quota, &theme, gen));
+            }
+            cards
         } else {
             self.render_provider_empty_state(&provider, cx)
         };

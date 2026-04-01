@@ -37,7 +37,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 
 ### `layout.rs` — Popup Window Sizing
 
-- **`PopupLayout`** — constants for popup dimensions: `WIDTH`, `BASE_HEIGHT`, `PER_QUOTA_HEIGHT`, `MIN_HEIGHT`, `MAX_HEIGHT`
+- **`PopupLayout`** — constants for popup dimensions: `WIDTH`, `BASE_HEIGHT`, `FIRST_QUOTA_HEIGHT`, `EXTRA_QUOTA_HEIGHT`, `MIN_HEIGHT`, `MAX_HEIGHT`
 - **`compute_popup_height_for_quotas()`** — pure function mapping quota count to pixel height (clamped to min/max)
 
 ## Constraints
