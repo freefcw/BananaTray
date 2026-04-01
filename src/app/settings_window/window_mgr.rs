@@ -3,7 +3,6 @@ use crate::app::AppState;
 use crate::models::ProviderKind;
 use gpui::*;
 use log::{error, info};
-use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -147,6 +146,8 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
                     let _ = handle.update(cx, |_, window, _| {
                         window.remove_window();
                     });
+                    // 即时清理 slot，避免留下 stale handle
+                    *slot.borrow_mut() = None;
                     return false;
                 }
             }
@@ -159,6 +160,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
                 .is_ok();
             if !ok {
                 info!(target: "settings", "existing handle is stale, clearing");
+                *slot.borrow_mut() = None;
             }
             ok
         } else {
@@ -178,7 +180,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
 
     let settings_state = state.clone();
     let display_id = target_display_id;
-    let window_size = size(px(580.0), px(560.0));
+    let window_size = size(px(430.0), px(640.0));
     // Calculate display-local centered bounds. Bounds::centered() returns global
     // coordinates, but the macOS platform layer adds screen_frame.origin on top,
     // causing double-offset on secondary displays.
@@ -198,11 +200,8 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     let result = cx.open_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
-            window_min_size: Some(size(px(520.0), px(440.0))),
-            titlebar: Some(TitlebarOptions {
-                title: Some(t!("settings.title").to_string().into()),
-                ..Default::default()
-            }),
+            window_min_size: Some(size(px(380.0), px(480.0))),
+            titlebar: None,
             kind: WindowKind::Normal,
             display_id,
             ..Default::default()

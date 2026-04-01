@@ -21,7 +21,6 @@ settings.tab.about: "About"
 
 # General tab — section labels
 settings.section.system: "SYSTEM"
-settings.section.toolbar: "TOOLBAR"
 settings.section.usage: "USAGE"
 settings.section.automation: "AUTOMATION"
 settings.section.language: "LANGUAGE"
@@ -30,10 +29,6 @@ settings.section.theme: "THEME"
 # General tab — items
 settings.start_at_login: "Start at Login"
 settings.start_at_login.desc: "Automatically opens BananaTray when you log in."
-settings.show_dashboard: "Show Dashboard button"
-settings.show_dashboard.desc: "Display the Dashboard button in the popup toolbar."
-settings.show_refresh: "Show Refresh button"
-settings.show_refresh.desc: "Display the Refresh button in the popup toolbar."
 settings.show_cost_summary: "Show cost summary"
 settings.show_cost_summary.desc: "Reads local usage logs. Shows today + last 30 days cost in the menu."
 settings.refresh_cadence: "Refresh cadence"
@@ -57,6 +52,12 @@ settings.display.desc: "Customize appearance, menu bar icon style, and notificat
 settings.advanced.desc: "Debug logging, network proxy, and other advanced options."
 settings.about.desc: "BananaTray version info, licenses, and acknowledgements."
 settings.coming_soon: "Coming soon"
+settings.save_return: "Save & Return"
+settings.section.toolbar: "TOOLBAR"
+settings.show_dashboard: "Show Dashboard Button"
+settings.show_dashboard.desc: "Display the dashboard shortcut in the toolbar."
+settings.show_refresh: "Show Refresh Button"
+settings.show_refresh.desc: "Display the refresh button in the toolbar."
 
 # ── Provider detail (settings window) ─────────────────────
 provider.info.state: "State"
