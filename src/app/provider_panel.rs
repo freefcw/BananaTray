@@ -9,22 +9,23 @@ use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
 
-/// 通用操作按钮（蓝底白字圆角），用于空状态的"重试"/"打开配置"等场景
+/// 通用操作按钮（Lumina风格：半透明背景+圆角）
 fn render_action_button(
     label: &str,
     theme: &Theme,
     handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    div().w_full().flex().justify_center().mt(px(4.0)).child(
+    div().w_full().flex().justify_center().mt(px(8.0)).child(
         div()
-            .px(px(12.0))
-            .py(px(6.0))
-            .rounded(px(8.0))
+            .px(px(16.0))
+            .py(px(8.0))
+            .rounded(px(10.0))
             .bg(theme.text_accent)
             .text_size(px(12.0))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(theme.element_active)
             .cursor_pointer()
+            .hover(|style| style.opacity(0.85))
             .child(label.to_string())
             .on_mouse_down(MouseButton::Left, handler),
     )
@@ -76,11 +77,11 @@ impl AppView {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap(px(12.0))
+            .gap(px(14.0))
             .px(px(20.0))
             .py(px(40.0))
             .rounded(px(14.0))
-            .bg(theme.bg_card)
+            .bg(theme.bg_card_inner)
             .border_1()
             .border_color(theme.border_subtle)
             .child(svg().path(icon).size(px(32.0)).text_color(theme.text_muted))
@@ -104,7 +105,7 @@ impl AppView {
             )
             .child(
                 div()
-                    .px(px(14.0))
+                    .px(px(16.0))
                     .py(px(8.0))
                     .rounded(px(10.0))
                     .bg(theme.text_accent)
@@ -123,86 +124,11 @@ impl AppView {
             .into_any_element()
     }
 
-    fn render_account_info_card(
-        &self,
-        provider: &ProviderStatus,
-        theme: &Theme,
-        _entity: Entity<AppView>,
-    ) -> Div {
-        let last_updated = provider.format_last_updated();
-        let tier_badge = provider.account_tier.clone();
-        let account_email = provider.account_email.clone();
-
-        // 如果既没有邮箱也没有套餐等级，只显示更新时间
-        if account_email.is_none() && tier_badge.is_none() {
-            return div()
-                .flex()
-                .justify_end()
-                .items_center()
-                .px(px(12.0))
-                .py(px(6.0))
-                .rounded(px(10.0))
-                .bg(theme.bg_card)
-                .border_1()
-                .border_color(theme.border_subtle)
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(theme.text_secondary)
-                        .child(last_updated),
-                );
-        }
-
-        // 有账户信息时，显示邮箱 + 套餐等级 + 更新时间
-        div()
-            .flex()
-            .justify_between()
-            .items_baseline()
-            .px(px(12.0))
-            .py(px(8.0))
-            .rounded(px(10.0))
-            .bg(theme.bg_card)
-            .border_1()
-            .border_color(theme.border_subtle)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .children(account_email.clone().map(|email| {
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(email)
-                    }))
-                    .children(tier_badge.map(|tier| {
-                        div()
-                            .text_size(px(10.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .rounded(px(4.0))
-                            .bg(theme.text_accent)
-                            .text_color(theme.element_active)
-                            .child(tier)
-                    })),
-            )
-            .child(
-                div()
-                    .text_size(px(11.0))
-                    .text_color(theme.text_secondary)
-                    .child(last_updated),
-            )
-    }
-
     fn render_provider_panel(
         &self,
         provider: &ProviderStatus,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // 先获取所有需要的数据，避免借用冲突
-        let entity = cx.entity().clone();
         let theme = Theme::clone(cx.global::<Theme>());
         let provider = provider.clone();
         let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
@@ -216,39 +142,100 @@ impl AppView {
                 .into_any_element();
         }
 
-        // 创建账户信息卡片（不需要 cx，因为 entity 已经 clone）
-        let account_card = self.render_account_info_card(&provider, &theme, entity);
-
-        // 创建配额信息容器
+        // Quota 卡片列表
         let quotas_container = if is_refreshing {
             self.render_refreshing_state(&provider, &theme)
         } else if has_quotas {
-            div().flex_col().gap(px(8.0)).children(
-                provider.quotas.iter().enumerate().map(|(index, quota)| {
-                    super::widgets::render_quota_bar(quota, index > 0, &theme)
-                }),
-            )
+            let gen = self.state.borrow().nav.generation;
+            let theme_clone = theme.clone();
+            div()
+                .flex_col()
+                .gap(px(16.0))
+                .children(
+                    provider
+                        .quotas
+                        .iter()
+                        .enumerate()
+                        .map(move |(index, quota)| {
+                            super::widgets::render_quota_bar(quota, index > 0, &theme_clone, gen)
+                        }),
+                )
         } else {
             self.render_provider_empty_state(&provider, cx)
         };
 
-        // 整体布局：账户卡片 + 配额容器
+        // Dashboard 链接行
+        let dashboard_url = provider.dashboard_url().to_string();
+        let dashboard_row = if !dashboard_url.is_empty() {
+            Some(self.render_link_row(
+                "src/icons/compass.svg",
+                &t!("tooltip.dashboard"),
+                &theme,
+                move |_, _, _| {
+                    let cmd = if cfg!(target_os = "linux") {
+                        "xdg-open"
+                    } else {
+                        "open"
+                    };
+                    let _ = std::process::Command::new(cmd).arg(&dashboard_url).spawn();
+                },
+            ))
+        } else {
+            None
+        };
+
+        // 整体布局
+        let mut container = div().flex_col().child(quotas_container);
+
+        if let Some(row) = dashboard_row {
+            container = container.child(div().mt(px(8.0)).child(row));
+        }
+
+        container.into_any_element()
+    }
+
+    /// 操作链接行（类似截图中的 "Usage Dashboard"）
+    fn render_link_row(
+        &self,
+        icon: &'static str,
+        label: &str,
+        theme: &Theme,
+        handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Div {
         div()
-            .flex_col()
-            .gap(px(12.0))
-            .child(account_card)
-            .child(quotas_container)
-            .into_any_element()
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .px(px(14.0))
+            .py(px(10.0))
+            .rounded(px(10.0))
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.bg_subtle))
+            .child(super::widgets::render_svg_icon(
+                icon,
+                px(16.0),
+                theme.text_muted,
+            ))
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .text_color(theme.text_secondary)
+                    .child(label.to_string()),
+            )
+            .on_mouse_down(MouseButton::Left, handler)
     }
 
     fn render_refreshing_state(&self, provider: &ProviderStatus, theme: &Theme) -> Div {
         div()
             .w_full()
+            .flex_col()
             .gap(px(12.0))
-            .py(px(32.0))
-            .rounded(px(8.0))
-            .bg(theme.bg_subtle)
-            // spinner 居中行
+            .py(px(40.0))
+            .rounded(px(12.0))
+            .bg(theme.bg_card_inner)
+            .border_1()
+            .border_color(theme.border_subtle)
+            // spinner 占位
             .child(
                 div().w_full().flex().justify_center().child(
                     div()
@@ -262,7 +249,7 @@ impl AppView {
                         .border_color(theme.text_accent),
                 ),
             )
-            // 文字居中行
+            // 文字
             .child(
                 div()
                     .w_full()
@@ -292,7 +279,6 @@ impl AppView {
         );
 
         let (title, message) = if is_error {
-            // 错误状态：优先显示错误消息作为标题
             let error_msg = provider.error_message.as_deref().unwrap_or("");
             (
                 t!("provider.refresh_failed").to_string(),
@@ -319,10 +305,13 @@ impl AppView {
 
         let mut container = div()
             .w_full()
+            .flex_col()
             .gap(px(8.0))
-            .rounded(px(8.0))
-            .bg(theme.bg_subtle)
-            .py(px(24.0))
+            .rounded(px(12.0))
+            .bg(theme.bg_card_inner)
+            .border_1()
+            .border_color(theme.border_subtle)
+            .py(px(28.0))
             // 标题居中
             .child(
                 div()
@@ -330,7 +319,7 @@ impl AppView {
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(if is_error {
-                        theme.text_accent
+                        theme.status_error
                     } else {
                         theme.text_primary
                     })
@@ -338,7 +327,7 @@ impl AppView {
                     .child(title),
             );
 
-        // 错误状态：显示错误消息（如果有）
+        // 错误消息
         if !message.is_empty() {
             container = container.child(
                 div()
@@ -354,7 +343,6 @@ impl AppView {
 
         if show_action {
             if is_config_error {
-                // 配置错误：显示"打开配置"按钮
                 container = container.child(render_action_button(
                     &t!("provider.open_config"),
                     theme,
@@ -368,7 +356,6 @@ impl AppView {
                     },
                 ));
             } else {
-                // 其他错误：显示"重试"按钮
                 container = container.child(render_action_button(
                     &t!("provider.retry"),
                     theme,

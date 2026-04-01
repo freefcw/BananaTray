@@ -31,29 +31,31 @@ impl AppView {
             })
             .collect();
 
+        let border_color = theme.border_subtle;
+
         div()
             .w_full()
             .border_b_1()
-            .border_color(theme.border_subtle)
-            .px(px(8.0))
-            .pt(px(2.0))
-            .pb(px(0.0))
+            .border_color(border_color)
+            .px(px(14.0))
+            .py(px(4.0))
             .overflow_hidden()
             .child(
                 div()
                     .id("nav-provider-scroll")
                     .overflow_x_scroll()
-                    .scrollbar_width(px(0.0)) // 隐藏滚动条，保持视觉简洁
+                    .scrollbar_width(px(0.0))
                     .flex()
                     .items_center()
-                    .gap(px(4.0))
+                    .gap(px(2.0))
                     .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                        self.render_nav_item(icon, label, tab, active_tab, cx)
+                        self.render_nav_pill(icon, label, tab, active_tab, cx)
                     })),
             )
     }
 
-    fn render_nav_item(
+    /// Lumina Bar 风格的 pill tab：水平 icon + label，选中时高亮背景
+    fn render_nav_pill(
         &self,
         icon_path: String,
         label: String,
@@ -66,51 +68,64 @@ impl AppView {
         let state = self.state.clone();
         let entity = cx.entity().clone();
 
-        let (icon_color, text_color) = if is_active {
-            (theme.text_primary, theme.text_primary)
+        let (bg, text_color, icon_color) = if is_active {
+            (
+                theme.nav_pill_active_bg,
+                theme.nav_pill_active_text,
+                theme.nav_pill_active_text,
+            )
         } else {
-            (theme.text_muted, theme.text_muted)
+            (transparent_black(), theme.text_muted, theme.text_muted)
         };
 
-        let item =
-            div()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(2.0))
-                .pt(px(4.0))
-                .pb(px(4.0))
-                .px(px(8.0)) // 固定水平间距，使其变为小巧的胶囊
-                .rounded(px(6.0))
-                .mt(px(2.0))
-                .mb(px(2.0))
-                .cursor_pointer()
-                .bg(if is_active {
-                    theme.bg_subtle // 仅仅是底色加深一点点
-                } else {
-                    transparent_black()
-                })
-                .hover(|style| style.bg(theme.border_subtle))
-                .child(div().flex().w_full().justify_center().child(
-                    super::widgets::render_svg_icon(icon_path, px(16.0), icon_color),
-                ))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .font_weight(if is_active {
-                            FontWeight::BOLD
-                        } else {
-                            FontWeight::MEDIUM
-                        })
-                        .text_color(text_color)
-                        .child(label),
-                );
+        let border_color = if is_active {
+            theme.border_strong
+        } else {
+            transparent_black()
+        };
 
-        item.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            state.borrow_mut().nav.switch_to(tab);
-            entity.update(cx, |_, cx| {
-                cx.notify();
-            });
-        })
+        div()
+            .flex()
+            .items_center()
+            .gap(px(5.0))
+            .px(px(10.0))
+            .py(px(6.0))
+            .rounded(px(8.0))
+            .cursor_pointer()
+            .bg(bg)
+            .border_1()
+            .border_color(border_color)
+            .hover(|style| {
+                if is_active {
+                    style
+                } else {
+                    style.bg(theme.bg_subtle)
+                }
+            })
+            .child(
+                svg()
+                    .path(icon_path)
+                    .size(px(15.0))
+                    .text_color(icon_color)
+                    .flex_shrink_0(),
+            )
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .line_height(relative(1.2))
+                    .font_weight(if is_active {
+                        FontWeight::SEMIBOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
+                    .text_color(text_color)
+                    .child(label),
+            )
+            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                state.borrow_mut().nav.switch_to(tab);
+                entity.update(cx, |_, cx| {
+                    cx.notify();
+                });
+            })
     }
 }

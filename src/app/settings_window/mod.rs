@@ -38,6 +38,7 @@ impl SettingsView {
             bg_panel: rgb(0xf9f9fb).into(),
             bg_subtle: rgb(0xebebf0).into(),
             bg_card: rgb(0xe0ecfb).into(),
+            bg_card_inner: rgb(0xe5e5ea).into(),
             text_primary: rgb(0x1c1c1e).into(),
             text_secondary: rgb(0x6e6e73).into(),
             text_muted: rgb(0x8e8e93).into(),
@@ -45,12 +46,23 @@ impl SettingsView {
             text_accent_soft: rgb(0xc2dcf7).into(),
             border_subtle: rgb(0xdcdce2).into(),
             border_strong: rgb(0xc7c7cc).into(),
-            element_active: rgb(0xffffff).into(), // 保持纯白用于开关等元素
+            element_active: rgb(0xffffff).into(),
             element_selected: rgb(0x007aff).into(),
             status_success: rgb(0x34c759).into(),
             status_error: rgb(0xff3b30).into(),
             status_warning: rgb(0xff9f0a).into(),
             progress_track: rgb(0xe5e5ea).into(),
+            // Lumina 新增 token
+            badge_healthy: rgb(0x34c759).into(),
+            badge_degraded: rgb(0xff9f0a).into(),
+            badge_offline: rgb(0xff3b30).into(),
+            badge_text: rgb(0xffffff).into(),
+            badge_synced_bg: rgba(0x34c7591a).into(),
+            btn_danger_bg: rgba(0xff3b301a).into(),
+            btn_sync_bg: rgb(0xe5e5ea).into(),
+            btn_sync_text: rgb(0x1c1c1e).into(),
+            nav_pill_active_bg: rgb(0x1c1c1e).into(),
+            nav_pill_active_text: rgb(0xffffff).into(),
         }
     }
 

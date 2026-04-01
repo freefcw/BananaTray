@@ -11,6 +11,45 @@ use std::collections::{HashMap, HashSet};
 pub enum AppTheme {
     Light,
     Dark,
+    System,
+}
+
+impl AppTheme {
+    /// 将 System 解析为具体的 Light 或 Dark（运行时检测系统偏好）
+    pub fn resolve(&self) -> AppTheme {
+        match self {
+            AppTheme::System => {
+                if Self::detect_system_dark_mode() {
+                    AppTheme::Dark
+                } else {
+                    AppTheme::Light
+                }
+            }
+            other => *other,
+        }
+    }
+
+    /// 检测 macOS 系统是否处于深色模式
+    fn detect_system_dark_mode() -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            Command::new("defaults")
+                .args(["read", "-g", "AppleInterfaceStyle"])
+                .output()
+                .map(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .trim()
+                        .eq_ignore_ascii_case("dark")
+                })
+                .unwrap_or(false)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Linux / 其他平台暂时默认浅色
+            false
+        }
+    }
 }
 
 /// Provider 特定配置
@@ -67,7 +106,7 @@ fn default_language() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            theme: AppTheme::Light,
+            theme: AppTheme::Dark,
             refresh_interval_mins: 5,
             global_hotkey: "Cmd+Shift+S".to_string(),
             auto_hide_window: true,

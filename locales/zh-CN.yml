@@ -25,6 +25,7 @@ settings.section.toolbar: "工具栏"
 settings.section.usage: "用量"
 settings.section.automation: "自动化"
 settings.section.language: "语言"
+settings.section.theme: "主题"
 
 # 通用 — 选项
 settings.start_at_login: "开机启动"
@@ -165,6 +166,13 @@ copilot.clear_token: "清除 Token"
 lang.system: "跟随系统"
 lang.en: "English"
 lang.zh_CN: "简体中文"
+
+# ── 主题名称 ─────────────────────────────────────────────
+theme.system: "跟随系统"
+theme.light: "浅色"
+theme.dark: "暗色"
+settings.theme: "主题"
+settings.theme.desc: "选择 BananaTray 的外观主题。"
 
 # ── 服务商错误 ────────────────────────────────────────────
 error.cli_not_found: "未找到 %{cli}：请先安装 CLI"

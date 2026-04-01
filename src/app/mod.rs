@@ -70,6 +70,7 @@ impl AppState {
             nav: NavigationState {
                 active_tab,
                 last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
+                generation: 0,
             },
             settings_ui: SettingsUiState {
                 active_tab: SettingsTab::General,
@@ -194,6 +195,51 @@ impl AppState {
 
         self.settings.clone()
     }
+
+    /// 获取当前活跃 provider 的状态徽章文案
+    /// < 1m: "● Synced", 1~59m: "● Xm ago", ≥ 1h: "● Xh ago"
+    /// Refreshing: "● Refreshing", 无数据: "● Offline"
+    pub fn header_status_text(&self) -> (String, HeaderStatusKind) {
+        let kind = match self.nav.active_tab {
+            NavTab::Provider(k) => k,
+            NavTab::Settings => self.nav.last_provider_kind,
+        };
+        let Some(provider) = self.provider_store.find(kind) else {
+            return ("Offline".to_string(), HeaderStatusKind::Offline);
+        };
+
+        if provider.connection == ConnectionStatus::Refreshing {
+            return ("Syncing…".to_string(), HeaderStatusKind::Syncing);
+        }
+
+        if let Some(instant) = provider.last_refreshed_instant {
+            let secs = instant.elapsed().as_secs();
+            if secs < 60 {
+                ("Synced".to_string(), HeaderStatusKind::Synced)
+            } else if secs < 3600 {
+                (format!("{}m ago", secs / 60), HeaderStatusKind::Stale)
+            } else {
+                (format!("{}h ago", secs / 3600), HeaderStatusKind::Stale)
+            }
+        } else {
+            match provider.connection {
+                ConnectionStatus::Error => ("Error".to_string(), HeaderStatusKind::Offline),
+                ConnectionStatus::Disconnected => {
+                    ("Offline".to_string(), HeaderStatusKind::Offline)
+                }
+                _ => ("Waiting".to_string(), HeaderStatusKind::Syncing),
+            }
+        }
+    }
+}
+
+/// 头部状态徽章类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderStatusKind {
+    Synced,
+    Syncing,
+    Stale,
+    Offline,
 }
 
 // ============================================================================
@@ -235,9 +281,10 @@ pub struct AppView {
 
 impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
-        let theme = match state.borrow().settings.theme {
+        let theme = match state.borrow().settings.theme.resolve() {
             AppTheme::Light => Theme::light(),
             AppTheme::Dark => Theme::dark(),
+            AppTheme::System => unreachable!("resolve() never returns System"),
         };
         cx.set_global(theme);
 
@@ -249,26 +296,101 @@ impl AppView {
         }
     }
 
-    /// Toolbar 按钮基础样式：30×30 圆角边框按钮
-    fn render_toolbar_button(icon: &'static str, icon_color: Hsla, theme: &Theme) -> Div {
+    // ========================================================================
+    // 头部区域：应用名 + 连接状态徽章
+    // ========================================================================
+
+    fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        let state = self.state.borrow();
+        let (status_text, status_kind) = state.header_status_text();
+        drop(state);
+
+        let (dot_color, badge_bg) = match status_kind {
+            HeaderStatusKind::Synced => (theme.badge_healthy, theme.badge_synced_bg),
+            HeaderStatusKind::Syncing => (theme.text_accent, rgba(0x3b82f61a).into()),
+            HeaderStatusKind::Stale => (theme.text_muted, theme.bg_subtle),
+            HeaderStatusKind::Offline => (theme.badge_offline, theme.btn_danger_bg),
+        };
+
         div()
-            .w(px(30.0))
-            .h(px(30.0))
+            .w_full()
             .flex()
             .items_center()
-            .justify_center()
-            .rounded(px(8.0))
-            .border_1()
+            .justify_between()
+            .px(px(16.0))
+            .py(px(12.0))
+            .border_b_1()
             .border_color(theme.border_subtle)
-            .bg(theme.bg_panel)
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.bg_subtle))
-            .child(crate::app::widgets::render_svg_icon(
-                icon,
-                px(15.0),
-                icon_color,
-            ))
+            .child(
+                // 左侧：应用图标 + 名称
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    // 应用图标
+                    .child(
+                        div()
+                            .w(px(36.0))
+                            .h(px(36.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(10.0))
+                            .bg(theme.bg_subtle)
+                            .border_1()
+                            .border_color(theme.border_subtle)
+                            .child(widgets::render_svg_icon(
+                                "src/icons/tray_icon.svg",
+                                px(20.0),
+                                theme.text_accent,
+                            )),
+                    )
+                    // 应用名称
+                    .child(
+                        div()
+                            .flex_col()
+                            .gap(px(1.0))
+                            .child(
+                                div()
+                                    .text_size(px(15.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(theme.text_primary)
+                                    .child("BananaTray"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.text_muted)
+                                    .child("AI USAGE MONITOR"),
+                            ),
+                    ),
+            )
+            .child(
+                // 右侧：状态徽章
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .px(px(10.0))
+                    .py(px(5.0))
+                    .rounded(px(12.0))
+                    .bg(badge_bg)
+                    .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(dot_color))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_secondary)
+                            .child(status_text),
+                    ),
+            )
     }
+
+    // ========================================================================
+    // 底部工具栏：Sync Data + Settings + Close
+    // ========================================================================
 
     fn render_global_actions(
         &self,
@@ -278,134 +400,136 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let border_color = theme.border_subtle;
 
-        let mut left = div().flex().items_center().gap(px(6.0));
-        if let NavTab::Provider(kind) = active_tab {
-            let borrowed = self.state.borrow();
-            let dashboard_url = borrowed
-                .provider_store
-                .find(kind)
-                .map(|p| p.dashboard_url().to_string())
-                .unwrap_or_default();
-            let is_refreshing = borrowed
-                .provider_store
-                .find(kind)
-                .map(|p| p.connection == crate::models::ConnectionStatus::Refreshing)
-                .unwrap_or(false);
-            let show_dashboard = borrowed.settings.show_toolbar_dashboard;
-            let show_refresh = borrowed.settings.show_toolbar_refresh;
-            drop(borrowed);
-
-            if show_dashboard {
-                left = left.child(widgets::with_tooltip(
-                    "tt-dashboard",
-                    &t!("tooltip.dashboard"),
-                    theme,
-                    Self::render_dashboard_button(dashboard_url, theme),
-                ));
-            }
-            if show_refresh {
-                let refresh_btn = self.render_refresh_button(kind, is_refreshing, cx);
-                let theme = cx.global::<Theme>();
-                left = left.child(widgets::with_tooltip(
-                    "tt-refresh",
-                    &t!("tooltip.refresh"),
-                    theme,
-                    refresh_btn,
-                ));
-            }
-        }
-
-        let right = {
-            let settings_btn = self.render_settings_icon_button(cx);
+        // Sync Data 按钮（触发当前 provider 的刷新）
+        let sync_btn = {
+            let is_provider = matches!(active_tab, NavTab::Provider(_));
+            let entity = cx.entity().clone();
+            let kind = match active_tab {
+                NavTab::Provider(k) => Some(k),
+                _ => None,
+            };
             let theme = cx.global::<Theme>();
-            let close_btn = Self::render_close_button(theme);
-            div()
+
+            let is_refreshing = kind
+                .and_then(|k| {
+                    self.state
+                        .borrow()
+                        .provider_store
+                        .find(k)
+                        .map(|p| p.connection == ConnectionStatus::Refreshing)
+                })
+                .unwrap_or(false);
+
+            let label = if is_refreshing {
+                t!("provider.status.refreshing").to_string()
+            } else {
+                t!("tooltip.refresh").to_string()
+            };
+
+            let mut btn = div()
                 .flex()
                 .items_center()
-                .gap(px(4.0))
-                .child(widgets::with_tooltip(
-                    "tt-settings",
-                    &t!("tooltip.settings"),
-                    theme,
-                    settings_btn,
+                .justify_center()
+                .gap(px(6.0))
+                .px(px(20.0))
+                .py(px(10.0))
+                .rounded(px(10.0))
+                .bg(theme.btn_sync_bg)
+                .border_1()
+                .border_color(theme.border_subtle)
+                .cursor_pointer()
+                .hover(|style| style.opacity(0.8))
+                .child(widgets::render_svg_icon(
+                    "src/icons/refresh.svg",
+                    px(14.0),
+                    theme.btn_sync_text,
                 ))
-                .child(widgets::with_tooltip(
-                    "tt-quit",
-                    &t!("tooltip.quit"),
-                    theme,
-                    close_btn,
-                ))
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.btn_sync_text)
+                        .child(label),
+                );
+
+            if is_provider && !is_refreshing {
+                btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    if let Some(k) = kind {
+                        entity.update(cx, |view, cx| {
+                            view.state
+                                .borrow_mut()
+                                .request_provider_refresh(k, RefreshReason::Manual);
+                            cx.notify();
+                        });
+                    }
+                });
+            }
+
+            btn
         };
+
+        // 设置按钮（圆形）
+        let settings_btn = self.render_circle_button(
+            "src/icons/settings.svg",
+            cx.global::<Theme>().text_secondary,
+            cx.global::<Theme>().bg_subtle,
+            cx.global::<Theme>().border_subtle,
+        );
+        let state_for_settings = self.state.clone();
+        let settings_btn = settings_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            let display_id = window.display(cx).map(|d| d.id());
+            state_for_settings.borrow_mut().view_entity = None;
+            window.remove_window();
+            schedule_open_settings_window(state_for_settings.clone(), display_id, cx);
+        });
+
+        // 关闭按钮（圆形，红色调）
+        let close_btn = self.render_circle_button(
+            "src/icons/close.svg",
+            cx.global::<Theme>().status_error,
+            cx.global::<Theme>().btn_danger_bg,
+            cx.global::<Theme>().btn_danger_bg,
+        );
+        let close_btn = close_btn.on_mouse_down(MouseButton::Left, |_, _, cx| {
+            cx.quit();
+        });
 
         div()
             .w_full()
             .flex()
             .items_center()
-            .justify_between()
-            .px(px(8.0))
-            .py(px(6.0))
+            .gap(px(8.0))
+            .px(px(14.0))
+            .py(px(10.0))
             .border_t_1()
             .border_color(border_color)
-            .child(left)
-            .child(right)
+            .child(sync_btn)
+            // 弹性空白，将设置和关闭按钮推到右侧
+            .child(div().flex_1())
+            .child(settings_btn)
+            .child(close_btn)
     }
 
-    fn render_dashboard_button(url: String, theme: &Theme) -> Div {
-        Self::render_toolbar_button("src/icons/compass.svg", theme.text_accent, theme)
-            .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                let cmd = if cfg!(target_os = "linux") {
-                    "xdg-open"
-                } else {
-                    "open"
-                };
-                let _ = std::process::Command::new(cmd).arg(&url).spawn();
-            })
-    }
-
-    fn render_refresh_button(
+    /// 圆形工具栏按钮
+    fn render_circle_button(
         &self,
-        kind: ProviderKind,
-        is_refreshing: bool,
-        cx: &mut Context<Self>,
+        icon: &'static str,
+        icon_color: Hsla,
+        bg_color: Hsla,
+        border_color: Hsla,
     ) -> Div {
-        let theme = cx.global::<Theme>();
-        let entity = cx.entity().clone();
-
-        let mut btn =
-            Self::render_toolbar_button("src/icons/refresh.svg", theme.text_accent, theme);
-
-        if is_refreshing {
-            // 刷新中：移除交互样式
-            btn = btn.cursor_default();
-        } else {
-            btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                entity.update(cx, |view, cx| {
-                    view.refresh_single_provider(kind, cx);
-                });
-            });
-        }
-
-        btn
-    }
-
-    fn render_settings_icon_button(&self, cx: &mut Context<Self>) -> Div {
-        let theme = cx.global::<Theme>();
-        let state = self.state.clone();
-
-        Self::render_toolbar_button("src/icons/settings.svg", theme.text_secondary, theme)
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                let display_id = window.display(cx).map(|d| d.id());
-                state.borrow_mut().view_entity = None;
-                window.remove_window();
-                schedule_open_settings_window(state.clone(), display_id, cx);
-            })
-    }
-
-    fn render_close_button(theme: &Theme) -> Div {
-        Self::render_toolbar_button("src/icons/close.svg", theme.text_secondary, theme)
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.quit();
-            })
+        div()
+            .w(px(38.0))
+            .h(px(38.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(10.0))
+            .bg(bg_color)
+            .border_1()
+            .border_color(border_color)
+            .cursor_pointer()
+            .child(widgets::render_svg_icon(icon, px(16.0), icon_color))
     }
 }
 
@@ -434,7 +558,13 @@ impl Render for AppView {
             .size_full()
             .bg(theme.bg_panel)
             .text_color(theme.text_primary)
+            .rounded(px(14.0))
+            .overflow_hidden()
+            // 头部
+            .child(self.render_header(cx))
+            // 导航
             .child(self.render_top_nav(active_tab, cx))
+            // 内容区
             .child(
                 div()
                     .id("content")
@@ -442,13 +572,15 @@ impl Render for AppView {
                     .overflow_y_scroll()
                     .child(match active_tab {
                         NavTab::Provider(kind) => div()
-                            .px(px(8.0)) // 更小边距
-                            .py(px(4.0)) // 更小边距
+                            .px(px(12.0))
+                            .pt(px(10.0))
+                            .pb(px(12.0))
                             .child(self.render_provider_detail(kind, cx))
                             .into_any_element(),
                         NavTab::Settings => self.render_settings_content(cx),
                     }),
             )
+            // 底部工具栏
             .child(self.render_global_actions(active_tab, cx))
     }
 }

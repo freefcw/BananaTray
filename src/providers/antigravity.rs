@@ -254,25 +254,26 @@ impl AntigravityProvider {
                     .unwrap_or("unknown");
 
                 if let Some(quota_info) = config.get("quotaInfo") {
-                    let remaining_fraction =
-                        quota_info.get("remainingFraction").and_then(|v| v.as_f64());
+                    // protobuf 默认值省略：remainingFraction 缺失时视为 0.0（额度耗尽）
+                    let fraction = quota_info
+                        .get("remainingFraction")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
 
-                    if let Some(fraction) = remaining_fraction {
-                        let used_percent = (1.0 - fraction) * 100.0;
+                    let used_percent = (1.0 - fraction) * 100.0;
 
-                        let reset_text = quota_info
-                            .get("resetTime")
-                            .and_then(|v| v.as_str())
-                            .and_then(time_utils::format_reset_countdown);
+                    let reset_text = quota_info
+                        .get("resetTime")
+                        .and_then(|v| v.as_str())
+                        .and_then(time_utils::format_reset_countdown);
 
-                        quotas.push(QuotaInfo::with_details(
-                            label,
-                            used_percent,
-                            100.0,
-                            QuotaType::ModelSpecific(label.to_string()),
-                            reset_text,
-                        ));
-                    }
+                    quotas.push(QuotaInfo::with_details(
+                        label,
+                        used_percent,
+                        100.0,
+                        QuotaType::ModelSpecific(label.to_string()),
+                        reset_text,
+                    ));
                 }
             }
         }
@@ -551,6 +552,37 @@ mod tests {
         let (quotas, _, _) = AntigravityProvider::parse_user_status(json).unwrap();
         assert_eq!(quotas.len(), 1);
         assert!((quotas[0].used - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_missing_remaining_fraction_treated_as_depleted() {
+        // protobuf 默认值省略：remainingFraction 为 0 时字段不序列化
+        let json = r#"{
+            "userStatus": {
+                "cascadeModelConfigData": {
+                    "clientModelConfigs": [
+                        {
+                            "label": "claude-opus",
+                            "quotaInfo": { "resetTime": "2099-01-01T00:00:00Z" }
+                        },
+                        {
+                            "label": "gemini-pro",
+                            "quotaInfo": { "remainingFraction": 0.8, "resetTime": "2099-01-01T00:00:00Z" }
+                        }
+                    ]
+                }
+            }
+        }"#;
+
+        let (quotas, _, _) = AntigravityProvider::parse_user_status(json).unwrap();
+        assert_eq!(quotas.len(), 2);
+
+        // Sorted by label: claude-opus, gemini-pro
+        assert_eq!(quotas[0].label, "claude-opus");
+        assert!((quotas[0].used - 100.0).abs() < 0.01); // 缺失 = 0.0 剩余 = 100% 已用
+
+        assert_eq!(quotas[1].label, "gemini-pro");
+        assert!((quotas[1].used - 20.0).abs() < 0.01); // 0.8 剩余 = 20% 已用
     }
 
     // --- regex tests ---

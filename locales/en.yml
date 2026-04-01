@@ -25,6 +25,7 @@ settings.section.toolbar: "TOOLBAR"
 settings.section.usage: "USAGE"
 settings.section.automation: "AUTOMATION"
 settings.section.language: "LANGUAGE"
+settings.section.theme: "THEME"
 
 # General tab — items
 settings.start_at_login: "Start at Login"
@@ -165,6 +166,13 @@ copilot.clear_token: "Clear Token"
 lang.system: "System Default"
 lang.en: "English"
 lang.zh_CN: "简体中文"
+
+# ── Theme names ──────────────────────────────────────────
+theme.system: "System"
+theme.light: "Light"
+theme.dark: "Dark"
+settings.theme: "Theme"
+settings.theme.desc: "Choose the appearance for BananaTray."
 
 # ── Provider errors ───────────────────────────────────────
 error.cli_not_found: "%{cli} not found: please install the CLI first"
