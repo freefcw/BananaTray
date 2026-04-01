@@ -1,169 +1,159 @@
 use super::SettingsView;
-use crate::app::persist_settings;
-use crate::app::widgets::render_card;
-use crate::models::AppTheme;
+use crate::app::widgets::{render_svg_icon, render_toggle_switch};
 use crate::theme::Theme;
 use gpui::*;
-use rust_i18n::t;
+
+// ============================================================================
+// 设计稿风格的段落标题和卡片
+// ============================================================================
+
+/// 段落标题（如 "SYSTEM"、"AUTOMATION"）— 大写、小号、间距
+pub(super) fn render_section_header(title: &str, theme: &Theme) -> Div {
+    div()
+        .text_size(px(11.0))
+        .font_weight(FontWeight::BOLD)
+        .text_color(theme.text_muted)
+        .px(px(4.0))
+        .pt(px(16.0))
+        .pb(px(8.0))
+        .child(title.to_uppercase())
+}
+
+/// 深色卡片容器（与设计稿匹配的暗色圆角卡片）
+pub(super) fn render_dark_card(theme: &Theme) -> Div {
+    div()
+        .flex_col()
+        .w_full()
+        .rounded(px(14.0))
+        .bg(theme.bg_card)
+        .border_1()
+        .border_color(theme.border_subtle)
+        .overflow_hidden()
+}
+
+/// 卡片内分隔线
+pub(super) fn render_divider(theme: &Theme) -> Div {
+    div().h(px(0.5)).w_full().bg(theme.border_subtle)
+}
+
+// ============================================================================
+// 带彩色圆形图标的设置行（设计稿核心组件）
+// ============================================================================
 
 impl SettingsView {
-    /// Render language selector card with radio-button style options
-    pub(super) fn render_language_selector(&self, current: &str, theme: &Theme) -> Div {
-        use crate::i18n::SUPPORTED_LANGUAGES;
-
-        let card = render_card(theme)
-            .flex_col()
+    /// 渲染带彩色圆形背景图标的开关行
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn render_icon_switch_row<F>(
+        icon_path: &'static str,
+        icon_color: Hsla,
+        icon_bg: Hsla,
+        title: &str,
+        description: &str,
+        enabled: bool,
+        theme: &Theme,
+        on_click: F,
+    ) -> Div
+    where
+        F: Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(12.0))
             .px(px(14.0))
-            .py(px(10.0))
-            .gap(px(2.0))
+            .py(px(12.0))
+            // 彩色圆形图标
+            .child(
+                div()
+                    .w(px(36.0))
+                    .h(px(36.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .bg(icon_bg)
+                    .flex_shrink_0()
+                    .child(render_svg_icon(icon_path, px(18.0), icon_color)),
+            )
+            // 标题 + 描述
             .child(
                 div()
                     .flex_col()
+                    .flex_1()
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(t!("settings.language").to_string()),
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_primary)
+                            .child(title.to_string()),
                     )
                     .child(
                         div()
-                            .text_size(px(12.5))
-                            .line_height(relative(1.4))
-                            .text_color(theme.text_secondary)
-                            .child(t!("settings.language.desc").to_string()),
+                            .text_size(px(12.0))
+                            .text_color(theme.text_muted)
+                            .child(description.to_string()),
                     ),
-            );
-
-        let mut options = div().flex().flex_wrap().gap(px(6.0)).mt(px(8.0));
-        for &(code, name_key) in SUPPORTED_LANGUAGES {
-            let is_active = current == code;
-            let state = self.state.clone();
-            let code_owned = code.to_string();
-
-            options = options.child(
-                div()
-                    .px(px(12.0))
-                    .py(px(6.0))
-                    .rounded_full()
-                    .bg(if is_active {
-                        theme.element_selected
-                    } else {
-                        theme.bg_subtle
-                    })
-                    .border_1()
-                    .border_color(if is_active {
-                        theme.element_selected
-                    } else {
-                        theme.border_subtle
-                    })
-                    .text_size(px(12.0))
-                    .font_weight(if is_active {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if is_active {
-                        theme.element_active
-                    } else {
-                        theme.text_primary
-                    })
+            )
+            // 开关
+            .child(
+                render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
+                    .flex_shrink_0()
                     .cursor_pointer()
-                    .child(t!(name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        let settings = {
-                            let mut s = state.borrow_mut();
-                            s.settings.language = code_owned.clone();
-                            crate::i18n::apply_locale(&s.settings.language);
-                            s.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        window.refresh();
-                    }),
-            );
-        }
-
-        card.child(options)
+                    .on_mouse_down(MouseButton::Left, on_click),
+            )
     }
 
-    /// Render theme selector card with pill-style options (System / Light / Dark)
-    pub(super) fn render_theme_selector(&self, current: AppTheme, theme: &Theme) -> Div {
-        const THEME_OPTIONS: &[(AppTheme, &str)] = &[
-            (AppTheme::System, "theme.system"),
-            (AppTheme::Light, "theme.light"),
-            (AppTheme::Dark, "theme.dark"),
-        ];
-
-        let card = render_card(theme)
-            .flex_col()
+    /// 渲染带彩色圆形背景图标的下拉行
+    pub(super) fn render_icon_dropdown_row(
+        icon_path: &'static str,
+        icon_color: Hsla,
+        icon_bg: Hsla,
+        title: &str,
+        description: &str,
+        theme: &Theme,
+        dropdown: Div,
+    ) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(12.0))
             .px(px(14.0))
-            .py(px(10.0))
-            .gap(px(2.0))
+            .py(px(12.0))
+            // 彩色圆形图标
+            .child(
+                div()
+                    .w(px(36.0))
+                    .h(px(36.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .bg(icon_bg)
+                    .flex_shrink_0()
+                    .child(render_svg_icon(icon_path, px(18.0), icon_color)),
+            )
+            // 标题 + 描述
             .child(
                 div()
                     .flex_col()
+                    .flex_1()
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(t!("settings.theme").to_string()),
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_primary)
+                            .child(title.to_string()),
                     )
                     .child(
                         div()
-                            .text_size(px(12.5))
-                            .line_height(relative(1.4))
-                            .text_color(theme.text_secondary)
-                            .child(t!("settings.theme.desc").to_string()),
+                            .text_size(px(12.0))
+                            .text_color(theme.text_muted)
+                            .child(description.to_string()),
                     ),
-            );
-
-        let mut options = div().flex().flex_wrap().gap(px(6.0)).mt(px(8.0));
-        for &(variant, name_key) in THEME_OPTIONS {
-            let is_active = current == variant;
-            let state = self.state.clone();
-
-            options = options.child(
-                div()
-                    .px(px(12.0))
-                    .py(px(6.0))
-                    .rounded_full()
-                    .bg(if is_active {
-                        theme.element_selected
-                    } else {
-                        theme.bg_subtle
-                    })
-                    .border_1()
-                    .border_color(if is_active {
-                        theme.element_selected
-                    } else {
-                        theme.border_subtle
-                    })
-                    .text_size(px(12.0))
-                    .font_weight(if is_active {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if is_active {
-                        theme.element_active
-                    } else {
-                        theme.text_primary
-                    })
-                    .cursor_pointer()
-                    .child(t!(name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        let settings = {
-                            let mut s = state.borrow_mut();
-                            s.settings.theme = variant;
-                            s.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        window.refresh();
-                    }),
-            );
-        }
-
-        card.child(options)
+            )
+            // 下拉控件
+            .child(dropdown)
     }
 }

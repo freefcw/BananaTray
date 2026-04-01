@@ -8,7 +8,7 @@ mod tab;
 mod toggle;
 mod tooltip;
 
-pub(crate) use card::{render_card, render_detail_section_title};
+pub(crate) use card::render_detail_section_title;
 pub(crate) use checkbox::render_checkbox;
 pub(crate) use icon::{render_footer_glyph, render_svg_icon};
 pub(crate) use quota_bar::render_quota_bar;

@@ -1,4 +1,4 @@
-use super::SettingsView;
+use super::super::SettingsView;
 use crate::app::persist_settings;
 use crate::models::{AppSettings, ProviderKind};
 use crate::theme::Theme;
@@ -160,7 +160,6 @@ fn render_sidebar_item(
     }
 
     // 设计稿：选中项有半透明紫色背景 + 紫色边框，未选中无背景。
-    // 将两者统一为一个 div，避免由于节点变化或边框有无造成的 1px 跳动。
     // 将两者统一为一个带 border_1() 的 div，避免边框切换造成的 1px 跳动。
     let styled_wrapper = if is_selected {
         div()
@@ -190,7 +189,7 @@ fn render_sidebar_item(
 impl SettingsView {
     // ══════ Left sidebar ══════
 
-    pub(super) fn render_provider_sidebar(
+    pub(in crate::app::settings_window) fn render_provider_sidebar(
         &self,
         providers: &[crate::models::ProviderStatus],
         selected: ProviderKind,
