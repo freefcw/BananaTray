@@ -225,9 +225,18 @@ impl AntigravityProvider {
             .map(|s| s.to_string());
 
         // Extract plan name
+        // 优先使用 userTier.name（能正确区分 Pro/Ultra/Free），
+        // planInfo.planName 对 Pro 和 Ultra 都返回 "Pro"，不可靠
         let plan_name = user_status
-            .pointer("/planStatus/planInfo/planName")
+            .pointer("/userTier/name")
             .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                user_status
+                    .pointer("/planStatus/planInfo/planName")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+            })
             .map(|s| s.to_string());
 
         // Extract per-model quotas from cascadeModelConfigData
@@ -341,6 +350,7 @@ mod tests {
         let json = r#"{
             "userStatus": {
                 "email": "user@example.com",
+                "userTier": { "id": "g1-ultra-tier", "name": "Google AI Ultra" },
                 "planStatus": { "planInfo": { "planName": "Pro" } },
                 "cascadeModelConfigData": {
                     "clientModelConfigs": [
@@ -365,7 +375,8 @@ mod tests {
         let (quotas, email, plan) = AntigravityProvider::parse_user_status(json).unwrap();
 
         assert_eq!(email, Some("user@example.com".to_string()));
-        assert_eq!(plan, Some("Pro".to_string()));
+        // userTier.name 优先于 planInfo.planName
+        assert_eq!(plan, Some("Google AI Ultra".to_string()));
         assert_eq!(quotas.len(), 2);
 
         // Sorted by label
@@ -375,6 +386,59 @@ mod tests {
 
         assert_eq!(quotas[1].label, "gpt-4o");
         assert!((quotas[1].used - 50.0).abs() < 0.01); // 1.0 - 0.5 = 0.5 => 50%
+    }
+
+    #[test]
+    fn test_parse_user_tier_priority() {
+        // userTier.name 应优先于 planInfo.planName
+        let json = r#"{
+            "userStatus": {
+                "userTier": { "name": "Google AI Ultra" },
+                "planStatus": { "planInfo": { "planName": "Pro" } },
+                "cascadeModelConfigData": {
+                    "clientModelConfigs": [
+                        { "label": "m", "quotaInfo": { "remainingFraction": 0.5 } }
+                    ]
+                }
+            }
+        }"#;
+        let (_, _, plan) = AntigravityProvider::parse_user_status(json).unwrap();
+        assert_eq!(plan, Some("Google AI Ultra".to_string()));
+    }
+
+    #[test]
+    fn test_parse_fallback_to_plan_name() {
+        // 没有 userTier 时，回退到 planInfo.planName
+        let json = r#"{
+            "userStatus": {
+                "planStatus": { "planInfo": { "planName": "Pro" } },
+                "cascadeModelConfigData": {
+                    "clientModelConfigs": [
+                        { "label": "m", "quotaInfo": { "remainingFraction": 0.5 } }
+                    ]
+                }
+            }
+        }"#;
+        let (_, _, plan) = AntigravityProvider::parse_user_status(json).unwrap();
+        assert_eq!(plan, Some("Pro".to_string()));
+    }
+
+    #[test]
+    fn test_parse_empty_user_tier_falls_back() {
+        // userTier.name 为空字符串时，应回退到 planInfo.planName
+        let json = r#"{
+            "userStatus": {
+                "userTier": { "name": "" },
+                "planStatus": { "planInfo": { "planName": "Pro" } },
+                "cascadeModelConfigData": {
+                    "clientModelConfigs": [
+                        { "label": "m", "quotaInfo": { "remainingFraction": 0.5 } }
+                    ]
+                }
+            }
+        }"#;
+        let (_, _, plan) = AntigravityProvider::parse_user_status(json).unwrap();
+        assert_eq!(plan, Some("Pro".to_string()));
     }
 
     #[test]
