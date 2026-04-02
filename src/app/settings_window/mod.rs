@@ -1,5 +1,6 @@
 mod about_tab;
 mod components;
+mod debug_tab;
 mod display_tab;
 mod general_tab;
 mod providers;
@@ -116,7 +117,9 @@ impl SettingsView {
     // ========================================================================
 
     fn render_tab_bar(&self, active_tab: SettingsTab, theme: &Theme) -> Div {
-        let tabs: Vec<(&str, String, SettingsTab)> = vec![
+        let show_debug = self.state.borrow().settings.show_debug_tab;
+
+        let mut tabs: Vec<(&str, String, SettingsTab)> = vec![
             (
                 "src/icons/settings.svg",
                 t!("settings.tab.general").to_string(),
@@ -138,6 +141,14 @@ impl SettingsView {
                 SettingsTab::About,
             ),
         ];
+
+        if show_debug {
+            tabs.push((
+                "src/icons/advanced.svg",
+                t!("settings.tab.debug").to_string(),
+                SettingsTab::Debug,
+            ));
+        }
 
         let mut bar = div()
             .w_full()
@@ -245,7 +256,8 @@ impl Render for SettingsView {
                     SettingsTab::General => self.render_general_tab(&settings, &theme),
                     SettingsTab::Display => self.render_display_tab(&settings, &theme),
                     SettingsTab::About => self.render_about_tab(&theme),
-                    _ => div(), // 未实现的 tab
+                    SettingsTab::Debug => self.render_debug_tab(&theme),
+                    _ => div(),
                 })
         };
 

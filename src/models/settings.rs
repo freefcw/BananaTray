@@ -93,6 +93,9 @@ pub struct AppSettings {
     /// 是否在工具栏显示 Refresh 按钮
     #[serde(default = "default_true")]
     pub show_refresh_button: bool,
+    /// 是否显示 Debug 标签页
+    #[serde(default)]
+    pub show_debug_tab: bool,
 }
 
 fn default_true() -> bool {
@@ -119,6 +122,7 @@ impl Default for AppSettings {
             language: default_language(),
             show_dashboard_button: true,
             show_refresh_button: true,
+            show_debug_tab: false,
         }
     }
 }
