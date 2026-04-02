@@ -1,6 +1,6 @@
 use super::AiProvider;
 use crate::models::{ProviderKind, ProviderMetadata, ProviderStatus};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -35,8 +35,9 @@ impl ProviderManager {
     }
 
     pub fn register(&mut self, provider: Arc<dyn AiProvider>) {
-        let provider_id = provider.id();
-        let kind = provider.kind();
+        let descriptor = provider.descriptor();
+        let provider_id = descriptor.id;
+        let kind = descriptor.kind();
         if self.provider_ids.contains(provider_id) {
             warn!(
                 target: "providers",
@@ -54,7 +55,7 @@ impl ProviderManager {
             return;
         }
         info!(target: "providers", "registering provider: {} ({:?})", provider_id, kind);
-        let metadata = provider.metadata();
+        let metadata = descriptor.metadata;
         debug_assert_eq!(metadata.kind, kind);
 
         self.provider_ids.insert(provider_id);
@@ -86,22 +87,24 @@ impl ProviderManager {
     pub async fn refresh_provider(&self, kind: ProviderKind) -> Result<crate::models::RefreshData> {
         debug!(target: "providers", "manager: refreshing provider {:?}", kind);
         if let Some(provider) = self.provider_for_kind(kind) {
-            if provider.is_available().await {
-                return provider.refresh().await;
+            if let Err(err) = provider.check_availability().await {
+                let classified = super::ProviderError::classify(&err);
+                let metadata = self.metadata_for(kind);
+                warn!(
+                    target: "providers",
+                    "provider {} is unavailable: {}",
+                    metadata.display_name,
+                    classified
+                );
+                return Err(classified.into());
             }
-
-            let metadata = self.metadata_for(kind);
-            warn!(
-                target: "providers",
-                "provider {} is unavailable",
-                metadata.display_name
-            );
-            bail!(
-                "Provider {} is currently unavailable in this environment.",
-                metadata.display_name
-            );
+            return provider.refresh().await;
         }
-        bail!("No implementation registered for provider {:?}", kind)
+        Err(super::ProviderError::unavailable(&format!(
+            "No implementation registered for provider {:?}",
+            kind
+        ))
+        .into())
     }
 }
 
@@ -113,7 +116,10 @@ mod tests {
     fn test_all_provider_kinds_have_implementation() {
         let manager = ProviderManager::new();
         for kind in ProviderKind::all() {
-            let found = manager.providers.iter().any(|p| p.kind() == *kind);
+            let found = manager
+                .providers
+                .iter()
+                .any(|p| p.descriptor().kind() == *kind);
             assert!(
                 found,
                 "ProviderKind::{:?} is defined in models but NOT registered in ProviderManager.
@@ -128,7 +134,7 @@ mod tests {
         let manager = ProviderManager::new();
         let mut ids = std::collections::HashSet::new();
         for p in &manager.providers {
-            let id = p.id();
+            let id = p.descriptor().id;
             assert!(ids.insert(id), "Duplicate provider id: {}", id);
         }
     }
@@ -138,7 +144,7 @@ mod tests {
         let manager = ProviderManager::new();
         let mut kinds = std::collections::HashSet::new();
         for provider in &manager.providers {
-            let kind = provider.kind();
+            let kind = provider.descriptor().kind();
             assert!(kinds.insert(kind), "Duplicate provider kind: {:?}", kind);
         }
         assert_eq!(manager.providers.len(), manager.providers_by_kind.len());

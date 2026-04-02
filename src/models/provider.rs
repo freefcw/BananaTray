@@ -49,6 +49,15 @@ pub struct ProviderMetadata {
     pub source_label: String,
 }
 
+/// Provider 描述符
+///
+/// 将注册 ID 与展示元数据收敛到单一入口，避免 `id()/metadata()/kind()` 分散定义。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProviderDescriptor {
+    pub id: &'static str,
+    pub metadata: ProviderMetadata,
+}
+
 impl ProviderKind {
     /// 配置文件中使用的小写标识符
     pub fn id_key(self) -> &'static str {
@@ -102,6 +111,16 @@ impl ProviderMetadata {
             icon_asset: "src/icons/provider-unknown.svg".to_string(),
             dashboard_url: String::new(),
         }
+    }
+}
+
+impl ProviderDescriptor {
+    pub fn kind(&self) -> ProviderKind {
+        self.metadata.kind
+    }
+
+    pub fn metadata(&self) -> &ProviderMetadata {
+        &self.metadata
     }
 }
 

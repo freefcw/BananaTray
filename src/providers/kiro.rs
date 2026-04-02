@@ -1,11 +1,13 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData};
+use crate::models::{
+    ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData,
+};
+use crate::providers::common::cli;
 use crate::utils::text_utils;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
 use rust_i18n::t;
-use std::process::Command;
 use std::sync::LazyLock;
 
 const KIRO_CLI: &str = "kiro-cli";
@@ -28,28 +30,16 @@ static WHOAMI_EMAIL_RE: LazyLock<Regex> =
 super::define_unit_provider!(KiroProvider);
 
 impl KiroProvider {
-    /// Run `kiro-cli chat --no-interactive "/usage"` to get usage data.
+    /// 执行 `kiro-cli chat --no-interactive /usage` 获取用量。
     ///
-    /// `--no-interactive` mode outputs usage directly to stdout without
-    /// requiring a PTY, logo, or MCP initialization.
+    /// `kiro-cli` 会在不同版本里把正文写到 stdout 或 stderr，这里统一收敛。
     fn run_usage() -> Result<String> {
         let start = std::time::Instant::now();
         log::info!(target: "providers::kiro", "Running kiro-cli chat --no-interactive /usage");
 
-        let output = Command::new(KIRO_CLI)
-            .args(["chat", "--no-interactive", "/usage"])
-            .output()
-            .context("Failed to run kiro-cli")?;
-
+        let output = cli::run_command(KIRO_CLI, &["chat", "--no-interactive", "/usage"])?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // kiro-cli writes usage output to stderr, so merge both streams
-        let combined = if stdout.trim().is_empty() {
-            stderr.to_string()
-        } else {
-            stdout.to_string()
-        };
 
         log::info!(
             target: "providers::kiro",
@@ -61,29 +51,24 @@ impl KiroProvider {
             if stdout.trim().is_empty() { "stderr" } else { "stdout" },
         );
 
-        Ok(combined)
+        cli::ensure_success(&output)?;
+        Ok(cli::stdout_or_stderr_text(&output))
     }
 
-    /// Run `kiro-cli whoami` to get account email.
-    ///
-    /// Sample output:
-    /// ```text
-    /// Logged in with GitHub
-    /// Email: freefcw@gmail.com
-    /// ```
+    /// 执行 `kiro-cli whoami` 读取当前登录邮箱。
     fn read_account_email() -> Option<String> {
-        let output = Command::new(KIRO_CLI).arg("whoami").output().ok()?;
+        let output = cli::run_command(KIRO_CLI, &["whoami"]).ok()?;
 
         if !output.status.success() {
             log::warn!(target: "providers::kiro", "kiro-cli whoami failed: {:?}", output.status);
             return None;
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stdout = cli::stdout_text(&output);
         Self::parse_whoami_email(&stdout)
     }
 
-    /// Parse email from `kiro-cli whoami` output.
+    /// 从 `kiro-cli whoami` 输出中提取邮箱。
     fn parse_whoami_email(raw: &str) -> Option<String> {
         for line in raw.lines() {
             let line = line.trim();
@@ -97,13 +82,11 @@ impl KiroProvider {
         None
     }
 
-    /// Parse the output of `kiro-cli chat --no-interactive "/usage"`.
+    /// 解析 `kiro-cli chat --no-interactive /usage` 输出。
     ///
-    /// Handles two quota types:
-    /// - **Regular credits**: `Credits (12.39 of 50 covered in plan)`
-    /// - **Bonus credits**: `Bonus credits: 122.54/500 credits used, expires in 29 days`
-    ///
-    /// Reset date formats: `resets on 2026-04-01` or `resets on 03/01`
+    /// 支持两类配额：
+    /// - 常规 credits: `Credits (12.39 of 50 covered in plan)`
+    /// - Bonus credits: `Bonus credits: 122.54/500 credits used, expires in 29 days`
     fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
         let clean = text_utils::strip_terminal_noise(raw);
         let mut quotas = Vec::new();
@@ -112,7 +95,7 @@ impl KiroProvider {
             .captures(&clean)
             .map(|c| t!("quota.label.resets_on", date = &c[1]).to_string());
 
-        // Bonus credits (e.g. "Bonus credits: 122.54/500 credits used, expires in 29 days")
+        // Bonus credits
         if let Some(caps) = BONUS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
@@ -130,7 +113,7 @@ impl KiroProvider {
             }
         }
 
-        // Regular credits (e.g. "Credits (12.39 of 50 covered in plan)")
+        // Regular credits
         if let Some(caps) = CREDITS_RE.captures(&clean) {
             let used: f64 = caps[1].parse().unwrap_or(0.0);
             let total: f64 = caps[2].parse().unwrap_or(0.0);
@@ -149,7 +132,7 @@ impl KiroProvider {
         Ok(quotas)
     }
 
-    /// Extract account tier (e.g. "KIRO FREE", "KIRO PRO") from usage output.
+    /// 从 usage 输出提取账户层级，例如 `KIRO FREE`、`KIRO PRO`。
     fn parse_account_tier(raw: &str) -> Option<String> {
         let clean = text_utils::strip_terminal_noise(raw);
         for line in clean.lines() {
@@ -163,24 +146,27 @@ impl KiroProvider {
 
 #[async_trait]
 impl AiProvider for KiroProvider {
-    fn metadata(&self) -> ProviderMetadata {
-        ProviderMetadata {
-            kind: ProviderKind::Kiro,
-            display_name: "Kiro".into(),
-            brand_name: "AWS".into(),
-            icon_asset: "src/icons/provider-kiro.svg".into(),
-            dashboard_url: "https://app.kiro.dev/account/usage".into(),
-            account_hint: "AWS account".into(),
-            source_label: "kiro cli".into(),
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor {
+            id: "kiro:cli",
+            metadata: ProviderMetadata {
+                kind: ProviderKind::Kiro,
+                display_name: "Kiro".into(),
+                brand_name: "AWS".into(),
+                icon_asset: "src/icons/provider-kiro.svg".into(),
+                dashboard_url: "https://app.kiro.dev/account/usage".into(),
+                account_hint: "AWS account".into(),
+                source_label: "kiro cli".into(),
+            },
         }
     }
 
-    fn id(&self) -> &'static str {
-        "kiro:cli"
-    }
-
-    async fn is_available(&self) -> bool {
-        Command::new(KIRO_CLI).arg("--version").output().is_ok()
+    async fn check_availability(&self) -> Result<()> {
+        if cli::command_exists(KIRO_CLI) {
+            Ok(())
+        } else {
+            Err(ProviderError::cli_not_found(KIRO_CLI).into())
+        }
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
