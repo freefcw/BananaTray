@@ -169,9 +169,9 @@ impl TrayController {
     }
 
     fn open(&mut self, cx: &mut App) {
-        let dynamic_height = app::compute_popup_height(&self.state.borrow());
+        let dynamic_height = self.state.borrow().popup_height();
         info!(target: "tray", "opening window with dynamic height: {}px", dynamic_height);
-        let window_size = size(px(app::PopupLayout::WIDTH), px(dynamic_height));
+        let window_size = size(px(models::PopupLayout::WIDTH), px(dynamic_height));
         let bounds = Self::preferred_window_bounds(cx, window_size);
         let kind = Self::preferred_window_kind();
 
