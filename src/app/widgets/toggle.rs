@@ -23,7 +23,7 @@ pub(crate) fn render_toggle_switch(
         })
         .border_1()
         .border_color(if enabled {
-            theme.text_accent_soft
+            theme.element_selected
         } else {
             theme.border_strong
         })

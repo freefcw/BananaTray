@@ -440,7 +440,7 @@ impl AppView {
                 .rounded(px(10.0))
                 .bg(theme.btn_sync_bg)
                 .border_1()
-                .border_color(theme.border_subtle)
+                .border_color(theme.btn_sync_bg)
                 .cursor_pointer()
                 .hover(|style| style.opacity(0.8))
                 .child(widgets::render_svg_icon(
