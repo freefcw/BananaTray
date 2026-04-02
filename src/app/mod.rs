@@ -257,13 +257,13 @@ pub(crate) fn compute_popup_height(state: &AppState) -> f32 {
     } else {
         state.nav.last_provider_kind
     };
-    let quota_count = state
-        .provider_store
-        .find(kind)
-        .map(|p| p.quotas.len())
-        .unwrap_or(1)
-        .max(1);
-    crate::models::compute_popup_height_for_quotas(quota_count)
+    let provider = state.provider_store.find(kind);
+    let quota_count = provider.map(|p| p.quotas.len()).unwrap_or(1);
+    let has_dashboard = provider
+        .map(|p| !p.dashboard_url().is_empty())
+        .unwrap_or(false);
+
+    crate::models::compute_popup_height_detailed(quota_count, has_dashboard)
 }
 
 pub(crate) fn persist_settings(settings: &AppSettings) {
@@ -539,7 +539,6 @@ impl AppView {
 
 impl Render for AppView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.global::<Theme>();
         let state = self.state.borrow();
         let active_tab = state.nav.active_tab;
         // 在每次渲染时动态调整窗口高度
@@ -552,10 +551,24 @@ impl Render for AppView {
             let new_height = px(desired_height);
             let diff = current_bounds.size.height - new_height;
             if diff.abs() > px(2.0) {
+                // 仅在高度变化时输出布局明细（避免每帧刷屏）
+                let content_area = desired_height
+                    - PopupLayout::HEADER_HEIGHT
+                    - PopupLayout::NAV_HEIGHT
+                    - PopupLayout::FOOTER_HEIGHT;
+                debug!(
+                    target: "layout",
+                    "window resize: {:?} -> {:?} (diff={:?}), content_area={:.0}px",
+                    current_bounds.size.height,
+                    new_height,
+                    diff,
+                    content_area
+                );
                 window.resize(size(px(PopupLayout::WIDTH), new_height));
             }
         }
 
+        let theme = cx.global::<Theme>();
         div()
             .flex()
             .flex_col()
