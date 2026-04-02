@@ -4,21 +4,10 @@
 
 use crate::app::persist_settings;
 use crate::theme::Theme;
+use crate::utils::platform::open_url;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use rust_i18n::t;
-
-/// 打开外部 URL
-fn open_url(url: &str) {
-    let cmd = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(target_os = "linux") {
-        "xdg-open"
-    } else {
-        "start"
-    };
-    let _ = std::process::Command::new(cmd).arg(url).spawn();
-}
 
 /// 渲染 Copilot 设置 UI（带交互，用于设置窗口）
 /// 设计稿：深色卡片容器 → 标题+描述 → 状态徽章 → token 信息 → 操作按钮

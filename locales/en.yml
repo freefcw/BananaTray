@@ -52,6 +52,12 @@ settings.display.desc: "Customize appearance, menu bar icon style, and notificat
 settings.advanced.desc: "Debug logging, network proxy, and other advanced options."
 settings.about.desc: "BananaTray version info, licenses, and acknowledgements."
 settings.coming_soon: "Coming soon"
+
+# About tab
+about.check_updates: "Check for Updates"
+about.developed_by: "Developed by"
+about.license: "License"
+about.website: "Website"
 settings.save_return: "Save & Return"
 settings.section.toolbar: "TOOLBAR"
 settings.show_dashboard: "Show Dashboard Button"
