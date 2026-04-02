@@ -1,3 +1,4 @@
+mod about_tab;
 mod components;
 mod display_tab;
 mod general_tab;
@@ -210,61 +211,6 @@ impl SettingsView {
 
         bar
     }
-
-    // ========================================================================
-    // About placeholder
-    // ========================================================================
-
-    fn render_placeholder_tab(tab: SettingsTab, theme: &Theme) -> Div {
-        let title = match tab {
-            SettingsTab::About => t!("settings.tab.about").to_string(),
-            _ => String::new(),
-        };
-        let desc = match tab {
-            SettingsTab::About => t!("settings.about.desc").to_string(),
-            _ => String::new(),
-        };
-
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .py(px(60.0))
-            .gap(px(8.0))
-            .child(
-                div()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_size(px(15.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .text_color(theme.text_muted)
-                            .text_align(TextAlign::Center)
-                            .line_height(relative(1.5))
-                            .child(desc),
-                    )
-                    .child(
-                        div()
-                            .mt(px(4.0))
-                            .px(px(12.0))
-                            .py(px(4.0))
-                            .rounded(px(6.0))
-                            .bg(theme.bg_subtle)
-                            .text_size(px(11.5))
-                            .text_color(theme.text_secondary)
-                            .child(t!("settings.coming_soon").to_string()),
-                    ),
-            )
-    }
 }
 
 impl Render for SettingsView {
@@ -294,7 +240,8 @@ impl Render for SettingsView {
                 .child(match active_tab {
                     SettingsTab::General => self.render_general_tab(&settings, &theme),
                     SettingsTab::Display => self.render_display_tab(&settings, &theme),
-                    _ => Self::render_placeholder_tab(active_tab, &theme),
+                    SettingsTab::About => self.render_about_tab(&theme),
+                    _ => div(), // 未实现的 tab
                 })
         };
 
