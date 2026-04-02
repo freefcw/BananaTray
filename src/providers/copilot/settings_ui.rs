@@ -10,6 +10,28 @@ use super::CopilotTokenSource;
 
 use crate::app::settings_window::SettingsView;
 
+/// 注册所有键盘事件处理器到 InputState entity
+fn register_input_actions(
+    div: Stateful<Div>,
+    input_entity: &Entity<adabraka_ui::components::input_state::InputState>,
+    window: &mut Window,
+) -> Stateful<Div> {
+    use adabraka_ui::components::input_state::InputState;
+
+    div.on_action(window.listener_for(input_entity, InputState::backspace))
+        .on_action(window.listener_for(input_entity, InputState::delete))
+        .on_action(window.listener_for(input_entity, InputState::left))
+        .on_action(window.listener_for(input_entity, InputState::right))
+        .on_action(window.listener_for(input_entity, InputState::select_left))
+        .on_action(window.listener_for(input_entity, InputState::select_right))
+        .on_action(window.listener_for(input_entity, InputState::select_all))
+        .on_action(window.listener_for(input_entity, InputState::home))
+        .on_action(window.listener_for(input_entity, InputState::end))
+        .on_action(window.listener_for(input_entity, InputState::copy))
+        .on_action(window.listener_for(input_entity, InputState::cut))
+        .on_action(window.listener_for(input_entity, InputState::paste))
+}
+
 #[derive(IntoElement)]
 struct CopilotInputBox {
     input_entity: Entity<adabraka_ui::components::input_state::InputState>,
@@ -22,9 +44,8 @@ impl RenderOnce for CopilotInputBox {
         let theme = self.theme;
         let input_entity = self.input_entity;
         let is_focused = self.focus_handle.is_focused(window);
-        use adabraka_ui::components::input_state::InputState;
 
-        div()
+        let input_div = div()
             .id("custom_copilot_input")
             .track_focus(&self.focus_handle)
             .w_full()
@@ -41,30 +62,20 @@ impl RenderOnce for CopilotInputBox {
             } else {
                 hsla(145.0 / 360.0, 0.6, 0.4, 0.35)
             })
-            .text_color(theme.status_success) // 绿色文本
-            .on_action(window.listener_for(&input_entity, InputState::backspace))
-            .on_action(window.listener_for(&input_entity, InputState::delete))
-            .on_action(window.listener_for(&input_entity, InputState::left))
-            .on_action(window.listener_for(&input_entity, InputState::right))
-            .on_action(window.listener_for(&input_entity, InputState::select_left))
-            .on_action(window.listener_for(&input_entity, InputState::select_right))
-            .on_action(window.listener_for(&input_entity, InputState::select_all))
-            .on_action(window.listener_for(&input_entity, InputState::home))
-            .on_action(window.listener_for(&input_entity, InputState::end))
-            .on_action(window.listener_for(&input_entity, InputState::copy))
-            .on_action(window.listener_for(&input_entity, InputState::cut))
-            .on_action(window.listener_for(&input_entity, InputState::paste))
+            .text_color(theme.status_success)
             .on_mouse_down(MouseButton::Left, {
                 let handle = self.focus_handle.clone();
                 move |_, window, _| handle.focus(window)
-            })
-            .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .text_size(px(13.0))
-                    .child(input_entity), // 直接渲染核心交互式文本！
-            )
+            });
+
+        // 使用辅助函数注册所有键盘事件
+        register_input_actions(input_div, &input_entity, window).child(
+            div()
+                .flex_1()
+                .overflow_hidden()
+                .text_size(px(13.0))
+                .child(input_entity),
+        )
     }
 }
 
@@ -147,14 +158,14 @@ pub(crate) fn render_settings_interactive(
     let is_editing = view.state.borrow().settings_ui.copilot_token_editing;
 
     if is_editing {
-        // 编辑模式：绿色盒子变为输入框
-        if view.copilot_input.is_none() {
-            view.copilot_input = Some(cx.new(|cx| {
-                let mut state = adabraka_ui::components::input_state::InputState::new(cx);
-                state.placeholder = "粘贴或输入 GitHub Token (ghp_...)".into();
-                state
-            }));
-        }
+        // 编辑模式：每次都重新创建 InputState（确保内容清空）
+        // 这样可以避免上次输入的内容残留
+        view.copilot_input = Some(cx.new(|cx| {
+            let mut state = adabraka_ui::components::input_state::InputState::new(cx);
+            state.placeholder = "粘贴或输入 GitHub Token (ghp_...)".into();
+            state
+        }));
+
         let input_entity = view.copilot_input.as_ref().unwrap().clone();
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
