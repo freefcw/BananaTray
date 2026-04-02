@@ -1,7 +1,15 @@
 use super::AppView;
 use crate::models::NavTab;
 use crate::theme::Theme;
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
+
+/// 两侧指示器区域宽度（像素），与原来的 px(14) padding 一致
+const INDICATOR_WIDTH: f32 = 14.0;
+/// 渐变遮罩从内容边缘向内延伸的宽度
+const FADE_WIDTH: f32 = 20.0;
+/// 滚动偏移量超过此阈值才显示指示器（避免微小偏移时闪烁）
+const SCROLL_THRESHOLD: f32 = 2.0;
 
 impl AppView {
     pub(crate) fn render_top_nav(
@@ -16,7 +24,6 @@ impl AppView {
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
-        // 显示所有已启用的 Provider tab，超出宽度时横向滚动
         let nav_items: Vec<_> = provider_order
             .into_iter()
             .filter(|kind| settings.is_provider_enabled(*kind))
@@ -32,25 +39,121 @@ impl AppView {
             .collect();
 
         let border_color = theme.border_subtle;
+        let panel_bg = theme.bg_panel;
 
+        // 读取当前滚动状态
+        let offset = self.nav_scroll_handle.offset();
+        let max_offset = self.nav_scroll_handle.max_offset();
+
+        let threshold = px(SCROLL_THRESHOLD);
+        let can_scroll_left = offset.x < threshold.negate();
+        let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
+
+        // 箭头颜色
+        let indicator_color = theme.text_muted;
+        let fade_from = panel_bg;
+        let fade_to: Hsla = transparent_black();
+
+        // 整体布局：三栏 [左指示器] [滚动内容] [右指示器]
         div()
             .w_full()
             .border_b_1()
             .border_color(border_color)
-            .px(px(14.0))
             .py(px(4.0))
-            .overflow_hidden()
+            .flex()
+            .items_center()
             .child(
+                // ── 左侧指示器区域 ──
                 div()
-                    .id("nav-provider-scroll")
-                    .overflow_x_scroll()
-                    .scrollbar_width(px(0.0))
+                    .w(px(INDICATOR_WIDTH))
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .gap(px(2.0))
-                    .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                        self.render_nav_pill(icon, label, tab, active_tab, cx)
-                    })),
+                    .justify_center()
+                    .when(can_scroll_left, |el| {
+                        el.child(
+                            svg()
+                                .path("src/icons/chevron-left.svg")
+                                .size(px(10.0))
+                                .text_color(indicator_color),
+                        )
+                    }),
+            )
+            .child(
+                // ── 中间滚动区域 ──
+                // 外层 wrapper: relative + overflow_hidden，承载渐变遮罩
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .relative()
+                    .child(
+                        // 实际滚动容器
+                        div()
+                            .id("nav-provider-scroll")
+                            .overflow_x_scroll()
+                            .scrollbar_width(px(0.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(2.0))
+                            .track_scroll(&self.nav_scroll_handle)
+                            .children(nav_items.into_iter().map(|(icon, label, tab)| {
+                                self.render_nav_pill(icon, label, tab, active_tab, cx)
+                            })),
+                    )
+                    // 左侧渐变遮罩 —— 盖在滚动内容边缘上
+                    .when(can_scroll_left, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .top(px(0.0))
+                                .left(px(0.0))
+                                .bottom(px(0.0))
+                                .w(px(FADE_WIDTH))
+                                .bg(multi_stop_linear_gradient(
+                                    90.,
+                                    &[
+                                        linear_color_stop(fade_from, 0.),
+                                        linear_color_stop(fade_to, 1.),
+                                    ],
+                                )),
+                        )
+                    })
+                    // 右侧渐变遮罩
+                    .when(can_scroll_right, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .top(px(0.0))
+                                .right(px(0.0))
+                                .bottom(px(0.0))
+                                .w(px(FADE_WIDTH))
+                                .bg(multi_stop_linear_gradient(
+                                    270.,
+                                    &[
+                                        linear_color_stop(fade_from, 0.),
+                                        linear_color_stop(fade_to, 1.),
+                                    ],
+                                )),
+                        )
+                    }),
+            )
+            .child(
+                // ── 右侧指示器区域 ──
+                div()
+                    .w(px(INDICATOR_WIDTH))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(can_scroll_right, |el| {
+                        el.child(
+                            svg()
+                                .path("src/icons/chevron-right.svg")
+                                .size(px(10.0))
+                                .text_color(indicator_color),
+                        )
+                    }),
             )
     }
 

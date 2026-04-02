@@ -10,8 +10,8 @@ use rust_i18n::t;
 
 const APP_NAME: &str = "BananaTray";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const APP_REPO: &str = "https://github.com/nicepkg/bananatray";
-const APP_WEBSITE: &str = "https://github.com/nicepkg/bananatray";
+const APP_REPO: &str = "https://github.com/freefcw/BananaTray";
+const APP_WEBSITE: &str = "https://github.com/freefcw/BananaTray";
 const APP_LICENSE: &str = "MIT License";
 const APP_AUTHOR: &str = "BananaTray Team";
 
@@ -261,7 +261,7 @@ impl SettingsView {
             .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
             .child(Self::render_info_row(
                 &t!("about.website"),
-                "github.com/nicepkg",
+                "BananaTray",
                 Some(APP_WEBSITE),
                 link_color,
                 theme,
@@ -319,7 +319,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_copyright(theme: &Theme) -> Div {
-        let year = 2025;
+        let year = 2026;
         let c = theme.text_muted;
         let copyright_color = hsla(c.h, c.s, c.l * 0.8, c.a * 0.7);
 
