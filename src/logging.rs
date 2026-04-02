@@ -18,7 +18,9 @@ pub fn init() -> Result<LoggingInit> {
         .with_context(|| format!("failed to open log file: {}", log_path.display()))?;
 
     fern::Dispatch::new()
-        .level(level)
+        // Dispatch 层不过滤，依赖 log::set_max_level 控制级别，
+        // 以支持运行时通过 Debug Tab 动态调整日志级别。
+        .level(LevelFilter::Trace)
         .level_for("wgpu", LevelFilter::Warn)
         .level_for("naga", LevelFilter::Warn)
         // GPUI 框架内部 display link 回调在窗口关闭后仍可能触发，产生无害的
@@ -41,6 +43,9 @@ pub fn init() -> Result<LoggingInit> {
         .chain(file_dispatch)
         .apply()
         .context("failed to install global logger")?;
+
+    // 通过全局 max level 控制实际过滤（运行时可动态调整）
+    log::set_max_level(level);
 
     install_panic_hook();
 

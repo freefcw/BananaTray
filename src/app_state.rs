@@ -69,6 +69,7 @@ pub enum SettingsTab {
     Providers,
     Display,
     About,
+    Debug,
 }
 
 /// 设置窗口的临时 UI 状态

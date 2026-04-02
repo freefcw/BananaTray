@@ -9,6 +9,7 @@ use rust_i18n::t;
 // 设计稿颜色常量
 const ICON_BG_DASHBOARD: u32 = 0x3b30a6; // 紫蓝色 (Dashboard)
 const ICON_BG_REFRESH: u32 = 0xb55a10; // 琥珀橙色 (Refresh)
+const ICON_BG_DEBUG: u32 = 0x555555; // 灰色 (Debug Tab)
 const ICON_FG: u32 = 0xffffff;
 
 impl SettingsView {
@@ -117,6 +118,32 @@ impl SettingsView {
                         },
                     )),
             )
+            // ═══════ DEVELOPER ═══════
+            .child(render_section_header(
+                &t!("settings.section.developer"),
+                theme,
+            ))
+            .child(render_dark_card(theme).child(Self::render_icon_switch_row(
+                "src/icons/advanced.svg",
+                rgb(ICON_FG).into(),
+                rgb(ICON_BG_DEBUG).into(),
+                &t!("settings.show_debug_tab"),
+                &t!("settings.show_debug_tab.desc"),
+                settings.show_debug_tab,
+                theme,
+                {
+                    let state = self.state.clone();
+                    move |_, window, _| {
+                        let settings = {
+                            let mut s = state.borrow_mut();
+                            s.settings.show_debug_tab = !s.settings.show_debug_tab;
+                            s.settings.clone()
+                        };
+                        persist_settings(&settings);
+                        window.refresh();
+                    }
+                },
+            )))
     }
 
     // ========================================================================
