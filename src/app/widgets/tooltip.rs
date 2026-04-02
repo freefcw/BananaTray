@@ -11,13 +11,14 @@ pub(crate) struct TooltipView {
     bg: Hsla,
     border: Hsla,
     text_color: Hsla,
+    multiline: bool,
 }
 
 impl Render for TooltipView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .px(px(8.0))
-            .py(px(4.0))
+        let base = div()
+            .px(px(10.0))
+            .py(px(6.0))
             .rounded(px(6.0))
             .bg(self.bg)
             .border_1()
@@ -25,18 +26,22 @@ impl Render for TooltipView {
             .shadow_md()
             .text_size(px(11.0))
             .text_color(self.text_color)
-            .whitespace_nowrap()
-            .child(self.text.clone())
+            .child(self.text.clone());
+
+        if self.multiline {
+            base.max_w(px(360.0)).line_height(relative(1.5))
+        } else {
+            base.whitespace_nowrap()
+        }
     }
 }
 
-/// Attach a native GPUI tooltip to a stateful div.
-/// The tooltip is rendered at the topmost layer, never clipped by parent containers,
-/// and automatically repositions to stay within window bounds.
-pub(crate) fn with_tooltip(
+/// 共享实现：创建 tooltip
+fn with_tooltip_impl(
     id: impl Into<ElementId>,
     tooltip_text: &str,
     theme: &Theme,
+    multiline: bool,
     child: Div,
 ) -> Stateful<Div> {
     let text: SharedString = tooltip_text.to_string().into();
@@ -50,7 +55,30 @@ pub(crate) fn with_tooltip(
             bg,
             border,
             text_color,
+            multiline,
         })
         .into()
     })
+}
+
+/// Attach a native GPUI tooltip to a stateful div.
+/// The tooltip is rendered at the topmost layer, never clipped by parent containers,
+/// and automatically repositions to stay within window bounds.
+pub(crate) fn with_tooltip(
+    id: impl Into<ElementId>,
+    tooltip_text: &str,
+    theme: &Theme,
+    child: Div,
+) -> Stateful<Div> {
+    with_tooltip_impl(id, tooltip_text, theme, false, child)
+}
+
+/// 多行 tooltip，适合较长的说明文字（如 token 来源优先级说明）
+pub fn with_multiline_tooltip(
+    id: impl Into<ElementId>,
+    tooltip_text: &str,
+    theme: &Theme,
+    child: Div,
+) -> Stateful<Div> {
+    with_tooltip_impl(id, tooltip_text, theme, true, child)
 }

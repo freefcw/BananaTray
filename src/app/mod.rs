@@ -1,11 +1,12 @@
 mod nav;
 mod provider_logic;
 mod provider_panel;
-mod settings_window;
+pub(crate) mod settings_window;
 mod tray_settings;
 mod widgets;
 
 pub use settings_window::schedule_open_settings_window;
+pub(crate) use widgets::with_multiline_tooltip;
 
 use crate::app_state::{NavigationState, ProviderStore, SettingsTab, SettingsUiState};
 use crate::models::{AppSettings, AppTheme, ConnectionStatus, NavTab, ProviderKind};
@@ -76,6 +77,7 @@ impl AppState {
                 active_tab: SettingsTab::General,
                 selected_provider: ProviderKind::Claude,
                 cadence_dropdown_open: false,
+                copilot_token_editing: false,
             },
             settings,
             refresh_tx,
