@@ -279,6 +279,7 @@ pub(crate) fn persist_settings(settings: &AppSettings) {
 pub struct AppView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) _activation_sub: Option<gpui::Subscription>,
+    pub(crate) nav_scroll_handle: gpui::ScrollHandle,
 }
 
 impl AppView {
@@ -295,6 +296,7 @@ impl AppView {
         Self {
             state,
             _activation_sub: None,
+            nav_scroll_handle: gpui::ScrollHandle::new(),
         }
     }
 
