@@ -157,7 +157,7 @@ impl SettingsView {
                     theme.nav_pill_active_bg,
                     theme.nav_pill_active_text,
                     theme.nav_pill_active_text,
-                    theme.border_strong,
+                    theme.nav_pill_active_bg,
                 )
             } else {
                 (
@@ -282,8 +282,8 @@ impl Render for SettingsView {
             .child(self.render_header(&theme))
             // Tab 栏
             .child(self.render_tab_bar(active_tab, &theme))
-            // 分隔线
-            .child(div().w_full().h(px(0.5)).bg(theme.border_subtle))
+            // Tab 栏与内容区分隔线
+            .child(div().w_full().h(px(1.0)).bg(theme.border_subtle))
             // 内容区
             .child(content)
     }

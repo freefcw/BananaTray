@@ -4,11 +4,9 @@ use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
-/// 两侧指示器区域宽度（像素），与原来的 px(14) padding 一致
+/// 两侧指示器区域宽度
 const INDICATOR_WIDTH: f32 = 14.0;
-/// 渐变遮罩从内容边缘向内延伸的宽度
-const FADE_WIDTH: f32 = 20.0;
-/// 滚动偏移量超过此阈值才显示指示器（避免微小偏移时闪烁）
+/// 滚动偏移量超过此阈值才显示指示器
 const SCROLL_THRESHOLD: f32 = 2.0;
 
 impl AppView {
@@ -39,22 +37,26 @@ impl AppView {
             .collect();
 
         let border_color = theme.border_subtle;
-        let panel_bg = theme.bg_panel;
 
-        // 读取当前滚动状态
         let offset = self.nav_scroll_handle.offset();
         let max_offset = self.nav_scroll_handle.max_offset();
-
         let threshold = px(SCROLL_THRESHOLD);
         let can_scroll_left = offset.x < threshold.negate();
         let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
 
-        // 箭头颜色
         let indicator_color = theme.text_muted;
-        let fade_from = panel_bg;
-        let fade_to: Hsla = transparent_black();
 
-        // 整体布局：三栏 [左指示器] [滚动内容] [右指示器]
+        // 计算点击箭头后要滚动到的目标 item 索引
+        let scroll_handle = self.nav_scroll_handle.clone();
+        let scroll_handle_r = scroll_handle.clone();
+        let entity_l = cx.entity().clone();
+        let entity_r = cx.entity().clone();
+
+        // 找到左侧第一个被裁剪/隐藏的 item 索引
+        let left_target = Self::find_left_target(&self.nav_scroll_handle);
+        // 找到右侧第一个被裁剪/隐藏的 item 索引
+        let right_target = Self::find_right_target(&self.nav_scroll_handle);
+
         div()
             .w_full()
             .border_b_1()
@@ -63,13 +65,15 @@ impl AppView {
             .flex()
             .items_center()
             .child(
-                // ── 左侧指示器区域 ──
+                // ── 左侧箭头指示器 ──
                 div()
+                    .id("nav-arrow-left")
                     .w(px(INDICATOR_WIDTH))
                     .flex_shrink_0()
                     .flex()
                     .items_center()
                     .justify_center()
+                    .cursor_pointer()
                     .when(can_scroll_left, |el| {
                         el.child(
                             svg()
@@ -77,75 +81,43 @@ impl AppView {
                                 .size(px(10.0))
                                 .text_color(indicator_color),
                         )
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            move |_, _, cx| {
+                                if let Some(ix) = left_target {
+                                    scroll_handle.scroll_to_item(ix);
+                                }
+                                entity_l.update(cx, |_, cx| cx.notify());
+                            },
+                        )
                     }),
             )
             .child(
                 // ── 中间滚动区域 ──
-                // 外层 wrapper: relative + overflow_hidden，承载渐变遮罩
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .relative()
-                    .child(
-                        // 实际滚动容器
-                        div()
-                            .id("nav-provider-scroll")
-                            .overflow_x_scroll()
-                            .scrollbar_width(px(0.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(2.0))
-                            .track_scroll(&self.nav_scroll_handle)
-                            .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                                self.render_nav_pill(icon, label, tab, active_tab, cx)
-                            })),
-                    )
-                    // 左侧渐变遮罩 —— 盖在滚动内容边缘上
-                    .when(can_scroll_left, |el| {
-                        el.child(
-                            div()
-                                .absolute()
-                                .top(px(0.0))
-                                .left(px(0.0))
-                                .bottom(px(0.0))
-                                .w(px(FADE_WIDTH))
-                                .bg(multi_stop_linear_gradient(
-                                    90.,
-                                    &[
-                                        linear_color_stop(fade_from, 0.),
-                                        linear_color_stop(fade_to, 1.),
-                                    ],
-                                )),
-                        )
-                    })
-                    // 右侧渐变遮罩
-                    .when(can_scroll_right, |el| {
-                        el.child(
-                            div()
-                                .absolute()
-                                .top(px(0.0))
-                                .right(px(0.0))
-                                .bottom(px(0.0))
-                                .w(px(FADE_WIDTH))
-                                .bg(multi_stop_linear_gradient(
-                                    270.,
-                                    &[
-                                        linear_color_stop(fade_from, 0.),
-                                        linear_color_stop(fade_to, 1.),
-                                    ],
-                                )),
-                        )
-                    }),
+                div().flex_1().min_w_0().overflow_hidden().child(
+                    div()
+                        .id("nav-provider-scroll")
+                        .overflow_x_scroll()
+                        .scrollbar_width(px(0.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(2.0))
+                        .track_scroll(&self.nav_scroll_handle)
+                        .children(nav_items.into_iter().map(|(icon, label, tab)| {
+                            self.render_nav_pill(icon, label, tab, active_tab, cx)
+                        })),
+                ),
             )
             .child(
-                // ── 右侧指示器区域 ──
+                // ── 右侧箭头指示器 ──
                 div()
+                    .id("nav-arrow-right")
                     .w(px(INDICATOR_WIDTH))
                     .flex_shrink_0()
                     .flex()
                     .items_center()
                     .justify_center()
+                    .cursor_pointer()
                     .when(can_scroll_right, |el| {
                         el.child(
                             svg()
@@ -153,8 +125,60 @@ impl AppView {
                                 .size(px(10.0))
                                 .text_color(indicator_color),
                         )
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            move |_, _, cx| {
+                                if let Some(ix) = right_target {
+                                    scroll_handle_r.scroll_to_item(ix);
+                                }
+                                entity_r.update(cx, |_, cx| cx.notify());
+                            },
+                        )
                     }),
             )
+    }
+
+    /// 找到当前可见区域左边缘之前的一个 item（向左滚动目标）
+    fn find_left_target(handle: &ScrollHandle) -> Option<usize> {
+        let offset = handle.offset();
+        let bounds = handle.bounds();
+        // 可见区域的左边界（在内容坐标系中）
+        let visible_left = bounds.left() - offset.x;
+        let count = handle.children_count();
+
+        // 从左向右找到第一个 left >= visible_left 的 item，目标是它前面一个
+        for i in 0..count {
+            if let Some(cb) = handle.bounds_for_item(i) {
+                if cb.left() >= visible_left - px(1.0) {
+                    return Some(i.saturating_sub(1));
+                }
+            }
+        }
+        None
+    }
+
+    /// 找到当前可见区域右边缘之后的一个 item（向右滚动目标）
+    fn find_right_target(handle: &ScrollHandle) -> Option<usize> {
+        let offset = handle.offset();
+        let bounds = handle.bounds();
+        // 可见区域的右边界（在内容坐标系中）
+        let visible_right = bounds.right() - offset.x;
+        let count = handle.children_count();
+
+        // 从左向右找到第一个 right > visible_right 的 item
+        for i in 0..count {
+            if let Some(cb) = handle.bounds_for_item(i) {
+                if cb.right() > visible_right + px(1.0) {
+                    return Some(i);
+                }
+            }
+        }
+        // 如果没找到，滚动到最后一个
+        if count > 0 {
+            Some(count - 1)
+        } else {
+            None
+        }
     }
 
     /// Lumina Bar 风格的 pill tab：水平 icon + label，选中时高亮背景
@@ -182,7 +206,7 @@ impl AppView {
         };
 
         let border_color = if is_active {
-            theme.border_strong
+            theme.nav_pill_active_bg
         } else {
             transparent_black()
         };
