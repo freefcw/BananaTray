@@ -160,9 +160,10 @@ impl AppView {
             self.render_provider_empty_state(&provider, cx)
         };
 
-        // Dashboard 链接行
+        // Dashboard 链接行（受 show_dashboard_button 设置控制）
+        let show_dashboard = self.state.borrow().settings.show_dashboard_button;
         let dashboard_url = provider.dashboard_url().to_string();
-        let dashboard_row = if !dashboard_url.is_empty() {
+        let dashboard_row = if show_dashboard && !dashboard_url.is_empty() {
             Some(self.render_link_row(
                 "src/icons/compass.svg",
                 &t!("tooltip.dashboard"),
@@ -185,6 +186,9 @@ impl AppView {
 
         if let Some(row) = dashboard_row {
             container = container.child(div().mt(px(8.0)).child(row));
+        } else {
+            // 无 Dashboard 行时补偿底部间距，保持与有 Dashboard 时视觉一致
+            container = container.child(div().h(px(8.0)));
         }
 
         container.into_any_element()

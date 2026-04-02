@@ -23,8 +23,8 @@ impl PopupLayout {
     pub const HEADER_HEIGHT: f32 = 61.0;
     /// Nav bar: py(4)×2 + pill_inner(py(6)×2 + 15 line_h) + 1px border-b
     pub const NAV_HEIGHT: f32 = 40.0;
-    /// 内容区垂直 padding: pt(10) + pb(12)
-    pub const CONTENT_PADDING: f32 = 22.0;
+    /// 内容区垂直 padding: pt(10) + pb(8)
+    pub const CONTENT_PADDING: f32 = 18.0;
     /// Footer: py(10)×2 + h(38) btn + 1px border-t
     pub const FOOTER_HEIGHT: f32 = 59.0;
 
@@ -46,8 +46,8 @@ impl PopupLayout {
     /// Dashboard 链接行高度: mt(8) + py(10)×2 + icon(16)
     pub const DASHBOARD_ROW_HEIGHT: f32 = 44.0;
 
-    /// 最小窗口高度：1张卡片 + dashboard
-    pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT + Self::DASHBOARD_ROW_HEIGHT;
+    /// 最小窗口高度：1张卡片（不含 dashboard）
+    pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT;
     /// 最大窗口高度
     pub const MAX_HEIGHT: f32 = 720.0;
 }
@@ -101,7 +101,10 @@ mod tests {
     #[test]
     fn test_popup_height_single_quota() {
         let h = compute_popup_height_for_quotas(1);
-        assert_eq!(h, PopupLayout::MIN_HEIGHT);
+        let expected = PopupLayout::FIXED_HEIGHT
+            + PopupLayout::CARD_HEIGHT
+            + PopupLayout::DASHBOARD_ROW_HEIGHT;
+        assert_eq!(h, expected);
     }
 
     #[test]

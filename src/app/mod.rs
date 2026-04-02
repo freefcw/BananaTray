@@ -259,9 +259,10 @@ pub(crate) fn compute_popup_height(state: &AppState) -> f32 {
     };
     let provider = state.provider_store.find(kind);
     let quota_count = provider.map(|p| p.quotas.len()).unwrap_or(1);
-    let has_dashboard = provider
-        .map(|p| !p.dashboard_url().is_empty())
-        .unwrap_or(false);
+    let has_dashboard = state.settings.show_dashboard_button
+        && provider
+            .map(|p| !p.dashboard_url().is_empty())
+            .unwrap_or(false);
 
     crate::models::compute_popup_height_detailed(quota_count, has_dashboard)
 }
@@ -498,7 +499,9 @@ impl AppView {
             cx.quit();
         });
 
-        div()
+        let show_refresh = self.state.borrow().settings.show_refresh_button;
+
+        let mut footer = div()
             .w_full()
             .flex()
             .items_center()
@@ -506,8 +509,13 @@ impl AppView {
             .px(px(14.0))
             .py(px(10.0))
             .border_t_1()
-            .border_color(border_color)
-            .child(sync_btn)
+            .border_color(border_color);
+
+        if show_refresh {
+            footer = footer.child(sync_btn);
+        }
+
+        footer
             // 弹性空白，将设置和关闭按钮推到右侧
             .child(div().flex_1())
             .child(settings_btn)
@@ -591,7 +599,7 @@ impl Render for AppView {
                         NavTab::Provider(kind) => div()
                             .px(px(12.0))
                             .pt(px(10.0))
-                            .pb(px(12.0))
+                            .pb(px(8.0))
                             .child(self.render_provider_detail(kind, cx))
                             .into_any_element(),
                         NavTab::Settings => self.render_settings_content(cx),
