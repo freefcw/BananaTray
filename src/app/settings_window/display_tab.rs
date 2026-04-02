@@ -1,7 +1,8 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::persist_settings;
+use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme};
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -81,15 +82,15 @@ impl SettingsView {
                         theme,
                         {
                             let state = self.state.clone();
-                            move |_, window, _| {
-                                let settings = {
-                                    let mut s = state.borrow_mut();
-                                    s.settings.show_dashboard_button =
-                                        !s.settings.show_dashboard_button;
-                                    s.settings.clone()
-                                };
-                                persist_settings(&settings);
-                                window.refresh();
+                            move |_, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(
+                                        SettingChange::ToggleShowDashboardButton,
+                                    ),
+                                    window,
+                                    cx,
+                                );
                             }
                         },
                     ))
@@ -105,15 +106,15 @@ impl SettingsView {
                         theme,
                         {
                             let state = self.state.clone();
-                            move |_, window, _| {
-                                let settings = {
-                                    let mut s = state.borrow_mut();
-                                    s.settings.show_refresh_button =
-                                        !s.settings.show_refresh_button;
-                                    s.settings.clone()
-                                };
-                                persist_settings(&settings);
-                                window.refresh();
+                            move |_, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(
+                                        SettingChange::ToggleShowRefreshButton,
+                                    ),
+                                    window,
+                                    cx,
+                                );
                             }
                         },
                     )),
@@ -133,14 +134,13 @@ impl SettingsView {
                 theme,
                 {
                     let state = self.state.clone();
-                    move |_, window, _| {
-                        let settings = {
-                            let mut s = state.borrow_mut();
-                            s.settings.show_debug_tab = !s.settings.show_debug_tab;
-                            s.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        window.refresh();
+                    move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::UpdateSetting(SettingChange::ToggleShowDebugTab),
+                            window,
+                            cx,
+                        );
                     }
                 },
             )))
@@ -197,14 +197,13 @@ impl SettingsView {
                     })
                     .cursor_pointer()
                     .child(t!(*name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        let settings = {
-                            let mut s = state.borrow_mut();
-                            s.settings.theme = variant;
-                            s.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        window.refresh();
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::UpdateSetting(SettingChange::Theme(variant)),
+                            window,
+                            cx,
+                        );
                     }),
             );
         }
@@ -256,15 +255,13 @@ impl SettingsView {
                     })
                     .cursor_pointer()
                     .child(t!(name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        let settings = {
-                            let mut s = state.borrow_mut();
-                            s.settings.language = code_owned.clone();
-                            crate::i18n::apply_locale(&s.settings.language);
-                            s.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        window.refresh();
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::UpdateSetting(SettingChange::Language(code_owned.clone())),
+                            window,
+                            cx,
+                        );
                     }),
             );
         }

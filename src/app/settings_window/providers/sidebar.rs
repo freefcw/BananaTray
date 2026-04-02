@@ -1,6 +1,8 @@
 use super::super::SettingsView;
-use crate::app::persist_settings;
-use crate::models::{AppSettings, ProviderKind};
+use crate::application::SettingsProviderListItemViewState;
+use crate::application::{AppAction, ProviderOrderDirection};
+use crate::models::ProviderKind;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use std::cell::RefCell;
@@ -28,18 +30,20 @@ fn render_sort_arrow_button(
         .cursor_pointer()
         .hover(|s| s.opacity(0.7))
         .child(label.to_string())
-        .on_mouse_down(MouseButton::Left, move |_, window, _| {
-            let mut s = state.borrow_mut();
-            let moved = if direction_up {
-                s.settings.move_provider_up(kind)
-            } else {
-                s.settings.move_provider_down(kind)
-            };
-            if moved {
-                persist_settings(&s.settings);
-            }
-            drop(s);
-            window.refresh();
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(
+                &state,
+                AppAction::ReorderProvider {
+                    kind,
+                    direction: if direction_up {
+                        ProviderOrderDirection::Up
+                    } else {
+                        ProviderOrderDirection::Down
+                    },
+                },
+                window,
+                cx,
+            );
         })
 }
 
@@ -180,9 +184,13 @@ fn render_sidebar_item(
     };
 
     item.child(styled_wrapper)
-        .on_mouse_down(MouseButton::Left, move |_, window, _| {
-            state.borrow_mut().settings_ui.selected_provider = kind;
-            window.refresh();
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(
+                &state,
+                AppAction::SelectSettingsProvider(kind),
+                window,
+                cx,
+            );
         })
 }
 
@@ -191,9 +199,7 @@ impl SettingsView {
 
     pub(in crate::app::settings_window) fn render_provider_sidebar(
         &mut self,
-        providers: &[crate::models::ProviderStatus],
-        selected: ProviderKind,
-        settings: &AppSettings,
+        items: &[SettingsProviderListItemViewState],
         theme: &Theme,
         viewport: Size<Pixels>,
         _cx: &mut Context<Self>,
@@ -201,49 +207,40 @@ impl SettingsView {
         // 设计稿：sidebar 无背景色，直接在暗色底上列出 provider
         let mut list = div().flex_col().py(px(4.0));
 
-        let ordered = settings.ordered_providers();
-
-        for (i, kind) in ordered.iter().enumerate() {
-            let is_selected = *kind == selected;
-            let is_enabled = settings.is_provider_enabled(*kind);
-
-            let status = providers.iter().find(|p| p.kind == *kind);
-            let icon = status
-                .map(|p| p.icon_asset().to_string())
-                .unwrap_or_else(|| "src/icons/provider-unknown.svg".to_string());
-            let display_name = status
-                .map(|p| p.display_name().to_string())
-                .unwrap_or_else(|| format!("{:?}", kind));
-
-            let is_first = i == 0;
-            let is_last = i == ordered.len() - 1;
-
+        for (index, item_state) in items.iter().enumerate() {
             // 排序箭头：仅选中行渲染
-            let (group_name, arrows) = if is_selected {
-                let gname = format!("sidebar-item-{i}");
-                let arrow_el =
-                    render_sort_arrows(gname.clone(), is_first, is_last, theme, &self.state, *kind);
-                (Some(gname), Some(arrow_el))
-            } else {
-                (None, None)
-            };
+            let (group_name, arrows) =
+                if item_state.is_selected && (item_state.can_move_up || item_state.can_move_down) {
+                    let gname = format!("sidebar-item-{index}");
+                    let arrow_el = render_sort_arrows(
+                        gname.clone(),
+                        !item_state.can_move_up,
+                        !item_state.can_move_down,
+                        theme,
+                        &self.state,
+                        item_state.kind,
+                    );
+                    (Some(gname), Some(arrow_el))
+                } else {
+                    (None, None)
+                };
 
             let content = render_sidebar_item_content(
-                icon,
-                display_name,
-                is_selected,
-                is_enabled,
+                item_state.icon.clone(),
+                item_state.display_name.clone(),
+                item_state.is_selected,
+                item_state.is_enabled,
                 theme,
                 arrows,
             );
 
             let item = render_sidebar_item(
                 content,
-                is_selected,
+                item_state.is_selected,
                 group_name,
                 theme,
                 self.state.clone(),
-                *kind,
+                item_state.kind,
             );
 
             list = list.child(item);

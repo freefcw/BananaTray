@@ -1,16 +1,15 @@
+use crate::application::{header_view_state, tray_global_actions_view_state, AppAction};
 use crate::models::NavTab;
 use crate::refresh::RefreshReason;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use log::debug;
-use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::app_state::AppState;
-use super::settings_window::schedule_open_settings_window;
 use super::widgets;
-use crate::app_state::HeaderStatusKind;
 
 use crate::models::PopupLayout;
 
@@ -25,7 +24,7 @@ pub struct AppView {
 
 impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
-        let theme = match state.borrow().settings.theme.resolve() {
+        let theme = match state.borrow().session.settings.theme.resolve() {
             crate::models::AppTheme::Light => Theme::light(),
             crate::models::AppTheme::Dark => Theme::dark(),
             crate::models::AppTheme::System => unreachable!("resolve() never returns System"),
@@ -47,15 +46,22 @@ impl AppView {
 
     pub(crate) fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
-        let state = self.state.borrow();
-        let (status_text, status_kind) = state.header_status_text();
-        drop(state);
+        let header = {
+            let state = self.state.borrow();
+            header_view_state(&state.session)
+        };
 
-        let (dot_color, badge_bg) = match status_kind {
-            HeaderStatusKind::Synced => (theme.badge_healthy, theme.badge_synced_bg),
-            HeaderStatusKind::Syncing => (theme.text_accent, rgba(0x3b82f61a).into()),
-            HeaderStatusKind::Stale => (theme.text_muted, theme.bg_subtle),
-            HeaderStatusKind::Offline => (theme.badge_offline, theme.btn_danger_bg),
+        let (dot_color, badge_bg) = match header.status_kind {
+            crate::app_state::HeaderStatusKind::Synced => {
+                (theme.badge_healthy, theme.badge_synced_bg)
+            }
+            crate::app_state::HeaderStatusKind::Syncing => {
+                (theme.text_accent, rgba(0x3b82f61a).into())
+            }
+            crate::app_state::HeaderStatusKind::Stale => (theme.text_muted, theme.bg_subtle),
+            crate::app_state::HeaderStatusKind::Offline => {
+                (theme.badge_offline, theme.btn_danger_bg)
+            }
         };
 
         div()
@@ -128,7 +134,7 @@ impl AppView {
                             .text_size(px(11.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text_secondary)
-                            .child(status_text),
+                            .child(header.status_text),
                     ),
             )
     }
@@ -139,37 +145,21 @@ impl AppView {
 
     pub(crate) fn render_global_actions(
         &self,
-        active_tab: NavTab,
+        _active_tab: NavTab,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let border_color = theme.border_subtle;
+        let actions = {
+            let state = self.state.borrow();
+            tray_global_actions_view_state(&state.session)
+        };
 
         // Sync Data 按钮（触发当前 provider 的刷新）
         let sync_btn = {
-            let is_provider = matches!(active_tab, NavTab::Provider(_));
             let entity = cx.entity().clone();
-            let kind = match active_tab {
-                NavTab::Provider(k) => Some(k),
-                _ => None,
-            };
+            let refresh = actions.refresh.clone();
             let theme = cx.global::<Theme>();
-
-            let is_refreshing = kind
-                .and_then(|k| {
-                    self.state
-                        .borrow()
-                        .provider_store
-                        .find(k)
-                        .map(|p| p.connection == crate::models::ConnectionStatus::Refreshing)
-                })
-                .unwrap_or(false);
-
-            let label = if is_refreshing {
-                t!("provider.status.refreshing").to_string()
-            } else {
-                t!("tooltip.refresh").to_string()
-            };
 
             let mut btn = div()
                 .flex()
@@ -194,17 +184,21 @@ impl AppView {
                         .text_size(px(13.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.btn_sync_text)
-                        .child(label),
+                        .child(refresh.label.clone()),
                 );
 
-            if is_provider && !is_refreshing {
+            if refresh.kind.is_some() && !refresh.is_refreshing {
                 btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    if let Some(k) = kind {
+                    if let Some(k) = refresh.kind {
                         entity.update(cx, |view, cx| {
-                            view.state
-                                .borrow_mut()
-                                .request_provider_refresh(k, RefreshReason::Manual);
-                            cx.notify();
+                            runtime::dispatch_in_context(
+                                &view.state,
+                                AppAction::RefreshProvider {
+                                    kind: k,
+                                    reason: RefreshReason::Manual,
+                                },
+                                cx,
+                            );
                         });
                     }
                 });
@@ -220,12 +214,14 @@ impl AppView {
             cx.global::<Theme>().bg_subtle,
             cx.global::<Theme>().border_subtle,
         );
-        let state_for_settings = self.state.clone();
+        let settings_state = self.state.clone();
         let settings_btn = settings_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            let display_id = window.display(cx).map(|d| d.id());
-            state_for_settings.borrow_mut().view_entity = None;
-            window.remove_window();
-            schedule_open_settings_window(state_for_settings.clone(), display_id, cx);
+            runtime::dispatch_in_window(
+                &settings_state,
+                AppAction::OpenSettings { provider: None },
+                window,
+                cx,
+            );
         });
 
         // 关闭按钮（圆形，红色调）
@@ -235,11 +231,10 @@ impl AppView {
             cx.global::<Theme>().btn_danger_bg,
             cx.global::<Theme>().btn_danger_bg,
         );
-        let close_btn = close_btn.on_mouse_down(MouseButton::Left, |_, _, cx| {
-            cx.quit();
+        let close_state = self.state.clone();
+        let close_btn = close_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(&close_state, AppAction::QuitApp, window, cx);
         });
-
-        let show_refresh = self.state.borrow().settings.show_refresh_button;
 
         let mut footer = div()
             .w_full()
@@ -251,7 +246,7 @@ impl AppView {
             .border_t_1()
             .border_color(border_color);
 
-        if show_refresh {
+        if actions.show_refresh {
             footer = footer.child(sync_btn);
         }
 
@@ -288,9 +283,9 @@ impl AppView {
 impl Render for AppView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.borrow();
-        let active_tab = state.nav.active_tab;
+        let active_tab = state.session.nav.active_tab;
         // 在每次渲染时动态调整窗口高度
-        let desired_height = state.popup_height();
+        let desired_height = state.session.popup_height();
         drop(state);
 
         // 仅对 Windowed 类型窗口执行 resize（避免影响全屏/最大化窗口）

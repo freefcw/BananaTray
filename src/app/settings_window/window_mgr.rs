@@ -1,6 +1,5 @@
 use super::SettingsView;
 use crate::app::AppState;
-use crate::models::ProviderKind;
 use gpui::*;
 use log::{error, info};
 use std::cell::RefCell;
@@ -232,17 +231,4 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     } else if let Err(err) = result {
         error!(target: "settings", "failed to open settings window: {err:?}");
     }
-}
-
-/// 打开设置窗口并选中指定的 Provider
-pub fn schedule_open_settings_window_with_provider(
-    state: Rc<RefCell<AppState>>,
-    provider: ProviderKind,
-    display_id: Option<DisplayId>,
-    cx: &mut App,
-) {
-    // 先设置选中的 provider
-    state.borrow_mut().settings_ui.selected_provider = provider;
-    // 然后打开设置窗口
-    schedule_open_settings_window(state, display_id, cx);
 }

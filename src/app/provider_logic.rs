@@ -30,25 +30,6 @@ pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     }
 }
 
-pub fn provider_empty_message(provider: &ProviderStatus) -> String {
-    if let Some(error) = &provider.error_message {
-        return error.clone();
-    }
-
-    match provider.connection {
-        ConnectionStatus::Error => {
-            t!("provider.cannot_refresh", name = provider.display_name()).to_string()
-        }
-        ConnectionStatus::Refreshing => {
-            t!("provider.fetching", name = provider.display_name()).to_string()
-        }
-        ConnectionStatus::Disconnected => {
-            t!("provider.connect_to_track", name = provider.display_name()).to_string()
-        }
-        ConnectionStatus::Connected => t!("provider.no_usage_details").to_string(),
-    }
-}
-
 #[allow(dead_code)]
 pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> String {
     if let Some(email) = &provider.account_email {
@@ -88,27 +69,6 @@ pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
             } else {
                 t!("provider.source_failed", source = base).to_string()
             }
-        }
-    }
-}
-
-pub fn provider_detail_subtitle(provider: &ProviderStatus) -> String {
-    let source = provider.source_label();
-    match provider.connection {
-        ConnectionStatus::Error => t!("provider.detail.last_failed", source = source).to_string(),
-        ConnectionStatus::Refreshing => {
-            t!("provider.detail.refreshing", source = source).to_string()
-        }
-        ConnectionStatus::Connected => {
-            if provider.last_refreshed_instant.is_some() {
-                let time = provider.format_last_updated().to_lowercase();
-                t!("provider.detail.updated", source = source, time = time).to_string()
-            } else {
-                t!("provider.detail.not_fetched", source = source).to_string()
-            }
-        }
-        ConnectionStatus::Disconnected => {
-            t!("provider.detail.not_detected", source = source).to_string()
         }
     }
 }
@@ -226,65 +186,5 @@ mod tests {
             p.metadata.brand_name = expected.to_string();
             assert_eq!(provider_account_label(&p, true), expected);
         }
-    }
-
-    // ── provider_empty_message ───────────────────────────────
-
-    #[test]
-    fn empty_message_connected() {
-        setup_locale();
-        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        assert_eq!(
-            provider_empty_message(&p),
-            "No usage details available yet."
-        );
-    }
-
-    #[test]
-    fn empty_message_disconnected() {
-        setup_locale();
-        let p = make_provider(ProviderKind::Gemini, ConnectionStatus::Disconnected);
-        assert_eq!(
-            provider_empty_message(&p),
-            "Connect Gemini to start tracking quota."
-        );
-    }
-
-    #[test]
-    fn empty_message_error() {
-        setup_locale();
-        let p = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
-        assert_eq!(
-            provider_empty_message(&p),
-            "Copilot usage could not be refreshed right now."
-        );
-    }
-
-    #[test]
-    fn empty_message_missing_env_var() {
-        setup_locale();
-        let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
-        p.error_message = Some("Config missing: GITHUB_TOKEN".into());
-        // 错误消息直接返回，不再尝试分类
-        assert_eq!(provider_empty_message(&p), "Config missing: GITHUB_TOKEN");
-    }
-
-    #[test]
-    fn empty_message_session_expired() {
-        setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.error_message = Some("Session expired: please re-login".into());
-        // 错误消息直接返回，不再尝试分类
-        assert_eq!(
-            provider_empty_message(&p),
-            "Session expired: please re-login"
-        );
-    }
-
-    #[test]
-    fn empty_message_generic_error() {
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.error_message = Some("network timeout".into());
-        assert_eq!(provider_empty_message(&p), "network timeout");
     }
 }

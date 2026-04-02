@@ -9,6 +9,8 @@ use rust_i18n::t;
 use super::CopilotTokenSource;
 
 use crate::app::settings_window::SettingsView;
+use crate::application::AppAction;
+use crate::runtime;
 
 /// 注册所有键盘事件处理器到 InputState entity
 fn register_input_actions(
@@ -88,7 +90,7 @@ pub(crate) fn render_settings_interactive(
 ) -> Div {
     // 获取当前 token 状态
     // resolve_token 使用基于时间的缓存（5秒有效期），避免频繁的文件 I/O
-    let settings = view.state.borrow().settings.clone();
+    let settings = view.state.borrow().session.settings.clone();
     let mem_token = settings.providers.github_token.as_deref();
     let status = super::resolve_token(mem_token);
 
@@ -155,7 +157,12 @@ pub(crate) fn render_settings_interactive(
     );
 
     // ── Token 状态区 or 输入框 ──
-    let is_editing = view.state.borrow().settings_ui.copilot_token_editing;
+    let is_editing = view
+        .state
+        .borrow()
+        .session
+        .settings_ui
+        .copilot_token_editing;
 
     if is_editing {
         // 编辑模式：每次都重新创建 InputState（确保内容清空）
@@ -296,20 +303,21 @@ fn render_action_buttons(
                     // 保存操作
                     if let Some(entity) = &input_entity_opt {
                         let text = entity.read(cx).content().trim().to_string();
-                        let mut s = state_left_click.borrow_mut();
-                        if !text.is_empty() {
-                            s.settings.providers.github_token = Some(text);
-                            let settings = s.settings.clone();
-                            crate::app::persist_settings(&settings);
-                        }
-                        s.settings_ui.copilot_token_editing = false;
-                        drop(s);
-                        window.refresh();
+                        runtime::dispatch_in_window(
+                            &state_left_click,
+                            AppAction::SaveCopilotToken(text),
+                            window,
+                            cx,
+                        );
                     }
                 } else {
-                    // 创建 Token
-                    crate::utils::platform::open_url(
-                        "https://github.com/settings/personal-access-tokens",
+                    runtime::dispatch_in_window(
+                        &state_left_click,
+                        AppAction::OpenUrl(
+                            "https://github.com/settings/personal-access-tokens".to_string(),
+                        ),
+                        window,
+                        cx,
                     );
                 }
             }),
@@ -344,17 +352,13 @@ fn render_action_buttons(
             .cursor_pointer()
             .hover(|s| s.opacity(0.9))
             .child(right_label)
-            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                let mut s = state_right_click.borrow_mut();
-                if is_editing {
-                    // 取消
-                    s.settings_ui.copilot_token_editing = false;
-                } else {
-                    // 进入设置
-                    s.settings_ui.copilot_token_editing = true;
-                }
-                drop(s);
-                window.refresh();
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_right_click,
+                    AppAction::SetCopilotTokenEditing(!is_editing),
+                    window,
+                    cx,
+                );
             }),
     );
 

@@ -1,9 +1,9 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::persist_settings;
 use crate::app::widgets::render_svg_icon;
-use crate::auto_launch;
+use crate::application::{AppAction, SettingChange};
 use crate::models::AppSettings;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -43,52 +43,23 @@ impl SettingsView {
             .pb(px(16.0))
             // ═══════ SYSTEM ═══════
             .child(render_section_header(&t!("settings.section.system"), theme))
-            .child(
-                render_dark_card(theme).child(Self::render_icon_switch_row(
-                    "src/icons/switch.svg",
-                    rgb(ICON_FG).into(),
-                    rgb(ICON_BG_LOGIN).into(),
-                    &t!("settings.start_at_login"),
-                    &t!("settings.start_at_login.desc"),
-                    login_checked,
-                    theme,
-                    move |_, window, _| {
-                        let desired = {
-                            let mut s = login_state.borrow_mut();
-                            s.settings.start_at_login = !s.settings.start_at_login;
-                            persist_settings(&s.settings);
-                            s.settings.start_at_login
-                        };
-                        window.refresh();
-
-                        // 后台线程处理系统调用
-                        std::thread::spawn(move || {
-                            auto_launch::sync(desired);
-
-                            let (title, body) = if desired {
-                                (
-                                    t!("notification.auto_launch.enabled.title"),
-                                    t!("notification.auto_launch.enabled.body"),
-                                )
-                            } else {
-                                (
-                                    t!("notification.auto_launch.disabled.title"),
-                                    t!("notification.auto_launch.disabled.body"),
-                                )
-                            };
-
-                            if let Err(e) = notify_rust::Notification::new()
-                                .appname("BananaTray")
-                                .summary(title.as_ref())
-                                .body(body.as_ref())
-                                .show()
-                            {
-                                log::warn!(target: "settings", "failed to show auto-launch notification: {}", e);
-                            }
-                        });
-                    },
-                )),
-            )
+            .child(render_dark_card(theme).child(Self::render_icon_switch_row(
+                "src/icons/switch.svg",
+                rgb(ICON_FG).into(),
+                rgb(ICON_BG_LOGIN).into(),
+                &t!("settings.start_at_login"),
+                &t!("settings.start_at_login.desc"),
+                login_checked,
+                theme,
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &login_state,
+                        AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
+                        window,
+                        cx,
+                    );
+                },
+            )))
             // ═══════ AUTOMATION ═══════
             .child(render_section_header(
                 &t!("settings.section.automation"),
@@ -116,15 +87,15 @@ impl SettingsView {
                         &t!("settings.session_quota_notifications.desc"),
                         notif_checked,
                         theme,
-                        move |_, window, _| {
-                            let settings = {
-                                let mut s = notif_state.borrow_mut();
-                                s.settings.session_quota_notifications =
-                                    !s.settings.session_quota_notifications;
-                                s.settings.clone()
-                            };
-                            persist_settings(&settings);
-                            window.refresh();
+                        move |_, window, cx| {
+                            runtime::dispatch_in_window(
+                                &notif_state,
+                                AppAction::UpdateSetting(
+                                    SettingChange::ToggleSessionQuotaNotifications,
+                                ),
+                                window,
+                                cx,
+                            );
                         },
                     ))
                     .child(render_divider(theme))
@@ -137,14 +108,13 @@ impl SettingsView {
                         &t!("settings.notification_sound.desc"),
                         sound_checked,
                         theme,
-                        move |_, window, _| {
-                            let settings = {
-                                let mut s = sound_state.borrow_mut();
-                                s.settings.notification_sound = !s.settings.notification_sound;
-                                s.settings.clone()
-                            };
-                            persist_settings(&settings);
-                            window.refresh();
+                        move |_, window, cx| {
+                            runtime::dispatch_in_window(
+                                &sound_state,
+                                AppAction::UpdateSetting(SettingChange::ToggleNotificationSound),
+                                window,
+                                cx,
+                            );
                         },
                     )),
             )
@@ -159,7 +129,7 @@ impl SettingsView {
         cadence_mins: Option<u64>,
         theme: &Theme,
     ) -> Div {
-        let dropdown_open = state.borrow().settings_ui.cadence_dropdown_open;
+        let dropdown_open = state.borrow().session.settings_ui.cadence_dropdown_open;
         let toggle_state = state.clone();
 
         let label = match cadence_mins {
@@ -199,11 +169,13 @@ impl SettingsView {
                     .ml(px(4.0))
                     .child(if dropdown_open { "▲" } else { "▼" }),
             )
-            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                let mut s = toggle_state.borrow_mut();
-                s.settings_ui.cadence_dropdown_open = !s.settings_ui.cadence_dropdown_open;
-                drop(s);
-                window.refresh();
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &toggle_state,
+                    AppAction::ToggleCadenceDropdown,
+                    window,
+                    cx,
+                );
             });
 
         if dropdown_open {
@@ -310,14 +282,15 @@ impl SettingsView {
                                         MouseButton::Left,
                                         move |_: &MouseDownEvent,
                                               window: &mut Window,
-                                              _: &mut App| {
-                                            let settings = {
-                                                let mut s = opt_state.borrow_mut();
-                                                s.select_cadence(mins);
-                                                s.settings.clone()
-                                            };
-                                            persist_settings(&settings);
-                                            window.refresh();
+                                              cx: &mut App| {
+                                            runtime::dispatch_in_window(
+                                                &opt_state,
+                                                AppAction::UpdateSetting(
+                                                    SettingChange::RefreshCadence(mins),
+                                                ),
+                                                window,
+                                                cx,
+                                            );
                                         },
                                     );
 
@@ -337,6 +310,7 @@ impl SettingsView {
 
     /// 退出按钮 — 设计稿风格的红色卡片
     fn render_quit_button(&self, theme: &Theme) -> Div {
+        let state = self.state.clone();
         div().mt(px(16.0)).child(
             div()
                 .w_full()
@@ -363,8 +337,8 @@ impl SettingsView {
                         .text_color(theme.status_error)
                         .child(t!("settings.quit").to_string()),
                 )
-                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                    cx.quit();
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
                 }),
         )
     }

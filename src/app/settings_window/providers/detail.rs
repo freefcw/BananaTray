@@ -1,8 +1,12 @@
 use super::super::SettingsView;
 use crate::app::widgets::{render_detail_section_title, render_svg_icon};
-use crate::app::{persist_settings, provider_logic};
-use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
+use crate::application::{
+    AppAction, ProviderSettingsMode, SettingsProviderDetailViewState, SettingsProviderStatusKind,
+    SettingsProviderUsageViewState,
+};
+use crate::models::ProviderKind;
 use crate::refresh::RefreshReason;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -74,11 +78,16 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, kind: ProviderKind, theme
             px(22.0),
             theme.text_muted,
         ))
-        .on_mouse_down(MouseButton::Left, move |_, window, _| {
-            let mut s = state.borrow_mut();
-            s.request_provider_refresh(kind, RefreshReason::Manual);
-            drop(s);
-            window.refresh();
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(
+                &state,
+                AppAction::RefreshProvider {
+                    kind,
+                    reason: RefreshReason::Manual,
+                },
+                window,
+                cx,
+            );
         })
 }
 
@@ -104,10 +113,13 @@ fn render_detail_action_buttons(
                 px(18.0),
                 theme,
             )
-            .on_mouse_down(MouseButton::Left, move |_, window, _cx| {
-                let settings = state_toggle.borrow_mut().toggle_provider(kind);
-                persist_settings(&settings);
-                window.refresh();
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_toggle,
+                    AppAction::ToggleProvider(kind),
+                    window,
+                    cx,
+                );
             }),
         )
 }
@@ -141,30 +153,11 @@ impl SettingsView {
 
     pub(in crate::app::settings_window) fn render_provider_detail_panel(
         &mut self,
-        providers: &[crate::models::ProviderStatus],
-        selected: ProviderKind,
-        settings: &AppSettings,
+        detail: &SettingsProviderDetailViewState,
         theme: &Theme,
         viewport: Size<Pixels>,
         cx: &mut Context<Self>,
     ) -> Div {
-        let provider = providers.iter().find(|p| p.kind == selected).cloned();
-        let is_enabled = settings.is_provider_enabled(selected);
-
-        let (icon, display_name, subtitle) = if let Some(ref p) = provider {
-            (
-                p.icon_asset().to_string(),
-                p.display_name().to_string(),
-                provider_logic::provider_detail_subtitle(p),
-            )
-        } else {
-            (
-                "src/icons/provider-unknown.svg".to_string(),
-                format!("{:?}", selected),
-                format!("{:?} · {}", selected, t!("provider.not_available")),
-            )
-        };
-
         let inner = div()
             .flex_col()
             .px(px(24.0))
@@ -177,24 +170,24 @@ impl SettingsView {
                     .items_center()
                     .justify_between()
                     .child(render_detail_header_info(
-                        &icon,
-                        &display_name,
-                        &subtitle,
+                        &detail.icon,
+                        &detail.display_name,
+                        &detail.subtitle,
                         theme,
                     ))
                     .child(render_detail_action_buttons(
                         self.state.clone(),
-                        selected,
-                        is_enabled,
+                        detail.kind,
+                        detail.is_enabled,
                         theme,
                     )),
             )
             // ── Info table (两列布局) ──
-            .child(self.render_info_table(provider.as_ref(), is_enabled, theme))
+            .child(self.render_info_table(&detail.info, theme))
             // ── Usage section ──
-            .child(self.render_usage_section(provider.as_ref(), is_enabled, theme))
+            .child(self.render_usage_section(&detail.usage, theme))
             // ── Settings section ──
-            .child(self.render_settings_section(selected, settings, theme, cx));
+            .child(self.render_settings_section(detail.settings_mode, theme, cx));
 
         let detail_scroll_h = viewport.height - px(65.0);
 
@@ -212,37 +205,14 @@ impl SettingsView {
 
     fn render_info_table(
         &self,
-        provider: Option<&crate::models::ProviderStatus>,
-        enabled: bool,
+        info: &crate::application::SettingsProviderInfoViewState,
         theme: &Theme,
     ) -> Div {
-        let state_text = if enabled {
-            t!("provider.state.enabled").to_string()
-        } else {
-            t!("provider.state.disabled").to_string()
+        let status_color = match info.status_kind {
+            SettingsProviderStatusKind::Success => theme.status_success,
+            SettingsProviderStatusKind::Error => theme.status_error,
+            SettingsProviderStatusKind::Neutral => theme.text_primary,
         };
-        let source_text = t!("provider.source.auto").to_string();
-        let updated_text = provider
-            .map(|p| p.format_last_updated())
-            .unwrap_or_else(|| t!("provider.not_fetched").to_string());
-
-        let status_text = provider
-            .map(|p| match p.connection {
-                ConnectionStatus::Connected => t!("provider.status.operational").to_string(),
-                ConnectionStatus::Disconnected => t!("provider.status.not_detected").to_string(),
-                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
-                ConnectionStatus::Error => t!("provider.status.error").to_string(),
-            })
-            .unwrap_or_else(|| t!("provider.status.unknown").to_string());
-
-        // 服务状态颜色：运行正常用绿色
-        let status_color = provider
-            .map(|p| match p.connection {
-                ConnectionStatus::Connected => theme.status_success,
-                ConnectionStatus::Error => theme.status_error,
-                _ => theme.text_primary,
-            })
-            .unwrap_or(theme.text_primary);
 
         // 设计稿：两列布局，第一行 "状态 + 来源"，第二行 "更新时间 + 服务状态"
         div()
@@ -256,13 +226,13 @@ impl SettingsView {
                     .gap(px(16.0))
                     .child(render_info_cell(
                         &t!("provider.info.state"),
-                        &state_text,
+                        &info.state_text,
                         theme.text_primary,
                         theme,
                     ))
                     .child(render_info_cell(
                         &t!("provider.info.source"),
-                        &source_text,
+                        &info.source_text,
                         theme.text_primary,
                         theme,
                     )),
@@ -274,13 +244,13 @@ impl SettingsView {
                     .gap(px(16.0))
                     .child(render_info_cell(
                         &t!("provider.info.updated"),
-                        &updated_text,
+                        &info.updated_text,
                         theme.text_primary,
                         theme,
                     ))
                     .child(render_info_cell(
                         &t!("provider.info.status"),
-                        &status_text,
+                        &info.status_text,
                         status_color,
                         theme,
                     )),
@@ -289,12 +259,7 @@ impl SettingsView {
 
     // ══════ Usage section ══════
 
-    fn render_usage_section(
-        &self,
-        provider: Option<&crate::models::ProviderStatus>,
-        enabled: bool,
-        theme: &Theme,
-    ) -> Div {
+    fn render_usage_section(&self, usage: &SettingsProviderUsageViewState, theme: &Theme) -> Div {
         let mut section = div()
             .flex_col()
             .mt(px(20.0))
@@ -303,39 +268,35 @@ impl SettingsView {
                 theme,
             ));
 
-        if !enabled {
-            return section.child(
-                div()
-                    .mt(px(8.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
-                    .child(t!("provider.enable_tracking").to_string()),
-            );
-        }
-
-        if let Some(p) = provider {
-            if !p.quotas.is_empty() {
-                // 为每个 quota 卡片单独添加间距，避免 gap 对 impl IntoElement 不生效
-                for quota in p.quotas.iter() {
+        match usage {
+            SettingsProviderUsageViewState::Disabled { message }
+            | SettingsProviderUsageViewState::Empty { message }
+            | SettingsProviderUsageViewState::Missing { message } => {
+                section = section.child(
+                    div()
+                        .mt(px(8.0))
+                        .text_size(px(12.0))
+                        .text_color(theme.text_secondary)
+                        .child(message.clone()),
+                );
+            }
+            SettingsProviderUsageViewState::Quotas { quotas } => {
+                for quota in quotas {
                     section = section.child(
                         div()
                             .mt(px(10.0))
                             .child(crate::app::widgets::render_quota_bar(quota, theme, 0)),
                     );
                 }
-            } else if p.connection == ConnectionStatus::Error {
-                let title = t!("provider.last_fetch_failed", name = p.display_name()).to_string();
-                let msg = p
-                    .error_message
-                    .clone()
-                    .unwrap_or_else(|| t!("provider.unknown_error").to_string());
+            }
+            SettingsProviderUsageViewState::Error { title, message } => {
                 section = section
                     .child(
                         div()
                             .mt(px(8.0))
                             .text_size(px(12.0))
                             .text_color(theme.text_muted)
-                            .child(title),
+                            .child(title.clone()),
                     )
                     .child(
                         div()
@@ -348,26 +309,10 @@ impl SettingsView {
                                     .text_size(px(11.5))
                                     .line_height(relative(1.4))
                                     .text_color(theme.text_secondary)
-                                    .child(msg),
+                                    .child(message.clone()),
                             ),
                     );
-            } else {
-                section = section.child(
-                    div()
-                        .mt(px(8.0))
-                        .text_size(px(12.0))
-                        .text_color(theme.text_secondary)
-                        .child(t!("provider.no_usage").to_string()),
-                );
             }
-        } else {
-            section = section.child(
-                div()
-                    .mt(px(8.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
-                    .child(t!("provider.not_available").to_string()),
-            );
         }
 
         section
@@ -377,8 +322,7 @@ impl SettingsView {
 
     fn render_settings_section(
         &mut self,
-        kind: ProviderKind,
-        _settings: &AppSettings,
+        settings_mode: ProviderSettingsMode,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -392,8 +336,8 @@ impl SettingsView {
                     theme,
                 ));
 
-        match kind {
-            ProviderKind::Copilot => {
+        match settings_mode {
+            ProviderSettingsMode::Interactive => {
                 // 3. 使用交互式 UI（支持 Token 输入和保存）
                 section = section.child(div().mt(px(10.0)).child(
                     crate::providers::copilot::settings_ui::render_settings_interactive(
@@ -401,7 +345,7 @@ impl SettingsView {
                     ),
                 ));
             }
-            _ => {
+            ProviderSettingsMode::AutoManaged => {
                 // 设计稿：无需配置的 provider — 虚线边框 + 居中图标 + 淡色文字，无背景色
                 let muted_color = hsla(0.0, 0.0, 0.45, 0.5); // 比 text_muted 更淡
                 section = section.child(

@@ -1,6 +1,7 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::notification::{send_system_notification, QuotaAlert};
+use crate::application::{AppAction, DebugNotificationKind};
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -158,16 +159,13 @@ impl SettingsView {
                     })
                     .cursor_pointer()
                     .child(label)
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        // 设置环境变量并更新日志级别
-                        std::env::set_var("RUST_LOG", &level_owned);
-                        if let Ok(filter) = log::LevelFilter::from_str_exact(&level_owned) {
-                            log::set_max_level(filter);
-                            log::info!(target: "settings", "log level changed to: {}", level_owned);
-                        }
-                        // 刷新 UI
-                        let _ = state.borrow();
-                        window.refresh();
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::UpdateLogLevel(level_owned.clone()),
+                            window,
+                            cx,
+                        );
                     }),
             );
         }
@@ -186,7 +184,11 @@ impl SettingsView {
     ) -> Div {
         use crate::app::widgets::render_svg_icon;
 
-        let alert_type = alert_type.to_string();
+        let alert_kind = match alert_type {
+            "low" => DebugNotificationKind::Low,
+            "exhausted" => DebugNotificationKind::Exhausted,
+            _ => DebugNotificationKind::Recovered,
+        };
         let state = self.state.clone();
 
         div()
@@ -251,43 +253,14 @@ impl SettingsView {
                             .text_color(theme.text_primary)
                             .child(t!("debug.send").to_string()),
                     )
-                    .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                        let with_sound = state.borrow().settings.notification_sound;
-                        let alert = match alert_type.as_str() {
-                            "low" => QuotaAlert::LowQuota {
-                                provider_name: "TestProvider".to_string(),
-                                remaining_pct: 8.0,
-                            },
-                            "exhausted" => QuotaAlert::Exhausted {
-                                provider_name: "TestProvider".to_string(),
-                            },
-                            _ => QuotaAlert::Recovered {
-                                provider_name: "TestProvider".to_string(),
-                                remaining_pct: 50.0,
-                            },
-                        };
-                        std::thread::spawn(move || {
-                            send_system_notification(&alert, with_sound);
-                        });
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::SendDebugNotification(alert_kind),
+                            window,
+                            cx,
+                        );
                     }),
             )
-    }
-}
-
-/// 从字符串精确匹配 log::LevelFilter（不区分大小写）
-trait LevelFilterExt {
-    fn from_str_exact(s: &str) -> Result<log::LevelFilter, ()>;
-}
-
-impl LevelFilterExt for log::LevelFilter {
-    fn from_str_exact(s: &str) -> Result<log::LevelFilter, ()> {
-        match s.to_lowercase().as_str() {
-            "error" => Ok(log::LevelFilter::Error),
-            "warn" => Ok(log::LevelFilter::Warn),
-            "info" => Ok(log::LevelFilter::Info),
-            "debug" => Ok(log::LevelFilter::Debug),
-            "trace" => Ok(log::LevelFilter::Trace),
-            _ => Err(()),
-        }
     }
 }

@@ -1,5 +1,7 @@
 use super::AppView;
+use crate::application::AppAction;
 use crate::models::NavTab;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
@@ -17,8 +19,8 @@ impl AppView {
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let state_ref = self.state.borrow();
-        let settings = state_ref.settings.clone();
-        let providers = state_ref.provider_store.providers.clone();
+        let settings = state_ref.session.settings.clone();
+        let providers = state_ref.session.provider_store.providers.clone();
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
@@ -192,7 +194,6 @@ impl AppView {
     ) -> impl IntoElement {
         let is_active = tab == active_tab;
         let theme = cx.global::<Theme>();
-        let state = self.state.clone();
         let entity = cx.entity().clone();
 
         let (bg, text_color, icon_color) = if is_active {
@@ -249,9 +250,8 @@ impl AppView {
                     .child(label),
             )
             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                state.borrow_mut().nav.switch_to(tab);
-                entity.update(cx, |_, cx| {
-                    cx.notify();
+                entity.update(cx, |view, cx| {
+                    runtime::dispatch_in_context(&view.state, AppAction::SelectNavTab(tab), cx);
                 });
             })
     }

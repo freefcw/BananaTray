@@ -1,7 +1,8 @@
-//! Pure-logic sub-state structs, free of GPUI dependency.
+//! Pure-logic application state, free of GPUI dependency.
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
 use crate::models::{AppSettings, ConnectionStatus, NavTab, ProviderKind, ProviderStatus};
+use crate::notification::QuotaAlertTracker;
 
 // ============================================================================
 // 子状态结构 (SRP: 每个结构体负责一个独立职责)
@@ -25,6 +26,92 @@ impl ProviderStore {
         if let Some(provider) = self.find_mut(kind) {
             provider.mark_refreshing();
         }
+    }
+}
+
+/// 纯逻辑应用会话状态
+pub struct AppSession {
+    pub provider_store: ProviderStore,
+    pub nav: NavigationState,
+    pub settings_ui: SettingsUiState,
+    pub settings: AppSettings,
+    pub alert_tracker: QuotaAlertTracker,
+}
+
+impl AppSession {
+    pub fn new(settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
+        let first_enabled = ProviderKind::all()
+            .iter()
+            .find(|kind| settings.is_provider_enabled(**kind))
+            .copied();
+
+        let active_tab = first_enabled
+            .map(NavTab::Provider)
+            .unwrap_or(NavTab::Settings);
+
+        Self {
+            provider_store: ProviderStore { providers },
+            nav: NavigationState {
+                active_tab,
+                last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
+                generation: 0,
+            },
+            settings_ui: SettingsUiState {
+                active_tab: SettingsTab::General,
+                selected_provider: ProviderKind::Claude,
+                cadence_dropdown_open: false,
+                copilot_token_editing: false,
+            },
+            settings,
+            alert_tracker: QuotaAlertTracker::new(),
+        }
+    }
+
+    pub fn header_status_text(&self) -> (String, HeaderStatusKind) {
+        compute_header_status(&self.nav, &self.provider_store)
+    }
+
+    pub fn popup_height(&self) -> f32 {
+        let kind = if let NavTab::Provider(kind) = self.nav.active_tab {
+            kind
+        } else {
+            self.nav.last_provider_kind
+        };
+        let provider = self.provider_store.find(kind);
+        let quota_count = provider.map(|p| p.quotas.len()).unwrap_or(1);
+        let has_dashboard = self.settings.show_dashboard_button
+            && provider
+                .map(|p| !p.dashboard_url().is_empty())
+                .unwrap_or(false);
+
+        crate::models::compute_popup_height_detailed(quota_count, has_dashboard)
+    }
+
+    pub fn has_enabled_providers(&self) -> bool {
+        ProviderKind::all()
+            .iter()
+            .any(|kind| self.settings.is_provider_enabled(*kind))
+    }
+
+    pub fn default_provider_tab(&mut self) -> Option<NavTab> {
+        if !self.has_enabled_providers() {
+            return None;
+        }
+
+        let last = self.nav.last_provider_kind;
+        let kind = if self.settings.is_provider_enabled(last) {
+            last
+        } else {
+            let fallback = ProviderKind::all()
+                .iter()
+                .find(|kind| self.settings.is_provider_enabled(**kind))
+                .copied()
+                .unwrap_or(last);
+            self.nav.last_provider_kind = fallback;
+            fallback
+        };
+
+        Some(NavTab::Provider(kind))
     }
 }
 

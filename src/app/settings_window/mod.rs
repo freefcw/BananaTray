@@ -9,6 +9,8 @@ mod window_mgr;
 use super::AppState;
 use crate::app::widgets::render_svg_icon;
 use crate::app_state::SettingsTab;
+use crate::application::AppAction;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use log::info;
@@ -17,7 +19,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use window_mgr::schedule_open_settings_window;
-pub use window_mgr::schedule_open_settings_window_with_provider;
 
 // ============================================================================
 // 设置视图 — 匹配 Lumina Bar 设计稿
@@ -40,7 +41,7 @@ impl SettingsView {
     /// 根据用户主题设置解析设置窗口主题（与主面板保持一致）
     pub(super) fn resolve_theme(state: &std::cell::RefCell<AppState>) -> Theme {
         use crate::models::AppTheme;
-        match state.borrow().settings.theme.resolve() {
+        match state.borrow().session.settings.theme.resolve() {
             AppTheme::Light => Theme::light(),
             AppTheme::Dark => Theme::dark(),
             AppTheme::System => unreachable!("resolve() never returns System"),
@@ -117,7 +118,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_tab_bar(&self, active_tab: SettingsTab, theme: &Theme) -> Div {
-        let show_debug = self.state.borrow().settings.show_debug_tab;
+        let show_debug = self.state.borrow().session.settings.show_debug_tab;
 
         let mut tabs: Vec<(&str, String, SettingsTab)> = vec![
             (
@@ -162,7 +163,6 @@ impl SettingsView {
         for (icon, label, tab) in tabs {
             let is_active = active_tab == tab;
             let state = self.state.clone();
-
             let (bg, text_color, icon_color, border_color) = if is_active {
                 (
                     theme.nav_pill_active_bg,
@@ -217,9 +217,13 @@ impl SettingsView {
                             .whitespace_nowrap()
                             .child(label),
                     )
-                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                        state.borrow_mut().settings_ui.active_tab = tab;
-                        window.refresh();
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::SetSettingsTab(tab),
+                            window,
+                            cx,
+                        );
                     }),
             );
         }
@@ -231,8 +235,8 @@ impl SettingsView {
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::resolve_theme(&self.state);
-        let settings = self.state.borrow().settings.clone();
-        let active_tab = self.state.borrow().settings_ui.active_tab;
+        let active_tab = self.state.borrow().session.settings_ui.active_tab;
+        let settings = self.state.borrow().session.settings.clone();
         let viewport = window.viewport_size();
 
         // ── Content area ─────────────
@@ -245,7 +249,7 @@ impl Render for SettingsView {
                 .flex_col()
                 .h(content_h)
                 .overflow_hidden()
-                .child(self.render_providers_tab(&settings, &theme, viewport, cx))
+                .child(self.render_providers_tab(&theme, viewport, cx))
         } else {
             div()
                 .id("settings-content")
