@@ -3,7 +3,10 @@ use crate::utils::time_utils;
 use anyhow::Result;
 use prost::Message;
 
-/// Parse strategy trait for extracting user status data
+/// 解析策略：针对不同载荷格式提取同一组领域数据。
+///
+/// 这里解决的是“同一来源的不同编码格式如何解析”，不是“多个来源之间如何回退”。
+/// 因此它与 Claude 的 `UsageProbe` 处于不同抽象层级，不应硬统一。
 pub trait ParseStrategy {
     /// Parse user status from raw data
     /// Returns (quotas, email, plan_name)

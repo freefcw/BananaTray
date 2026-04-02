@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use smol::channel::{Receiver, Sender};
 
 use crate::models::{ErrorKind, ProviderKind, RefreshData};
+use crate::provider_error_presenter::ProviderErrorPresenter;
 use crate::providers::ProviderManager;
 
 // ============================================================================
@@ -164,19 +165,6 @@ impl RefreshCoordinator {
             .await;
     }
 
-    /// Convert ProviderError to ErrorKind for UI decision
-    fn classify_error_kind(error: &crate::providers::ProviderError) -> ErrorKind {
-        use crate::providers::ProviderError;
-        match error {
-            ProviderError::ConfigMissing { .. } => ErrorKind::ConfigMissing,
-            ProviderError::AuthRequired { .. } | ProviderError::SessionExpired { .. } => {
-                ErrorKind::AuthRequired
-            }
-            ProviderError::Timeout | ProviderError::NetworkFailed { .. } => ErrorKind::NetworkError,
-            _ => ErrorKind::Unknown,
-        }
-    }
-
     /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
     fn build_outcome(kind: ProviderKind, result: anyhow::Result<RefreshData>) -> RefreshOutcome {
         match result {
@@ -195,17 +183,17 @@ impl RefreshCoordinator {
                         RefreshOutcome {
                             kind,
                             result: RefreshResult::Unavailable {
-                                message: classified.format_for_display(),
+                                message: ProviderErrorPresenter::to_message(&classified),
                             },
                         }
                     }
                     _ => {
                         log::warn!(target: "refresh", "provider {:?} failed: {}", kind, classified);
-                        let error_kind = Self::classify_error_kind(&classified);
+                        let error_kind = ProviderErrorPresenter::to_error_kind(&classified);
                         RefreshOutcome {
                             kind,
                             result: RefreshResult::Failed {
-                                error: classified.format_for_display(),
+                                error: ProviderErrorPresenter::to_message(&classified),
                                 error_kind,
                             },
                         }
@@ -360,6 +348,7 @@ impl RefreshCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::provider_error_presenter::ProviderErrorPresenter;
 
     #[test]
     fn test_classify_error_kind_config_missing() {
@@ -367,7 +356,7 @@ mod tests {
             key: "github_token".to_string(),
         };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::ConfigMissing
         );
     }
@@ -376,7 +365,7 @@ mod tests {
     fn test_classify_error_kind_auth_required() {
         let error = crate::providers::ProviderError::AuthRequired { hint: None };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::AuthRequired
         );
     }
@@ -387,7 +376,7 @@ mod tests {
             hint: Some("re-login".to_string()),
         };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::AuthRequired
         );
     }
@@ -396,7 +385,7 @@ mod tests {
     fn test_classify_error_kind_network_error() {
         let error = crate::providers::ProviderError::Timeout;
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::NetworkError
         );
 
@@ -404,7 +393,7 @@ mod tests {
             reason: "timeout".to_string(),
         };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::NetworkError
         );
     }
@@ -415,7 +404,7 @@ mod tests {
             cli_name: "claude".to_string(),
         };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::Unknown
         );
 
@@ -423,7 +412,7 @@ mod tests {
             reason: "invalid json".to_string(),
         };
         assert_eq!(
-            RefreshCoordinator::classify_error_kind(&error),
+            ProviderErrorPresenter::to_error_kind(&error),
             ErrorKind::Unknown
         );
     }

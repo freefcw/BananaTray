@@ -1,9 +1,9 @@
+pub mod common;
 pub mod manager;
 
-use crate::models::{ProviderKind, ProviderMetadata, QuotaInfo, RefreshData};
+use crate::models::{ProviderDescriptor, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
-use rust_i18n::t;
 use std::sync::Arc;
 
 pub use manager::ProviderManager;
@@ -199,75 +199,21 @@ impl ProviderError {
             reason: reason.to_string(),
         }
     }
-
-    /// 返回用户友好的错误消息（UI 展示用）
-    ///
-    /// 设计原则：
-    /// - 面向用户的提示 → 国际化
-    /// - 技术性错误 → 直接返回英文 reason（便于调试和搜索）
-    pub fn format_for_display(&self) -> String {
-        match self {
-            // ── 面向用户的提示（国际化）──────────────────────────
-            Self::CliNotFound { cli_name } => t!("error.cli_not_found", cli = cli_name).to_string(),
-            Self::AuthRequired { hint } => match hint {
-                Some(h) => h.clone(), // hint 已经是国际化的文本
-                None => t!("error.auth_required_default").to_string(),
-            },
-            Self::SessionExpired { hint } => match hint {
-                Some(h) => h.clone(), // hint 已经是国际化的文本
-                None => t!("error.session_expired_default").to_string(),
-            },
-            Self::FolderTrustRequired => t!("error.folder_trust").to_string(),
-            Self::UpdateRequired { version } => match version {
-                Some(v) => t!("error.update_required_ver", version = v).to_string(),
-                None => t!("error.update_required").to_string(),
-            },
-            Self::ConfigMissing { key } => t!("error.config_missing", key = key).to_string(),
-
-            // ── 技术性错误（保留英文，便于调试）────────────────────
-            Self::Unavailable { reason } => reason.clone(),
-            Self::ParseFailed { reason } => reason.clone(),
-            Self::Timeout => "Request timeout".to_string(),
-            Self::NoData => "No quota data available".to_string(),
-            Self::NetworkFailed { reason } => format!("Network error: {}", reason),
-            Self::FetchFailed { reason } => reason.clone(),
-        }
-    }
 }
 
 /// AI Provider 的核心接口
 #[async_trait]
 pub trait AiProvider: Send + Sync {
-    /// 获取 Provider 的元数据
-    fn metadata(&self) -> ProviderMetadata;
+    /// 获取 Provider 的描述符（ID + 元数据）
+    fn descriptor(&self) -> ProviderDescriptor;
 
-    /// 该 Provider 的内部唯一标识（通常与 kind().id_key() 不同，用于更细粒度的区分实现）
-    fn id(&self) -> &'static str;
-
-    /// 关联的枚举类型
-    fn kind(&self) -> ProviderKind {
-        self.metadata().kind
-    }
-
-    /// 是否可以在当前设备或环境中可用（如 CLI 是否已安装等）
-    async fn is_available(&self) -> bool {
-        true
+    /// 检查当前环境是否满足刷新条件。
+    async fn check_availability(&self) -> Result<()> {
+        Ok(())
     }
 
     /// 核心方法：拉取最新的配额/用量情况
-    async fn refresh(&self) -> Result<RefreshData> {
-        // 默认实现：调用 refresh_quotas 并包装为 RefreshData
-        let quotas = self.refresh_quotas().await?;
-        Ok(RefreshData::quotas_only(quotas))
-    }
-
-    /// 辅助方法：只返回配额列表（向后兼容）
-    /// 如果 Provider 没有账户信息需求，可以实现这个方法
-    async fn refresh_quotas(&self) -> Result<Vec<QuotaInfo>> {
-        Err(anyhow::anyhow!(
-            "Provider must implement either refresh or refresh_quotas"
-        ))
-    }
+    async fn refresh(&self) -> Result<RefreshData>;
 }
 
 macro_rules! register_providers {

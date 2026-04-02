@@ -18,10 +18,10 @@ pub enum ProbeMode {
     Api,
 }
 
-/// Probe Trait：获取方式的抽象
+/// Probe Trait：数据源选择的抽象。
 ///
-/// 每种获取方式（CLI、API）都需要实现此 trait，
-/// 以便 ClaudeProvider 可以统一调用。
+/// 这里描述的是“去哪里拿数据”（CLI / API），而不是“如何解析同一份数据”。
+/// 因此它不应与 Antigravity 的 `ParseStrategy` 合并成同一个通用 trait。
 pub trait UsageProbe: Send + Sync {
     /// 执行配额获取
     fn probe(&self) -> Result<Vec<QuotaInfo>>;

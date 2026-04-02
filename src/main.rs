@@ -10,6 +10,7 @@ mod i18n;
 mod logging;
 pub mod models;
 pub mod notification;
+mod provider_error_presenter;
 mod providers;
 mod refresh;
 mod settings_store;

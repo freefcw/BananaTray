@@ -8,6 +8,7 @@ pub mod app_state;
 pub mod auto_launch;
 pub mod i18n;
 pub mod models;
+pub mod provider_error_presenter;
 pub mod providers;
 pub mod refresh;
 pub mod settings_store;
