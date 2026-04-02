@@ -190,12 +190,13 @@ impl SettingsView {
     // ══════ Left sidebar ══════
 
     pub(in crate::app::settings_window) fn render_provider_sidebar(
-        &self,
+        &mut self,
         providers: &[crate::models::ProviderStatus],
         selected: ProviderKind,
         settings: &AppSettings,
         theme: &Theme,
         viewport: Size<Pixels>,
+        _cx: &mut Context<Self>,
     ) -> Div {
         // 设计稿：sidebar 无背景色，直接在暗色底上列出 provider
         let mut list = div().flex_col().py(px(4.0));

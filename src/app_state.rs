@@ -76,6 +76,7 @@ pub struct SettingsUiState {
     pub active_tab: SettingsTab,
     pub selected_provider: ProviderKind,
     pub cadence_dropdown_open: bool,
+    pub copilot_token_editing: bool,
 }
 
 // ============================================================================
@@ -316,6 +317,7 @@ mod tests {
             active_tab: SettingsTab::General,
             selected_provider: ProviderKind::Claude,
             cadence_dropdown_open: false,
+            copilot_token_editing: false,
         };
         assert_eq!(ui.active_tab, SettingsTab::General);
         assert!(!ui.cadence_dropdown_open);

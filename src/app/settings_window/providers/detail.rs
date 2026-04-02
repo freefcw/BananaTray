@@ -140,12 +140,13 @@ impl SettingsView {
     // ══════ Right detail panel ══════
 
     pub(in crate::app::settings_window) fn render_provider_detail_panel(
-        &self,
+        &mut self,
         providers: &[crate::models::ProviderStatus],
         selected: ProviderKind,
         settings: &AppSettings,
         theme: &Theme,
         viewport: Size<Pixels>,
+        cx: &mut Context<Self>,
     ) -> Div {
         let provider = providers.iter().find(|p| p.kind == selected).cloned();
         let is_enabled = settings.is_provider_enabled(selected);
@@ -193,7 +194,7 @@ impl SettingsView {
             // ── Usage section ──
             .child(self.render_usage_section(provider.as_ref(), is_enabled, theme))
             // ── Settings section ──
-            .child(self.render_settings_section(selected, settings, theme));
+            .child(self.render_settings_section(selected, settings, theme, cx));
 
         let detail_scroll_h = viewport.height - px(65.0);
 
@@ -375,10 +376,11 @@ impl SettingsView {
     // ══════ Provider-specific settings ══════
 
     fn render_settings_section(
-        &self,
+        &mut self,
         kind: ProviderKind,
-        settings: &AppSettings,
+        _settings: &AppSettings,
         theme: &Theme,
+        cx: &mut Context<Self>,
     ) -> Div {
         let mut section =
             div()
@@ -392,20 +394,10 @@ impl SettingsView {
 
         match kind {
             ProviderKind::Copilot => {
-                // 1. 解析 token（纯数据，由 provider 层处理）
-                let mem_token = settings.providers.github_token.as_deref();
-                let status = crate::providers::copilot::resolve_token(mem_token);
-
-                // 2. 回写：若从磁盘/环境变量发现了 token，同步到内存状态
-                if status.token.is_some() && settings.providers.github_token.is_none() {
-                    self.state.borrow_mut().settings.providers.github_token = status.token.clone();
-                }
-
                 // 3. 使用交互式 UI（支持 Token 输入和保存）
                 section = section.child(div().mt(px(10.0)).child(
                     crate::providers::copilot::settings_ui::render_settings_interactive(
-                        self.state.clone(),
-                        theme,
+                        self, theme, cx,
                     ),
                 ));
             }

@@ -13,12 +13,37 @@ use serde::Deserialize;
 // Token 解析
 // ============================================================================
 
+/// Token 来源类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopilotTokenSource {
+    /// 用户在配置文件中手动设置的 token
+    ConfigFile,
+    /// 从 GitHub Copilot 扩展的 OAuth 配置自动检测
+    CopilotOAuth,
+    /// 从 GITHUB_TOKEN 环境变量读取
+    EnvVar,
+    /// 没有找到任何 token
+    None,
+}
+
+impl CopilotTokenSource {
+    /// 用于日志的简短英文标签
+    pub fn log_label(&self) -> &'static str {
+        match self {
+            Self::ConfigFile => "config file",
+            Self::CopilotOAuth => "Copilot OAuth",
+            Self::EnvVar => "GITHUB_TOKEN env",
+            Self::None => "none",
+        }
+    }
+}
+
 /// Copilot Token 解析结果
 pub struct CopilotTokenStatus {
     /// 有效的 token（可能来自内存/磁盘/环境变量）
     pub token: Option<String>,
-    /// token 来源描述
-    pub source: &'static str,
+    /// token 来源
+    pub source: CopilotTokenSource,
 }
 
 impl CopilotTokenStatus {
@@ -34,58 +59,78 @@ impl CopilotTokenStatus {
     }
 }
 
-/// 从多个来源解析 GitHub Token
-///
-/// 优先级：内存设置 > 磁盘配置文件 > Copilot OAuth > 环境变量 GITHUB_TOKEN
-pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
-    // 1. 内存中的设置（已加载的 AppSettings）
-    if let Some(t) = memory_token.filter(|s| !s.is_empty()) {
-        return CopilotTokenStatus {
-            token: Some(t.to_string()),
-            source: "config file",
-        };
-    }
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
-    // 2. 从磁盘配置文件读取
-    if let Some(t) = read_github_token_from_config() {
-        return CopilotTokenStatus {
-            token: Some(t),
-            source: "config file",
-        };
-    }
-
-    // 3. 从 GitHub Copilot 扩展配置读取 OAuth token
-    if let Some(t) = read_copilot_oauth_token() {
-        return CopilotTokenStatus {
-            token: Some(t),
-            source: "Copilot OAuth",
-        };
-    }
-
-    // 4. 环境变量
-    if let Some(t) = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()) {
-        return CopilotTokenStatus {
-            token: Some(t),
-            source: "GITHUB_TOKEN env",
-        };
-    }
-
-    CopilotTokenStatus {
-        token: None,
-        source: "",
-    }
+/// 缓存结构：存储上次解析的结果和时间
+struct TokenCache {
+    last_resolve: Option<Instant>,
+    cached_oauth_token: Option<String>,
 }
 
-/// 从磁盘配置文件读取 github_token
-fn read_github_token_from_config() -> Option<String> {
-    let path = crate::settings_store::config_path();
-    let content = std::fs::read_to_string(path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-    json.get("providers")
-        .and_then(|p| p.get("github_token"))
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
+static TOKEN_CACHE: Mutex<TokenCache> = Mutex::new(TokenCache {
+    last_resolve: None,
+    cached_oauth_token: None,
+});
+
+/// 缓存有效期：5秒（避免频繁的文件 I/O）
+const CACHE_DURATION: Duration = Duration::from_secs(5);
+
+/// 从多个来源解析 GitHub Token
+///
+/// 优先级：BananaTray 配置 > Copilot 扩展 OAuth > 环境变量 GITHUB_TOKEN
+///
+/// 使用基于时间的缓存（5秒有效期）来避免每次渲染都执行文件 I/O
+pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
+    debug!(target: "providers", "resolve_token: memory_token={:?}", memory_token.map(|t| if t.len() > 8 { &t[..8] } else { t }));
+
+    // 1. BananaTray 配置文件（settings.json 中的 github_token，启动时已加载到内存）
+    // 这个不缓存，因为内存状态可能随时变化
+    if let Some(t) = memory_token.filter(|s| !s.is_empty()) {
+        debug!(target: "providers", "resolve_token: → ConfigFile (from memory, len={})", t.len());
+        return CopilotTokenStatus {
+            token: Some(t.to_string()),
+            source: CopilotTokenSource::ConfigFile,
+        };
+    }
+
+    // 2. 检查缓存是否有效
+    let now = Instant::now();
+    let mut cache = TOKEN_CACHE.lock().unwrap();
+
+    let should_refresh = cache.last_resolve.is_none()
+        || now.duration_since(cache.last_resolve.unwrap()) > CACHE_DURATION;
+
+    if should_refresh {
+        // 缓存过期，重新读取
+        cache.cached_oauth_token = read_copilot_oauth_token();
+        cache.last_resolve = Some(now);
+        debug!(target: "providers", "resolve_token: cache refreshed");
+    }
+
+    // 3. 使用缓存的 OAuth token
+    if let Some(t) = cache.cached_oauth_token.clone() {
+        debug!(target: "providers", "resolve_token: → CopilotOAuth (cached, len={})", t.len());
+        return CopilotTokenStatus {
+            token: Some(t),
+            source: CopilotTokenSource::CopilotOAuth,
+        };
+    }
+
+    // 4. 环境变量（快速操作，不需要缓存）
+    if let Some(t) = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()) {
+        debug!(target: "providers", "resolve_token: → EnvVar (len={})", t.len());
+        return CopilotTokenStatus {
+            token: Some(t),
+            source: CopilotTokenSource::EnvVar,
+        };
+    }
+
+    debug!(target: "providers", "resolve_token: → None (no token found)");
+    CopilotTokenStatus {
+        token: None,
+        source: CopilotTokenSource::None,
+    }
 }
 
 /// 从 ~/.config/github-copilot/ 读取已有的 OAuth token
@@ -166,7 +211,7 @@ impl AiProvider for CopilotProvider {
         let token_status = resolve_token(None);
         let available = token_status.token.is_some();
         debug!(target: "providers", "Copilot availability: {} (token source: {})",
-            available, token_status.source);
+            available, token_status.source.log_label());
         available
     }
 

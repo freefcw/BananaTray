@@ -22,14 +22,18 @@ pub use window_mgr::schedule_open_settings_window_with_provider;
 // 设置视图 — 匹配 Lumina Bar 设计稿
 // ============================================================================
 
-pub(super) struct SettingsView {
-    pub(super) state: Rc<RefCell<AppState>>,
+pub(crate) struct SettingsView {
+    pub(crate) state: Rc<RefCell<AppState>>,
+    pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
 }
 
 impl SettingsView {
-    pub(super) fn new(state: Rc<RefCell<AppState>>, _cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(state: Rc<RefCell<AppState>>, _cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
-        Self { state }
+        Self {
+            state,
+            copilot_input: None,
+        }
     }
 
     /// 根据用户主题设置解析设置窗口主题（与主面板保持一致）
@@ -214,7 +218,7 @@ impl SettingsView {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::resolve_theme(&self.state);
         let settings = self.state.borrow().settings.clone();
         let active_tab = self.state.borrow().settings_ui.active_tab;
@@ -230,7 +234,7 @@ impl Render for SettingsView {
                 .flex_col()
                 .h(content_h)
                 .overflow_hidden()
-                .child(self.render_providers_tab(&settings, &theme, viewport))
+                .child(self.render_providers_tab(&settings, &theme, viewport, cx))
         } else {
             div()
                 .id("settings-content")
