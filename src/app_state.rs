@@ -1,7 +1,7 @@
 //! Pure-logic sub-state structs, free of GPUI dependency.
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
-use crate::models::{AppSettings, NavTab, ProviderKind, ProviderStatus};
+use crate::models::{AppSettings, ConnectionStatus, NavTab, ProviderKind, ProviderStatus};
 
 // ============================================================================
 // 子状态结构 (SRP: 每个结构体负责一个独立职责)
@@ -78,6 +78,57 @@ pub struct SettingsUiState {
     pub selected_provider: ProviderKind,
     pub cadence_dropdown_open: bool,
     pub copilot_token_editing: bool,
+}
+
+// ============================================================================
+// 纯逻辑助手函数
+// ============================================================================
+
+/// 头部状态徽章类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderStatusKind {
+    Synced,
+    Syncing,
+    Stale,
+    Offline,
+}
+
+/// 计算当前头部应该显示的内容
+/// < 1m: "● Synced", 1~59m: "● Xm ago", ≥ 1h: "● Xh ago"
+/// Refreshing: "● Refreshing", 无数据: "● Offline"
+pub fn compute_header_status(
+    nav: &NavigationState,
+    store: &ProviderStore,
+) -> (String, HeaderStatusKind) {
+    let kind = match nav.active_tab {
+        NavTab::Provider(k) => k,
+        NavTab::Settings => nav.last_provider_kind,
+    };
+
+    let Some(provider) = store.find(kind) else {
+        return ("Offline".to_string(), HeaderStatusKind::Offline);
+    };
+
+    if provider.connection == ConnectionStatus::Refreshing {
+        return ("Syncing…".to_string(), HeaderStatusKind::Syncing);
+    }
+
+    if let Some(instant) = provider.last_refreshed_instant {
+        let secs = instant.elapsed().as_secs();
+        if secs < 60 {
+            ("Synced".to_string(), HeaderStatusKind::Synced)
+        } else if secs < 3600 {
+            (format!("{}m ago", secs / 60), HeaderStatusKind::Stale)
+        } else {
+            (format!("{}h ago", secs / 3600), HeaderStatusKind::Stale)
+        }
+    } else {
+        match provider.connection {
+            ConnectionStatus::Error => ("Error".to_string(), HeaderStatusKind::Offline),
+            ConnectionStatus::Disconnected => ("Offline".to_string(), HeaderStatusKind::Offline),
+            _ => ("Waiting".to_string(), HeaderStatusKind::Syncing),
+        }
+    }
 }
 
 // ============================================================================
@@ -322,5 +373,127 @@ mod tests {
         };
         assert_eq!(ui.active_tab, SettingsTab::General);
         assert!(!ui.cadence_dropdown_open);
+    }
+
+    // ── HeaderStatusText ────────────────────────────────────────
+
+    #[test]
+    fn header_status_missing_provider() {
+        let store = make_store(&[]);
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "Offline");
+        assert_eq!(kind, HeaderStatusKind::Offline);
+    }
+
+    #[test]
+    fn header_status_refreshing() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Refreshing;
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "Syncing…");
+        assert_eq!(kind, HeaderStatusKind::Syncing);
+    }
+
+    #[test]
+    fn header_status_disconnected() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Disconnected;
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "Offline");
+        assert_eq!(kind, HeaderStatusKind::Offline);
+    }
+
+    #[test]
+    fn header_status_synced_now() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Connected;
+        // 刚刷新的时间
+        p.last_refreshed_instant = Some(std::time::Instant::now());
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "Synced");
+        assert_eq!(kind, HeaderStatusKind::Synced);
+    }
+
+    #[test]
+    fn header_status_synced_minutes_ago() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Connected;
+        // 5分钟前
+        p.last_refreshed_instant =
+            Some(std::time::Instant::now() - std::time::Duration::from_secs(300));
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "5m ago");
+        assert_eq!(kind, HeaderStatusKind::Stale);
+    }
+
+    #[test]
+    fn header_status_synced_hours_ago() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Connected;
+        // 2小时前
+        p.last_refreshed_instant =
+            Some(std::time::Instant::now() - std::time::Duration::from_secs(7200));
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "2h ago");
+        assert_eq!(kind, HeaderStatusKind::Stale);
+    }
+
+    #[test]
+    fn header_status_error() {
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        p.connection = ConnectionStatus::Error;
+        // 注意：如果是 Error 状态且 last_refreshed_instant 不为 None，
+        // 我们会显示最后刷新时间（在前面分支处理了），所以这里设为 None 以测试 Error 分支
+        p.last_refreshed_instant = None;
+
+        let nav = NavigationState {
+            active_tab: NavTab::Provider(ProviderKind::Claude),
+            last_provider_kind: ProviderKind::Claude,
+            generation: 0,
+        };
+        let (text, kind) = compute_header_status(&nav, &store);
+        assert_eq!(text, "Error");
+        assert_eq!(kind, HeaderStatusKind::Offline);
     }
 }
