@@ -5,9 +5,11 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod app_state;
+pub mod application;
 pub mod auto_launch;
 pub mod i18n;
 pub mod models;
+pub mod notification;
 pub mod provider_error_presenter;
 pub mod providers;
 pub mod refresh;
@@ -22,4 +24,4 @@ pub mod app;
 #[cfg(feature = "app")]
 pub mod logging;
 #[cfg(feature = "app")]
-pub mod notification;
+pub mod runtime;

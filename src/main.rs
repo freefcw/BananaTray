@@ -4,6 +4,7 @@ rust_i18n::i18n!("locales", fallback = "en");
 
 mod app;
 mod app_state;
+mod application;
 mod assets;
 mod auto_launch;
 mod i18n;
@@ -13,12 +14,14 @@ pub mod notification;
 mod provider_error_presenter;
 mod providers;
 mod refresh;
+mod runtime;
 mod settings_store;
 mod single_instance;
 mod theme;
 mod utils;
 
 use app::{schedule_open_settings_window, AppState};
+use application::AppAction;
 use assets::Assets;
 use gpui::*;
 use log::{error, info};
@@ -69,41 +72,21 @@ impl TrayController {
     }
 
     fn toggle_provider(&mut self, cx: &mut App) {
-        let has_any_enabled = {
-            let state = self.state.borrow();
-            crate::models::ProviderKind::all()
-                .iter()
-                .any(|k| state.settings.is_provider_enabled(*k))
+        let provider_tab = {
+            let mut state = self.state.borrow_mut();
+            state.session.default_provider_tab()
         };
 
-        if !has_any_enabled {
+        let Some(provider_tab) = provider_tab else {
             info!(target: "tray", "no providers enabled, opening settings directly");
             self.show_settings(cx);
             return;
-        }
-
-        let provider_tab = {
-            let mut state = self.state.borrow_mut();
-            let last = state.nav.last_provider_kind;
-            // 如果上次选中的 provider 已经被禁用了，切到第一个可用的
-            let kind = if state.settings.is_provider_enabled(last) {
-                last
-            } else {
-                let fallback = crate::models::ProviderKind::all()
-                    .iter()
-                    .find(|k| state.settings.is_provider_enabled(**k))
-                    .copied()
-                    .unwrap_or(last);
-                state.nav.last_provider_kind = fallback;
-                fallback
-            };
-            NavTab::Provider(kind)
         };
         info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
 
         // Check if window is actually alive, not just if handle exists
         if self.is_window_alive(cx) {
-            let active_tab = self.state.borrow().nav.active_tab;
+            let active_tab = self.state.borrow().session.nav.active_tab;
             if matches!(active_tab, NavTab::Provider(_)) {
                 info!(target: "tray", "provider panel already open, closing existing panel");
                 self.close_popup(cx);
@@ -127,18 +110,11 @@ impl TrayController {
 
     fn show(&mut self, tab: NavTab, cx: &mut App) {
         info!(target: "tray", "show window for tab {:?}", tab);
-        {
-            let mut state = self.state.borrow_mut();
-            state.nav.switch_to(tab);
-        }
+        runtime::dispatch_in_app(&self.state, AppAction::SelectNavTab(tab), cx);
 
         if let Some(window) = self.window.as_ref() {
-            info!(target: "tray", "notifying existing tray window to rerender");
-            let _ = window.update(cx, |view, window, cx| {
-                let _ = view;
-                let _ = window;
-                cx.notify();
-            });
+            info!(target: "tray", "reusing existing tray window");
+            let _ = window.update(cx, |_, _, _| {});
         } else {
             info!(target: "tray", "opening a fresh tray window");
             self.open(cx);
@@ -170,7 +146,7 @@ impl TrayController {
     }
 
     fn open(&mut self, cx: &mut App) {
-        let dynamic_height = self.state.borrow().popup_height();
+        let dynamic_height = self.state.borrow().session.popup_height();
         info!(target: "tray", "opening window with dynamic height: {}px", dynamic_height);
         let window_size = size(px(models::PopupLayout::WIDTH), px(dynamic_height));
         let bounds = Self::preferred_window_bounds(cx, window_size);
@@ -201,7 +177,8 @@ impl TrayController {
                     if !activation_initialized.replace(true) {
                         return;
                     }
-                    let should_auto_hide = auto_hide_state.borrow().settings.auto_hide_window;
+                    let should_auto_hide =
+                        auto_hide_state.borrow().session.settings.auto_hide_window;
                     if should_auto_hide && !window.is_window_active() {
                         info!(target: "tray", "auto-hide closing inactive tray popup");
                         auto_hide_state.borrow_mut().view_entity = None;
@@ -277,21 +254,18 @@ fn main() {
             {
                 let state = controller.borrow().state.clone();
                 let async_cx = cx.to_async();
-                let mut pump_cx = cx.to_async();
+                let pump_cx = cx.to_async();
                 async_cx
                     .foreground_executor()
                     .spawn(async move {
                         while let Ok(event) = event_rx.recv().await {
-                            let view_entity = {
-                                let mut s = state.borrow_mut();
-                                s.apply_refresh_event(event);
-                                s.view_entity.clone()
-                            };
-                            if let Some(entity) = view_entity {
-                                let _ = entity.update(&mut pump_cx, |_, cx| {
-                                    cx.notify();
-                                });
-                            }
+                            let _ = pump_cx.update(|cx| {
+                                runtime::dispatch_in_app(
+                                    &state,
+                                    AppAction::RefreshEventReceived(event),
+                                    cx,
+                                );
+                            });
                         }
                     })
                     .detach();
@@ -300,9 +274,20 @@ fn main() {
             // 6. 初始配置同步 + 启动刷新
             {
                 let state = controller.borrow().state.clone();
-                let s = state.borrow();
-                s.sync_config_to_coordinator();
-                let _ = s.send_refresh(RefreshRequest::RefreshAll {
+                let config_request = {
+                    let session = &state.borrow().session;
+                    let enabled = crate::models::ProviderKind::all()
+                        .iter()
+                        .filter(|kind| session.settings.is_provider_enabled(**kind))
+                        .copied()
+                        .collect();
+                    RefreshRequest::UpdateConfig {
+                        interval_mins: session.settings.refresh_interval_mins,
+                        enabled,
+                    }
+                };
+                let _ = state.borrow().send_refresh(config_request);
+                let _ = state.borrow().send_refresh(RefreshRequest::RefreshAll {
                     reason: RefreshReason::Startup,
                 });
             }

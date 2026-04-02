@@ -1,10 +1,11 @@
-use super::provider_logic;
-use super::settings_window::{
-    schedule_open_settings_window, schedule_open_settings_window_with_provider,
-};
 use super::AppView;
-use crate::models::{ConnectionStatus, ErrorKind, ProviderKind, ProviderStatus};
+use crate::application::{
+    provider_detail_view_state, AppAction, DisabledProviderViewState, ProviderBodyViewState,
+    ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
+};
+use crate::models::ProviderKind;
 use crate::refresh::RefreshReason;
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -37,41 +38,26 @@ impl AppView {
         kind: ProviderKind,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let state = self.state.borrow();
-        let is_enabled = state.settings.is_provider_enabled(kind);
-        let provider = state.provider_store.find(kind).cloned();
-        drop(state);
+        let view_state = {
+            let state = self.state.borrow();
+            provider_detail_view_state(&state.session, kind)
+        };
 
-        if !is_enabled {
-            return self.render_provider_not_enabled(kind, cx);
-        }
-
-        if let Some(provider) = provider {
-            self.render_provider_panel(&provider, cx)
-        } else {
-            div()
-                .child(t!("provider.not_found").to_string())
-                .into_any_element()
+        match view_state {
+            ProviderDetailViewState::Disabled(vm) => self.render_provider_not_enabled(&vm, cx),
+            ProviderDetailViewState::Missing { message } => div().child(message).into_any_element(),
+            ProviderDetailViewState::Panel(vm) => self.render_provider_panel(vm, cx),
         }
     }
 
     fn render_provider_not_enabled(
         &self,
-        kind: ProviderKind,
+        vm: &DisabledProviderViewState,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = cx.global::<Theme>();
         let state = self.state.clone();
-        let provider = state.borrow().provider_store.find(kind).cloned();
-
-        let (icon, display_name) = if let Some(p) = provider {
-            (p.icon_asset().to_string(), p.display_name().to_string())
-        } else {
-            (
-                "src/icons/provider-unknown.svg".to_string(),
-                format!("{:?}", kind),
-            )
-        };
+        let kind = vm.kind;
 
         div()
             .flex_col()
@@ -84,16 +70,18 @@ impl AppView {
             .bg(theme.bg_card_inner)
             .border_1()
             .border_color(theme.border_subtle)
-            .child(svg().path(icon).size(px(32.0)).text_color(theme.text_muted))
+            .child(
+                svg()
+                    .path(vm.icon.clone())
+                    .size(px(32.0))
+                    .text_color(theme.text_muted),
+            )
             .child(
                 div()
                     .text_size(px(14.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text_primary)
-                    .child(format!(
-                        "{}",
-                        t!("provider.not_enabled", name = display_name)
-                    )),
+                    .child(vm.title.clone()),
             )
             .child(
                 div()
@@ -101,7 +89,7 @@ impl AppView {
                     .text_color(theme.text_secondary)
                     .text_align(TextAlign::Center)
                     .line_height(relative(1.4))
-                    .child(t!("provider.enable_hint").to_string()),
+                    .child(vm.hint.clone()),
             )
             .child(
                 div()
@@ -115,10 +103,14 @@ impl AppView {
                     .cursor_pointer()
                     .child(t!("provider.open_settings").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        let display_id = window.display(cx).map(|d| d.id());
-                        state.borrow_mut().view_entity = None;
-                        window.remove_window();
-                        schedule_open_settings_window(state.clone(), display_id, cx);
+                        runtime::dispatch_in_window(
+                            &state,
+                            AppAction::OpenSettings {
+                                provider: Some(kind),
+                            },
+                            window,
+                            cx,
+                        );
                     }),
             )
             .into_any_element()
@@ -126,55 +118,44 @@ impl AppView {
 
     fn render_provider_panel(
         &self,
-        provider: &ProviderStatus,
+        vm: crate::application::ProviderPanelViewState,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = Theme::clone(cx.global::<Theme>());
-        let provider = provider.clone();
-        let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
-        let is_error = provider.connection == ConnectionStatus::Error;
-        let has_quotas = !provider.quotas.is_empty();
-
-        // 错误状态：不显示账户卡片，直接显示错误空状态
-        if is_error && !has_quotas {
-            return self
-                .render_provider_empty_state(&provider, cx)
-                .into_any_element();
-        }
-
-        // Quota 卡片列表
-        let quotas_container = if is_refreshing {
-            self.render_refreshing_state(&provider, &theme)
-        } else if has_quotas {
-            let gen = self.state.borrow().nav.generation;
-            let mut cards = div().flex_col();
-            for (i, quota) in provider.quotas.iter().enumerate() {
-                if i > 0 {
-                    // 卡片之间的显式间距（不依赖 gap，GPUI 对 gap 支持不稳定）
-                    cards = cards.child(div().h(px(8.0)));
-                }
-                cards = cards.child(super::widgets::render_quota_bar(quota, &theme, gen));
+        let quotas_container = match &vm.body {
+            ProviderBodyViewState::Refreshing { provider_name } => {
+                self.render_refreshing_state(provider_name, &theme)
             }
-            cards
-        } else {
-            self.render_provider_empty_state(&provider, cx)
+            ProviderBodyViewState::Quotas { quotas, generation } => {
+                let mut cards = div().flex_col();
+                for (i, quota) in quotas.iter().enumerate() {
+                    if i > 0 {
+                        cards = cards.child(div().h(px(8.0)));
+                    }
+                    cards =
+                        cards.child(super::widgets::render_quota_bar(quota, &theme, *generation));
+                }
+                cards
+            }
+            ProviderBodyViewState::Empty(empty_vm) => {
+                self.render_provider_empty_state(empty_vm, cx)
+            }
         };
 
         // Dashboard 链接行（受 show_dashboard_button 设置控制）
-        let show_dashboard = self.state.borrow().settings.show_dashboard_button;
-        let dashboard_url = provider.dashboard_url().to_string();
-        let dashboard_row = if show_dashboard && !dashboard_url.is_empty() {
+        let state_for_dashboard = self.state.clone();
+        let dashboard_row = if vm.show_dashboard {
             Some(self.render_link_row(
                 "src/icons/compass.svg",
                 &t!("tooltip.dashboard"),
                 &theme,
-                move |_, _, _| {
-                    let cmd = if cfg!(target_os = "linux") {
-                        "xdg-open"
-                    } else {
-                        "open"
-                    };
-                    let _ = std::process::Command::new(cmd).arg(&dashboard_url).spawn();
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_for_dashboard,
+                        AppAction::OpenDashboard(vm.kind),
+                        window,
+                        cx,
+                    );
                 },
             ))
         } else {
@@ -225,7 +206,7 @@ impl AppView {
             .on_mouse_down(MouseButton::Left, handler)
     }
 
-    fn render_refreshing_state(&self, provider: &ProviderStatus, theme: &Theme) -> Div {
+    fn render_refreshing_state(&self, provider_name: &str, theme: &Theme) -> Div {
         div()
             .w_full()
             .flex_col()
@@ -257,51 +238,19 @@ impl AppView {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.text_secondary)
                     .text_align(TextAlign::Center)
-                    .child(format!(
-                        "{}",
-                        t!("provider.fetching", name = provider.display_name())
-                    )),
+                    .child(t!("provider.fetching", name = provider_name).to_string()),
             )
     }
 
     fn render_provider_empty_state(
         &self,
-        provider: &ProviderStatus,
+        vm: &ProviderEmptyViewState,
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = cx.global::<Theme>();
-        let is_error = provider.connection == ConnectionStatus::Error;
-
-        // 检测是否为配置错误（需要显示"打开配置"而非"重试"）
-        let is_config_error = matches!(
-            provider.error_kind,
-            ErrorKind::ConfigMissing | ErrorKind::AuthRequired
-        );
-
-        let (title, message) = if is_error {
-            let error_msg = provider.error_message.as_deref().unwrap_or("");
-            (
-                t!("provider.refresh_failed").to_string(),
-                error_msg.to_string(),
-            )
-        } else {
-            let title = match provider.connection {
-                ConnectionStatus::Connected => t!("provider.waiting").to_string(),
-                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
-                ConnectionStatus::Disconnected => t!("provider.connection_required").to_string(),
-                ConnectionStatus::Error => unreachable!(),
-            };
-            let message = provider_logic::provider_empty_message(provider);
-            (title, message)
-        };
-
-        let show_action = matches!(
-            provider.connection,
-            ConnectionStatus::Error | ConnectionStatus::Disconnected
-        );
-        let kind = provider.kind;
         let entity = cx.entity().clone();
-        let state = self.state.clone();
+        let state_for_settings = self.state.clone();
+        let kind = vm.kind;
 
         let mut container = div()
             .w_full()
@@ -318,17 +267,17 @@ impl AppView {
                     .w_full()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(if is_error {
+                    .text_color(if vm.is_error {
                         theme.status_error
                     } else {
                         theme.text_primary
                     })
                     .text_align(TextAlign::Center)
-                    .child(title),
+                    .child(vm.title.clone()),
             );
 
         // 错误消息
-        if !message.is_empty() {
+        if !vm.message.is_empty() {
             container = container.child(
                 div()
                     .w_full()
@@ -337,20 +286,22 @@ impl AppView {
                     .line_height(relative(1.4))
                     .text_color(theme.text_secondary)
                     .text_align(TextAlign::Center)
-                    .child(message),
+                    .child(vm.message.clone()),
             );
         }
 
-        if show_action {
-            if is_config_error {
+        if let Some(action) = vm.action {
+            if action == ProviderEmptyAction::OpenSettings {
                 container = container.child(render_action_button(
                     &t!("provider.open_config"),
                     theme,
                     move |_, window, cx| {
-                        schedule_open_settings_window_with_provider(
-                            state.clone(),
-                            kind,
-                            window.display(cx).map(|d| d.id()),
+                        runtime::dispatch_in_window(
+                            &state_for_settings,
+                            AppAction::OpenSettings {
+                                provider: Some(kind),
+                            },
+                            window,
                             cx,
                         );
                     },
@@ -361,7 +312,14 @@ impl AppView {
                     theme,
                     move |_, _, cx| {
                         entity.update(cx, |view, cx| {
-                            view.refresh_single_provider(kind, cx);
+                            runtime::dispatch_in_context(
+                                &view.state,
+                                AppAction::RefreshProvider {
+                                    kind,
+                                    reason: RefreshReason::Manual,
+                                },
+                                cx,
+                            );
                         });
                     },
                 ));
@@ -369,13 +327,5 @@ impl AppView {
         }
 
         container
-    }
-
-    /// Trigger a refresh for a single provider (used by the retry button).
-    pub(crate) fn refresh_single_provider(&self, kind: ProviderKind, cx: &mut Context<Self>) {
-        self.state
-            .borrow_mut()
-            .request_provider_refresh(kind, RefreshReason::Manual);
-        cx.notify();
     }
 }

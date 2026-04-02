@@ -1,4 +1,6 @@
-use super::{persist_settings, AppView};
+use super::AppView;
+use crate::application::{AppAction, SettingChange};
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
 use rust_i18n::t;
@@ -7,12 +9,9 @@ const AUTO_HIDE_ICON: &str = "src/icons/display.svg";
 
 impl AppView {
     pub(crate) fn render_settings_content(&self, cx: &mut Context<Self>) -> AnyElement {
-        let settings = self.state.borrow().settings.clone();
+        let settings = self.state.borrow().session.settings.clone();
         let theme = cx.global::<Theme>();
-        let state = self.state.clone();
         let entity = cx.entity().clone();
-        let auto_hide_state = state.clone();
-        let auto_hide_entity = entity.clone();
 
         div()
             .px(px(12.0))
@@ -60,15 +59,12 @@ impl AppView {
                     )
                     .child(self.render_toggle_switch_small(settings.auto_hide_window, theme))
                     .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        let settings = {
-                            let mut app_state = auto_hide_state.borrow_mut();
-                            app_state.settings.auto_hide_window =
-                                !app_state.settings.auto_hide_window;
-                            app_state.settings.clone()
-                        };
-                        persist_settings(&settings);
-                        auto_hide_entity.update(cx, |_, cx| {
-                            cx.notify();
+                        entity.update(cx, |view, cx| {
+                            runtime::dispatch_in_context(
+                                &view.state,
+                                AppAction::UpdateSetting(SettingChange::ToggleAutoHideWindow),
+                                cx,
+                            );
                         });
                     }),
             )

@@ -1,4 +1,6 @@
-use crate::app::{persist_settings, AppState};
+use crate::app::AppState;
+use crate::application::{AppAction, SettingChange};
+use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -97,7 +99,7 @@ fn render_trigger_button(
     cadence_mins: Option<u64>,
     theme: &Theme,
 ) -> Div {
-    let dropdown_open = state.borrow().settings_ui.cadence_dropdown_open;
+    let dropdown_open = state.borrow().session.settings_ui.cadence_dropdown_open;
     let toggle_state = state.clone();
 
     let mut trigger = div()
@@ -132,11 +134,13 @@ fn render_trigger_button(
                 .ml(px(TRIGGER_GAP))
                 .child(if dropdown_open { "▲" } else { "▼" }),
         )
-        .on_mouse_down(MouseButton::Left, move |_, window, _| {
-            let mut s = toggle_state.borrow_mut();
-            s.settings_ui.cadence_dropdown_open = !s.settings_ui.cadence_dropdown_open;
-            drop(s);
-            window.refresh();
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(
+                &toggle_state,
+                AppAction::ToggleCadenceDropdown,
+                window,
+                cx,
+            );
         });
 
     if dropdown_open {
@@ -238,14 +242,13 @@ fn render_option_row(
                     .child("✓"),
             )
         })
-        .on_mouse_down(MouseButton::Left, move |_, window, _| {
-            let settings = {
-                let mut s = opt_state.borrow_mut();
-                s.select_cadence(mins);
-                s.settings.clone()
-            };
-            persist_settings(&settings);
-            window.refresh();
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(
+                &opt_state,
+                AppAction::UpdateSetting(SettingChange::RefreshCadence(mins)),
+                window,
+                cx,
+            );
         });
 
     if index > 0 {
