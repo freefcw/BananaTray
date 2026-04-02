@@ -101,9 +101,11 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
                         .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(badge_color))
                         .child(
                             div()
+                                .overflow_hidden()
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text_secondary)
+                                .whitespace_nowrap()
                                 .child(q.label.to_uppercase()),
                         ),
                 )
