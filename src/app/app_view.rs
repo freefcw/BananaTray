@@ -24,7 +24,8 @@ pub struct AppView {
 
 impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
-        let theme = match state.borrow().session.settings.theme.resolve() {
+        let is_dark = crate::utils::platform::detect_system_dark_mode();
+        let theme = match state.borrow().session.settings.theme.resolve(is_dark) {
             crate::models::AppTheme::Light => Theme::light(),
             crate::models::AppTheme::Dark => Theme::dark(),
             crate::models::AppTheme::System => unreachable!("resolve() never returns System"),

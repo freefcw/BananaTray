@@ -15,39 +15,20 @@ pub enum AppTheme {
 }
 
 impl AppTheme {
-    /// 将 System 解析为具体的 Light 或 Dark（运行时检测系统偏好）
-    pub fn resolve(&self) -> AppTheme {
+    /// 将 System 解析为具体的 Light 或 Dark
+    ///
+    /// `system_is_dark` 由调用方提供（从平台 API 检测），
+    /// 保持数据模型不依赖系统调用（DIP/可测试性）。
+    pub fn resolve(self, system_is_dark: bool) -> AppTheme {
         match self {
             AppTheme::System => {
-                if Self::detect_system_dark_mode() {
+                if system_is_dark {
                     AppTheme::Dark
                 } else {
                     AppTheme::Light
                 }
             }
-            other => *other,
-        }
-    }
-
-    /// 检测 macOS 系统是否处于深色模式
-    fn detect_system_dark_mode() -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            use std::process::Command;
-            Command::new("defaults")
-                .args(["read", "-g", "AppleInterfaceStyle"])
-                .output()
-                .map(|o| {
-                    String::from_utf8_lossy(&o.stdout)
-                        .trim()
-                        .eq_ignore_ascii_case("dark")
-                })
-                .unwrap_or(false)
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            // Linux / 其他平台暂时默认浅色
-            false
+            other => other,
         }
     }
 }

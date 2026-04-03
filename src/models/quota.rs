@@ -3,6 +3,14 @@ use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+/// 元数据代理方法生成宏：保持 `provider.display_name()` 等 API 不变，
+/// 消除手写代理的样板代码。新增 ProviderMetadata 字段时只需加一行。
+macro_rules! delegate_metadata {
+    ($($method:ident -> $field:ident),* $(,)?) => {
+        $(pub fn $method(&self) -> &str { &self.metadata.$field })*
+    };
+}
+
 // ============================================================================
 // 配额类型
 // ============================================================================
@@ -247,22 +255,6 @@ impl QuotaInfo {
             }
         }
     }
-
-    // ========================================================================
-    // 兼容旧 API（deprecated，将在未来版本移除）
-    // ========================================================================
-
-    /// 格式化显示文本
-    #[deprecated(note = "Use remaining_text() instead")]
-    pub fn display_text(&self) -> String {
-        self.remaining_text()
-    }
-
-    /// 格式化详情文本
-    #[deprecated(note = "Use usage_detail_text() instead")]
-    pub fn detail_text(&self) -> String {
-        self.usage_detail_text()
-    }
 }
 
 // ============================================================================
@@ -330,7 +322,24 @@ pub enum ConnectionStatus {
     Error,
 }
 
-/// 单个 Provider 的完整状态
+/// 单个 Provider 的完整运行时状态
+///
+/// ## 状态转换规则
+///
+/// ```text
+/// ┌──────────────┐
+/// │ Disconnected │──mark_refreshing()──→ Refreshing
+/// └──────────────┘                          │
+///       ↑                              ┌────┴────┐
+///  mark_unavailable()            succeeded()   failed()
+///  (非 Connected 时)                 │      ┌───┴───┐
+///                              Connected  有旧数据？ 无旧数据？
+///                                         Connected  Error
+/// ```
+///
+/// - `mark_refresh_failed`: 有旧配额数据 → 保持 Connected（展示陈旧数据）；
+///   无旧数据 → Error（触发 UI 空状态/错误提示）
+/// - `mark_unavailable`: 仅在非 Connected 时回退到 Disconnected
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
     pub kind: ProviderKind,
@@ -410,30 +419,15 @@ impl ProviderStatus {
         self.error_kind = error_kind;
     }
 
-    /// 兼容旧的扁平化访问接口
-    pub fn display_name(&self) -> &str {
-        &self.metadata.display_name
-    }
-
-    pub fn icon_asset(&self) -> &str {
-        &self.metadata.icon_asset
-    }
-
-    pub fn dashboard_url(&self) -> &str {
-        &self.metadata.dashboard_url
-    }
-
-    pub fn brand_name(&self) -> &str {
-        &self.metadata.brand_name
-    }
-
-    pub fn account_hint(&self) -> &str {
-        &self.metadata.account_hint
-    }
-
-    pub fn source_label(&self) -> &str {
-        &self.metadata.source_label
-    }
+    // 元数据代理方法（由宏生成，保持 30+ 处调用点兼容）
+    delegate_metadata!(
+        display_name -> display_name,
+        icon_asset -> icon_asset,
+        dashboard_url -> dashboard_url,
+        brand_name -> brand_name,
+        account_hint -> account_hint,
+        source_label -> source_label,
+    );
 
     /// 格式化上次刷新的相对时间
     pub fn format_last_updated(&self) -> String {
@@ -476,11 +470,7 @@ impl ProviderStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 确保 i18n 测试使用英语 locale
-    fn setup_locale() {
-        rust_i18n::set_locale("en");
-    }
+    use crate::models::test_helpers::{make_test_provider, setup_test_locale as setup_locale};
 
     // ========================================================================
     // 基础计算测试
@@ -711,16 +701,6 @@ mod tests {
         assert_eq!(q_zero.usage_detail_text(), "$0.00 / $100.00");
     }
 
-    #[test]
-    #[allow(deprecated)]
-    fn test_deprecated_api_compatibility() {
-        setup_locale();
-        // 验证 deprecated API 仍然工作
-        let q = QuotaInfo::new("test", 30.0, 100.0);
-        assert_eq!(q.display_text(), q.remaining_text());
-        assert_eq!(q.detail_text(), q.usage_detail_text());
-    }
-
     // ========================================================================
     // 边界条件测试
     // ========================================================================
@@ -759,63 +739,42 @@ mod tests {
     // format_last_updated 测试
     // ========================================================================
 
-    fn make_test_provider(connection: ConnectionStatus) -> ProviderStatus {
-        ProviderStatus {
-            kind: ProviderKind::Claude,
-            metadata: ProviderMetadata {
-                kind: ProviderKind::Claude,
-                display_name: "Claude".to_string(),
-                brand_name: "Anthropic".to_string(),
-                source_label: "test".to_string(),
-                account_hint: "test".to_string(),
-                icon_asset: "test.svg".to_string(),
-                dashboard_url: "https://example.com".to_string(),
-            },
-            enabled: true,
-            connection,
-            quotas: vec![],
-            account_email: None,
-            is_paid: false,
-            account_tier: None,
-            last_updated_at: None,
-            error_message: None,
-            error_kind: ErrorKind::default(),
-            last_refreshed_instant: None,
-        }
+    fn make_provider(connection: ConnectionStatus) -> ProviderStatus {
+        make_test_provider(ProviderKind::Claude, connection)
     }
 
     #[test]
     fn format_last_updated_no_instant_connected() {
         setup_locale();
-        let p = make_test_provider(ConnectionStatus::Connected);
+        let p = make_provider(ConnectionStatus::Connected);
         assert_eq!(p.format_last_updated(), "Waiting for data");
     }
 
     #[test]
     fn format_last_updated_no_instant_refreshing() {
         setup_locale();
-        let p = make_test_provider(ConnectionStatus::Refreshing);
+        let p = make_provider(ConnectionStatus::Refreshing);
         assert_eq!(p.format_last_updated(), "Refreshing…");
     }
 
     #[test]
     fn format_last_updated_no_instant_error() {
         setup_locale();
-        let p = make_test_provider(ConnectionStatus::Error);
+        let p = make_provider(ConnectionStatus::Error);
         assert_eq!(p.format_last_updated(), "Needs attention");
     }
 
     #[test]
     fn format_last_updated_no_instant_disconnected() {
         setup_locale();
-        let p = make_test_provider(ConnectionStatus::Disconnected);
+        let p = make_provider(ConnectionStatus::Disconnected);
         assert_eq!(p.format_last_updated(), "Not connected");
     }
 
     #[test]
     fn format_last_updated_with_text_fallback() {
         setup_locale();
-        let mut p = make_test_provider(ConnectionStatus::Connected);
+        let mut p = make_provider(ConnectionStatus::Connected);
         p.last_updated_at = Some("Custom text".to_string());
         assert_eq!(p.format_last_updated(), "Custom text");
     }
@@ -823,7 +782,7 @@ mod tests {
     #[test]
     fn format_last_updated_just_now() {
         setup_locale();
-        let mut p = make_test_provider(ConnectionStatus::Connected);
+        let mut p = make_provider(ConnectionStatus::Connected);
         p.last_refreshed_instant = Some(std::time::Instant::now());
         assert_eq!(p.format_last_updated(), "Updated just now");
     }
@@ -831,7 +790,7 @@ mod tests {
     #[test]
     fn mark_refresh_failed_sets_update_text() {
         setup_locale();
-        let mut p = make_test_provider(ConnectionStatus::Connected);
+        let mut p = make_provider(ConnectionStatus::Connected);
         p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
         assert_eq!(p.last_updated_at.as_deref(), Some("Update failed"));
         assert_eq!(p.error_message.as_deref(), Some("timeout"));

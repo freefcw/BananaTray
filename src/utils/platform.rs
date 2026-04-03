@@ -12,6 +12,29 @@ pub fn open_url(url: &str) {
     let _ = std::process::Command::new(cmd).arg(url).spawn();
 }
 
+/// 检测系统是否处于深色模式
+///
+/// macOS: 读取 `defaults read -g AppleInterfaceStyle`
+/// Linux/其他: 默认浅色模式
+pub fn detect_system_dark_mode() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .eq_ignore_ascii_case("dark")
+            })
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

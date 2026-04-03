@@ -41,7 +41,8 @@ impl SettingsView {
     /// 根据用户主题设置解析设置窗口主题（与主面板保持一致）
     pub(super) fn resolve_theme(state: &std::cell::RefCell<AppState>) -> Theme {
         use crate::models::AppTheme;
-        match state.borrow().session.settings.theme.resolve() {
+        let is_dark = crate::utils::platform::detect_system_dark_mode();
+        match state.borrow().session.settings.theme.resolve(is_dark) {
             AppTheme::Light => Theme::light(),
             AppTheme::Dark => Theme::dark(),
             AppTheme::System => unreachable!("resolve() never returns System"),
