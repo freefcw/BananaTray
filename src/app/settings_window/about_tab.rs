@@ -1,4 +1,5 @@
 use super::SettingsView;
+use crate::app::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
 use crate::theme::Theme;
 use crate::utils::platform::open_url;
 use gpui::*;
@@ -201,42 +202,25 @@ impl SettingsView {
     }
 
     // ========================================================================
-    // Check for Updates
+    // Check for Updates — 使用 render_action_button
     // ========================================================================
 
     fn render_update_button(theme: &Theme) -> Div {
-        let accent = theme.text_accent;
-        let border = hsla(accent.h, accent.s, accent.l, 0.5);
-        let text = hsla(accent.h, accent.s, accent.l, 0.7);
-
-        div().w_full().pb(px(14.0)).child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .py(px(10.0))
-                .rounded(px(10.0))
-                .border_1()
-                .border_color(border)
-                .bg(transparent_black())
-                .cursor_pointer()
-                .hover(|s| s.bg(hsla(accent.h, accent.s, accent.l, 0.06)))
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(text)
-                        .child(t!("about.check_updates").to_string()),
-                )
-                .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                    open_url(APP_REPO);
-                }),
-        )
+        let repo = APP_REPO.to_string();
+        div().w_full().pb(px(14.0)).child(render_action_button(
+            &t!("about.check_updates"),
+            None,
+            ButtonVariant::Outlined,
+            true,
+            theme,
+            move |_, _, _| {
+                open_url(&repo);
+            },
+        ))
     }
 
     // ========================================================================
-    // 信息行区域（Developed by / License / Website）
+    // 信息行区域 — 使用公共 render_kv_info_row
     // ========================================================================
 
     fn render_info_section(theme: &Theme) -> Div {
@@ -248,7 +232,7 @@ impl SettingsView {
             .w_full()
             .pt(px(2.0))
             .pb(px(8.0))
-            .child(Self::render_info_row(
+            .child(render_kv_info_row(
                 &t!("about.build_version"),
                 GIT_HASH,
                 None,
@@ -256,7 +240,7 @@ impl SettingsView {
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
-            .child(Self::render_info_row(
+            .child(render_kv_info_row(
                 &t!("about.developed_by"),
                 APP_AUTHOR,
                 Some(APP_AUTHOR_URL),
@@ -264,7 +248,7 @@ impl SettingsView {
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
-            .child(Self::render_info_row(
+            .child(render_kv_info_row(
                 &t!("about.license"),
                 APP_LICENSE,
                 None,
@@ -272,59 +256,13 @@ impl SettingsView {
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
-            .child(Self::render_info_row(
+            .child(render_kv_info_row(
                 &t!("about.website"),
                 "BananaTray",
                 Some(APP_WEBSITE),
                 link_color,
                 theme,
             ))
-    }
-
-    /// 信息行 — 左标签 + 右值（可选链接）
-    fn render_info_row(
-        label: &str,
-        value: &str,
-        url: Option<&str>,
-        value_color: Hsla,
-        theme: &Theme,
-    ) -> Div {
-        let value_str = value.to_string();
-
-        let mut value_el = div()
-            .text_size(px(12.5))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(value_color);
-
-        if let Some(link) = url {
-            let link_owned = link.to_string();
-            value_el = value_el
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .cursor_pointer()
-                .child(value_str)
-                .child(div().text_size(px(10.0)).text_color(value_color).child("↗"))
-                .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                    open_url(&link_owned);
-                });
-        } else {
-            value_el = value_el.child(value_str);
-        }
-
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .w_full()
-            .py(px(8.0))
-            .child(
-                div()
-                    .text_size(px(12.5))
-                    .text_color(theme.text_muted)
-                    .child(label.to_string()),
-            )
-            .child(value_el)
     }
 
     // ========================================================================

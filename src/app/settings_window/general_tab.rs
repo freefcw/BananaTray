@@ -1,6 +1,6 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::widgets::render_svg_icon;
+use crate::app::widgets::{render_action_button, ButtonVariant};
 use crate::application::{AppAction, SettingChange};
 use crate::models::AppSettings;
 use crate::runtime;
@@ -308,38 +308,18 @@ impl SettingsView {
         .with_priority(1)
     }
 
-    /// 退出按钮 — 设计稿风格的红色卡片
+    /// 退出按钮 — 使用 render_action_button (Danger 变体)
     fn render_quit_button(&self, theme: &Theme) -> Div {
         let state = self.state.clone();
-        div().mt(px(16.0)).child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .gap(px(8.0))
-                .py(px(12.0))
-                .rounded(px(12.0))
-                .bg(theme.btn_danger_bg)
-                .border_1()
-                .border_color(theme.status_error)
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.85))
-                .child(render_svg_icon(
-                    "src/icons/switch.svg",
-                    px(16.0),
-                    theme.status_error,
-                ))
-                .child(
-                    div()
-                        .text_size(px(14.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.status_error)
-                        .child(t!("settings.quit").to_string()),
-                )
-                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                    runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
-                }),
-        )
+        div().mt(px(16.0)).child(render_action_button(
+            &t!("settings.quit"),
+            Some(("src/icons/switch.svg", theme.status_error)),
+            ButtonVariant::Danger,
+            true,
+            theme,
+            move |_, window, cx| {
+                runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
+            },
+        ))
     }
 }

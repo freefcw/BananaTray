@@ -1,5 +1,9 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
+use crate::app::widgets::{
+    render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
+    render_segmented_control, ButtonVariant, SegmentedSize,
+};
 use crate::application::{
     build_debug_info_text, debug_tab_view_state, AppAction, DebugContext, DebugNotificationKind,
     DebugTabViewState, LogLevelColor,
@@ -97,119 +101,49 @@ impl SettingsView {
     // Section 1: Log — 日志级别 + 文件信息
     // ========================================================================
 
-    /// 日志级别选择行 — 图标 + 分段选择器
+    /// 日志级别选择行 — 使用 render_icon_row + render_segmented_control
     fn render_log_level_row(
         current: &str,
         theme: &Theme,
         state: &std::rc::Rc<std::cell::RefCell<crate::app::AppState>>,
     ) -> Div {
-        use crate::app::widgets::render_svg_icon;
+        let options: Vec<(String, String)> = LOG_LEVELS
+            .iter()
+            .map(|&(level, label)| (label.to_string(), level.to_string()))
+            .collect();
+        let current_owned = current.to_lowercase();
+        let state_clone = state.clone();
 
-        let mut row = div()
-            .flex()
-            .items_center()
-            .gap(px(12.0))
-            .px(px(14.0))
-            .py(px(12.0))
-            // 彩色圆形图标
-            .child(
-                div()
-                    .w(px(36.0))
-                    .h(px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(rgb(ICON_BG_LOG))
-                    .flex_shrink_0()
-                    .child(render_svg_icon(
-                        "src/icons/advanced.svg",
-                        px(18.0),
-                        rgb(ICON_FG).into(),
-                    )),
-            )
-            // 标题 + 描述
-            .child(
-                div()
-                    .flex_col()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(t!("debug.log_level").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_muted)
-                            .child(t!("debug.log_level.desc").to_string()),
-                    ),
-            );
-
-        // 日志级别分段选择器
-        let mut control = div()
-            .flex()
-            .flex_shrink_0()
-            .rounded(px(6.0))
-            .bg(theme.bg_subtle)
-            .border_1()
-            .border_color(theme.border_subtle)
-            .overflow_hidden();
-
-        for &(level, label) in LOG_LEVELS {
-            let is_active = current.eq_ignore_ascii_case(level);
-            let level_owned = level.to_string();
-            let state = state.clone();
-
-            control = control.child(
-                div()
-                    .px(px(8.0))
-                    .py(px(5.0))
-                    .rounded(px(5.0))
-                    .bg(if is_active {
-                        theme.nav_pill_active_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .text_size(px(11.0))
-                    .font_weight(if is_active {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if is_active {
-                        theme.element_active
-                    } else {
-                        theme.text_secondary
-                    })
-                    .cursor_pointer()
-                    .child(label)
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state,
-                            AppAction::UpdateLogLevel(level_owned.clone()),
-                            window,
-                            cx,
-                        );
-                    }),
-            );
-        }
-
-        row = row.child(control);
-        row
+        render_icon_row(
+            "src/icons/advanced.svg",
+            rgb(ICON_FG).into(),
+            rgb(ICON_BG_LOG).into(),
+            &t!("debug.log_level"),
+            &t!("debug.log_level.desc"),
+            theme,
+            render_segmented_control(
+                &options,
+                &current_owned,
+                SegmentedSize::Compact,
+                theme,
+                move |level: String, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_clone,
+                        AppAction::UpdateLogLevel(level),
+                        window,
+                        cx,
+                    );
+                },
+            ),
+        )
     }
 
-    /// 日志文件信息行 — 路径 + 大小 + Open/Copy 按钮
+    /// 日志文件信息行 — 使用 render_icon_row + render_action_button 组合
     fn render_log_file_row(
         &self,
         debug_state: &crate::application::DebugTabViewState,
         theme: &Theme,
     ) -> Div {
-        use crate::app::widgets::render_svg_icon;
-
         let log = &debug_state.log;
         let path_display = log.log_path.as_deref().unwrap_or("—");
         let size_display = log.log_file_size.as_deref().unwrap_or("—");
@@ -219,30 +153,55 @@ impl SettingsView {
         let state_copy = self.state.clone();
         let path_for_copy = log.log_path.clone().unwrap_or_default();
 
+        // 右侧操作按钮组：Open + Copy Path
+        let trailing = div()
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .child(render_action_button(
+                &t!("debug.open"),
+                None,
+                ButtonVariant::Subtle,
+                false,
+                theme,
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_open,
+                        AppAction::OpenLogDirectory,
+                        window,
+                        cx,
+                    );
+                },
+            ))
+            .child(render_action_button(
+                &t!("debug.copy_path"),
+                None,
+                ButtonVariant::Subtle,
+                false,
+                theme,
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_copy,
+                        AppAction::CopyToClipboard(path_for_copy.clone()),
+                        window,
+                        cx,
+                    );
+                },
+            ));
+
+        // render_icon_row 的 description 是纯文字，而这里需要 overflow_hidden 的路径信息，
+        // 因此用 render_colored_icon + 手动中间区域 + trailing 保持布局一致
         div()
             .flex()
             .items_center()
             .gap(px(12.0))
             .px(px(14.0))
             .py(px(12.0))
-            // 彩色圆形图标
-            .child(
-                div()
-                    .w(px(36.0))
-                    .h(px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(rgb(ICON_BG_FILE))
-                    .flex_shrink_0()
-                    .child(render_svg_icon(
-                        "src/icons/status.svg",
-                        px(18.0),
-                        rgb(ICON_FG).into(),
-                    )),
-            )
-            // 标题 + 路径描述
+            .child(crate::app::widgets::render_colored_icon(
+                "src/icons/status.svg",
+                rgb(ICON_FG).into(),
+                rgb(ICON_BG_FILE).into(),
+            ))
             .child(
                 div()
                     .flex_col()
@@ -265,34 +224,11 @@ impl SettingsView {
                             .child(subtitle),
                     ),
             )
-            // Open 按钮
-            .child(
-                self.render_mini_button(&t!("debug.open"), theme)
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state_open,
-                            AppAction::OpenLogDirectory,
-                            window,
-                            cx,
-                        );
-                    }),
-            )
-            // Copy Path 按钮
-            .child(
-                self.render_mini_button(&t!("debug.copy_path"), theme)
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state_copy,
-                            AppAction::CopyToClipboard(path_for_copy.clone()),
-                            window,
-                            cx,
-                        );
-                    }),
-            )
+            .child(trailing)
     }
 
     // ========================================================================
-    // Section 2: Environment
+    // Section 2: Environment — 使用 render_colored_icon_sized + render_info_cell
     // ========================================================================
 
     fn render_environment_card(
@@ -300,8 +236,6 @@ impl SettingsView {
         debug_state: &crate::application::DebugTabViewState,
         theme: &Theme,
     ) -> Div {
-        use crate::app::widgets::render_svg_icon;
-
         let env = &debug_state.environment;
 
         let env_rows: Vec<(String, String)> = vec![
@@ -326,7 +260,7 @@ impl SettingsView {
 
         let mut card = render_dark_card(theme);
 
-        // 头部图标行
+        // 头部图标行 — 使用 render_colored_icon_sized (28px)
         card = card.child(
             div()
                 .flex()
@@ -335,22 +269,13 @@ impl SettingsView {
                 .px(px(14.0))
                 .pt(px(12.0))
                 .pb(px(8.0))
-                .child(
-                    div()
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_full()
-                        .bg(rgb(ICON_BG_ENV))
-                        .flex_shrink_0()
-                        .child(render_svg_icon(
-                            "src/icons/about.svg",
-                            px(14.0),
-                            rgb(ICON_FG).into(),
-                        )),
-                )
+                .child(render_colored_icon_sized(
+                    "src/icons/about.svg",
+                    rgb(ICON_FG).into(),
+                    rgb(ICON_BG_ENV).into(),
+                    28.0,
+                    14.0,
+                ))
                 .child(
                     div()
                         .text_size(px(13.0))
@@ -360,85 +285,50 @@ impl SettingsView {
                 ),
         );
 
-        // 键值对行
+        // 键值对行 — 使用 render_info_cell
         for (label, value) in &env_rows {
-            card = card.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(14.0))
-                    .py(px(5.0))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text_muted)
-                            .child(label.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_secondary)
-                            .max_w(px(280.0))
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .child(value.clone()),
-                    ),
-            );
+            card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_info_cell(
+                label,
+                value,
+                theme.text_secondary,
+                theme,
+            )));
         }
 
-        // Copy Debug Info 按钮
+        // Copy Debug Info 按钮 — 使用 render_action_button
         let debug_text = build_debug_info_text(debug_state);
         let state = self.state.clone();
 
         card = card.child(
-            div().px(px(14.0)).pt(px(8.0)).pb(px(12.0)).child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(6.0))
-                    .px(px(16.0))
-                    .py(px(8.0))
-                    .rounded(px(8.0))
-                    .bg(theme.bg_subtle)
-                    .border_1()
-                    .border_color(theme.border_strong)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.85))
-                    .child(render_svg_icon(
-                        "src/icons/overview.svg",
-                        px(12.0),
-                        theme.text_secondary,
-                    ))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(t!("debug.copy_debug_info").to_string()),
-                    )
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            div()
+                .px(px(14.0))
+                .pt(px(8.0))
+                .pb(px(12.0))
+                .child(render_action_button(
+                    &t!("debug.copy_debug_info"),
+                    Some(("src/icons/overview.svg", theme.text_secondary)),
+                    ButtonVariant::Subtle,
+                    true,
+                    theme,
+                    move |_, window, cx| {
                         runtime::dispatch_in_window(
                             &state,
                             AppAction::CopyToClipboard(debug_text.clone()),
                             window,
                             cx,
                         );
-                    }),
-            ),
+                    },
+                )),
         );
 
         card
     }
 
     // ========================================================================
-    // Section 4: Test Notifications (保留现有)
+    // Section 3: Test Notifications
     // ========================================================================
 
-    /// 测试通知按钮行
+    /// 测试通知按钮行 — 使用 render_icon_row + render_action_button
     fn render_test_notification_button(
         &self,
         title: &str,
@@ -446,8 +336,6 @@ impl SettingsView {
         alert_type: &str,
         theme: &Theme,
     ) -> Div {
-        use crate::app::widgets::render_svg_icon;
-
         let alert_kind = match alert_type {
             "low" => DebugNotificationKind::Low,
             "exhausted" => DebugNotificationKind::Exhausted,
@@ -455,86 +343,29 @@ impl SettingsView {
         };
         let state = self.state.clone();
 
-        div()
-            .flex()
-            .items_center()
-            .gap(px(12.0))
-            .px(px(14.0))
-            .py(px(12.0))
-            // 彩色圆形图标
-            .child(
-                div()
-                    .w(px(36.0))
-                    .h(px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(rgb(ICON_BG_NOTIF))
-                    .flex_shrink_0()
-                    .child(render_svg_icon(
-                        "src/icons/status.svg",
-                        px(18.0),
-                        rgb(ICON_FG).into(),
-                    )),
-            )
-            // 标题 + 描述
-            .child(
-                div()
-                    .flex_col()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(title.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_muted)
-                            .child(desc.to_string()),
-                    ),
-            )
-            // 发送按钮
-            .child(
-                self.render_mini_button(&t!("debug.send"), theme)
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state,
-                            AppAction::SendDebugNotification(alert_kind),
-                            window,
-                            cx,
-                        );
-                    }),
-            )
-    }
-
-    // ========================================================================
-    // 共享组件
-    // ========================================================================
-
-    /// 小型操作按钮（Send / Open / Copy Path）
-    fn render_mini_button(&self, label: &str, theme: &Theme) -> Div {
-        div()
-            .flex_shrink_0()
-            .px(px(12.0))
-            .py(px(6.0))
-            .rounded(px(6.0))
-            .bg(theme.bg_subtle)
-            .border_1()
-            .border_color(theme.border_strong)
-            .cursor_pointer()
-            .hover(|s| s.opacity(0.85))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text_primary)
-                    .child(label.to_string()),
-            )
+        render_icon_row(
+            "src/icons/status.svg",
+            rgb(ICON_FG).into(),
+            rgb(ICON_BG_NOTIF).into(),
+            title,
+            desc,
+            theme,
+            render_action_button(
+                &t!("debug.send"),
+                None,
+                ButtonVariant::Subtle,
+                false,
+                theme,
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state,
+                        AppAction::SendDebugNotification(alert_kind),
+                        window,
+                        cx,
+                    );
+                },
+            ),
+        )
     }
 
     // ═══════ PROVIDER DEBUG CONSOLE ═══════
