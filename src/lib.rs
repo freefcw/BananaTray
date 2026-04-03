@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 //! BananaTray - 系统托盘配额监控应用
 //!
 //! 注意：这是一个 bin + lib 混合 crate，lib 部分主要供测试使用。

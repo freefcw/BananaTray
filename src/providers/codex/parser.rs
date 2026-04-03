@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_parse_headers_response() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let raw = "HTTP/1.1 200 OK\r\nx-codex-primary-used-percent: 25\r\nx-codex-secondary-used-percent: 80\r\nx-codex-credits-balance: 12.5\r\n\r\n";
         let quotas = parse_usage_response(raw).unwrap();
         assert_eq!(quotas.len(), 3);
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_parse_json_response() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let raw = r#"{
             "rate_limit": {
                 "primary_window": { "used_percent": 33, "reset_at": 1767225600 },

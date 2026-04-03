@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_parse_unlimited_plan() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"pro","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":300,"percent_remaining":100,"unlimited":true}}}"#;
         let data = parse_user_info_response(body, "200").unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_parse_limited_plan() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"business","quota_snapshots":{"premium_interactions":{"entitlement":500,"remaining":125,"percent_remaining":25,"unlimited":false}}}"#;
         let data = parse_user_info_response(body, "200").unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Business"));

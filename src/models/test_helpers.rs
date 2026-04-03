@@ -37,7 +37,7 @@ pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> P
     }
 }
 
-/// 设置测试 locale 为英语
-pub fn setup_test_locale() {
-    rust_i18n::set_locale("en");
+/// 设置测试 locale 为英语，并在测试期间独占 locale 全局状态
+pub fn setup_test_locale() -> crate::i18n::TestLocaleGuard {
+    crate::i18n::test_locale_guard("en")
 }

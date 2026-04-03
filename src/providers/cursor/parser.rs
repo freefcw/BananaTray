@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_parse_unlimited_plan() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"membershipType":"pro","isUnlimited":true,"billingCycleEnd":"2026-05-01T00:00:00Z"}"#;
         let quotas = parse_usage_response(body).unwrap();
         assert_eq!(quotas.len(), 1);
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_parse_team_and_ondemand() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{
             "membershipType":"business",
             "isUnlimited":false,

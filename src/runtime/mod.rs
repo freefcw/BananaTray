@@ -1,5 +1,6 @@
 use crate::app::{persist_settings, schedule_open_settings_window, AppState};
-use crate::application::{reduce, AppAction, AppEffect, DebugNotificationKind};
+use crate::application::effect::{route_effect, CommonEffect, RoutedEffect};
+use crate::application::{reduce, AppAction, DebugNotificationKind};
 use crate::models::ConnectionStatus;
 use crate::notification::{send_system_notification, QuotaAlert};
 use crate::refresh::RefreshRequest;
@@ -14,10 +15,9 @@ pub fn dispatch_in_context<V: 'static>(
     action: AppAction,
     cx: &mut Context<V>,
 ) {
-    let effects = reduce_action(state, action);
-    for effect in effects {
-        run_effect_in_context(state, effect, cx);
-    }
+    dispatch_effects(state, action, |effect| {
+        run_effect_in_context(state, effect, cx)
+    });
 }
 
 pub fn dispatch_in_window(
@@ -26,51 +26,48 @@ pub fn dispatch_in_window(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let effects = reduce_action(state, action);
-    for effect in effects {
+    dispatch_effects(state, action, |effect| {
         run_effect_in_window(state, effect, window, cx);
-    }
+    });
 }
 
 pub fn dispatch_in_app(state: &Rc<RefCell<AppState>>, action: AppAction, cx: &mut App) {
-    let effects = reduce_action(state, action);
-    for effect in effects {
-        run_effect_in_app(state, effect, cx);
-    }
+    dispatch_effects(state, action, |effect| run_effect_in_app(state, effect, cx));
 }
 
-fn reduce_action(state: &Rc<RefCell<AppState>>, action: AppAction) -> Vec<AppEffect> {
+fn reduce_action(state: &Rc<RefCell<AppState>>, action: AppAction) -> Vec<RoutedEffect> {
     let mut state_ref = state.borrow_mut();
     reduce(&mut state_ref.session, action)
+        .into_iter()
+        .map(route_effect)
+        .collect()
+}
+
+fn dispatch_effects(
+    state: &Rc<RefCell<AppState>>,
+    action: AppAction,
+    mut run_effect: impl FnMut(RoutedEffect),
+) {
+    for effect in reduce_action(state, action) {
+        run_effect(effect);
+    }
 }
 
 fn run_effect_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
-    effect: AppEffect,
+    effect: RoutedEffect,
     cx: &mut Context<V>,
 ) {
     match effect {
-        AppEffect::Render => cx.notify(),
-        AppEffect::PersistSettings => persist_current_settings(state),
-        AppEffect::SendRefreshRequest(request) => {
-            let _ = send_refresh_request(state, request);
-        }
-        AppEffect::ApplyLocale(language) => crate::i18n::apply_locale(&language),
-        AppEffect::UpdateLogLevel(level) => update_log_level(&level),
-        AppEffect::SendQuotaNotification { alert, with_sound } => {
-            send_system_notification(&alert, with_sound);
-        }
-        AppEffect::SendDebugNotification { kind, with_sound } => {
-            send_system_notification(&build_debug_alert(kind), with_sound);
-        }
-        AppEffect::SyncAutoLaunch(enabled) => sync_auto_launch(enabled),
-        AppEffect::OpenSettingsWindow => {
+        RoutedEffect::Common(effect) => run_common_effect(state, effect),
+        RoutedEffect::Render => cx.notify(),
+        RoutedEffect::OpenSettingsWindow => {
             warn!(target: "runtime", "OpenSettingsWindow effect ignored: not available in Context<V>");
         }
-        AppEffect::OpenUrl(url) => {
+        RoutedEffect::OpenUrl(url) => {
             warn!(target: "runtime", "OpenUrl({}) effect ignored: not available in Context<V>", url);
         }
-        AppEffect::QuitApp => {
+        RoutedEffect::QuitApp => {
             warn!(target: "runtime", "QuitApp effect ignored: not available in Context<V>");
         }
     }
@@ -78,55 +75,77 @@ fn run_effect_in_context<V: 'static>(
 
 fn run_effect_in_window(
     state: &Rc<RefCell<AppState>>,
-    effect: AppEffect,
+    effect: RoutedEffect,
     window: &mut Window,
     cx: &mut App,
 ) {
     match effect {
-        AppEffect::Render => window.refresh(),
-        AppEffect::PersistSettings => persist_current_settings(state),
-        AppEffect::SendRefreshRequest(request) => {
-            let _ = send_refresh_request(state, request);
-        }
-        AppEffect::OpenSettingsWindow => {
+        RoutedEffect::Common(effect) => run_common_effect(state, effect),
+        RoutedEffect::Render => window.refresh(),
+        RoutedEffect::OpenSettingsWindow => {
             let display_id = window.display(cx).map(|display| display.id());
             state.borrow_mut().view_entity = None;
             window.remove_window();
             schedule_open_settings_window(state.clone(), display_id, cx);
         }
-        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
-        AppEffect::SyncAutoLaunch(enabled) => sync_auto_launch(enabled),
-        AppEffect::ApplyLocale(language) => crate::i18n::apply_locale(&language),
-        AppEffect::UpdateLogLevel(level) => update_log_level(&level),
-        AppEffect::SendQuotaNotification { alert, with_sound } => {
-            send_system_notification(&alert, with_sound);
+        _ => {
+            if let Err(err_effect) = run_app_logic_effect(effect, cx) {
+                warn!(target: "runtime", "Effect {:?} ignored in Window context", err_effect);
+            }
         }
-        AppEffect::SendDebugNotification { kind, with_sound } => {
-            send_system_notification(&build_debug_alert(kind), with_sound);
-        }
-        AppEffect::QuitApp => cx.quit(),
     }
 }
 
-fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut App) {
+fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: RoutedEffect, cx: &mut App) {
     match effect {
-        AppEffect::Render => notify_view_entity(state, cx),
-        AppEffect::PersistSettings => persist_current_settings(state),
-        AppEffect::SendRefreshRequest(request) => {
+        RoutedEffect::Common(effect) => run_common_effect(state, effect),
+        RoutedEffect::Render => notify_view_entity(state, cx),
+        RoutedEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
+        _ => {
+            if let Err(err_effect) = run_app_logic_effect(effect, cx) {
+                warn!(target: "runtime", "Effect {:?} ignored in App context", err_effect);
+            }
+        }
+    }
+}
+
+fn run_app_logic_effect(effect: RoutedEffect, cx: &mut App) -> Result<(), RoutedEffect> {
+    match effect {
+        RoutedEffect::OpenUrl(url) => {
+            crate::utils::platform::open_url(&url);
+            Ok(())
+        }
+        RoutedEffect::QuitApp => {
+            cx.quit();
+            Ok(())
+        }
+        _ => Err(effect),
+    }
+}
+
+fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
+    match effect {
+        CommonEffect::PersistSettings => {
+            persist_current_settings(state);
+        }
+        CommonEffect::SendRefreshRequest(request) => {
             let _ = send_refresh_request(state, request);
         }
-        AppEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
-        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
-        AppEffect::SyncAutoLaunch(enabled) => sync_auto_launch(enabled),
-        AppEffect::ApplyLocale(language) => crate::i18n::apply_locale(&language),
-        AppEffect::UpdateLogLevel(level) => update_log_level(&level),
-        AppEffect::SendQuotaNotification { alert, with_sound } => {
+        CommonEffect::SyncAutoLaunch(enabled) => {
+            sync_auto_launch(enabled);
+        }
+        CommonEffect::ApplyLocale(language) => {
+            crate::i18n::apply_locale(&language);
+        }
+        CommonEffect::UpdateLogLevel(level) => {
+            update_log_level(&level);
+        }
+        CommonEffect::SendQuotaNotification { alert, with_sound } => {
             send_system_notification(&alert, with_sound);
         }
-        AppEffect::SendDebugNotification { kind, with_sound } => {
+        CommonEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
-        AppEffect::QuitApp => cx.quit(),
     }
 }
 
