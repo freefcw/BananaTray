@@ -72,7 +72,10 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
     let gradient_mid: Hsla = rgb(0x06b6d4).into(); // cyan
     let gradient_end = fill_color; // 状态色（绿/黄/红）
 
+    let hover_bg = theme.bg_card_inner_hovered;
+
     let card = div()
+        .id(ElementId::Name(format!("quota-card-{}", q.label).into()))
         .w_full()
         .flex_col()
         .gap(px(6.0))
@@ -81,7 +84,8 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
         .rounded(px(12.0))
         .bg(theme.bg_card_inner)
         .border_1()
-        .border_color(theme.border_strong);
+        .border_color(theme.border_strong)
+        .hover(move |style| style.bg(hover_bg));
 
     card
         // ── 第一行：● MODEL-NAME + [HEALTHY] ──
