@@ -150,6 +150,9 @@ fn apply_setting_change(
                 session.settings_ui.active_tab = SettingsTab::General;
             }
         }
+        SettingChange::ToggleShowAccountInfo => {
+            session.settings.show_account_info = !session.settings.show_account_info;
+        }
         SettingChange::Theme(theme) => {
             session.settings.theme = theme;
         }
@@ -336,7 +339,7 @@ fn push_render(effects: &mut Vec<AppEffect>) {
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{AppSettings, ConnectionStatus};
+    use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
     use crate::refresh::{RefreshOutcome, RefreshResult};
 
     fn make_session() -> AppSession {
@@ -363,6 +366,43 @@ mod tests {
 
     fn has_render(effects: &[AppEffect]) -> bool {
         has_effect(effects, |e| matches!(e, AppEffect::Render))
+    }
+
+    // ── ToggleShowAccountInfo ───────────────────────────
+
+    #[test]
+    fn toggle_show_account_info_flips_setting() {
+        let mut session = make_session();
+        assert!(session.settings.show_account_info); // default = true
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
+        );
+
+        assert!(!session.settings.show_account_info);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn toggle_show_account_info_round_trip() {
+        let mut session = make_session();
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
+        );
+        assert!(!session.settings.show_account_info);
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
+        );
+        assert!(session.settings.show_account_info);
     }
 
     // ── SelectDebugProvider ─────────────────────────────

@@ -1,7 +1,7 @@
 use super::AppView;
 use crate::application::{
-    provider_detail_view_state, AppAction, DisabledProviderViewState, ProviderBodyViewState,
-    ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
+    provider_detail_view_state, AccountInfoViewState, AppAction, DisabledProviderViewState,
+    ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
 };
 use crate::models::ProviderKind;
 use crate::refresh::RefreshReason;
@@ -142,7 +142,7 @@ impl AppView {
             }
         };
 
-        // Dashboard 链接行（受 show_dashboard_button 设置控制）
+        // Dashboard 链接行（受 show_dashboard_button 设置控制，账户卡片存在时隐藏）
         let state_for_dashboard = self.state.clone();
         let dashboard_row = if vm.show_dashboard {
             Some(self.render_link_row(
@@ -163,7 +163,16 @@ impl AppView {
         };
 
         // 整体布局
-        let mut container = div().flex_col().child(quotas_container);
+        let mut container = div().flex_col();
+
+        // 账户信息卡片（位于配额卡片上方）
+        if let Some(ref account) = vm.account {
+            container = container
+                .child(self.render_account_info_card(account, vm.kind, &theme))
+                .child(div().h(px(8.0)));
+        }
+
+        container = container.child(quotas_container);
 
         if let Some(row) = dashboard_row {
             container = container.child(div().mt(px(8.0)).child(row));
@@ -173,6 +182,130 @@ impl AppView {
         }
 
         container.into_any_element()
+    }
+
+    /// 账户信息卡片：头像(首字符) + 邮箱 + 套餐徽章 + 更新时间 + > 箭头
+    fn render_account_info_card(
+        &self,
+        account: &AccountInfoViewState,
+        kind: ProviderKind,
+        theme: &Theme,
+    ) -> Div {
+        let avatar_char = account
+            .email
+            .chars()
+            .next()
+            .unwrap_or('?')
+            .to_uppercase()
+            .next()
+            .unwrap_or('?')
+            .to_string();
+
+        // 状态行：套餐徽章 + 更新时间
+        let mut status_row = div().flex().items_center().gap(px(8.0));
+
+        if let Some(ref tier) = account.tier {
+            status_row = status_row.child(
+                div()
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(theme.text_accent_soft)
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(theme.text_accent)
+                    .child(tier.to_uppercase()),
+            );
+        }
+
+        status_row = status_row.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .child(super::widgets::render_svg_icon(
+                    "src/icons/status.svg",
+                    px(12.0),
+                    theme.text_muted,
+                ))
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(theme.text_muted)
+                        .child(account.updated_text.clone()),
+                ),
+        );
+
+        let can_click = !account.dashboard_url.is_empty();
+        let state_for_click = self.state.clone();
+
+        let mut card = div()
+            .w_full()
+            .flex()
+            .items_center()
+            .gap(px(12.0))
+            .px(px(12.0))
+            .py(px(12.0))
+            .rounded(px(14.0))
+            .bg(theme.bg_card_inner)
+            .border_1()
+            .border_color(theme.border_subtle)
+            // 头像
+            .child(
+                div()
+                    .w(px(44.0))
+                    .h(px(44.0))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(10.0))
+                    .bg(theme.bg_subtle)
+                    .border_1()
+                    .border_color(theme.border_subtle)
+                    .text_size(px(18.0))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(theme.text_accent)
+                    .child(avatar_char),
+            )
+            // 邮箱 + 状态行
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text_primary)
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .child(account.email.clone()),
+                    )
+                    .child(status_row),
+            )
+            // 右侧 > 箭头
+            .child(div().flex_shrink_0().child(super::widgets::render_svg_icon(
+                "src/icons/chevron-right.svg",
+                px(16.0),
+                theme.text_muted,
+            )));
+
+        if can_click {
+            card = card.cursor_pointer().hover(|style| style.opacity(0.85));
+            card = card.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_for_click,
+                    AppAction::OpenDashboard(kind),
+                    window,
+                    cx,
+                );
+            });
+        }
+
+        card
     }
 
     /// 操作链接行（类似截图中的 "Usage Dashboard"）

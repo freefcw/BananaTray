@@ -70,6 +70,8 @@ settings.show_refresh: "Show Refresh Button"
 settings.show_refresh.desc: "Display the refresh button in the toolbar."
 settings.show_debug_tab: "Debug Tab"
 settings.show_debug_tab.desc: "Show the Debug tab in settings for testing and diagnostics."
+settings.show_account_info: "Show Account Info"
+settings.show_account_info.desc: "Display account email and plan info above quota cards."
 settings.tab.debug: "Debug"
 
 # ── Debug tab ─────────────────────────────────────────────

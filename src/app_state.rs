@@ -5,6 +5,39 @@ use crate::models::{AppSettings, ConnectionStatus, NavTab, ProviderKind, Provide
 use crate::notification::QuotaAlertTracker;
 
 // ============================================================================
+// Provider 面板可见性规则（单一真理来源，供 selector 和 popup_height 共用）
+// ============================================================================
+
+/// Provider 面板中各可选区域的可见性标志
+pub struct ProviderPanelFlags {
+    /// 是否显示账户信息卡片
+    pub show_account_info: bool,
+    /// 是否显示底部 Dashboard 链接行
+    pub show_dashboard_row: bool,
+    /// Provider 是否有 Dashboard URL
+    pub has_dashboard_url: bool,
+}
+
+/// 根据设置和 Provider 状态计算面板可见性标志。
+///
+/// 核心规则：账户卡片已包含 Dashboard 入口时，隐藏底部 Dashboard 行（互斥）。
+pub fn provider_panel_flags(
+    settings: &AppSettings,
+    provider: &ProviderStatus,
+) -> ProviderPanelFlags {
+    let has_dashboard_url = !provider.dashboard_url().is_empty();
+    let show_account_info = settings.show_account_info && provider.account_email.is_some();
+    let show_dashboard_row =
+        settings.show_dashboard_button && has_dashboard_url && !show_account_info;
+
+    ProviderPanelFlags {
+        show_account_info,
+        show_dashboard_row,
+        has_dashboard_url,
+    }
+}
+
+// ============================================================================
 // 子状态结构 (SRP: 每个结构体负责一个独立职责)
 // ============================================================================
 
@@ -83,12 +116,15 @@ impl AppSession {
         };
         let provider = self.provider_store.find(kind);
         let quota_count = provider.map(|p| p.quotas.len()).unwrap_or(1);
-        let has_dashboard = self.settings.show_dashboard_button
-            && provider
-                .map(|p| !p.dashboard_url().is_empty())
-                .unwrap_or(false);
 
-        crate::models::compute_popup_height_detailed(quota_count, has_dashboard)
+        let (show_account, show_dashboard) = provider
+            .map(|p| {
+                let flags = provider_panel_flags(&self.settings, p);
+                (flags.show_account_info, flags.show_dashboard_row)
+            })
+            .unwrap_or((false, false));
+
+        crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
     }
 
     pub fn has_enabled_providers(&self) -> bool {
@@ -334,6 +370,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -347,6 +384,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Settings);
         assert_eq!(nav.active_tab, NavTab::Settings);
@@ -361,6 +399,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -377,6 +416,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -392,6 +432,7 @@ mod tests {
             last_provider_kind: ProviderKind::Gemini,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -407,6 +448,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -421,6 +463,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         // Only Claude is enabled, and we're disabling it — no fallback target
         let settings = make_settings(&[ProviderKind::Claude]);
@@ -437,6 +480,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         // Enable Copilot and Gemini; fallback should pick based on ProviderKind::all() order
         let settings = make_settings(&[
@@ -476,6 +520,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Offline");
@@ -493,6 +538,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Syncing…");
@@ -510,6 +556,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Offline");
@@ -529,6 +576,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Synced");
@@ -549,6 +597,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "5m ago");
@@ -569,11 +618,75 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "2h ago");
         assert_eq!(kind, HeaderStatusKind::Stale);
     }
+
+    // ── provider_panel_flags ──────────────────────────────────
+
+    #[test]
+    fn panel_flags_account_visible_hides_dashboard_row() {
+        let mut settings = AppSettings::default();
+        settings.show_account_info = true;
+        settings.show_dashboard_button = true;
+
+        let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.account_email = Some("user@example.com".to_string());
+
+        let flags = provider_panel_flags(&settings, &provider);
+        assert!(flags.show_account_info);
+        assert!(!flags.show_dashboard_row);
+        assert!(flags.has_dashboard_url);
+    }
+
+    #[test]
+    fn panel_flags_no_email_shows_dashboard_row() {
+        let mut settings = AppSettings::default();
+        settings.show_account_info = true;
+        settings.show_dashboard_button = true;
+
+        let provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        // account_email is None by default
+
+        let flags = provider_panel_flags(&settings, &provider);
+        assert!(!flags.show_account_info);
+        assert!(flags.show_dashboard_row);
+    }
+
+    #[test]
+    fn panel_flags_setting_off_shows_dashboard_row() {
+        let mut settings = AppSettings::default();
+        settings.show_account_info = false;
+        settings.show_dashboard_button = true;
+
+        let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.account_email = Some("user@example.com".to_string());
+
+        let flags = provider_panel_flags(&settings, &provider);
+        assert!(!flags.show_account_info);
+        assert!(flags.show_dashboard_row);
+    }
+
+    #[test]
+    fn panel_flags_dashboard_setting_off() {
+        let mut settings = AppSettings::default();
+        settings.show_account_info = true;
+        settings.show_dashboard_button = false;
+
+        let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.account_email = Some("user@example.com".to_string());
+
+        let flags = provider_panel_flags(&settings, &provider);
+        assert!(flags.show_account_info);
+        assert!(!flags.show_dashboard_row);
+        // dashboard_url 仍然存在（账户卡片 chevron 可用）
+        assert!(flags.has_dashboard_url);
+    }
+
+    // ── HeaderStatusText ────────────────────────────────────────
 
     #[test]
     fn header_status_error() {
@@ -589,6 +702,7 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
+            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Error");

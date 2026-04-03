@@ -51,7 +51,21 @@ pub struct DisabledProviderViewState {
 pub struct ProviderPanelViewState {
     pub kind: ProviderKind,
     pub show_dashboard: bool,
+    pub account: Option<AccountInfoViewState>,
     pub body: ProviderBodyViewState,
+}
+
+/// 账户信息卡片 ViewModel
+#[derive(Debug, Clone)]
+pub struct AccountInfoViewState {
+    /// 账户邮箱
+    pub email: String,
+    /// 套餐名称（如 "Pro", "Max"）
+    pub tier: Option<String>,
+    /// 上次更新时间描述
+    pub updated_text: String,
+    /// Dashboard URL（空字符串表示不可点击）
+    pub dashboard_url: String,
 }
 
 #[derive(Debug, Clone)]

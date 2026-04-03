@@ -77,6 +77,9 @@ pub struct AppSettings {
     /// 是否显示 Debug 标签页
     #[serde(default)]
     pub show_debug_tab: bool,
+    /// 是否在 Provider 面板显示账户信息卡片
+    #[serde(default = "default_true")]
+    pub show_account_info: bool,
 }
 
 fn default_true() -> bool {
@@ -104,6 +107,7 @@ impl Default for AppSettings {
             show_dashboard_button: true,
             show_refresh_button: true,
             show_debug_tab: false,
+            show_account_info: true,
         }
     }
 }

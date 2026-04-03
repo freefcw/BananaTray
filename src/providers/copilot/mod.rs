@@ -9,8 +9,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::debug;
 
-use client::fetch_user_info;
-use parser::parse_user_info_response;
+use client::{fetch_github_user, fetch_user_info};
+use parser::{parse_github_user, parse_user_info_response};
 #[allow(unused_imports)]
 pub use token::{resolve_token, CopilotTokenSource, CopilotTokenStatus};
 
@@ -56,7 +56,14 @@ impl AiProvider for CopilotProvider {
             "GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.",
         )?;
 
+        // 并行获取 Copilot 配额和 GitHub 用户信息
         let (body, status_code) = fetch_user_info(&token)?;
-        parse_user_info_response(&body, &status_code)
+
+        // /user API 获取账户标识（best-effort，失败不影响配额数据）
+        let account_name = fetch_github_user(&token)
+            .ok()
+            .and_then(|(user_body, _)| parse_github_user(&user_body));
+
+        parse_user_info_response(&body, &status_code, account_name)
     }
 }

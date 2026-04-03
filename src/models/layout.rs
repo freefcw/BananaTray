@@ -46,6 +46,9 @@ impl PopupLayout {
     /// Dashboard 链接行高度: mt(8) + py(10)×2 + icon(16)
     pub const DASHBOARD_ROW_HEIGHT: f32 = 44.0;
 
+    /// 账户信息卡片高度: py(12)×2 + avatar(44) + border(2) + 底部 spacer(8)
+    pub const ACCOUNT_INFO_HEIGHT: f32 = 78.0;
+
     /// 最小窗口高度：1张卡片（不含 dashboard）
     pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT;
     /// 最大窗口高度
@@ -54,11 +57,15 @@ impl PopupLayout {
 
 /// 根据 quota 数量和是否有 dashboard 行，计算弹出窗口高度
 pub fn compute_popup_height_for_quotas(quota_count: usize) -> f32 {
-    compute_popup_height_detailed(quota_count, true)
+    compute_popup_height_detailed(quota_count, true, false)
 }
 
-/// 计算弹出窗口高度
-pub fn compute_popup_height_detailed(quota_count: usize, has_dashboard: bool) -> f32 {
+/// 计算弹出窗口高度（统一所有可选区域的高度因素）
+pub fn compute_popup_height_detailed(
+    quota_count: usize,
+    has_dashboard: bool,
+    has_account_info: bool,
+) -> f32 {
     let count = quota_count.max(1);
 
     let cards_height = count as f32 * PopupLayout::CARD_HEIGHT;
@@ -72,8 +79,17 @@ pub fn compute_popup_height_detailed(quota_count: usize, has_dashboard: bool) ->
     } else {
         0.0
     };
+    let account_height = if has_account_info {
+        PopupLayout::ACCOUNT_INFO_HEIGHT
+    } else {
+        0.0
+    };
 
-    let raw_height = PopupLayout::FIXED_HEIGHT + cards_height + spacers_height + dashboard_height;
+    let raw_height = PopupLayout::FIXED_HEIGHT
+        + cards_height
+        + spacers_height
+        + dashboard_height
+        + account_height;
 
     raw_height.clamp(PopupLayout::MIN_HEIGHT, PopupLayout::MAX_HEIGHT)
 }
@@ -145,9 +161,17 @@ mod tests {
 
     #[test]
     fn test_popup_height_without_dashboard() {
-        let with = compute_popup_height_detailed(2, true);
-        let without = compute_popup_height_detailed(2, false);
+        let with = compute_popup_height_detailed(2, true, false);
+        let without = compute_popup_height_detailed(2, false, false);
         assert!(with > without);
         assert!((with - without - PopupLayout::DASHBOARD_ROW_HEIGHT).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_popup_height_with_account_info() {
+        let without = compute_popup_height_detailed(2, true, false);
+        let with = compute_popup_height_detailed(2, true, true);
+        assert!(with > without);
+        assert!((with - without - PopupLayout::ACCOUNT_INFO_HEIGHT).abs() < f32::EPSILON);
     }
 }
