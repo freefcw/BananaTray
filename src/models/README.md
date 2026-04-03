@@ -17,7 +17,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 
 - **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit`, `General`
 - **`StatusLevel`** — traffic-light severity: `Green`, `Yellow`, `Red` (implements `Ord`)
-- **`QuotaInfo`** — single quota entry with `used`, `limit`, `label`, `quota_type`, `reset_at`. Key methods:
+- **`QuotaInfo`** — single quota entry with `used`, `limit`, `label`, `quota_type`, `detail_text`. Key methods:
   - `percentage()` / `percent_remaining()` — usage ratios (not clamped, allows >100% for over-quota)
   - `status_level()` — maps percentage to `StatusLevel` (thresholds: <80% Green, <95% Yellow, else Red)
   - `is_percentage_mode()` — true when `limit == 100.0` (data is already a percentage)

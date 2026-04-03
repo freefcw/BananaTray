@@ -370,7 +370,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -384,7 +383,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Settings);
         assert_eq!(nav.active_tab, NavTab::Settings);
@@ -399,7 +397,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
         assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
@@ -416,7 +413,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -432,7 +428,6 @@ mod tests {
             last_provider_kind: ProviderKind::Gemini,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -448,7 +443,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
         nav.fallback_on_disable(ProviderKind::Claude, &settings);
@@ -463,7 +457,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         // Only Claude is enabled, and we're disabling it — no fallback target
         let settings = make_settings(&[ProviderKind::Claude]);
@@ -480,7 +473,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         // Enable Copilot and Gemini; fallback should pick based on ProviderKind::all() order
         let settings = make_settings(&[
@@ -520,7 +512,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Offline");
@@ -538,7 +529,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Syncing…");
@@ -556,7 +546,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Offline");
@@ -576,7 +565,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Synced");
@@ -597,7 +585,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "5m ago");
@@ -618,7 +605,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "2h ago");
@@ -702,7 +688,6 @@ mod tests {
             last_provider_kind: ProviderKind::Claude,
             prev_active_tab: None,
             generation: 0,
-            prev_active_tab: None,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Error");

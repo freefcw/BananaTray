@@ -204,14 +204,14 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
                         ),
                 ),
         )
-        // ── 第四行：重置时间 ──
+        // ── 第四行：详情文本（由 Provider 提供，如重置时间、额度详情等） ──
         .child(
             div().flex().items_center().gap(px(4.0)).mt(px(12.0)).child(
                 div()
                     .text_size(px(11.0))
                     .text_color(theme.text_muted)
-                    .child(if let Some(ref reset) = q.reset_at {
-                        format!("⏱ {}", reset)
+                    .child(if let Some(ref detail) = q.detail_text {
+                        detail.clone()
                     } else {
                         String::new()
                     }),

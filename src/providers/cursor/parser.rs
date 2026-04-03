@@ -148,7 +148,7 @@ mod tests {
         let body = r#"{"membershipType":"pro","isUnlimited":true,"billingCycleEnd":"2026-05-01T00:00:00Z"}"#;
         let quotas = parse_usage_response(body).unwrap();
         assert_eq!(quotas.len(), 1);
-        assert_eq!(quotas[0].reset_at.as_deref(), Some("Unlimited"));
+        assert_eq!(quotas[0].detail_text.as_deref(), Some("Unlimited"));
     }
 
     #[test]

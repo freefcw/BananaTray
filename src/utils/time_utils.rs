@@ -152,13 +152,13 @@ mod tests {
     #[test]
     fn test_format_countdown_values() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
-        assert_eq!(format_countdown(0), "Resets soon");
-        assert_eq!(format_countdown(-100), "Resets soon");
-        assert_eq!(format_countdown(60), "Resets in 1m");
-        assert_eq!(format_countdown(3661), "Resets in 1h 1m");
-        assert_eq!(format_countdown(3600), "Resets in 1h");
-        assert_eq!(format_countdown(90000), "Resets in 1d 1h");
-        assert_eq!(format_countdown(86400), "Resets in 1d");
+        assert_eq!(format_countdown(0), "⏱ Resets soon");
+        assert_eq!(format_countdown(-100), "⏱ Resets soon");
+        assert_eq!(format_countdown(60), "⏱ Resets in 1m");
+        assert_eq!(format_countdown(3661), "⏱ Resets in 1h 1m");
+        assert_eq!(format_countdown(3600), "⏱ Resets in 1h");
+        assert_eq!(format_countdown(90000), "⏱ Resets in 1d 1h");
+        assert_eq!(format_countdown(86400), "⏱ Resets in 1d");
     }
 
     #[test]

@@ -73,14 +73,22 @@ pub(super) fn parse_user_info_response(
                     Some(t!("quota.label.unlimited").to_string()),
                 )
             } else {
-                let used = (interactions.entitlement - interactions.remaining).max(0) as f64;
-                let limit = interactions.entitlement as f64;
+                let used_count = (interactions.entitlement - interactions.remaining).max(0);
+                let total_count = interactions.entitlement;
+                let used = used_count as f64;
+                let limit = total_count as f64;
+                let detail = t!(
+                    "quota.label.request_detail",
+                    used = used_count,
+                    total = total_count
+                )
+                .to_string();
                 QuotaInfo::with_details(
                     t!("quota.label.premium_requests", plan = plan_label).to_string(),
                     used,
                     limit,
                     QuotaType::Weekly,
-                    None,
+                    Some(detail),
                 )
             }
         } else {
@@ -122,7 +130,7 @@ mod tests {
         let data = parse_user_info_response(body, "200", None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
         assert_eq!(data.quotas.len(), 1);
-        assert_eq!(data.quotas[0].reset_at.as_deref(), Some("Unlimited"));
+        assert_eq!(data.quotas[0].detail_text.as_deref(), Some("Unlimited"));
     }
 
     #[test]
@@ -133,6 +141,10 @@ mod tests {
         assert_eq!(data.account_tier.as_deref(), Some("Business"));
         assert_eq!(data.quotas[0].used, 375.0);
         assert_eq!(data.quotas[0].limit, 500.0);
+        assert_eq!(
+            data.quotas[0].detail_text.as_deref(),
+            Some("375 / 500 requests")
+        );
     }
 
     #[test]
