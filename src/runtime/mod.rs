@@ -236,19 +236,8 @@ fn sync_auto_launch(enabled: bool) {
             )
         };
 
-        let mut notification = notify_rust::Notification::new();
-        notification
-            .appname("BananaTray")
-            .summary(&title)
-            .body(&body);
-
-        if let Err(err) = notification.show() {
-            warn!(
-                target: "settings",
-                "failed to show auto-launch notification: {}",
-                err
-            );
-        }
+        // 使用 osascript 发送通知，绕过 mac-notification-sys 的 "use_default" bug
+        crate::notification::send_plain_notification(&title, &body);
     });
 }
 

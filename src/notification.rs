@@ -139,6 +139,14 @@ impl QuotaAlertTracker {
 // ============================================================================
 
 /// 发送系统通知
+///
+/// 在独立线程中发送通知，避免阻塞 GPUI 事件循环。
+///
+/// - **macOS**: 通过 `osascript`（AppleScript）发送原生通知。
+///   `notify-rust` 的 macOS 后端 `mac-notification-sys` 在 `ensure_application_set()` 中
+///   硬编码执行 `get id of application "use_default"`，macOS 找不到该应用时会弹出
+///   "Choose Application" 系统对话框，无法通过参数规避。
+/// - **其他平台**: 使用 `notify-rust`（Linux D-Bus / Windows Toast）。
 pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
     let (title, body) = match alert {
         QuotaAlert::LowQuota {
@@ -169,11 +177,64 @@ pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
         ),
     };
 
+    // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
+    std::thread::spawn(move || {
+        platform_send_notification(&title, &body, with_sound);
+    });
+}
+
+/// 发送简单的系统通知（无声音）。
+///
+/// 供不需要 QuotaAlert 包装的场景使用（如 auto-launch 通知）。
+pub fn send_plain_notification(title: &str, body: &str) {
+    platform_send_notification(title, body, false);
+}
+
+// ---- macOS: 通过 osascript 绕过 mac-notification-sys 的 bug ----
+
+#[cfg(target_os = "macos")]
+fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
+    // 转义双引号，防止 AppleScript 注入
+    let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
+    let escaped_body = body.replace('\\', "\\\\").replace('"', "\\\"");
+
+    let script = if with_sound {
+        format!(
+            r#"display notification "{}" with title "{}" sound name "Glass""#,
+            escaped_body, escaped_title
+        )
+    } else {
+        format!(
+            r#"display notification "{}" with title "{}""#,
+            escaped_body, escaped_title
+        )
+    };
+
+    match std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                info!(target: "notification", "system notification sent: {}", title);
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!(target: "notification", "osascript failed: {}", stderr.trim());
+            }
+        }
+        Err(err) => {
+            warn!(target: "notification", "failed to run osascript: {}", err);
+        }
+    }
+}
+
+// ---- 非 macOS: 使用 notify-rust (Linux D-Bus / Windows Toast) ----
+
+#[cfg(not(target_os = "macos"))]
+fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
     let mut notification = notify_rust::Notification::new();
-    notification
-        .appname("BananaTray")
-        .summary(&title)
-        .body(&body);
+    notification.appname("BananaTray").summary(title).body(body);
 
     if with_sound {
         notification.sound_name("default");
