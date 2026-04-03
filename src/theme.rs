@@ -8,6 +8,8 @@ pub struct Theme {
     pub bg_card: Hsla,
     /// 卡片内层背景（更深的黑色，用于 quota 卡片）
     pub bg_card_inner: Hsla,
+    /// 卡片内层背景 hover 态（亮度稍高）
+    pub bg_card_inner_hovered: Hsla,
     pub text_primary: Hsla,
     pub text_secondary: Hsla,
     pub text_muted: Hsla,
@@ -56,6 +58,7 @@ impl Theme {
             bg_subtle: rgb(0xececee).into(), // 更深的灰底
             bg_card: rgb(0xf0f0f2).into(),
             bg_card_inner: rgb(0xffffff).into(), // quota 卡片：纯白
+            bg_card_inner_hovered: rgb(0xededef).into(), // hover 态：参照设计稿比例
             text_primary: rgb(0x18181b).into(),
             text_secondary: rgb(0x71717a).into(),
             text_muted: rgb(0xa1a1aa).into(),
@@ -90,6 +93,7 @@ impl Theme {
             bg_subtle: rgb(0x1c1c20).into(),
             bg_card: rgb(0x1c1c20).into(),
             bg_card_inner: rgb(0x151518).into(),
+            bg_card_inner_hovered: rgb(0x272329).into(), // hover 态：参照设计稿比例
             text_primary: rgb(0xf4f4f5).into(),
             text_secondary: rgb(0xa1a1aa).into(),
             text_muted: rgb(0x71717a).into(),
