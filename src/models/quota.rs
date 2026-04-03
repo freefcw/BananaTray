@@ -652,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_remaining_text_percentage() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::new("test", 30.0, 100.0);
         assert_eq!(q.remaining_text(), "70% left");
 
@@ -666,7 +666,7 @@ mod tests {
 
     #[test]
     fn test_remaining_text_credit() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
         assert_eq!(q.remaining_text(), "$15.00 left");
 
@@ -679,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_usage_detail_text_percentage() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::new("test", 30.0, 100.0);
         assert_eq!(q.usage_detail_text(), "30% used");
 
@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn test_usage_detail_text_credit() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
         assert_eq!(q.usage_detail_text(), "$5.00 / $20.00");
 
@@ -745,35 +745,35 @@ mod tests {
 
     #[test]
     fn format_last_updated_no_instant_connected() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let p = make_provider(ConnectionStatus::Connected);
         assert_eq!(p.format_last_updated(), "Waiting for data");
     }
 
     #[test]
     fn format_last_updated_no_instant_refreshing() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let p = make_provider(ConnectionStatus::Refreshing);
         assert_eq!(p.format_last_updated(), "Refreshing…");
     }
 
     #[test]
     fn format_last_updated_no_instant_error() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let p = make_provider(ConnectionStatus::Error);
         assert_eq!(p.format_last_updated(), "Needs attention");
     }
 
     #[test]
     fn format_last_updated_no_instant_disconnected() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let p = make_provider(ConnectionStatus::Disconnected);
         assert_eq!(p.format_last_updated(), "Not connected");
     }
 
     #[test]
     fn format_last_updated_with_text_fallback() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut p = make_provider(ConnectionStatus::Connected);
         p.last_updated_at = Some("Custom text".to_string());
         assert_eq!(p.format_last_updated(), "Custom text");
@@ -781,7 +781,7 @@ mod tests {
 
     #[test]
     fn format_last_updated_just_now() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut p = make_provider(ConnectionStatus::Connected);
         p.last_refreshed_instant = Some(std::time::Instant::now());
         assert_eq!(p.format_last_updated(), "Updated just now");
@@ -789,7 +789,7 @@ mod tests {
 
     #[test]
     fn mark_refresh_failed_sets_update_text() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut p = make_provider(ConnectionStatus::Connected);
         p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
         assert_eq!(p.last_updated_at.as_deref(), Some("Update failed"));

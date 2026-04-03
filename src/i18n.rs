@@ -69,6 +69,23 @@ pub fn apply_locale(language: &str) {
     rust_i18n::set_locale(locale);
 }
 
+#[cfg(test)]
+pub(crate) type TestLocaleGuard = std::sync::MutexGuard<'static, ()>;
+
+#[cfg(test)]
+pub(crate) fn test_locale_guard(locale: &str) -> TestLocaleGuard {
+    use std::sync::{Mutex, OnceLock};
+
+    static LOCALE_TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+    let guard = LOCALE_TEST_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("locale test mutex poisoned");
+    rust_i18n::set_locale(locale);
+    guard
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -135,12 +152,14 @@ mod tests {
 
     #[test]
     fn apply_locale_sets_en() {
+        let _locale_guard = test_locale_guard("en");
         apply_locale("en");
         assert_eq!(rust_i18n::locale().to_string(), "en");
     }
 
     #[test]
     fn apply_locale_sets_zh_cn() {
+        let _locale_guard = test_locale_guard("en");
         apply_locale("zh-CN");
         assert_eq!(rust_i18n::locale().to_string(), "zh-CN");
         // 恢复到 en，避免影响其他测试
@@ -149,6 +168,7 @@ mod tests {
 
     #[test]
     fn apply_locale_invalid_falls_back_to_en() {
+        let _locale_guard = test_locale_guard("en");
         apply_locale("invalid-locale");
         assert_eq!(rust_i18n::locale().to_string(), "en");
     }
@@ -191,6 +211,7 @@ mod tests {
 
     #[test]
     fn all_hint_keys_exist_in_locales() {
+        let _locale_guard = test_locale_guard("en");
         // 代码中使用的所有 hint key（仅包含面向用户的提示）
         let required_keys = [
             "hint.set_env_var",

@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_parse_usage_response_weekly_and_session() {
-        rust_i18n::set_locale("en");
+        let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{
             "usages": [{
                 "scope": "FEATURE_CODING",

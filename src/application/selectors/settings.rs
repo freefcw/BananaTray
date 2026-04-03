@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn settings_providers_tab_marks_reorder_boundaries() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.provider_order = vec!["gemini".into(), "claude".into(), "copilot".into()];
         settings.set_provider_enabled(ProviderKind::Gemini, true);
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn settings_provider_detail_reports_disabled_usage() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Claude, false);
 
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn settings_provider_detail_reports_error_usage() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Copilot, true);
 

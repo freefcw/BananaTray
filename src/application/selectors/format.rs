@@ -102,21 +102,21 @@ mod tests {
 
     #[test]
     fn format_quota_usage_integers() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::new("Daily", 50.0, 200.0);
         assert_eq!(format_quota_usage(&q), "50 / 200 used");
     }
 
     #[test]
     fn format_quota_usage_percentage_mode() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::new("Model", 65.0, 100.0);
         assert_eq!(format_quota_usage(&q), "35% remaining");
     }
 
     #[test]
     fn format_quota_usage_decimals() {
-        setup_locale();
+        let _locale_guard = setup_locale();
         let q = QuotaInfo::new("Session", 3.5, 10.0);
         assert_eq!(format_quota_usage(&q), "3.5 / 10 used");
     }

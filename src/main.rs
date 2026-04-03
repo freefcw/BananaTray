@@ -112,9 +112,8 @@ impl TrayController {
         info!(target: "tray", "show window for tab {:?}", tab);
         runtime::dispatch_in_app(&self.state, AppAction::SelectNavTab(tab), cx);
 
-        if let Some(window) = self.window.as_ref() {
+        if self.window.is_some() {
             info!(target: "tray", "reusing existing tray window");
-            let _ = window.update(cx, |_, _, _| {});
         } else {
             info!(target: "tray", "opening a fresh tray window");
             self.open(cx);
@@ -274,18 +273,8 @@ fn main() {
             // 6. 初始配置同步 + 启动刷新
             {
                 let state = controller.borrow().state.clone();
-                let config_request = {
-                    let session = &state.borrow().session;
-                    let enabled = crate::models::ProviderKind::all()
-                        .iter()
-                        .filter(|kind| session.settings.is_provider_enabled(**kind))
-                        .copied()
-                        .collect();
-                    RefreshRequest::UpdateConfig {
-                        interval_mins: session.settings.refresh_interval_mins,
-                        enabled,
-                    }
-                };
+                let config_request =
+                    crate::application::build_config_sync_request(&state.borrow().session);
                 let _ = state.borrow().send_refresh(config_request);
                 let _ = state.borrow().send_refresh(RefreshRequest::RefreshAll {
                     reason: RefreshReason::Startup,

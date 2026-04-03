@@ -135,7 +135,7 @@ fn apply_setting_change(
         SettingChange::RefreshCadence(mins) => {
             session.settings.refresh_interval_mins = mins.unwrap_or(0);
             session.settings_ui.cadence_dropdown_open = false;
-            effects.push(AppEffect::SendRefreshRequest(refresh_config_request(
+            effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
                 session,
             )));
         }
@@ -190,7 +190,7 @@ fn toggle_provider(session: &mut AppSession, kind: ProviderKind, effects: &mut V
     }
 
     effects.push(AppEffect::PersistSettings);
-    effects.push(AppEffect::SendRefreshRequest(refresh_config_request(
+    effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
         session,
     )));
     if new_val {
@@ -274,7 +274,7 @@ fn apply_refresh_event(
     }
 }
 
-fn refresh_config_request(session: &AppSession) -> RefreshRequest {
+pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
     let enabled: Vec<ProviderKind> = ProviderKind::all()
         .iter()
         .filter(|kind| session.settings.is_provider_enabled(**kind))
