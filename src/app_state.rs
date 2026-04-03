@@ -62,6 +62,9 @@ impl AppSession {
                 selected_provider: ProviderKind::Claude,
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
+                debug_selected_provider: None,
+                debug_refresh_active: false,
+                debug_prev_log_level: None,
             },
             settings,
             alert_tracker: QuotaAlertTracker::new(),
@@ -169,6 +172,12 @@ pub struct SettingsUiState {
     pub selected_provider: ProviderKind,
     pub cadence_dropdown_open: bool,
     pub copilot_token_editing: bool,
+    /// Debug Tab: 当前选中的调试 Provider
+    pub debug_selected_provider: Option<ProviderKind>,
+    /// Debug Tab: 是否正在调试刷新中
+    pub debug_refresh_active: bool,
+    /// Debug Tab: 调试刷新前的日志级别（用于刷新完成后恢复）
+    pub debug_prev_log_level: Option<log::LevelFilter>,
 }
 
 // ============================================================================
@@ -449,6 +458,9 @@ mod tests {
             selected_provider: ProviderKind::Claude,
             cadence_dropdown_open: false,
             copilot_token_editing: false,
+            debug_selected_provider: None,
+            debug_refresh_active: false,
+            debug_prev_log_level: None,
         };
         assert_eq!(ui.active_tab, SettingsTab::General);
         assert!(!ui.cadence_dropdown_open);

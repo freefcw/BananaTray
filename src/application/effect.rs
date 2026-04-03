@@ -1,4 +1,5 @@
 use crate::application::DebugNotificationKind;
+use crate::models::ProviderKind;
 use crate::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
 
@@ -22,6 +23,12 @@ pub enum AppEffect {
     },
     OpenLogDirectory,
     CopyToClipboard(String),
+    /// 启用日志捕获 → 提升日志级别 → 发送 RefreshOne
+    StartDebugRefresh(ProviderKind),
+    /// 恢复调试刷新前的日志级别
+    RestoreLogLevel(log::LevelFilter),
+    /// 清空调试日志缓冲区
+    ClearDebugLogs,
     QuitApp,
 }
 
@@ -42,6 +49,9 @@ pub enum CommonEffect {
     },
     OpenLogDirectory,
     CopyToClipboard(String),
+    StartDebugRefresh(ProviderKind),
+    RestoreLogLevel(log::LevelFilter),
+    ClearDebugLogs,
 }
 
 #[derive(Debug)]
@@ -81,6 +91,13 @@ pub fn route_effect(effect: AppEffect) -> RoutedEffect {
         AppEffect::CopyToClipboard(text) => {
             RoutedEffect::Common(CommonEffect::CopyToClipboard(text))
         }
+        AppEffect::StartDebugRefresh(kind) => {
+            RoutedEffect::Common(CommonEffect::StartDebugRefresh(kind))
+        }
+        AppEffect::RestoreLogLevel(level) => {
+            RoutedEffect::Common(CommonEffect::RestoreLogLevel(level))
+        }
+        AppEffect::ClearDebugLogs => RoutedEffect::Common(CommonEffect::ClearDebugLogs),
         AppEffect::QuitApp => RoutedEffect::QuitApp,
     }
 }
@@ -118,6 +135,14 @@ mod tests {
         assert!(matches!(
             route_effect(AppEffect::CopyToClipboard("hello".to_string())),
             RoutedEffect::Common(CommonEffect::CopyToClipboard(text)) if text == "hello"
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::StartDebugRefresh(ProviderKind::Claude)),
+            RoutedEffect::Common(CommonEffect::StartDebugRefresh(ProviderKind::Claude))
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::RestoreLogLevel(log::LevelFilter::Info)),
+            RoutedEffect::Common(CommonEffect::RestoreLogLevel(log::LevelFilter::Info))
         ));
     }
 

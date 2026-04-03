@@ -30,6 +30,12 @@ pub enum AppAction {
     SendDebugNotification(DebugNotificationKind),
     OpenLogDirectory,
     CopyToClipboard(String),
+    /// Debug Tab: 选择调试目标 Provider
+    SelectDebugProvider(ProviderKind),
+    /// Debug Tab: 强制刷新选中的 Provider（跳过 cooldown，临时提升日志级别）
+    DebugRefreshProvider,
+    /// Debug Tab: 清空日志缓冲区
+    ClearDebugLogs,
     QuitApp,
 }
 

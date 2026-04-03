@@ -6,6 +6,7 @@
 
 use crate::app_state::AppSession;
 use crate::models::{ConnectionStatus, ProviderKind};
+use crate::utils::log_capture::LogEntry;
 use std::path::PathBuf;
 
 // ============================================================================
@@ -30,11 +31,15 @@ pub struct DebugContext {
     pub settings_path: String,
     /// 应用版本号
     pub app_version: String,
+    /// 调试控制台捕获的日志条目（从 LogCapture 读取）
+    pub captured_logs: Vec<LogEntry>,
 }
 
 impl DebugContext {
     /// 从系统收集运行时信息（含 I/O 副作用）
     pub fn collect(log_path: Option<PathBuf>) -> Self {
+        use crate::utils::log_capture::LogCapture;
+
         let log_file_size = log_path
             .as_ref()
             .and_then(|p| std::fs::metadata(p).ok())
@@ -48,6 +53,7 @@ impl DebugContext {
             locale: rust_i18n::locale().to_string(),
             settings_path: crate::settings_store::config_path().display().to_string(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            captured_logs: LogCapture::global().entries(),
         }
     }
 }
@@ -62,6 +68,41 @@ pub struct DebugTabViewState {
     pub log: LogViewState,
     pub providers: Vec<ProviderDiagnosticItem>,
     pub environment: EnvironmentViewState,
+    pub console: DebugConsoleViewState,
+}
+
+/// 调试控制台区域
+#[derive(Debug, Clone)]
+pub struct DebugConsoleViewState {
+    /// 可选择的 Provider 列表（已启用的）
+    pub available_providers: Vec<(ProviderKind, String)>,
+    /// 当前选中的 Provider
+    pub selected_provider: Option<ProviderKind>,
+    /// 是否正在调试刷新中
+    pub refresh_active: bool,
+    /// 捕获的日志条目
+    pub log_entries: Vec<CapturedLogEntry>,
+    /// 日志条目数量（用于显示计数）
+    pub log_count: usize,
+}
+
+/// 单条捕获的日志（用于 UI 渲染）
+#[derive(Debug, Clone)]
+pub struct CapturedLogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub level_color: LogLevelColor,
+    pub target: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LogLevelColor {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
 }
 
 /// 日志区域
@@ -120,6 +161,7 @@ pub fn debug_tab_view_state(session: &AppSession, ctx: &DebugContext) -> DebugTa
         log: build_log_view_state(ctx),
         providers: build_provider_diagnostics(session),
         environment: build_environment_view_state(session, ctx),
+        console: build_console_view_state(session, ctx),
     }
 }
 
@@ -260,6 +302,50 @@ pub fn build_debug_info_text(state: &DebugTabViewState) -> String {
     lines.join("\n")
 }
 
+fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugConsoleViewState {
+    // 已启用的 Provider 列表
+    let available_providers: Vec<(ProviderKind, String)> = session
+        .settings
+        .ordered_providers()
+        .into_iter()
+        .filter(|kind| session.settings.is_provider_enabled(*kind))
+        .filter_map(|kind| {
+            session
+                .provider_store
+                .find(kind)
+                .map(|p| (kind, p.display_name().to_string()))
+        })
+        .collect();
+
+    // 从 DebugContext 注入的日志条目转换为 UI ViewState
+    let log_count = ctx.captured_logs.len();
+    let log_entries: Vec<CapturedLogEntry> = ctx
+        .captured_logs
+        .iter()
+        .map(|entry| CapturedLogEntry {
+            timestamp: entry.timestamp.clone(),
+            level: entry.level.to_string().to_uppercase(),
+            level_color: match entry.level {
+                log::Level::Error => LogLevelColor::Error,
+                log::Level::Warn => LogLevelColor::Warn,
+                log::Level::Info => LogLevelColor::Info,
+                log::Level::Debug => LogLevelColor::Debug,
+                log::Level::Trace => LogLevelColor::Trace,
+            },
+            target: entry.target.clone(),
+            message: entry.message.clone(),
+        })
+        .collect();
+
+    DebugConsoleViewState {
+        available_providers,
+        selected_provider: session.settings_ui.debug_selected_provider,
+        refresh_active: session.settings_ui.debug_refresh_active,
+        log_entries,
+        log_count,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,6 +363,7 @@ mod tests {
             locale: "zh-CN".to_string(),
             settings_path: "/Users/test/.config/bananatray/config.toml".to_string(),
             app_version: "0.1.0".to_string(),
+            captured_logs: vec![],
         }
     }
 
