@@ -56,6 +56,7 @@ impl RenderOnce for CopilotInputBox {
             .gap(px(8.0))
             .px(px(14.0))
             .py(px(10.0))
+            .h(px(40.0))
             .rounded(px(8.0))
             .bg(hsla(145.0 / 360.0, 0.6, 0.3, 0.15))
             .border_1()
@@ -164,9 +165,9 @@ pub(crate) fn render_settings_interactive(
         .settings_ui
         .copilot_token_editing;
 
+    // ── Token 状态区 or 输入框 ──
     if is_editing {
-        // 编辑模式：每次都重新创建 InputState（确保内容清空）
-        // 这样可以避免上次输入的内容残留
+        // 编辑模式：每次都重新创建 InputState
         view.copilot_input = Some(cx.new(|cx| {
             let mut state = adabraka_ui::components::input_state::InputState::new(cx);
             state.placeholder = "粘贴或输入 GitHub Token (ghp_...)".into();
@@ -181,76 +182,84 @@ pub(crate) fn render_settings_interactive(
             theme: theme.clone(),
             focus_handle,
         });
+    } else if has_token {
+        // 默认模式：Token 已配置状态
+        card = card.child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .px(px(14.0))
+                .py(px(10.0))
+                .h(px(40.0))
+                .rounded(px(8.0))
+                .bg(hsla(145.0 / 360.0, 0.6, 0.3, 0.15))
+                .border_1()
+                .border_color(hsla(145.0 / 360.0, 0.6, 0.4, 0.35))
+                .child(
+                    div()
+                        .text_size(px(14.0))
+                        .text_color(theme.status_success)
+                        .child("✓"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(theme.status_success)
+                        .child(t!("copilot.token_configured").to_string()),
+                ),
+        );
     } else {
-        // 默认模式：Token 状态区
-        if has_token {
-            // 绿色状态行：✓ Token 已配置
-            card = card.child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .px(px(14.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(hsla(145.0 / 360.0, 0.6, 0.3, 0.15))
-                    .border_1()
-                    .border_color(hsla(145.0 / 360.0, 0.6, 0.4, 0.35))
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .text_color(theme.status_success)
-                            .child("✓"),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.status_success)
-                            .child(t!("copilot.token_configured").to_string()),
-                    ),
-            );
-
-            // Token 来源信息
-            let source_label = match source {
-                CopilotTokenSource::ConfigFile => t!("copilot.source.config_file").to_string(),
-                CopilotTokenSource::CopilotOAuth => t!("copilot.source.copilot_oauth").to_string(),
-                CopilotTokenSource::EnvVar => t!("copilot.source.env_var").to_string(),
-                CopilotTokenSource::None => String::new(),
-            };
-
-            card = card.child(
-                div()
-                    .py(px(6.0))
-                    .flex_col()
-                    .gap(px(4.0))
-                    // 脱敏 token + 来源
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_muted)
-                            .child(
-                                t!(
-                                    "copilot.token_via",
-                                    masked = masked.unwrap_or_default(),
-                                    source = &source_label
-                                )
-                                .to_string(),
-                            ),
-                    ),
-            );
-        } else {
-            // 未配置提示
-            card = card.child(
-                div()
-                    .text_size(px(12.0))
-                    .line_height(relative(1.5))
-                    .text_color(theme.text_muted)
-                    .child(t!("copilot.token_hint").to_string()),
-            );
-        }
+        // 默认模式：Token 未配置提示
+        card = card.child(
+            div()
+                .h(px(40.0)) // 与 InputBox 高度大致对齐，保持一致性
+                .flex()
+                .items_center()
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .line_height(relative(1.5))
+                        .text_color(theme.text_muted)
+                        .child(t!("copilot.token_hint").to_string()),
+                ),
+        );
     }
+
+    // ── Token 来源信息行 (始终站位，保持布局稳定) ──
+    let (source_info, text_color) = if !is_editing && has_token {
+        let source_label = match source {
+            CopilotTokenSource::ConfigFile => t!("copilot.source.config_file").to_string(),
+            CopilotTokenSource::CopilotOAuth => t!("copilot.source.copilot_oauth").to_string(),
+            CopilotTokenSource::CopilotCli => t!("copilot.source.copilot_cli").to_string(),
+            CopilotTokenSource::EnvVar => t!("copilot.source.env_var").to_string(),
+            CopilotTokenSource::None => String::new(),
+        };
+
+        (
+            t!(
+                "copilot.token_via",
+                masked = masked.unwrap_or_default(),
+                source = &source_label
+            )
+            .to_string(),
+            theme.text_muted,
+        )
+    } else {
+        // 编辑模式或未配置时，使用占位字符并设置颜色与背景一致，实现“隐形”站位
+        ("placeholder".to_string(), theme.bg_card_inner)
+    };
+
+    card = card.child(
+        div().py(px(6.0)).child(
+            div()
+                .text_size(px(12.0))
+                .text_color(text_color)
+                .child(source_info),
+        ),
+    );
 
     // ── 操作按钮 ──
     card = card.child(render_action_buttons(

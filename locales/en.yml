@@ -191,9 +191,10 @@ copilot.set_token: "Set Token"
 copilot.save_token: "Save Token"
 copilot.cancel_setup: "Cancel Setup"
 copilot.source.config_file: "Config file"
-copilot.source.copilot_oauth: "Copilot extension auto-detected"
 copilot.source.env_var: "GITHUB_TOKEN env var"
-copilot.token_sources_tip: "Token resolution priority:\n① Config file (click \"Set Token\" to configure)\n② Copilot extension (~/.config/github-copilot/)\n③ GITHUB_TOKEN env var"
+copilot.source.copilot_oauth: "Copilot extension auto-detected"
+copilot.source.copilot_cli: "Copilot CLI (Keychain)"
+copilot.token_sources_tip: "Token resolution priority:\n① Config file (click \"Set Token\" to configure)\n② GITHUB_TOKEN env var\n③ Copilot extension (~/.config/github-copilot/)\n④ Copilot CLI (macOS Keychain)"
 
 # ── Language names ────────────────────────────────────────
 lang.system: "System Default"
