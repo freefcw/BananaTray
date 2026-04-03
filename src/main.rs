@@ -39,9 +39,12 @@ struct TrayController {
 }
 
 impl TrayController {
-    fn new(refresh_tx: smol::channel::Sender<RefreshRequest>) -> Self {
+    fn new(
+        refresh_tx: smol::channel::Sender<RefreshRequest>,
+        log_path: Option<std::path::PathBuf>,
+    ) -> Self {
         info!(target: "tray", "initializing tray controller");
-        let state = Rc::new(RefCell::new(AppState::new(refresh_tx)));
+        let state = Rc::new(RefCell::new(AppState::new(refresh_tx, log_path)));
         Self {
             window: None,
             state,
@@ -194,14 +197,16 @@ impl TrayController {
 }
 
 fn main() {
-    match logging::init() {
+    let log_path = match logging::init() {
         Ok(init) => {
             log::info!(target: "app", "logging initialized at {}", init.log_path.display());
+            Some(init.log_path)
         }
         Err(err) => {
             eprintln!("failed to initialize logging: {err:#}");
+            None
         }
-    }
+    };
 
     // Single-instance check: must run before Application::new() so that a
     // secondary process exits immediately without initializing the UI toolkit.
@@ -215,7 +220,7 @@ fn main() {
 
     Application::new()
         .with_assets(Assets::new())
-        .run(|cx: &mut App| {
+        .run(move |cx: &mut App| {
             // 0. 初始化 i18n locale
             {
                 let settings = crate::settings_store::load().unwrap_or_default();
@@ -247,7 +252,10 @@ fn main() {
                 .expect("failed to spawn refresh coordinator thread");
 
             // 4. 窗口控制器
-            let controller = Rc::new(RefCell::new(TrayController::new(refresh_tx)));
+            let controller = Rc::new(RefCell::new(TrayController::new(
+                refresh_tx,
+                log_path.clone(),
+            )));
 
             // 5. 启动事件泵：从协调器接收事件，更新 AppState，并通知 UI 刷新
             {

@@ -83,6 +83,29 @@ debug.test_recovered: "配额恢复"
 debug.test_recovered.desc: "发送一条测试用的配额恢复通知。"
 debug.send: "发送"
 
+# 调试页 — 日志文件
+debug.log_file: "日志文件"
+debug.log_file.desc: "应用日志输出位置。"
+debug.open: "打开"
+debug.copy_path: "复制路径"
+
+# 调试页 — Provider 诊断
+debug.section.providers: "服务商诊断"
+debug.quotas_loaded: "%{n} 个配额"
+debug.no_quotas: "—"
+
+# 调试页 — 环境信息
+debug.section.environment: "环境信息"
+debug.env.version: "版本"
+debug.env.os: "操作系统"
+debug.env.log_level: "日志级别"
+debug.env.locale: "语言"
+debug.env.settings_path: "配置文件"
+debug.env.log_path: "日志路径"
+debug.env.providers: "服务商"
+debug.env.refresh: "刷新间隔"
+debug.copy_debug_info: "复制诊断信息"
+
 # ── 服务商详情（设置窗口）─────────────────────────────────
 provider.info.state: "状态"
 provider.info.source: "来源"

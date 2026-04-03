@@ -1,3 +1,4 @@
+mod debug;
 #[allow(dead_code)] // 函数已就绪，待后续 UI 接入后启用
 mod format;
 mod settings;
@@ -146,6 +147,10 @@ pub enum ProviderSettingsMode {
 // Re-exports：保持 `use crate::application::selectors::xxx` 路径不变
 // ============================================================================
 
+pub use debug::{
+    build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState,
+    ProviderDiagnosticItem, ProviderDiagnosticStatus,
+};
 #[allow(unused_imports)] // 函数已就绪，待后续 UI 接入后启用
 pub use format::{
     format_amount, format_quota_usage, provider_account_label, provider_list_subtitle,

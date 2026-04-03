@@ -323,6 +323,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
@@ -335,6 +336,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         nav.switch_to(NavTab::Settings);
@@ -348,6 +350,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
@@ -363,6 +366,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
@@ -377,6 +381,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Gemini),
             last_provider_kind: ProviderKind::Gemini,
+            prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
@@ -391,6 +396,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
@@ -404,6 +410,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         // Only Claude is enabled, and we're disabling it — no fallback target
@@ -419,6 +426,7 @@ mod tests {
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         // Enable Copilot and Gemini; fallback should pick based on ProviderKind::all() order
@@ -454,6 +462,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -470,6 +479,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -486,6 +496,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -504,6 +515,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -523,6 +535,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -542,6 +555,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
@@ -561,6 +575,7 @@ mod tests {
         let nav = NavigationState {
             active_tab: NavTab::Provider(ProviderKind::Claude),
             last_provider_kind: ProviderKind::Claude,
+            prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);

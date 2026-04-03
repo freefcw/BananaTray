@@ -83,6 +83,29 @@ debug.test_recovered: "Recovered"
 debug.test_recovered.desc: "Send a test quota-recovered notification."
 debug.send: "Send"
 
+# Debug tab — Log file
+debug.log_file: "Log File"
+debug.log_file.desc: "Application log output location."
+debug.open: "Open"
+debug.copy_path: "Copy Path"
+
+# Debug tab — Provider diagnostics
+debug.section.providers: "PROVIDER DIAGNOSTICS"
+debug.quotas_loaded: "%{n} quotas"
+debug.no_quotas: "—"
+
+# Debug tab — Environment
+debug.section.environment: "ENVIRONMENT"
+debug.env.version: "Version"
+debug.env.os: "OS"
+debug.env.log_level: "Log Level"
+debug.env.locale: "Locale"
+debug.env.settings_path: "Settings"
+debug.env.log_path: "Log Path"
+debug.env.providers: "Providers"
+debug.env.refresh: "Refresh"
+debug.copy_debug_info: "Copy Debug Info"
+
 # ── Provider detail (settings window) ─────────────────────
 provider.info.state: "State"
 provider.info.source: "Source"

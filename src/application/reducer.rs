@@ -85,6 +85,12 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 with_sound: session.settings.notification_sound,
             });
         }
+        AppAction::OpenLogDirectory => {
+            effects.push(AppEffect::OpenLogDirectory);
+        }
+        AppAction::CopyToClipboard(text) => {
+            effects.push(AppEffect::CopyToClipboard(text));
+        }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
 
