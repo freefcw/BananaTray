@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 // ============================================================================
 
 macro_rules! define_provider_kind {
-    ($($variant:ident),* $(,)?) => {
+    ($($variant:ident => $id:literal),* $(,)?) => {
         /// 支持的 AI Provider 枚举
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
         pub enum ProviderKind {
@@ -17,24 +17,40 @@ macro_rules! define_provider_kind {
             pub fn all() -> &'static [ProviderKind] {
                 &[$(Self::$variant),*]
             }
+
+            /// 配置文件中使用的小写标识符
+            pub fn id_key(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $id),*
+                }
+            }
+
+            /// 从小写标识符反查 ProviderKind
+            pub fn from_id_key(key: &str) -> Option<Self> {
+                match key {
+                    $($id => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
         }
     };
 }
 
+// 新增 Provider 只需在此添加一行：Variant => "id_key"
 define_provider_kind!(
-    Claude,
-    Gemini,
-    Copilot,
-    Codex,
-    Kimi,
-    Amp,
-    Cursor,
-    OpenCode,
-    MiniMax,
-    VertexAi,
-    Kilo,
-    Kiro,
-    Antigravity,
+    Claude => "claude",
+    Gemini => "gemini",
+    Copilot => "copilot",
+    Codex => "codex",
+    Kimi => "kimi",
+    Amp => "amp",
+    Cursor => "cursor",
+    OpenCode => "opencode",
+    MiniMax => "minimax",
+    VertexAi => "vertexai",
+    Kilo => "kilo",
+    Kiro => "kiro",
+    Antigravity => "antigravity",
 );
 
 /// Provider 元数据
@@ -56,46 +72,6 @@ pub struct ProviderMetadata {
 pub struct ProviderDescriptor {
     pub id: &'static str,
     pub metadata: ProviderMetadata,
-}
-
-impl ProviderKind {
-    /// 配置文件中使用的小写标识符
-    pub fn id_key(self) -> &'static str {
-        match self {
-            Self::Claude => "claude",
-            Self::Gemini => "gemini",
-            Self::Copilot => "copilot",
-            Self::Codex => "codex",
-            Self::Kimi => "kimi",
-            Self::Amp => "amp",
-            Self::Cursor => "cursor",
-            Self::OpenCode => "opencode",
-            Self::MiniMax => "minimax",
-            Self::VertexAi => "vertexai",
-            Self::Kilo => "kilo",
-            Self::Kiro => "kiro",
-            Self::Antigravity => "antigravity",
-        }
-    }
-
-    pub fn from_id_key(key: &str) -> Option<Self> {
-        match key {
-            "claude" => Some(Self::Claude),
-            "gemini" => Some(Self::Gemini),
-            "copilot" => Some(Self::Copilot),
-            "codex" => Some(Self::Codex),
-            "kimi" => Some(Self::Kimi),
-            "amp" => Some(Self::Amp),
-            "cursor" => Some(Self::Cursor),
-            "opencode" => Some(Self::OpenCode),
-            "minimax" => Some(Self::MiniMax),
-            "vertexai" => Some(Self::VertexAi),
-            "kilo" => Some(Self::Kilo),
-            "kiro" => Some(Self::Kiro),
-            "antigravity" => Some(Self::Antigravity),
-            _ => None,
-        }
-    }
 }
 
 impl ProviderMetadata {

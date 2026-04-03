@@ -225,33 +225,13 @@ pub fn compute_header_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
-        ConnectionStatus, ErrorKind, ProviderKind, ProviderMetadata, ProviderStatus,
-    };
+    use crate::models::test_helpers::make_test_provider;
+    use crate::models::{ConnectionStatus, ProviderKind};
 
     fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
-        ProviderStatus {
-            kind,
-            metadata: ProviderMetadata {
-                kind,
-                display_name: format!("{:?}", kind),
-                brand_name: format!("{:?}", kind),
-                source_label: "test".to_string(),
-                account_hint: "test".to_string(),
-                icon_asset: "test.svg".to_string(),
-                dashboard_url: "https://example.com".to_string(),
-            },
-            enabled,
-            connection: ConnectionStatus::Disconnected,
-            quotas: vec![],
-            account_email: None,
-            is_paid: false,
-            account_tier: None,
-            last_updated_at: None,
-            error_message: None,
-            error_kind: ErrorKind::default(),
-            last_refreshed_instant: None,
-        }
+        let mut p = make_test_provider(kind, ConnectionStatus::Disconnected);
+        p.enabled = enabled;
+        p
     }
 
     fn make_store(kinds: &[(ProviderKind, bool)]) -> ProviderStore {

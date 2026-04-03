@@ -1,9 +1,12 @@
-/// Pure formatting and business logic, free of any UI dependencies.
-/// Extracted for testability (GPUI proc macros crash during test compilation).
+//! 格式化与展示文案函数
+//!
+//! 将 Provider/Quota → 展示文本 的转换逻辑集中于此。
+//! 从原 `app/provider_logic.rs` 合并而来。
+
 use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo};
 use rust_i18n::t;
 
-#[allow(dead_code)]
+/// 格式化数值：整数不带小数点，非整数保留一位
 pub fn format_amount(value: f64) -> String {
     if (value.fract() - 0.0).abs() < f64::EPSILON {
         format!("{:.0}", value)
@@ -12,7 +15,7 @@ pub fn format_amount(value: f64) -> String {
     }
 }
 
-#[allow(dead_code)]
+/// 格式化配额使用情况（用于 UI 展示）
 pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     if quota.is_percentage_mode() {
         t!(
@@ -30,7 +33,7 @@ pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     }
 }
 
-#[allow(dead_code)]
+/// 生成 Provider 账号标签（优先显示邮箱，否则显示品牌名/账号提示）
 pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> String {
     if let Some(email) = &provider.account_email {
         return email.clone();
@@ -43,7 +46,7 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
     }
 }
 
-#[allow(dead_code)]
+/// 生成 Provider 列表副标题（连接状态相关的描述文案）
 pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
     if !provider.enabled {
         return t!("provider.disabled_source", source = provider.source_label()).to_string();
@@ -76,39 +79,10 @@ pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
-        ConnectionStatus, ErrorKind, ProviderKind, ProviderMetadata, ProviderStatus, QuotaInfo,
+    use crate::models::test_helpers::{
+        make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
-
-    /// 确保 i18n 测试使用英语 locale
-    fn setup_locale() {
-        rust_i18n::set_locale("en");
-    }
-
-    fn make_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
-        ProviderStatus {
-            kind,
-            metadata: ProviderMetadata {
-                kind,
-                display_name: format!("{:?}", kind),
-                brand_name: "Test Brand".to_string(),
-                source_label: "test source".to_string(),
-                account_hint: "test account".to_string(),
-                icon_asset: "src/icons/usage.svg".to_string(),
-                dashboard_url: "https://example.com".to_string(),
-            },
-            enabled: true,
-            connection,
-            quotas: vec![],
-            account_email: None,
-            is_paid: false,
-            account_tier: None,
-            last_updated_at: None,
-            error_message: None,
-            error_kind: ErrorKind::default(),
-            last_refreshed_instant: None,
-        }
-    }
+    use crate::models::{ConnectionStatus, ProviderKind, QuotaInfo};
 
     // ── format_amount ────────────────────────────────────────
 

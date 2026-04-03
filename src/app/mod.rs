@@ -1,7 +1,6 @@
 mod app_state;
 mod app_view;
 mod nav;
-mod provider_logic;
 mod provider_panel;
 pub(crate) mod settings_window;
 mod tray_settings;
