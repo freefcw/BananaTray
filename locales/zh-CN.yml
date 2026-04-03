@@ -89,10 +89,6 @@ debug.log_file.desc: "应用日志输出位置。"
 debug.open: "打开"
 debug.copy_path: "复制路径"
 
-# 调试页 — Provider 诊断
-debug.section.providers: "服务商诊断"
-debug.quotas_loaded: "%{n} 个配额"
-debug.no_quotas: "—"
 
 # 调试页 — 环境信息
 debug.section.environment: "环境信息"
@@ -105,6 +101,15 @@ debug.env.log_path: "日志路径"
 debug.env.providers: "服务商"
 debug.env.refresh: "刷新间隔"
 debug.copy_debug_info: "复制诊断信息"
+
+# Debug tab — Provider 调试控制台
+debug.section.console: "调试控制台"
+debug.console.force_refresh: "强制刷新"
+debug.console.refreshing: "刷新中…"
+debug.console.empty: "选择一个服务商，点击「强制刷新」以捕获日志。"
+debug.console.entries: "条日志"
+debug.console.copy_logs: "复制日志"
+debug.console.clear_logs: "清空"
 
 # ── 服务商详情（设置窗口）─────────────────────────────────
 provider.info.state: "状态"

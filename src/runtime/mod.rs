@@ -157,6 +157,33 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
         CommonEffect::CopyToClipboard(text) => {
             crate::utils::platform::copy_to_clipboard(&text);
         }
+        CommonEffect::StartDebugRefresh(kind) => {
+            use crate::utils::log_capture::LogCapture;
+            info!(target: "runtime", "starting debug refresh for {:?}", kind);
+            // 1. 保存当前日志级别到 state（供 RestoreLogLevel 使用）
+            state.borrow_mut().session.settings_ui.debug_prev_log_level = Some(log::max_level());
+            // 2. 清空并启用日志捕获
+            LogCapture::global().clear();
+            LogCapture::global().enable();
+            // 3. 临时提升日志级别到 Debug
+            log::set_max_level(log::LevelFilter::Debug);
+            // 4. 发送手动刷新请求（跳过 cooldown）
+            let request = crate::refresh::RefreshRequest::RefreshOne {
+                kind,
+                reason: crate::refresh::RefreshReason::Manual,
+            };
+            let _ = send_refresh_request(state, request);
+        }
+        CommonEffect::RestoreLogLevel(level) => {
+            use crate::utils::log_capture::LogCapture;
+            info!(target: "runtime", "debug refresh complete, restoring log level to {:?}", level);
+            // 停用日志捕获，恢复日志级别
+            LogCapture::global().disable();
+            log::set_max_level(level);
+        }
+        CommonEffect::ClearDebugLogs => {
+            crate::utils::log_capture::LogCapture::global().clear();
+        }
     }
 }
 

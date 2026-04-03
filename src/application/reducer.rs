@@ -91,6 +91,25 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::CopyToClipboard(text) => {
             effects.push(AppEffect::CopyToClipboard(text));
         }
+        AppAction::SelectDebugProvider(kind) => {
+            session.settings_ui.debug_selected_provider = Some(kind);
+            push_render(&mut effects);
+        }
+        AppAction::DebugRefreshProvider => {
+            if let Some(kind) = session.settings_ui.debug_selected_provider {
+                if !session.settings_ui.debug_refresh_active {
+                    session.settings_ui.debug_refresh_active = true;
+                    // 标记 UI 为 Refreshing
+                    session.provider_store.mark_refreshing(kind);
+                    effects.push(AppEffect::StartDebugRefresh(kind));
+                    push_render(&mut effects);
+                }
+            }
+        }
+        AppAction::ClearDebugLogs => {
+            effects.push(AppEffect::ClearDebugLogs);
+            push_render(&mut effects);
+        }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
 
@@ -217,64 +236,80 @@ fn apply_refresh_event(
             push_render(effects);
         }
         RefreshEvent::Finished(outcome) => {
-            if session.provider_store.find(outcome.kind).is_none() {
-                return;
+            // 先记录是否为调试刷新目标（必须在 match 之前，避免被 early return 跳过）
+            let is_debug_target = session.settings_ui.debug_refresh_active
+                && session.settings_ui.debug_selected_provider == Some(outcome.kind);
+
+            // 处理刷新结果（用 block 限制 return 作用域，确保后续恢复逻辑总能执行）
+            'process: {
+                if session.provider_store.find(outcome.kind).is_none() {
+                    break 'process;
+                }
+
+                match outcome.result {
+                    RefreshResult::Success { data } => {
+                        info!(
+                            target: "providers",
+                            "provider {:?} refresh succeeded: {} quotas",
+                            outcome.kind,
+                            data.quotas.len()
+                        );
+                        let provider_name = session
+                            .provider_store
+                            .find(outcome.kind)
+                            .map(|provider| provider.display_name().to_string())
+                            .unwrap_or_else(|| format!("{:?}", outcome.kind));
+                        if let Some(alert) =
+                            session
+                                .alert_tracker
+                                .update(outcome.kind, &provider_name, &data.quotas)
+                        {
+                            if session.settings.session_quota_notifications {
+                                effects.push(AppEffect::SendQuotaNotification {
+                                    alert,
+                                    with_sound: session.settings.notification_sound,
+                                });
+                            }
+                        }
+                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                            break 'process;
+                        };
+                        provider.mark_refresh_succeeded(data);
+                        push_render(effects);
+                    }
+                    RefreshResult::Unavailable { message } => {
+                        debug!(
+                            target: "providers",
+                            "provider {:?} unavailable: {}",
+                            outcome.kind,
+                            message
+                        );
+                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                            break 'process;
+                        };
+                        provider.mark_unavailable(message);
+                        push_render(effects);
+                    }
+                    RefreshResult::Failed { error, error_kind } => {
+                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                            break 'process;
+                        };
+                        provider.mark_refresh_failed(error, error_kind);
+                        push_render(effects);
+                    }
+                    RefreshResult::SkippedCooldown
+                    | RefreshResult::SkippedInFlight
+                    | RefreshResult::SkippedDisabled => {}
+                }
             }
 
-            match outcome.result {
-                RefreshResult::Success { data } => {
-                    info!(
-                        target: "providers",
-                        "provider {:?} refresh succeeded: {} quotas",
-                        outcome.kind,
-                        data.quotas.len()
-                    );
-                    let provider_name = session
-                        .provider_store
-                        .find(outcome.kind)
-                        .map(|provider| provider.display_name().to_string())
-                        .unwrap_or_else(|| format!("{:?}", outcome.kind));
-                    if let Some(alert) =
-                        session
-                            .alert_tracker
-                            .update(outcome.kind, &provider_name, &data.quotas)
-                    {
-                        if session.settings.session_quota_notifications {
-                            effects.push(AppEffect::SendQuotaNotification {
-                                alert,
-                                with_sound: session.settings.notification_sound,
-                            });
-                        }
-                    }
-                    let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
-                        return;
-                    };
-                    provider.mark_refresh_succeeded(data);
-                    push_render(effects);
+            // 调试刷新完成后恢复日志级别 — 这段代码无论上面如何分支都一定会执行
+            if is_debug_target {
+                session.settings_ui.debug_refresh_active = false;
+                if let Some(prev_level) = session.settings_ui.debug_prev_log_level.take() {
+                    effects.push(AppEffect::RestoreLogLevel(prev_level));
                 }
-                RefreshResult::Unavailable { message } => {
-                    debug!(
-                        target: "providers",
-                        "provider {:?} unavailable: {}",
-                        outcome.kind,
-                        message
-                    );
-                    let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
-                        return;
-                    };
-                    provider.mark_unavailable(message);
-                    push_render(effects);
-                }
-                RefreshResult::Failed { error, error_kind } => {
-                    let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
-                        return;
-                    };
-                    provider.mark_refresh_failed(error, error_kind);
-                    push_render(effects);
-                }
-                RefreshResult::SkippedCooldown
-                | RefreshResult::SkippedInFlight
-                | RefreshResult::SkippedDisabled => {}
+                push_render(effects);
             }
         }
     }
@@ -295,4 +330,222 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
 
 fn push_render(effects: &mut Vec<AppEffect>) {
     effects.push(AppEffect::Render);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::test_helpers::make_test_provider;
+    use crate::models::{AppSettings, ConnectionStatus};
+    use crate::refresh::{RefreshOutcome, RefreshResult};
+
+    fn make_session() -> AppSession {
+        let providers = ProviderKind::all()
+            .iter()
+            .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
+            .collect();
+        AppSession::new(AppSettings::default(), providers)
+    }
+
+    /// 构建一个不包含指定 provider 的 session
+    fn make_session_without(excluded: ProviderKind) -> AppSession {
+        let providers = ProviderKind::all()
+            .iter()
+            .filter(|k| **k != excluded)
+            .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
+            .collect();
+        AppSession::new(AppSettings::default(), providers)
+    }
+
+    fn has_effect(effects: &[AppEffect], f: impl Fn(&AppEffect) -> bool) -> bool {
+        effects.iter().any(f)
+    }
+
+    fn has_render(effects: &[AppEffect]) -> bool {
+        has_effect(effects, |e| matches!(e, AppEffect::Render))
+    }
+
+    // ── SelectDebugProvider ─────────────────────────────
+
+    #[test]
+    fn select_debug_provider_updates_state() {
+        let mut session = make_session();
+        assert!(session.settings_ui.debug_selected_provider.is_none());
+
+        let effects = reduce(
+            &mut session,
+            AppAction::SelectDebugProvider(ProviderKind::Claude),
+        );
+
+        assert_eq!(
+            session.settings_ui.debug_selected_provider,
+            Some(ProviderKind::Claude)
+        );
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn select_debug_provider_can_change() {
+        let mut session = make_session();
+        reduce(
+            &mut session,
+            AppAction::SelectDebugProvider(ProviderKind::Claude),
+        );
+        reduce(
+            &mut session,
+            AppAction::SelectDebugProvider(ProviderKind::Copilot),
+        );
+
+        assert_eq!(
+            session.settings_ui.debug_selected_provider,
+            Some(ProviderKind::Copilot)
+        );
+    }
+
+    // ── DebugRefreshProvider ────────────────────────────
+
+    #[test]
+    fn debug_refresh_without_selection_is_noop() {
+        let mut session = make_session();
+        let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
+
+        assert!(!session.settings_ui.debug_refresh_active);
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::StartDebugRefresh(_)
+        )));
+    }
+
+    #[test]
+    fn debug_refresh_with_selection_produces_effect() {
+        let mut session = make_session();
+        reduce(
+            &mut session,
+            AppAction::SelectDebugProvider(ProviderKind::Gemini),
+        );
+
+        let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
+
+        assert!(session.settings_ui.debug_refresh_active);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::StartDebugRefresh(ProviderKind::Gemini)
+        )));
+    }
+
+    #[test]
+    fn debug_refresh_while_active_is_noop() {
+        let mut session = make_session();
+        reduce(
+            &mut session,
+            AppAction::SelectDebugProvider(ProviderKind::Gemini),
+        );
+        reduce(&mut session, AppAction::DebugRefreshProvider);
+
+        // 再次点击不应重复触发
+        let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::StartDebugRefresh(_)
+        )));
+    }
+
+    // ── ClearDebugLogs ──────────────────────────────────
+
+    #[test]
+    fn clear_debug_logs_produces_effect() {
+        let mut session = make_session();
+        let effects = reduce(&mut session, AppAction::ClearDebugLogs);
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ClearDebugLogs
+        )));
+        assert!(has_render(&effects));
+    }
+
+    // ── RefreshEvent::Finished + debug restore ──────────
+
+    #[test]
+    fn finished_event_restores_debug_state() {
+        let mut session = make_session();
+        let kind = ProviderKind::Claude;
+
+        // 模拟调试刷新状态
+        session.settings_ui.debug_selected_provider = Some(kind);
+        session.settings_ui.debug_refresh_active = true;
+        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
+
+        let outcome = RefreshOutcome {
+            kind,
+            result: RefreshResult::Failed {
+                error: "test error".to_string(),
+                error_kind: crate::models::ErrorKind::NetworkError,
+            },
+        };
+        let mut effects = vec![];
+        apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+
+        // 即使刷新失败，也应该恢复
+        assert!(!session.settings_ui.debug_refresh_active);
+        assert!(session.settings_ui.debug_prev_log_level.is_none());
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::RestoreLogLevel(log::LevelFilter::Info)
+        )));
+    }
+
+    #[test]
+    fn finished_event_for_other_provider_does_not_restore() {
+        let mut session = make_session();
+
+        // 调试刷新 Claude，但完成的是 Gemini
+        session.settings_ui.debug_selected_provider = Some(ProviderKind::Claude);
+        session.settings_ui.debug_refresh_active = true;
+        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
+
+        let outcome = RefreshOutcome {
+            kind: ProviderKind::Gemini,
+            result: RefreshResult::SkippedCooldown,
+        };
+        let mut effects = vec![];
+        apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+
+        // 不应恢复
+        assert!(session.settings_ui.debug_refresh_active);
+        assert!(session.settings_ui.debug_prev_log_level.is_some());
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::RestoreLogLevel(_)
+        )));
+    }
+
+    #[test]
+    fn finished_restore_survives_unknown_provider() {
+        // 构建一个不包含 Claude 的 session
+        let mut session = make_session_without(ProviderKind::Claude);
+        let kind = ProviderKind::Claude;
+
+        // 调试刷新中，但 provider_store 中该 provider 不存在
+        session.settings_ui.debug_selected_provider = Some(kind);
+        session.settings_ui.debug_refresh_active = true;
+        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Warn);
+
+        let outcome = RefreshOutcome {
+            kind,
+            result: RefreshResult::Failed {
+                error: "gone".to_string(),
+                error_kind: crate::models::ErrorKind::Unknown,
+            },
+        };
+        let mut effects = vec![];
+        apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+
+        // 关键：即使 provider 不在 store 中，恢复逻辑仍必须执行
+        assert!(!session.settings_ui.debug_refresh_active);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::RestoreLogLevel(log::LevelFilter::Warn)
+        )));
+    }
 }

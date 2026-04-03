@@ -31,13 +31,20 @@ pub fn init() -> Result<LoggingInit> {
             !(metadata.target().is_empty() && metadata.level() == log::Level::Error)
         })
         .format(|out, message, record| {
-            out.finish(format_args!(
+            let formatted = format!(
                 "{} [{}] {:<12} {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 record.level(),
                 record.target(),
                 message
-            ))
+            );
+            // 同步写入 Debug Tab 的日志捕获器（如果已启用）
+            crate::utils::log_capture::LogCapture::global().try_push(
+                record.level(),
+                record.target(),
+                &message.to_string(),
+            );
+            out.finish(format_args!("{}", formatted))
         })
         .chain(std::io::stdout())
         .chain(file_dispatch)
