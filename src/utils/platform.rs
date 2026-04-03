@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// 使用系统默认浏览器打开外部 URL
 ///
 /// 跨平台支持：macOS → `open`，Linux → `xdg-open`，Windows → `start`
@@ -10,6 +12,118 @@ pub fn open_url(url: &str) {
         "start"
     };
     let _ = std::process::Command::new(cmd).arg(url).spawn();
+}
+
+/// 在系统文件管理器中打开指定路径（显示该文件所在目录）
+///
+/// macOS: `open -R <path>`（在 Finder 中选中文件）
+/// Linux: `xdg-open <parent_dir>`
+pub fn open_path_in_finder(path: &Path) {
+    if cfg!(target_os = "macos") {
+        let _ = std::process::Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .spawn();
+    } else if cfg!(target_os = "linux") {
+        let dir = path.parent().unwrap_or(path);
+        let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+    }
+}
+
+/// 将文本写入系统剪贴板
+///
+/// macOS: `pbcopy`
+/// Linux: `xclip` 或 `xsel`
+pub fn copy_to_clipboard(text: &str) {
+    use std::io::Write;
+    #[cfg(target_os = "macos")]
+    {
+        match std::process::Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            Ok(mut child) => {
+                if let Some(stdin) = child.stdin.as_mut() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+                log::info!(target: "runtime", "copied {} bytes to clipboard", text.len());
+            }
+            Err(err) => {
+                log::warn!(target: "runtime", "failed to copy to clipboard: {}", err);
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let result = std::process::Command::new("xclip")
+            .args(["-selection", "clipboard"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .or_else(|_| {
+                std::process::Command::new("xsel")
+                    .arg("--clipboard")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+            });
+        match result {
+            Ok(mut child) => {
+                if let Some(stdin) = child.stdin.as_mut() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+                log::info!(target: "runtime", "copied {} bytes to clipboard", text.len());
+            }
+            Err(err) => {
+                log::warn!(target: "runtime", "failed to copy to clipboard: {}", err);
+            }
+        }
+    }
+}
+
+/// 获取操作系统版本信息字符串
+///
+/// macOS: `macOS 15.4 (aarch64)`
+/// Linux: `Linux (x86_64)`
+pub fn os_info() -> String {
+    let arch = std::env::consts::ARCH;
+
+    #[cfg(target_os = "macos")]
+    {
+        let version = std::process::Command::new("sw_vers")
+            .arg("-productVersion")
+            .output()
+            .ok()
+            .and_then(|o| {
+                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(v)
+                }
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        format!("macOS {} ({})", version, arch)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        format!("Linux ({})", arch)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        format!("{} ({})", std::env::consts::OS, arch)
+    }
+}
+
+/// 将文件大小格式化为人类可读的字符串
+pub fn format_file_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
 }
 
 /// 检测系统是否处于深色模式
@@ -42,8 +156,22 @@ mod tests {
     #[test]
     fn open_url_does_not_panic_on_valid_url() {
         // 仅验证不 panic，不验证是否真正打开（需要桌面环境）
-        // 使用 about:blank 避免实际打开浏览器在 CI 环境
-        // 注意：此测试在无桌面环境中会静默失败（spawn 返回 Err），这是预期行为
         open_url("about:blank");
+    }
+
+    #[test]
+    fn os_info_returns_non_empty() {
+        let info = os_info();
+        assert!(!info.is_empty());
+        assert!(info.contains(std::env::consts::ARCH));
+    }
+
+    #[test]
+    fn format_file_size_units() {
+        assert_eq!(format_file_size(500), "500 B");
+        assert_eq!(format_file_size(1024), "1.0 KB");
+        assert_eq!(format_file_size(1536), "1.5 KB");
+        assert_eq!(format_file_size(1048576), "1.0 MB");
+        assert_eq!(format_file_size(2621440), "2.5 MB");
     }
 }

@@ -146,6 +146,17 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
         CommonEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
+        CommonEffect::OpenLogDirectory => {
+            let log_path = state.borrow().log_path.clone();
+            if let Some(path) = log_path {
+                crate::utils::platform::open_path_in_finder(&path);
+            } else {
+                warn!(target: "runtime", "OpenLogDirectory: log_path not available");
+            }
+        }
+        CommonEffect::CopyToClipboard(text) => {
+            crate::utils::platform::copy_to_clipboard(&text);
+        }
     }
 }
 

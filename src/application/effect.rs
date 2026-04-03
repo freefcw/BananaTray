@@ -20,6 +20,8 @@ pub enum AppEffect {
         kind: DebugNotificationKind,
         with_sound: bool,
     },
+    OpenLogDirectory,
+    CopyToClipboard(String),
     QuitApp,
 }
 
@@ -38,6 +40,8 @@ pub enum CommonEffect {
         kind: DebugNotificationKind,
         with_sound: bool,
     },
+    OpenLogDirectory,
+    CopyToClipboard(String),
 }
 
 #[derive(Debug)]
@@ -73,6 +77,10 @@ pub fn route_effect(effect: AppEffect) -> RoutedEffect {
         AppEffect::SendDebugNotification { kind, with_sound } => {
             RoutedEffect::Common(CommonEffect::SendDebugNotification { kind, with_sound })
         }
+        AppEffect::OpenLogDirectory => RoutedEffect::Common(CommonEffect::OpenLogDirectory),
+        AppEffect::CopyToClipboard(text) => {
+            RoutedEffect::Common(CommonEffect::CopyToClipboard(text))
+        }
         AppEffect::QuitApp => RoutedEffect::QuitApp,
     }
 }
@@ -102,6 +110,14 @@ mod tests {
         assert!(matches!(
             route_effect(AppEffect::UpdateLogLevel("debug".to_string())),
             RoutedEffect::Common(CommonEffect::UpdateLogLevel(level)) if level == "debug"
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::OpenLogDirectory),
+            RoutedEffect::Common(CommonEffect::OpenLogDirectory)
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::CopyToClipboard("hello".to_string())),
+            RoutedEffect::Common(CommonEffect::CopyToClipboard(text)) if text == "hello"
         ));
     }
 

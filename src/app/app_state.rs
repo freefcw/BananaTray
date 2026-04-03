@@ -3,6 +3,7 @@ use crate::models::AppSettings;
 use crate::refresh::RefreshRequest;
 use log::{debug, warn};
 use smol::channel::Sender;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 // ============================================================================
@@ -27,10 +28,12 @@ pub struct AppState {
     pub refresh_tx: Sender<RefreshRequest>,
     /// 当前 AppView 的弱引用，用于事件泵通知 UI 刷新
     pub view_entity: Option<gpui::WeakEntity<super::AppView>>,
+    /// 日志文件路径（Debug Tab 展示用）
+    pub log_path: Option<PathBuf>,
 }
 
 impl AppState {
-    pub fn new(refresh_tx: Sender<RefreshRequest>) -> Self {
+    pub fn new(refresh_tx: Sender<RefreshRequest>, log_path: Option<PathBuf>) -> Self {
         debug!(target: "app", "initializing AppState");
         let settings = crate::settings_store::load().unwrap_or_else(|err| {
             warn!(target: "settings", "failed to load saved settings: {err}");
@@ -53,6 +56,7 @@ impl AppState {
             session,
             refresh_tx,
             view_entity: None,
+            log_path,
         }
     }
 

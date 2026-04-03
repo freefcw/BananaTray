@@ -28,6 +28,8 @@ pub enum AppAction {
     OpenUrl(String),
     UpdateLogLevel(String),
     SendDebugNotification(DebugNotificationKind),
+    OpenLogDirectory,
+    CopyToClipboard(String),
     QuitApp,
 }
 
