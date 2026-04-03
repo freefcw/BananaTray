@@ -55,6 +55,7 @@ impl AppSession {
                 active_tab,
                 last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
                 generation: 0,
+                prev_active_tab: None,
             },
             settings_ui: SettingsUiState {
                 active_tab: SettingsTab::General,
@@ -121,11 +122,14 @@ pub struct NavigationState {
     pub last_provider_kind: ProviderKind,
     /// 每次 switch_to 递增，用于让进度条动画在切换时重播
     pub generation: u64,
+    /// 切换前的 tab，用于导航栏滑块动画的起点
+    pub prev_active_tab: Option<NavTab>,
 }
 
 impl NavigationState {
     /// 切换到指定 tab，若为 Provider 则同步 last_provider_kind
     pub fn switch_to(&mut self, tab: NavTab) {
+        self.prev_active_tab = Some(self.active_tab);
         self.generation += 1;
         self.active_tab = tab;
         if let NavTab::Provider(kind) = tab {
