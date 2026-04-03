@@ -5,11 +5,36 @@ use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
+use std::time::Duration;
 
 /// 两侧指示器区域宽度
 const INDICATOR_WIDTH: f32 = 14.0;
 /// 滚动偏移量超过此阈值才显示指示器
 const SCROLL_THRESHOLD: f32 = 2.0;
+/// 滑块动画时长 (ms)
+const SLIDER_ANIMATION_MS: u64 = 450;
+
+/// 果冻缓动：在 animator 闭包内使用，将 0→1 的 delta 映射成带过冲的值。
+/// 前 60% 时间冲到目标的 ~106%，后 40% 回弹到 100%。
+fn jelly_overshoot(t: f32) -> f32 {
+    let overshoot = 1.06;
+    if t < 0.6 {
+        let p = t / 0.6;
+        // ease-out-cubic 到 overshoot
+        let ease = 1.0 - (1.0 - p).powi(3);
+        ease * overshoot
+    } else {
+        let p = (t - 0.6) / 0.4;
+        // ease-in-out 从 overshoot 回到 1.0
+        let ease = p * p * (3.0 - 2.0 * p); // smoothstep
+        overshoot + (1.0 - overshoot) * ease
+    }
+}
+
+/// 线性插值
+fn lerp(a: Pixels, b: Pixels, t: f32) -> Pixels {
+    a + (b - a) * t
+}
 
 impl AppView {
     pub(crate) fn render_top_nav(
@@ -21,6 +46,8 @@ impl AppView {
         let state_ref = self.state.borrow();
         let settings = state_ref.session.settings.clone();
         let providers = state_ref.session.provider_store.providers.clone();
+        let generation = state_ref.session.nav.generation;
+        let prev_tab = state_ref.session.nav.prev_active_tab;
         drop(state_ref);
 
         let provider_order = settings.ordered_providers();
@@ -37,6 +64,11 @@ impl AppView {
                 })
             })
             .collect();
+
+        // 计算 active / prev pill 在 nav_items 中的索引
+        let active_index = nav_items.iter().position(|(_, _, tab)| *tab == active_tab);
+        let prev_index =
+            prev_tab.and_then(|pt| nav_items.iter().position(|(_, _, tab)| *tab == pt));
 
         let border_color = theme.border_subtle;
 
@@ -58,6 +90,40 @@ impl AppView {
         let left_target = Self::find_left_target(&self.nav_scroll_handle);
         // 找到右侧第一个被裁剪/隐藏的 item 索引
         let right_target = Self::find_right_target(&self.nav_scroll_handle);
+
+        // ── 滑块位置计算 ──
+        // bounds_for_item 返回的是 layout bounds（内容空间，不含 scroll offset）。
+        // 滑块放在 scroll 容器的外层 wrapper 中（overflow_hidden + relative），
+        // 需要：1) 减去 scroll 容器的 left 得到内容空间中的相对坐标
+        //       2) 加上 scroll offset.x 转换为视觉位置
+        let scroll_bounds = self.nav_scroll_handle.bounds();
+        let scroll_left = scroll_bounds.left();
+        let scroll_offset_x = offset.x; // 已在上面获取（负值=向左滚动过）
+
+        // 将 layout bounds 转换为滑块在 wrapper 中的视觉坐标 (left, width, height)
+        let to_visual = |b: Bounds<Pixels>| -> (Pixels, Pixels, Pixels) {
+            (
+                b.left() - scroll_left + scroll_offset_x,
+                b.size.width,
+                b.size.height,
+            )
+        };
+
+        // 滑块的目标位置（当前 active pill）
+        let target_rect = active_index
+            .and_then(|ix| self.nav_scroll_handle.bounds_for_item(ix))
+            .map(to_visual);
+
+        // 滑块的起始位置（上一个 active pill）
+        let from_rect = prev_index
+            .and_then(|ix| self.nav_scroll_handle.bounds_for_item(ix))
+            .map(to_visual);
+
+        let slider_bg = theme.nav_pill_active_bg;
+
+        // ── 构建滑块元素 ──
+        let slider = target_rect
+            .map(|_| self.render_nav_slider(target_rect, from_rect, generation, slider_bg));
 
         div()
             .w_full()
@@ -95,20 +161,28 @@ impl AppView {
                     }),
             )
             .child(
-                // ── 中间滚动区域 ──
-                div().flex_1().min_w_0().overflow_hidden().child(
-                    div()
-                        .id("nav-provider-scroll")
-                        .overflow_x_scroll()
-                        .scrollbar_width(px(0.0))
-                        .flex()
-                        .items_center()
-                        .gap(px(2.0))
-                        .track_scroll(&self.nav_scroll_handle)
-                        .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                            self.render_nav_pill(icon, label, tab, active_tab, cx)
-                        })),
-                ),
+                // ── 中间区域：relative wrapper + absolute 滑块 + scroll 容器 ──
+                // 滑块放在 wrapper 内（不在 scroll 容器内），避免影响 scroll children 索引
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .relative()
+                    // 滑块背景层（absolute，z-order 在 scroll 之下）
+                    .when_some(slider, |el, s| el.child(s))
+                    .child(
+                        div()
+                            .id("nav-provider-scroll")
+                            .overflow_x_scroll()
+                            .scrollbar_width(px(0.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(2.0))
+                            .track_scroll(&self.nav_scroll_handle)
+                            .children(nav_items.into_iter().map(|(icon, label, tab)| {
+                                self.render_nav_pill(icon, label, tab, active_tab, cx)
+                            })),
+                    ),
             )
             .child(
                 // ── 右侧箭头指示器 ──
@@ -138,6 +212,50 @@ impl AppView {
                         )
                     }),
             )
+    }
+
+    /// 渲染导航栏滑块背景（absolute 定位，带果冻动画）
+    fn render_nav_slider(
+        &self,
+        target_rect: Option<(Pixels, Pixels, Pixels)>,
+        from_rect: Option<(Pixels, Pixels, Pixels)>,
+        generation: u64,
+        bg: Hsla,
+    ) -> impl IntoElement {
+        let (to_left, to_width, to_height) = target_rect.unwrap();
+
+        // 如果有 from_rect 且和 target 不同 → 播放动画
+        // 否则直接定位到 target（无动画）
+        let should_animate = from_rect
+            .map(|(fl, fw, _)| (fl - to_left).abs() > px(1.0) || (fw - to_width).abs() > px(1.0))
+            .unwrap_or(false);
+
+        let base = div()
+            .absolute()
+            .top(px(0.0))
+            .h(to_height)
+            .rounded(px(8.0))
+            .bg(bg);
+
+        if should_animate {
+            let (from_left, from_width, _) = from_rect.unwrap();
+
+            base.with_animation(
+                ElementId::Name(format!("nav-slider-{}", generation).into()),
+                Animation::new(Duration::from_millis(SLIDER_ANIMATION_MS)),
+                move |el, delta| {
+                    // delta: 0.0 → 1.0 (linear)
+                    // 应用果冻过冲映射
+                    let t = jelly_overshoot(delta);
+                    let left = lerp(from_left, to_left, t);
+                    let width = lerp(from_width, to_width, t);
+                    el.left(left).w(width)
+                },
+            )
+            .into_any_element()
+        } else {
+            base.left(to_left).w(to_width).into_any_element()
+        }
     }
 
     /// 找到当前可见区域左边缘之前的一个 item（向左滚动目标）
@@ -183,7 +301,8 @@ impl AppView {
         }
     }
 
-    /// Lumina Bar 风格的 pill tab：水平 icon + label，选中时高亮背景
+    /// Lumina Bar 风格的 pill tab：水平 icon + label
+    /// 选中状态的背景由滑块提供，pill 本身始终透明背景
     fn render_nav_pill(
         &self,
         icon_path: String,
@@ -196,20 +315,10 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let entity = cx.entity().clone();
 
-        let (bg, text_color, icon_color) = if is_active {
-            (
-                theme.nav_pill_active_bg,
-                theme.nav_pill_active_text,
-                theme.nav_pill_active_text,
-            )
+        let (text_color, icon_color) = if is_active {
+            (theme.nav_pill_active_text, theme.nav_pill_active_text)
         } else {
-            (transparent_black(), theme.text_muted, theme.text_muted)
-        };
-
-        let border_color = if is_active {
-            theme.nav_pill_active_bg
-        } else {
-            transparent_black()
+            (theme.text_muted, theme.text_muted)
         };
 
         div()
@@ -220,9 +329,7 @@ impl AppView {
             .py(px(6.0))
             .rounded(px(8.0))
             .cursor_pointer()
-            .bg(bg)
-            .border_1()
-            .border_color(border_color)
+            // pill 本身不设背景，由滑块层提供
             .hover(|style| {
                 if is_active {
                     style
