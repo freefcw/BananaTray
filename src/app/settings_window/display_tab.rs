@@ -1,5 +1,6 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
+use crate::app::widgets::{render_segmented_control, SegmentedSize};
 use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme};
 use crate::runtime;
@@ -39,15 +40,28 @@ impl SettingsView {
                                     .text_color(theme.text_primary)
                                     .child(t!("settings.theme").to_string()),
                             )
-                            .child(self.render_segmented_control(
-                                &[
-                                    ("theme.system", AppTheme::System),
-                                    ("theme.light", AppTheme::Light),
-                                    ("theme.dark", AppTheme::Dark),
-                                ],
-                                settings.theme,
-                                theme,
-                            )),
+                            .child({
+                                let state = self.state.clone();
+                                let options: Vec<(String, AppTheme)> = vec![
+                                    (t!("theme.system").to_string(), AppTheme::System),
+                                    (t!("theme.light").to_string(), AppTheme::Light),
+                                    (t!("theme.dark").to_string(), AppTheme::Dark),
+                                ];
+                                render_segmented_control(
+                                    &options,
+                                    &settings.theme,
+                                    SegmentedSize::Full,
+                                    theme,
+                                    move |variant: AppTheme, window, cx| {
+                                        runtime::dispatch_in_window(
+                                            &state,
+                                            AppAction::UpdateSetting(SettingChange::Theme(variant)),
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )
+                            }),
                     )
                     // Language 选择器
                     .child(
@@ -61,7 +75,31 @@ impl SettingsView {
                                     .text_color(theme.text_primary)
                                     .child(t!("settings.language").to_string()),
                             )
-                            .child(self.render_language_segmented(&settings.language, theme)),
+                            .child({
+                                let state = self.state.clone();
+                                let options: Vec<(String, String)> =
+                                    crate::i18n::SUPPORTED_LANGUAGES
+                                        .iter()
+                                        .map(|&(code, name_key)| {
+                                            (t!(name_key).to_string(), code.to_string())
+                                        })
+                                        .collect();
+                                let current_lang = settings.language.clone();
+                                render_segmented_control(
+                                    &options,
+                                    &current_lang,
+                                    SegmentedSize::Full,
+                                    theme,
+                                    move |code: String, window, cx| {
+                                        runtime::dispatch_in_window(
+                                            &state,
+                                            AppAction::UpdateSetting(SettingChange::Language(code)),
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )
+                            }),
                     ),
             )
             // ═══════ TOOLBAR ═══════
@@ -144,128 +182,5 @@ impl SettingsView {
                     }
                 },
             )))
-    }
-
-    // ========================================================================
-    // Segmented Control — 设计稿风格的分段选择器
-    // ========================================================================
-
-    /// Theme 分段选择器 (SYSTEM / LIGHT / DARK)
-    fn render_segmented_control(
-        &self,
-        options: &[(&str, AppTheme)],
-        current: AppTheme,
-        theme: &Theme,
-    ) -> Div {
-        let mut control = div()
-            .w_full()
-            .flex()
-            .rounded(px(8.0))
-            .bg(theme.bg_subtle)
-            .border_1()
-            .border_color(theme.border_subtle)
-            .overflow_hidden();
-
-        for (name_key, variant) in options {
-            let is_active = current == *variant;
-            let state = self.state.clone();
-            let variant = *variant;
-
-            control = control.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(8.0))
-                    .rounded(px(7.0))
-                    .bg(if is_active {
-                        theme.nav_pill_active_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .text_size(px(12.0))
-                    .font_weight(if is_active {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if is_active {
-                        theme.element_active
-                    } else {
-                        theme.text_secondary
-                    })
-                    .cursor_pointer()
-                    .child(t!(*name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state,
-                            AppAction::UpdateSetting(SettingChange::Theme(variant)),
-                            window,
-                            cx,
-                        );
-                    }),
-            );
-        }
-
-        control
-    }
-
-    /// Language 分段选择器
-    fn render_language_segmented(&self, current: &str, theme: &Theme) -> Div {
-        use crate::i18n::SUPPORTED_LANGUAGES;
-
-        let mut control = div()
-            .w_full()
-            .flex()
-            .rounded(px(8.0))
-            .bg(theme.bg_subtle)
-            .border_1()
-            .border_color(theme.border_subtle)
-            .overflow_hidden();
-
-        for &(code, name_key) in SUPPORTED_LANGUAGES {
-            let is_active = current == code;
-            let state = self.state.clone();
-            let code_owned = code.to_string();
-
-            control = control.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(8.0))
-                    .rounded(px(7.0))
-                    .bg(if is_active {
-                        theme.nav_pill_active_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .text_size(px(12.0))
-                    .font_weight(if is_active {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .text_color(if is_active {
-                        theme.element_active
-                    } else {
-                        theme.text_secondary
-                    })
-                    .cursor_pointer()
-                    .child(t!(name_key).to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
-                            &state,
-                            AppAction::UpdateSetting(SettingChange::Language(code_owned.clone())),
-                            window,
-                            cx,
-                        );
-                    }),
-            );
-        }
-
-        control
     }
 }

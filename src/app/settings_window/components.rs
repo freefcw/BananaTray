@@ -1,5 +1,5 @@
 use super::SettingsView;
-use crate::app::widgets::{render_svg_icon, render_toggle_switch};
+use crate::app::widgets::{render_icon_row, render_toggle_switch};
 use crate::theme::Theme;
 use gpui::*;
 
@@ -37,11 +37,12 @@ pub(super) fn render_divider(theme: &Theme) -> Div {
 }
 
 // ============================================================================
-// 带彩色圆形图标的设置行（设计稿核心组件）
+// 带彩色圆形图标的设置行（基于公共 render_icon_row 组件）
 // ============================================================================
 
 impl SettingsView {
     /// 渲染带彩色圆形背景图标的开关行
+    /// 快捷函数：render_icon_row + render_toggle_switch 组合
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_icon_switch_row<F>(
         icon_path: &'static str,
@@ -56,55 +57,22 @@ impl SettingsView {
     where
         F: Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
     {
-        div()
-            .flex()
-            .items_center()
-            .gap(px(12.0))
-            .px(px(14.0))
-            .py(px(12.0))
-            // 彩色圆形图标
-            .child(
-                div()
-                    .w(px(36.0))
-                    .h(px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(icon_bg)
-                    .flex_shrink_0()
-                    .child(render_svg_icon(icon_path, px(18.0), icon_color)),
-            )
-            // 标题 + 描述
-            .child(
-                div()
-                    .flex_col()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(title.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_muted)
-                            .child(description.to_string()),
-                    ),
-            )
-            // 开关
-            .child(
-                render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
-                    .flex_shrink_0()
-                    .cursor_pointer()
-                    .on_mouse_down(MouseButton::Left, on_click),
-            )
+        render_icon_row(
+            icon_path,
+            icon_color,
+            icon_bg,
+            title,
+            description,
+            theme,
+            render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
+                .flex_shrink_0()
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, on_click),
+        )
     }
 
     /// 渲染带彩色圆形背景图标的下拉行
+    /// 快捷函数：render_icon_row + 自定义下拉控件 组合
     pub(super) fn render_icon_dropdown_row(
         icon_path: &'static str,
         icon_color: Hsla,
@@ -114,46 +82,14 @@ impl SettingsView {
         theme: &Theme,
         dropdown: Div,
     ) -> Div {
-        div()
-            .flex()
-            .items_center()
-            .gap(px(12.0))
-            .px(px(14.0))
-            .py(px(12.0))
-            // 彩色圆形图标
-            .child(
-                div()
-                    .w(px(36.0))
-                    .h(px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(icon_bg)
-                    .flex_shrink_0()
-                    .child(render_svg_icon(icon_path, px(18.0), icon_color)),
-            )
-            // 标题 + 描述
-            .child(
-                div()
-                    .flex_col()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
-                            .child(title.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_muted)
-                            .child(description.to_string()),
-                    ),
-            )
-            // 下拉控件
-            .child(dropdown)
+        render_icon_row(
+            icon_path,
+            icon_color,
+            icon_bg,
+            title,
+            description,
+            theme,
+            dropdown,
+        )
     }
 }

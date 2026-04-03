@@ -1,17 +1,28 @@
+mod action_button;
 #[allow(dead_code)]
 mod cadence_dropdown;
 mod card;
 mod checkbox;
+mod colored_icon;
 mod icon;
+mod icon_row;
+mod info_row;
 mod quota_bar;
+mod segmented_control;
 mod tab;
 mod toggle;
 mod tooltip;
 
+pub(crate) use action_button::{render_action_button, ButtonVariant};
 pub(crate) use card::render_detail_section_title;
 pub(crate) use checkbox::render_checkbox;
+#[allow(unused_imports)]
+pub(crate) use colored_icon::{render_colored_icon, render_colored_icon_sized};
 pub(crate) use icon::{render_footer_glyph, render_svg_icon};
+pub(crate) use icon_row::render_icon_row;
+pub(crate) use info_row::{render_info_cell, render_kv_info_row};
 pub(crate) use quota_bar::render_quota_bar;
+pub(crate) use segmented_control::{render_segmented_control, SegmentedSize};
 pub(crate) use toggle::render_toggle_switch;
 #[allow(unused_imports)]
 pub(crate) use tooltip::{with_multiline_tooltip, with_tooltip};

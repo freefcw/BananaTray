@@ -1,5 +1,5 @@
 use super::super::SettingsView;
-use crate::app::widgets::{render_detail_section_title, render_svg_icon};
+use crate::app::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use crate::application::{
     AppAction, ProviderSettingsMode, SettingsProviderDetailViewState, SettingsProviderStatusKind,
     SettingsProviderUsageViewState,
@@ -121,30 +121,6 @@ fn render_detail_action_buttons(
                     cx,
                 );
             }),
-        )
-}
-
-/// 渲染单个信息单元格（标签 + 值），水平排列：label  value
-/// 设计稿样式：一行内 label(灰) value(亮) label(灰) value(亮)
-fn render_info_cell(label: &str, value: &str, value_color: Hsla, theme: &Theme) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .flex_1()
-        .child(
-            div()
-                .text_size(px(12.5))
-                .text_color(theme.text_muted)
-                .flex_shrink_0()
-                .child(label.to_string()),
-        )
-        .child(
-            div()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(value_color)
-                .child(value.to_string()),
         )
 }
 
