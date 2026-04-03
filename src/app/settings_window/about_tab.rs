@@ -13,7 +13,12 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_REPO: &str = "https://github.com/freefcw/BananaTray";
 const APP_WEBSITE: &str = "https://github.com/freefcw/BananaTray";
 const APP_LICENSE: &str = "MIT License";
-const APP_AUTHOR: &str = "BananaTray Team";
+const APP_AUTHOR: &str = "freefcw";
+const APP_AUTHOR_URL: &str = "https://github.com/freefcw";
+const GIT_HASH: &str = match option_env!("BANANATRAY_GIT_HASH") {
+    Some(h) => h,
+    None => "unknown",
+};
 
 impl SettingsView {
     /// About Tab 入口
@@ -244,10 +249,18 @@ impl SettingsView {
             .pt(px(2.0))
             .pb(px(8.0))
             .child(Self::render_info_row(
-                &t!("about.developed_by"),
-                APP_AUTHOR,
+                &t!("about.build_version"),
+                GIT_HASH,
                 None,
                 theme.text_secondary,
+                theme,
+            ))
+            .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
+            .child(Self::render_info_row(
+                &t!("about.developed_by"),
+                APP_AUTHOR,
+                Some(APP_AUTHOR_URL),
+                link_color,
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
