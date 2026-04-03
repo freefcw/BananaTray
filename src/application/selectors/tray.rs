@@ -3,7 +3,7 @@
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
 use super::*;
-use crate::app_state::AppSession;
+use crate::app_state::{provider_panel_flags, AppSession};
 use crate::models::{ConnectionStatus, ErrorKind, NavTab, ProviderKind, ProviderStatus};
 use rust_i18n::t;
 
@@ -80,8 +80,28 @@ pub fn provider_detail_view_state(
         };
     };
 
-    let show_dashboard =
-        session.settings.show_dashboard_button && !provider.dashboard_url().is_empty();
+    let flags = provider_panel_flags(&session.settings, &provider);
+
+    let account = if flags.show_account_info {
+        provider
+            .account_email
+            .as_ref()
+            .map(|email| AccountInfoViewState {
+                email: email.clone(),
+                tier: provider.account_tier.clone(),
+                updated_text: provider.format_last_updated(),
+                dashboard_url: if flags.has_dashboard_url {
+                    provider.dashboard_url().to_string()
+                } else {
+                    String::new()
+                },
+            })
+    } else {
+        None
+    };
+
+    let show_dashboard = flags.show_dashboard_row;
+
     let is_refreshing = provider.connection == ConnectionStatus::Refreshing;
     let is_error = provider.connection == ConnectionStatus::Error;
     let has_quotas = !provider.quotas.is_empty();
@@ -104,6 +124,7 @@ pub fn provider_detail_view_state(
     ProviderDetailViewState::Panel(ProviderPanelViewState {
         kind,
         show_dashboard,
+        account,
         body,
     })
 }
@@ -168,5 +189,82 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
             t!("provider.connect_to_track", name = provider.display_name()).to_string()
         }
         ConnectionStatus::Connected => t!("provider.no_usage_details").to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::test_helpers::{
+        make_test_provider as make_provider, setup_test_locale as setup_locale,
+    };
+    use crate::models::{AppSettings, ConnectionStatus, QuotaInfo};
+
+    fn make_session_with_provider(settings: AppSettings, provider: ProviderStatus) -> AppSession {
+        let kind = provider.kind;
+        let session = AppSession::new(settings, vec![provider]);
+        // new() 自动选择第一个启用的 provider 为 active tab
+        assert!(matches!(
+            session.nav.active_tab,
+            NavTab::Provider(k) if k == kind
+        ));
+        session
+    }
+
+    // ── Account Info 冒烟测试 ─────────────────────────────────
+    // 边界组合（setting off / no email / dashboard off）已在
+    // app_state::tests::panel_flags_* 单元测试中覆盖，
+    // 这里只验证 selector 正确集成 flags → ViewModel 的端到端路径。
+
+    #[test]
+    fn account_card_assembled_when_email_and_setting_on() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+        settings.show_account_info = true;
+        settings.show_dashboard_button = true;
+
+        let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.account_email = Some("test@example.com".to_string());
+        provider.account_tier = Some("Pro".to_string());
+        provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+        let session = make_session_with_provider(settings, provider);
+        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+
+        match view {
+            ProviderDetailViewState::Panel(panel) => {
+                let account = panel.account.expect("account should be Some");
+                assert_eq!(account.email, "test@example.com");
+                assert_eq!(account.tier, Some("Pro".to_string()));
+                assert!(!account.dashboard_url.is_empty());
+                // 账户卡片存在时，dashboard 行应隐藏（互斥）
+                assert!(!panel.show_dashboard);
+            }
+            _ => panic!("expected Panel variant"),
+        }
+    }
+
+    #[test]
+    fn no_account_card_when_email_absent() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+        settings.show_account_info = true;
+        settings.show_dashboard_button = true;
+
+        let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+        let session = make_session_with_provider(settings, provider);
+        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+
+        match view {
+            ProviderDetailViewState::Panel(panel) => {
+                assert!(panel.account.is_none());
+                assert!(panel.show_dashboard);
+            }
+            _ => panic!("expected Panel variant"),
+        }
     }
 }

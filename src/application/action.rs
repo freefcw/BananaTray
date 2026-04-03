@@ -54,6 +54,7 @@ pub enum SettingChange {
     ToggleShowDashboardButton,
     ToggleShowRefreshButton,
     ToggleShowDebugTab,
+    ToggleShowAccountInfo,
     Theme(AppTheme),
     Language(String),
     RefreshCadence(Option<u64>),

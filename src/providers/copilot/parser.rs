@@ -10,6 +10,13 @@ struct CopilotInternalResponse {
     quota_snapshots: Option<QuotaSnapshots>,
 }
 
+/// GitHub /user API 响应（只取需要的字段）
+#[derive(Debug, Deserialize)]
+struct GitHubUserResponse {
+    login: Option<String>,
+    email: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct QuotaSnapshots {
     premium_interactions: Option<InteractionQuota>,
@@ -24,7 +31,20 @@ struct InteractionQuota {
     unlimited: Option<bool>,
 }
 
-pub(super) fn parse_user_info_response(body: &str, status_code: &str) -> Result<RefreshData> {
+/// 从 /user API 响应中提取账户标识（优先 email，其次 login）
+pub(super) fn parse_github_user(body: &str) -> Option<String> {
+    let resp: GitHubUserResponse = serde_json::from_str(body).ok()?;
+    // 优先用 email，没有则用 login（GitHub 用户名）
+    resp.email
+        .filter(|e| !e.is_empty())
+        .or(resp.login.filter(|l| !l.is_empty()))
+}
+
+pub(super) fn parse_user_info_response(
+    body: &str,
+    status_code: &str,
+    account_name: Option<String>,
+) -> Result<RefreshData> {
     match status_code {
         "401" => {
             bail!("GitHub token is invalid or expired. Update your token in Settings → Providers.")
@@ -78,7 +98,7 @@ pub(super) fn parse_user_info_response(body: &str, status_code: &str) -> Result<
 
     Ok(RefreshData::with_account(
         vec![quota],
-        None,
+        account_name,
         Some(plan_label),
     ))
 }
@@ -99,7 +119,7 @@ mod tests {
     fn test_parse_unlimited_plan() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"pro","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":300,"percent_remaining":100,"unlimited":true}}}"#;
-        let data = parse_user_info_response(body, "200").unwrap();
+        let data = parse_user_info_response(body, "200", None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
         assert_eq!(data.quotas.len(), 1);
         assert_eq!(data.quotas[0].reset_at.as_deref(), Some("Unlimited"));
@@ -109,7 +129,7 @@ mod tests {
     fn test_parse_limited_plan() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"business","quota_snapshots":{"premium_interactions":{"entitlement":500,"remaining":125,"percent_remaining":25,"unlimited":false}}}"#;
-        let data = parse_user_info_response(body, "200").unwrap();
+        let data = parse_user_info_response(body, "200", None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Business"));
         assert_eq!(data.quotas[0].used, 375.0);
         assert_eq!(data.quotas[0].limit, 500.0);
@@ -117,7 +137,42 @@ mod tests {
 
     #[test]
     fn test_parse_404_error() {
-        let err = parse_user_info_response("{}", "404").unwrap_err();
+        let err = parse_user_info_response("{}", "404", None).unwrap_err();
         assert!(err.to_string().contains("Copilot not enabled"));
+    }
+
+    #[test]
+    fn test_parse_with_account_name() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let body = r#"{"copilot_plan":"pro","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":300,"percent_remaining":100,"unlimited":true}}}"#;
+        let data = parse_user_info_response(body, "200", Some("octocat".to_string())).unwrap();
+        assert_eq!(data.account_email.as_deref(), Some("octocat"));
+        assert_eq!(data.account_tier.as_deref(), Some("Pro"));
+    }
+
+    #[test]
+    fn test_parse_github_user_with_email() {
+        let body = r#"{"login":"octocat","email":"octocat@github.com"}"#;
+        assert_eq!(
+            parse_github_user(body),
+            Some("octocat@github.com".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_github_user_fallback_to_login() {
+        let body = r#"{"login":"octocat","email":null}"#;
+        assert_eq!(parse_github_user(body), Some("octocat".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_user_empty_email_fallback() {
+        let body = r#"{"login":"octocat","email":""}"#;
+        assert_eq!(parse_github_user(body), Some("octocat".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_user_invalid_json() {
+        assert_eq!(parse_github_user("not json"), None);
     }
 }
