@@ -154,6 +154,6 @@ mod tests {
         assert_eq!(quotas.len(), 2);
         assert_eq!(quotas[0].used, 33.0);
         assert_eq!(quotas[1].used, 66.0);
-        assert!(quotas[0].reset_at.is_some());
+        assert!(quotas[0].detail_text.is_some());
     }
 }

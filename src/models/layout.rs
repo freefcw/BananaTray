@@ -8,9 +8,9 @@
 ///
 /// ## 重要：GPUI 空字符串渲染行为
 ///
-/// 当 `reset_at = None` 时，第4行渲染 `String::new()` 作为 text child，
+/// 当 `detail_text = None` 时，第4行渲染 `String::new()` 作为 text child，
 /// GPUI 仍然会为 `text_size(11)` 的 div 分配行高空间。
-/// 因此卡片高度与 `reset_at` 是否存在 **无关**，始终使用统一的 CARD_HEIGHT。
+/// 因此卡片高度与 `detail_text` 是否存在 **无关**，始终使用统一的 CARD_HEIGHT。
 pub struct PopupLayout;
 
 impl PopupLayout {

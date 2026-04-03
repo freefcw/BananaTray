@@ -81,8 +81,8 @@ pub struct QuotaInfo {
     /// 配额类型
     #[serde(default = "default_quota_type")]
     pub quota_type: QuotaType,
-    /// 重置时间描述（如 "Resets in 2h 15m"）
-    pub reset_at: Option<String>,
+    /// 第四行详情文本（由 Provider 提供，如重置时间、额度详情等）
+    pub detail_text: Option<String>,
 }
 
 fn default_quota_type() -> QuotaType {
@@ -96,7 +96,7 @@ impl QuotaInfo {
             limit,
             label: label.into(),
             quota_type: QuotaType::General,
-            reset_at: None,
+            detail_text: None,
         }
     }
 
@@ -106,14 +106,14 @@ impl QuotaInfo {
         used: f64,
         limit: f64,
         quota_type: QuotaType,
-        reset_at: Option<String>,
+        detail_text: Option<String>,
     ) -> Self {
         Self {
             used,
             limit,
             label: label.into(),
             quota_type,
-            reset_at,
+            detail_text,
         }
     }
 

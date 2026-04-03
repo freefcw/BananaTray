@@ -237,7 +237,10 @@ Overages: Disabled
         assert!((credits.used - 12.39).abs() < 0.01);
         assert!((credits.limit - 50.0).abs() < 0.01);
         assert_eq!(credits.quota_type, QuotaType::General);
-        assert_eq!(credits.reset_at.as_deref(), Some("Resets on 2026-04-01"));
+        assert_eq!(
+            credits.detail_text.as_deref(),
+            Some("⏱ Resets on 2026-04-01")
+        );
     }
 
     #[test]
@@ -247,7 +250,10 @@ Overages: Disabled
         assert_eq!(quotas.len(), 1);
         assert!((quotas[0].used - 25.50).abs() < 0.01);
         assert!((quotas[0].limit - 100.0).abs() < 0.01);
-        assert_eq!(quotas[0].reset_at.as_deref(), Some("Resets on 2026-05-15"));
+        assert_eq!(
+            quotas[0].detail_text.as_deref(),
+            Some("⏱ Resets on 2026-05-15")
+        );
     }
 
     #[test]
@@ -256,7 +262,7 @@ Overages: Disabled
             "Estimated Usage | resets on 03/01 | KIRO FREE\nCredits (5.0 of 50 covered in plan)\n";
         let quotas = KiroProvider::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 1);
-        assert_eq!(quotas[0].reset_at.as_deref(), Some("Resets on 03/01"));
+        assert_eq!(quotas[0].detail_text.as_deref(), Some("⏱ Resets on 03/01"));
     }
 
     #[test]
@@ -269,14 +275,14 @@ Overages: Disabled
         assert!((bonus.used - 122.54).abs() < 0.01);
         assert!((bonus.limit - 500.0).abs() < 0.01);
         assert_eq!(bonus.quota_type, QuotaType::Credit);
-        assert_eq!(bonus.reset_at.as_deref(), Some("Expires in 29 days"));
+        assert_eq!(bonus.detail_text.as_deref(), Some("⏱ Expires in 29 days"));
 
         let regular = &quotas[1];
         assert_eq!(regular.label, "Credits");
         assert!((regular.used - 0.0).abs() < 0.01);
         assert!((regular.limit - 50.0).abs() < 0.01);
         assert_eq!(regular.quota_type, QuotaType::General);
-        assert_eq!(regular.reset_at.as_deref(), Some("Resets on 03/01"));
+        assert_eq!(regular.detail_text.as_deref(), Some("⏱ Resets on 03/01"));
     }
 
     #[test]
@@ -287,7 +293,10 @@ Overages: Disabled
         assert_eq!(quotas[0].label, "Bonus Credits");
         assert!((quotas[0].used - 10.5).abs() < 0.01);
         assert!((quotas[0].limit - 100.0).abs() < 0.01);
-        assert_eq!(quotas[0].reset_at.as_deref(), Some("Expires in 5 days"));
+        assert_eq!(
+            quotas[0].detail_text.as_deref(),
+            Some("⏱ Expires in 5 days")
+        );
     }
 
     #[test]

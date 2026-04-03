@@ -95,11 +95,11 @@ impl ClaudeCliProbe {
 
             let section_text = lines.join("\n");
 
-            // 提取重置时间
+            // 提取重置时间（CLI 直接输出，不经过 format_countdown，需手动加 ⏱ 前缀）
             let reset_at = lines.iter().find_map(|line| {
                 RESET_RE
                     .captures(line)
-                    .map(|caps| caps[1].trim().to_string())
+                    .map(|caps| format!("⏱ Resets {}", caps[1].trim()))
             });
 
             // 对于 Credit 类型，优先尝试提取美元金额（可能没有百分比）
