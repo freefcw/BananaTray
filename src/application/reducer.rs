@@ -171,6 +171,11 @@ fn apply_setting_change(
             session.settings.tray_icon_style = style;
             effects.push(AppEffect::ApplyTrayIcon(style));
         }
+        SettingChange::SetQuotaDisplayMode(mode) => {
+            session.settings.quota_display_mode = mode;
+            effects.push(AppEffect::PersistSettings);
+            push_render(effects);
+        }
     }
 
     effects.push(AppEffect::PersistSettings);
@@ -576,6 +581,55 @@ mod tests {
             AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Monochrome)),
         );
         assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Monochrome);
+    }
+
+    // ── SetQuotaDisplayMode ────────────────────────────
+
+    #[test]
+    fn set_quota_display_mode_updates_setting_and_produces_effects() {
+        use crate::models::QuotaDisplayMode;
+
+        let mut session = make_session();
+        assert_eq!(
+            session.settings.quota_display_mode,
+            QuotaDisplayMode::Remaining
+        );
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(QuotaDisplayMode::Used)),
+        );
+
+        assert_eq!(session.settings.quota_display_mode, QuotaDisplayMode::Used);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn set_quota_display_mode_round_trip() {
+        use crate::models::QuotaDisplayMode;
+
+        let mut session = make_session();
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(QuotaDisplayMode::Used)),
+        );
+        assert_eq!(session.settings.quota_display_mode, QuotaDisplayMode::Used);
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(
+                QuotaDisplayMode::Remaining,
+            )),
+        );
+        assert_eq!(
+            session.settings.quota_display_mode,
+            QuotaDisplayMode::Remaining
+        );
     }
 
     // ── ClearDebugLogs ──────────────────────────────────

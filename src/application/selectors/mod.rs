@@ -9,7 +9,7 @@ mod tray;
 // ============================================================================
 
 use crate::app_state::HeaderStatusKind;
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderKind, QuotaDisplayMode, QuotaInfo};
 
 // ── Tray 弹出窗口 ──
 
@@ -53,6 +53,7 @@ pub struct ProviderPanelViewState {
     pub show_dashboard: bool,
     pub account: Option<AccountInfoViewState>,
     pub body: ProviderBodyViewState,
+    pub quota_display_mode: QuotaDisplayMode,
 }
 
 /// 账户信息卡片 ViewModel
@@ -124,6 +125,7 @@ pub struct SettingsProviderDetailViewState {
     pub info: SettingsProviderInfoViewState,
     pub usage: SettingsProviderUsageViewState,
     pub settings_mode: ProviderSettingsMode,
+    pub quota_display_mode: QuotaDisplayMode,
 }
 
 #[derive(Debug, Clone)]

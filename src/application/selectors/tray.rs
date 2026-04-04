@@ -126,6 +126,7 @@ pub fn provider_detail_view_state(
         show_dashboard,
         account,
         body,
+        quota_display_mode: session.settings.quota_display_mode,
     })
 }
 
@@ -263,6 +264,54 @@ mod tests {
             ProviderDetailViewState::Panel(panel) => {
                 assert!(panel.account.is_none());
                 assert!(panel.show_dashboard);
+            }
+            _ => panic!("expected Panel variant"),
+        }
+    }
+
+    // ── QuotaDisplayMode 透传 ────────────────────────────
+
+    #[test]
+    fn panel_inherits_quota_display_mode_from_settings() {
+        use crate::models::QuotaDisplayMode;
+
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+        settings.quota_display_mode = QuotaDisplayMode::Used;
+
+        let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+        let session = make_session_with_provider(settings, provider);
+        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+
+        match view {
+            ProviderDetailViewState::Panel(panel) => {
+                assert_eq!(panel.quota_display_mode, QuotaDisplayMode::Used);
+            }
+            _ => panic!("expected Panel variant"),
+        }
+    }
+
+    #[test]
+    fn panel_defaults_to_remaining_mode() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+
+        let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+        let session = make_session_with_provider(settings, provider);
+        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+
+        match view {
+            ProviderDetailViewState::Panel(panel) => {
+                assert_eq!(
+                    panel.quota_display_mode,
+                    crate::models::QuotaDisplayMode::Remaining
+                );
             }
             _ => panic!("expected Panel variant"),
         }
