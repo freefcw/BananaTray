@@ -1,4 +1,5 @@
 use super::provider::ProviderKind;
+use super::quota::QuotaInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -228,6 +229,27 @@ impl AppSettings {
         self.hidden_quotas
             .get(kind.id_key())
             .is_none_or(|set| !set.contains(quota_key))
+    }
+
+    /// 统计可见配额数量（惰性求值，不分配内存）
+    pub fn visible_quota_count(&self, kind: ProviderKind, quotas: &[QuotaInfo]) -> usize {
+        quotas
+            .iter()
+            .filter(|q| self.is_quota_visible(kind, &q.quota_type.stable_key()))
+            .count()
+    }
+
+    /// 过滤出在托盘弹窗中可见的配额（不包含被隐藏的项）
+    /// 返回引用，避免不必要的 clone；调用方按需 `.cloned().collect()` 即可。
+    pub fn visible_quotas<'a>(
+        &self,
+        kind: ProviderKind,
+        quotas: &'a [QuotaInfo],
+    ) -> Vec<&'a QuotaInfo> {
+        quotas
+            .iter()
+            .filter(|q| self.is_quota_visible(kind, &q.quota_type.stable_key()))
+            .collect()
     }
 
     /// 切换某个 quota 的可见性（隐藏 ↔ 显示）

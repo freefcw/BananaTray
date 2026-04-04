@@ -113,14 +113,10 @@ pub fn provider_detail_view_state(
             provider_name: provider.display_name().to_string(),
         }
     } else if has_quotas {
-        let visible_quotas: Vec<crate::models::QuotaInfo> = provider
-            .quotas
-            .iter()
-            .filter(|q| {
-                session
-                    .settings
-                    .is_quota_visible(kind, &q.quota_type.stable_key())
-            })
+        let visible_quotas: Vec<crate::models::QuotaInfo> = session
+            .settings
+            .visible_quotas(kind, &provider.quotas)
+            .into_iter()
             .cloned()
             .collect();
         if visible_quotas.is_empty() {
