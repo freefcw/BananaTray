@@ -9,11 +9,14 @@ use gpui::*;
 type DivStyleFn = Box<dyn Fn(Div) -> Div>;
 
 /// 分段选择器尺寸风格
+#[allow(dead_code)]
 pub(crate) enum SegmentedSize {
-    /// 全宽等分（用于 Theme / Language 选择器）
+    /// 全宽等分（用于纵向堆叠布局）
     Full,
     /// 紧凑自适应宽度（用于 Log Level 选择器）
     Compact,
+    /// 行内自适应宽度（用于水平行布局，如 Display Tab 的 Theme/Language 选择器）
+    Inline,
 }
 
 /// 渲染分段选择器
@@ -55,6 +58,17 @@ where
             11.0,
             Box::new(|d: Div| d.flex_shrink_0()),
             Box::new(|d: Div| d.px(px(8.0)).py(px(5.0))),
+        ),
+        SegmentedSize::Inline => (
+            12.0,
+            Box::new(|d: Div| d.flex_shrink_0()),
+            Box::new(|d: Div| {
+                d.px(px(14.0))
+                    .py(px(7.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+            }),
         ),
     };
 

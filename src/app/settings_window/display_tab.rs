@@ -26,127 +26,85 @@ impl SettingsView {
             .child(
                 render_dark_card(theme)
                     .px(px(14.0))
-                    .py(px(14.0))
-                    .gap(px(16.0))
-                    // Theme 选择器
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .text_size(px(15.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_primary)
-                                    .child(t!("settings.theme").to_string()),
-                            )
-                            .child({
-                                let state = self.state.clone();
-                                let options: Vec<(String, AppTheme)> = vec![
-                                    (t!("theme.system").to_string(), AppTheme::System),
-                                    (t!("theme.light").to_string(), AppTheme::Light),
-                                    (t!("theme.dark").to_string(), AppTheme::Dark),
-                                ];
-                                render_segmented_control(
-                                    &options,
-                                    &settings.theme,
-                                    SegmentedSize::Full,
-                                    theme,
-                                    move |variant: AppTheme, window, cx| {
-                                        runtime::dispatch_in_window(
-                                            &state,
-                                            AppAction::UpdateSetting(SettingChange::Theme(variant)),
-                                            window,
-                                            cx,
-                                        );
-                                    },
-                                )
-                            }),
-                    )
-                    // Language 选择器
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .text_size(px(15.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_primary)
-                                    .child(t!("settings.language").to_string()),
-                            )
-                            .child({
-                                let state = self.state.clone();
-                                let options: Vec<(String, String)> =
-                                    crate::i18n::SUPPORTED_LANGUAGES
-                                        .iter()
-                                        .map(|&(code, name_key)| {
-                                            (t!(name_key).to_string(), code.to_string())
-                                        })
-                                        .collect();
-                                let current_lang = settings.language.clone();
-                                render_segmented_control(
-                                    &options,
-                                    &current_lang,
-                                    SegmentedSize::Full,
-                                    theme,
-                                    move |code: String, window, cx| {
-                                        runtime::dispatch_in_window(
-                                            &state,
-                                            AppAction::UpdateSetting(SettingChange::Language(code)),
-                                            window,
-                                            cx,
-                                        );
-                                    },
-                                )
-                            }),
-                    )
-                    // Tray Icon Style 选择器
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .text_size(px(15.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_primary)
-                                    .child(t!("settings.tray_icon_style").to_string()),
-                            )
-                            .child({
-                                let state = self.state.clone();
-                                let options: Vec<(String, TrayIconStyle)> = vec![
-                                    (
-                                        t!("settings.tray_icon.monochrome").to_string(),
-                                        TrayIconStyle::Monochrome,
-                                    ),
-                                    (
-                                        t!("settings.tray_icon.yellow").to_string(),
-                                        TrayIconStyle::Yellow,
-                                    ),
-                                    (
-                                        t!("settings.tray_icon.colorful").to_string(),
-                                        TrayIconStyle::Colorful,
-                                    ),
-                                ];
-                                render_segmented_control(
-                                    &options,
-                                    &settings.tray_icon_style,
-                                    SegmentedSize::Full,
-                                    theme,
-                                    move |style: TrayIconStyle, window, cx| {
-                                        runtime::dispatch_in_window(
-                                            &state,
-                                            AppAction::UpdateSetting(
-                                                SettingChange::SetTrayIconStyle(style),
-                                            ),
-                                            window,
-                                            cx,
-                                        );
-                                    },
-                                )
-                            }),
-                    ),
+                    .py(px(4.0))
+                    // Theme 选择器行
+                    .child(render_inline_segmented_row(
+                        &t!("settings.theme"),
+                        vec![
+                            (t!("theme.system").to_string(), AppTheme::System),
+                            (t!("theme.light").to_string(), AppTheme::Light),
+                            (t!("theme.dark").to_string(), AppTheme::Dark),
+                        ],
+                        &settings.theme,
+                        theme,
+                        {
+                            let state = self.state.clone();
+                            move |variant: AppTheme, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(SettingChange::Theme(variant)),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    ))
+                    .child(render_divider(theme))
+                    // Language 选择器行
+                    .child(render_inline_segmented_row(
+                        &t!("settings.language"),
+                        crate::i18n::SUPPORTED_LANGUAGES
+                            .iter()
+                            .map(|&(code, name_key)| (t!(name_key).to_string(), code.to_string()))
+                            .collect(),
+                        &settings.language,
+                        theme,
+                        {
+                            let state = self.state.clone();
+                            move |code: String, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(SettingChange::Language(code)),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    ))
+                    .child(render_divider(theme))
+                    // Tray Icon Style 选择器行
+                    .child(render_inline_segmented_row(
+                        &t!("settings.tray_icon_style"),
+                        vec![
+                            (
+                                t!("settings.tray_icon.monochrome").to_string(),
+                                TrayIconStyle::Monochrome,
+                            ),
+                            (
+                                t!("settings.tray_icon.yellow").to_string(),
+                                TrayIconStyle::Yellow,
+                            ),
+                            (
+                                t!("settings.tray_icon.colorful").to_string(),
+                                TrayIconStyle::Colorful,
+                            ),
+                        ],
+                        &settings.tray_icon_style,
+                        theme,
+                        {
+                            let state = self.state.clone();
+                            move |style: TrayIconStyle, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(
+                                        style,
+                                    )),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    )),
             )
             // ═══════ TOOLBAR ═══════
             .child(render_section_header(
@@ -229,4 +187,42 @@ impl SettingsView {
                 },
             )))
     }
+}
+
+/// 渲染水平行式分段选择器行：左侧标签（13px MEDIUM）+ 右侧 Inline SegmentedControl
+///
+/// 用于 Appearance section 的 Theme / Language / Tray Icon Style 行。
+fn render_inline_segmented_row<T, F>(
+    label: &str,
+    options: Vec<(String, T)>,
+    current: &T,
+    theme: &Theme,
+    on_select: F,
+) -> Div
+where
+    T: PartialEq + Clone + 'static,
+    F: Fn(T, &mut Window, &mut App) + Clone + 'static,
+{
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .w_full()
+        .py(px(10.0))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme.text_primary)
+                .flex_shrink_0()
+                .mr(px(16.0))
+                .child(label.to_string()),
+        )
+        .child(render_segmented_control(
+            &options,
+            current,
+            SegmentedSize::Inline,
+            theme,
+            on_select,
+        ))
 }
