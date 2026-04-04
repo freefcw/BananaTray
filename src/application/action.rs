@@ -60,6 +60,10 @@ pub enum SettingChange {
     RefreshCadence(Option<u64>),
     SetTrayIconStyle(TrayIconStyle),
     SetQuotaDisplayMode(QuotaDisplayMode),
+    ToggleQuotaVisibility {
+        kind: ProviderKind,
+        quota_key: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -118,6 +118,10 @@ pub struct AppSettings {
     /// 额度显示模式：剩余 or 已用
     #[serde(default)]
     pub quota_display_mode: QuotaDisplayMode,
+    /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）
+    /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合
+    #[serde(default)]
+    pub hidden_quotas: HashMap<String, HashSet<String>>,
 }
 
 fn default_true() -> bool {
@@ -148,6 +152,7 @@ impl Default for AppSettings {
             show_account_info: true,
             tray_icon_style: TrayIconStyle::default(),
             quota_display_mode: QuotaDisplayMode::default(),
+            hidden_quotas: HashMap::new(),
         }
     }
 }
@@ -215,6 +220,26 @@ impl AppSettings {
             }
         }
         false
+    }
+
+    /// 判断某个 quota 是否在托盘弹窗中可见（未被隐藏）
+    /// `quota_key` 应使用 `QuotaType::stable_key()`，而非 i18n label
+    pub fn is_quota_visible(&self, kind: ProviderKind, quota_key: &str) -> bool {
+        self.hidden_quotas
+            .get(kind.id_key())
+            .is_none_or(|set| !set.contains(quota_key))
+    }
+
+    /// 切换某个 quota 的可见性（隐藏 ↔ 显示）
+    /// `quota_key` 应使用 `QuotaType::stable_key()`，而非 i18n label
+    pub fn toggle_quota_visibility(&mut self, kind: ProviderKind, quota_key: String) {
+        let set = self
+            .hidden_quotas
+            .entry(kind.id_key().to_string())
+            .or_default();
+        if !set.remove(&quota_key) {
+            set.insert(quota_key);
+        }
     }
 
     /// 确保 provider_order 包含所有 Provider
@@ -296,5 +321,38 @@ mod tests {
         });
         let settings: AppSettings = serde_json::from_value(json).unwrap();
         assert_eq!(settings.tray_icon_style, TrayIconStyle::Monochrome);
+    }
+
+    // ── hidden_quotas ────────────────────────────────────
+
+    #[test]
+    fn hidden_quotas_default_all_visible() {
+        let settings = AppSettings::default();
+        // 使用 QuotaType::stable_key() 而非 i18n label
+        assert!(settings.is_quota_visible(ProviderKind::Claude, "session"));
+        assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    }
+
+    #[test]
+    fn toggle_quota_visibility_hides_then_shows() {
+        let mut settings = AppSettings::default();
+        assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+
+        settings.toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+        assert!(!settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+        // 其他 key 不受影响
+        assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Sonnet"));
+
+        settings.toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+        assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    }
+
+    #[test]
+    fn hidden_quotas_isolated_per_provider() {
+        let mut settings = AppSettings::default();
+        settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+
+        assert!(!settings.is_quota_visible(ProviderKind::Claude, "session"));
+        assert!(settings.is_quota_visible(ProviderKind::Gemini, "session"));
     }
 }

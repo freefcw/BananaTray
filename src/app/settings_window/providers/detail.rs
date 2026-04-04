@@ -1,8 +1,8 @@
 use super::super::SettingsView;
 use crate::app::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use crate::application::{
-    AppAction, ProviderSettingsMode, SettingsProviderDetailViewState, SettingsProviderStatusKind,
-    SettingsProviderUsageViewState,
+    AppAction, ProviderSettingsMode, QuotaVisibilityItem, SettingChange,
+    SettingsProviderDetailViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
 use crate::models::{ProviderKind, QuotaDisplayMode};
 use crate::refresh::RefreshReason;
@@ -14,6 +14,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::app::AppState;
+
+/// 配额可见性行是否显示左侧小图标（默认开启，视觉更灵动）
+const SHOW_QUOTA_ROW_ICON: bool = true;
 
 // ══════ 可复用的 detail 区域组件 ══════
 
@@ -162,6 +165,12 @@ impl SettingsView {
             .child(self.render_info_table(&detail.info, theme))
             // ── Usage section ──
             .child(self.render_usage_section(&detail.usage, theme, detail.quota_display_mode))
+            // ── Quota visibility section ──
+            .child(self.render_quota_visibility_section(
+                detail.kind,
+                &detail.quota_visibility,
+                theme,
+            ))
             // ── Settings section ──
             .child(self.render_settings_section(detail.settings_mode, theme, cx));
 
@@ -295,6 +304,121 @@ impl SettingsView {
         }
 
         section
+    }
+
+    // ══════ Quota visibility (托盘弹窗中显示哪些模型) ══════
+
+    fn render_quota_visibility_section(
+        &self,
+        kind: ProviderKind,
+        items: &[QuotaVisibilityItem],
+        theme: &Theme,
+    ) -> Div {
+        let mut section = div()
+            .flex_col()
+            .mt(px(20.0))
+            .child(render_detail_section_title(
+                &t!("provider.section.quota_visibility"),
+                theme,
+            ));
+
+        if items.is_empty() {
+            section = section.child(
+                div()
+                    .mt(px(8.0))
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .child(t!("provider.quota_visibility.empty").to_string()),
+            );
+        } else {
+            let list = div()
+                .flex_col()
+                .mt(px(8.0))
+                .rounded(px(10.0))
+                .bg(theme.bg_card)
+                .border_1()
+                .border_color(theme.border_subtle)
+                .overflow_hidden();
+
+            let item_count = items.len();
+            let mut list = list;
+            for (i, item) in items.iter().enumerate() {
+                list = list.child(self.render_quota_visibility_row(kind, item, theme));
+                if i + 1 < item_count {
+                    list = list.child(div().h(px(0.5)).w_full().bg(theme.border_subtle));
+                }
+            }
+            section = section.child(list);
+        }
+
+        section
+    }
+
+    /// 单行：（可选图标 +）配额标签 + 小号 toggle switch
+    fn render_quota_visibility_row(
+        &self,
+        kind: ProviderKind,
+        item: &QuotaVisibilityItem,
+        theme: &Theme,
+    ) -> Div {
+        let state = self.state.clone();
+        let quota_key = item.quota_key.clone();
+        let visible = item.visible;
+        let show_icon = SHOW_QUOTA_ROW_ICON;
+
+        let mut label_row = div().flex().items_center().gap(px(8.0));
+        if show_icon {
+            label_row = label_row.child(render_svg_icon(
+                "src/icons/status.svg",
+                px(14.0),
+                if visible {
+                    theme.text_accent
+                } else {
+                    theme.text_muted
+                },
+            ));
+        }
+        label_row = label_row.child(
+            div()
+                .text_size(px(12.5))
+                .text_color(if visible {
+                    theme.text_primary
+                } else {
+                    theme.text_muted
+                })
+                .child(item.label.clone()),
+        );
+
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px(px(12.0))
+            .py(px(8.0))
+            .cursor_pointer()
+            .hover(|s| s.bg(theme.bg_subtle))
+            .child(label_row)
+            .child(
+                crate::app::widgets::render_toggle_switch(
+                    visible,
+                    px(36.0),
+                    px(20.0),
+                    px(14.0),
+                    theme,
+                )
+                .flex_shrink_0(),
+            )
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state,
+                    AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
+                        kind,
+                        quota_key: quota_key.clone(),
+                    }),
+                    window,
+                    cx,
+                );
+            })
     }
 
     // ══════ Provider-specific settings ══════
