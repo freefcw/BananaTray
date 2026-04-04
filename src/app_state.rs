@@ -117,14 +117,7 @@ impl AppSession {
         let provider = self.provider_store.find(kind);
         let quota_count = provider
             .map(|p| {
-                let visible = p
-                    .quotas
-                    .iter()
-                    .filter(|q| {
-                        self.settings
-                            .is_quota_visible(kind, &q.quota_type.stable_key())
-                    })
-                    .count();
+                let visible = self.settings.visible_quota_count(kind, &p.quotas);
                 if visible == 0 && !p.quotas.is_empty() {
                     1 // 全部隐藏时显示空状态，至少预留 1 个卡片高度
                 } else {
