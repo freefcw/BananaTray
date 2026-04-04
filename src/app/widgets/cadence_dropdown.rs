@@ -2,15 +2,13 @@ use crate::app::AppState;
 use crate::application::{AppAction, SettingChange};
 use crate::runtime;
 use crate::theme::Theme;
-use gpui::prelude::FluentBuilder;
 use gpui::*;
 use rust_i18n::t;
 use std::cell::RefCell;
-use std::ops::Range;
 use std::rc::Rc;
 
 /// Available refresh cadence options (None = Manual, Some(mins) = Auto)
-const REFRESH_OPTIONS: &[Option<u64>] = &[
+const OPTIONS: &[Option<u64>] = &[
     None,
     Some(1),
     Some(2),
@@ -21,29 +19,6 @@ const REFRESH_OPTIONS: &[Option<u64>] = &[
     Some(30),
 ];
 
-// Layout constants
-const TRIGGER_PADDING_X: f32 = 10.0;
-const TRIGGER_PADDING_Y: f32 = 5.0;
-const TRIGGER_RADIUS: f32 = 6.0;
-const TRIGGER_GAP: f32 = 4.0;
-const TRIGGER_MARGIN_LEFT: f32 = 12.0;
-const DROPDOWN_TOP_OFFSET: f32 = 32.0;
-const DROPDOWN_MIN_WIDTH: f32 = 100.0;
-const DROPDOWN_MAX_HEIGHT: f32 = 180.0;
-const DROPDOWN_RADIUS: f32 = 8.0;
-const OPTION_PADDING_X: f32 = 12.0;
-const OPTION_PADDING_Y: f32 = 7.0;
-const FONT_SIZE_TRIGGER: f32 = 12.0;
-const FONT_SIZE_ARROW: f32 = 10.0;
-const FONT_SIZE_OPTION: f32 = 12.5;
-const FONT_SIZE_CHECK: f32 = 11.0;
-const FONT_SIZE_LABEL: f32 = 13.0;
-const FONT_SIZE_DESC: f32 = 12.5;
-const ROW_PADDING_X: f32 = 14.0;
-const ROW_PADDING_Y: f32 = 10.0;
-const LABEL_GAP: f32 = 2.0;
-
-/// Format a cadence option for display
 fn format_cadence(mins: Option<u64>) -> String {
     match mins {
         None => t!("cadence.manual").to_string(),
@@ -52,49 +27,8 @@ fn format_cadence(mins: Option<u64>) -> String {
     }
 }
 
-/// Render a cadence dropdown row (collapsed trigger + optional expanded option list).
-///
-/// Returns a `Div` that can be placed inside a card.
-pub(crate) fn render_cadence_dropdown(
-    state: &Rc<RefCell<AppState>>,
-    cadence_mins: Option<u64>,
-    theme: &Theme,
-) -> Div {
-    let trigger = render_trigger_button(state, cadence_mins, theme);
-
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .px(px(ROW_PADDING_X))
-        .py(px(ROW_PADDING_Y))
-        .child(render_cadence_label(theme))
-        .child(trigger)
-}
-
-/// Left-side label with title and description.
-fn render_cadence_label(theme: &Theme) -> Div {
-    div()
-        .flex_col()
-        .gap(px(LABEL_GAP))
-        .flex_1()
-        .child(
-            div()
-                .text_size(px(FONT_SIZE_LABEL))
-                .font_weight(FontWeight::MEDIUM)
-                .child(t!("settings.refresh_cadence").to_string()),
-        )
-        .child(
-            div()
-                .text_size(px(FONT_SIZE_DESC))
-                .line_height(relative(1.4))
-                .text_color(theme.text_secondary)
-                .child(t!("settings.refresh_cadence.desc").to_string()),
-        )
-}
-
-/// Right-side trigger button that toggles the dropdown.
-fn render_trigger_button(
+/// 内联刷新频率触发按钮 — 风格与设计稿一致（对外开放）
+pub(crate) fn render_cadence_trigger(
     state: &Rc<RefCell<AppState>>,
     cadence_mins: Option<u64>,
     theme: &Theme,
@@ -107,12 +41,13 @@ fn render_trigger_button(
         .flex()
         .flex_shrink_0()
         .items_center()
-        .gap(px(TRIGGER_GAP))
-        .ml(px(TRIGGER_MARGIN_LEFT))
-        .px(px(TRIGGER_PADDING_X))
-        .py(px(TRIGGER_PADDING_Y))
-        .rounded(px(TRIGGER_RADIUS))
-        .bg(theme.bg_subtle)
+        .justify_between()
+        .min_w(px(110.0))
+        .gap(px(8.0))
+        .px(px(12.0))
+        .py(px(6.0))
+        .rounded(px(6.0))
+        .bg(theme.bg_base)
         .border_1()
         .border_color(if dropdown_open {
             theme.element_selected
@@ -122,16 +57,15 @@ fn render_trigger_button(
         .cursor_pointer()
         .child(
             div()
-                .text_size(px(FONT_SIZE_TRIGGER))
+                .text_size(px(13.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text_primary)
                 .child(format_cadence(cadence_mins)),
         )
         .child(
             div()
-                .text_size(px(FONT_SIZE_ARROW))
+                .text_size(px(10.0))
                 .text_color(theme.text_muted)
-                .ml(px(TRIGGER_GAP))
                 .child(if dropdown_open { "▲" } else { "▼" }),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -144,20 +78,18 @@ fn render_trigger_button(
         });
 
     if dropdown_open {
-        trigger = trigger.child(render_option_list(state, cadence_mins, theme));
+        trigger = trigger.child(render_cadence_options(state, cadence_mins, theme));
     }
 
     trigger
 }
 
-/// Floating option list shown when the dropdown is open.
-fn render_option_list(
+/// 下拉选项列表（内部组件）
+fn render_cadence_options(
     state: &Rc<RefCell<AppState>>,
     cadence_mins: Option<u64>,
     theme: &Theme,
 ) -> Deferred {
-    let bg = theme.bg_base;
-    let border = theme.border_strong;
     let state = state.clone();
     let theme = theme.clone();
 
@@ -165,95 +97,79 @@ fn render_option_list(
         div()
             .occlude()
             .absolute()
-            .top(px(DROPDOWN_TOP_OFFSET))
+            .top(px(36.0)) // Slight offset from the trigger button
             .right(px(0.0))
-            .w(px(DROPDOWN_MIN_WIDTH))
-            .h(px(DROPDOWN_MAX_HEIGHT))
-            .rounded(px(DROPDOWN_RADIUS))
-            .bg(bg)
+            .w(px(140.0)) // Explicit width ensures w_full() on children calculates properly
+            .p(px(6.0)) // Inner padding for the popup shell
+            .rounded(px(8.0))
+            .bg(theme.bg_subtle)
             .border_1()
-            .border_color(border)
+            .border_color(theme.border_strong)
             .shadow_lg()
-            .child(
-                uniform_list(
-                    "cadence-options-list",
-                    REFRESH_OPTIONS.len(),
-                    move |range: Range<usize>, _window: &mut Window, _cx: &mut App| {
-                        range
-                            .map(|i| {
-                                let mins = REFRESH_OPTIONS[i];
-                                render_option_row(i, mins, cadence_mins, &state, bg, &theme)
-                            })
-                            .collect::<Vec<_>>()
+            .flex()
+            .flex_col()
+            .gap(px(2.0)) // Gap between items
+            .children(OPTIONS.iter().map(move |&mins| {
+                let is_active = cadence_mins == mins;
+                let opt_state = state.clone();
+                let th = theme.clone();
+                let label = format_cadence(mins);
+
+                let mut row = div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .rounded(px(6.0))
+                    .cursor_pointer();
+
+                if is_active {
+                    row = row
+                        .bg(th.nav_pill_active_bg) // Subtle active background
+                        .border_1()
+                        .border_color(th.element_selected) // Distinct outline
+                        .child(
+                            div()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(th.text_primary)
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(th.text_accent)
+                                .child("✓"),
+                        );
+                } else {
+                    row = row
+                        .border_1()
+                        .border_color(gpui::transparent_black()) // Transparent border to prevent height jumping
+                        .hover(|s| s.bg(th.bg_card_inner_hovered)) // Hover effect
+                        .child(
+                            div()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(th.text_secondary)
+                                .child(label),
+                        );
+                }
+
+                row.on_mouse_down(
+                    MouseButton::Left,
+                    move |_: &MouseDownEvent, window: &mut Window, cx: &mut App| {
+                        runtime::dispatch_in_window(
+                            &opt_state,
+                            AppAction::UpdateSetting(SettingChange::RefreshCadence(mins)),
+                            window,
+                            cx,
+                        );
                     },
                 )
-                .size_full(),
-            ),
+            })),
     )
     .with_priority(1)
-}
-
-/// Single selectable row inside the option list.
-fn render_option_row(
-    index: usize,
-    mins: Option<u64>,
-    cadence_mins: Option<u64>,
-    state: &Rc<RefCell<AppState>>,
-    bg: Hsla,
-    theme: &Theme,
-) -> Div {
-    let is_active = cadence_mins == mins;
-    let opt_state = state.clone();
-
-    let mut row = div()
-        .w_full()
-        .flex()
-        .items_center()
-        .justify_between()
-        .px(px(OPTION_PADDING_X))
-        .py(px(OPTION_PADDING_Y))
-        .cursor_pointer()
-        .bg(if is_active {
-            theme.element_selected
-        } else {
-            bg
-        })
-        .child(
-            div()
-                .text_size(px(FONT_SIZE_OPTION))
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
-                .text_color(if is_active {
-                    theme.element_active
-                } else {
-                    theme.text_primary
-                })
-                .child(format_cadence(mins)),
-        )
-        .when(is_active, |el| {
-            el.child(
-                div()
-                    .text_size(px(FONT_SIZE_CHECK))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(theme.element_active)
-                    .child("✓"),
-            )
-        })
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
-                &opt_state,
-                AppAction::UpdateSetting(SettingChange::RefreshCadence(mins)),
-                window,
-                cx,
-            );
-        });
-
-    if index > 0 {
-        row = row.border_t_1().border_color(theme.border_strong);
-    }
-
-    row
 }

@@ -1,5 +1,4 @@
 mod action_button;
-#[allow(dead_code)]
 mod cadence_dropdown;
 mod card;
 mod checkbox;
@@ -14,6 +13,7 @@ mod toggle;
 mod tooltip;
 
 pub(crate) use action_button::{render_action_button, ButtonVariant};
+pub(crate) use cadence_dropdown::render_cadence_trigger;
 pub(crate) use card::render_detail_section_title;
 pub(crate) use checkbox::render_checkbox;
 #[allow(unused_imports)]
