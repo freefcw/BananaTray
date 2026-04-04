@@ -1,5 +1,5 @@
 use crate::application::DebugNotificationKind;
-use crate::models::ProviderKind;
+use crate::models::{ProviderKind, TrayIconStyle};
 use crate::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
 
@@ -29,6 +29,8 @@ pub enum AppEffect {
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区
     ClearDebugLogs,
+    /// 切换托盘图标风格
+    ApplyTrayIcon(TrayIconStyle),
     QuitApp,
 }
 
@@ -60,6 +62,7 @@ pub enum RoutedEffect {
     Render,
     OpenSettingsWindow,
     OpenUrl(String),
+    ApplyTrayIcon(TrayIconStyle),
     QuitApp,
 }
 
@@ -98,6 +101,7 @@ pub fn route_effect(effect: AppEffect) -> RoutedEffect {
             RoutedEffect::Common(CommonEffect::RestoreLogLevel(level))
         }
         AppEffect::ClearDebugLogs => RoutedEffect::Common(CommonEffect::ClearDebugLogs),
+        AppEffect::ApplyTrayIcon(style) => RoutedEffect::ApplyTrayIcon(style),
         AppEffect::QuitApp => RoutedEffect::QuitApp,
     }
 }
@@ -193,6 +197,14 @@ mod tests {
         assert!(matches!(
             route_effect(AppEffect::QuitApp),
             RoutedEffect::QuitApp
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::ApplyTrayIcon(TrayIconStyle::Yellow)),
+            RoutedEffect::ApplyTrayIcon(TrayIconStyle::Yellow)
+        ));
+        assert!(matches!(
+            route_effect(AppEffect::ApplyTrayIcon(TrayIconStyle::Monochrome)),
+            RoutedEffect::ApplyTrayIcon(TrayIconStyle::Monochrome)
         ));
     }
 }

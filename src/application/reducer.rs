@@ -167,6 +167,10 @@ fn apply_setting_change(
                 session,
             )));
         }
+        SettingChange::SetTrayIconStyle(style) => {
+            session.settings.tray_icon_style = style;
+            effects.push(AppEffect::ApplyTrayIcon(style));
+        }
     }
 
     effects.push(AppEffect::PersistSettings);
@@ -527,6 +531,51 @@ mod tests {
             e,
             AppEffect::StartDebugRefresh(_)
         )));
+    }
+
+    // ── SetTrayIconStyle ───────────────────────────────
+
+    #[test]
+    fn set_tray_icon_style_updates_setting_and_produces_effects() {
+        use crate::models::TrayIconStyle;
+
+        let mut session = make_session();
+        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Monochrome);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Yellow)),
+        );
+
+        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Yellow);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(TrayIconStyle::Yellow)
+        )));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn set_tray_icon_style_round_trip() {
+        use crate::models::TrayIconStyle;
+
+        let mut session = make_session();
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Colorful)),
+        );
+        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Colorful);
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Monochrome)),
+        );
+        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Monochrome);
     }
 
     // ── ClearDebugLogs ──────────────────────────────────

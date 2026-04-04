@@ -27,3 +27,5 @@ pub mod app;
 pub mod logging;
 #[cfg(feature = "app")]
 pub mod runtime;
+#[cfg(feature = "app")]
+pub mod tray_icon_helper;

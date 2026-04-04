@@ -11,4 +11,4 @@ pub use provider::{NavTab, ProviderDescriptor, ProviderKind, ProviderMetadata};
 pub use quota::{
     ConnectionStatus, ErrorKind, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel,
 };
-pub use settings::{AppSettings, AppTheme};
+pub use settings::{AppSettings, AppTheme, TrayIconStyle};
