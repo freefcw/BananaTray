@@ -133,6 +133,7 @@ provider.status.refreshing: "Refreshing…"
 provider.status.error: "Error"
 provider.status.unknown: "Unknown"
 provider.section.usage: "Usage"
+provider.section.quota_visibility: "Tray Display"
 provider.section.settings: "Settings"
 provider.enable_tracking: "Enable this provider to start tracking usage."
 provider.last_fetch_failed: "Last %{name} fetch failed:"
@@ -143,6 +144,7 @@ provider.auto_configured: "%{name} is configured automatically. No additional se
 provider.settings.auto_title: "This provider is automatically configured"
 provider.settings.auto_desc: "No additional settings required"
 provider.not_found: "Provider not found"
+provider.quota_visibility.empty: "No quota data available yet. Enable and refresh to see models."
 
 # ── Provider panel (popup) ────────────────────────────────
 provider.not_enabled: "%{name} is not enabled"

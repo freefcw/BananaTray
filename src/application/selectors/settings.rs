@@ -61,6 +61,22 @@ fn settings_provider_detail_view_state(
         )
     };
 
+    let quota_visibility = provider
+        .map(|p| {
+            p.quotas
+                .iter()
+                .map(|q| {
+                    let quota_key = q.quota_type.stable_key();
+                    QuotaVisibilityItem {
+                        label: q.label.clone(),
+                        quota_key: quota_key.clone(),
+                        visible: session.settings.is_quota_visible(kind, &quota_key),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     SettingsProviderDetailViewState {
         kind,
         icon,
@@ -74,6 +90,7 @@ fn settings_provider_detail_view_state(
             _ => ProviderSettingsMode::AutoManaged,
         },
         quota_display_mode: session.settings.quota_display_mode,
+        quota_visibility,
     }
 }
 
@@ -281,6 +298,55 @@ mod tests {
             view_state.detail.usage,
             SettingsProviderUsageViewState::Error { .. }
         ));
+    }
+
+    // ── quota_visibility 构建 ────────────────────────────
+
+    #[test]
+    fn settings_detail_builds_quota_visibility_from_stable_key() {
+        use crate::models::{QuotaInfo, QuotaType};
+
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Claude, true);
+        // 隐藏 session 类型配额
+        settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+
+        let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        provider.quotas = vec![
+            QuotaInfo::with_details(
+                String::from("Session (5h)"),
+                30.0,
+                100.0,
+                QuotaType::Session,
+                None,
+            ),
+            QuotaInfo::with_details(String::from("Weekly"), 50.0, 100.0, QuotaType::Weekly, None),
+        ];
+
+        let session = make_session(settings, ProviderKind::Claude, vec![provider]);
+        let view_state = settings_providers_tab_view_state(&session);
+
+        assert_eq!(view_state.detail.quota_visibility.len(), 2);
+        // Session 应被标记为不可见（使用 stable_key 匹配，不依赖 label）
+        assert_eq!(view_state.detail.quota_visibility[0].quota_key, "session");
+        assert!(!view_state.detail.quota_visibility[0].visible);
+        // Weekly 应仍可见
+        assert_eq!(view_state.detail.quota_visibility[1].quota_key, "weekly");
+        assert!(view_state.detail.quota_visibility[1].visible);
+    }
+
+    #[test]
+    fn settings_detail_quota_visibility_empty_when_no_quotas() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Claude, true);
+
+        let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        let session = make_session(settings, ProviderKind::Claude, vec![provider]);
+        let view_state = settings_providers_tab_view_state(&session);
+
+        assert!(view_state.detail.quota_visibility.is_empty());
     }
 
     // ── QuotaDisplayMode 透传 ────────────────────────────

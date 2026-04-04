@@ -173,8 +173,9 @@ fn apply_setting_change(
         }
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.quota_display_mode = mode;
-            effects.push(AppEffect::PersistSettings);
-            push_render(effects);
+        }
+        SettingChange::ToggleQuotaVisibility { kind, quota_key } => {
+            session.settings.toggle_quota_visibility(kind, quota_key);
         }
     }
 
@@ -630,6 +631,60 @@ mod tests {
             session.settings.quota_display_mode,
             QuotaDisplayMode::Remaining
         );
+    }
+
+    // ── ToggleQuotaVisibility ──────────────────────────
+
+    #[test]
+    fn toggle_quota_visibility_updates_setting_and_produces_effects() {
+        let mut session = make_session();
+        assert!(session
+            .settings
+            .is_quota_visible(ProviderKind::Claude, "session"));
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
+                kind: ProviderKind::Claude,
+                quota_key: "session".to_string(),
+            }),
+        );
+
+        assert!(!session
+            .settings
+            .is_quota_visible(ProviderKind::Claude, "session"));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn toggle_quota_visibility_round_trip() {
+        let mut session = make_session();
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
+                kind: ProviderKind::Claude,
+                quota_key: "weekly".to_string(),
+            }),
+        );
+        assert!(!session
+            .settings
+            .is_quota_visible(ProviderKind::Claude, "weekly"));
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
+                kind: ProviderKind::Claude,
+                quota_key: "weekly".to_string(),
+            }),
+        );
+        assert!(session
+            .settings
+            .is_quota_visible(ProviderKind::Claude, "weekly"));
     }
 
     // ── ClearDebugLogs ──────────────────────────────────

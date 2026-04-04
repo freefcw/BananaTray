@@ -13,6 +13,6 @@ pub use selectors::{
     CapturedLogEntry, DebugConsoleViewState, DebugContext, DebugTabViewState,
     DisabledProviderViewState, LogLevelColor, ProviderBodyViewState, ProviderDetailViewState,
     ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState, ProviderSettingsMode,
-    SettingsProviderDetailViewState, SettingsProviderInfoViewState,
+    QuotaVisibilityItem, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };

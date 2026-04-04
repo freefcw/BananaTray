@@ -113,9 +113,23 @@ pub fn provider_detail_view_state(
             provider_name: provider.display_name().to_string(),
         }
     } else if has_quotas {
-        ProviderBodyViewState::Quotas {
-            quotas: provider.quotas.clone(),
-            generation: session.nav.generation,
+        let visible_quotas: Vec<crate::models::QuotaInfo> = provider
+            .quotas
+            .iter()
+            .filter(|q| {
+                session
+                    .settings
+                    .is_quota_visible(kind, &q.quota_type.stable_key())
+            })
+            .cloned()
+            .collect();
+        if visible_quotas.is_empty() {
+            ProviderBodyViewState::Empty(provider_empty_view_state(&provider))
+        } else {
+            ProviderBodyViewState::Quotas {
+                quotas: visible_quotas,
+                generation: session.nav.generation,
+            }
         }
     } else {
         ProviderBodyViewState::Empty(provider_empty_view_state(&provider))

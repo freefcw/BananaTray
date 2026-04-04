@@ -30,6 +30,20 @@ pub enum QuotaType {
     General,
 }
 
+impl QuotaType {
+    /// 语言无关的稳定标识符，用于配置持久化（hidden_quotas key）。
+    /// 不依赖 i18n，切换语言不会导致配置失效。
+    pub fn stable_key(&self) -> String {
+        match self {
+            QuotaType::Session => "session".into(),
+            QuotaType::Weekly => "weekly".into(),
+            QuotaType::ModelSpecific(model) => format!("model:{model}"),
+            QuotaType::Credit => "credit".into(),
+            QuotaType::General => "general".into(),
+        }
+    }
+}
+
 // ============================================================================
 // 用量状态等级
 // ============================================================================
@@ -471,6 +485,22 @@ impl ProviderStatus {
 mod tests {
     use super::*;
     use crate::models::test_helpers::{make_test_provider, setup_test_locale as setup_locale};
+
+    // ========================================================================
+    // QuotaType::stable_key
+    // ========================================================================
+
+    #[test]
+    fn quota_type_stable_key_is_language_independent() {
+        assert_eq!(QuotaType::Session.stable_key(), "session");
+        assert_eq!(QuotaType::Weekly.stable_key(), "weekly");
+        assert_eq!(
+            QuotaType::ModelSpecific("Opus".into()).stable_key(),
+            "model:Opus"
+        );
+        assert_eq!(QuotaType::Credit.stable_key(), "credit");
+        assert_eq!(QuotaType::General.stable_key(), "general");
+    }
 
     // ========================================================================
     // 基础计算测试

@@ -126,6 +126,19 @@ pub struct SettingsProviderDetailViewState {
     pub usage: SettingsProviderUsageViewState,
     pub settings_mode: ProviderSettingsMode,
     pub quota_display_mode: QuotaDisplayMode,
+    /// 配额可见性列表（用于设置 UI 中的勾选框）
+    pub quota_visibility: Vec<QuotaVisibilityItem>,
+}
+
+/// 单个配额在托盘弹窗中的可见性状态
+#[derive(Debug, Clone)]
+pub struct QuotaVisibilityItem {
+    /// 配额标签（i18n，仅用于 UI 显示）
+    pub label: String,
+    /// 语言无关的稳定标识符（来自 QuotaType::stable_key()，用于持久化和 action 传递）
+    pub quota_key: String,
+    /// 是否在托盘弹窗中显示
+    pub visible: bool,
 }
 
 #[derive(Debug, Clone)]
