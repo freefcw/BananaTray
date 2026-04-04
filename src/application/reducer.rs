@@ -368,6 +368,45 @@ mod tests {
         has_effect(effects, |e| matches!(e, AppEffect::Render))
     }
 
+    // ── Cadence Dropdown ────────────────────────────────
+
+    #[test]
+    fn toggle_cadence_dropdown_flips_state() {
+        let mut session = make_session();
+        assert!(!session.settings_ui.cadence_dropdown_open);
+
+        let effects = reduce(&mut session, AppAction::ToggleCadenceDropdown);
+
+        assert!(session.settings_ui.cadence_dropdown_open);
+        assert!(has_render(&effects));
+
+        reduce(&mut session, AppAction::ToggleCadenceDropdown);
+        assert!(!session.settings_ui.cadence_dropdown_open);
+    }
+
+    #[test]
+    fn update_refresh_cadence_applies_setting_and_closes_dropdown() {
+        let mut session = make_session();
+        session.settings_ui.cadence_dropdown_open = true;
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::RefreshCadence(Some(15))),
+        );
+
+        assert_eq!(session.settings.refresh_interval_mins, 15);
+        assert!(!session.settings_ui.cadence_dropdown_open);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendRefreshRequest(_)
+        )));
+        assert!(has_render(&effects));
+    }
+
     // ── ToggleShowAccountInfo ───────────────────────────
 
     #[test]
