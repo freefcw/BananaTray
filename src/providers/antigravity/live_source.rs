@@ -84,10 +84,40 @@ pub fn detect_process() -> Result<ProcessInfo> {
 
     stdout
         .lines()
-        .find(|line| PROCESS_NAMES.iter().any(|name| line.contains(name)))
+        .find(|line| is_antigravity_process(line))
         .ok_or_else(|| ProviderError::unavailable("Antigravity language server not running")) // pgrep 有结果但不是目标进程
         .and_then(parse_process_line)
         .map_err(Into::into)
+}
+
+/// 判断 pgrep 输出行是否为 Antigravity 的 language server 进程。
+///
+/// 由于 Windsurf 也使用同名的 `language_server_macos` 二进制文件，
+/// 仅靠进程名无法区分。需要额外检查：
+/// - 命令行参数中包含 `--app_data_dir` 且值为 `antigravity`
+/// - 或可执行文件路径中包含 `/antigravity/` 或 `/Antigravity.app/`
+fn is_antigravity_process(line: &str) -> bool {
+    let lower = line.to_lowercase();
+
+    // 首先确认是 language_server_macos 进程
+    if !PROCESS_NAMES.iter().any(|name| lower.contains(name)) {
+        return false;
+    }
+
+    // 检查 --app_data_dir antigravity（Antigravity 特有的参数）
+    if lower.contains("--app_data_dir") && lower.contains("antigravity") {
+        return true;
+    }
+
+    // 检查路径中包含 antigravity（如 /Applications/Antigravity.app/... 或 ~/.antigravity/...）
+    if lower.contains("/antigravity/")
+        || lower.contains(".antigravity/")
+        || lower.contains("/antigravity.app/")
+    {
+        return true;
+    }
+
+    false
 }
 
 pub fn resolve_port(process: &ProcessInfo) -> Result<u16> {
@@ -259,6 +289,36 @@ mod tests {
         let line = "12345 language_server_macos_arm --extension_server_port 4242";
         let err = parse_process_line(line).unwrap_err();
         assert!(matches!(err, ProviderError::ParseFailed { .. }));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_with_app_data_dir() {
+        let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc --extension_server_port 57048 --app_data_dir antigravity";
+        assert!(is_antigravity_process(line));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_with_path() {
+        let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc";
+        assert!(is_antigravity_process(line));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_rejects_windsurf() {
+        let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+        assert!(!is_antigravity_process(line));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_rejects_non_language_server() {
+        let line = "99999 /usr/bin/some_other_process --app_data_dir antigravity";
+        assert!(!is_antigravity_process(line));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_with_dot_antigravity_path() {
+        let line = "12345 /Users/test/.antigravity/bin/language_server_macos_arm --csrf_token abc";
+        assert!(is_antigravity_process(line));
     }
 
     #[test]
