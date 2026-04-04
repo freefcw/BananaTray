@@ -73,6 +73,7 @@ fn settings_provider_detail_view_state(
             ProviderKind::Copilot => ProviderSettingsMode::Interactive,
             _ => ProviderSettingsMode::AutoManaged,
         },
+        quota_display_mode: session.settings.quota_display_mode,
     }
 }
 
@@ -280,5 +281,29 @@ mod tests {
             view_state.detail.usage,
             SettingsProviderUsageViewState::Error { .. }
         ));
+    }
+
+    // ── QuotaDisplayMode 透传 ────────────────────────────
+
+    #[test]
+    fn settings_detail_inherits_quota_display_mode() {
+        use crate::models::QuotaDisplayMode;
+
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Claude, true);
+        settings.quota_display_mode = QuotaDisplayMode::Used;
+
+        let session = make_session(
+            settings,
+            ProviderKind::Claude,
+            vec![make_provider(
+                ProviderKind::Claude,
+                ConnectionStatus::Connected,
+            )],
+        );
+
+        let view_state = settings_providers_tab_view_state(&session);
+        assert_eq!(view_state.detail.quota_display_mode, QuotaDisplayMode::Used);
     }
 }

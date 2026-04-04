@@ -304,3 +304,11 @@ quota.label.resets_on: "⏱ Resets on %{date}"
 quota.label.expires_in_days: "⏱ Expires in %{days} days"
 quota.label.request_detail: "%{used} / %{total} requests"
 quota.label.credit_remaining: "$%{remaining} / $%{total} remaining"
+
+# ── Quota display mode ─────────────────────────────────────
+quota.mode.remaining: "Remaining"
+quota.mode.used: "Used"
+settings.quota_display_mode: "Quota Display"
+settings.quota_display_mode.desc: "Show remaining or used quota in the panel."
+settings.quota_display_mode.remaining: "Remaining"
+settings.quota_display_mode.used: "Used"

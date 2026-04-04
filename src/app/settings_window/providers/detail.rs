@@ -4,7 +4,7 @@ use crate::application::{
     AppAction, ProviderSettingsMode, SettingsProviderDetailViewState, SettingsProviderStatusKind,
     SettingsProviderUsageViewState,
 };
-use crate::models::ProviderKind;
+use crate::models::{ProviderKind, QuotaDisplayMode};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -161,7 +161,7 @@ impl SettingsView {
             // ── Info table (两列布局) ──
             .child(self.render_info_table(&detail.info, theme))
             // ── Usage section ──
-            .child(self.render_usage_section(&detail.usage, theme))
+            .child(self.render_usage_section(&detail.usage, theme, detail.quota_display_mode))
             // ── Settings section ──
             .child(self.render_settings_section(detail.settings_mode, theme, cx));
 
@@ -235,7 +235,12 @@ impl SettingsView {
 
     // ══════ Usage section ══════
 
-    fn render_usage_section(&self, usage: &SettingsProviderUsageViewState, theme: &Theme) -> Div {
+    fn render_usage_section(
+        &self,
+        usage: &SettingsProviderUsageViewState,
+        theme: &Theme,
+        display_mode: QuotaDisplayMode,
+    ) -> Div {
         let mut section = div()
             .flex_col()
             .mt(px(20.0))
@@ -258,11 +263,9 @@ impl SettingsView {
             }
             SettingsProviderUsageViewState::Quotas { quotas } => {
                 for quota in quotas {
-                    section = section.child(
-                        div()
-                            .mt(px(10.0))
-                            .child(crate::app::widgets::render_quota_bar(quota, theme, 0)),
-                    );
+                    section = section.child(div().mt(px(10.0)).child(
+                        crate::app::widgets::render_quota_bar(quota, theme, 0, display_mode),
+                    ));
                 }
             }
             SettingsProviderUsageViewState::Error { title, message } => {

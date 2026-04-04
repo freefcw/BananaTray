@@ -1,5 +1,5 @@
 use crate::app_state::SettingsTab;
-use crate::models::{AppTheme, NavTab, ProviderKind, TrayIconStyle};
+use crate::models::{AppTheme, NavTab, ProviderKind, QuotaDisplayMode, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason};
 
 #[derive(Debug)]
@@ -59,6 +59,7 @@ pub enum SettingChange {
     Language(String),
     RefreshCadence(Option<u64>),
     SetTrayIconStyle(TrayIconStyle),
+    SetQuotaDisplayMode(QuotaDisplayMode),
 }
 
 #[derive(Debug, Clone, Copy)]

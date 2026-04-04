@@ -28,6 +28,16 @@ pub enum TrayIconStyle {
     Colorful,
 }
 
+/// 额度显示模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum QuotaDisplayMode {
+    /// 显示剩余额度（默认）
+    #[default]
+    Remaining,
+    /// 显示已用额度
+    Used,
+}
+
 /// 应用主题
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppTheme {
@@ -105,6 +115,9 @@ pub struct AppSettings {
     /// 托盘图标风格
     #[serde(default)]
     pub tray_icon_style: TrayIconStyle,
+    /// 额度显示模式：剩余 or 已用
+    #[serde(default)]
+    pub quota_display_mode: QuotaDisplayMode,
 }
 
 fn default_true() -> bool {
@@ -134,6 +147,7 @@ impl Default for AppSettings {
             show_debug_tab: false,
             show_account_info: true,
             tray_icon_style: TrayIconStyle::default(),
+            quota_display_mode: QuotaDisplayMode::default(),
         }
     }
 }

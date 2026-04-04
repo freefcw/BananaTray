@@ -132,8 +132,12 @@ impl AppView {
                     if i > 0 {
                         cards = cards.child(div().h(px(8.0)));
                     }
-                    cards =
-                        cards.child(super::widgets::render_quota_bar(quota, &theme, *generation));
+                    cards = cards.child(super::widgets::render_quota_bar(
+                        quota,
+                        &theme,
+                        *generation,
+                        vm.quota_display_mode,
+                    ));
                 }
                 cards
             }

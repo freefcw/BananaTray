@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use crate::models::{QuotaInfo, QuotaType, StatusLevel};
+use crate::models::{QuotaDisplayMode, QuotaInfo, QuotaType, StatusLevel};
 use crate::theme::Theme;
 use gpui::*;
+use rust_i18n::t;
 
 /// 状态徽章文本
 fn status_badge_label(level: StatusLevel) -> &'static str {
@@ -32,7 +33,12 @@ fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
 }
 
 /// Lumina Bar 风格的 quota 卡片
-pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) -> impl IntoElement {
+pub(crate) fn render_quota_bar(
+    q: &QuotaInfo,
+    theme: &Theme,
+    generation: u64,
+    display_mode: QuotaDisplayMode,
+) -> impl IntoElement {
     let remaining_pct = q.percent_remaining();
     let is_over_limit = remaining_pct < 0.0;
     let status = q.status_level();
@@ -50,8 +56,8 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
     let anim_id = ElementId::Name(format!("quota-bar-{}-{}", q.label, generation).into());
 
     // 主显示文本：数字 + 单位合并为单个字符串，避免对齐问题
-    let display_text = match q.quota_type {
-        QuotaType::Credit => {
+    let display_text = match (&q.quota_type, display_mode) {
+        (QuotaType::Credit, QuotaDisplayMode::Remaining) => {
             let remaining = q.limit - q.used;
             if remaining >= 0.0 {
                 format!("${:.0}", remaining)
@@ -59,10 +65,23 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
                 format!("-${:.0}", -remaining)
             }
         }
-        _ => {
+        (QuotaType::Credit, QuotaDisplayMode::Used) => {
+            format!("${:.0}", q.used)
+        }
+        (_, QuotaDisplayMode::Remaining) => {
             let pct = remaining_pct.max(0.0);
             format!("{:.0}", pct)
         }
+        (_, QuotaDisplayMode::Used) => {
+            let pct = q.percentage().clamp(0.0, 100.0);
+            format!("{:.0}", pct)
+        }
+    };
+
+    // 模式标签
+    let mode_label = match display_mode {
+        QuotaDisplayMode::Remaining => t!("quota.mode.remaining").to_string(),
+        QuotaDisplayMode::Used => t!("quota.mode.used").to_string(),
     };
 
     let has_unit = !matches!(q.quota_type, QuotaType::Credit);
@@ -170,7 +189,7 @@ pub(crate) fn render_quota_bar(q: &QuotaInfo, theme: &Theme, generation: u64) ->
                         .text_color(theme.text_secondary)
                         .line_height(relative(1.0))
                         .mb(px(1.0))
-                        .child("Remaining"),
+                        .child(mode_label),
                 ),
         )
         // ── 第三行：进度条（渐变色） ──

@@ -2,7 +2,7 @@ use super::components::{render_dark_card, render_divider, render_section_header}
 use super::SettingsView;
 use crate::app::widgets::{render_segmented_control, SegmentedSize};
 use crate::application::{AppAction, SettingChange};
-use crate::models::{AppSettings, AppTheme, TrayIconStyle};
+use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
@@ -98,6 +98,36 @@ impl SettingsView {
                                     &state,
                                     AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(
                                         style,
+                                    )),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    ))
+                    .child(render_divider(theme))
+                    // Quota Display Mode 选择器行
+                    .child(render_inline_segmented_row(
+                        &t!("settings.quota_display_mode"),
+                        vec![
+                            (
+                                t!("settings.quota_display_mode.remaining").to_string(),
+                                QuotaDisplayMode::Remaining,
+                            ),
+                            (
+                                t!("settings.quota_display_mode.used").to_string(),
+                                QuotaDisplayMode::Used,
+                            ),
+                        ],
+                        &settings.quota_display_mode,
+                        theme,
+                        {
+                            let state = self.state.clone();
+                            move |mode: QuotaDisplayMode, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(
+                                        mode,
                                     )),
                                     window,
                                     cx,
