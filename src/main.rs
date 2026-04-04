@@ -18,6 +18,7 @@ mod runtime;
 mod settings_store;
 mod single_instance;
 mod theme;
+mod tray_icon_helper;
 mod utils;
 
 use app::{schedule_open_settings_window, AppState};
@@ -233,7 +234,10 @@ fn main() {
             cx.set_keep_alive_without_windows(true);
 
             // 2. 配置系统托盘
-            cx.set_tray_icon(Some(include_bytes!("tray_icon.png")));
+            {
+                let settings = crate::settings_store::load().unwrap_or_default();
+                crate::tray_icon_helper::apply_tray_icon(cx, settings.tray_icon_style);
+            }
             cx.set_tray_tooltip(&t!("tray.tooltip"));
             cx.set_tray_panel_mode(true);
 

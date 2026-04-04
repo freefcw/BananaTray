@@ -6,6 +6,28 @@ use std::collections::{HashMap, HashSet};
 // 应用设置
 // ============================================================================
 
+/// 托盘图标风格
+///
+/// macOS 的 NSImage `setTemplate:YES` 会强制将图标当作模板图像，
+/// 只读取 alpha 通道并忽略所有颜色信息，由系统根据菜单栏明暗模式
+/// 自动着色（浅色模式 → 深色图标，深色模式 → 浅色图标）。
+///
+/// 为了支持彩色图标，`Monochrome` 使用 template 模式（跟随系统），
+/// 而 `Yellow` / `Colorful` 则通过运行时 hack 将 `setTemplate` 关闭，
+/// 使图标显示原始颜色。
+///
+/// 在 Windows / Linux 上没有 template 概念，PNG 颜色直接生效。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrayIconStyle {
+    /// 单色 — macOS template 模式，跟随系统深色/浅色自动适配
+    #[default]
+    Monochrome,
+    /// 黄色香蕉
+    Yellow,
+    /// 多彩渐变色香蕉
+    Colorful,
+}
+
 /// 应用主题
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppTheme {
@@ -80,6 +102,9 @@ pub struct AppSettings {
     /// 是否在 Provider 面板显示账户信息卡片
     #[serde(default = "default_true")]
     pub show_account_info: bool,
+    /// 托盘图标风格
+    #[serde(default)]
+    pub tray_icon_style: TrayIconStyle,
 }
 
 fn default_true() -> bool {
@@ -108,6 +133,7 @@ impl Default for AppSettings {
             show_refresh_button: true,
             show_debug_tab: false,
             show_account_info: true,
+            tray_icon_style: TrayIconStyle::default(),
         }
     }
 }
@@ -222,5 +248,39 @@ mod tests {
         assert_eq!(settings.provider_order[0], ProviderKind::Claude.id_key());
         assert_eq!(settings.provider_order[1], ProviderKind::Gemini.id_key());
         assert_eq!(settings.provider_order.len(), ProviderKind::all().len());
+    }
+
+    // ── TrayIconStyle ────────────────────────────────────
+
+    #[test]
+    fn tray_icon_style_default_is_monochrome() {
+        assert_eq!(TrayIconStyle::default(), TrayIconStyle::Monochrome);
+    }
+
+    #[test]
+    fn tray_icon_style_serde_round_trip() {
+        for style in [
+            TrayIconStyle::Monochrome,
+            TrayIconStyle::Yellow,
+            TrayIconStyle::Colorful,
+        ] {
+            let json = serde_json::to_string(&style).unwrap();
+            let deserialized: TrayIconStyle = serde_json::from_str(&json).unwrap();
+            assert_eq!(style, deserialized);
+        }
+    }
+
+    #[test]
+    fn app_settings_missing_tray_icon_style_defaults_to_monochrome() {
+        // Simulate loading settings JSON that was saved before tray_icon_style existed.
+        let json = serde_json::json!({
+            "theme": "Dark",
+            "refresh_interval_mins": 5,
+            "global_hotkey": "Cmd+Shift+S",
+            "auto_hide_window": true,
+            "providers": {}
+        });
+        let settings: AppSettings = serde_json::from_value(json).unwrap();
+        assert_eq!(settings.tray_icon_style, TrayIconStyle::Monochrome);
     }
 }

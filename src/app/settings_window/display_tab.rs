@@ -2,7 +2,7 @@ use super::components::{render_dark_card, render_divider, render_section_header}
 use super::SettingsView;
 use crate::app::widgets::{render_segmented_control, SegmentedSize};
 use crate::application::{AppAction, SettingChange};
-use crate::models::{AppSettings, AppTheme};
+use crate::models::{AppSettings, AppTheme, TrayIconStyle};
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
@@ -94,6 +94,52 @@ impl SettingsView {
                                         runtime::dispatch_in_window(
                                             &state,
                                             AppAction::UpdateSetting(SettingChange::Language(code)),
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )
+                            }),
+                    )
+                    // Tray Icon Style 选择器
+                    .child(
+                        div()
+                            .flex_col()
+                            .gap(px(10.0))
+                            .child(
+                                div()
+                                    .text_size(px(15.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_primary)
+                                    .child(t!("settings.tray_icon_style").to_string()),
+                            )
+                            .child({
+                                let state = self.state.clone();
+                                let options: Vec<(String, TrayIconStyle)> = vec![
+                                    (
+                                        t!("settings.tray_icon.monochrome").to_string(),
+                                        TrayIconStyle::Monochrome,
+                                    ),
+                                    (
+                                        t!("settings.tray_icon.yellow").to_string(),
+                                        TrayIconStyle::Yellow,
+                                    ),
+                                    (
+                                        t!("settings.tray_icon.colorful").to_string(),
+                                        TrayIconStyle::Colorful,
+                                    ),
+                                ];
+                                render_segmented_control(
+                                    &options,
+                                    &settings.tray_icon_style,
+                                    SegmentedSize::Full,
+                                    theme,
+                                    move |style: TrayIconStyle, window, cx| {
+                                        runtime::dispatch_in_window(
+                                            &state,
+                                            AppAction::UpdateSetting(
+                                                SettingChange::SetTrayIconStyle(style),
+                                            ),
                                             window,
                                             cx,
                                         );

@@ -67,6 +67,9 @@ fn run_effect_in_context<V: 'static>(
         RoutedEffect::OpenUrl(url) => {
             warn!(target: "runtime", "OpenUrl({}) effect ignored: not available in Context<V>", url);
         }
+        RoutedEffect::ApplyTrayIcon(_) => {
+            warn!(target: "runtime", "ApplyTrayIcon effect ignored: not available in Context<V>");
+        }
         RoutedEffect::QuitApp => {
             warn!(target: "runtime", "QuitApp effect ignored: not available in Context<V>");
         }
@@ -113,6 +116,10 @@ fn run_app_logic_effect(effect: RoutedEffect, cx: &mut App) -> Result<(), Routed
     match effect {
         RoutedEffect::OpenUrl(url) => {
             crate::utils::platform::open_url(&url);
+            Ok(())
+        }
+        RoutedEffect::ApplyTrayIcon(style) => {
+            crate::tray_icon_helper::apply_tray_icon(cx, style);
             Ok(())
         }
         RoutedEffect::QuitApp => {
