@@ -180,6 +180,7 @@ impl TrayController {
             let auto_hide_state = self.state.clone();
             let activation_initialized = Rc::new(Cell::new(false));
             let _ = handle.update(cx, |view, window, cx| {
+                // 监听窗口失焦，自动关闭
                 let activation_initialized = activation_initialized.clone();
                 let sub = cx.observe_window_activation(window, move |_view, window, _cx| {
                     if !activation_initialized.replace(true) {
@@ -194,6 +195,20 @@ impl TrayController {
                     }
                 });
                 view._activation_sub = Some(sub);
+
+                // 监听系统外观变化（深色/浅色模式切换），自动更新主题
+                let appearance_state = view.state.clone();
+                let appearance_sub =
+                    cx.observe_window_appearance(window, move |_view, window, cx| {
+                        let user_theme = appearance_state.borrow().session.settings.theme;
+                        let theme = crate::theme::Theme::resolve_for_settings(
+                            user_theme,
+                            window.appearance(),
+                        );
+                        cx.set_global(theme);
+                        log::debug!(target: "app", "system appearance changed, tray theme updated");
+                    });
+                view._appearance_sub = Some(appearance_sub);
             });
             self.window = Some(handle);
         } else if let Err(err) = result {

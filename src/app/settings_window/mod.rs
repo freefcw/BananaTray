@@ -27,6 +27,8 @@ pub use window_mgr::schedule_open_settings_window;
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
+    /// 监听系统深色模式变化，自动切换主题
+    pub(crate) _appearance_sub: Option<gpui::Subscription>,
 }
 
 impl SettingsView {
@@ -35,18 +37,17 @@ impl SettingsView {
         Self {
             state,
             copilot_input: None,
+            _appearance_sub: None,
         }
     }
 
-    /// 根据用户主题设置解析设置窗口主题（与主面板保持一致）
-    pub(super) fn resolve_theme(state: &std::cell::RefCell<AppState>) -> Theme {
-        use crate::models::AppTheme;
-        let is_dark = crate::utils::platform::detect_system_dark_mode();
-        match state.borrow().session.settings.theme.resolve(is_dark) {
-            AppTheme::Light => Theme::light(),
-            AppTheme::Dark => Theme::dark(),
-            AppTheme::System => unreachable!("resolve() never returns System"),
-        }
+    /// 根据用户主题设置 + 窗口外观解析设置窗口主题
+    pub(super) fn resolve_theme(
+        state: &std::cell::RefCell<AppState>,
+        appearance: WindowAppearance,
+    ) -> Theme {
+        let user_theme = state.borrow().session.settings.theme;
+        Theme::resolve_for_settings(user_theme, appearance)
     }
 
     // ========================================================================
@@ -235,7 +236,7 @@ impl SettingsView {
 
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Self::resolve_theme(&self.state);
+        let theme = Self::resolve_theme(&self.state, window.appearance());
         let active_tab = self.state.borrow().session.settings_ui.active_tab;
         let settings = self.state.borrow().session.settings.clone();
         let viewport = window.viewport_size();

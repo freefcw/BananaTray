@@ -214,7 +214,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     if let Ok(handle) = result {
         info!(target: "settings", "opened new settings window");
         cx.activate(true);
-        let _ = handle.update(cx, |_, window, _| {
+        let _ = handle.update(cx, |view, window, cx| {
             window.show_window();
             window.activate_window();
             // Force a resize cycle to sync viewport/renderer on secondary displays.
@@ -223,6 +223,16 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
             let vp = window.viewport_size();
             window.resize(size(vp.width + px(1.0), vp.height));
             window.resize(vp);
+
+            // 监听系统外观变化（深色/浅色模式切换），触发重绘以更新主题
+            let appearance_sub =
+                cx.observe_window_appearance(window, |_view, _window, cx| {
+                    // SettingsView::render 每帧调用 resolve_theme(window.appearance())，
+                    // 只需 notify 触发重绘即可
+                    cx.notify();
+                    log::debug!(target: "settings", "system appearance changed, settings window refreshed");
+                });
+            view._appearance_sub = Some(appearance_sub);
         });
         info!(target: "settings", "requested app/window activation for settings window");
         SETTINGS_WINDOW.with(|slot| {

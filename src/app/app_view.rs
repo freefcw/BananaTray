@@ -19,13 +19,18 @@ use crate::models::PopupLayout;
 pub struct AppView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) _activation_sub: Option<gpui::Subscription>,
+    /// 监听系统深色模式变化，自动切换主题
+    pub(crate) _appearance_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
 }
 
 impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
+        // 初次创建时通过子进程检测深色模式并设置主题
+        // 后续变化通过 observe_window_appearance 自动跟随
         let is_dark = crate::utils::platform::detect_system_dark_mode();
-        let theme = match state.borrow().session.settings.theme.resolve(is_dark) {
+        let user_theme = state.borrow().session.settings.theme;
+        let theme = match user_theme.resolve(is_dark) {
             crate::models::AppTheme::Light => Theme::light(),
             crate::models::AppTheme::Dark => Theme::dark(),
             crate::models::AppTheme::System => unreachable!("resolve() never returns System"),
@@ -37,6 +42,7 @@ impl AppView {
         Self {
             state,
             _activation_sub: None,
+            _appearance_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
         }
     }
