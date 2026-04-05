@@ -1,10 +1,10 @@
 use crate::app_state::AppSession;
 use crate::models::AppSettings;
+use crate::providers::ProviderManager;
 use crate::refresh::RefreshRequest;
 use log::{debug, warn};
 use smol::channel::Sender;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 // ============================================================================
 // 设置持久化（放在此处：紧密关联 AppSettings 操作，由调用方在修改后触发）
@@ -33,14 +33,17 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(refresh_tx: Sender<RefreshRequest>, log_path: Option<PathBuf>) -> Self {
+    pub fn new(
+        refresh_tx: Sender<RefreshRequest>,
+        manager: &ProviderManager,
+        log_path: Option<PathBuf>,
+    ) -> Self {
         debug!(target: "app", "initializing AppState");
         let settings = crate::settings_store::load().unwrap_or_else(|err| {
             warn!(target: "settings", "failed to load saved settings: {err}");
             AppSettings::default()
         });
         crate::auto_launch::sync(settings.start_at_login);
-        let manager = Arc::new(crate::providers::ProviderManager::new());
         let mut providers = manager.initial_statuses();
         for p in &mut providers {
             p.enabled = settings.is_provider_enabled(p.kind);

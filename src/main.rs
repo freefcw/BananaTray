@@ -42,10 +42,11 @@ struct TrayController {
 impl TrayController {
     fn new(
         refresh_tx: smol::channel::Sender<RefreshRequest>,
+        manager: &crate::providers::ProviderManager,
         log_path: Option<std::path::PathBuf>,
     ) -> Self {
         info!(target: "tray", "initializing tray controller");
-        let state = Rc::new(RefCell::new(AppState::new(refresh_tx, log_path)));
+        let state = Rc::new(RefCell::new(AppState::new(refresh_tx, manager, log_path)));
         Self {
             window: None,
             state,
@@ -243,10 +244,8 @@ fn main() {
 
             // 3. 启动 RefreshCoordinator（后台事件循环）
             let (event_tx, event_rx) = smol::channel::bounded::<refresh::RefreshEvent>(64);
-            let coordinator = {
-                let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
-                RefreshCoordinator::new(manager, event_tx)
-            };
+            let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
+            let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
             let refresh_tx = coordinator.sender();
 
             // 在后台线程运行协调器事件循环
@@ -255,9 +254,10 @@ fn main() {
                 .spawn(move || smol::block_on(coordinator.run()))
                 .expect("failed to spawn refresh coordinator thread");
 
-            // 4. 窗口控制器
+            // 4. 窗口控制器（复用同一个 ProviderManager 实例）
             let controller = Rc::new(RefCell::new(TrayController::new(
                 refresh_tx,
+                &manager,
                 log_path.clone(),
             )));
 
