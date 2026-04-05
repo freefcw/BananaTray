@@ -1,5 +1,13 @@
 use gpui::*;
 
+/// 判断 WindowAppearance 是否为深色系
+pub fn is_dark_appearance(appearance: WindowAppearance) -> bool {
+    matches!(
+        appearance,
+        WindowAppearance::Dark | WindowAppearance::VibrantDark
+    )
+}
+
 #[derive(Clone)]
 pub struct Theme {
     pub bg_base: Hsla,
@@ -118,6 +126,22 @@ impl Theme {
             btn_sync_text: rgb(0xf4f4f5).into(),
             nav_pill_active_bg: rgb(0x2c2c30).into(),
             nav_pill_active_text: rgb(0xf4f4f5).into(),
+        }
+    }
+
+    /// 根据 WindowAppearance 和用户主题设置解析为具体 Theme
+    ///
+    /// 当用户选择 System 时使用 `appearance` 检测深色/浅色；
+    /// 用户明确选择 Light/Dark 时忽略 `appearance`。
+    pub fn resolve_for_settings(
+        user_theme: crate::models::AppTheme,
+        appearance: WindowAppearance,
+    ) -> Self {
+        let resolved = user_theme.resolve(is_dark_appearance(appearance));
+        match resolved {
+            crate::models::AppTheme::Light => Self::light(),
+            crate::models::AppTheme::Dark => Self::dark(),
+            crate::models::AppTheme::System => unreachable!("resolve() never returns System"),
         }
     }
 }
