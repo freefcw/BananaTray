@@ -1,6 +1,5 @@
 use crate::app::{persist_settings, schedule_open_settings_window, AppState};
-use crate::application::effect::{route_effect, CommonEffect, RoutedEffect};
-use crate::application::{reduce, AppAction, DebugNotificationKind};
+use crate::application::{reduce, AppAction, AppEffect, DebugNotificationKind};
 use crate::models::ConnectionStatus;
 use crate::notification::{send_system_notification, QuotaAlert};
 use crate::refresh::RefreshRequest;
@@ -35,125 +34,102 @@ pub fn dispatch_in_app(state: &Rc<RefCell<AppState>>, action: AppAction, cx: &mu
     dispatch_effects(state, action, |effect| run_effect_in_app(state, effect, cx));
 }
 
-fn reduce_action(state: &Rc<RefCell<AppState>>, action: AppAction) -> Vec<RoutedEffect> {
-    let mut state_ref = state.borrow_mut();
-    reduce(&mut state_ref.session, action)
-        .into_iter()
-        .map(route_effect)
-        .collect()
-}
-
 fn dispatch_effects(
     state: &Rc<RefCell<AppState>>,
     action: AppAction,
-    mut run_effect: impl FnMut(RoutedEffect),
+    mut run_effect: impl FnMut(AppEffect),
 ) {
-    for effect in reduce_action(state, action) {
+    let effects = {
+        let mut state_ref = state.borrow_mut();
+        reduce(&mut state_ref.session, action)
+    };
+    for effect in effects {
         run_effect(effect);
     }
 }
 
+// ============================================================================
+// Effect 执行：按 GPUI 上下文分派
+// ============================================================================
+
 fn run_effect_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
-    effect: RoutedEffect,
+    effect: AppEffect,
     cx: &mut Context<V>,
 ) {
     match effect {
-        RoutedEffect::Common(effect) => run_common_effect(state, effect),
-        RoutedEffect::Render => cx.notify(),
-        RoutedEffect::OpenSettingsWindow => {
-            warn!(target: "runtime", "OpenSettingsWindow effect ignored: not available in Context<V>");
+        AppEffect::Render => cx.notify(),
+        // Context<V> 中无法执行以下 effect
+        AppEffect::OpenSettingsWindow
+        | AppEffect::OpenUrl(_)
+        | AppEffect::ApplyTrayIcon(_)
+        | AppEffect::QuitApp => {
+            warn!(target: "runtime", "effect {:?} ignored: not available in Context<V>", effect);
         }
-        RoutedEffect::OpenUrl(url) => {
-            warn!(target: "runtime", "OpenUrl({}) effect ignored: not available in Context<V>", url);
-        }
-        RoutedEffect::ApplyTrayIcon(_) => {
-            warn!(target: "runtime", "ApplyTrayIcon effect ignored: not available in Context<V>");
-        }
-        RoutedEffect::QuitApp => {
-            warn!(target: "runtime", "QuitApp effect ignored: not available in Context<V>");
-        }
+        other => run_common_effect(state, other),
     }
 }
 
 fn run_effect_in_window(
     state: &Rc<RefCell<AppState>>,
-    effect: RoutedEffect,
+    effect: AppEffect,
     window: &mut Window,
     cx: &mut App,
 ) {
     match effect {
-        RoutedEffect::Common(effect) => run_common_effect(state, effect),
-        RoutedEffect::Render => window.refresh(),
-        RoutedEffect::OpenSettingsWindow => {
+        AppEffect::Render => window.refresh(),
+        AppEffect::OpenSettingsWindow => {
             let display_id = window.display(cx).map(|display| display.id());
             state.borrow_mut().view_entity = None;
             window.remove_window();
             schedule_open_settings_window(state.clone(), display_id, cx);
         }
-        _ => {
-            if let Err(err_effect) = run_app_logic_effect(effect, cx) {
-                warn!(target: "runtime", "Effect {:?} ignored in Window context", err_effect);
-            }
-        }
+        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
+        AppEffect::ApplyTrayIcon(style) => crate::tray_icon_helper::apply_tray_icon(cx, style),
+        AppEffect::QuitApp => cx.quit(),
+        other => run_common_effect(state, other),
     }
 }
 
-fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: RoutedEffect, cx: &mut App) {
+fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut App) {
     match effect {
-        RoutedEffect::Common(effect) => run_common_effect(state, effect),
-        RoutedEffect::Render => notify_view_entity(state, cx),
-        RoutedEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
-        _ => {
-            if let Err(err_effect) = run_app_logic_effect(effect, cx) {
-                warn!(target: "runtime", "Effect {:?} ignored in App context", err_effect);
-            }
-        }
+        AppEffect::Render => notify_view_entity(state, cx),
+        AppEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
+        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
+        AppEffect::ApplyTrayIcon(style) => crate::tray_icon_helper::apply_tray_icon(cx, style),
+        AppEffect::QuitApp => cx.quit(),
+        other => run_common_effect(state, other),
     }
 }
 
-fn run_app_logic_effect(effect: RoutedEffect, cx: &mut App) -> Result<(), RoutedEffect> {
-    match effect {
-        RoutedEffect::OpenUrl(url) => {
-            crate::utils::platform::open_url(&url);
-            Ok(())
-        }
-        RoutedEffect::ApplyTrayIcon(style) => {
-            crate::tray_icon_helper::apply_tray_icon(cx, style);
-            Ok(())
-        }
-        RoutedEffect::QuitApp => {
-            cx.quit();
-            Ok(())
-        }
-        _ => Err(effect),
-    }
-}
+// ============================================================================
+// Common Effect 执行：不依赖 GPUI 上下文
+// ============================================================================
 
-fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
+fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
     match effect {
-        CommonEffect::PersistSettings => {
+        AppEffect::PersistSettings => {
             persist_current_settings(state);
         }
-        CommonEffect::SendRefreshRequest(request) => {
+        AppEffect::SendRefreshRequest(request) => {
             let _ = send_refresh_request(state, request);
         }
-        CommonEffect::SyncAutoLaunch(enabled) => {
+        AppEffect::SyncAutoLaunch(enabled) => {
             sync_auto_launch(enabled);
         }
-        CommonEffect::ApplyLocale(language) => {
+        AppEffect::ApplyLocale(language) => {
             crate::i18n::apply_locale(&language);
         }
-        CommonEffect::UpdateLogLevel(level) => {
+        AppEffect::UpdateLogLevel(level) => {
             update_log_level(&level);
         }
-        CommonEffect::SendQuotaNotification { alert, with_sound } => {
+        AppEffect::SendQuotaNotification { alert, with_sound } => {
             send_system_notification(&alert, with_sound);
         }
-        CommonEffect::SendDebugNotification { kind, with_sound } => {
+        AppEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
-        CommonEffect::OpenLogDirectory => {
+        AppEffect::OpenLogDirectory => {
             let log_path = state.borrow().log_path.clone();
             if let Some(path) = log_path {
                 crate::utils::platform::open_path_in_finder(&path);
@@ -161,10 +137,10 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
                 warn!(target: "runtime", "OpenLogDirectory: log_path not available");
             }
         }
-        CommonEffect::CopyToClipboard(text) => {
+        AppEffect::CopyToClipboard(text) => {
             crate::utils::platform::copy_to_clipboard(&text);
         }
-        CommonEffect::StartDebugRefresh(kind) => {
+        AppEffect::StartDebugRefresh(kind) => {
             use crate::utils::log_capture::LogCapture;
             info!(target: "runtime", "starting debug refresh for {:?}", kind);
             // 1. 保存当前日志级别到 state（供 RestoreLogLevel 使用）
@@ -181,18 +157,30 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             };
             let _ = send_refresh_request(state, request);
         }
-        CommonEffect::RestoreLogLevel(level) => {
+        AppEffect::RestoreLogLevel(level) => {
             use crate::utils::log_capture::LogCapture;
             info!(target: "runtime", "debug refresh complete, restoring log level to {:?}", level);
             // 停用日志捕获，恢复日志级别
             LogCapture::global().disable();
             log::set_max_level(level);
         }
-        CommonEffect::ClearDebugLogs => {
+        AppEffect::ClearDebugLogs => {
             crate::utils::log_capture::LogCapture::global().clear();
+        }
+        // 以下 variant 应由上层 context-specific match 处理，不应到达此处
+        AppEffect::Render
+        | AppEffect::OpenSettingsWindow
+        | AppEffect::OpenUrl(_)
+        | AppEffect::ApplyTrayIcon(_)
+        | AppEffect::QuitApp => {
+            warn!(target: "runtime", "unexpected effect in run_common_effect: {:?}", effect);
         }
     }
 }
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 fn persist_current_settings(state: &Rc<RefCell<AppState>>) {
     let settings = state.borrow().session.settings.clone();
