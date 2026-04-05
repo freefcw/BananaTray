@@ -33,6 +33,10 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// ============================================================================
+// TrayController — 窗口管理器
+// ============================================================================
+
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 struct TrayController {
     window: Option<WindowHandle<app::AppView>>,
@@ -198,6 +202,144 @@ impl TrayController {
     }
 }
 
+// ============================================================================
+// Bootstrap — 应用初始化
+// ============================================================================
+
+/// 初始化 i18n、UI 工具包、托盘图标（在 GPUI run 闭包内调用）
+fn bootstrap_ui(cx: &mut App) {
+    // i18n locale
+    let settings = crate::settings_store::load().unwrap_or_default();
+    crate::i18n::apply_locale(&settings.language);
+
+    // adabraka-ui 工具包
+    adabraka_ui::init(cx);
+    adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
+    cx.set_keep_alive_without_windows(true);
+
+    // 系统托盘
+    crate::tray_icon_helper::apply_tray_icon(cx, settings.tray_icon_style);
+    cx.set_tray_tooltip(&t!("tray.tooltip"));
+    cx.set_tray_panel_mode(true);
+}
+
+/// 创建 ProviderManager + RefreshCoordinator，启动后台刷新线程。
+/// 返回 (refresh_tx, event_rx, manager) 供后续步骤使用。
+fn bootstrap_refresh() -> (
+    smol::channel::Sender<RefreshRequest>,
+    smol::channel::Receiver<refresh::RefreshEvent>,
+    std::sync::Arc<crate::providers::ProviderManager>,
+) {
+    let (event_tx, event_rx) = smol::channel::bounded::<refresh::RefreshEvent>(64);
+    let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
+    let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
+    let refresh_tx = coordinator.sender();
+
+    std::thread::Builder::new()
+        .name("refresh-coordinator".into())
+        .spawn(move || smol::block_on(coordinator.run()))
+        .expect("failed to spawn refresh coordinator thread");
+
+    (refresh_tx, event_rx, manager)
+}
+
+/// 启动事件泵：从协调器接收 RefreshEvent，分派到 UI 线程更新 AppState
+fn start_event_pump(
+    state: &Rc<RefCell<AppState>>,
+    event_rx: smol::channel::Receiver<refresh::RefreshEvent>,
+    cx: &mut App,
+) {
+    let state = state.clone();
+    let pump_cx = cx.to_async();
+    cx.to_async()
+        .foreground_executor()
+        .spawn(async move {
+            while let Ok(event) = event_rx.recv().await {
+                let _ = pump_cx.update(|cx| {
+                    runtime::dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
+                });
+            }
+        })
+        .detach();
+}
+
+/// 发送初始配置同步 + 启动首次刷新
+fn trigger_initial_refresh(state: &Rc<RefCell<AppState>>) {
+    let config_request = crate::application::build_config_sync_request(&state.borrow().session);
+    let _ = state.borrow().send_refresh(config_request);
+    let _ = state.borrow().send_refresh(RefreshRequest::RefreshAll {
+        reason: RefreshReason::Startup,
+    });
+}
+
+/// 注册托盘图标事件（左键/右键）
+fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
+    let ctrl = controller.clone();
+    cx.on_tray_icon_event(move |event, cx| {
+        info!(target: "tray", "received tray event: {:?}", event);
+        match event {
+            TrayIconEvent::LeftClick => ctrl.borrow_mut().toggle_provider(cx),
+            TrayIconEvent::RightClick => ctrl.borrow_mut().show_settings(cx),
+            _ => {}
+        }
+    });
+}
+
+/// 注册全局热键 Cmd+Shift+S
+fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
+    info!(target: "hotkey", "registering global hotkey Cmd+Shift+S");
+    if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
+        let _ = cx.register_global_hotkey(1, &keystroke);
+    }
+    let async_cx = cx.to_async();
+    let ctrl = controller.clone();
+    cx.on_global_hotkey(move |id| {
+        if id == 1 {
+            info!(target: "hotkey", "received global hotkey 1");
+            let _ = async_cx.update(|cx| {
+                ctrl.borrow_mut().toggle_provider(cx);
+            });
+        }
+    });
+}
+
+/// 监听二次实例的 SHOW 请求，桥接 std::sync::mpsc → 前台 executor
+fn listen_for_secondary_instance(
+    controller: &Rc<RefCell<TrayController>>,
+    show_rx: std::sync::mpsc::Receiver<()>,
+    cx: &mut App,
+) {
+    let (show_async_tx, show_async_rx) = smol::channel::bounded::<()>(4);
+    std::thread::Builder::new()
+        .name("single-instance-bridge".into())
+        .spawn(move || {
+            while show_rx.recv().is_ok() {
+                if show_async_tx.send_blocking(()).is_err() {
+                    break;
+                }
+            }
+        })
+        .expect("failed to spawn single-instance bridge thread");
+
+    let ctrl = controller.clone();
+    let show_async_cx = cx.to_async();
+    cx.to_async()
+        .foreground_executor()
+        .spawn(async move {
+            while show_async_rx.recv().await.is_ok() {
+                info!(target: "app", "secondary instance requested SHOW");
+                let _ = show_async_cx.update(|cx| {
+                    ctrl.borrow_mut().toggle_provider(cx);
+                });
+            }
+        })
+        .detach();
+}
+
+// ============================================================================
+// Entry Point
+// ============================================================================
+
 fn main() {
     let log_path = match logging::init() {
         Ok(init) => {
@@ -223,133 +365,29 @@ fn main() {
     Application::new()
         .with_assets(Assets::new())
         .run(move |cx: &mut App| {
-            // 0. 初始化 i18n locale
-            {
-                let settings = crate::settings_store::load().unwrap_or_default();
-                crate::i18n::apply_locale(&settings.language);
-            }
+            // 1. UI + 托盘初始化
+            bootstrap_ui(cx);
 
-            // 1. 初始化
-            adabraka_ui::init(cx);
-            adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
-            cx.set_keep_alive_without_windows(true);
+            // 2. 后台刷新系统
+            let (refresh_tx, event_rx, manager) = bootstrap_refresh();
 
-            // 2. 配置系统托盘
-            {
-                let settings = crate::settings_store::load().unwrap_or_default();
-                crate::tray_icon_helper::apply_tray_icon(cx, settings.tray_icon_style);
-            }
-            cx.set_tray_tooltip(&t!("tray.tooltip"));
-            cx.set_tray_panel_mode(true);
-
-            // 3. 启动 RefreshCoordinator（后台事件循环）
-            let (event_tx, event_rx) = smol::channel::bounded::<refresh::RefreshEvent>(64);
-            let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
-            let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
-            let refresh_tx = coordinator.sender();
-
-            // 在后台线程运行协调器事件循环
-            std::thread::Builder::new()
-                .name("refresh-coordinator".into())
-                .spawn(move || smol::block_on(coordinator.run()))
-                .expect("failed to spawn refresh coordinator thread");
-
-            // 4. 窗口控制器（复用同一个 ProviderManager 实例）
+            // 3. 窗口控制器
             let controller = Rc::new(RefCell::new(TrayController::new(
                 refresh_tx,
                 &manager,
                 log_path.clone(),
             )));
 
-            // 5. 启动事件泵：从协调器接收事件，更新 AppState，并通知 UI 刷新
-            {
-                let state = controller.borrow().state.clone();
-                let async_cx = cx.to_async();
-                let pump_cx = cx.to_async();
-                async_cx
-                    .foreground_executor()
-                    .spawn(async move {
-                        while let Ok(event) = event_rx.recv().await {
-                            let _ = pump_cx.update(|cx| {
-                                runtime::dispatch_in_app(
-                                    &state,
-                                    AppAction::RefreshEventReceived(event),
-                                    cx,
-                                );
-                            });
-                        }
-                    })
-                    .detach();
-            }
+            // 4. 事件泵
+            start_event_pump(&controller.borrow().state, event_rx, cx);
 
-            // 6. 初始配置同步 + 启动刷新
-            {
-                let state = controller.borrow().state.clone();
-                let config_request =
-                    crate::application::build_config_sync_request(&state.borrow().session);
-                let _ = state.borrow().send_refresh(config_request);
-                let _ = state.borrow().send_refresh(RefreshRequest::RefreshAll {
-                    reason: RefreshReason::Startup,
-                });
-            }
+            // 5. 初始刷新
+            trigger_initial_refresh(&controller.borrow().state);
 
-            // 7. 托盘点击
-            let tray_ctrl = controller.clone();
-            cx.on_tray_icon_event(move |event, cx| {
-                info!(target: "tray", "received tray event: {:?}", event);
-                match event {
-                    TrayIconEvent::LeftClick => tray_ctrl.borrow_mut().toggle_provider(cx),
-                    TrayIconEvent::RightClick => tray_ctrl.borrow_mut().show_settings(cx),
-                    _ => {}
-                }
-            });
-
-            // 8. 全局热键 Cmd+Shift+S
-            info!(target: "hotkey", "registering global hotkey Cmd+Shift+S");
-            if let Ok(keystroke) = Keystroke::parse("cmd-shift-s") {
-                let _ = cx.register_global_hotkey(1, &keystroke);
-            }
-            let async_cx = cx.to_async();
-            let hotkey_ctrl = controller.clone();
-            cx.on_global_hotkey(move |id| {
-                if id == 1 {
-                    info!(target: "hotkey", "received global hotkey 1");
-                    let _ = async_cx.update(|cx| {
-                        hotkey_ctrl.borrow_mut().toggle_provider(cx);
-                    });
-                }
-            });
-
-            // 9. Listen for "SHOW" commands from secondary instances.
-            //    Bridge std::sync::mpsc → smol::channel so we can await on the
-            //    foreground executor (std Receiver is !Sync).
-            {
-                let (show_async_tx, show_async_rx) = smol::channel::bounded::<()>(4);
-                std::thread::Builder::new()
-                    .name("single-instance-bridge".into())
-                    .spawn(move || {
-                        while show_rx.recv().is_ok() {
-                            if show_async_tx.send_blocking(()).is_err() {
-                                break;
-                            }
-                        }
-                    })
-                    .expect("failed to spawn single-instance bridge thread");
-
-                let show_ctrl = controller.clone();
-                let show_async_cx = cx.to_async();
-                cx.to_async()
-                    .foreground_executor()
-                    .spawn(async move {
-                        while show_async_rx.recv().await.is_ok() {
-                            info!(target: "app", "secondary instance requested SHOW");
-                            let _ = show_async_cx.update(|cx| {
-                                show_ctrl.borrow_mut().toggle_provider(cx);
-                            });
-                        }
-                    })
-                    .detach();
-            }
+            // 6. 注册事件处理器
+            register_tray_events(&controller, cx);
+            register_global_hotkey(&controller, cx);
+            listen_for_secondary_instance(&controller, show_rx, cx);
 
             info!(target: "app", "BananaTray is running - look for the tray icon");
         });
