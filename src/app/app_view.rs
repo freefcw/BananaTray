@@ -194,14 +194,15 @@ impl AppView {
                         .child(refresh.label.clone()),
                 );
 
-            if refresh.kind.is_some() && !refresh.is_refreshing {
+            if refresh.id.is_some() && !refresh.is_refreshing {
                 btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    if let Some(k) = refresh.kind {
+                    if let Some(ref id) = refresh.id {
+                        let id = id.clone();
                         entity.update(cx, |view, cx| {
                             runtime::dispatch_in_context(
                                 &view.state,
                                 AppAction::RefreshProvider {
-                                    kind: k,
+                                    id,
                                     reason: RefreshReason::Manual,
                                 },
                                 cx,
@@ -290,7 +291,7 @@ impl AppView {
 impl Render for AppView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.borrow();
-        let active_tab = state.session.nav.active_tab;
+        let active_tab = state.session.nav.active_tab.clone();
         // 在每次渲染时动态调整窗口高度
         let desired_height = state.session.popup_height();
         drop(state);
@@ -330,25 +331,25 @@ impl Render for AppView {
             // 头部
             .child(self.render_header(cx))
             // 导航
-            .child(self.render_top_nav(active_tab, cx))
+            .child(self.render_top_nav(active_tab.clone(), cx))
             // 内容区
             .child(
                 div()
                     .id("content")
                     .flex_1()
                     .overflow_y_scroll()
-                    .child(match active_tab {
-                        NavTab::Provider(kind) => div()
+                    .child(match &active_tab {
+                        NavTab::Provider(id) => div()
                             .px(px(12.0))
                             .pt(px(10.0))
                             .pb(px(8.0))
-                            .child(self.render_provider_detail(kind, cx))
+                            .child(self.render_provider_detail(id, cx))
                             .into_any_element(),
                         NavTab::Settings => self.render_settings_content(cx),
                     }),
             )
             // 底部工具栏
-            .child(self.render_global_actions(active_tab, cx))
+            .child(self.render_global_actions(active_tab.clone(), cx))
     }
 }
 

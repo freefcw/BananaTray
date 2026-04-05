@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::app_state::{provider_panel_flags, AppSession};
-use crate::models::{ConnectionStatus, ErrorKind, NavTab, ProviderKind, ProviderStatus};
+use crate::models::{ConnectionStatus, ErrorKind, NavTab, ProviderId, ProviderStatus};
 use rust_i18n::t;
 
 pub fn header_view_state(session: &AppSession) -> HeaderViewState {
@@ -16,16 +16,17 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
 }
 
 pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsViewState {
-    let kind = match session.nav.active_tab {
-        NavTab::Provider(kind) => Some(kind),
+    let id = match &session.nav.active_tab {
+        NavTab::Provider(id) => Some(id.clone()),
         NavTab::Settings => None,
     };
 
-    let is_refreshing = kind
-        .and_then(|kind| {
+    let is_refreshing = id
+        .as_ref()
+        .and_then(|id| {
             session
                 .provider_store
-                .find(kind)
+                .find_by_id(id)
                 .map(|provider| provider.connection == ConnectionStatus::Refreshing)
         })
         .unwrap_or(false);
@@ -39,7 +40,7 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
     GlobalActionsViewState {
         show_refresh: session.settings.show_refresh_button,
         refresh: RefreshButtonViewState {
-            kind,
+            id,
             is_refreshing,
             label,
         },
@@ -48,10 +49,10 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
 
 pub fn provider_detail_view_state(
     session: &AppSession,
-    kind: ProviderKind,
+    id: &ProviderId,
 ) -> ProviderDetailViewState {
-    let is_enabled = session.settings.is_provider_enabled(kind);
-    let provider = session.provider_store.find(kind).cloned();
+    let is_enabled = session.settings.is_enabled(id);
+    let provider = session.provider_store.find_by_id(id).cloned();
 
     if !is_enabled {
         let (icon, display_name) = if let Some(provider) = provider {
@@ -62,12 +63,12 @@ pub fn provider_detail_view_state(
         } else {
             (
                 "src/icons/provider-unknown.svg".to_string(),
-                format!("{:?}", kind),
+                format!("{}", id),
             )
         };
 
         return ProviderDetailViewState::Disabled(DisabledProviderViewState {
-            kind,
+            id: id.clone(),
             icon,
             title: t!("provider.not_enabled", name = display_name).to_string(),
             hint: t!("provider.enable_hint").to_string(),
@@ -115,7 +116,7 @@ pub fn provider_detail_view_state(
     } else if has_quotas {
         let visible_quotas: Vec<crate::models::QuotaInfo> = session
             .settings
-            .visible_quotas(kind, &provider.quotas)
+            .visible_quotas(id.kind(), &provider.quotas)
             .into_iter()
             .cloned()
             .collect();
@@ -132,7 +133,7 @@ pub fn provider_detail_view_state(
     };
 
     ProviderDetailViewState::Panel(ProviderPanelViewState {
-        kind,
+        id: id.clone(),
         show_dashboard,
         account,
         body,
@@ -176,7 +177,7 @@ fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewStat
     };
 
     ProviderEmptyViewState {
-        kind: provider.kind,
+        id: provider.provider_id.clone(),
         title,
         message,
         is_error,
@@ -209,16 +210,16 @@ mod tests {
     use crate::models::test_helpers::{
         make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
-    use crate::models::{AppSettings, ConnectionStatus, QuotaInfo};
+    use crate::models::{AppSettings, ConnectionStatus, ProviderKind, QuotaInfo};
+
+    fn pid(kind: ProviderKind) -> ProviderId {
+        ProviderId::BuiltIn(kind)
+    }
 
     fn make_session_with_provider(settings: AppSettings, provider: ProviderStatus) -> AppSession {
-        let kind = provider.kind;
+        let id = provider.provider_id.clone();
         let session = AppSession::new(settings, vec![provider]);
-        // new() 自动选择第一个启用的 provider 为 active tab
-        assert!(matches!(
-            session.nav.active_tab,
-            NavTab::Provider(k) if k == kind
-        ));
+        assert_eq!(session.nav.active_tab, NavTab::Provider(id));
         session
     }
 
@@ -241,7 +242,7 @@ mod tests {
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
 
         let session = make_session_with_provider(settings, provider);
-        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+        let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
 
         match view {
             ProviderDetailViewState::Panel(panel) => {
@@ -249,7 +250,6 @@ mod tests {
                 assert_eq!(account.email, "test@example.com");
                 assert_eq!(account.tier, Some("Pro".to_string()));
                 assert!(!account.dashboard_url.is_empty());
-                // 账户卡片存在时，dashboard 行应隐藏（互斥）
                 assert!(!panel.show_dashboard);
             }
             _ => panic!("expected Panel variant"),
@@ -268,7 +268,7 @@ mod tests {
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
 
         let session = make_session_with_provider(settings, provider);
-        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+        let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
 
         match view {
             ProviderDetailViewState::Panel(panel) => {
@@ -294,7 +294,7 @@ mod tests {
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
 
         let session = make_session_with_provider(settings, provider);
-        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+        let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
 
         match view {
             ProviderDetailViewState::Panel(panel) => {
@@ -314,7 +314,7 @@ mod tests {
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
 
         let session = make_session_with_provider(settings, provider);
-        let view = provider_detail_view_state(&session, ProviderKind::Gemini);
+        let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
 
         match view {
             ProviderDetailViewState::Panel(panel) => {

@@ -4,28 +4,29 @@
 
 use super::*;
 use crate::app_state::AppSession;
-use crate::models::{ConnectionStatus, ProviderKind, ProviderStatus};
+use crate::models::{ConnectionStatus, ProviderId, ProviderKind, ProviderStatus};
 use rust_i18n::t;
 
 pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvidersTabViewState {
-    let ordered = session.settings.ordered_providers();
-    let selected = session.settings_ui.selected_provider;
+    let custom_ids = session.provider_store.custom_provider_ids();
+    let ordered = session.settings.ordered_provider_ids(&custom_ids);
+    let selected = &session.settings_ui.selected_provider;
 
     let items = ordered
         .iter()
         .enumerate()
-        .map(|(index, kind)| {
-            let provider = session.provider_store.find(*kind);
+        .map(|(index, id)| {
+            let provider = session.provider_store.find_by_id(id);
             SettingsProviderListItemViewState {
-                kind: *kind,
+                id: id.clone(),
                 icon: provider
                     .map(|provider| provider.icon_asset().to_string())
                     .unwrap_or_else(|| "src/icons/provider-unknown.svg".to_string()),
                 display_name: provider
                     .map(|provider| provider.display_name().to_string())
-                    .unwrap_or_else(|| format!("{:?}", kind)),
-                is_selected: *kind == selected,
-                is_enabled: session.settings.is_provider_enabled(*kind),
+                    .unwrap_or_else(|| format!("{}", id)),
+                is_selected: id == selected,
+                is_enabled: session.settings.is_enabled(id),
                 can_move_up: index > 0,
                 can_move_down: index + 1 < ordered.len(),
             }
@@ -42,10 +43,10 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
 
 fn settings_provider_detail_view_state(
     session: &AppSession,
-    kind: ProviderKind,
+    id: &ProviderId,
 ) -> SettingsProviderDetailViewState {
-    let provider = session.provider_store.find(kind);
-    let is_enabled = session.settings.is_provider_enabled(kind);
+    let provider = session.provider_store.find_by_id(id);
+    let is_enabled = session.settings.is_enabled(id);
 
     let (icon, display_name, subtitle) = if let Some(provider) = provider {
         (
@@ -56,8 +57,8 @@ fn settings_provider_detail_view_state(
     } else {
         (
             "src/icons/provider-unknown.svg".to_string(),
-            format!("{:?}", kind),
-            format!("{:?} · {}", kind, t!("provider.not_available")),
+            format!("{}", id),
+            format!("{} · {}", id, t!("provider.not_available")),
         )
     };
 
@@ -70,7 +71,7 @@ fn settings_provider_detail_view_state(
                     QuotaVisibilityItem {
                         label: q.label.clone(),
                         quota_key: quota_key.clone(),
-                        visible: session.settings.is_quota_visible(kind, &quota_key),
+                        visible: session.settings.is_quota_visible(id.kind(), &quota_key),
                     }
                 })
                 .collect()
@@ -78,15 +79,15 @@ fn settings_provider_detail_view_state(
         .unwrap_or_default();
 
     SettingsProviderDetailViewState {
-        kind,
+        id: id.clone(),
         icon,
         display_name,
         subtitle,
         is_enabled,
         info: settings_provider_info_view_state(provider, is_enabled),
         usage: settings_provider_usage_view_state(provider, is_enabled),
-        settings_mode: match kind {
-            ProviderKind::Copilot => ProviderSettingsMode::Interactive,
+        settings_mode: match id {
+            ProviderId::BuiltIn(ProviderKind::Copilot) => ProviderSettingsMode::Interactive,
             _ => ProviderSettingsMode::AutoManaged,
         },
         quota_display_mode: session.settings.quota_display_mode,
@@ -209,9 +210,13 @@ mod tests {
     };
     use crate::models::{AppSettings, ConnectionStatus, ProviderKind, ProviderStatus};
 
+    fn pid(kind: ProviderKind) -> ProviderId {
+        ProviderId::BuiltIn(kind)
+    }
+
     fn make_session(
         settings: AppSettings,
-        selected_provider: ProviderKind,
+        selected_provider: ProviderId,
         providers: Vec<ProviderStatus>,
     ) -> AppSession {
         let mut session = AppSession::new(settings, providers);
@@ -230,7 +235,7 @@ mod tests {
 
         let session = make_session(
             settings,
-            ProviderKind::Claude,
+            pid(ProviderKind::Claude),
             vec![
                 make_provider(ProviderKind::Gemini, ConnectionStatus::Connected),
                 make_provider(ProviderKind::Claude, ConnectionStatus::Connected),
@@ -240,10 +245,10 @@ mod tests {
 
         let view_state = settings_providers_tab_view_state(&session);
 
-        assert_eq!(view_state.items[0].kind, ProviderKind::Gemini);
+        assert_eq!(view_state.items[0].id, pid(ProviderKind::Gemini));
         assert!(!view_state.items[0].can_move_up);
         assert!(view_state.items[0].can_move_down);
-        assert_eq!(view_state.items[1].kind, ProviderKind::Claude);
+        assert_eq!(view_state.items[1].id, pid(ProviderKind::Claude));
         assert!(view_state.items[1].is_selected);
         assert!(view_state.items[1].can_move_up);
         assert!(view_state.items[1].can_move_down);
@@ -257,7 +262,7 @@ mod tests {
 
         let session = make_session(
             settings,
-            ProviderKind::Claude,
+            pid(ProviderKind::Claude),
             vec![make_provider(
                 ProviderKind::Claude,
                 ConnectionStatus::Disconnected,
@@ -283,7 +288,7 @@ mod tests {
         let mut provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
         provider.error_message = Some("boom".to_string());
 
-        let session = make_session(settings, ProviderKind::Copilot, vec![provider]);
+        let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
         let view_state = settings_providers_tab_view_state(&session);
 
         assert_eq!(
@@ -324,7 +329,7 @@ mod tests {
             QuotaInfo::with_details(String::from("Weekly"), 50.0, 100.0, QuotaType::Weekly, None),
         ];
 
-        let session = make_session(settings, ProviderKind::Claude, vec![provider]);
+        let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
         let view_state = settings_providers_tab_view_state(&session);
 
         assert_eq!(view_state.detail.quota_visibility.len(), 2);
@@ -343,7 +348,7 @@ mod tests {
         settings.set_provider_enabled(ProviderKind::Claude, true);
 
         let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        let session = make_session(settings, ProviderKind::Claude, vec![provider]);
+        let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
         let view_state = settings_providers_tab_view_state(&session);
 
         assert!(view_state.detail.quota_visibility.is_empty());
@@ -362,7 +367,7 @@ mod tests {
 
         let session = make_session(
             settings,
-            ProviderKind::Claude,
+            pid(ProviderKind::Claude),
             vec![make_provider(
                 ProviderKind::Claude,
                 ConnectionStatus::Connected,

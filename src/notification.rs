@@ -1,4 +1,4 @@
-use crate::models::{ProviderKind, QuotaInfo};
+use crate::models::{ProviderId, QuotaInfo};
 use log::{info, warn};
 use rust_i18n::t;
 use std::collections::HashMap;
@@ -57,7 +57,7 @@ impl AlertState {
 /// 设计为纯逻辑组件：只输出"应该发什么通知"，不直接发送通知。
 #[derive(Default)]
 pub struct QuotaAlertTracker {
-    states: HashMap<ProviderKind, AlertState>,
+    states: HashMap<ProviderId, AlertState>,
 }
 
 impl QuotaAlertTracker {
@@ -70,7 +70,7 @@ impl QuotaAlertTracker {
     /// 判定逻辑：取所有 quota 中最差的剩余百分比代表整个 Provider。
     pub fn update(
         &mut self,
-        kind: ProviderKind,
+        id: &ProviderId,
         provider_name: &str,
         quotas: &[QuotaInfo],
     ) -> Option<QuotaAlert> {
@@ -90,13 +90,13 @@ impl QuotaAlertTracker {
         let new_state = AlertState::from_remaining(worst_remaining);
 
         // 首次数据只建立基线，不触发告警（避免启动时误报）
-        let Some(&old_state) = self.states.get(&kind) else {
-            self.states.insert(kind, new_state);
+        let Some(&old_state) = self.states.get(id) else {
+            self.states.insert(id.clone(), new_state);
             return None;
         };
 
         // 更新状态
-        self.states.insert(kind, new_state);
+        self.states.insert(id.clone(), new_state);
 
         // 状态未变化，不触发
         if old_state == new_state {
@@ -257,7 +257,11 @@ fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::QuotaInfo;
+    use crate::models::{ProviderKind, QuotaInfo};
+
+    fn pid(kind: ProviderKind) -> ProviderId {
+        ProviderId::BuiltIn(kind)
+    }
 
     fn make_quota(used: f64, limit: f64) -> QuotaInfo {
         QuotaInfo::new("test", used, limit)
@@ -275,7 +279,7 @@ mod tests {
     fn test_no_alert_on_first_normal_data() {
         let mut tracker = QuotaAlertTracker::new();
         let quotas = vec![make_quota(30.0, 100.0)]; // 70% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &quotas);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &quotas);
         assert!(alert.is_none(), "首次正常数据不应触发告警");
     }
 
@@ -284,11 +288,11 @@ mod tests {
         let mut tracker = QuotaAlertTracker::new();
         // 先建立 Normal 基线
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         // 进入 Low
         let low = vec![make_quota(92.0, 100.0)]; // 8% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &low);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
         assert!(matches!(alert, Some(QuotaAlert::LowQuota { .. })));
     }
 
@@ -296,13 +300,13 @@ mod tests {
     fn test_low_to_exhausted() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         let low = vec![make_quota(95.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &low);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
 
         let exhausted = vec![make_quota(100.0, 100.0)]; // 0% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &exhausted);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &exhausted);
         assert!(matches!(alert, Some(QuotaAlert::Exhausted { .. })));
     }
 
@@ -310,11 +314,11 @@ mod tests {
     fn test_normal_to_exhausted_directly() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         // 直接跳到耗尽
         let exhausted = vec![make_quota(100.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &exhausted);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &exhausted);
         assert!(matches!(alert, Some(QuotaAlert::Exhausted { .. })));
     }
 
@@ -322,14 +326,14 @@ mod tests {
     fn test_exhausted_to_recovery() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         let exhausted = vec![make_quota(100.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &exhausted);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &exhausted);
 
         // 恢复
         let recovered = vec![make_quota(50.0, 100.0)]; // 50% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &recovered);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &recovered);
         assert!(matches!(alert, Some(QuotaAlert::Recovered { .. })));
     }
 
@@ -337,14 +341,14 @@ mod tests {
     fn test_exhausted_to_low_still_recovers() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         let exhausted = vec![make_quota(100.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &exhausted);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &exhausted);
 
         // 恢复到 Low（5% remaining）
         let low = vec![make_quota(95.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &low);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
         assert!(
             matches!(alert, Some(QuotaAlert::Recovered { .. })),
             "从耗尽恢复到 Low 也应触发恢复通知"
@@ -355,14 +359,14 @@ mod tests {
     fn test_repeated_state_no_alert() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         let low = vec![make_quota(92.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &low);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
 
         // 同样是 Low，不应再次告警
         let still_low = vec![make_quota(93.0, 100.0)]; // 7% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &still_low);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &still_low);
         assert!(alert.is_none(), "重复 Low 状态不应重复告警");
     }
 
@@ -370,14 +374,14 @@ mod tests {
     fn test_worst_quota_determines_state() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         // 多个 quota，其中一个几乎耗尽
         let mixed = vec![
             make_quota(30.0, 100.0), // 70% remaining — Green
             make_quota(95.0, 100.0), // 5% remaining — Low (最差)
         ];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &mixed);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &mixed);
         assert!(
             matches!(alert, Some(QuotaAlert::LowQuota { .. })),
             "应取最差的 quota 决定状态"
@@ -387,7 +391,7 @@ mod tests {
     #[test]
     fn test_empty_quotas_no_alert() {
         let mut tracker = QuotaAlertTracker::new();
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &[]);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &[]);
         assert!(alert.is_none(), "空 quotas 不应触发告警");
     }
 
@@ -397,19 +401,19 @@ mod tests {
 
         // Claude Normal 基线
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         // Gemini Normal 基线
-        tracker.update(ProviderKind::Gemini, "Gemini", &normal);
+        tracker.update(&pid(ProviderKind::Gemini), "Gemini", &normal);
 
         // Claude 进入 Low
         let low = vec![make_quota(92.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &low);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
         assert!(matches!(alert, Some(QuotaAlert::LowQuota { .. })));
 
         // Gemini 保持 Normal，不触发
         let still_normal = vec![make_quota(40.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Gemini, "Gemini", &still_normal);
+        let alert = tracker.update(&pid(ProviderKind::Gemini), "Gemini", &still_normal);
         assert!(alert.is_none(), "Gemini 状态未变，不应触发");
     }
 
@@ -418,7 +422,7 @@ mod tests {
         let mut tracker = QuotaAlertTracker::new();
         // 首次数据就是 Low，不应触发告警（只建立基线）
         let low = vec![make_quota(95.0, 100.0)]; // 5% remaining
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &low);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
         assert!(alert.is_none(), "首次 Low 数据不应触发告警");
     }
 
@@ -427,7 +431,7 @@ mod tests {
         let mut tracker = QuotaAlertTracker::new();
         // 首次数据就是耗尽，不应触发告警
         let exhausted = vec![make_quota(100.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &exhausted);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &exhausted);
         assert!(alert.is_none(), "首次 Exhausted 数据不应触发告警");
     }
 
@@ -435,47 +439,48 @@ mod tests {
     fn test_low_to_normal_no_alert() {
         let mut tracker = QuotaAlertTracker::new();
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &normal);
 
         let low = vec![make_quota(92.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &low);
+        tracker.update(&pid(ProviderKind::Claude), "Claude", &low);
 
         // Low → Normal：状态好转但不是从 Exhausted 恢复，不发通知
         let back_normal = vec![make_quota(30.0, 100.0)];
-        let alert = tracker.update(ProviderKind::Claude, "Claude", &back_normal);
+        let alert = tracker.update(&pid(ProviderKind::Claude), "Claude", &back_normal);
         assert!(alert.is_none(), "Low → Normal 不应触发通知");
     }
 
     #[test]
     fn test_full_cycle_alerts_re_fire() {
         let mut tracker = QuotaAlertTracker::new();
+        let claude = pid(ProviderKind::Claude);
         let normal = vec![make_quota(30.0, 100.0)];
-        tracker.update(ProviderKind::Claude, "Claude", &normal);
+        tracker.update(&claude, "Claude", &normal);
 
         // Normal → Low
         let low = vec![make_quota(92.0, 100.0)];
         assert!(matches!(
-            tracker.update(ProviderKind::Claude, "Claude", &low),
+            tracker.update(&claude, "Claude", &low),
             Some(QuotaAlert::LowQuota { .. })
         ));
 
         // Low → Exhausted
         let exhausted = vec![make_quota(100.0, 100.0)];
         assert!(matches!(
-            tracker.update(ProviderKind::Claude, "Claude", &exhausted),
+            tracker.update(&claude, "Claude", &exhausted),
             Some(QuotaAlert::Exhausted { .. })
         ));
 
         // Exhausted → Normal（恢复）
         assert!(matches!(
-            tracker.update(ProviderKind::Claude, "Claude", &normal),
+            tracker.update(&claude, "Claude", &normal),
             Some(QuotaAlert::Recovered { .. })
         ));
 
         // 恢复后再次进入 Low，应该**再次**触发告警
         assert!(
             matches!(
-                tracker.update(ProviderKind::Claude, "Claude", &low),
+                tracker.update(&claude, "Claude", &low),
                 Some(QuotaAlert::LowQuota { .. })
             ),
             "恢复后重新进入 Low 应该再次通知"

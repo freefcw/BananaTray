@@ -1,5 +1,5 @@
 use crate::application::DebugNotificationKind;
-use crate::models::{ProviderKind, TrayIconStyle};
+use crate::models::{ProviderId, TrayIconStyle};
 use crate::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
 
@@ -28,7 +28,7 @@ pub enum AppEffect {
     OpenLogDirectory,
     CopyToClipboard(String),
     /// 启用日志捕获 → 提升日志级别 → 发送 RefreshOne
-    StartDebugRefresh(ProviderKind),
+    StartDebugRefresh(ProviderId),
     /// 恢复调试刷新前的日志级别
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区

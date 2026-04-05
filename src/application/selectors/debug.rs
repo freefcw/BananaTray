@@ -5,7 +5,7 @@
 //! 所有 I/O 和环境变量读取都在 DebugContext 构造时完成。
 
 use crate::app_state::AppSession;
-use crate::models::{ConnectionStatus, ProviderKind};
+use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
 use std::path::PathBuf;
 
@@ -75,9 +75,9 @@ pub struct DebugTabViewState {
 #[derive(Debug, Clone)]
 pub struct DebugConsoleViewState {
     /// 可选择的 Provider 列表（已启用的）
-    pub available_providers: Vec<(ProviderKind, String)>,
+    pub available_providers: Vec<(ProviderId, String)>,
     /// 当前选中的 Provider
-    pub selected_provider: Option<ProviderKind>,
+    pub selected_provider: Option<ProviderId>,
     /// 是否正在调试刷新中
     pub refresh_active: bool,
     /// 捕获的日志条目
@@ -117,7 +117,7 @@ pub struct LogViewState {
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // kind 用于测试断言，error_message 用于 debug_info_text
 pub struct ProviderDiagnosticItem {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub display_name: String,
     pub icon: String,
     pub source: String,
@@ -177,70 +177,70 @@ fn build_log_view_state(ctx: &DebugContext) -> LogViewState {
 
 fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticItem> {
     session
-        .settings
-        .ordered_providers()
-        .into_iter()
-        .filter_map(|kind| {
-            session.provider_store.find(kind).map(|provider| {
-                let is_enabled = session.settings.is_provider_enabled(kind);
+        .provider_store
+        .providers
+        .iter()
+        .map(|provider| {
+            let is_enabled = session.settings.is_enabled(&provider.provider_id);
 
-                let (status_text, status_dot) = if !is_enabled {
-                    ("Disabled".to_string(), ProviderDiagnosticStatus::Disabled)
-                } else {
-                    match provider.connection {
-                        ConnectionStatus::Connected => {
-                            let time_text = provider.format_last_updated();
-                            (
-                                format!("Connected · {}", time_text),
-                                ProviderDiagnosticStatus::Connected,
-                            )
-                        }
-                        ConnectionStatus::Refreshing => (
-                            "Refreshing…".to_string(),
-                            ProviderDiagnosticStatus::Refreshing,
-                        ),
-                        ConnectionStatus::Error => {
-                            let msg = provider.error_message.as_deref().unwrap_or("unknown error");
-                            (format!("Error · {}", msg), ProviderDiagnosticStatus::Error)
-                        }
-                        ConnectionStatus::Disconnected => {
-                            let msg = provider
-                                .error_message
-                                .as_deref()
-                                .map(|m| format!("Disconnected · {}", m))
-                                .unwrap_or_else(|| "Disconnected".to_string());
-                            (msg, ProviderDiagnosticStatus::Disconnected)
-                        }
+            let (status_text, status_dot) = if !is_enabled {
+                ("Disabled".to_string(), ProviderDiagnosticStatus::Disabled)
+            } else {
+                match provider.connection {
+                    ConnectionStatus::Connected => {
+                        let time_text = provider.format_last_updated();
+                        (
+                            format!("Connected · {}", time_text),
+                            ProviderDiagnosticStatus::Connected,
+                        )
                     }
-                };
-
-                let quota_count = if is_enabled { provider.quotas.len() } else { 0 };
-
-                ProviderDiagnosticItem {
-                    kind,
-                    display_name: provider.display_name().to_string(),
-                    icon: provider.icon_asset().to_string(),
-                    source: provider.source_label().to_string(),
-                    status_text,
-                    status_dot,
-                    quota_count,
-                    error_message: if is_enabled {
-                        provider.error_message.clone()
-                    } else {
-                        None
-                    },
+                    ConnectionStatus::Refreshing => (
+                        "Refreshing…".to_string(),
+                        ProviderDiagnosticStatus::Refreshing,
+                    ),
+                    ConnectionStatus::Error => {
+                        let msg = provider.error_message.as_deref().unwrap_or("unknown error");
+                        (format!("Error · {}", msg), ProviderDiagnosticStatus::Error)
+                    }
+                    ConnectionStatus::Disconnected => {
+                        let msg = provider
+                            .error_message
+                            .as_deref()
+                            .map(|m| format!("Disconnected · {}", m))
+                            .unwrap_or_else(|| "Disconnected".to_string());
+                        (msg, ProviderDiagnosticStatus::Disconnected)
+                    }
                 }
-            })
+            };
+
+            let quota_count = if is_enabled { provider.quotas.len() } else { 0 };
+
+            ProviderDiagnosticItem {
+                id: provider.provider_id.clone(),
+                display_name: provider.display_name().to_string(),
+                icon: provider.icon_asset().to_string(),
+                source: provider.source_label().to_string(),
+                status_text,
+                status_dot,
+                quota_count,
+                error_message: if is_enabled {
+                    provider.error_message.clone()
+                } else {
+                    None
+                },
+            }
         })
         .collect()
 }
 
 fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> EnvironmentViewState {
-    let enabled_count = ProviderKind::all()
+    let enabled_count = session
+        .provider_store
+        .providers
         .iter()
-        .filter(|k| session.settings.is_provider_enabled(**k))
+        .filter(|p| session.settings.is_enabled(&p.provider_id))
         .count();
-    let total_count = ProviderKind::all().len();
+    let total_count = session.provider_store.providers.len();
 
     let refresh_text = if session.settings.refresh_interval_mins == 0 {
         "Manual".to_string()
@@ -303,18 +303,12 @@ pub fn build_debug_info_text(state: &DebugTabViewState) -> String {
 }
 
 fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugConsoleViewState {
-    // 已启用的 Provider 列表
-    let available_providers: Vec<(ProviderKind, String)> = session
-        .settings
-        .ordered_providers()
-        .into_iter()
-        .filter(|kind| session.settings.is_provider_enabled(*kind))
-        .filter_map(|kind| {
-            session
-                .provider_store
-                .find(kind)
-                .map(|p| (kind, p.display_name().to_string()))
-        })
+    let available_providers: Vec<(ProviderId, String)> = session
+        .provider_store
+        .providers
+        .iter()
+        .filter(|p| session.settings.is_enabled(&p.provider_id))
+        .map(|p| (p.provider_id.clone(), p.display_name().to_string()))
         .collect();
 
     // 从 DebugContext 注入的日志条目转换为 UI ViewState
@@ -339,7 +333,7 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
 
     DebugConsoleViewState {
         available_providers,
-        selected_provider: session.settings_ui.debug_selected_provider,
+        selected_provider: session.settings_ui.debug_selected_provider.clone(),
         refresh_active: session.settings_ui.debug_refresh_active,
         log_entries,
         log_count,
@@ -351,7 +345,7 @@ mod tests {
     use super::*;
     use crate::app_state::AppSession;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{AppSettings, ConnectionStatus};
+    use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 
     /// 构造一个不含 I/O 的测试 DebugContext
     fn test_context() -> DebugContext {
@@ -454,7 +448,7 @@ mod tests {
 
         let claude = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Claude)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Claude))
             .unwrap();
         assert_eq!(claude.status_dot, ProviderDiagnosticStatus::Disconnected);
         assert!(claude.status_text.starts_with("Disconnected"));
@@ -470,7 +464,7 @@ mod tests {
 
         let claude = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Claude)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Claude))
             .unwrap();
         assert_eq!(claude.status_dot, ProviderDiagnosticStatus::Connected);
         assert!(claude.status_text.starts_with("Connected"));
@@ -486,7 +480,7 @@ mod tests {
 
         let cursor = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Cursor)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Cursor))
             .unwrap();
         assert_eq!(cursor.status_dot, ProviderDiagnosticStatus::Refreshing);
         assert_eq!(cursor.status_text, "Refreshing…");
@@ -498,15 +492,17 @@ mod tests {
         settings.set_provider_enabled(ProviderKind::Gemini, true);
         let mut session =
             make_session_with_status(settings, ProviderKind::Gemini, ConnectionStatus::Error);
-        // 设置错误消息
-        if let Some(p) = session.provider_store.find_mut(ProviderKind::Gemini) {
+        if let Some(p) = session
+            .provider_store
+            .find_by_id_mut(&ProviderId::BuiltIn(ProviderKind::Gemini))
+        {
             p.error_message = Some("auth expired".to_string());
         }
         let items = build_provider_diagnostics(&session);
 
         let gemini = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Gemini)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Gemini))
             .unwrap();
         assert_eq!(gemini.status_dot, ProviderDiagnosticStatus::Error);
         assert_eq!(gemini.status_text, "Error · auth expired");
@@ -523,7 +519,7 @@ mod tests {
 
         let gemini = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Gemini)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Gemini))
             .unwrap();
         assert_eq!(gemini.status_text, "Error · unknown error");
     }
@@ -533,14 +529,17 @@ mod tests {
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Claude, true);
         let mut session = make_session(settings);
-        if let Some(p) = session.provider_store.find_mut(ProviderKind::Claude) {
+        if let Some(p) = session
+            .provider_store
+            .find_by_id_mut(&ProviderId::BuiltIn(ProviderKind::Claude))
+        {
             p.error_message = Some("connection reset".to_string());
         }
         let items = build_provider_diagnostics(&session);
 
         let claude = items
             .iter()
-            .find(|i| i.kind == ProviderKind::Claude)
+            .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Claude))
             .unwrap();
         assert_eq!(claude.status_text, "Disconnected · connection reset");
     }

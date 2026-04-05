@@ -8,6 +8,7 @@ use crate::utils::time_utils;
 use anyhow::Result;
 use async_trait::async_trait;
 use rust_i18n::t;
+use std::borrow::Cow;
 
 use auth::{check_auth_type, credentials_path, load_credentials, refresh_token_via_cli};
 use client::fetch_quota_via_api;
@@ -35,7 +36,7 @@ impl GeminiProvider {
 impl AiProvider for GeminiProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "gemini:api",
+            id: Cow::Borrowed("gemini:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Gemini,
                 display_name: "Gemini".into(),

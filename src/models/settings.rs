@@ -1,4 +1,4 @@
-use super::provider::ProviderKind;
+use super::provider::{ProviderId, ProviderKind};
 use super::quota::QuotaInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -160,9 +160,9 @@ impl Default for AppSettings {
 
 impl AppSettings {
     /// 检查指定 Provider 是否已启用
-    pub fn is_provider_enabled(&self, kind: ProviderKind) -> bool {
+    pub fn is_enabled(&self, id: &ProviderId) -> bool {
         self.enabled_providers
-            .get(kind.id_key())
+            .get(&id.id_key())
             .copied()
             .unwrap_or(false)
     }
@@ -173,7 +173,13 @@ impl AppSettings {
             .insert(kind.id_key().to_string(), enabled);
     }
 
-    /// 按用户自定义顺序返回所有 Provider。未在 provider_order 中出现的 Provider 追加到末尾。
+    /// 通过 ProviderId 设置启用状态
+    pub fn set_enabled(&mut self, id: &ProviderId, enabled: bool) {
+        self.enabled_providers
+            .insert(id.id_key().to_string(), enabled);
+    }
+
+    /// 按用户自定义顺序返回所有内置 Provider。未在 provider_order 中出现的 Provider 追加到末尾。
     pub fn ordered_providers(&self) -> Vec<ProviderKind> {
         let mut result = Vec::with_capacity(ProviderKind::all().len());
         let mut seen = HashSet::with_capacity(ProviderKind::all().len());
@@ -197,11 +203,43 @@ impl AppSettings {
         result
     }
 
+    /// 按用户自定义顺序返回所有 Provider（内置 + 自定义）。
+    /// `custom_ids` 为当前已加载的自定义 Provider ID 列表。
+    pub fn ordered_provider_ids(&self, custom_ids: &[ProviderId]) -> Vec<ProviderId> {
+        let mut result = Vec::new();
+        let mut seen = HashSet::new();
+
+        // 先按保存的顺序添加（内置 + 自定义均可能在 provider_order 中）
+        for key in &self.provider_order {
+            let id = ProviderId::from_id_key(key);
+            if seen.insert(id.clone()) {
+                result.push(id);
+            }
+        }
+
+        // 追加未出现的内置 Provider（保持默认顺序）
+        for &kind in ProviderKind::all() {
+            let id = ProviderId::BuiltIn(kind);
+            if seen.insert(id.clone()) {
+                result.push(id);
+            }
+        }
+
+        // 追加未出现的自定义 Provider
+        for custom_id in custom_ids {
+            if seen.insert(custom_id.clone()) {
+                result.push(custom_id.clone());
+            }
+        }
+
+        result
+    }
+
     /// 将指定 Provider 在排序中上移一位。返回 true 表示发生了移动。
-    pub fn move_provider_up(&mut self, kind: ProviderKind) -> bool {
-        self.ensure_provider_order();
-        let key = kind.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| k == key) {
+    pub fn move_provider_up(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
+        self.ensure_provider_order(custom_ids);
+        let key = id.id_key();
+        if let Some(pos) = self.provider_order.iter().position(|k| *k == key) {
             if pos > 0 {
                 self.provider_order.swap(pos, pos - 1);
                 return true;
@@ -211,10 +249,10 @@ impl AppSettings {
     }
 
     /// 将指定 Provider 在排序中下移一位。返回 true 表示发生了移动。
-    pub fn move_provider_down(&mut self, kind: ProviderKind) -> bool {
-        self.ensure_provider_order();
-        let key = kind.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| k == key) {
+    pub fn move_provider_down(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
+        self.ensure_provider_order(custom_ids);
+        let key = id.id_key();
+        if let Some(pos) = self.provider_order.iter().position(|k| *k == key) {
             if pos + 1 < self.provider_order.len() {
                 self.provider_order.swap(pos, pos + 1);
                 return true;
@@ -264,12 +302,12 @@ impl AppSettings {
         }
     }
 
-    /// 确保 provider_order 包含所有 Provider
-    fn ensure_provider_order(&mut self) {
+    /// 确保 provider_order 包含所有 Provider（内置 + 自定义）
+    fn ensure_provider_order(&mut self, custom_ids: &[ProviderId]) {
         self.provider_order = self
-            .ordered_providers()
+            .ordered_provider_ids(custom_ids)
             .into_iter()
-            .map(|kind| kind.id_key().to_string())
+            .map(|id| id.id_key().to_string())
             .collect();
     }
 }
@@ -298,14 +336,13 @@ mod tests {
     #[test]
     fn move_provider_up_normalizes_provider_order() {
         let mut settings = AppSettings::default();
-        settings.provider_order = vec![
-            "invalid".into(),
-            "gemini".into(),
-            "gemini".into(),
-            "claude".into(),
-        ];
+        // 初始顺序: gemini, claude（只用合法内置 key，避免混入 custom id）
+        settings.provider_order = vec!["gemini".into(), "gemini".into(), "claude".into()];
 
-        assert!(settings.move_provider_up(ProviderKind::Claude));
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(settings.move_provider_up(&claude, &[]));
+        // ensure_provider_order 去重后：gemini, claude, ...rest
+        // move_up claude: claude, gemini, ...rest
         assert_eq!(settings.provider_order[0], ProviderKind::Claude.id_key());
         assert_eq!(settings.provider_order[1], ProviderKind::Gemini.id_key());
         assert_eq!(settings.provider_order.len(), ProviderKind::all().len());
@@ -376,5 +413,125 @@ mod tests {
 
         assert!(!settings.is_quota_visible(ProviderKind::Claude, "session"));
         assert!(settings.is_quota_visible(ProviderKind::Gemini, "session"));
+    }
+
+    // ── ordered_provider_ids ──────────────────────────────────
+
+    #[test]
+    fn ordered_provider_ids_respects_saved_order() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec!["gemini".into(), "claude".into()];
+
+        let ids = settings.ordered_provider_ids(&[]);
+        assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
+        assert_eq!(ids[1], ProviderId::BuiltIn(ProviderKind::Claude));
+        // 所有内置 Provider 都应出现
+        assert!(ids.len() >= ProviderKind::all().len());
+    }
+
+    #[test]
+    fn ordered_provider_ids_includes_custom() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec!["gemini".into(), "myai:cli".into(), "claude".into()];
+        let custom = vec![ProviderId::Custom("myai:cli".to_string())];
+
+        let ids = settings.ordered_provider_ids(&custom);
+        let pos_gemini = ids
+            .iter()
+            .position(|id| *id == ProviderId::BuiltIn(ProviderKind::Gemini))
+            .unwrap();
+        let pos_custom = ids
+            .iter()
+            .position(|id| *id == ProviderId::Custom("myai:cli".to_string()))
+            .unwrap();
+        let pos_claude = ids
+            .iter()
+            .position(|id| *id == ProviderId::BuiltIn(ProviderKind::Claude))
+            .unwrap();
+        assert!(pos_gemini < pos_custom);
+        assert!(pos_custom < pos_claude);
+    }
+
+    #[test]
+    fn ordered_provider_ids_appends_unseen_custom() {
+        let settings = AppSettings::default();
+        let custom = vec![ProviderId::Custom("new:provider".to_string())];
+
+        let ids = settings.ordered_provider_ids(&custom);
+        // 自定义 Provider 应出现在最后
+        assert!(ids.contains(&ProviderId::Custom("new:provider".to_string())));
+        assert_eq!(ids.len(), ProviderKind::all().len() + 1);
+    }
+
+    #[test]
+    fn ordered_provider_ids_deduplicates() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec!["claude".into(), "claude".into(), "gemini".into()];
+
+        let ids = settings.ordered_provider_ids(&[]);
+        let claude_count = ids
+            .iter()
+            .filter(|id| **id == ProviderId::BuiltIn(ProviderKind::Claude))
+            .count();
+        assert_eq!(claude_count, 1);
+    }
+
+    // ── move_provider_up/down with ProviderId ─────────────────
+
+    #[test]
+    fn move_provider_down_works() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec!["claude".into(), "gemini".into()];
+
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(settings.move_provider_down(&claude, &[]));
+        // claude 应该到 gemini 后面
+        let pos_claude = settings
+            .provider_order
+            .iter()
+            .position(|k| k == "claude")
+            .unwrap();
+        let pos_gemini = settings
+            .provider_order
+            .iter()
+            .position(|k| k == "gemini")
+            .unwrap();
+        assert!(pos_gemini < pos_claude);
+    }
+
+    #[test]
+    fn move_provider_up_at_top_returns_false() {
+        let mut settings = AppSettings::default();
+        settings.provider_order = vec!["claude".into(), "gemini".into()];
+
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(!settings.move_provider_up(&claude, &[]));
+    }
+
+    #[test]
+    fn move_provider_down_at_bottom_returns_false() {
+        let mut settings = AppSettings::default();
+        // ensure_provider_order 会填充所有内置 Provider，最后一个不能再下移
+        let all_keys: Vec<String> = ProviderKind::all()
+            .iter()
+            .map(|k| k.id_key().to_string())
+            .collect();
+        settings.provider_order = all_keys;
+
+        let last = ProviderKind::all().last().unwrap();
+        let id = ProviderId::BuiltIn(*last);
+        assert!(!settings.move_provider_down(&id, &[]));
+    }
+
+    #[test]
+    fn move_custom_provider_up() {
+        let mut settings = AppSettings::default();
+        let custom = ProviderId::Custom("myai:cli".to_string());
+        // 手动设置顺序：claude, myai:cli
+        settings.provider_order = vec!["claude".into(), "myai:cli".into()];
+
+        assert!(settings.move_provider_up(&custom, &[custom.clone()]));
+        assert_eq!(settings.provider_order[0], "myai:cli");
+        assert_eq!(settings.provider_order[1], "claude");
     }
 }

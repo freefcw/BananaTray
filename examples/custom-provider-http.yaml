@@ -1,0 +1,54 @@
+# 示例：HTTP API 类型的自定义 Provider
+#
+# 将此文件放到 ~/.config/bananatray/providers/ 目录下即可生效。
+
+id: "myapi:api"
+
+metadata:
+  display_name: "My API Service"
+  brand_name: "MyCloud"
+  icon: "☁️"
+  dashboard_url: "https://mycloud.com/console/usage"
+  account_hint: "MyCloud account"
+  source_label: "mycloud api"
+
+# 可用性检查：检测环境变量是否设置
+availability:
+  type: env_var
+  value: "MYCLOUD_API_KEY"
+
+# 数据获取：HTTP POST 请求
+source:
+  type: http_post
+  url: "https://api.mycloud.com/v1/usage"
+  auth:
+    type: bearer_env
+    env_var: "MYCLOUD_API_KEY"
+  headers:
+    - name: "Origin"
+      value: "https://mycloud.com"
+    # Header value 中可以用 ${ENV_VAR} 引用环境变量
+    - name: "Cookie"
+      value: "auth=${MYCLOUD_API_KEY}"
+  body: '{"scope":"coding"}'
+
+# 响应解析：从 JSON 中提取配额数据
+#
+# 假设 API 返回：
+# {
+#   "user": {"email": "user@example.com"},
+#   "plan": {"name": "Pro"},
+#   "quotas": [
+#     {"used": 256, "limit": 1024, "reset_at": "2026-05-01"}
+#   ]
+# }
+parser:
+  format: json
+  account_email: "user.email"
+  account_tier: "plan.name"
+  quotas:
+    - label: "Weekly Quota"
+      used: "quotas.0.used"
+      limit: "quotas.0.limit"
+      quota_type: weekly
+      detail: "quotas.0.reset_at"

@@ -185,7 +185,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             log::set_max_level(log::LevelFilter::Debug);
             // 4. 发送手动刷新请求（跳过 cooldown）
             let request = crate::refresh::RefreshRequest::RefreshOne {
-                kind,
+                id: kind,
                 reason: crate::refresh::RefreshReason::Manual,
             };
             let _ = send_refresh_request(state, request);
@@ -230,15 +230,15 @@ fn notify_view_entity(state: &Rc<RefCell<AppState>>, cx: &mut App) {
 }
 
 fn send_refresh_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) -> bool {
-    let failed_kind = match &request {
-        RefreshRequest::RefreshOne { kind, .. } => Some(*kind),
+    let failed_id = match &request {
+        RefreshRequest::RefreshOne { id, .. } => Some(id.clone()),
         _ => None,
     };
     let send_result = state.borrow().send_refresh(request);
     if let Err(err) = send_result {
         warn!(target: "refresh", "failed to send refresh request: {}", err);
-        if let Some(kind) = failed_kind {
-            if let Some(provider) = state.borrow_mut().session.provider_store.find_mut(kind) {
+        if let Some(ref id) = failed_id {
+            if let Some(provider) = state.borrow_mut().session.provider_store.find_by_id_mut(id) {
                 provider.connection = ConnectionStatus::Disconnected;
             }
         }

@@ -47,19 +47,19 @@ impl AppView {
         let settings = state_ref.session.settings.clone();
         let providers = state_ref.session.provider_store.providers.clone();
         let generation = state_ref.session.nav.generation;
-        let prev_tab = state_ref.session.nav.prev_active_tab;
+        let prev_tab = state_ref.session.nav.prev_active_tab.clone();
+        let custom_ids = state_ref.session.provider_store.custom_provider_ids();
         drop(state_ref);
-
-        let provider_order = settings.ordered_providers();
-        let nav_items: Vec<_> = provider_order
-            .into_iter()
-            .filter(|kind| settings.is_provider_enabled(*kind))
-            .filter_map(|kind| {
-                providers.iter().find(|p| p.kind == kind).map(|p| {
+        let ordered_ids = settings.ordered_provider_ids(&custom_ids);
+        let nav_items: Vec<_> = ordered_ids
+            .iter()
+            .filter(|id| settings.is_enabled(id))
+            .filter_map(|id| {
+                providers.iter().find(|p| p.provider_id == *id).map(|p| {
                     (
                         p.icon_asset().to_string(),
                         p.display_name().to_string(),
-                        NavTab::Provider(kind),
+                        NavTab::Provider(id.clone()),
                     )
                 })
             })
@@ -180,7 +180,7 @@ impl AppView {
                             .gap(px(2.0))
                             .track_scroll(&self.nav_scroll_handle)
                             .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                                self.render_nav_pill(icon, label, tab, active_tab, cx)
+                                self.render_nav_pill(icon, label, tab, active_tab.clone(), cx)
                             })),
                     ),
             )
@@ -358,7 +358,11 @@ impl AppView {
             )
             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                 entity.update(cx, |view, cx| {
-                    runtime::dispatch_in_context(&view.state, AppAction::SelectNavTab(tab), cx);
+                    runtime::dispatch_in_context(
+                        &view.state,
+                        AppAction::SelectNavTab(tab.clone()),
+                        cx,
+                    );
                 });
             })
     }

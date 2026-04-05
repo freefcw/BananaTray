@@ -15,6 +15,8 @@ use cli_probe::ClaudeCliProbe;
 use log::debug;
 use rust_i18n::t;
 
+use std::borrow::Cow;
+
 use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Result;
@@ -142,7 +144,7 @@ impl ClaudeProvider {
 impl AiProvider for ClaudeProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "claude",
+            id: Cow::Borrowed("claude"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Claude,
                 display_name: "Claude".into(),

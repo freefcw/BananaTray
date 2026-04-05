@@ -1,4 +1,4 @@
-use super::provider::{ProviderKind, ProviderMetadata};
+use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -356,7 +356,9 @@ pub enum ConnectionStatus {
 /// - `mark_unavailable`: 仅在非 Connected 时回退到 Disconnected
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
-    pub kind: ProviderKind,
+    /// 统一标识符（内置 = BuiltIn(kind)，自定义 = Custom(id)）
+    #[serde(default = "default_provider_id")]
+    pub provider_id: ProviderId,
     /// 静态元数据（名称、图标、链接等）
     pub metadata: ProviderMetadata,
     /// 启用状态（从设置读取）
@@ -381,10 +383,39 @@ pub struct ProviderStatus {
     pub last_refreshed_instant: Option<Instant>,
 }
 
+/// serde 默认值：反序列化旧数据时，provider_id 用 Claude 作占位
+fn default_provider_id() -> ProviderId {
+    ProviderId::BuiltIn(ProviderKind::Claude)
+}
+
 impl ProviderStatus {
+    /// 获取 ProviderKind 分类（从 provider_id 派生）
+    pub fn kind(&self) -> ProviderKind {
+        self.provider_id.kind()
+    }
+
     pub fn new(metadata: ProviderMetadata) -> Self {
+        let provider_id = ProviderId::BuiltIn(metadata.kind);
         Self {
-            kind: metadata.kind,
+            provider_id,
+            metadata,
+            enabled: true,
+            connection: ConnectionStatus::Disconnected,
+            quotas: vec![],
+            account_email: None,
+            is_paid: false,
+            account_tier: None,
+            last_updated_at: None,
+            error_message: None,
+            error_kind: ErrorKind::default(),
+            last_refreshed_instant: None,
+        }
+    }
+
+    /// 创建自定义 Provider 状态
+    pub fn new_custom(provider_id: ProviderId, metadata: ProviderMetadata) -> Self {
+        Self {
+            provider_id,
             metadata,
             enabled: true,
             connection: ConnectionStatus::Disconnected,

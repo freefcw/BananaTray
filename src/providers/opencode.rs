@@ -3,6 +3,7 @@ use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshD
 use crate::providers::common::cli;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::borrow::Cow;
 
 const OPENCODE_CLI: &str = "opencode";
 
@@ -12,7 +13,7 @@ super::define_unit_provider!(OpenCodeProvider);
 impl AiProvider for OpenCodeProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "opencode:cli",
+            id: Cow::Borrowed("opencode:cli"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::OpenCode,
                 display_name: "OpenCode".into(),

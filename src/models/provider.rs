@@ -1,4 +1,71 @@
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+
+// ============================================================================
+// ProviderId: 统一标识内置或自定义 Provider
+// ============================================================================
+
+/// Provider 统一标识符
+///
+/// 区分内置 Provider（通过 ProviderKind 标识）和自定义 Provider（通过字符串 ID 标识）
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ProviderId {
+    /// 内置 Provider
+    BuiltIn(ProviderKind),
+    /// 自定义 Provider（YAML 声明），格式为 "name:source"
+    Custom(String),
+}
+
+impl ProviderId {
+    /// 获取配置文件中使用的标识符
+    pub fn id_key(&self) -> String {
+        match self {
+            ProviderId::BuiltIn(kind) => kind.id_key().to_string(),
+            ProviderId::Custom(id) => id.clone(),
+        }
+    }
+
+    /// 从标识符反查 ProviderId
+    ///
+    /// 内置 Provider 返回 BuiltIn，未知标识符返回 Custom
+    pub fn from_id_key(key: &str) -> Self {
+        ProviderKind::from_id_key(key)
+            .map(ProviderId::BuiltIn)
+            .unwrap_or_else(|| ProviderId::Custom(key.to_string()))
+    }
+
+    /// 判断是否为内置 Provider
+    pub fn is_builtin(&self) -> bool {
+        matches!(self, ProviderId::BuiltIn(_))
+    }
+
+    /// 判断是否为自定义 Provider
+    pub fn is_custom(&self) -> bool {
+        matches!(self, ProviderId::Custom(_))
+    }
+
+    /// 如果是内置 Provider，返回 Some(ProviderKind)，否则返回 None
+    pub fn as_builtin(&self) -> Option<ProviderKind> {
+        match self {
+            ProviderId::BuiltIn(kind) => Some(*kind),
+            ProviderId::Custom(_) => None,
+        }
+    }
+
+    /// 获取 ProviderKind（如果是自定义 Provider 则返回 ProviderKind::Custom）
+    pub fn kind(&self) -> ProviderKind {
+        match self {
+            ProviderId::BuiltIn(kind) => *kind,
+            ProviderId::Custom(_) => ProviderKind::Custom,
+        }
+    }
+}
+
+impl std::fmt::Display for ProviderId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id_key())
+    }
+}
 
 // ============================================================================
 // Provider 类型定义
@@ -7,13 +74,17 @@ use serde::{Deserialize, Serialize};
 macro_rules! define_provider_kind {
     ($($variant:ident => $id:literal),* $(,)?) => {
         /// 支持的 AI Provider 枚举
+        ///
+        /// 内置 Provider 通过宏定义，`Custom` 用于 YAML 声明的自定义 Provider。
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
         pub enum ProviderKind {
-            $($variant),*
+            $($variant,)*
+            /// YAML 声明的自定义 Provider
+            Custom,
         }
 
         impl ProviderKind {
-            /// 获取所有 Provider
+            /// 获取所有内置 Provider（不含 Custom）
             pub fn all() -> &'static [ProviderKind] {
                 &[$(Self::$variant),*]
             }
@@ -21,7 +92,8 @@ macro_rules! define_provider_kind {
             /// 配置文件中使用的小写标识符
             pub fn id_key(self) -> &'static str {
                 match self {
-                    $(Self::$variant => $id),*
+                    $(Self::$variant => $id,)*
+                    Self::Custom => "custom",
                 }
             }
 
@@ -68,9 +140,10 @@ pub struct ProviderMetadata {
 /// Provider 描述符
 ///
 /// 将注册 ID 与展示元数据收敛到单一入口，避免 `id()/metadata()/kind()` 分散定义。
+/// `id` 使用 `Cow` 以同时支持内置 Provider（`&'static str`）和自定义 Provider（`String`）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderDescriptor {
-    pub id: &'static str,
+    pub id: Cow<'static, str>,
     pub metadata: ProviderMetadata,
 }
 
@@ -141,8 +214,8 @@ mod tests {
 }
 
 /// 底部导航页签
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NavTab {
-    Provider(ProviderKind),
+    Provider(ProviderId),
     Settings,
 }

@@ -6,6 +6,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::borrow::Cow;
 
 use auth::{get_token, kimi_cli_exists};
 use client::fetch_usage;
@@ -17,7 +18,7 @@ super::define_unit_provider!(KimiProvider);
 impl AiProvider for KimiProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "kimi:api",
+            id: Cow::Borrowed("kimi:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Kimi,
                 display_name: "Kimi".into(),

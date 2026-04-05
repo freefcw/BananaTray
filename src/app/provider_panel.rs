@@ -3,7 +3,7 @@ use crate::application::{
     provider_detail_view_state, AccountInfoViewState, AppAction, DisabledProviderViewState,
     ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
 };
-use crate::models::ProviderKind;
+use crate::models::ProviderId;
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -35,12 +35,12 @@ fn render_action_button(
 impl AppView {
     pub(crate) fn render_provider_detail(
         &self,
-        kind: ProviderKind,
+        id: &ProviderId,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let view_state = {
             let state = self.state.borrow();
-            provider_detail_view_state(&state.session, kind)
+            provider_detail_view_state(&state.session, id)
         };
 
         match view_state {
@@ -57,7 +57,7 @@ impl AppView {
     ) -> AnyElement {
         let theme = cx.global::<Theme>();
         let state = self.state.clone();
-        let kind = vm.kind;
+        let id = vm.id.clone();
 
         div()
             .flex_col()
@@ -106,7 +106,7 @@ impl AppView {
                         runtime::dispatch_in_window(
                             &state,
                             AppAction::OpenSettings {
-                                provider: Some(kind),
+                                provider: Some(id.clone()),
                             },
                             window,
                             cx,
@@ -148,7 +148,9 @@ impl AppView {
 
         // Dashboard 链接行（受 show_dashboard_button 设置控制，账户卡片存在时隐藏）
         let state_for_dashboard = self.state.clone();
+        let id = vm.id.clone();
         let dashboard_row = if vm.show_dashboard {
+            let dashboard_id = id.clone();
             Some(self.render_link_row(
                 "src/icons/compass.svg",
                 &t!("tooltip.dashboard"),
@@ -156,7 +158,7 @@ impl AppView {
                 move |_, window, cx| {
                     runtime::dispatch_in_window(
                         &state_for_dashboard,
-                        AppAction::OpenDashboard(vm.kind),
+                        AppAction::OpenDashboard(dashboard_id.clone()),
                         window,
                         cx,
                     );
@@ -172,7 +174,7 @@ impl AppView {
         // 账户信息卡片（位于配额卡片上方）
         if let Some(ref account) = vm.account {
             container = container
-                .child(self.render_account_info_card(account, vm.kind, &theme))
+                .child(self.render_account_info_card(account, &id, &theme))
                 .child(div().h(px(8.0)));
         }
 
@@ -192,7 +194,7 @@ impl AppView {
     fn render_account_info_card(
         &self,
         account: &AccountInfoViewState,
-        kind: ProviderKind,
+        id: &ProviderId,
         theme: &Theme,
     ) -> Div {
         let avatar_char = account
@@ -299,13 +301,16 @@ impl AppView {
 
         if can_click {
             card = card.cursor_pointer().hover(|style| style.opacity(0.85));
-            card = card.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                runtime::dispatch_in_window(
-                    &state_for_click,
-                    AppAction::OpenDashboard(kind),
-                    window,
-                    cx,
-                );
+            card = card.on_mouse_down(MouseButton::Left, {
+                let id = id.clone();
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_for_click,
+                        AppAction::OpenDashboard(id.clone()),
+                        window,
+                        cx,
+                    );
+                }
             });
         }
 
@@ -387,7 +392,7 @@ impl AppView {
         let theme = cx.global::<Theme>();
         let entity = cx.entity().clone();
         let state_for_settings = self.state.clone();
-        let kind = vm.kind;
+        let id = vm.id.clone();
 
         let mut container = div()
             .w_full()
@@ -436,7 +441,7 @@ impl AppView {
                         runtime::dispatch_in_window(
                             &state_for_settings,
                             AppAction::OpenSettings {
-                                provider: Some(kind),
+                                provider: Some(id.clone()),
                             },
                             window,
                             cx,
@@ -452,7 +457,7 @@ impl AppView {
                             runtime::dispatch_in_context(
                                 &view.state,
                                 AppAction::RefreshProvider {
-                                    kind,
+                                    id: id.clone(),
                                     reason: RefreshReason::Manual,
                                 },
                                 cx,

@@ -6,6 +6,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::borrow::Cow;
 
 use auth::{api_url, get_api_key};
 use client::fetch_remains;
@@ -17,7 +18,7 @@ super::define_unit_provider!(MiniMaxProvider);
 impl AiProvider for MiniMaxProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "minimax:api",
+            id: Cow::Borrowed("minimax:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::MiniMax,
                 display_name: "MiniMax".into(),

@@ -8,6 +8,7 @@ use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshD
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::debug;
+use std::borrow::Cow;
 
 use client::{fetch_github_user, fetch_user_info};
 use parser::{parse_github_user, parse_user_info_response};
@@ -20,7 +21,7 @@ super::define_unit_provider!(CopilotProvider);
 impl AiProvider for CopilotProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "copilot:api",
+            id: Cow::Borrowed("copilot:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Copilot,
                 display_name: "Copilot".into(),
