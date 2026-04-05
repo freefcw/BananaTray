@@ -112,26 +112,29 @@ mod tests {
         let tmp = env::temp_dir().join("bananatray_test_env");
         fs::create_dir_all(&tmp).unwrap();
 
-        env::set_var("BANANATRAY_RESOURCES", tmp.to_str().unwrap());
+        // SAFETY: 测试串行执行（cargo test 默认单线程），无并发 env 访问
+        unsafe { env::set_var("BANANATRAY_RESOURCES", tmp.to_str().unwrap()) };
         let result = Assets::from_env();
         assert!(result.is_some());
         assert_eq!(result.unwrap(), tmp);
 
-        env::remove_var("BANANATRAY_RESOURCES");
+        unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         fs::remove_dir_all(&tmp).ok();
     }
 
     #[test]
     fn test_from_env_with_nonexistent_dir() {
-        env::set_var("BANANATRAY_RESOURCES", "/nonexistent/path/bananatray");
+        // SAFETY: 测试串行执行，无并发 env 访问
+        unsafe { env::set_var("BANANATRAY_RESOURCES", "/nonexistent/path/bananatray") };
         let result = Assets::from_env();
         assert!(result.is_none());
-        env::remove_var("BANANATRAY_RESOURCES");
+        unsafe { env::remove_var("BANANATRAY_RESOURCES") };
     }
 
     #[test]
     fn test_from_env_unset() {
-        env::remove_var("BANANATRAY_RESOURCES");
+        // SAFETY: 测试串行执行，无并发 env 访问
+        unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         let result = Assets::from_env();
         assert!(result.is_none());
     }
@@ -160,7 +163,8 @@ mod tests {
     #[test]
     fn test_resolve_base_fallback_to_dev() {
         // 确保没有干扰环境变量
-        env::remove_var("BANANATRAY_RESOURCES");
+        // SAFETY: 测试串行执行，无并发 env 访问
+        unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         let result = Assets::resolve_base();
         // 在开发环境中，应该回退到 CARGO_MANIFEST_DIR
         assert!(result.is_dir());

@@ -237,7 +237,6 @@ fn sync_auto_launch(enabled: bool) {
 }
 
 fn update_log_level(level: &str) {
-    std::env::set_var("RUST_LOG", level);
     if let Some(filter) = parse_log_level(level) {
         log::set_max_level(filter);
         info!(target: "settings", "log level changed to: {}", level);
