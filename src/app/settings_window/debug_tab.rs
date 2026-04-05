@@ -385,8 +385,8 @@ impl SettingsView {
 
         // Provider 选择器（水平按钮组）
         for (kind, name) in &console.available_providers {
-            let is_selected = console.selected_provider == Some(*kind);
-            let kind_clone = *kind;
+            let is_selected = console.selected_provider.as_ref() == Some(kind);
+            let kind_clone = kind.clone();
             let state_select = self.state.clone();
 
             toolbar = toolbar.child(
@@ -425,7 +425,7 @@ impl SettingsView {
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         runtime::dispatch_in_window(
                             &state_select,
-                            AppAction::SelectDebugProvider(kind_clone),
+                            AppAction::SelectDebugProvider(kind_clone.clone()),
                             window,
                             cx,
                         );

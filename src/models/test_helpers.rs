@@ -3,7 +3,7 @@
 //! 统一 ProviderStatus / ProviderMetadata 的构造逻辑，
 //! 消除 quota.rs / app_state.rs / provider_logic.rs / selectors.rs 中的重复定义。
 
-use super::provider::{ProviderKind, ProviderMetadata};
+use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
 use super::quota::{ConnectionStatus, ErrorKind, ProviderStatus};
 
 /// 创建测试用的 ProviderMetadata
@@ -22,7 +22,7 @@ pub fn make_test_metadata(kind: ProviderKind) -> ProviderMetadata {
 /// 创建测试用的 ProviderStatus（指定连接状态）
 pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
     ProviderStatus {
-        kind,
+        provider_id: ProviderId::BuiltIn(kind),
         metadata: make_test_metadata(kind),
         enabled: true,
         connection,

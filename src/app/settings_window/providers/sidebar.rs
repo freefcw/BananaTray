@@ -1,7 +1,7 @@
 use super::super::SettingsView;
 use crate::application::SettingsProviderListItemViewState;
 use crate::application::{AppAction, ProviderOrderDirection};
-use crate::models::ProviderKind;
+use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
@@ -15,7 +15,7 @@ fn render_sort_arrow_button(
     label: &str,
     theme: &Theme,
     state: Rc<RefCell<AppState>>,
-    kind: ProviderKind,
+    id: ProviderId,
     direction_up: bool,
 ) -> Div {
     div()
@@ -34,7 +34,7 @@ fn render_sort_arrow_button(
             runtime::dispatch_in_window(
                 &state,
                 AppAction::ReorderProvider {
-                    kind,
+                    id: id.clone(),
                     direction: if direction_up {
                         ProviderOrderDirection::Up
                     } else {
@@ -54,7 +54,7 @@ fn render_sort_arrows(
     is_last: bool,
     theme: &Theme,
     state: &Rc<RefCell<AppState>>,
-    kind: ProviderKind,
+    id: &ProviderId,
 ) -> Div {
     let mut arrow_col = div()
         .flex_col()
@@ -68,7 +68,7 @@ fn render_sort_arrows(
             "▲",
             theme,
             state.clone(),
-            kind,
+            id.clone(),
             true,
         ));
     }
@@ -77,7 +77,7 @@ fn render_sort_arrows(
             "▼",
             theme,
             state.clone(),
-            kind,
+            id.clone(),
             false,
         ));
     }
@@ -154,7 +154,7 @@ fn render_sidebar_item(
     group_name: Option<String>,
     theme: &Theme,
     state: Rc<RefCell<AppState>>,
-    kind: ProviderKind,
+    id: ProviderId,
 ) -> Div {
     let mut item = div().flex().items_center().cursor_pointer();
 
@@ -187,7 +187,7 @@ fn render_sidebar_item(
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
             runtime::dispatch_in_window(
                 &state,
-                AppAction::SelectSettingsProvider(kind),
+                AppAction::SelectSettingsProvider(id.clone()),
                 window,
                 cx,
             );
@@ -218,7 +218,7 @@ impl SettingsView {
                         !item_state.can_move_down,
                         theme,
                         &self.state,
-                        item_state.kind,
+                        &item_state.id,
                     );
                     (Some(gname), Some(arrow_el))
                 } else {
@@ -240,7 +240,7 @@ impl SettingsView {
                 group_name,
                 theme,
                 self.state.clone(),
-                item_state.kind,
+                item_state.id.clone(),
             );
 
             list = list.child(item);

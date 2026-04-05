@@ -2,6 +2,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 super::define_unit_provider!(KiloProvider);
@@ -39,7 +40,7 @@ impl KiloProvider {
 impl AiProvider for KiloProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "kilo:ext",
+            id: Cow::Borrowed("kilo:ext"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Kilo,
                 display_name: "Kilo".into(),

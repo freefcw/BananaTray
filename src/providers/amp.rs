@@ -7,6 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
 use rust_i18n::t;
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 // 预编译的正则表达式
@@ -93,7 +94,7 @@ impl AmpProvider {
 impl AiProvider for AmpProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "amp:cli",
+            id: Cow::Borrowed("amp:cli"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Amp,
                 display_name: "Amp".into(),

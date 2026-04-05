@@ -4,7 +4,7 @@ use crate::application::{
     AppAction, ProviderSettingsMode, QuotaVisibilityItem, SettingChange,
     SettingsProviderDetailViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-use crate::models::{ProviderKind, QuotaDisplayMode};
+use crate::models::{ProviderId, ProviderKind, QuotaDisplayMode};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -65,7 +65,7 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
 }
 
 /// 刷新按钮（⟳）— 设计稿：较大尺寸，清晰可见
-fn render_refresh_button(state: Rc<RefCell<AppState>>, kind: ProviderKind, theme: &Theme) -> Div {
+fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &Theme) -> Div {
     div()
         .w(px(36.0))
         .h(px(36.0))
@@ -85,7 +85,7 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, kind: ProviderKind, theme
             runtime::dispatch_in_window(
                 &state,
                 AppAction::RefreshProvider {
-                    kind,
+                    id: id.clone(),
                     reason: RefreshReason::Manual,
                 },
                 window,
@@ -97,17 +97,18 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, kind: ProviderKind, theme
 /// Header 右侧操作区：刷新按钮 + 启用/禁用开关
 fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
-    kind: ProviderKind,
+    id: &ProviderId,
     is_enabled: bool,
     theme: &Theme,
 ) -> Div {
     let state_toggle = state.clone();
+    let id_toggle = id.clone();
 
     div()
         .flex()
         .items_center()
         .gap(px(10.0))
-        .child(render_refresh_button(state, kind, theme))
+        .child(render_refresh_button(state, id.clone(), theme))
         .child(
             crate::app::widgets::render_toggle_switch(
                 is_enabled,
@@ -119,7 +120,7 @@ fn render_detail_action_buttons(
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 runtime::dispatch_in_window(
                     &state_toggle,
-                    AppAction::ToggleProvider(kind),
+                    AppAction::ToggleProvider(id_toggle.clone()),
                     window,
                     cx,
                 );
@@ -156,7 +157,7 @@ impl SettingsView {
                     ))
                     .child(render_detail_action_buttons(
                         self.state.clone(),
-                        detail.kind,
+                        &detail.id,
                         detail.is_enabled,
                         theme,
                     )),
@@ -167,7 +168,7 @@ impl SettingsView {
             .child(self.render_usage_section(&detail.usage, theme, detail.quota_display_mode))
             // ── Quota visibility section ──
             .child(self.render_quota_visibility_section(
-                detail.kind,
+                detail.id.kind(),
                 &detail.quota_visibility,
                 theme,
             ))

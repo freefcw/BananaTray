@@ -1,37 +1,37 @@
 use crate::app_state::SettingsTab;
-use crate::models::{AppTheme, NavTab, ProviderKind, QuotaDisplayMode, TrayIconStyle};
+use crate::models::{AppTheme, NavTab, ProviderId, ProviderKind, QuotaDisplayMode, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason};
 
 #[derive(Debug)]
 pub enum AppAction {
     SelectNavTab(NavTab),
     SetSettingsTab(SettingsTab),
-    SelectSettingsProvider(ProviderKind),
+    SelectSettingsProvider(ProviderId),
     ToggleCadenceDropdown,
     SetCopilotTokenEditing(bool),
     SaveCopilotToken(String),
     ReorderProvider {
-        kind: ProviderKind,
+        id: ProviderId,
         direction: ProviderOrderDirection,
     },
     UpdateSetting(SettingChange),
     RefreshProvider {
-        kind: ProviderKind,
+        id: ProviderId,
         reason: RefreshReason,
     },
-    ToggleProvider(ProviderKind),
+    ToggleProvider(ProviderId),
     RefreshEventReceived(RefreshEvent),
     OpenSettings {
-        provider: Option<ProviderKind>,
+        provider: Option<ProviderId>,
     },
-    OpenDashboard(ProviderKind),
+    OpenDashboard(ProviderId),
     OpenUrl(String),
     UpdateLogLevel(String),
     SendDebugNotification(DebugNotificationKind),
     OpenLogDirectory,
     CopyToClipboard(String),
     /// Debug Tab: 选择调试目标 Provider
-    SelectDebugProvider(ProviderKind),
+    SelectDebugProvider(ProviderId),
     /// Debug Tab: 强制刷新选中的 Provider（跳过 cooldown，临时提升日志级别）
     DebugRefreshProvider,
     /// Debug Tab: 清空日志缓冲区

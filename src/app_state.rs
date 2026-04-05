@@ -1,7 +1,9 @@
 //! Pure-logic application state, free of GPUI dependency.
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
-use crate::models::{AppSettings, ConnectionStatus, NavTab, ProviderKind, ProviderStatus};
+use crate::models::{
+    AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, ProviderStatus,
+};
 use crate::notification::QuotaAlertTracker;
 
 // ============================================================================
@@ -47,18 +49,30 @@ pub struct ProviderStore {
 }
 
 impl ProviderStore {
-    pub fn find(&self, kind: ProviderKind) -> Option<&ProviderStatus> {
-        self.providers.iter().find(|p| p.kind == kind)
+    /// 通过 ProviderId 查找 Provider
+    pub fn find_by_id(&self, id: &ProviderId) -> Option<&ProviderStatus> {
+        self.providers.iter().find(|p| p.provider_id == *id)
     }
 
-    pub fn find_mut(&mut self, kind: ProviderKind) -> Option<&mut ProviderStatus> {
-        self.providers.iter_mut().find(|p| p.kind == kind)
+    /// 通过 ProviderId 查找可变 Provider
+    pub fn find_by_id_mut(&mut self, id: &ProviderId) -> Option<&mut ProviderStatus> {
+        self.providers.iter_mut().find(|p| p.provider_id == *id)
     }
 
-    pub fn mark_refreshing(&mut self, kind: ProviderKind) {
-        if let Some(provider) = self.find_mut(kind) {
+    /// 通过 ProviderId 标记为刷新中
+    pub fn mark_refreshing_by_id(&mut self, id: &ProviderId) {
+        if let Some(provider) = self.find_by_id_mut(id) {
             provider.mark_refreshing();
         }
+    }
+
+    /// 获取所有自定义 Provider 的 ID 列表
+    pub fn custom_provider_ids(&self) -> Vec<ProviderId> {
+        self.providers
+            .iter()
+            .filter(|p| p.provider_id.is_custom())
+            .map(|p| p.provider_id.clone())
+            .collect()
     }
 }
 
@@ -73,12 +87,13 @@ pub struct AppSession {
 
 impl AppSession {
     pub fn new(settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
-        let first_enabled = ProviderKind::all()
+        let first_enabled = providers
             .iter()
-            .find(|kind| settings.is_provider_enabled(**kind))
-            .copied();
+            .find(|p| settings.is_enabled(&p.provider_id))
+            .map(|p| p.provider_id.clone());
 
         let active_tab = first_enabled
+            .clone()
             .map(NavTab::Provider)
             .unwrap_or(NavTab::Settings);
 
@@ -86,13 +101,14 @@ impl AppSession {
             provider_store: ProviderStore { providers },
             nav: NavigationState {
                 active_tab,
-                last_provider_kind: first_enabled.unwrap_or(ProviderKind::Claude),
+                last_provider_id: first_enabled
+                    .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude)),
                 generation: 0,
                 prev_active_tab: None,
             },
             settings_ui: SettingsUiState {
                 active_tab: SettingsTab::General,
-                selected_provider: ProviderKind::Claude,
+                selected_provider: ProviderId::BuiltIn(ProviderKind::Claude),
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
                 debug_selected_provider: None,
@@ -109,12 +125,13 @@ impl AppSession {
     }
 
     pub fn popup_height(&self) -> f32 {
-        let kind = if let NavTab::Provider(kind) = self.nav.active_tab {
-            kind
+        let id = if let NavTab::Provider(ref id) = self.nav.active_tab {
+            id.clone()
         } else {
-            self.nav.last_provider_kind
+            self.nav.last_provider_id.clone()
         };
-        let provider = self.provider_store.find(kind);
+        let provider = self.provider_store.find_by_id(&id);
+        let kind = id.kind();
         let quota_count = provider
             .map(|p| {
                 let visible = self.settings.visible_quota_count(kind, &p.quotas);
@@ -137,9 +154,10 @@ impl AppSession {
     }
 
     pub fn has_enabled_providers(&self) -> bool {
-        ProviderKind::all()
+        self.provider_store
+            .providers
             .iter()
-            .any(|kind| self.settings.is_provider_enabled(*kind))
+            .any(|p| self.settings.is_enabled(&p.provider_id))
     }
 
     pub fn default_provider_tab(&mut self) -> Option<NavTab> {
@@ -147,27 +165,29 @@ impl AppSession {
             return None;
         }
 
-        let last = self.nav.last_provider_kind;
-        let kind = if self.settings.is_provider_enabled(last) {
+        let last = self.nav.last_provider_id.clone();
+        let id = if self.settings.is_enabled(&last) {
             last
         } else {
-            let fallback = ProviderKind::all()
+            let fallback = self
+                .provider_store
+                .providers
                 .iter()
-                .find(|kind| self.settings.is_provider_enabled(**kind))
-                .copied()
+                .find(|p| self.settings.is_enabled(&p.provider_id))
+                .map(|p| p.provider_id.clone())
                 .unwrap_or(last);
-            self.nav.last_provider_kind = fallback;
+            self.nav.last_provider_id = fallback.clone();
             fallback
         };
 
-        Some(NavTab::Provider(kind))
+        Some(NavTab::Provider(id))
     }
 }
 
 /// Tray 弹出窗口的导航状态
 pub struct NavigationState {
     pub active_tab: NavTab,
-    pub last_provider_kind: ProviderKind,
+    pub last_provider_id: ProviderId,
     /// 每次 switch_to 递增，用于让进度条动画在切换时重播
     pub generation: u64,
     /// 切换前的 tab，用于导航栏滑块动画的起点
@@ -175,28 +195,32 @@ pub struct NavigationState {
 }
 
 impl NavigationState {
-    /// 切换到指定 tab，若为 Provider 则同步 last_provider_kind
+    /// 切换到指定 tab，若为 Provider 则同步 last_provider_id
     pub fn switch_to(&mut self, tab: NavTab) {
-        self.prev_active_tab = Some(self.active_tab);
+        self.prev_active_tab = Some(self.active_tab.clone());
         self.generation += 1;
-        self.active_tab = tab;
-        if let NavTab::Provider(kind) = tab {
-            self.last_provider_kind = kind;
+        if let NavTab::Provider(ref id) = tab {
+            self.last_provider_id = id.clone();
         }
+        self.active_tab = tab;
     }
 
     /// 当某个 provider 被禁用时，若它是当前活跃 tab 则回退到下一个已启用的 provider
-    pub fn fallback_on_disable(&mut self, disabled: ProviderKind, settings: &AppSettings) {
-        let is_current = matches!(self.active_tab, NavTab::Provider(k) if k == disabled);
+    pub fn fallback_on_disable(
+        &mut self,
+        disabled: &ProviderId,
+        providers: &[ProviderStatus],
+        settings: &AppSettings,
+    ) {
+        let is_current = matches!(&self.active_tab, NavTab::Provider(id) if id == disabled);
         if !is_current {
             return;
         }
-        if let Some(next) = ProviderKind::all()
+        if let Some(next) = providers
             .iter()
-            .find(|k| **k != disabled && settings.is_provider_enabled(**k))
-            .copied()
+            .find(|p| p.provider_id != *disabled && settings.is_enabled(&p.provider_id))
         {
-            self.switch_to(NavTab::Provider(next));
+            self.switch_to(NavTab::Provider(next.provider_id.clone()));
         }
     }
 }
@@ -214,11 +238,11 @@ pub enum SettingsTab {
 /// 设置窗口的临时 UI 状态
 pub struct SettingsUiState {
     pub active_tab: SettingsTab,
-    pub selected_provider: ProviderKind,
+    pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
     pub copilot_token_editing: bool,
     /// Debug Tab: 当前选中的调试 Provider
-    pub debug_selected_provider: Option<ProviderKind>,
+    pub debug_selected_provider: Option<ProviderId>,
     /// Debug Tab: 是否正在调试刷新中
     pub debug_refresh_active: bool,
     /// Debug Tab: 调试刷新前的日志级别（用于刷新完成后恢复）
@@ -245,12 +269,12 @@ pub fn compute_header_status(
     nav: &NavigationState,
     store: &ProviderStore,
 ) -> (String, HeaderStatusKind) {
-    let kind = match nav.active_tab {
-        NavTab::Provider(k) => k,
-        NavTab::Settings => nav.last_provider_kind,
+    let id = match &nav.active_tab {
+        NavTab::Provider(id) => id.clone(),
+        NavTab::Settings => nav.last_provider_id.clone(),
     };
 
-    let Some(provider) = store.find(kind) else {
+    let Some(provider) = store.find_by_id(&id) else {
         return ("Offline".to_string(), HeaderStatusKind::Offline);
     };
 
@@ -284,7 +308,12 @@ pub fn compute_header_status(
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{ConnectionStatus, ProviderKind};
+    use crate::models::{ConnectionStatus, ProviderId, ProviderKind};
+
+    /// 快捷构造 ProviderId::BuiltIn
+    fn pid(kind: ProviderKind) -> ProviderId {
+        ProviderId::BuiltIn(kind)
+    }
 
     fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
         let mut p = make_test_provider(kind, ConnectionStatus::Disconnected);
@@ -314,14 +343,14 @@ mod tests {
     #[test]
     fn store_find_existing() {
         let store = make_store(&[(ProviderKind::Claude, true), (ProviderKind::Gemini, false)]);
-        assert!(store.find(ProviderKind::Claude).is_some());
-        assert!(store.find(ProviderKind::Gemini).is_some());
+        assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_some());
+        assert!(store.find_by_id(&pid(ProviderKind::Gemini)).is_some());
     }
 
     #[test]
     fn store_find_missing() {
         let store = make_store(&[(ProviderKind::Claude, true)]);
-        assert!(store.find(ProviderKind::Copilot).is_none());
+        assert!(store.find_by_id(&pid(ProviderKind::Copilot)).is_none());
     }
 
     #[test]
@@ -331,34 +360,48 @@ mod tests {
             (ProviderKind::Gemini, false),
             (ProviderKind::Copilot, true),
         ]);
-        let p = store.find(ProviderKind::Gemini).unwrap();
-        assert_eq!(p.kind, ProviderKind::Gemini);
+        let p = store.find_by_id(&pid(ProviderKind::Gemini)).unwrap();
+        assert_eq!(p.kind(), ProviderKind::Gemini);
         assert!(!p.enabled);
     }
 
     #[test]
     fn store_find_mut_modifies() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        store.find_mut(ProviderKind::Claude).unwrap().enabled = false;
-        assert!(!store.find(ProviderKind::Claude).unwrap().enabled);
+        store
+            .find_by_id_mut(&pid(ProviderKind::Claude))
+            .unwrap()
+            .enabled = false;
+        assert!(
+            !store
+                .find_by_id(&pid(ProviderKind::Claude))
+                .unwrap()
+                .enabled
+        );
     }
 
     #[test]
     fn store_find_mut_missing_returns_none() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        assert!(store.find_mut(ProviderKind::Copilot).is_none());
+        assert!(store.find_by_id_mut(&pid(ProviderKind::Copilot)).is_none());
     }
 
     #[test]
     fn store_mark_refreshing() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
         assert_eq!(
-            store.find(ProviderKind::Claude).unwrap().connection,
+            store
+                .find_by_id(&pid(ProviderKind::Claude))
+                .unwrap()
+                .connection,
             ConnectionStatus::Disconnected
         );
-        store.mark_refreshing(ProviderKind::Claude);
+        store.mark_refreshing_by_id(&pid(ProviderKind::Claude));
         assert_eq!(
-            store.find(ProviderKind::Claude).unwrap().connection,
+            store
+                .find_by_id(&pid(ProviderKind::Claude))
+                .unwrap()
+                .connection,
             ConnectionStatus::Refreshing
         );
     }
@@ -367,7 +410,7 @@ mod tests {
     fn store_mark_refreshing_missing_is_noop() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
         // Should not panic
-        store.mark_refreshing(ProviderKind::Copilot);
+        store.mark_refreshing_by_id(&pid(ProviderKind::Copilot));
     }
 
     // ── NavigationState ────────────────────────────────────────
@@ -376,122 +419,123 @@ mod tests {
     fn nav_switch_to_provider() {
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
-            last_provider_kind: ProviderKind::Claude,
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
-        nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Gemini);
+        nav.switch_to(NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Gemini));
     }
 
     #[test]
     fn nav_switch_to_settings_preserves_last_provider() {
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
         nav.switch_to(NavTab::Settings);
         assert_eq!(nav.active_tab, NavTab::Settings);
-        // last_provider_kind should remain unchanged
-        assert_eq!(nav.last_provider_kind, ProviderKind::Claude);
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Claude));
     }
 
     #[test]
     fn nav_switch_between_providers() {
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
-        nav.switch_to(NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Gemini);
+        nav.switch_to(NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Gemini));
 
-        nav.switch_to(NavTab::Provider(ProviderKind::Copilot));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Copilot);
+        nav.switch_to(NavTab::Provider(pid(ProviderKind::Copilot)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Copilot));
     }
 
     #[test]
     fn nav_fallback_when_current_disabled() {
+        let store = make_store(&[(ProviderKind::Claude, true), (ProviderKind::Gemini, true)]);
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
-        nav.fallback_on_disable(ProviderKind::Claude, &settings);
-        // Should fall back to next enabled provider (Gemini)
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Gemini);
+        nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Gemini));
     }
 
     #[test]
     fn nav_fallback_noop_when_not_current() {
+        let store = make_store(&[(ProviderKind::Gemini, true)]);
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Gemini),
-            last_provider_kind: ProviderKind::Gemini,
+            active_tab: NavTab::Provider(pid(ProviderKind::Gemini)),
+            last_provider_id: pid(ProviderKind::Gemini),
             prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
-        nav.fallback_on_disable(ProviderKind::Claude, &settings);
-        // Should not change since Claude is not the active tab
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Gemini);
+        nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Gemini)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Gemini));
     }
 
     #[test]
     fn nav_fallback_noop_when_on_settings_tab() {
+        let store = make_store(&[(ProviderKind::Gemini, true)]);
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
-            last_provider_kind: ProviderKind::Claude,
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
         let settings = make_settings(&[ProviderKind::Gemini]);
-        nav.fallback_on_disable(ProviderKind::Claude, &settings);
-        // Settings tab should remain
+        nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
         assert_eq!(nav.active_tab, NavTab::Settings);
     }
 
     #[test]
     fn nav_fallback_no_other_enabled_stays_put() {
+        let store = make_store(&[(ProviderKind::Claude, true)]);
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
-        // Only Claude is enabled, and we're disabling it — no fallback target
         let settings = make_settings(&[ProviderKind::Claude]);
-        nav.fallback_on_disable(ProviderKind::Claude, &settings);
-        // Stays on Claude (no alternative available)
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Claude));
-        assert_eq!(nav.last_provider_kind, ProviderKind::Claude);
+        nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Claude)));
+        assert_eq!(nav.last_provider_id, pid(ProviderKind::Claude));
     }
 
     #[test]
     fn nav_fallback_picks_first_enabled_in_order() {
+        let store = make_store(&[
+            (ProviderKind::Claude, true),
+            (ProviderKind::Gemini, true),
+            (ProviderKind::Copilot, true),
+        ]);
         let mut nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
-        // Enable Copilot and Gemini; fallback should pick based on ProviderKind::all() order
         let settings = make_settings(&[
             ProviderKind::Claude,
             ProviderKind::Gemini,
             ProviderKind::Copilot,
         ]);
-        nav.fallback_on_disable(ProviderKind::Claude, &settings);
-        // Gemini comes before Copilot in ProviderKind::all()
-        assert_eq!(nav.active_tab, NavTab::Provider(ProviderKind::Gemini));
+        nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
+        assert_eq!(nav.active_tab, NavTab::Provider(pid(ProviderKind::Gemini)));
     }
 
     // ── SettingsUiState ────────────────────────────────────────
@@ -500,7 +544,7 @@ mod tests {
     fn settings_ui_default_values() {
         let ui = SettingsUiState {
             active_tab: SettingsTab::General,
-            selected_provider: ProviderKind::Claude,
+            selected_provider: pid(ProviderKind::Claude),
             cadence_dropdown_open: false,
             copilot_token_editing: false,
             debug_selected_provider: None,
@@ -517,8 +561,8 @@ mod tests {
     fn header_status_missing_provider() {
         let store = make_store(&[]);
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -530,12 +574,12 @@ mod tests {
     #[test]
     fn header_status_refreshing() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Refreshing;
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -547,12 +591,12 @@ mod tests {
     #[test]
     fn header_status_disconnected() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Disconnected;
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -564,14 +608,13 @@ mod tests {
     #[test]
     fn header_status_synced_now() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
-        // 刚刷新的时间
         p.last_refreshed_instant = Some(std::time::Instant::now());
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -583,15 +626,14 @@ mod tests {
     #[test]
     fn header_status_synced_minutes_ago() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
-        // 5分钟前
         p.last_refreshed_instant =
             Some(std::time::Instant::now() - std::time::Duration::from_secs(300));
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -603,15 +645,14 @@ mod tests {
     #[test]
     fn header_status_synced_hours_ago() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
-        // 2小时前
         p.last_refreshed_instant =
             Some(std::time::Instant::now() - std::time::Duration::from_secs(7200));
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
@@ -686,20 +727,97 @@ mod tests {
     #[test]
     fn header_status_error() {
         let mut store = make_store(&[(ProviderKind::Claude, true)]);
-        let p = store.find_mut(ProviderKind::Claude).unwrap();
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Error;
         // 注意：如果是 Error 状态且 last_refreshed_instant 不为 None，
         // 我们会显示最后刷新时间（在前面分支处理了），所以这里设为 None 以测试 Error 分支
         p.last_refreshed_instant = None;
 
         let nav = NavigationState {
-            active_tab: NavTab::Provider(ProviderKind::Claude),
-            last_provider_kind: ProviderKind::Claude,
+            active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
+            last_provider_id: pid(ProviderKind::Claude),
             prev_active_tab: None,
             generation: 0,
         };
         let (text, kind) = compute_header_status(&nav, &store);
         assert_eq!(text, "Error");
         assert_eq!(kind, HeaderStatusKind::Offline);
+    }
+
+    // ── ProviderStore: find_by_id / custom_provider_ids ──────
+
+    #[test]
+    fn store_find_by_id_builtin() {
+        let store = make_store(&[(ProviderKind::Claude, true)]);
+        assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_some());
+        assert!(store.find_by_id(&pid(ProviderKind::Gemini)).is_none());
+    }
+
+    #[test]
+    fn store_find_by_id_custom() {
+        let custom_id = ProviderId::Custom("myai:cli".to_string());
+        let mut store = make_store(&[]);
+        let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+        store
+            .providers
+            .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+
+        assert!(store.find_by_id(&custom_id).is_some());
+        assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_none());
+    }
+
+    #[test]
+    fn store_find_by_id_mut_custom() {
+        let custom_id = ProviderId::Custom("myai:cli".to_string());
+        let mut store = make_store(&[]);
+        let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+        store
+            .providers
+            .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+
+        store.find_by_id_mut(&custom_id).unwrap().enabled = false;
+        assert!(!store.find_by_id(&custom_id).unwrap().enabled);
+    }
+
+    #[test]
+    fn store_mark_refreshing_by_id_custom() {
+        let custom_id = ProviderId::Custom("myai:cli".to_string());
+        let mut store = make_store(&[]);
+        let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+        store
+            .providers
+            .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+
+        store.mark_refreshing_by_id(&custom_id);
+        assert_eq!(
+            store.find_by_id(&custom_id).unwrap().connection,
+            ConnectionStatus::Refreshing
+        );
+    }
+
+    #[test]
+    fn store_custom_provider_ids() {
+        let custom1 = ProviderId::Custom("a:cli".to_string());
+        let custom2 = ProviderId::Custom("b:cli".to_string());
+        let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        store.providers.push(ProviderStatus::new_custom(
+            custom1.clone(),
+            metadata.clone(),
+        ));
+        store
+            .providers
+            .push(ProviderStatus::new_custom(custom2.clone(), metadata));
+
+        let ids = store.custom_provider_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&custom1));
+        assert!(ids.contains(&custom2));
+    }
+
+    #[test]
+    fn store_custom_provider_ids_empty_when_no_custom() {
+        let store = make_store(&[(ProviderKind::Claude, true)]);
+        assert!(store.custom_provider_ids().is_empty());
     }
 }

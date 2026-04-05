@@ -8,6 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
 use rust_i18n::t;
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 const KIRO_CLI: &str = "kiro-cli";
@@ -148,7 +149,7 @@ impl KiroProvider {
 impl AiProvider for KiroProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "kiro:cli",
+            id: Cow::Borrowed("kiro:cli"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Kiro,
                 display_name: "Kiro".into(),

@@ -1,4 +1,5 @@
 pub mod common;
+pub mod custom;
 pub mod manager;
 
 use crate::models::{ProviderDescriptor, RefreshData};

@@ -7,6 +7,7 @@ use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshD
 use anyhow::Result;
 use async_trait::async_trait;
 use log::warn;
+use std::borrow::Cow;
 
 super::define_unit_provider!(AntigravityProvider);
 
@@ -49,7 +50,7 @@ impl AntigravityProvider {
 impl AiProvider for AntigravityProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "antigravity:api",
+            id: Cow::Borrowed("antigravity:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Antigravity,
                 display_name: "Antigravity".into(),

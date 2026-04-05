@@ -6,6 +6,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use std::borrow::Cow;
 
 use auth::{db_path, extract_user_id_from_jwt, read_access_token};
 use client::fetch_usage_summary;
@@ -17,7 +18,7 @@ super::define_unit_provider!(CursorProvider);
 impl AiProvider for CursorProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "cursor:api",
+            id: Cow::Borrowed("cursor:api"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Cursor,
                 display_name: "Cursor".into(),

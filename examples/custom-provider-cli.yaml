@@ -1,0 +1,37 @@
+# 示例：CLI 类型的自定义 Provider
+#
+# 将此文件放到 ~/.config/bananatray/providers/ 目录下即可生效。
+# 文件名任意，只要扩展名是 .yaml 或 .yml。
+
+id: "myai:cli"
+
+metadata:
+  display_name: "My AI Tool"
+  brand_name: "MyCompany"
+  icon: "🤖"
+  dashboard_url: "https://myai.com/usage"
+  account_hint: "MyAI account"
+  source_label: "myai cli"
+
+# 可用性检查：检测 CLI 是否安装
+availability:
+  type: cli_exists
+  value: "myai"
+
+# 数据获取：执行 CLI 命令
+source:
+  type: cli
+  command: "myai"
+  args: ["usage", "--no-color"]
+
+# 响应解析：用正则表达式提取配额数据
+parser:
+  format: regex
+  # 从输出中提取账户邮箱（可选）
+  account_email: 'Signed in as\s+(\S+)'
+  quotas:
+    - label: "Monthly Credits"
+      pattern: 'Credits:\s*\$([0-9.]+)\s*/\s*\$([0-9.]+)'
+      used_group: 1
+      limit_group: 2
+      quota_type: credit

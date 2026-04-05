@@ -9,7 +9,7 @@ mod tray;
 // ============================================================================
 
 use crate::app_state::HeaderStatusKind;
-use crate::models::{ProviderKind, QuotaDisplayMode, QuotaInfo};
+use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo};
 
 // ── Tray 弹出窗口 ──
 
@@ -27,7 +27,7 @@ pub struct GlobalActionsViewState {
 
 #[derive(Debug, Clone)]
 pub struct RefreshButtonViewState {
-    pub kind: Option<ProviderKind>,
+    pub id: Option<ProviderId>,
     pub is_refreshing: bool,
     pub label: String,
 }
@@ -41,7 +41,7 @@ pub enum ProviderDetailViewState {
 
 #[derive(Debug, Clone)]
 pub struct DisabledProviderViewState {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub icon: String,
     pub title: String,
     pub hint: String,
@@ -49,7 +49,7 @@ pub struct DisabledProviderViewState {
 
 #[derive(Debug, Clone)]
 pub struct ProviderPanelViewState {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub show_dashboard: bool,
     pub account: Option<AccountInfoViewState>,
     pub body: ProviderBodyViewState,
@@ -83,7 +83,7 @@ pub enum ProviderBodyViewState {
 
 #[derive(Debug, Clone)]
 pub struct ProviderEmptyViewState {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub title: String,
     pub message: String,
     pub is_error: bool,
@@ -106,7 +106,7 @@ pub struct SettingsProvidersTabViewState {
 
 #[derive(Debug, Clone)]
 pub struct SettingsProviderListItemViewState {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub icon: String,
     pub display_name: String,
     pub is_selected: bool,
@@ -117,7 +117,7 @@ pub struct SettingsProviderListItemViewState {
 
 #[derive(Debug, Clone)]
 pub struct SettingsProviderDetailViewState {
-    pub kind: ProviderKind,
+    pub id: ProviderId,
     pub icon: String,
     pub display_name: String,
     pub subtitle: String,

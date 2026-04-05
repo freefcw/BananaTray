@@ -1,6 +1,6 @@
 use crate::app_state::{AppSession, SettingsTab};
 use crate::application::{AppAction, AppEffect, ProviderOrderDirection, SettingChange};
-use crate::models::{NavTab, ProviderKind};
+use crate::models::{NavTab, ProviderId};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use log::{debug, info};
 
@@ -16,8 +16,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.active_tab = tab;
             push_render(&mut effects);
         }
-        AppAction::SelectSettingsProvider(kind) => {
-            session.settings_ui.selected_provider = kind;
+        AppAction::SelectSettingsProvider(id) => {
+            session.settings_ui.selected_provider = id;
             push_render(&mut effects);
         }
         AppAction::ToggleCadenceDropdown => {
@@ -37,10 +37,13 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.copilot_token_editing = false;
             push_render(&mut effects);
         }
-        AppAction::ReorderProvider { kind, direction } => {
+        AppAction::ReorderProvider { id, direction } => {
+            let custom_ids = session.provider_store.custom_provider_ids();
             let moved = match direction {
-                ProviderOrderDirection::Up => session.settings.move_provider_up(kind),
-                ProviderOrderDirection::Down => session.settings.move_provider_down(kind),
+                ProviderOrderDirection::Up => session.settings.move_provider_up(&id, &custom_ids),
+                ProviderOrderDirection::Down => {
+                    session.settings.move_provider_down(&id, &custom_ids)
+                }
             };
             if moved {
                 effects.push(AppEffect::PersistSettings);
@@ -50,24 +53,24 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::UpdateSetting(change) => {
             apply_setting_change(session, change, &mut effects);
         }
-        AppAction::RefreshProvider { kind, reason } => {
-            request_provider_refresh(session, kind, reason, &mut effects);
+        AppAction::RefreshProvider { id, reason } => {
+            request_provider_refresh(session, id, reason, &mut effects);
         }
-        AppAction::ToggleProvider(kind) => {
-            toggle_provider(session, kind, &mut effects);
+        AppAction::ToggleProvider(id) => {
+            toggle_provider(session, id, &mut effects);
         }
         AppAction::RefreshEventReceived(event) => {
             apply_refresh_event(session, event, &mut effects);
         }
         AppAction::OpenSettings { provider } => {
-            if let Some(kind) = provider {
-                session.settings_ui.selected_provider = kind;
+            if let Some(id) = provider {
+                session.settings_ui.selected_provider = id;
                 session.settings_ui.active_tab = SettingsTab::Providers;
             }
             effects.push(AppEffect::OpenSettingsWindow);
         }
-        AppAction::OpenDashboard(kind) => {
-            if let Some(provider) = session.provider_store.find(kind) {
+        AppAction::OpenDashboard(id) => {
+            if let Some(provider) = session.provider_store.find_by_id(&id) {
                 let url = provider.dashboard_url().trim();
                 if !url.is_empty() {
                     effects.push(AppEffect::OpenUrl(url.to_string()));
@@ -91,17 +94,16 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::CopyToClipboard(text) => {
             effects.push(AppEffect::CopyToClipboard(text));
         }
-        AppAction::SelectDebugProvider(kind) => {
-            session.settings_ui.debug_selected_provider = Some(kind);
+        AppAction::SelectDebugProvider(id) => {
+            session.settings_ui.debug_selected_provider = Some(id);
             push_render(&mut effects);
         }
         AppAction::DebugRefreshProvider => {
-            if let Some(kind) = session.settings_ui.debug_selected_provider {
+            if let Some(ref id) = session.settings_ui.debug_selected_provider {
                 if !session.settings_ui.debug_refresh_active {
                     session.settings_ui.debug_refresh_active = true;
-                    // 标记 UI 为 Refreshing
-                    session.provider_store.mark_refreshing(kind);
-                    effects.push(AppEffect::StartDebugRefresh(kind));
+                    session.provider_store.mark_refreshing_by_id(id);
+                    effects.push(AppEffect::StartDebugRefresh(id.clone()));
                     push_render(&mut effects);
                 }
             }
@@ -185,46 +187,49 @@ fn apply_setting_change(
 
 fn request_provider_refresh(
     session: &mut AppSession,
-    kind: ProviderKind,
+    id: ProviderId,
     reason: RefreshReason,
     effects: &mut Vec<AppEffect>,
 ) {
-    if !session.settings.is_provider_enabled(kind) {
+    if !session.settings.is_enabled(&id) {
         debug!(
             target: "refresh",
-            "ignoring refresh request for disabled provider {:?}",
-            kind
+            "ignoring refresh request for disabled provider {}",
+            id
         );
         return;
     }
 
-    session.provider_store.mark_refreshing(kind);
+    session.provider_store.mark_refreshing_by_id(&id);
     effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
-        kind,
+        id,
         reason,
     }));
     push_render(effects);
 }
 
-fn toggle_provider(session: &mut AppSession, kind: ProviderKind, effects: &mut Vec<AppEffect>) {
-    let new_val = !session.settings.is_provider_enabled(kind);
+fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<AppEffect>) {
+    let new_val = !session.settings.is_enabled(&id);
     info!(
         target: "providers",
-        "toggling provider {:?} from {} to {}",
-        kind,
+        "toggling provider {} from {} to {}",
+        id,
         !new_val,
         new_val
     );
-    session.settings.set_provider_enabled(kind, new_val);
+    session.settings.set_enabled(&id, new_val);
 
-    if let Some(provider) = session.provider_store.find_mut(kind) {
+    if let Some(provider) = session.provider_store.find_by_id_mut(&id) {
         provider.enabled = new_val;
     }
 
     if new_val {
-        session.nav.switch_to(NavTab::Provider(kind));
+        session.nav.switch_to(NavTab::Provider(id.clone()));
     } else {
-        session.nav.fallback_on_disable(kind, &session.settings);
+        let providers = &session.provider_store.providers;
+        session
+            .nav
+            .fallback_on_disable(&id, providers, &session.settings);
     }
 
     effects.push(AppEffect::PersistSettings);
@@ -232,7 +237,7 @@ fn toggle_provider(session: &mut AppSession, kind: ProviderKind, effects: &mut V
         session,
     )));
     if new_val {
-        request_provider_refresh(session, kind, RefreshReason::ProviderToggled, effects);
+        request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
     } else {
         push_render(effects);
     }
@@ -244,18 +249,16 @@ fn apply_refresh_event(
     effects: &mut Vec<AppEffect>,
 ) {
     match event {
-        RefreshEvent::Started { kind } => {
-            session.provider_store.mark_refreshing(kind);
+        RefreshEvent::Started { id } => {
+            session.provider_store.mark_refreshing_by_id(&id);
             push_render(effects);
         }
         RefreshEvent::Finished(outcome) => {
-            // 先记录是否为调试刷新目标（必须在 match 之前，避免被 early return 跳过）
             let is_debug_target = session.settings_ui.debug_refresh_active
-                && session.settings_ui.debug_selected_provider == Some(outcome.kind);
+                && session.settings_ui.debug_selected_provider.as_ref() == Some(&outcome.id);
 
-            // 处理刷新结果（用 block 限制 return 作用域，确保后续恢复逻辑总能执行）
             'process: {
-                if session.provider_store.find(outcome.kind).is_none() {
+                if session.provider_store.find_by_id(&outcome.id).is_none() {
                     break 'process;
                 }
 
@@ -263,19 +266,19 @@ fn apply_refresh_event(
                     RefreshResult::Success { data } => {
                         info!(
                             target: "providers",
-                            "provider {:?} refresh succeeded: {} quotas",
-                            outcome.kind,
+                            "provider {} refresh succeeded: {} quotas",
+                            outcome.id,
                             data.quotas.len()
                         );
                         let provider_name = session
                             .provider_store
-                            .find(outcome.kind)
+                            .find_by_id(&outcome.id)
                             .map(|provider| provider.display_name().to_string())
-                            .unwrap_or_else(|| format!("{:?}", outcome.kind));
+                            .unwrap_or_else(|| format!("{}", outcome.id));
                         if let Some(alert) =
                             session
                                 .alert_tracker
-                                .update(outcome.kind, &provider_name, &data.quotas)
+                                .update(&outcome.id, &provider_name, &data.quotas)
                         {
                             if session.settings.session_quota_notifications {
                                 effects.push(AppEffect::SendQuotaNotification {
@@ -284,7 +287,8 @@ fn apply_refresh_event(
                                 });
                             }
                         }
-                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
+                        else {
                             break 'process;
                         };
                         provider.mark_refresh_succeeded(data);
@@ -293,18 +297,20 @@ fn apply_refresh_event(
                     RefreshResult::Unavailable { message } => {
                         debug!(
                             target: "providers",
-                            "provider {:?} unavailable: {}",
-                            outcome.kind,
+                            "provider {} unavailable: {}",
+                            outcome.id,
                             message
                         );
-                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
+                        else {
                             break 'process;
                         };
                         provider.mark_unavailable(message);
                         push_render(effects);
                     }
                     RefreshResult::Failed { error, error_kind } => {
-                        let Some(provider) = session.provider_store.find_mut(outcome.kind) else {
+                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
+                        else {
                             break 'process;
                         };
                         provider.mark_refresh_failed(error, error_kind);
@@ -316,7 +322,6 @@ fn apply_refresh_event(
                 }
             }
 
-            // 调试刷新完成后恢复日志级别 — 这段代码无论上面如何分支都一定会执行
             if is_debug_target {
                 session.settings_ui.debug_refresh_active = false;
                 if let Some(prev_level) = session.settings_ui.debug_prev_log_level.take() {
@@ -329,10 +334,12 @@ fn apply_refresh_event(
 }
 
 pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
-    let enabled: Vec<ProviderKind> = ProviderKind::all()
+    let enabled: Vec<ProviderId> = session
+        .provider_store
+        .providers
         .iter()
-        .filter(|kind| session.settings.is_provider_enabled(**kind))
-        .copied()
+        .filter(|p| session.settings.is_enabled(&p.provider_id))
+        .map(|p| p.provider_id.clone())
         .collect();
 
     RefreshRequest::UpdateConfig {
@@ -349,8 +356,12 @@ fn push_render(effects: &mut Vec<AppEffect>) {
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
+    use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind};
     use crate::refresh::{RefreshOutcome, RefreshResult};
+
+    fn pid(kind: ProviderKind) -> ProviderId {
+        ProviderId::BuiltIn(kind)
+    }
 
     fn make_session() -> AppSession {
         let providers = ProviderKind::all()
@@ -463,12 +474,12 @@ mod tests {
 
         let effects = reduce(
             &mut session,
-            AppAction::SelectDebugProvider(ProviderKind::Claude),
+            AppAction::SelectDebugProvider(pid(ProviderKind::Claude)),
         );
 
         assert_eq!(
             session.settings_ui.debug_selected_provider,
-            Some(ProviderKind::Claude)
+            Some(pid(ProviderKind::Claude))
         );
         assert!(has_render(&effects));
     }
@@ -478,16 +489,16 @@ mod tests {
         let mut session = make_session();
         reduce(
             &mut session,
-            AppAction::SelectDebugProvider(ProviderKind::Claude),
+            AppAction::SelectDebugProvider(pid(ProviderKind::Claude)),
         );
         reduce(
             &mut session,
-            AppAction::SelectDebugProvider(ProviderKind::Copilot),
+            AppAction::SelectDebugProvider(pid(ProviderKind::Copilot)),
         );
 
         assert_eq!(
             session.settings_ui.debug_selected_provider,
-            Some(ProviderKind::Copilot)
+            Some(pid(ProviderKind::Copilot))
         );
     }
 
@@ -510,7 +521,7 @@ mod tests {
         let mut session = make_session();
         reduce(
             &mut session,
-            AppAction::SelectDebugProvider(ProviderKind::Gemini),
+            AppAction::SelectDebugProvider(pid(ProviderKind::Gemini)),
         );
 
         let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
@@ -518,7 +529,7 @@ mod tests {
         assert!(session.settings_ui.debug_refresh_active);
         assert!(has_effect(&effects, |e| matches!(
             e,
-            AppEffect::StartDebugRefresh(ProviderKind::Gemini)
+            AppEffect::StartDebugRefresh(_)
         )));
     }
 
@@ -527,7 +538,7 @@ mod tests {
         let mut session = make_session();
         reduce(
             &mut session,
-            AppAction::SelectDebugProvider(ProviderKind::Gemini),
+            AppAction::SelectDebugProvider(pid(ProviderKind::Gemini)),
         );
         reduce(&mut session, AppAction::DebugRefreshProvider);
 
@@ -706,15 +717,14 @@ mod tests {
     #[test]
     fn finished_event_restores_debug_state() {
         let mut session = make_session();
-        let kind = ProviderKind::Claude;
+        let id = pid(ProviderKind::Claude);
 
-        // 模拟调试刷新状态
-        session.settings_ui.debug_selected_provider = Some(kind);
+        session.settings_ui.debug_selected_provider = Some(id.clone());
         session.settings_ui.debug_refresh_active = true;
         session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
 
         let outcome = RefreshOutcome {
-            kind,
+            id,
             result: RefreshResult::Failed {
                 error: "test error".to_string(),
                 error_kind: crate::models::ErrorKind::NetworkError,
@@ -723,7 +733,6 @@ mod tests {
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        // 即使刷新失败，也应该恢复
         assert!(!session.settings_ui.debug_refresh_active);
         assert!(session.settings_ui.debug_prev_log_level.is_none());
         assert!(has_effect(&effects, |e| matches!(
@@ -736,19 +745,17 @@ mod tests {
     fn finished_event_for_other_provider_does_not_restore() {
         let mut session = make_session();
 
-        // 调试刷新 Claude，但完成的是 Gemini
-        session.settings_ui.debug_selected_provider = Some(ProviderKind::Claude);
+        session.settings_ui.debug_selected_provider = Some(pid(ProviderKind::Claude));
         session.settings_ui.debug_refresh_active = true;
         session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
 
         let outcome = RefreshOutcome {
-            kind: ProviderKind::Gemini,
+            id: pid(ProviderKind::Gemini),
             result: RefreshResult::SkippedCooldown,
         };
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        // 不应恢复
         assert!(session.settings_ui.debug_refresh_active);
         assert!(session.settings_ui.debug_prev_log_level.is_some());
         assert!(!has_effect(&effects, |e| matches!(
@@ -759,17 +766,15 @@ mod tests {
 
     #[test]
     fn finished_restore_survives_unknown_provider() {
-        // 构建一个不包含 Claude 的 session
         let mut session = make_session_without(ProviderKind::Claude);
-        let kind = ProviderKind::Claude;
+        let id = pid(ProviderKind::Claude);
 
-        // 调试刷新中，但 provider_store 中该 provider 不存在
-        session.settings_ui.debug_selected_provider = Some(kind);
+        session.settings_ui.debug_selected_provider = Some(id.clone());
         session.settings_ui.debug_refresh_active = true;
         session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Warn);
 
         let outcome = RefreshOutcome {
-            kind,
+            id,
             result: RefreshResult::Failed {
                 error: "gone".to_string(),
                 error_kind: crate::models::ErrorKind::Unknown,
@@ -778,7 +783,6 @@ mod tests {
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        // 关键：即使 provider 不在 store 中，恢复逻辑仍必须执行
         assert!(!session.settings_ui.debug_refresh_active);
         assert!(has_effect(&effects, |e| matches!(
             e,

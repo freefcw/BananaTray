@@ -2,6 +2,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 super::define_unit_provider!(VertexAiProvider);
@@ -41,7 +42,7 @@ impl VertexAiProvider {
 impl AiProvider for VertexAiProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: "vertexai:gcloud",
+            id: Cow::Borrowed("vertexai:gcloud"),
             metadata: ProviderMetadata {
                 kind: ProviderKind::VertexAi,
                 display_name: "Vertex AI".into(),
