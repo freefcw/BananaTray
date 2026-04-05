@@ -34,11 +34,44 @@ pub fn dispatch_in_app(state: &Rc<RefCell<AppState>>, action: AppAction, cx: &mu
     dispatch_effects(state, action, |effect| run_effect_in_app(state, effect, cx));
 }
 
+/// 将 action 通过 reducer 转换为 effects 并逐个执行。
+///
+/// **RefCell 安全约束**：`run_effect` 回调中**不得**再次调用 `dispatch_*` 系列函数，
+/// 否则会导致 `borrow_mut` 重入 panic。当前所有 effect handler 遵守此约束：
+/// 需要异步分派的场景（如 OpenSettingsWindow）使用 `schedule_*` 延迟到下一轮事件循环。
+///
+/// 此函数内置重入护卫（dispatch guard），在重入时会立即 panic 并给出清晰的错误信息，
+/// 而不是等到 RefCell 报出难以定位的 "already borrowed"。
 fn dispatch_effects(
     state: &Rc<RefCell<AppState>>,
     action: AppAction,
     mut run_effect: impl FnMut(AppEffect),
 ) {
+    use std::cell::Cell;
+
+    thread_local! {
+        static DISPATCHING: Cell<bool> = const { Cell::new(false) };
+    }
+
+    // RAII 护卫：即使 effect handler panic 也能正确重置标志位
+    struct DispatchGuard;
+    impl Drop for DispatchGuard {
+        fn drop(&mut self) {
+            DISPATCHING.with(|flag| flag.set(false));
+        }
+    }
+
+    DISPATCHING.with(|flag| {
+        assert!(
+            !flag.get(),
+            "BUG: reentrant dispatch detected! \
+             Effect handlers must not call dispatch_* directly. \
+             Use schedule_* for deferred dispatch."
+        );
+        flag.set(true);
+    });
+    let _guard = DispatchGuard;
+
     let effects = {
         let mut state_ref = state.borrow_mut();
         reduce(&mut state_ref.session, action)
