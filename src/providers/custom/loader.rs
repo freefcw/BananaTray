@@ -83,7 +83,7 @@ fn load_one(path: &Path) -> Result<CustomProvider> {
     let content = std::fs::read_to_string(path)?;
     let def: CustomProviderDef = serde_yaml::from_str(&content)?;
     validate(&def)?;
-    Ok(CustomProvider::new(def))
+    CustomProvider::new(def)
 }
 
 /// 校验定义的合法性，在加载时 fail-fast
@@ -124,12 +124,31 @@ fn validate_parser(parser: &ParserDef) -> Result<()> {
                 anyhow::bail!("'parser.quotas' must contain at least one rule");
             }
             for rule in quotas {
-                if rule.used.is_empty() || rule.limit.is_empty() {
+                // 校验模式互斥：remaining 模式 vs 传统 used+limit 模式
+                let has_remaining = rule.remaining.as_ref().is_some_and(|s| !s.is_empty());
+                let has_limit = rule.limit.as_ref().is_some_and(|s| !s.is_empty());
+                let has_used = rule.used.as_ref().is_some_and(|s| !s.is_empty());
+
+                if has_remaining && has_limit {
                     anyhow::bail!(
-                        "quota rule '{}': 'used' and 'limit' paths cannot be empty",
+                        "quota rule '{}': 'remaining' and 'limit' are mutually exclusive",
                         rule.label
                     );
                 }
+                if !has_remaining && !has_limit {
+                    anyhow::bail!(
+                        "quota rule '{}': must specify either 'remaining' or 'used'+'limit'",
+                        rule.label
+                    );
+                }
+                if has_limit && !has_used {
+                    anyhow::bail!(
+                        "quota rule '{}': 'used' is required when 'limit' is specified",
+                        rule.label
+                    );
+                }
+
+                validate_divisor(&rule.label, rule.divisor)?;
             }
         }
         ParserDef::Regex { quotas, .. } => {
@@ -138,6 +157,7 @@ fn validate_parser(parser: &ParserDef) -> Result<()> {
             }
             for rule in quotas {
                 validate_regex_rule(rule)?;
+                validate_divisor(&rule.label, rule.divisor)?;
             }
         }
     }
@@ -175,6 +195,20 @@ fn validate_regex_rule(rule: &RegexQuotaRule) -> Result<()> {
     Ok(())
 }
 
+/// 校验 divisor 必须为正数
+fn validate_divisor(label: &str, divisor: Option<f64>) -> Result<()> {
+    if let Some(d) = divisor {
+        if d <= 0.0 {
+            anyhow::bail!(
+                "quota rule '{}': divisor must be positive, got {}",
+                label,
+                d
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +218,7 @@ mod tests {
     fn make_minimal_def() -> CustomProviderDef {
         CustomProviderDef {
             id: "test:cli".to_string(),
+            base_url: None,
             metadata: MetadataDef {
                 display_name: "Test".to_string(),
                 brand_name: "Test".to_string(),
@@ -207,6 +242,7 @@ mod tests {
                     used_group: 1,
                     limit_group: 2,
                     quota_type: QuotaTypeDef::General,
+                    divisor: None,
                 }],
             },
         }
@@ -275,6 +311,7 @@ mod tests {
                 used_group: 1,
                 limit_group: 2,
                 quota_type: QuotaTypeDef::General,
+                divisor: None,
             }],
         };
         let err = validate(&def).unwrap_err();
@@ -292,6 +329,7 @@ mod tests {
                 used_group: 1,
                 limit_group: 5, // 超出
                 quota_type: QuotaTypeDef::General,
+                divisor: None,
             }],
         };
         let err = validate(&def).unwrap_err();
@@ -306,13 +344,151 @@ mod tests {
             account_tier: None,
             quotas: vec![JsonQuotaRule {
                 label: "Test".to_string(),
-                used: String::new(),
-                limit: "usage.limit".to_string(),
+                used: None,
+                limit: None,
+                remaining: None,
                 quota_type: QuotaTypeDef::General,
                 detail: None,
+                divisor: None,
             }],
         };
         assert!(validate(&def).is_err());
+    }
+
+    #[test]
+    fn test_validate_json_remaining_mode_valid() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Balance".to_string(),
+                used: Some("data.used".to_string()),
+                limit: None,
+                remaining: Some("data.remaining".to_string()),
+                quota_type: QuotaTypeDef::Credit,
+                detail: None,
+                divisor: None,
+            }],
+        };
+        assert!(validate(&def).is_ok());
+    }
+
+    #[test]
+    fn test_validate_json_remaining_and_limit_conflict() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Bad".to_string(),
+                used: None,
+                limit: Some("data.limit".to_string()),
+                remaining: Some("data.remaining".to_string()),
+                quota_type: QuotaTypeDef::Credit,
+                detail: None,
+                divisor: None,
+            }],
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn test_validate_json_limit_without_used() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Bad".to_string(),
+                used: None,
+                limit: Some("data.limit".to_string()),
+                remaining: None,
+                quota_type: QuotaTypeDef::General,
+                detail: None,
+                divisor: None,
+            }],
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("'used' is required"));
+    }
+
+    #[test]
+    fn test_validate_json_divisor_zero() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Balance".to_string(),
+                used: Some("data.used".to_string()),
+                limit: Some("data.limit".to_string()),
+                remaining: None,
+                quota_type: QuotaTypeDef::Credit,
+                detail: None,
+                divisor: Some(0.0),
+            }],
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("divisor must be positive"));
+    }
+
+    #[test]
+    fn test_validate_regex_divisor_zero() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Regex {
+            account_email: None,
+            quotas: vec![RegexQuotaRule {
+                label: "Credits".to_string(),
+                pattern: r"(\d+)/(\d+)".to_string(),
+                used_group: 1,
+                limit_group: 2,
+                quota_type: QuotaTypeDef::General,
+                divisor: Some(0.0),
+            }],
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("divisor must be positive"));
+    }
+
+    #[test]
+    fn test_validate_divisor_negative() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Balance".to_string(),
+                used: Some("data.used".to_string()),
+                limit: Some("data.limit".to_string()),
+                remaining: None,
+                quota_type: QuotaTypeDef::Credit,
+                detail: None,
+                divisor: Some(-100.0),
+            }],
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("divisor must be positive"));
+    }
+
+    #[test]
+    fn test_validate_divisor_positive_is_ok() {
+        let mut def = make_minimal_def();
+        def.parser = ParserDef::Json {
+            account_email: None,
+            account_tier: None,
+            quotas: vec![JsonQuotaRule {
+                label: "Balance".to_string(),
+                used: Some("data.used".to_string()),
+                limit: Some("data.limit".to_string()),
+                remaining: None,
+                quota_type: QuotaTypeDef::Credit,
+                detail: None,
+                divisor: Some(500000.0),
+            }],
+        };
+        assert!(validate(&def).is_ok());
     }
 
     // ── load_from_dir ───────────────────────────

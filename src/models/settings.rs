@@ -318,13 +318,15 @@ mod tests {
 
     #[test]
     fn ordered_providers_ignores_invalid_and_duplicate_keys() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec![
-            "gemini".into(),
-            "invalid".into(),
-            "claude".into(),
-            "gemini".into(),
-        ];
+        let settings = AppSettings {
+            provider_order: vec![
+                "gemini".into(),
+                "invalid".into(),
+                "claude".into(),
+                "gemini".into(),
+            ],
+            ..Default::default()
+        };
 
         let ordered = settings.ordered_providers();
 
@@ -335,9 +337,11 @@ mod tests {
 
     #[test]
     fn move_provider_up_normalizes_provider_order() {
-        let mut settings = AppSettings::default();
-        // 初始顺序: gemini, claude（只用合法内置 key，避免混入 custom id）
-        settings.provider_order = vec!["gemini".into(), "gemini".into(), "claude".into()];
+        let mut settings = AppSettings {
+            // 初始顺序: gemini, claude（只用合法内置 key，避免混入 custom id）
+            provider_order: vec!["gemini".into(), "gemini".into(), "claude".into()],
+            ..Default::default()
+        };
 
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
         assert!(settings.move_provider_up(&claude, &[]));
@@ -419,8 +423,10 @@ mod tests {
 
     #[test]
     fn ordered_provider_ids_respects_saved_order() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["gemini".into(), "claude".into()];
+        let settings = AppSettings {
+            provider_order: vec!["gemini".into(), "claude".into()],
+            ..Default::default()
+        };
 
         let ids = settings.ordered_provider_ids(&[]);
         assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
@@ -431,8 +437,10 @@ mod tests {
 
     #[test]
     fn ordered_provider_ids_includes_custom() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["gemini".into(), "myai:cli".into(), "claude".into()];
+        let settings = AppSettings {
+            provider_order: vec!["gemini".into(), "myai:cli".into(), "claude".into()],
+            ..Default::default()
+        };
         let custom = vec![ProviderId::Custom("myai:cli".to_string())];
 
         let ids = settings.ordered_provider_ids(&custom);
@@ -465,8 +473,10 @@ mod tests {
 
     #[test]
     fn ordered_provider_ids_deduplicates() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["claude".into(), "claude".into(), "gemini".into()];
+        let settings = AppSettings {
+            provider_order: vec!["claude".into(), "claude".into(), "gemini".into()],
+            ..Default::default()
+        };
 
         let ids = settings.ordered_provider_ids(&[]);
         let claude_count = ids
@@ -480,8 +490,10 @@ mod tests {
 
     #[test]
     fn move_provider_down_works() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["claude".into(), "gemini".into()];
+        let mut settings = AppSettings {
+            provider_order: vec!["claude".into(), "gemini".into()],
+            ..Default::default()
+        };
 
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
         assert!(settings.move_provider_down(&claude, &[]));
@@ -501,8 +513,10 @@ mod tests {
 
     #[test]
     fn move_provider_up_at_top_returns_false() {
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["claude".into(), "gemini".into()];
+        let mut settings = AppSettings {
+            provider_order: vec!["claude".into(), "gemini".into()],
+            ..Default::default()
+        };
 
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
         assert!(!settings.move_provider_up(&claude, &[]));
@@ -510,13 +524,15 @@ mod tests {
 
     #[test]
     fn move_provider_down_at_bottom_returns_false() {
-        let mut settings = AppSettings::default();
         // ensure_provider_order 会填充所有内置 Provider，最后一个不能再下移
         let all_keys: Vec<String> = ProviderKind::all()
             .iter()
             .map(|k| k.id_key().to_string())
             .collect();
-        settings.provider_order = all_keys;
+        let mut settings = AppSettings {
+            provider_order: all_keys,
+            ..Default::default()
+        };
 
         let last = ProviderKind::all().last().unwrap();
         let id = ProviderId::BuiltIn(*last);
@@ -525,12 +541,14 @@ mod tests {
 
     #[test]
     fn move_custom_provider_up() {
-        let mut settings = AppSettings::default();
         let custom = ProviderId::Custom("myai:cli".to_string());
-        // 手动设置顺序：claude, myai:cli
-        settings.provider_order = vec!["claude".into(), "myai:cli".into()];
+        let mut settings = AppSettings {
+            // 手动设置顺序：claude, myai:cli
+            provider_order: vec!["claude".into(), "myai:cli".into()],
+            ..Default::default()
+        };
 
-        assert!(settings.move_provider_up(&custom, &[custom.clone()]));
+        assert!(settings.move_provider_up(&custom, std::slice::from_ref(&custom)));
         assert_eq!(settings.provider_order[0], "myai:cli");
         assert_eq!(settings.provider_order[1], "claude");
     }

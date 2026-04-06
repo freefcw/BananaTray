@@ -310,6 +310,7 @@ quota.label.credit_remaining: "剩余 $%{remaining} / $%{total}"
 # ── 额度显示模式 ───────────────────────────────────────────
 quota.mode.remaining: "剩余"
 quota.mode.used: "已用"
+quota.mode.balance: "余额"
 settings.quota_display_mode: "额度显示"
 settings.quota_display_mode.desc: "在面板中显示剩余额度还是已用额度。"
 settings.quota_display_mode.remaining: "剩余"

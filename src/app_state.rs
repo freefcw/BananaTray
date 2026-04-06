@@ -665,9 +665,11 @@ mod tests {
 
     #[test]
     fn panel_flags_account_visible_hides_dashboard_row() {
-        let mut settings = AppSettings::default();
-        settings.show_account_info = true;
-        settings.show_dashboard_button = true;
+        let settings = AppSettings {
+            show_account_info: true,
+            show_dashboard_button: true,
+            ..Default::default()
+        };
 
         let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.account_email = Some("user@example.com".to_string());
@@ -680,9 +682,11 @@ mod tests {
 
     #[test]
     fn panel_flags_no_email_shows_dashboard_row() {
-        let mut settings = AppSettings::default();
-        settings.show_account_info = true;
-        settings.show_dashboard_button = true;
+        let settings = AppSettings {
+            show_account_info: true,
+            show_dashboard_button: true,
+            ..Default::default()
+        };
 
         let provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         // account_email is None by default
@@ -694,9 +698,11 @@ mod tests {
 
     #[test]
     fn panel_flags_setting_off_shows_dashboard_row() {
-        let mut settings = AppSettings::default();
-        settings.show_account_info = false;
-        settings.show_dashboard_button = true;
+        let settings = AppSettings {
+            show_account_info: false,
+            show_dashboard_button: true,
+            ..Default::default()
+        };
 
         let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.account_email = Some("user@example.com".to_string());
@@ -708,9 +714,11 @@ mod tests {
 
     #[test]
     fn panel_flags_dashboard_setting_off() {
-        let mut settings = AppSettings::default();
-        settings.show_account_info = true;
-        settings.show_dashboard_button = false;
+        let settings = AppSettings {
+            show_account_info: true,
+            show_dashboard_button: false,
+            ..Default::default()
+        };
 
         let mut provider = make_test_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.account_email = Some("user@example.com".to_string());

@@ -227,8 +227,10 @@ mod tests {
     #[test]
     fn settings_providers_tab_marks_reorder_boundaries() {
         let _locale_guard = setup_locale();
-        let mut settings = AppSettings::default();
-        settings.provider_order = vec!["gemini".into(), "claude".into(), "copilot".into()];
+        let mut settings = AppSettings {
+            provider_order: vec!["gemini".into(), "claude".into(), "copilot".into()],
+            ..Default::default()
+        };
         settings.set_provider_enabled(ProviderKind::Gemini, true);
         settings.set_provider_enabled(ProviderKind::Claude, true);
         settings.set_provider_enabled(ProviderKind::Copilot, true);

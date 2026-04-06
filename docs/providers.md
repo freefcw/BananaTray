@@ -1,6 +1,6 @@
 # Providers
 
-## Supported Providers (12)
+## Supported Providers (12 built-in + custom)
 
 | Provider | ID | Data Source | Implementation |
 |----------|-----|-----------|----------------|
@@ -17,6 +17,22 @@
 | Kilo | `kilo:ext` | — (placeholder) | `providers/kilo.rs` |
 | OpenCode | `opencode:cli` | — (placeholder) | `providers/opencode.rs` |
 | Vertex AI | `vertexai:gcloud` | — (placeholder) | `providers/vertex_ai.rs` |
+
+## Custom Provider（YAML 声明式）
+
+除内置 Provider 外，用户可以通过 YAML 文件声明自定义 Provider，无需编写代码。
+
+支持的数据获取方式：CLI 命令 / HTTP GET / HTTP POST
+支持的认证方式：Bearer Token / 自定义 Header / Login（用户名密码）/ Cookie / Session Token
+支持的解析方式：JSON 点分路径 / 正则表达式 capture group
+
+| 场景示例 | 模板文件 |
+|----------|----------|
+| NewAPI / OneAPI 中转站 | `examples/custom-provider-newapi.yaml` |
+| HTTP API（POST） | `examples/custom-provider-http.yaml` |
+| CLI 命令行工具 | `examples/custom-provider-cli.yaml` |
+
+详细使用说明：[自定义 Provider 使用指南](custom-provider.md)
 
 ## AiProvider Trait
 

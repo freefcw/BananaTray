@@ -1,0 +1,68 @@
+# 示例：NewAPI / OneAPI 中转站额度监控
+#
+# NewAPI (https://github.com/Calcium-Ion/new-api) 是基于 OneAPI 的 AI API 中转站管理系统。
+# 此配置通过浏览器中已登录的 session cookie 调用 /api/user/self 查询用户额度。
+#
+# 获取 session token 步骤：
+# 1. 在浏览器中登录你的 NewAPI 站点
+# 2. 打开 DevTools（F12 或 Cmd+Option+I）
+# 3. 切换到 Application → Cookies → 找到你的站点域名
+# 4. 找到名为 "session" 的 cookie，复制其 Value
+# 5. 填入下方 token 字段
+#
+# ⚠️ 注意：session token 有有效期，过期后需重新从浏览器获取并更新配置文件。
+#
+# 使用方法：
+# 1. 修改下方的 base_url 和 token
+# 2. 将此文件复制到自定义 Provider 目录：
+#    macOS: ~/Library/Application Support/bananatray/providers/newapi.yaml
+#    Linux: ~/.config/bananatray/providers/newapi.yaml
+# 3. 重启 BananaTray
+
+id: "newapi:api"
+
+# ========== 只需修改这 2 项 ==========
+# 你的中转站地址（不含末尾斜杠）
+base_url: "https://your-newapi-site.com"
+
+metadata:
+  display_name: "NewAPI"
+  brand_name: "NewAPI Relay"
+  icon: "🔄"
+  dashboard_url: "/"              # 自动拼接为 base_url
+  account_hint: "NewAPI account"
+  source_label: "newapi api"
+
+availability:
+  type: always
+
+source:
+  type: http_get
+  url: "/api/user/self"           # 自动拼接为 base_url + /api/user/self
+  auth:
+    type: session_token
+    # 从浏览器 DevTools → Application → Cookies 中复制 session 值
+    token: "your_session_token_here"
+    # cookie_name: "session"      # 默认就是 "session"，大多数 NewAPI 站点无需修改
+
+# ========== 高级选项 ==========
+# 如果你的站点使用不同的 cookie 名称（如 "access_token"），取消注释 cookie_name 并修改
+#
+# 如果需要传递多个 cookie（如同时包含 session 和 cf_clearance），
+# 可改用 cookie 认证类型：
+#
+#   auth:
+#     type: cookie
+#     value: "session=eyJ...;cf_clearance=abc123"
+
+# 响应解析
+parser:
+  format: json
+  account_email: "data.display_name"
+  quotas:
+    - label: "Balance"
+      remaining: "data.quota"       # 剩余额度（NewAPI 的 quota 即为余额）
+      used: "data.used_quota"       # 已用额度（可选，用于展示）
+      quota_type: credit
+      # 500000 积分 = $1 USD（根据你的站点实际汇率调整）
+      divisor: 500000

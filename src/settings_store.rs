@@ -111,9 +111,11 @@ mod tests {
     #[test]
     fn save_load_round_trip() {
         let (_dir, path) = temp_settings_path();
-        let mut settings = AppSettings::default();
-        settings.theme = AppTheme::Light;
-        settings.refresh_interval_mins = 42;
+        let settings = AppSettings {
+            theme: AppTheme::Light,
+            refresh_interval_mins: 42,
+            ..Default::default()
+        };
 
         save_to(&settings, &path).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -175,12 +177,16 @@ mod tests {
     fn save_overwrites_existing_file() {
         let (_dir, path) = temp_settings_path();
 
-        let mut s1 = AppSettings::default();
-        s1.refresh_interval_mins = 1;
+        let s1 = AppSettings {
+            refresh_interval_mins: 1,
+            ..Default::default()
+        };
         save_to(&s1, &path).unwrap();
 
-        let mut s2 = AppSettings::default();
-        s2.refresh_interval_mins = 99;
+        let s2 = AppSettings {
+            refresh_interval_mins: 99,
+            ..Default::default()
+        };
         save_to(&s2, &path).unwrap();
 
         let loaded = load_from(&path).unwrap();
