@@ -34,7 +34,7 @@ pub struct MetadataDef {
 }
 
 fn default_icon() -> String {
-    "🤖".to_string()
+    String::new()
 }
 
 fn default_account_hint() -> String {
@@ -343,7 +343,7 @@ parser:
       pattern: '(\d+)/(\d+)'
 "#;
         let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(def.metadata.icon, "🤖");
+        assert_eq!(def.metadata.icon, "");
         assert_eq!(def.metadata.account_hint, "account");
         if let ParserDef::Regex { quotas, .. } = &def.parser {
             assert_eq!(quotas[0].used_group, 1);

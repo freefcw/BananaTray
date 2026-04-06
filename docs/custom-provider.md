@@ -142,7 +142,7 @@ parser: { ... }                # 响应解析规则（必填）
 metadata:
   display_name: "My Provider"  # 界面显示名称（必填）
   brand_name: "MyBrand"        # 品牌名称（必填）
-  icon: "🤖"                   # 图标 emoji（默认 🤖）
+  # icon: "N"                   # 可选，不填则自动取 display_name 首字母（单色渲染）
   dashboard_url: "https://..."  # 面板跳转链接（可选）
   account_hint: "account"       # 账户提示文本（默认 "account"）
   source_label: "api"           # 数据源标签（可选）

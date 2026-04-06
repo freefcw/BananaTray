@@ -222,7 +222,7 @@ mod tests {
             metadata: MetadataDef {
                 display_name: "Test".to_string(),
                 brand_name: "Test".to_string(),
-                icon: "🤖".to_string(),
+                icon: String::new(),
                 dashboard_url: String::new(),
                 account_hint: "account".to_string(),
                 source_label: String::new(),

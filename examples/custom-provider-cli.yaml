@@ -8,7 +8,7 @@ id: "myai:cli"
 metadata:
   display_name: "My AI Tool"
   brand_name: "MyCompany"
-  icon: "🤖"
+  # icon: "C"                     # 可选，不配则自动取 display_name 首字母
   dashboard_url: "https://myai.com/usage"
   account_hint: "MyAI account"
   source_label: "myai cli"

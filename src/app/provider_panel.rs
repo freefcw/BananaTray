@@ -70,12 +70,11 @@ impl AppView {
             .bg(theme.bg_card_inner)
             .border_1()
             .border_color(theme.border_subtle)
-            .child(
-                svg()
-                    .path(vm.icon.clone())
-                    .size(px(32.0))
-                    .text_color(theme.text_muted),
-            )
+            .child(super::widgets::render_provider_icon(
+                vm.icon.clone(),
+                px(32.0),
+                theme.text_muted,
+            ))
             .child(
                 div()
                     .text_size(px(14.0))

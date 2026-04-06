@@ -26,24 +26,13 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
         .flex()
         .items_center()
         .gap(px(14.0))
-        .child(
-            // 图标容器：加大尺寸
-            div()
-                .w(px(56.0))
-                .h(px(56.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(14.0))
-                .bg(theme.bg_subtle)
-                .flex_shrink_0()
-                .child(
-                    svg()
-                        .path(icon.to_string())
-                        .size(px(32.0))
-                        .text_color(theme.text_primary),
-                ),
-        )
+        .child(crate::app::widgets::render_provider_icon_boxed(
+            icon,
+            px(56.0),
+            px(32.0),
+            theme.text_primary,
+            theme.bg_subtle,
+        ))
         .child(
             div()
                 .flex_col()
