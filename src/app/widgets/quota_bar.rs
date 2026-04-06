@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::application::quota_usage_detail_text;
 use crate::models::{QuotaDisplayMode, QuotaInfo, QuotaType, StatusLevel};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
@@ -244,7 +245,7 @@ pub(crate) fn render_quota_bar(
         .child({
             // 余额模式显示已用额度，传统模式显示 detail_text
             let detail_str = if is_balance {
-                let used_text = q.usage_detail_text();
+                let used_text = quota_usage_detail_text(q);
                 if used_text.is_empty() {
                     q.detail_text.clone().unwrap_or_default()
                 } else if let Some(ref detail) = q.detail_text {
