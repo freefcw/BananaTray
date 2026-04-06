@@ -12,4 +12,7 @@ pub use quota::{
     ConnectionStatus, ErrorKind, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel,
     UpdateStatus,
 };
-pub use settings::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
+pub use settings::{
+    AppSettings, AppTheme, DisplaySettings, NotificationSettings, ProviderConfig, ProviderSettings,
+    QuotaDisplayMode, SystemSettings, TrayIconStyle,
+};

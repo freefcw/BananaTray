@@ -186,8 +186,12 @@ impl TrayController {
                     if !activation_initialized.replace(true) {
                         return;
                     }
-                    let should_auto_hide =
-                        auto_hide_state.borrow().session.settings.auto_hide_window;
+                    let should_auto_hide = auto_hide_state
+                        .borrow()
+                        .session
+                        .settings
+                        .system
+                        .auto_hide_window;
                     if should_auto_hide && !window.is_window_active() {
                         info!(target: "tray", "auto-hide closing inactive tray popup");
                         auto_hide_state.borrow_mut().view_entity = None;
@@ -200,7 +204,7 @@ impl TrayController {
                 let appearance_state = view.state.clone();
                 let appearance_sub =
                     cx.observe_window_appearance(window, move |_view, window, cx| {
-                        let user_theme = appearance_state.borrow().session.settings.theme;
+                        let user_theme = appearance_state.borrow().session.settings.display.theme;
                         let theme = crate::theme::Theme::resolve_for_settings(
                             user_theme,
                             window.appearance(),
@@ -225,7 +229,7 @@ impl TrayController {
 fn bootstrap_ui(cx: &mut App) {
     // i18n locale
     let settings = crate::settings_store::load().unwrap_or_default();
-    crate::i18n::apply_locale(&settings.language);
+    crate::i18n::apply_locale(&settings.display.language);
 
     // adabraka-ui 工具包
     adabraka_ui::init(cx);
@@ -233,7 +237,7 @@ fn bootstrap_ui(cx: &mut App) {
     cx.set_keep_alive_without_windows(true);
 
     // 系统托盘
-    crate::tray_icon_helper::apply_tray_icon(cx, settings.tray_icon_style);
+    crate::tray_icon_helper::apply_tray_icon(cx, settings.display.tray_icon_style);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
     cx.set_tray_panel_mode(true);
 }

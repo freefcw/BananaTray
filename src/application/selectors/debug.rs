@@ -243,10 +243,10 @@ fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> Env
         .count();
     let total_count = session.provider_store.providers.len();
 
-    let refresh_text = if session.settings.refresh_interval_mins == 0 {
+    let refresh_text = if session.settings.system.refresh_interval_mins == 0 {
         "Manual".to_string()
     } else {
-        format!("{} min", session.settings.refresh_interval_mins)
+        format!("{} min", session.settings.system.refresh_interval_mins)
     };
 
     EnvironmentViewState {
@@ -576,7 +576,10 @@ mod tests {
     #[test]
     fn environment_refresh_manual() {
         let settings = AppSettings {
-            refresh_interval_mins: 0,
+            system: crate::models::SystemSettings {
+                refresh_interval_mins: 0,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let session = make_session(settings);
@@ -587,7 +590,10 @@ mod tests {
     #[test]
     fn environment_refresh_interval() {
         let settings = AppSettings {
-            refresh_interval_mins: 5,
+            system: crate::models::SystemSettings {
+                refresh_interval_mins: 5,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let session = make_session(settings);

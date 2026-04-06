@@ -29,8 +29,12 @@ fn load_from(path: &Path) -> Result<AppSettings> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("failed to read settings file at {}", path.display()))?;
 
-    let settings = serde_json::from_str::<AppSettings>(&content)
+    // 支持新旧两种 JSON 格式：新格式嵌套子结构体，旧格式扁平字段自动迁移
+    let value: serde_json::Value = serde_json::from_str(&content)
         .with_context(|| format!("failed to parse settings file at {}", path.display()))?;
+
+    let settings = AppSettings::from_json_value(value)
+        .with_context(|| format!("failed to deserialize settings from {}", path.display()))?;
 
     debug!(target: "settings", "loaded settings from {}", path.display());
     Ok(settings)
@@ -112,16 +116,22 @@ mod tests {
     fn save_load_round_trip() {
         let (_dir, path) = temp_settings_path();
         let settings = AppSettings {
-            theme: AppTheme::Light,
-            refresh_interval_mins: 42,
+            display: crate::models::DisplaySettings {
+                theme: AppTheme::Light,
+                ..Default::default()
+            },
+            system: crate::models::SystemSettings {
+                refresh_interval_mins: 42,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
         save_to(&settings, &path).unwrap();
         let loaded = load_from(&path).unwrap();
 
-        assert_eq!(loaded.theme, AppTheme::Light);
-        assert_eq!(loaded.refresh_interval_mins, 42);
+        assert_eq!(loaded.display.theme, AppTheme::Light);
+        assert_eq!(loaded.system.refresh_interval_mins, 42);
     }
 
     #[test]
@@ -156,10 +166,10 @@ mod tests {
 
         let settings = load_from(&path).unwrap();
 
-        assert_eq!(settings.theme, AppSettings::default().theme);
+        assert_eq!(settings.display.theme, AppSettings::default().display.theme);
         assert_eq!(
-            settings.refresh_interval_mins,
-            AppSettings::default().refresh_interval_mins
+            settings.system.refresh_interval_mins,
+            AppSettings::default().system.refresh_interval_mins
         );
     }
 
@@ -178,18 +188,24 @@ mod tests {
         let (_dir, path) = temp_settings_path();
 
         let s1 = AppSettings {
-            refresh_interval_mins: 1,
+            system: crate::models::SystemSettings {
+                refresh_interval_mins: 1,
+                ..Default::default()
+            },
             ..Default::default()
         };
         save_to(&s1, &path).unwrap();
 
         let s2 = AppSettings {
-            refresh_interval_mins: 99,
+            system: crate::models::SystemSettings {
+                refresh_interval_mins: 99,
+                ..Default::default()
+            },
             ..Default::default()
         };
         save_to(&s2, &path).unwrap();
 
         let loaded = load_from(&path).unwrap();
-        assert_eq!(loaded.refresh_interval_mins, 99);
+        assert_eq!(loaded.system.refresh_interval_mins, 99);
     }
 }

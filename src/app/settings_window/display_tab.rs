@@ -35,7 +35,7 @@ impl SettingsView {
                             (t!("theme.light").to_string(), AppTheme::Light),
                             (t!("theme.dark").to_string(), AppTheme::Dark),
                         ],
-                        &settings.theme,
+                        &settings.display.theme,
                         theme,
                         {
                             let state = self.state.clone();
@@ -57,7 +57,7 @@ impl SettingsView {
                             .iter()
                             .map(|&(code, name_key)| (t!(name_key).to_string(), code.to_string()))
                             .collect(),
-                        &settings.language,
+                        &settings.display.language,
                         theme,
                         {
                             let state = self.state.clone();
@@ -89,7 +89,7 @@ impl SettingsView {
                                 TrayIconStyle::Colorful,
                             ),
                         ],
-                        &settings.tray_icon_style,
+                        &settings.display.tray_icon_style,
                         theme,
                         {
                             let state = self.state.clone();
@@ -119,7 +119,7 @@ impl SettingsView {
                                 QuotaDisplayMode::Used,
                             ),
                         ],
-                        &settings.quota_display_mode,
+                        &settings.display.quota_display_mode,
                         theme,
                         {
                             let state = self.state.clone();
@@ -150,7 +150,7 @@ impl SettingsView {
                         rgb(ICON_BG_DASHBOARD).into(),
                         &t!("settings.show_dashboard"),
                         &t!("settings.show_dashboard.desc"),
-                        settings.show_dashboard_button,
+                        settings.display.show_dashboard_button,
                         theme,
                         {
                             let state = self.state.clone();
@@ -174,7 +174,7 @@ impl SettingsView {
                         rgb(ICON_BG_REFRESH).into(),
                         &t!("settings.show_refresh"),
                         &t!("settings.show_refresh.desc"),
-                        settings.show_refresh_button,
+                        settings.display.show_refresh_button,
                         theme,
                         {
                             let state = self.state.clone();
@@ -202,7 +202,7 @@ impl SettingsView {
                 rgb(ICON_BG_DEBUG).into(),
                 &t!("settings.show_debug_tab"),
                 &t!("settings.show_debug_tab.desc"),
-                settings.show_debug_tab,
+                settings.display.show_debug_tab,
                 theme,
                 {
                     let state = self.state.clone();

@@ -43,7 +43,7 @@ impl AppState {
             warn!(target: "settings", "failed to load saved settings: {err}");
             AppSettings::default()
         });
-        crate::auto_launch::sync(settings.start_at_login);
+        crate::auto_launch::sync(settings.system.start_at_login);
         let providers = manager.initial_statuses();
         let session = AppSession::new(settings, providers);
         debug!(

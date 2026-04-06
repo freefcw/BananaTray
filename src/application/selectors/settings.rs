@@ -91,7 +91,7 @@ fn settings_provider_detail_view_state(
             ProviderId::BuiltIn(ProviderKind::Copilot) => ProviderSettingsMode::Interactive,
             _ => ProviderSettingsMode::AutoManaged,
         },
-        quota_display_mode: session.settings.quota_display_mode,
+        quota_display_mode: session.settings.display.quota_display_mode,
         quota_visibility,
     }
 }
@@ -229,7 +229,10 @@ mod tests {
     fn settings_providers_tab_marks_reorder_boundaries() {
         let _locale_guard = setup_locale();
         let mut settings = AppSettings {
-            provider_order: vec!["gemini".into(), "claude".into(), "copilot".into()],
+            provider: crate::models::ProviderConfig {
+                provider_order: vec!["gemini".into(), "claude".into(), "copilot".into()],
+                ..Default::default()
+            },
             ..Default::default()
         };
         settings.set_provider_enabled(ProviderKind::Gemini, true);
@@ -366,7 +369,7 @@ mod tests {
         let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Claude, true);
-        settings.quota_display_mode = QuotaDisplayMode::Used;
+        settings.display.quota_display_mode = QuotaDisplayMode::Used;
 
         let session = make_session(
             settings,

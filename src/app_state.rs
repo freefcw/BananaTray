@@ -28,9 +28,9 @@ pub fn provider_panel_flags(
     provider: &ProviderStatus,
 ) -> ProviderPanelFlags {
     let has_dashboard_url = !provider.dashboard_url().is_empty();
-    let show_account_info = settings.show_account_info && provider.account_email.is_some();
+    let show_account_info = settings.display.show_account_info && provider.account_email.is_some();
     let show_dashboard_row =
-        settings.show_dashboard_button && has_dashboard_url && !show_account_info;
+        settings.display.show_dashboard_button && has_dashboard_url && !show_account_info;
 
     ProviderPanelFlags {
         show_account_info,
@@ -308,7 +308,7 @@ pub fn compute_header_status(
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{ConnectionStatus, ProviderId, ProviderKind};
+    use crate::models::{ConnectionStatus, DisplaySettings, ProviderId, ProviderKind};
 
     /// 快捷构造 ProviderId::BuiltIn
     fn pid(kind: ProviderKind) -> ProviderId {
@@ -661,8 +661,11 @@ mod tests {
     #[test]
     fn panel_flags_account_visible_hides_dashboard_row() {
         let settings = AppSettings {
-            show_account_info: true,
-            show_dashboard_button: true,
+            display: DisplaySettings {
+                show_account_info: true,
+                show_dashboard_button: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -678,8 +681,11 @@ mod tests {
     #[test]
     fn panel_flags_no_email_shows_dashboard_row() {
         let settings = AppSettings {
-            show_account_info: true,
-            show_dashboard_button: true,
+            display: DisplaySettings {
+                show_account_info: true,
+                show_dashboard_button: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -694,8 +700,11 @@ mod tests {
     #[test]
     fn panel_flags_setting_off_shows_dashboard_row() {
         let settings = AppSettings {
-            show_account_info: false,
-            show_dashboard_button: true,
+            display: DisplaySettings {
+                show_account_info: false,
+                show_dashboard_button: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -710,8 +719,11 @@ mod tests {
     #[test]
     fn panel_flags_dashboard_setting_off() {
         let settings = AppSettings {
-            show_account_info: true,
-            show_dashboard_button: false,
+            display: DisplaySettings {
+                show_account_info: true,
+                show_dashboard_button: false,
+                ..Default::default()
+            },
             ..Default::default()
         };
 

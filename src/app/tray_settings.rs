@@ -27,7 +27,7 @@ impl AppView {
                 AUTO_HIDE_ICON,
                 &t!("settings.auto_hide"),
                 &t!("settings.auto_hide.desc"),
-                settings.auto_hide_window,
+                settings.system.auto_hide_window,
                 theme,
                 move |_, _, cx| {
                     entity_auto_hide.update(cx, |view, cx| {
@@ -44,7 +44,7 @@ impl AppView {
                 ACCOUNT_INFO_ICON,
                 &t!("settings.show_account_info"),
                 &t!("settings.show_account_info.desc"),
-                settings.show_account_info,
+                settings.display.show_account_info,
                 theme,
                 move |_, _, cx| {
                     entity_account_info.update(cx, |view, cx| {
