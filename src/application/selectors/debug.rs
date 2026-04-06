@@ -4,6 +4,7 @@
 //! selector 是纯函数：`(AppSession, DebugContext) → DebugTabViewState`
 //! 所有 I/O 和环境变量读取都在 DebugContext 构造时完成。
 
+use super::format::format_last_updated;
 use crate::app_state::AppSession;
 use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
@@ -188,7 +189,7 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
             } else {
                 match provider.connection {
                     ConnectionStatus::Connected => {
-                        let time_text = provider.format_last_updated();
+                        let time_text = format_last_updated(provider);
                         (
                             format!("Connected · {}", time_text),
                             ProviderDiagnosticStatus::Connected,

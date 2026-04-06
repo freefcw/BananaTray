@@ -62,7 +62,7 @@ impl NavigationState {
 }
 
 // 测试辅助函数
-fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
+fn make_provider(kind: ProviderKind) -> ProviderStatus {
     let provider_id = ProviderId::BuiltIn(kind);
     ProviderStatus {
         provider_id,
@@ -75,25 +75,20 @@ fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
             icon_asset: "test.svg".to_string(),
             dashboard_url: "https://example.com".to_string(),
         },
-        enabled,
         connection: ConnectionStatus::Disconnected,
         quotas: vec![],
         account_email: None,
-        is_paid: false,
         account_tier: None,
-        last_updated_at: None,
+        update_status: None,
         error_message: None,
         error_kind: ErrorKind::default(),
         last_refreshed_instant: None,
     }
 }
 
-fn make_store(kinds: &[(ProviderKind, bool)]) -> ProviderStore {
+fn make_store(kinds: &[ProviderKind]) -> ProviderStore {
     ProviderStore {
-        providers: kinds
-            .iter()
-            .map(|(k, enabled)| make_provider(*k, *enabled))
-            .collect(),
+        providers: kinds.iter().map(|k| make_provider(*k)).collect(),
         manager: Arc::new(bananatray::providers::ProviderManager::new()),
     }
 }
@@ -116,35 +111,36 @@ fn make_settings(enabled: &[ProviderKind]) -> AppSettings {
 
 #[test]
 fn store_find_existing() {
-    let store = make_store(&[(ProviderKind::Claude, true), (ProviderKind::Gemini, false)]);
+    let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
     assert!(store.find(&provider_id(ProviderKind::Claude)).is_some());
     assert!(store.find(&provider_id(ProviderKind::Gemini)).is_some());
 }
 
 #[test]
 fn store_find_missing() {
-    let store = make_store(&[(ProviderKind::Claude, true)]);
+    let store = make_store(&[ProviderKind::Claude]);
     assert!(store.find(&provider_id(ProviderKind::Copilot)).is_none());
 }
 
 #[test]
 fn store_find_mut_modifies() {
-    let mut store = make_store(&[(ProviderKind::Claude, true)]);
+    let mut store = make_store(&[ProviderKind::Claude]);
     store
         .find_mut(&provider_id(ProviderKind::Claude))
         .unwrap()
-        .enabled = false;
-    assert!(
-        !store
+        .connection = ConnectionStatus::Error;
+    assert_eq!(
+        store
             .find(&provider_id(ProviderKind::Claude))
             .unwrap()
-            .enabled
+            .connection,
+        ConnectionStatus::Error
     );
 }
 
 #[test]
 fn store_set_connection() {
-    let mut store = make_store(&[(ProviderKind::Claude, true)]);
+    let mut store = make_store(&[ProviderKind::Claude]);
     assert_eq!(
         store
             .find(&provider_id(ProviderKind::Claude))
@@ -167,7 +163,7 @@ fn store_set_connection() {
 
 #[test]
 fn store_set_connection_missing_is_noop() {
-    let mut store = make_store(&[(ProviderKind::Claude, true)]);
+    let mut store = make_store(&[ProviderKind::Claude]);
     // Should not panic
     store.set_connection(&provider_id(ProviderKind::Copilot), ConnectionStatus::Error);
 }
