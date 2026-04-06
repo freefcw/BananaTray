@@ -72,6 +72,14 @@ fi
 copy_runtime_resources "$RESOURCES_DIR"
 
 echo "✅ App Bundle 已创建: $APP_DIR"
+
+# ------------------------------------------------------------------
+# 3. Ad-hoc 代码签名（通知权限需要）
+# ------------------------------------------------------------------
+echo "🔏 Ad-hoc 代码签名..."
+codesign --force --deep --sign - "$APP_DIR"
+echo "✅ 签名完成"
+
 echo ""
 echo "📂 目录结构:"
 echo "   $APP_DIR/"
