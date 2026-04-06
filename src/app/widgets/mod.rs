@@ -3,6 +3,7 @@ mod cadence_dropdown;
 mod card;
 mod checkbox;
 mod colored_icon;
+mod global_actions;
 mod icon;
 mod icon_row;
 mod info_row;

@@ -234,6 +234,61 @@ mod tests {
         session
     }
 
+    // ── tray_global_actions_view_state ──────────────────────────
+
+    #[test]
+    fn global_actions_show_refresh_follows_setting() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+        settings.display.show_refresh_button = false;
+
+        let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        let session = make_session_with_provider(settings, provider);
+        let actions = tray_global_actions_view_state(&session);
+
+        assert!(!actions.show_refresh);
+    }
+
+    #[test]
+    fn global_actions_refresh_id_matches_active_provider() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+
+        let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+        let session = make_session_with_provider(settings, provider);
+        let actions = tray_global_actions_view_state(&session);
+
+        assert_eq!(actions.refresh.id, Some(pid(ProviderKind::Gemini)));
+        assert!(!actions.refresh.is_refreshing);
+    }
+
+    #[test]
+    fn global_actions_is_refreshing_when_provider_refreshing() {
+        let _locale_guard = setup_locale();
+        let mut settings = AppSettings::default();
+        settings.set_provider_enabled(ProviderKind::Gemini, true);
+
+        let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Refreshing);
+        let session = make_session_with_provider(settings, provider);
+        let actions = tray_global_actions_view_state(&session);
+
+        assert!(actions.refresh.is_refreshing);
+    }
+
+    #[test]
+    fn global_actions_refresh_id_none_on_settings_tab() {
+        let _locale_guard = setup_locale();
+        let settings = AppSettings::default();
+        // 没有任何 provider → active_tab 回退到 Settings
+        let mut session = AppSession::new(settings, vec![]);
+        session.nav.active_tab = NavTab::Settings;
+        let actions = tray_global_actions_view_state(&session);
+
+        assert!(actions.refresh.id.is_none());
+    }
+
     // ── Account Info 冒烟测试 ─────────────────────────────────
     // 边界组合（setting off / no email / dashboard off）已在
     // app_state::tests::panel_flags_* 单元测试中覆盖，
