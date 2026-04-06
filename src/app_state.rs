@@ -125,32 +125,7 @@ impl AppSession {
     }
 
     pub fn popup_height(&self) -> f32 {
-        let id = if let NavTab::Provider(ref id) = self.nav.active_tab {
-            id.clone()
-        } else {
-            self.nav.last_provider_id.clone()
-        };
-        let provider = self.provider_store.find_by_id(&id);
-        let kind = id.kind();
-        let quota_count = provider
-            .map(|p| {
-                let visible = self.settings.visible_quota_count(kind, &p.quotas);
-                if visible == 0 && !p.quotas.is_empty() {
-                    1 // 全部隐藏时显示空状态，至少预留 1 个卡片高度
-                } else {
-                    visible
-                }
-            })
-            .unwrap_or(1);
-
-        let (show_account, show_dashboard) = provider
-            .map(|p| {
-                let flags = provider_panel_flags(&self.settings, p);
-                (flags.show_account_info, flags.show_dashboard_row)
-            })
-            .unwrap_or((false, false));
-
-        crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
+        compute_popup_height(&self.nav, &self.provider_store, &self.settings)
     }
 
     pub fn has_enabled_providers(&self) -> bool {
@@ -260,6 +235,42 @@ pub enum HeaderStatusKind {
     Syncing,
     Stale,
     Offline,
+}
+
+/// 根据当前导航状态和 Provider 数据计算弹出窗口高度
+///
+/// 步骤：解析当前 provider → 过滤可见 quota → 判断面板可见性 → 委托布局计算
+pub fn compute_popup_height(
+    nav: &NavigationState,
+    store: &ProviderStore,
+    settings: &AppSettings,
+) -> f32 {
+    let id = match &nav.active_tab {
+        NavTab::Provider(id) => id.clone(),
+        _ => nav.last_provider_id.clone(),
+    };
+    let provider = store.find_by_id(&id);
+    let kind = id.kind();
+
+    let quota_count = provider
+        .map(|p| {
+            let visible = settings.visible_quota_count(kind, &p.quotas);
+            if visible == 0 && !p.quotas.is_empty() {
+                1 // 全部隐藏时显示空状态，至少预留 1 个卡片高度
+            } else {
+                visible
+            }
+        })
+        .unwrap_or(1);
+
+    let (show_account, show_dashboard) = provider
+        .map(|p| {
+            let flags = provider_panel_flags(settings, p);
+            (flags.show_account_info, flags.show_dashboard_row)
+        })
+        .unwrap_or((false, false));
+
+    crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
 }
 
 /// 计算当前头部应该显示的内容
@@ -837,5 +848,113 @@ mod tests {
     fn store_custom_provider_ids_empty_when_no_custom() {
         let store = make_store(&[ProviderKind::Claude]);
         assert!(store.custom_provider_ids().is_empty());
+    }
+
+    // ── compute_popup_height ─────────────────────────────────
+
+    fn make_nav(kind: ProviderKind) -> NavigationState {
+        NavigationState {
+            active_tab: NavTab::Provider(pid(kind)),
+            last_provider_id: pid(kind),
+            prev_active_tab: None,
+            generation: 0,
+        }
+    }
+
+    #[test]
+    fn popup_height_missing_provider_returns_min() {
+        let store = make_store(&[]);
+        let nav = make_nav(ProviderKind::Claude);
+        let settings = AppSettings::default();
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        assert_eq!(h, crate::models::PopupLayout::MIN_HEIGHT);
+    }
+
+    #[test]
+    fn popup_height_empty_quotas_with_dashboard() {
+        // make_test_provider 有 dashboard_url，无 account_email → show_dashboard = true
+        let store = make_store(&[ProviderKind::Claude]);
+        let nav = make_nav(ProviderKind::Claude);
+        let settings = AppSettings::default();
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        let expected = crate::models::compute_popup_height_detailed(1, true, false);
+        assert_eq!(h, expected);
+    }
+
+    #[test]
+    fn popup_height_uses_last_provider_on_settings_tab() {
+        let store = make_store(&[ProviderKind::Claude]);
+        let nav = NavigationState {
+            active_tab: NavTab::Settings,
+            last_provider_id: pid(ProviderKind::Claude),
+            prev_active_tab: None,
+            generation: 0,
+        };
+        let settings = AppSettings::default();
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        let expected = crate::models::compute_popup_height_detailed(1, true, false);
+        assert_eq!(h, expected);
+    }
+
+    #[test]
+    fn popup_height_with_visible_quotas() {
+        use crate::models::QuotaInfo;
+
+        let mut store = make_store(&[ProviderKind::Claude]);
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
+        p.quotas = vec![
+            QuotaInfo::new("Session", 50.0, 100.0),
+            QuotaInfo::new("Weekly", 20.0, 100.0),
+        ];
+
+        let nav = make_nav(ProviderKind::Claude);
+        let settings = AppSettings::default();
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        let expected = crate::models::compute_popup_height_detailed(2, true, false);
+        assert_eq!(h, expected);
+    }
+
+    #[test]
+    fn popup_height_all_quotas_hidden_shows_one_card() {
+        use crate::models::{QuotaInfo, QuotaType};
+
+        let mut store = make_store(&[ProviderKind::Claude]);
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
+        p.quotas = vec![QuotaInfo::with_details(
+            "Session",
+            50.0,
+            100.0,
+            QuotaType::Session,
+            None,
+        )];
+
+        let nav = make_nav(ProviderKind::Claude);
+        let mut settings = AppSettings::default();
+        settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        // 全部隐藏时至少预留 1 个卡片高度，dashboard 仍可见
+        let expected = crate::models::compute_popup_height_detailed(1, true, false);
+        assert_eq!(h, expected);
+    }
+
+    #[test]
+    fn popup_height_account_info_hides_dashboard_row() {
+        // 有 account_email 时 show_account_info=true，dashboard_row 互斥隐藏
+        let mut store = make_store(&[ProviderKind::Claude]);
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
+        p.account_email = Some("user@example.com".to_string());
+
+        let nav = make_nav(ProviderKind::Claude);
+        let settings = AppSettings::default();
+
+        let h = compute_popup_height(&nav, &store, &settings);
+        // account_info 可见时 dashboard_row 被互斥隐藏
+        let expected = crate::models::compute_popup_height_detailed(1, false, true);
+        assert_eq!(h, expected);
     }
 }
