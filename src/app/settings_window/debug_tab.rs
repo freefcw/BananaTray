@@ -212,13 +212,13 @@ impl SettingsView {
                         div()
                             .text_size(px(14.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
+                            .text_color(theme.text.primary)
                             .child(t!("debug.log_file").to_string()),
                     )
                     .child(
                         div()
                             .text_size(px(11.0))
-                            .text_color(theme.text_muted)
+                            .text_color(theme.text.muted)
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .child(subtitle),
@@ -280,7 +280,7 @@ impl SettingsView {
                     div()
                         .text_size(px(13.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text_primary)
+                        .text_color(theme.text.primary)
                         .child(t!("debug.section.environment").to_string()),
                 ),
         );
@@ -290,7 +290,7 @@ impl SettingsView {
             card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_info_cell(
                 label,
                 value,
-                theme.text_secondary,
+                theme.text.secondary,
                 theme,
             )));
         }
@@ -306,7 +306,7 @@ impl SettingsView {
                 .pb(px(12.0))
                 .child(render_action_button(
                     &t!("debug.copy_debug_info"),
-                    Some(("src/icons/overview.svg", theme.text_secondary)),
+                    Some(("src/icons/overview.svg", theme.text.secondary)),
                     ButtonVariant::Subtle,
                     true,
                     theme,
@@ -395,15 +395,15 @@ impl SettingsView {
                     .py(px(4.0))
                     .rounded(px(6.0))
                     .bg(if is_selected {
-                        theme.bg_card_inner
+                        theme.bg.card_inner
                     } else {
-                        theme.bg_subtle
+                        theme.bg.subtle
                     })
                     .border_1()
                     .border_color(if is_selected {
-                        theme.text_accent_soft
+                        theme.text.accent_soft
                     } else {
-                        theme.border_strong
+                        theme.border.strong
                     })
                     .cursor_pointer()
                     .hover(|s| s.opacity(0.85))
@@ -416,9 +416,9 @@ impl SettingsView {
                                 FontWeight::NORMAL
                             })
                             .text_color(if is_selected {
-                                theme.text_accent
+                                theme.text.accent
                             } else {
-                                theme.text_secondary
+                                theme.text.secondary
                             })
                             .child(name.clone()),
                     )
@@ -452,12 +452,12 @@ impl SettingsView {
                         .px(px(12.0))
                         .py(px(5.0))
                         .rounded(px(6.0))
-                        .bg(theme.bg_subtle)
+                        .bg(theme.bg.subtle)
                         .child(
                             div()
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.text_muted)
+                                .text_color(theme.text.muted)
                                 .child(btn_label),
                         ),
                 );
@@ -506,7 +506,7 @@ impl SettingsView {
                     .child(
                         div()
                             .text_size(px(12.0))
-                            .text_color(theme.text_muted)
+                            .text_color(theme.text.muted)
                             .child(t!("debug.console.empty").to_string()),
                     ),
             );
@@ -539,7 +539,7 @@ impl SettingsView {
                             div()
                                 .text_size(px(10.0))
                                 .font_family("SF Mono")
-                                .text_color(theme.text_muted)
+                                .text_color(theme.text.muted)
                                 .flex_shrink_0()
                                 .child(entry.timestamp.clone()),
                         )
@@ -559,7 +559,7 @@ impl SettingsView {
                             div()
                                 .text_size(px(10.0))
                                 .font_family("SF Mono")
-                                .text_color(theme.text_secondary)
+                                .text_color(theme.text.secondary)
                                 .w(px(100.0))
                                 .flex_shrink_0()
                                 .child(entry.target.clone()),
@@ -569,7 +569,7 @@ impl SettingsView {
                             div()
                                 .text_size(px(10.0))
                                 .font_family("SF Mono")
-                                .text_color(theme.text_primary)
+                                .text_color(theme.text.primary)
                                 .flex_grow()
                                 .child(entry.message.clone()),
                         ),
@@ -604,7 +604,7 @@ impl SettingsView {
                     .child(
                         div()
                             .text_size(px(10.0))
-                            .text_color(theme.text_muted)
+                            .text_color(theme.text.muted)
                             .child(format!("{} {}", log_count, t!("debug.console.entries"))),
                     )
                     .child(div().flex_grow())
@@ -614,15 +614,15 @@ impl SettingsView {
                             .px(px(8.0))
                             .py(px(3.0))
                             .rounded(px(4.0))
-                            .bg(theme.bg_subtle)
+                            .bg(theme.bg.subtle)
                             .border_1()
-                            .border_color(theme.border_strong)
+                            .border_color(theme.border.strong)
                             .cursor_pointer()
                             .hover(|s| s.opacity(0.85))
                             .child(
                                 div()
                                     .text_size(px(10.0))
-                                    .text_color(theme.text_secondary)
+                                    .text_color(theme.text.secondary)
                                     .child(t!("debug.console.copy_logs").to_string()),
                             )
                             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -640,15 +640,15 @@ impl SettingsView {
                             .px(px(8.0))
                             .py(px(3.0))
                             .rounded(px(4.0))
-                            .bg(theme.bg_subtle)
+                            .bg(theme.bg.subtle)
                             .border_1()
-                            .border_color(theme.border_strong)
+                            .border_color(theme.border.strong)
                             .cursor_pointer()
                             .hover(|s| s.opacity(0.85))
                             .child(
                                 div()
                                     .text_size(px(10.0))
-                                    .text_color(theme.text_secondary)
+                                    .text_color(theme.text.secondary)
                                     .child(t!("debug.console.clear_logs").to_string()),
                             )
                             .on_mouse_down(MouseButton::Left, move |_, window, cx| {

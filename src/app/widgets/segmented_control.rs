@@ -75,9 +75,9 @@ where
     let mut control = container_style(div())
         .flex()
         .rounded(px(8.0))
-        .bg(theme.bg_subtle)
+        .bg(theme.bg.subtle)
         .border_1()
-        .border_color(theme.border_subtle)
+        .border_color(theme.border.subtle)
         .overflow_hidden();
 
     for (label, value) in options {
@@ -88,7 +88,7 @@ where
         let pill = pill_style(div())
             .rounded(px(7.0))
             .bg(if is_active {
-                theme.nav_pill_active_bg
+                theme.nav.pill_active_bg
             } else {
                 transparent_black()
             })
@@ -99,9 +99,9 @@ where
                 FontWeight::MEDIUM
             })
             .text_color(if is_active {
-                theme.element_active
+                theme.element.active
             } else {
-                theme.text_secondary
+                theme.text.secondary
             })
             .cursor_pointer()
             .child(label.clone())

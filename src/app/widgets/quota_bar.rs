@@ -19,18 +19,18 @@ fn status_badge_label(level: StatusLevel) -> &'static str {
 /// 状态徽章颜色
 fn status_badge_color(level: StatusLevel, theme: &Theme) -> Hsla {
     match level {
-        StatusLevel::Green => theme.badge_healthy,
-        StatusLevel::Yellow => theme.badge_degraded,
-        StatusLevel::Red => theme.badge_offline,
+        StatusLevel::Green => theme.badge.healthy,
+        StatusLevel::Yellow => theme.badge.degraded,
+        StatusLevel::Red => theme.badge.offline,
     }
 }
 
 /// 进度条颜色（与状态对应）
 fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
     match level {
-        StatusLevel::Green => theme.status_success,
-        StatusLevel::Yellow => theme.status_warning,
-        StatusLevel::Red => theme.status_error,
+        StatusLevel::Green => theme.status.success,
+        StatusLevel::Yellow => theme.status.warning,
+        StatusLevel::Red => theme.status.error,
     }
 }
 
@@ -95,7 +95,7 @@ pub(crate) fn render_quota_bar(
     // 余额模式无 % 单位；传统模式 Credit 也无 % 单位
     let has_unit = !is_balance && !matches!(q.quota_type, QuotaType::Credit);
 
-    let hover_bg = theme.bg_card_inner_hovered;
+    let hover_bg = theme.bg.card_inner_hovered;
 
     let card = div()
         .id(ElementId::Name(format!("quota-card-{}", q.label).into()))
@@ -105,9 +105,9 @@ pub(crate) fn render_quota_bar(
         .px(px(16.0))
         .py(px(14.0))
         .rounded(px(12.0))
-        .bg(theme.bg_card_inner)
+        .bg(theme.bg.card_inner)
         .border_1()
-        .border_color(theme.border_strong)
+        .border_color(theme.border.strong)
         .hover(move |style| style.bg(hover_bg));
 
     card
@@ -131,7 +131,7 @@ pub(crate) fn render_quota_bar(
                                 .overflow_hidden()
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.text_secondary)
+                                .text_color(theme.text.secondary)
                                 .whitespace_nowrap()
                                 .child(q.label.to_uppercase()),
                         ),
@@ -167,7 +167,7 @@ pub(crate) fn render_quota_bar(
                             div()
                                 .text_size(px(36.0))
                                 .font_weight(FontWeight::BOLD)
-                                .text_color(theme.text_primary)
+                                .text_color(theme.text.primary)
                                 .line_height(relative(1.0))
                                 .whitespace_nowrap()
                                 .child(display_text),
@@ -177,7 +177,7 @@ pub(crate) fn render_quota_bar(
                                 div()
                                     .text_size(px(18.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text_secondary)
+                                    .text_color(theme.text.secondary)
                                     .line_height(relative(1.0))
                                     .ml(px(2.0))
                                     .mb(px(6.0))
@@ -190,7 +190,7 @@ pub(crate) fn render_quota_bar(
                 .child(
                     div()
                         .text_size(px(12.0))
-                        .text_color(theme.text_secondary)
+                        .text_color(theme.text.secondary)
                         .line_height(relative(1.0))
                         .mb(px(1.0))
                         .child(mode_label),
@@ -216,7 +216,7 @@ pub(crate) fn render_quota_bar(
                     .h(px(5.0))
                     .mt(px(6.0))
                     .mb(px(6.0))
-                    .bg(theme.progress_track)
+                    .bg(theme.status.progress_track)
                     .rounded_full()
                     .overflow_hidden()
                     .child(
@@ -259,7 +259,7 @@ pub(crate) fn render_quota_bar(
             div().flex().items_center().gap(px(4.0)).mt(px(12.0)).child(
                 div()
                     .text_size(px(11.0))
-                    .text_color(theme.text_muted)
+                    .text_color(theme.text.muted)
                     .child(detail_str),
             )
         })

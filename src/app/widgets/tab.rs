@@ -20,7 +20,7 @@ pub(crate) fn render_icon_tab(
         .cursor_pointer()
         .border_b_2()
         .border_color(if active {
-            theme.text_accent
+            theme.text.accent
         } else {
             transparent_black()
         })
@@ -33,14 +33,14 @@ pub(crate) fn render_icon_tab(
                 .justify_center()
                 .rounded(px(5.0))
                 .bg(if active {
-                    theme.bg_card
+                    theme.bg.card
                 } else {
                     transparent_black()
                 })
                 .child(svg().path(icon_path).size(px(15.0)).text_color(if active {
-                    theme.text_accent
+                    theme.text.accent
                 } else {
-                    theme.text_muted
+                    theme.text.muted
                 })),
         )
         .child(
@@ -48,9 +48,9 @@ pub(crate) fn render_icon_tab(
                 .text_size(px(11.5))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(if active {
-                    theme.text_accent
+                    theme.text.accent
                 } else {
-                    theme.text_muted
+                    theme.text.muted
                 })
                 .child(label.to_string()),
         )

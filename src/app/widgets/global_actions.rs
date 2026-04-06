@@ -11,7 +11,7 @@ use crate::app::AppView;
 impl AppView {
     pub(crate) fn render_global_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
-        let border_color = theme.border_subtle;
+        let border_color = theme.border.subtle;
         let actions = {
             let state = self.state.borrow();
             tray_global_actions_view_state(&state.session)
@@ -31,21 +31,21 @@ impl AppView {
                 .px(px(20.0))
                 .py(px(10.0))
                 .rounded(px(10.0))
-                .bg(theme.btn_sync_bg)
+                .bg(theme.button.sync_bg)
                 .border_1()
-                .border_color(theme.btn_sync_bg)
+                .border_color(theme.button.sync_bg)
                 .cursor_pointer()
                 .hover(|style| style.opacity(0.8))
                 .child(render_svg_icon(
                     "src/icons/refresh.svg",
                     px(14.0),
-                    theme.btn_sync_text,
+                    theme.button.sync_text,
                 ))
                 .child(
                     div()
                         .text_size(px(13.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.btn_sync_text)
+                        .text_color(theme.button.sync_text)
                         .child(refresh.label.clone()),
                 );
 
@@ -73,9 +73,9 @@ impl AppView {
         // 设置按钮（圆形）
         let settings_btn = render_circle_button(
             "src/icons/settings.svg",
-            cx.global::<Theme>().text_secondary,
-            cx.global::<Theme>().bg_subtle,
-            cx.global::<Theme>().border_subtle,
+            cx.global::<Theme>().text.secondary,
+            cx.global::<Theme>().bg.subtle,
+            cx.global::<Theme>().border.subtle,
         );
         let settings_state = self.state.clone();
         let settings_btn = settings_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -90,9 +90,9 @@ impl AppView {
         // 关闭按钮（圆形，红色调）
         let close_btn = render_circle_button(
             "src/icons/close.svg",
-            cx.global::<Theme>().status_error,
-            cx.global::<Theme>().btn_danger_bg,
-            cx.global::<Theme>().btn_danger_bg,
+            cx.global::<Theme>().status.error,
+            cx.global::<Theme>().button.danger_bg,
+            cx.global::<Theme>().button.danger_bg,
         );
         let close_state = self.state.clone();
         let close_btn = close_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {

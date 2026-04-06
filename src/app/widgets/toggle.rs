@@ -17,22 +17,22 @@ pub(crate) fn render_toggle_switch(
         .rounded_full()
         .px(px(2.0))
         .bg(if enabled {
-            theme.element_selected
+            theme.element.selected
         } else {
-            theme.bg_subtle
+            theme.bg.subtle
         })
         .border_1()
         .border_color(if enabled {
-            theme.element_selected
+            theme.element.selected
         } else {
-            theme.border_strong
+            theme.border.strong
         })
         .child(
             div()
                 .w(knob_size)
                 .h(knob_size)
                 .rounded_full()
-                .bg(theme.element_active)
+                .bg(theme.element.active)
                 .ml(if enabled { travel } else { px(0.0) }),
         )
 }

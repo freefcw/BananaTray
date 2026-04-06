@@ -243,7 +243,7 @@ where
             div()
                 .text_size(px(13.0))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_primary)
+                .text_color(theme.text.primary)
                 .flex_shrink_0()
                 .mr(px(16.0))
                 .child(label.to_string()),

@@ -30,8 +30,8 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
             icon,
             px(56.0),
             px(32.0),
-            theme.text_primary,
-            theme.bg_subtle,
+            theme.text.primary,
+            theme.bg.subtle,
         ))
         .child(
             div()
@@ -41,13 +41,13 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
                     div()
                         .text_size(px(18.0))
                         .font_weight(FontWeight::BOLD)
-                        .text_color(theme.text_primary)
+                        .text_color(theme.text.primary)
                         .child(display_name.to_string()),
                 )
                 .child(
                     div()
                         .text_size(px(11.5))
-                        .text_color(theme.text_muted)
+                        .text_color(theme.text.muted)
                         .child(subtitle.to_string()),
                 ),
         )
@@ -62,13 +62,13 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
         .items_center()
         .justify_center()
         .rounded(px(10.0))
-        .bg(theme.bg_subtle)
+        .bg(theme.bg.subtle)
         .cursor_pointer()
         .hover(|s| s.opacity(0.8))
         .child(crate::app::widgets::render_svg_icon(
             "src/icons/refresh.svg",
             px(22.0),
-            theme.text_muted,
+            theme.text.muted,
         ))
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
             runtime::dispatch_in_window(
@@ -184,9 +184,9 @@ impl SettingsView {
         theme: &Theme,
     ) -> Div {
         let status_color = match info.status_kind {
-            SettingsProviderStatusKind::Success => theme.status_success,
-            SettingsProviderStatusKind::Error => theme.status_error,
-            SettingsProviderStatusKind::Neutral => theme.text_primary,
+            SettingsProviderStatusKind::Success => theme.status.success,
+            SettingsProviderStatusKind::Error => theme.status.error,
+            SettingsProviderStatusKind::Neutral => theme.text.primary,
         };
 
         // 设计稿：两列布局，第一行 "状态 + 来源"，第二行 "更新时间 + 服务状态"
@@ -202,13 +202,13 @@ impl SettingsView {
                     .child(render_info_cell(
                         &t!("provider.info.state"),
                         &info.state_text,
-                        theme.text_primary,
+                        theme.text.primary,
                         theme,
                     ))
                     .child(render_info_cell(
                         &t!("provider.info.source"),
                         &info.source_text,
-                        theme.text_primary,
+                        theme.text.primary,
                         theme,
                     )),
             )
@@ -220,7 +220,7 @@ impl SettingsView {
                     .child(render_info_cell(
                         &t!("provider.info.updated"),
                         &info.updated_text,
-                        theme.text_primary,
+                        theme.text.primary,
                         theme,
                     ))
                     .child(render_info_cell(
@@ -256,7 +256,7 @@ impl SettingsView {
                     div()
                         .mt(px(8.0))
                         .text_size(px(12.0))
-                        .text_color(theme.text_secondary)
+                        .text_color(theme.text.secondary)
                         .child(message.clone()),
                 );
             }
@@ -273,7 +273,7 @@ impl SettingsView {
                         div()
                             .mt(px(8.0))
                             .text_size(px(12.0))
-                            .text_color(theme.text_muted)
+                            .text_color(theme.text.muted)
                             .child(title.clone()),
                     )
                     .child(
@@ -281,12 +281,12 @@ impl SettingsView {
                             .px(px(10.0))
                             .py(px(8.0))
                             .rounded(px(6.0))
-                            .bg(theme.bg_subtle)
+                            .bg(theme.bg.subtle)
                             .child(
                                 div()
                                     .text_size(px(11.5))
                                     .line_height(relative(1.4))
-                                    .text_color(theme.text_secondary)
+                                    .text_color(theme.text.secondary)
                                     .child(message.clone()),
                             ),
                     );
@@ -317,7 +317,7 @@ impl SettingsView {
                 div()
                     .mt(px(8.0))
                     .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .child(t!("provider.quota_visibility.empty").to_string()),
             );
         } else {
@@ -325,9 +325,9 @@ impl SettingsView {
                 .flex_col()
                 .mt(px(8.0))
                 .rounded(px(10.0))
-                .bg(theme.bg_card)
+                .bg(theme.bg.card)
                 .border_1()
-                .border_color(theme.border_subtle)
+                .border_color(theme.border.subtle)
                 .overflow_hidden();
 
             let item_count = items.len();
@@ -335,7 +335,7 @@ impl SettingsView {
             for (i, item) in items.iter().enumerate() {
                 list = list.child(self.render_quota_visibility_row(kind, item, theme));
                 if i + 1 < item_count {
-                    list = list.child(div().h(px(0.5)).w_full().bg(theme.border_subtle));
+                    list = list.child(div().h(px(0.5)).w_full().bg(theme.border.subtle));
                 }
             }
             section = section.child(list);
@@ -362,9 +362,9 @@ impl SettingsView {
                 "src/icons/status.svg",
                 px(14.0),
                 if visible {
-                    theme.text_accent
+                    theme.text.accent
                 } else {
-                    theme.text_muted
+                    theme.text.muted
                 },
             ));
         }
@@ -372,9 +372,9 @@ impl SettingsView {
             div()
                 .text_size(px(12.5))
                 .text_color(if visible {
-                    theme.text_primary
+                    theme.text.primary
                 } else {
-                    theme.text_muted
+                    theme.text.muted
                 })
                 .child(item.label.clone()),
         );
@@ -386,7 +386,7 @@ impl SettingsView {
             .px(px(12.0))
             .py(px(8.0))
             .cursor_pointer()
-            .hover(|s| s.bg(theme.bg_subtle))
+            .hover(|s| s.bg(theme.bg.subtle))
             .child(label_row)
             .child(
                 crate::app::widgets::render_toggle_switch(

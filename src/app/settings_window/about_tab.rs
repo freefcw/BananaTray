@@ -56,7 +56,7 @@ impl SettingsView {
                     .text_align(TextAlign::Center)
                     .text_size(px(22.0))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(theme.text_primary)
+                    .text_color(theme.text.primary)
                     .pt(px(2.0))
                     .child(APP_NAME),
             )
@@ -65,7 +65,7 @@ impl SettingsView {
                     .w_full()
                     .text_align(TextAlign::Center)
                     .text_size(px(13.0))
-                    .text_color(theme.text_muted)
+                    .text_color(theme.text.muted)
                     .line_height(relative(1.5))
                     .child(t!("settings.about.desc").to_string()),
             )
@@ -73,7 +73,7 @@ impl SettingsView {
 
     /// 带双层辉光的 App 图标 + 版本徽章
     fn render_glow_icon(theme: &Theme) -> Div {
-        let accent = theme.text_accent;
+        let accent = theme.text.accent;
         let glow_outer = hsla(accent.h, accent.s, accent.l, 0.08);
         let glow_inner = hsla(accent.h, accent.s, accent.l, 0.15);
         let icon_border = hsla(accent.h, accent.s * 0.5, accent.l, 0.3);
@@ -117,12 +117,12 @@ impl SettingsView {
                     .rounded(px(22.0))
                     .border_1()
                     .border_color(border_color)
-                    .bg(theme.bg_card)
+                    .bg(theme.bg.card)
                     .child(
                         svg()
                             .path("src/icons/tray_icon.svg")
                             .size(px(48.0))
-                            .text_color(theme.text_accent),
+                            .text_color(theme.text.accent),
                     ),
             )
             // 版本徽章
@@ -134,7 +134,7 @@ impl SettingsView {
                     .px(px(8.0))
                     .py(px(3.0))
                     .rounded(px(6.0))
-                    .bg(theme.text_accent)
+                    .bg(theme.text.accent)
                     .text_size(px(10.5))
                     .font_weight(FontWeight::BOLD)
                     .text_color(hsla(0.0, 0.0, 1.0, 1.0))
@@ -179,21 +179,21 @@ impl SettingsView {
             .py(px(8.0))
             .rounded(px(10.0))
             .border_1()
-            .border_color(theme.border_strong)
-            .bg(theme.bg_card)
+            .border_color(theme.border.strong)
+            .bg(theme.bg.card)
             .cursor_pointer()
-            .hover(|s| s.bg(theme.bg_subtle))
+            .hover(|s| s.bg(theme.bg.subtle))
             .child(
                 svg()
                     .path(icon_path)
                     .size(px(14.0))
-                    .text_color(theme.text_secondary),
+                    .text_color(theme.text.secondary),
             )
             .child(
                 div()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .child(label.to_string()),
             )
             .on_mouse_down(MouseButton::Left, move |_, _, _| {
@@ -224,7 +224,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_info_section(theme: &Theme) -> Div {
-        let accent = theme.text_accent;
+        let accent = theme.text.accent;
         let link_color = hsla(accent.h, accent.s, accent.l, 0.7);
 
         div()
@@ -236,10 +236,10 @@ impl SettingsView {
                 &t!("about.build_version"),
                 GIT_HASH,
                 None,
-                theme.text_secondary,
+                theme.text.secondary,
                 theme,
             ))
-            .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
+            .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
             .child(render_kv_info_row(
                 &t!("about.developed_by"),
                 APP_AUTHOR,
@@ -247,15 +247,15 @@ impl SettingsView {
                 link_color,
                 theme,
             ))
-            .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
+            .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
             .child(render_kv_info_row(
                 &t!("about.license"),
                 APP_LICENSE,
                 None,
-                theme.text_secondary,
+                theme.text.secondary,
                 theme,
             ))
-            .child(div().h(px(0.5)).w_full().bg(theme.border_subtle))
+            .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
             .child(render_kv_info_row(
                 &t!("about.website"),
                 "BananaTray",
@@ -271,7 +271,7 @@ impl SettingsView {
 
     fn render_copyright(theme: &Theme) -> Div {
         let year = 2026;
-        let c = theme.text_muted;
+        let c = theme.text.muted;
         let copyright_color = hsla(c.h, c.s, c.l * 0.8, c.a * 0.7);
 
         div()

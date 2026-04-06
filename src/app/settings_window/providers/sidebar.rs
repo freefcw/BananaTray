@@ -26,7 +26,7 @@ fn render_sort_arrow_button(
         .justify_center()
         .rounded(px(3.0))
         .text_size(px(8.0))
-        .text_color(theme.element_active)
+        .text_color(theme.element.active)
         .cursor_pointer()
         .hover(|s| s.opacity(0.7))
         .child(label.to_string())
@@ -95,14 +95,14 @@ fn render_sidebar_item_content(
 ) -> Div {
     // 设计稿：选中项图标和文字为亮色/紫色，未选中为灰色
     let icon_color = if is_selected {
-        theme.text_primary
+        theme.text.primary
     } else {
-        theme.text_muted
+        theme.text.muted
     };
     let name_color = if is_selected {
-        theme.text_primary
+        theme.text.primary
     } else {
-        theme.text_muted
+        theme.text.muted
     };
 
     // 名称行：名字 + 启用圆点
@@ -119,7 +119,7 @@ fn render_sidebar_item_content(
                 .w(px(7.0))
                 .h(px(7.0))
                 .rounded_full()
-                .bg(theme.status_success),
+                .bg(theme.status.success),
         )
     } else {
         name_row
@@ -177,7 +177,7 @@ fn render_sidebar_item(
             .w_full()
             .border_1()
             .border_color(gpui::transparent_black())
-            .hover(|s| s.bg(theme.bg_subtle))
+            .hover(|s| s.bg(theme.bg.subtle))
             .child(item_content)
     };
 

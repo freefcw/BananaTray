@@ -47,25 +47,25 @@ pub(crate) fn render_cadence_trigger(
         .px(px(12.0))
         .py(px(6.0))
         .rounded(px(6.0))
-        .bg(theme.bg_base)
+        .bg(theme.bg.base)
         .border_1()
         .border_color(if dropdown_open {
-            theme.element_selected
+            theme.element.selected
         } else {
-            theme.border_strong
+            theme.border.strong
         })
         .cursor_pointer()
         .child(
             div()
                 .text_size(px(13.0))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_primary)
+                .text_color(theme.text.primary)
                 .child(format_cadence(cadence_mins)),
         )
         .child(
             div()
                 .text_size(px(10.0))
-                .text_color(theme.text_muted)
+                .text_color(theme.text.muted)
                 .child(if dropdown_open { "▲" } else { "▼" }),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -102,9 +102,9 @@ fn render_cadence_options(
             .w(px(140.0)) // Explicit width ensures w_full() on children calculates properly
             .p(px(6.0)) // Inner padding for the popup shell
             .rounded(px(8.0))
-            .bg(theme.bg_subtle)
+            .bg(theme.bg.subtle)
             .border_1()
-            .border_color(theme.border_strong)
+            .border_color(theme.border.strong)
             .shadow_lg()
             .flex()
             .flex_col()
@@ -127,33 +127,33 @@ fn render_cadence_options(
 
                 if is_active {
                     row = row
-                        .bg(th.nav_pill_active_bg) // Subtle active background
+                        .bg(th.nav.pill_active_bg) // Subtle active background
                         .border_1()
-                        .border_color(th.element_selected) // Distinct outline
+                        .border_color(th.element.selected) // Distinct outline
                         .child(
                             div()
                                 .text_size(px(13.0))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(th.text_primary)
+                                .text_color(th.text.primary)
                                 .child(label),
                         )
                         .child(
                             div()
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::BOLD)
-                                .text_color(th.text_accent)
+                                .text_color(th.text.accent)
                                 .child("✓"),
                         );
                 } else {
                     row = row
                         .border_1()
                         .border_color(gpui::transparent_black()) // Transparent border to prevent height jumping
-                        .hover(|s| s.bg(th.bg_card_inner_hovered)) // Hover effect
+                        .hover(|s| s.bg(th.bg.card_inner_hovered)) // Hover effect
                         .child(
                             div()
                                 .text_size(px(13.0))
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(th.text_secondary)
+                                .text_color(th.text.secondary)
                                 .child(label),
                         );
                 }

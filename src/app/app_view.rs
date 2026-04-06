@@ -58,14 +58,14 @@ impl AppView {
 
         let (dot_color, badge_bg) = match header.status_kind {
             crate::app_state::HeaderStatusKind::Synced => {
-                (theme.badge_healthy, theme.badge_synced_bg)
+                (theme.badge.healthy, theme.badge.synced_bg)
             }
             crate::app_state::HeaderStatusKind::Syncing => {
-                (theme.text_accent, rgba(0x3b82f61a).into())
+                (theme.text.accent, rgba(0x3b82f61a).into())
             }
-            crate::app_state::HeaderStatusKind::Stale => (theme.text_muted, theme.bg_subtle),
+            crate::app_state::HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
             crate::app_state::HeaderStatusKind::Offline => {
-                (theme.badge_offline, theme.btn_danger_bg)
+                (theme.badge.offline, theme.button.danger_bg)
             }
         };
 
@@ -77,7 +77,7 @@ impl AppView {
             .px(px(16.0))
             .py(px(12.0))
             .border_b_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             .child(
                 // 左侧：应用图标 + 名称
                 div()
@@ -93,13 +93,13 @@ impl AppView {
                             .items_center()
                             .justify_center()
                             .rounded(px(10.0))
-                            .bg(theme.bg_subtle)
+                            .bg(theme.bg.subtle)
                             .border_1()
-                            .border_color(theme.border_subtle)
+                            .border_color(theme.border.subtle)
                             .child(widgets::render_svg_icon(
                                 "src/icons/tray_icon.svg",
                                 px(20.0),
-                                theme.text_accent,
+                                theme.text.accent,
                             )),
                     )
                     // 应用名称
@@ -111,14 +111,14 @@ impl AppView {
                                 div()
                                     .text_size(px(15.0))
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(theme.text_primary)
+                                    .text_color(theme.text.primary)
                                     .child("BananaTray"),
                             )
                             .child(
                                 div()
                                     .text_size(px(10.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text_muted)
+                                    .text_color(theme.text.muted)
                                     .child("AI USAGE MONITOR"),
                             ),
                     ),
@@ -138,7 +138,7 @@ impl AppView {
                         div()
                             .text_size(px(11.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_secondary)
+                            .text_color(theme.text.secondary)
                             .child(header.status_text),
                     ),
             )
@@ -181,8 +181,8 @@ impl Render for AppView {
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme.bg_panel)
-            .text_color(theme.text_primary)
+            .bg(theme.bg.panel)
+            .text_color(theme.text.primary)
             .rounded(px(14.0))
             .overflow_hidden()
             // 头部

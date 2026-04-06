@@ -21,7 +21,7 @@ pub(crate) fn render_footer_glyph(
         .justify_center()
         .rounded(px(6.0))
         .border_1()
-        .border_color(theme.text_accent_soft)
-        .bg(theme.bg_subtle)
-        .child(render_svg_icon(icon_path, px(11.0), theme.text_accent))
+        .border_color(theme.text.accent_soft)
+        .bg(theme.bg.subtle)
+        .child(render_svg_icon(icon_path, px(11.0), theme.text.accent))
 }

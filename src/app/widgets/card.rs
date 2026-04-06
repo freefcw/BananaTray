@@ -8,7 +8,7 @@ pub(crate) fn render_card(theme: &Theme) -> Div {
     div()
         .flex_col()
         .rounded(px(10.0))
-        .bg(theme.bg_panel)
+        .bg(theme.bg.panel)
         .overflow_hidden()
 }
 
@@ -19,7 +19,7 @@ pub(crate) fn render_card_separator(theme: &Theme) -> Div {
         .h(px(0.5))
         .w_full()
         .ml(px(14.0))
-        .bg(theme.progress_track)
+        .bg(theme.status.progress_track)
 }
 
 /// 小号段落标签（如 "SYSTEM"、"USAGE"），12px muted
@@ -28,7 +28,7 @@ pub(crate) fn render_section_label(title: &str, theme: &Theme) -> Div {
     div()
         .text_size(px(12.0))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme.text_muted)
+        .text_color(theme.text.muted)
         .px(px(4.0))
         .pb(px(6.0))
         .child(title.to_string())
@@ -39,7 +39,7 @@ pub(crate) fn render_detail_section_title(title: &str, theme: &Theme) -> Div {
     div()
         .text_size(px(14.0))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme.text_primary)
+        .text_color(theme.text.primary)
         .child(title.to_string())
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn render_checkbox_row(
                     div()
                         .text_size(px(12.5))
                         .line_height(relative(1.4))
-                        .text_color(theme.text_secondary)
+                        .text_color(theme.text.secondary)
                         .child(description.to_string()),
                 ),
         )
@@ -115,7 +115,7 @@ where
                     div()
                         .text_size(px(12.5))
                         .line_height(relative(1.4))
-                        .text_color(theme.text_secondary)
+                        .text_color(theme.text.secondary)
                         .child(description.to_string()),
                 ),
         )
@@ -136,13 +136,13 @@ pub(crate) fn render_info_row(label: &str, value: &str, theme: &Theme) -> Div {
             div()
                 .w(px(70.0))
                 .text_size(px(12.0))
-                .text_color(theme.text_muted)
+                .text_color(theme.text.muted)
                 .child(label.to_string()),
         )
         .child(
             div()
                 .text_size(px(12.0))
-                .text_color(theme.text_primary)
+                .text_color(theme.text.primary)
                 .child(value.to_string()),
         )
 }

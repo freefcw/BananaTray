@@ -127,7 +127,7 @@ impl SettingsView {
         let state = self.state.clone();
         div().mt(px(16.0)).child(render_action_button(
             &t!("settings.quit"),
-            Some(("src/icons/switch.svg", theme.status_error)),
+            Some(("src/icons/switch.svg", theme.status.error)),
             ButtonVariant::Danger,
             true,
             theme,
