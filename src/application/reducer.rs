@@ -441,6 +441,61 @@ mod tests {
         assert!(has_render(&effects));
     }
 
+    // ── ToggleStartAtLogin ───────────────────────────────
+
+    #[test]
+    fn toggle_start_at_login_produces_sync_and_notification() {
+        let mut session = make_session();
+        assert!(!session.settings.system.start_at_login);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
+        );
+
+        assert!(session.settings.system.start_at_login);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SyncAutoLaunch(true)
+        )));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendPlainNotification { .. }
+        )));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn toggle_start_at_login_round_trip() {
+        let mut session = make_session();
+
+        // enable
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
+        );
+        assert!(session.settings.system.start_at_login);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SyncAutoLaunch(true)
+        )));
+
+        // disable
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
+        );
+        assert!(!session.settings.system.start_at_login);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SyncAutoLaunch(false)
+        )));
+    }
+
     // ── ToggleShowAccountInfo ───────────────────────────
 
     #[test]
