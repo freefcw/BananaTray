@@ -97,6 +97,9 @@ pub struct QuotaInfo {
     pub quota_type: QuotaType,
     /// 第四行详情文本（由 Provider 提供，如重置时间、额度详情等）
     pub detail_text: Option<String>,
+    /// 余额模式：直接存储剩余额度值（与 used/limit 进度条模式互斥）
+    #[serde(default)]
+    pub remaining_balance: Option<f64>,
 }
 
 fn default_quota_type() -> QuotaType {
@@ -111,6 +114,7 @@ impl QuotaInfo {
             label: label.into(),
             quota_type: QuotaType::General,
             detail_text: None,
+            remaining_balance: None,
         }
     }
 
@@ -128,7 +132,31 @@ impl QuotaInfo {
             label: label.into(),
             quota_type,
             detail_text,
+            remaining_balance: None,
         }
+    }
+
+    /// 创建余额模式的配额（无进度条，仅展示余额和已用）
+    pub fn balance_only(
+        label: impl Into<String>,
+        remaining: f64,
+        used: Option<f64>,
+        quota_type: QuotaType,
+        detail_text: Option<String>,
+    ) -> Self {
+        Self {
+            used: used.unwrap_or(0.0),
+            limit: 0.0,
+            label: label.into(),
+            quota_type,
+            detail_text,
+            remaining_balance: Some(remaining),
+        }
+    }
+
+    /// 是否为余额模式（无进度条）
+    pub fn is_balance_only(&self) -> bool {
+        self.remaining_balance.is_some()
     }
 
     /// 使用百分比 (可负数，当超出配额时)
@@ -161,19 +189,35 @@ impl QuotaInfo {
 
     /// 状态等级：Green / Yellow / Red
     ///
-    /// 阈值定义：
+    /// 传统模式阈值（基于百分比）：
     /// - Green: 剩余 > 50%
     /// - Yellow: 剩余 20% ~ 50%（包含边界）
     /// - Red: 剩余 < 20%
+    ///
+    /// 余额模式阈值（基于绝对值，仅 Credit 类型）：
+    /// - Green: 余额 >= $5
+    /// - Yellow: $1 ~ $5
+    /// - Red: < $1
     pub fn status_level(&self) -> StatusLevel {
-        let remaining_pct = self.percent_remaining();
-
-        if remaining_pct > 50.0 {
-            StatusLevel::Green
-        } else if remaining_pct >= 20.0 {
-            StatusLevel::Yellow
+        if let Some(balance) = self.remaining_balance {
+            // 余额模式：按绝对值判断
+            if balance >= 5.0 {
+                StatusLevel::Green
+            } else if balance >= 1.0 {
+                StatusLevel::Yellow
+            } else {
+                StatusLevel::Red
+            }
         } else {
-            StatusLevel::Red
+            // 传统模式：按百分比判断
+            let remaining_pct = self.percent_remaining();
+            if remaining_pct > 50.0 {
+                StatusLevel::Green
+            } else if remaining_pct >= 20.0 {
+                StatusLevel::Yellow
+            } else {
+                StatusLevel::Red
+            }
         }
     }
 
@@ -221,50 +265,74 @@ impl QuotaInfo {
     // ========================================================================
 
     /// 剩余量摘要文本（用于 UI 主显示）
+    /// - 余额模式: "$X.XX" 或 "X.XX"（直接显示余额数值）
     /// - Credit 类型: "$X.XX left" 或 "$X.XX over"（负数）
     /// - 其他类型: "X% left" 或 "X% over"（负数）
     pub fn remaining_text(&self) -> String {
-        match self.quota_type {
-            QuotaType::Credit => {
-                let remaining = self.limit - self.used;
-                if remaining >= 0.0 {
-                    t!("quota.credit_left", amount = format!("{:.2}", remaining)).to_string()
-                } else {
-                    t!("quota.credit_over", amount = format!("{:.2}", -remaining)).to_string()
-                }
+        if let Some(balance) = self.remaining_balance {
+            // 余额模式：直接显示余额
+            if matches!(self.quota_type, QuotaType::Credit) {
+                format!("${:.2}", balance)
+            } else {
+                format!("{:.2}", balance)
             }
-            _ => {
-                let pct = self.percent_remaining();
-                if pct >= 0.0 {
-                    t!("quota.pct_left", pct = format!("{:.0}", pct)).to_string()
-                } else {
-                    t!("quota.pct_over", pct = format!("{:.0}", -pct)).to_string()
+        } else {
+            match self.quota_type {
+                QuotaType::Credit => {
+                    let remaining = self.limit - self.used;
+                    if remaining >= 0.0 {
+                        t!("quota.credit_left", amount = format!("{:.2}", remaining)).to_string()
+                    } else {
+                        t!("quota.credit_over", amount = format!("{:.2}", -remaining)).to_string()
+                    }
+                }
+                _ => {
+                    let pct = self.percent_remaining();
+                    if pct >= 0.0 {
+                        t!("quota.pct_left", pct = format!("{:.0}", pct)).to_string()
+                    } else {
+                        t!("quota.pct_over", pct = format!("{:.0}", -pct)).to_string()
+                    }
                 }
             }
         }
     }
 
     /// 使用详情文本（用于 UI 详细展示）
+    /// - 余额模式: "Used: $X.XX" 或 空
     /// - Credit 类型: "$X.XX / $Y.YY"
     /// - 其他类型: "X used / Y total" 或 "X% used"
     pub fn usage_detail_text(&self) -> String {
-        match self.quota_type {
-            QuotaType::Credit => t!(
-                "quota.credit_detail",
-                used = format!("{:.2}", self.used),
-                limit = format!("{:.2}", self.limit)
-            )
-            .to_string(),
-            _ => {
-                if self.is_percentage_mode() {
-                    t!("quota.pct_used", pct = format!("{:.0}", self.used)).to_string()
+        if self.remaining_balance.is_some() {
+            // 余额模式：显示已用额度
+            if self.used > 0.0 {
+                if matches!(self.quota_type, QuotaType::Credit) {
+                    format!("Used: ${:.2}", self.used)
                 } else {
-                    t!(
-                        "quota.count_detail",
-                        used = format!("{:.0}", self.used),
-                        total = format!("{:.0}", self.limit)
-                    )
-                    .to_string()
+                    format!("Used: {:.2}", self.used)
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            match self.quota_type {
+                QuotaType::Credit => t!(
+                    "quota.credit_detail",
+                    used = format!("{:.2}", self.used),
+                    limit = format!("{:.2}", self.limit)
+                )
+                .to_string(),
+                _ => {
+                    if self.is_percentage_mode() {
+                        t!("quota.pct_used", pct = format!("{:.0}", self.used)).to_string()
+                    } else {
+                        t!(
+                            "quota.count_detail",
+                            used = format!("{:.0}", self.used),
+                            total = format!("{:.0}", self.limit)
+                        )
+                        .to_string()
+                    }
                 }
             }
         }
@@ -760,6 +828,85 @@ mod tests {
 
         let q_zero = QuotaInfo::with_details("Credit", 0.0, 100.0, QuotaType::Credit, None);
         assert_eq!(q_zero.usage_detail_text(), "$0.00 / $100.00");
+    }
+
+    // ========================================================================
+    // 余额模式测试
+    // ========================================================================
+
+    #[test]
+    fn test_balance_only_construction() {
+        let q = QuotaInfo::balance_only("Balance", 10.0, Some(3.0), QuotaType::Credit, None);
+        assert!(q.is_balance_only());
+        assert!((q.remaining_balance.unwrap() - 10.0).abs() < f64::EPSILON);
+        assert!((q.used - 3.0).abs() < f64::EPSILON);
+        assert!((q.limit - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_balance_only_without_used() {
+        let q = QuotaInfo::balance_only("Balance", 5.0, None, QuotaType::Credit, None);
+        assert!(q.is_balance_only());
+        assert!((q.used - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_balance_only_is_not_set_for_normal() {
+        let q = QuotaInfo::new("Normal", 30.0, 100.0);
+        assert!(!q.is_balance_only());
+        assert!(q.remaining_balance.is_none());
+    }
+
+    #[test]
+    fn test_balance_only_status_level() {
+        // >= $5 → Green
+        let q_green = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
+        assert_eq!(q_green.status_level(), StatusLevel::Green);
+
+        let q_green_boundary = QuotaInfo::balance_only("B", 5.0, None, QuotaType::Credit, None);
+        assert_eq!(q_green_boundary.status_level(), StatusLevel::Green);
+
+        // $1 ~ $5 → Yellow
+        let q_yellow = QuotaInfo::balance_only("B", 3.0, None, QuotaType::Credit, None);
+        assert_eq!(q_yellow.status_level(), StatusLevel::Yellow);
+
+        let q_yellow_boundary = QuotaInfo::balance_only("B", 1.0, None, QuotaType::Credit, None);
+        assert_eq!(q_yellow_boundary.status_level(), StatusLevel::Yellow);
+
+        // < $1 → Red
+        let q_red = QuotaInfo::balance_only("B", 0.5, None, QuotaType::Credit, None);
+        assert_eq!(q_red.status_level(), StatusLevel::Red);
+
+        let q_red_zero = QuotaInfo::balance_only("B", 0.0, None, QuotaType::Credit, None);
+        assert_eq!(q_red_zero.status_level(), StatusLevel::Red);
+    }
+
+    #[test]
+    fn test_balance_only_remaining_text_credit() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("B", 15.50, None, QuotaType::Credit, None);
+        assert_eq!(q.remaining_text(), "$15.50");
+    }
+
+    #[test]
+    fn test_balance_only_remaining_text_general() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("B", 42.0, None, QuotaType::General, None);
+        assert_eq!(q.remaining_text(), "42.00");
+    }
+
+    #[test]
+    fn test_balance_only_usage_detail_text_with_used() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("B", 10.0, Some(3.50), QuotaType::Credit, None);
+        assert_eq!(q.usage_detail_text(), "Used: $3.50");
+    }
+
+    #[test]
+    fn test_balance_only_usage_detail_text_zero_used() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
+        assert_eq!(q.usage_detail_text(), "");
     }
 
     // ========================================================================

@@ -574,8 +574,10 @@ mod tests {
 
     #[test]
     fn environment_refresh_manual() {
-        let mut settings = AppSettings::default();
-        settings.refresh_interval_mins = 0;
+        let settings = AppSettings {
+            refresh_interval_mins: 0,
+            ..Default::default()
+        };
         let session = make_session(settings);
         let env = build_environment_view_state(&session, &test_context());
         assert_eq!(env.refresh_interval, "Manual");
@@ -583,8 +585,10 @@ mod tests {
 
     #[test]
     fn environment_refresh_interval() {
-        let mut settings = AppSettings::default();
-        settings.refresh_interval_mins = 5;
+        let settings = AppSettings {
+            refresh_interval_mins: 5,
+            ..Default::default()
+        };
         let session = make_session(settings);
         let env = build_environment_view_state(&session, &test_context());
         assert_eq!(env.refresh_interval, "5 min");

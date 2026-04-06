@@ -6,7 +6,9 @@
 
 将 YAML 文件放到 `~/.config/bananatray/providers/` 目录（macOS 上是 `~/Library/Application Support/bananatray/providers/`），应用启动时自动加载。
 
-示例文件见 `examples/custom-provider-cli.yaml` 和 `examples/custom-provider-http.yaml`。
+示例文件见 `examples/custom-provider-cli.yaml`、`examples/custom-provider-http.yaml` 和 `examples/custom-provider-newapi.yaml`。
+
+详细使用指南见 [docs/custom-provider.md](../../docs/custom-provider.md)。
 
 ## 模块结构
 
@@ -14,7 +16,6 @@
 custom/
   mod.rs          — 模块入口，re-export
   schema.rs       — YAML 反序列化结构体
-  fetcher.rs      — 数据获取（CLI / HTTP GET / HTTP POST）
   extractor.rs    — 响应解析（JSON 路径提取 / 正则匹配）
   provider.rs     — CustomProvider（impl AiProvider）
   loader.rs       — 文件扫描 + 加载 + 校验
@@ -36,10 +37,23 @@ custom/
 
 ## 支持的认证方式
 
-| auth type     | 说明 |
+| auth type       | 说明 |
+|-----------------|------|
+| `session_token` | 用浏览器 session cookie 认证（NewAPI/OneAPI 推荐） |
+| `cookie`        | 直接传递完整的 Cookie 字符串（多个 cookie 场景） |
+| `bearer`        | Token 直接写在 YAML 配置中 |
+| `bearer_env`    | 从环境变量读取 token，设置 `Authorization: Bearer {token}` |
+| `header_env`    | 从环境变量读取值，设置自定义 header |
+| `login`         | 先登录获取 token 再用于请求（备选，部分站点可能不支持） |
+
+## 支持的可用性检查
+
+| type          | 说明 |
 |---------------|------|
-| `bearer_env`  | 从环境变量读取 token，设置 `Authorization: Bearer {token}` |
-| `header_env`  | 从环境变量读取值，设置自定义 header |
+| `always`      | 始终可用（推荐，适合认证信息已在配置中的场景） |
+| `cli_exists`  | 检查 CLI 命令是否存在 |
+| `env_var`     | 检查环境变量是否设置 |
+| `file_exists` | 检查文件是否存在（支持 ~ 展开） |
 
 ## 支持的解析方式
 
@@ -47,3 +61,27 @@ custom/
 |---------|------|
 | `json`  | 点分路径提取（如 `data.usage.used`），支持数组索引（如 `items.0.value`） |
 | `regex` | 正则 capture group 提取 used/limit 值 |
+
+## 环境变量展开
+
+以下字段支持 `${ENV_VAR}` 语法，在运行时自动用环境变量值替换：
+
+| 字段 | 说明 |
+|------|------|
+| `source.url` | HTTP 请求 URL（如 `${NEWAPI_BASE_URL}/api/user/self`） |
+| `source.headers[].value` | HTTP header 值 |
+| `metadata.dashboard_url` | 面板跳转链接 |
+
+## 数值变换
+
+配额提取规则支持 `divisor` 可选字段，提取的 `used` 和 `limit` 数值会自动除以此值。
+适用于需要单位换算的场景（如 NewAPI 积分 → 美元）：
+
+```yaml
+quotas:
+  - label: "Balance"
+    used: "data.used_quota"
+    limit: "data.quota"
+    quota_type: credit
+    divisor: 500000  # 500000 积分 = $1 USD
+```

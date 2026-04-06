@@ -310,6 +310,7 @@ quota.label.credit_remaining: "$%{remaining} / $%{total} remaining"
 # ── Quota display mode ─────────────────────────────────────
 quota.mode.remaining: "Remaining"
 quota.mode.used: "Used"
+quota.mode.balance: "Balance"
 settings.quota_display_mode: "Quota Display"
 settings.quota_display_mode.desc: "Show remaining or used quota in the panel."
 settings.quota_display_mode.remaining: "Remaining"
