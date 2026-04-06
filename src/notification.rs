@@ -1,3 +1,28 @@
+//! Quota alert tracking and system notification delivery.
+//!
+//! # Platform notification architecture
+//!
+//! | Platform | Bundled (.app) | Development (cargo run) |
+//! |----------|----------------|-------------------------|
+//! | macOS    | `UNUserNotificationCenter` (native) | `osascript` (AppleScript) |
+//! | Linux    | `notify-rust` (D-Bus) | `notify-rust` (D-Bus) |
+//!
+//! ## Why `notify-rust` is excluded on macOS
+//!
+//! `notify-rust` depends on `mac-notification-sys`, which contains ObjC code that:
+//! 1. Calls `LSCopyApplicationURLsForBundleIdentifier()` to resolve bundle IDs
+//! 2. Executes AppleScript `get id of application "..."` for app lookup
+//! 3. Swizzles `NSBundle.bundleIdentifier` via `method_exchangeImplementations`
+//!
+//! These operations trigger macOS Launch Services to scan **all** registered app
+//! locations, including network volumes (NFS/SMB). If the system has configured
+//! network shares, this causes the TCC dialog:
+//! **"BananaTray wants to access files on a network volume"**.
+//!
+//! Since macOS uses its own native notification path (`UNUserNotificationCenter`
+//! + `osascript` fallback), `notify-rust` is unnecessary and is excluded via
+//!   `cfg(not(target_os = "macos"))` in both `Cargo.toml` and this module.
+
 use crate::models::{ProviderId, QuotaInfo};
 use log::{info, warn};
 use rust_i18n::t;
@@ -193,8 +218,8 @@ pub fn send_plain_notification(title: &str, body: &str) {
 
 /// 请求系统通知授权（仅在 App Bundle 模式下生效）。
 ///
-/// 应在应用启动时调用一次。如果不在 Bundle 内（如 `cargo run`），
-/// 此函数不做任何操作。
+/// 应在应用启动时调用一次。同时设置 delegate 以支持前台通知弹出。
+/// 如果不在 Bundle 内（如 `cargo run`），此函数不做任何操作。
 #[cfg(target_os = "macos")]
 pub fn request_notification_authorization() {
     if !is_running_in_bundle() {
@@ -206,6 +231,10 @@ pub fn request_notification_authorization() {
         use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
 
         let center = UNUserNotificationCenter::currentNotificationCenter();
+
+        // 设置 delegate，使通知在前台时也能弹出横幅
+        install_notification_delegate(&center);
+
         let options = UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound;
 
         let handler = block2::RcBlock::new(
@@ -224,6 +253,77 @@ pub fn request_notification_authorization() {
 
         center.requestAuthorizationWithOptions_completionHandler(options, &handler);
     }
+}
+
+/// 安装通知 delegate，实现前台横幅弹出。
+///
+/// macOS 默认行为：当应用在前台时，通知不弹出横幅，只送到通知中心。
+/// 通过实现 `UNUserNotificationCenterDelegate` 的
+/// `willPresentNotification:withCompletionHandler:` 方法，
+/// 指定 `Banner | Sound | List` 来覆盖此默认行为。
+#[cfg(target_os = "macos")]
+unsafe fn install_notification_delegate(
+    center: &objc2_user_notifications::UNUserNotificationCenter,
+) {
+    use std::sync::Once;
+
+    use objc2::runtime::{AnyClass, AnyObject, ClassBuilder, Sel};
+    use objc2_user_notifications::UNNotificationPresentationOptions;
+
+    static REGISTER: Once = Once::new();
+
+    REGISTER.call_once(|| {
+        // 注册一个 ObjC 类 BananaTrayNotificationDelegate : NSObject
+        let superclass = AnyClass::get(c"NSObject").unwrap();
+        let mut builder = ClassBuilder::new(c"BananaTrayNotificationDelegate", superclass).unwrap();
+
+        // 实现 userNotificationCenter:willPresentNotification:withCompletionHandler:
+        // 签名: void (id self, SEL _cmd, id center, id notification, id completionHandler)
+        unsafe extern "C" fn will_present(
+            _this: &AnyObject,
+            _cmd: Sel,
+            _center: &AnyObject,
+            _notification: &AnyObject,
+            handler: &block2::Block<dyn Fn(UNNotificationPresentationOptions)>,
+        ) {
+            let options = UNNotificationPresentationOptions::Banner
+                | UNNotificationPresentationOptions::Sound
+                | UNNotificationPresentationOptions::List;
+            handler.call((options,));
+        }
+
+        builder.add_method(
+            objc2::sel!(userNotificationCenter:willPresentNotification:withCompletionHandler:),
+            will_present as unsafe extern "C" fn(_, _, _, _, _),
+        );
+
+        // 声明遵守 UNUserNotificationCenterDelegate protocol
+        let protocol =
+            objc2::runtime::AnyProtocol::get(c"UNUserNotificationCenterDelegate").unwrap();
+        builder.add_protocol(protocol);
+
+        let _cls = builder.register();
+    });
+
+    // 创建 delegate 实例并设置到 center
+    // 注意：UNUserNotificationCenter 持有 delegate 的弱引用，
+    // 所以需要用 static 保持实例存活。
+    // 使用 usize 存储指针以满足 Send+Sync，delegate 存活整个进程生命周期。
+    use std::sync::OnceLock;
+    static DELEGATE: OnceLock<usize> = OnceLock::new();
+
+    let delegate_ptr = *DELEGATE.get_or_init(|| {
+        let cls = AnyClass::get(c"BananaTrayNotificationDelegate").unwrap();
+        let obj: *mut AnyObject = objc2::msg_send![cls, alloc];
+        let obj: *mut AnyObject = objc2::msg_send![obj, init];
+        obj as usize
+    });
+
+    let delegate = &*(delegate_ptr as *const AnyObject);
+    // setDelegate: 是 UNUserNotificationCenter 的方法，接受 id<UNUserNotificationCenterDelegate>
+    let _: () = objc2::msg_send![center, setDelegate: delegate];
+
+    info!(target: "notification", "notification delegate installed for foreground banner support");
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -255,6 +355,8 @@ fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
 ///
 /// 仅在 App Bundle 模式下使用。通知会显示应用图标，
 /// 并在系统通知中心归类到 BananaTray。
+///
+/// 若原生通知发送失败（如未签名），自动 fallback 到 osascript。
 #[cfg(target_os = "macos")]
 fn send_native_notification(title: &str, body: &str, with_sound: bool) {
     use objc2_foundation::NSString;
@@ -290,13 +392,16 @@ fn send_native_notification(title: &str, body: &str, with_sound: bool) {
 
         let center = UNUserNotificationCenter::currentNotificationCenter();
 
-        let title_for_log = title.to_string();
+        // 捕获 title/body/with_sound 用于 fallback
+        let title_owned = title.to_string();
+        let body_owned = body.to_string();
         let handler = block2::RcBlock::new(move |error: *mut objc2_foundation::NSError| {
             if error.is_null() {
-                info!(target: "notification", "native notification sent: {}", title_for_log);
+                info!(target: "notification", "native notification sent: {}", title_owned);
             } else {
                 let err = &*error;
-                warn!(target: "notification", "failed to send native notification: {:?}", err);
+                warn!(target: "notification", "native notification failed: {:?}, falling back to osascript", err);
+                send_osascript_notification(&title_owned, &body_owned, with_sound);
             }
         });
 
@@ -344,7 +449,9 @@ fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
     }
 }
 
-// ---- 非 macOS: 使用 notify-rust (Linux D-Bus / Windows Toast) ----
+// ---- non-macOS: notify-rust (Linux D-Bus / Windows Toast) ----
+// NOTE: notify-rust is a cfg(not(macos)) dependency in Cargo.toml.
+// Do NOT add a macOS code path here; see module-level doc for rationale.
 
 #[cfg(not(target_os = "macos"))]
 fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
