@@ -81,6 +81,7 @@ pub struct AppSession {
     pub provider_store: ProviderStore,
     pub nav: NavigationState,
     pub settings_ui: SettingsUiState,
+    pub debug_ui: DebugUiState,
     pub settings: AppSettings,
     pub alert_tracker: QuotaAlertTracker,
 }
@@ -111,10 +112,8 @@ impl AppSession {
                 selected_provider: ProviderId::BuiltIn(ProviderKind::Claude),
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
-                debug_selected_provider: None,
-                debug_refresh_active: false,
-                debug_prev_log_level: None,
             },
+            debug_ui: DebugUiState::default(),
             settings,
             alert_tracker: QuotaAlertTracker::new(),
         }
@@ -216,12 +215,17 @@ pub struct SettingsUiState {
     pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
     pub copilot_token_editing: bool,
-    /// Debug Tab: 当前选中的调试 Provider
-    pub debug_selected_provider: Option<ProviderId>,
-    /// Debug Tab: 是否正在调试刷新中
-    pub debug_refresh_active: bool,
-    /// Debug Tab: 调试刷新前的日志级别（用于刷新完成后恢复）
-    pub debug_prev_log_level: Option<log::LevelFilter>,
+}
+
+/// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）
+#[derive(Default)]
+pub struct DebugUiState {
+    /// 当前选中的调试 Provider
+    pub selected_provider: Option<ProviderId>,
+    /// 是否正在调试刷新中
+    pub refresh_active: bool,
+    /// 调试刷新前的日志级别（用于刷新完成后恢复）
+    pub prev_log_level: Option<log::LevelFilter>,
 }
 
 // ============================================================================
@@ -553,12 +557,17 @@ mod tests {
             selected_provider: pid(ProviderKind::Claude),
             cadence_dropdown_open: false,
             copilot_token_editing: false,
-            debug_selected_provider: None,
-            debug_refresh_active: false,
-            debug_prev_log_level: None,
         };
         assert_eq!(ui.active_tab, SettingsTab::General);
         assert!(!ui.cadence_dropdown_open);
+    }
+
+    #[test]
+    fn debug_ui_default_values() {
+        let debug = DebugUiState::default();
+        assert!(debug.selected_provider.is_none());
+        assert!(!debug.refresh_active);
+        assert!(debug.prev_log_level.is_none());
     }
 
     // ── HeaderStatusText ────────────────────────────────────────

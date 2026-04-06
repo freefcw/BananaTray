@@ -95,13 +95,13 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             effects.push(AppEffect::CopyToClipboard(text));
         }
         AppAction::SelectDebugProvider(id) => {
-            session.settings_ui.debug_selected_provider = Some(id);
+            session.debug_ui.selected_provider = Some(id);
             push_render(&mut effects);
         }
         AppAction::DebugRefreshProvider => {
-            if let Some(ref id) = session.settings_ui.debug_selected_provider {
-                if !session.settings_ui.debug_refresh_active {
-                    session.settings_ui.debug_refresh_active = true;
+            if let Some(ref id) = session.debug_ui.selected_provider {
+                if !session.debug_ui.refresh_active {
+                    session.debug_ui.refresh_active = true;
                     session.provider_store.mark_refreshing_by_id(id);
                     effects.push(AppEffect::StartDebugRefresh(id.clone()));
                     push_render(&mut effects);
@@ -131,6 +131,19 @@ fn apply_setting_change(
             let new_val = !session.settings.system.start_at_login;
             session.settings.system.start_at_login = new_val;
             effects.push(AppEffect::SyncAutoLaunch(new_val));
+            // 自启动状态变更通知（与 SyncAutoLaunch 解耦，各自单一职责）
+            let (title, body) = if new_val {
+                (
+                    rust_i18n::t!("notification.auto_launch.enabled.title").to_string(),
+                    rust_i18n::t!("notification.auto_launch.enabled.body").to_string(),
+                )
+            } else {
+                (
+                    rust_i18n::t!("notification.auto_launch.disabled.title").to_string(),
+                    rust_i18n::t!("notification.auto_launch.disabled.body").to_string(),
+                )
+            };
+            effects.push(AppEffect::SendPlainNotification { title, body });
         }
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =
@@ -254,8 +267,8 @@ fn apply_refresh_event(
             push_render(effects);
         }
         RefreshEvent::Finished(outcome) => {
-            let is_debug_target = session.settings_ui.debug_refresh_active
-                && session.settings_ui.debug_selected_provider.as_ref() == Some(&outcome.id);
+            let is_debug_target = session.debug_ui.refresh_active
+                && session.debug_ui.selected_provider.as_ref() == Some(&outcome.id);
 
             'process: {
                 if session.provider_store.find_by_id(&outcome.id).is_none() {
@@ -323,8 +336,8 @@ fn apply_refresh_event(
             }
 
             if is_debug_target {
-                session.settings_ui.debug_refresh_active = false;
-                if let Some(prev_level) = session.settings_ui.debug_prev_log_level.take() {
+                session.debug_ui.refresh_active = false;
+                if let Some(prev_level) = session.debug_ui.prev_log_level.take() {
                     effects.push(AppEffect::RestoreLogLevel(prev_level));
                 }
                 push_render(effects);
@@ -470,7 +483,7 @@ mod tests {
     #[test]
     fn select_debug_provider_updates_state() {
         let mut session = make_session();
-        assert!(session.settings_ui.debug_selected_provider.is_none());
+        assert!(session.debug_ui.selected_provider.is_none());
 
         let effects = reduce(
             &mut session,
@@ -478,7 +491,7 @@ mod tests {
         );
 
         assert_eq!(
-            session.settings_ui.debug_selected_provider,
+            session.debug_ui.selected_provider,
             Some(pid(ProviderKind::Claude))
         );
         assert!(has_render(&effects));
@@ -497,7 +510,7 @@ mod tests {
         );
 
         assert_eq!(
-            session.settings_ui.debug_selected_provider,
+            session.debug_ui.selected_provider,
             Some(pid(ProviderKind::Copilot))
         );
     }
@@ -509,7 +522,7 @@ mod tests {
         let mut session = make_session();
         let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
 
-        assert!(!session.settings_ui.debug_refresh_active);
+        assert!(!session.debug_ui.refresh_active);
         assert!(!has_effect(&effects, |e| matches!(
             e,
             AppEffect::StartDebugRefresh(_)
@@ -526,7 +539,7 @@ mod tests {
 
         let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
 
-        assert!(session.settings_ui.debug_refresh_active);
+        assert!(session.debug_ui.refresh_active);
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::StartDebugRefresh(_)
@@ -737,9 +750,9 @@ mod tests {
         let mut session = make_session();
         let id = pid(ProviderKind::Claude);
 
-        session.settings_ui.debug_selected_provider = Some(id.clone());
-        session.settings_ui.debug_refresh_active = true;
-        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
+        session.debug_ui.selected_provider = Some(id.clone());
+        session.debug_ui.refresh_active = true;
+        session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
         let outcome = RefreshOutcome {
             id,
@@ -751,8 +764,8 @@ mod tests {
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        assert!(!session.settings_ui.debug_refresh_active);
-        assert!(session.settings_ui.debug_prev_log_level.is_none());
+        assert!(!session.debug_ui.refresh_active);
+        assert!(session.debug_ui.prev_log_level.is_none());
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::RestoreLogLevel(log::LevelFilter::Info)
@@ -763,9 +776,9 @@ mod tests {
     fn finished_event_for_other_provider_does_not_restore() {
         let mut session = make_session();
 
-        session.settings_ui.debug_selected_provider = Some(pid(ProviderKind::Claude));
-        session.settings_ui.debug_refresh_active = true;
-        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Info);
+        session.debug_ui.selected_provider = Some(pid(ProviderKind::Claude));
+        session.debug_ui.refresh_active = true;
+        session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
         let outcome = RefreshOutcome {
             id: pid(ProviderKind::Gemini),
@@ -774,8 +787,8 @@ mod tests {
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        assert!(session.settings_ui.debug_refresh_active);
-        assert!(session.settings_ui.debug_prev_log_level.is_some());
+        assert!(session.debug_ui.refresh_active);
+        assert!(session.debug_ui.prev_log_level.is_some());
         assert!(!has_effect(&effects, |e| matches!(
             e,
             AppEffect::RestoreLogLevel(_)
@@ -787,9 +800,9 @@ mod tests {
         let mut session = make_session_without(ProviderKind::Claude);
         let id = pid(ProviderKind::Claude);
 
-        session.settings_ui.debug_selected_provider = Some(id.clone());
-        session.settings_ui.debug_refresh_active = true;
-        session.settings_ui.debug_prev_log_level = Some(log::LevelFilter::Warn);
+        session.debug_ui.selected_provider = Some(id.clone());
+        session.debug_ui.refresh_active = true;
+        session.debug_ui.prev_log_level = Some(log::LevelFilter::Warn);
 
         let outcome = RefreshOutcome {
             id,
@@ -801,7 +814,7 @@ mod tests {
         let mut effects = vec![];
         apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
 
-        assert!(!session.settings_ui.debug_refresh_active);
+        assert!(!session.debug_ui.refresh_active);
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::RestoreLogLevel(log::LevelFilter::Warn)

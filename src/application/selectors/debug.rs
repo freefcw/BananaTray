@@ -334,8 +334,8 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
 
     DebugConsoleViewState {
         available_providers,
-        selected_provider: session.settings_ui.debug_selected_provider.clone(),
-        refresh_active: session.settings_ui.debug_refresh_active,
+        selected_provider: session.debug_ui.selected_provider.clone(),
+        refresh_active: session.debug_ui.refresh_active,
         log_entries,
         log_count,
     }

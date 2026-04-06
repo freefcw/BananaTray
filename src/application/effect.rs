@@ -15,6 +15,11 @@ pub enum AppEffect {
     OpenSettingsWindow,
     OpenUrl(String),
     SyncAutoLaunch(bool),
+    /// 发送简单文本通知（无 QuotaAlert 包装）
+    SendPlainNotification {
+        title: String,
+        body: String,
+    },
     ApplyLocale(String),
     UpdateLogLevel(String),
     SendQuotaNotification {
