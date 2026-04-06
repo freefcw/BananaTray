@@ -219,10 +219,6 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
     );
     session.settings.set_enabled(&id, new_val);
 
-    if let Some(provider) = session.provider_store.find_by_id_mut(&id) {
-        provider.enabled = new_val;
-    }
-
     if new_val {
         session.nav.switch_to(NavTab::Provider(id.clone()));
     } else {

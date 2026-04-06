@@ -315,18 +315,13 @@ mod tests {
         ProviderId::BuiltIn(kind)
     }
 
-    fn make_provider(kind: ProviderKind, enabled: bool) -> ProviderStatus {
-        let mut p = make_test_provider(kind, ConnectionStatus::Disconnected);
-        p.enabled = enabled;
-        p
+    fn make_provider(kind: ProviderKind) -> ProviderStatus {
+        make_test_provider(kind, ConnectionStatus::Disconnected)
     }
 
-    fn make_store(kinds: &[(ProviderKind, bool)]) -> ProviderStore {
+    fn make_store(kinds: &[ProviderKind]) -> ProviderStore {
         ProviderStore {
-            providers: kinds
-                .iter()
-                .map(|(k, enabled)| make_provider(*k, *enabled))
-                .collect(),
+            providers: kinds.iter().map(|k| make_provider(*k)).collect(),
         }
     }
 
@@ -342,53 +337,53 @@ mod tests {
 
     #[test]
     fn store_find_existing() {
-        let store = make_store(&[(ProviderKind::Claude, true), (ProviderKind::Gemini, false)]);
+        let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
         assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_some());
         assert!(store.find_by_id(&pid(ProviderKind::Gemini)).is_some());
     }
 
     #[test]
     fn store_find_missing() {
-        let store = make_store(&[(ProviderKind::Claude, true)]);
+        let store = make_store(&[ProviderKind::Claude]);
         assert!(store.find_by_id(&pid(ProviderKind::Copilot)).is_none());
     }
 
     #[test]
     fn store_find_returns_correct_provider() {
         let store = make_store(&[
-            (ProviderKind::Claude, true),
-            (ProviderKind::Gemini, false),
-            (ProviderKind::Copilot, true),
+            ProviderKind::Claude,
+            ProviderKind::Gemini,
+            ProviderKind::Copilot,
         ]);
         let p = store.find_by_id(&pid(ProviderKind::Gemini)).unwrap();
         assert_eq!(p.kind(), ProviderKind::Gemini);
-        assert!(!p.enabled);
     }
 
     #[test]
-    fn store_find_mut_modifies() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+    fn store_find_mut_modifies_connection() {
+        let mut store = make_store(&[ProviderKind::Claude]);
         store
             .find_by_id_mut(&pid(ProviderKind::Claude))
             .unwrap()
-            .enabled = false;
-        assert!(
-            !store
+            .connection = ConnectionStatus::Error;
+        assert_eq!(
+            store
                 .find_by_id(&pid(ProviderKind::Claude))
                 .unwrap()
-                .enabled
+                .connection,
+            ConnectionStatus::Error
         );
     }
 
     #[test]
     fn store_find_mut_missing_returns_none() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         assert!(store.find_by_id_mut(&pid(ProviderKind::Copilot)).is_none());
     }
 
     #[test]
     fn store_mark_refreshing() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         assert_eq!(
             store
                 .find_by_id(&pid(ProviderKind::Claude))
@@ -408,7 +403,7 @@ mod tests {
 
     #[test]
     fn store_mark_refreshing_missing_is_noop() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         // Should not panic
         store.mark_refreshing_by_id(&pid(ProviderKind::Copilot));
     }
@@ -459,7 +454,7 @@ mod tests {
 
     #[test]
     fn nav_fallback_when_current_disabled() {
-        let store = make_store(&[(ProviderKind::Claude, true), (ProviderKind::Gemini, true)]);
+        let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
             last_provider_id: pid(ProviderKind::Claude),
@@ -474,7 +469,7 @@ mod tests {
 
     #[test]
     fn nav_fallback_noop_when_not_current() {
-        let store = make_store(&[(ProviderKind::Gemini, true)]);
+        let store = make_store(&[ProviderKind::Gemini]);
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(pid(ProviderKind::Gemini)),
             last_provider_id: pid(ProviderKind::Gemini),
@@ -489,7 +484,7 @@ mod tests {
 
     #[test]
     fn nav_fallback_noop_when_on_settings_tab() {
-        let store = make_store(&[(ProviderKind::Gemini, true)]);
+        let store = make_store(&[ProviderKind::Gemini]);
         let mut nav = NavigationState {
             active_tab: NavTab::Settings,
             last_provider_id: pid(ProviderKind::Claude),
@@ -503,7 +498,7 @@ mod tests {
 
     #[test]
     fn nav_fallback_no_other_enabled_stays_put() {
-        let store = make_store(&[(ProviderKind::Claude, true)]);
+        let store = make_store(&[ProviderKind::Claude]);
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
             last_provider_id: pid(ProviderKind::Claude),
@@ -519,9 +514,9 @@ mod tests {
     #[test]
     fn nav_fallback_picks_first_enabled_in_order() {
         let store = make_store(&[
-            (ProviderKind::Claude, true),
-            (ProviderKind::Gemini, true),
-            (ProviderKind::Copilot, true),
+            ProviderKind::Claude,
+            ProviderKind::Gemini,
+            ProviderKind::Copilot,
         ]);
         let mut nav = NavigationState {
             active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
@@ -573,7 +568,7 @@ mod tests {
 
     #[test]
     fn header_status_refreshing() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Refreshing;
 
@@ -590,7 +585,7 @@ mod tests {
 
     #[test]
     fn header_status_disconnected() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Disconnected;
 
@@ -607,7 +602,7 @@ mod tests {
 
     #[test]
     fn header_status_synced_now() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
         p.last_refreshed_instant = Some(std::time::Instant::now());
@@ -625,7 +620,7 @@ mod tests {
 
     #[test]
     fn header_status_synced_minutes_ago() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
         p.last_refreshed_instant =
@@ -644,7 +639,7 @@ mod tests {
 
     #[test]
     fn header_status_synced_hours_ago() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
         p.last_refreshed_instant =
@@ -734,7 +729,7 @@ mod tests {
 
     #[test]
     fn header_status_error() {
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Error;
         // 注意：如果是 Error 状态且 last_refreshed_instant 不为 None，
@@ -756,7 +751,7 @@ mod tests {
 
     #[test]
     fn store_find_by_id_builtin() {
-        let store = make_store(&[(ProviderKind::Claude, true)]);
+        let store = make_store(&[ProviderKind::Claude]);
         assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_some());
         assert!(store.find_by_id(&pid(ProviderKind::Gemini)).is_none());
     }
@@ -783,8 +778,11 @@ mod tests {
             .providers
             .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
 
-        store.find_by_id_mut(&custom_id).unwrap().enabled = false;
-        assert!(!store.find_by_id(&custom_id).unwrap().enabled);
+        store.find_by_id_mut(&custom_id).unwrap().connection = ConnectionStatus::Error;
+        assert_eq!(
+            store.find_by_id(&custom_id).unwrap().connection,
+            ConnectionStatus::Error
+        );
     }
 
     #[test]
@@ -808,7 +806,7 @@ mod tests {
         let custom1 = ProviderId::Custom("a:cli".to_string());
         let custom2 = ProviderId::Custom("b:cli".to_string());
         let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
-        let mut store = make_store(&[(ProviderKind::Claude, true)]);
+        let mut store = make_store(&[ProviderKind::Claude]);
         store.providers.push(ProviderStatus::new_custom(
             custom1.clone(),
             metadata.clone(),
@@ -825,7 +823,7 @@ mod tests {
 
     #[test]
     fn store_custom_provider_ids_empty_when_no_custom() {
-        let store = make_store(&[(ProviderKind::Claude, true)]);
+        let store = make_store(&[ProviderKind::Claude]);
         assert!(store.custom_provider_ids().is_empty());
     }
 }

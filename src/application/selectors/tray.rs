@@ -2,6 +2,7 @@
 //!
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
+use super::format::format_last_updated;
 use super::*;
 use crate::app_state::{provider_panel_flags, AppSession};
 use crate::models::{ConnectionStatus, ErrorKind, NavTab, ProviderId, ProviderStatus};
@@ -90,7 +91,7 @@ pub fn provider_detail_view_state(
             .map(|email| AccountInfoViewState {
                 email: email.clone(),
                 tier: provider.account_tier.clone(),
-                updated_text: provider.format_last_updated(),
+                updated_text: format_last_updated(&provider),
                 dashboard_url: if flags.has_dashboard_url {
                     provider.dashboard_url().to_string()
                 } else {

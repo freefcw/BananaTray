@@ -10,5 +10,6 @@ pub use layout::{compute_popup_height_detailed, compute_popup_height_for_quotas,
 pub use provider::{NavTab, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata};
 pub use quota::{
     ConnectionStatus, ErrorKind, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel,
+    UpdateStatus,
 };
 pub use settings::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};

@@ -3,7 +3,7 @@
 //! 将 Provider/Quota → 展示文本 的转换逻辑集中于此。
 //! 从原 `app/provider_logic.rs` 合并而来。
 
-use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo};
+use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo, UpdateStatus};
 use rust_i18n::t;
 
 /// 格式化数值：整数不带小数点，非整数保留一位
@@ -33,6 +33,34 @@ pub fn format_quota_usage(quota: &QuotaInfo) -> String {
     }
 }
 
+/// 格式化上次刷新的相对时间
+///
+/// 从 `ProviderStatus` 的实例方法提取到 selector 层，
+/// 消除数据模型对 i18n 的依赖（DIP 原则）。
+pub fn format_last_updated(provider: &ProviderStatus) -> String {
+    if let Some(instant) = provider.last_refreshed_instant {
+        let secs = instant.elapsed().as_secs();
+        if secs < 60 {
+            t!("provider.updated_just_now").to_string()
+        } else if secs < 3600 {
+            t!("provider.updated_min_ago", n = secs / 60).to_string()
+        } else {
+            t!("provider.updated_hr_ago", n = secs / 3600).to_string()
+        }
+    } else if let Some(status) = provider.update_status {
+        match status {
+            UpdateStatus::Failed => t!("quota.update_failed").to_string(),
+        }
+    } else {
+        match provider.connection {
+            ConnectionStatus::Connected => t!("provider.waiting_for_data").to_string(),
+            ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
+            ConnectionStatus::Error => t!("provider.needs_attention").to_string(),
+            ConnectionStatus::Disconnected => t!("provider.not_connected").to_string(),
+        }
+    }
+}
+
 /// 生成 Provider 账号标签（优先显示邮箱，否则显示品牌名/账号提示）
 pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> String {
     if let Some(email) = &provider.account_email {
@@ -47,8 +75,8 @@ pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> Strin
 }
 
 /// 生成 Provider 列表副标题（连接状态相关的描述文案）
-pub fn provider_list_subtitle(provider: &ProviderStatus) -> String {
-    if !provider.enabled {
+pub fn provider_list_subtitle(provider: &ProviderStatus, enabled: bool) -> String {
+    if !enabled {
         return t!("provider.disabled_source", source = provider.source_label()).to_string();
     }
     match provider.connection {
@@ -82,7 +110,7 @@ mod tests {
     use crate::models::test_helpers::{
         make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
-    use crate::models::{ConnectionStatus, ProviderKind, QuotaInfo};
+    use crate::models::{ConnectionStatus, ProviderKind, QuotaInfo, UpdateStatus};
 
     // ── format_amount ────────────────────────────────────────
 
@@ -119,6 +147,52 @@ mod tests {
         let _locale_guard = setup_locale();
         let q = QuotaInfo::new("Session", 3.5, 10.0);
         assert_eq!(format_quota_usage(&q), "3.5 / 10 used");
+    }
+
+    // ── format_last_updated ──────────────────────────────────
+
+    #[test]
+    fn format_last_updated_no_instant_connected() {
+        let _locale_guard = setup_locale();
+        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        assert_eq!(format_last_updated(&p), "Waiting for data");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_refreshing() {
+        let _locale_guard = setup_locale();
+        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
+        assert_eq!(format_last_updated(&p), "Refreshing…");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_error() {
+        let _locale_guard = setup_locale();
+        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+        assert_eq!(format_last_updated(&p), "Needs attention");
+    }
+
+    #[test]
+    fn format_last_updated_no_instant_disconnected() {
+        let _locale_guard = setup_locale();
+        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
+        assert_eq!(format_last_updated(&p), "Not connected");
+    }
+
+    #[test]
+    fn format_last_updated_with_failed_status() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.update_status = Some(UpdateStatus::Failed);
+        assert_eq!(format_last_updated(&p), "Update failed");
+    }
+
+    #[test]
+    fn format_last_updated_just_now() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.last_refreshed_instant = Some(std::time::Instant::now());
+        assert_eq!(format_last_updated(&p), "Updated just now");
     }
 
     // ── provider_account_label ───────────────────────────────
@@ -160,5 +234,32 @@ mod tests {
             p.metadata.brand_name = expected.to_string();
             assert_eq!(provider_account_label(&p, true), expected);
         }
+    }
+
+    // ── provider_list_subtitle ───────────────────────────────
+
+    #[test]
+    fn subtitle_disabled_shows_source() {
+        let _locale_guard = setup_locale();
+        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        let subtitle = provider_list_subtitle(&p, false);
+        assert!(subtitle.contains("test"));
+    }
+
+    #[test]
+    fn subtitle_connected_with_email() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.account_email = Some("user@example.com".into());
+        assert_eq!(provider_list_subtitle(&p, true), "user@example.com");
+    }
+
+    #[test]
+    fn subtitle_error_with_message() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+        p.error_message = Some("auth expired".into());
+        let subtitle = provider_list_subtitle(&p, true);
+        assert!(subtitle.contains("test")); // source_label
     }
 }

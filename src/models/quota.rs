@@ -404,6 +404,13 @@ pub enum ConnectionStatus {
     Error,
 }
 
+/// 上次刷新的结果状态（结构化，不含展示文案）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UpdateStatus {
+    /// 最近一次刷新失败
+    Failed,
+}
+
 /// 单个 Provider 的完整运行时状态
 ///
 /// ## 状态转换规则
@@ -429,18 +436,15 @@ pub struct ProviderStatus {
     pub provider_id: ProviderId,
     /// 静态元数据（名称、图标、链接等）
     pub metadata: ProviderMetadata,
-    /// 启用状态（从设置读取）
-    pub enabled: bool,
     pub connection: ConnectionStatus,
     pub quotas: Vec<QuotaInfo>,
     /// 账号邮箱（可选，用于 UI 展示）
     pub account_email: Option<String>,
-    /// 是否为付费版
-    pub is_paid: bool,
     /// 账号层级（如 "Pro", "Max", "Free", "Business"）
     pub account_tier: Option<String>,
-    /// 上次更新时间描述（仅用于错误/断连状态的静态文案）
-    pub last_updated_at: Option<String>,
+    /// 上次刷新的结果状态（结构化，selector 层负责 i18n 格式化）
+    #[serde(default)]
+    pub update_status: Option<UpdateStatus>,
     /// 最近一次刷新失败时的提示文案
     pub error_message: Option<String>,
     /// 错误类型分类（用于 UI 决定操作）
@@ -467,13 +471,11 @@ impl ProviderStatus {
         Self {
             provider_id,
             metadata,
-            enabled: true,
             connection: ConnectionStatus::Disconnected,
             quotas: vec![],
             account_email: None,
-            is_paid: false,
             account_tier: None,
-            last_updated_at: None,
+            update_status: None,
             error_message: None,
             error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
@@ -485,13 +487,11 @@ impl ProviderStatus {
         Self {
             provider_id,
             metadata,
-            enabled: true,
             connection: ConnectionStatus::Disconnected,
             quotas: vec![],
             account_email: None,
-            is_paid: false,
             account_tier: None,
-            last_updated_at: None,
+            update_status: None,
             error_message: None,
             error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
@@ -508,7 +508,7 @@ impl ProviderStatus {
         self.account_tier = data.account_tier;
         self.connection = ConnectionStatus::Connected;
         self.last_refreshed_instant = Some(Instant::now());
-        self.last_updated_at = None;
+        self.update_status = None;
         self.error_message = None;
         self.error_kind = ErrorKind::default();
     }
@@ -527,7 +527,7 @@ impl ProviderStatus {
         } else {
             self.connection = ConnectionStatus::Connected;
         }
-        self.last_updated_at = Some(t!("quota.update_failed").to_string());
+        self.update_status = Some(UpdateStatus::Failed);
         self.error_message = Some(error);
         self.error_kind = error_kind;
     }
@@ -541,29 +541,6 @@ impl ProviderStatus {
         account_hint -> account_hint,
         source_label -> source_label,
     );
-
-    /// 格式化上次刷新的相对时间
-    pub fn format_last_updated(&self) -> String {
-        if let Some(instant) = self.last_refreshed_instant {
-            let secs = instant.elapsed().as_secs();
-            if secs < 60 {
-                t!("provider.updated_just_now").to_string()
-            } else if secs < 3600 {
-                t!("provider.updated_min_ago", n = secs / 60).to_string()
-            } else {
-                t!("provider.updated_hr_ago", n = secs / 3600).to_string()
-            }
-        } else if let Some(ref text) = self.last_updated_at {
-            text.clone()
-        } else {
-            match self.connection {
-                ConnectionStatus::Connected => t!("provider.waiting_for_data").to_string(),
-                ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
-                ConnectionStatus::Error => t!("provider.needs_attention").to_string(),
-                ConnectionStatus::Disconnected => t!("provider.not_connected").to_string(),
-            }
-        }
-    }
 
     /// 获取最高用量的状态等级（用于总览显示）
     #[allow(dead_code)]
@@ -944,7 +921,7 @@ mod tests {
     }
 
     // ========================================================================
-    // format_last_updated 测试
+    // mark_refresh_failed 状态转换测试
     // ========================================================================
 
     fn make_provider(connection: ConnectionStatus) -> ProviderStatus {
@@ -952,55 +929,10 @@ mod tests {
     }
 
     #[test]
-    fn format_last_updated_no_instant_connected() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ConnectionStatus::Connected);
-        assert_eq!(p.format_last_updated(), "Waiting for data");
-    }
-
-    #[test]
-    fn format_last_updated_no_instant_refreshing() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ConnectionStatus::Refreshing);
-        assert_eq!(p.format_last_updated(), "Refreshing…");
-    }
-
-    #[test]
-    fn format_last_updated_no_instant_error() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ConnectionStatus::Error);
-        assert_eq!(p.format_last_updated(), "Needs attention");
-    }
-
-    #[test]
-    fn format_last_updated_no_instant_disconnected() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ConnectionStatus::Disconnected);
-        assert_eq!(p.format_last_updated(), "Not connected");
-    }
-
-    #[test]
-    fn format_last_updated_with_text_fallback() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ConnectionStatus::Connected);
-        p.last_updated_at = Some("Custom text".to_string());
-        assert_eq!(p.format_last_updated(), "Custom text");
-    }
-
-    #[test]
-    fn format_last_updated_just_now() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ConnectionStatus::Connected);
-        p.last_refreshed_instant = Some(std::time::Instant::now());
-        assert_eq!(p.format_last_updated(), "Updated just now");
-    }
-
-    #[test]
-    fn mark_refresh_failed_sets_update_text() {
-        let _locale_guard = setup_locale();
+    fn mark_refresh_failed_sets_update_status() {
         let mut p = make_provider(ConnectionStatus::Connected);
         p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
-        assert_eq!(p.last_updated_at.as_deref(), Some("Update failed"));
+        assert_eq!(p.update_status, Some(UpdateStatus::Failed));
         assert_eq!(p.error_message.as_deref(), Some("timeout"));
         assert_eq!(p.connection, ConnectionStatus::Error);
         assert_eq!(p.error_kind, ErrorKind::NetworkError);

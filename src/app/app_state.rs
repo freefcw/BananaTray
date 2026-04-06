@@ -44,10 +44,7 @@ impl AppState {
             AppSettings::default()
         });
         crate::auto_launch::sync(settings.start_at_login);
-        let mut providers = manager.initial_statuses();
-        for p in &mut providers {
-            p.enabled = settings.is_enabled(&p.provider_id);
-        }
+        let providers = manager.initial_statuses();
         let session = AppSession::new(settings, providers);
         debug!(
             target: "app",

@@ -2,6 +2,7 @@
 //!
 //! 将 AppSession → Settings ViewModel 的转换逻辑集中于此。
 
+use super::format::format_last_updated;
 use super::*;
 use crate::app_state::AppSession;
 use crate::models::{ConnectionStatus, ProviderId, ProviderKind, ProviderStatus};
@@ -106,7 +107,7 @@ fn settings_provider_info_view_state(
     };
     let source_text = t!("provider.source.auto").to_string();
     let updated_text = provider
-        .map(|provider| provider.format_last_updated())
+        .map(format_last_updated)
         .unwrap_or_else(|| t!("provider.not_fetched").to_string());
 
     let (status_text, status_kind) = provider
@@ -190,7 +191,7 @@ fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
         }
         ConnectionStatus::Connected => {
             if provider.last_refreshed_instant.is_some() {
-                let time = provider.format_last_updated().to_lowercase();
+                let time = format_last_updated(provider).to_lowercase();
                 t!("provider.detail.updated", source = source, time = time).to_string()
             } else {
                 t!("provider.detail.not_fetched", source = source).to_string()
