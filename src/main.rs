@@ -240,6 +240,9 @@ fn bootstrap_ui(cx: &mut App) {
     crate::tray_icon_helper::apply_tray_icon(cx, settings.display.tray_icon_style);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
     cx.set_tray_panel_mode(true);
+
+    // 通知授权（仅在 App Bundle 模式下请求）
+    crate::notification::request_notification_authorization();
 }
 
 /// 创建 ProviderManager + RefreshCoordinator，启动后台刷新线程。

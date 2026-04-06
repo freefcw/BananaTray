@@ -142,10 +142,9 @@ impl QuotaAlertTracker {
 ///
 /// 在独立线程中发送通知，避免阻塞 GPUI 事件循环。
 ///
-/// - **macOS**: 通过 `osascript`（AppleScript）发送原生通知。
-///   `notify-rust` 的 macOS 后端 `mac-notification-sys` 在 `ensure_application_set()` 中
-///   硬编码执行 `get id of application "use_default"`，macOS 找不到该应用时会弹出
-///   "Choose Application" 系统对话框，无法通过参数规避。
+/// - **macOS (App Bundle)**: 通过 `UNUserNotificationCenter` 发送原生通知，
+///   支持应用图标显示和系统通知中心管理。
+/// - **macOS (cargo run)**: 通过 `osascript`（AppleScript）发送通知作为开发模式 fallback。
 /// - **其他平台**: 使用 `notify-rust`（Linux D-Bus / Windows Toast）。
 pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
     let (title, body) = match alert {
@@ -190,10 +189,126 @@ pub fn send_plain_notification(title: &str, body: &str) {
     platform_send_notification(title, body, false);
 }
 
-// ---- macOS: 通过 osascript 绕过 mac-notification-sys 的 bug ----
+// ---- macOS: 原生通知 (UNUserNotificationCenter) + osascript fallback ----
+
+/// 请求系统通知授权（仅在 App Bundle 模式下生效）。
+///
+/// 应在应用启动时调用一次。如果不在 Bundle 内（如 `cargo run`），
+/// 此函数不做任何操作。
+#[cfg(target_os = "macos")]
+pub fn request_notification_authorization() {
+    if !is_running_in_bundle() {
+        info!(target: "notification", "not running in app bundle, skipping notification authorization");
+        return;
+    }
+
+    unsafe {
+        use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
+
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        let options = UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound;
+
+        let handler = block2::RcBlock::new(
+            |granted: objc2::runtime::Bool, error: *mut objc2_foundation::NSError| {
+                if granted.as_bool() {
+                    info!(target: "notification", "notification authorization granted");
+                } else {
+                    warn!(target: "notification", "notification authorization denied");
+                    if !error.is_null() {
+                        let err = &*error;
+                        warn!(target: "notification", "authorization error: {:?}", err);
+                    }
+                }
+            },
+        );
+
+        center.requestAuthorizationWithOptions_completionHandler(options, &handler);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_notification_authorization() {
+    // 非 macOS 平台不需要请求授权
+}
+
+/// 检测当前进程是否运行在 macOS App Bundle 内。
+///
+/// 通过检查 `CFBundleIdentifier` 是否存在来判断：以 `.app` 方式运行时
+/// 会有有效的 Bundle ID，而 `cargo run` 直接运行二进制时不会有。
+#[cfg(target_os = "macos")]
+fn is_running_in_bundle() -> bool {
+    use objc2_foundation::NSBundle;
+    let bundle = NSBundle::mainBundle();
+    bundle.bundleIdentifier().is_some()
+}
 
 #[cfg(target_os = "macos")]
 fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
+    if is_running_in_bundle() {
+        send_native_notification(title, body, with_sound);
+    } else {
+        send_osascript_notification(title, body, with_sound);
+    }
+}
+
+/// 通过 UNUserNotificationCenter 发送原生系统通知。
+///
+/// 仅在 App Bundle 模式下使用。通知会显示应用图标，
+/// 并在系统通知中心归类到 BananaTray。
+#[cfg(target_os = "macos")]
+fn send_native_notification(title: &str, body: &str, with_sound: bool) {
+    use objc2_foundation::NSString;
+    use objc2_user_notifications::{
+        UNMutableNotificationContent, UNNotificationRequest, UNNotificationSound,
+        UNUserNotificationCenter,
+    };
+
+    unsafe {
+        let content = UNMutableNotificationContent::new();
+        content.setTitle(&NSString::from_str(title));
+        content.setBody(&NSString::from_str(body));
+
+        if with_sound {
+            let sound = UNNotificationSound::defaultSound();
+            content.setSound(Some(&sound));
+        }
+
+        // 使用时间戳作为唯一 ID，避免通知覆盖
+        let identifier = NSString::from_str(&format!(
+            "bananatray-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        ));
+
+        let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
+            &identifier,
+            &content,
+            None,
+        );
+
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+
+        let title_for_log = title.to_string();
+        let handler = block2::RcBlock::new(move |error: *mut objc2_foundation::NSError| {
+            if error.is_null() {
+                info!(target: "notification", "native notification sent: {}", title_for_log);
+            } else {
+                let err = &*error;
+                warn!(target: "notification", "failed to send native notification: {:?}", err);
+            }
+        });
+
+        center.addNotificationRequest_withCompletionHandler(&request, Some(&handler));
+    }
+}
+
+/// 通过 osascript (AppleScript) 发送通知。
+///
+/// 用于 `cargo run` 开发模式下的 fallback，或任何不在 App Bundle 中运行的场景。
+#[cfg(target_os = "macos")]
+fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
     // 转义双引号，防止 AppleScript 注入
     let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
     let escaped_body = body.replace('\\', "\\\\").replace('"', "\\\"");
@@ -217,7 +332,7 @@ fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
     {
         Ok(output) => {
             if output.status.success() {
-                info!(target: "notification", "system notification sent: {}", title);
+                info!(target: "notification", "osascript notification sent: {}", title);
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 warn!(target: "notification", "osascript failed: {}", stderr.trim());
@@ -484,6 +599,16 @@ mod tests {
                 Some(QuotaAlert::LowQuota { .. })
             ),
             "恢复后重新进入 Low 应该再次通知"
+        );
+    }
+
+    /// `cargo test` 运行时不在 .app Bundle 内，`is_running_in_bundle` 应返回 false
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_is_running_in_bundle_returns_false_in_tests() {
+        assert!(
+            !super::is_running_in_bundle(),
+            "cargo test 环境下不应被识别为 App Bundle"
         );
     }
 }
