@@ -31,7 +31,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::SaveCopilotToken(token) => {
             let token = token.trim().to_string();
             if !token.is_empty() {
-                session.settings.providers.github_token = Some(token);
+                session.settings.provider.credentials.github_token = Some(token);
                 effects.push(AppEffect::PersistSettings);
             }
             session.settings_ui.copilot_token_editing = false;
@@ -85,7 +85,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::SendDebugNotification(kind) => {
             effects.push(AppEffect::SendDebugNotification {
                 kind,
-                with_sound: session.settings.notification_sound,
+                with_sound: session.settings.notification.notification_sound,
             });
         }
         AppAction::OpenLogDirectory => {
@@ -125,56 +125,60 @@ fn apply_setting_change(
 ) {
     match change {
         SettingChange::ToggleAutoHideWindow => {
-            session.settings.auto_hide_window = !session.settings.auto_hide_window;
+            session.settings.system.auto_hide_window = !session.settings.system.auto_hide_window;
         }
         SettingChange::ToggleStartAtLogin => {
-            let new_val = !session.settings.start_at_login;
-            session.settings.start_at_login = new_val;
+            let new_val = !session.settings.system.start_at_login;
+            session.settings.system.start_at_login = new_val;
             effects.push(AppEffect::SyncAutoLaunch(new_val));
         }
         SettingChange::ToggleSessionQuotaNotifications => {
-            session.settings.session_quota_notifications =
-                !session.settings.session_quota_notifications;
+            session.settings.notification.session_quota_notifications =
+                !session.settings.notification.session_quota_notifications;
         }
         SettingChange::ToggleNotificationSound => {
-            session.settings.notification_sound = !session.settings.notification_sound;
+            session.settings.notification.notification_sound =
+                !session.settings.notification.notification_sound;
         }
         SettingChange::ToggleShowDashboardButton => {
-            session.settings.show_dashboard_button = !session.settings.show_dashboard_button;
+            session.settings.display.show_dashboard_button =
+                !session.settings.display.show_dashboard_button;
         }
         SettingChange::ToggleShowRefreshButton => {
-            session.settings.show_refresh_button = !session.settings.show_refresh_button;
+            session.settings.display.show_refresh_button =
+                !session.settings.display.show_refresh_button;
         }
         SettingChange::ToggleShowDebugTab => {
-            let new_val = !session.settings.show_debug_tab;
-            session.settings.show_debug_tab = new_val;
+            let new_val = !session.settings.display.show_debug_tab;
+            session.settings.display.show_debug_tab = new_val;
             if !new_val && session.settings_ui.active_tab == SettingsTab::Debug {
                 session.settings_ui.active_tab = SettingsTab::General;
             }
         }
         SettingChange::ToggleShowAccountInfo => {
-            session.settings.show_account_info = !session.settings.show_account_info;
+            session.settings.display.show_account_info =
+                !session.settings.display.show_account_info;
         }
         SettingChange::Theme(theme) => {
-            session.settings.theme = theme;
+            session.settings.display.theme = theme;
         }
         SettingChange::Language(language) => {
-            session.settings.language = language.clone();
+            session.settings.display.language = language.clone();
             effects.push(AppEffect::ApplyLocale(language));
         }
         SettingChange::RefreshCadence(mins) => {
-            session.settings.refresh_interval_mins = mins.unwrap_or(0);
+            session.settings.system.refresh_interval_mins = mins.unwrap_or(0);
             session.settings_ui.cadence_dropdown_open = false;
             effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
                 session,
             )));
         }
         SettingChange::SetTrayIconStyle(style) => {
-            session.settings.tray_icon_style = style;
+            session.settings.display.tray_icon_style = style;
             effects.push(AppEffect::ApplyTrayIcon(style));
         }
         SettingChange::SetQuotaDisplayMode(mode) => {
-            session.settings.quota_display_mode = mode;
+            session.settings.display.quota_display_mode = mode;
         }
         SettingChange::ToggleQuotaVisibility { kind, quota_key } => {
             session.settings.toggle_quota_visibility(kind, quota_key);
@@ -276,10 +280,10 @@ fn apply_refresh_event(
                                 .alert_tracker
                                 .update(&outcome.id, &provider_name, &data.quotas)
                         {
-                            if session.settings.session_quota_notifications {
+                            if session.settings.notification.session_quota_notifications {
                                 effects.push(AppEffect::SendQuotaNotification {
                                     alert,
-                                    with_sound: session.settings.notification_sound,
+                                    with_sound: session.settings.notification.notification_sound,
                                 });
                             }
                         }
@@ -339,7 +343,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
         .collect();
 
     RefreshRequest::UpdateConfig {
-        interval_mins: session.settings.refresh_interval_mins,
+        interval_mins: session.settings.system.refresh_interval_mins,
         enabled,
     }
 }
@@ -411,7 +415,7 @@ mod tests {
             AppAction::UpdateSetting(SettingChange::RefreshCadence(Some(15))),
         );
 
-        assert_eq!(session.settings.refresh_interval_mins, 15);
+        assert_eq!(session.settings.system.refresh_interval_mins, 15);
         assert!(!session.settings_ui.cadence_dropdown_open);
         assert!(has_effect(&effects, |e| matches!(
             e,
@@ -429,14 +433,14 @@ mod tests {
     #[test]
     fn toggle_show_account_info_flips_setting() {
         let mut session = make_session();
-        assert!(session.settings.show_account_info); // default = true
+        assert!(session.settings.display.show_account_info); // default = true
 
         let effects = reduce(
             &mut session,
             AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
         );
 
-        assert!(!session.settings.show_account_info);
+        assert!(!session.settings.display.show_account_info);
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::PersistSettings
@@ -452,13 +456,13 @@ mod tests {
             &mut session,
             AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
         );
-        assert!(!session.settings.show_account_info);
+        assert!(!session.settings.display.show_account_info);
 
         reduce(
             &mut session,
             AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
         );
-        assert!(session.settings.show_account_info);
+        assert!(session.settings.display.show_account_info);
     }
 
     // ── SelectDebugProvider ─────────────────────────────
@@ -553,14 +557,20 @@ mod tests {
         use crate::models::TrayIconStyle;
 
         let mut session = make_session();
-        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Monochrome);
+        assert_eq!(
+            session.settings.display.tray_icon_style,
+            TrayIconStyle::Monochrome
+        );
 
         let effects = reduce(
             &mut session,
             AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Yellow)),
         );
 
-        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Yellow);
+        assert_eq!(
+            session.settings.display.tray_icon_style,
+            TrayIconStyle::Yellow
+        );
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::ApplyTrayIcon(TrayIconStyle::Yellow)
@@ -582,13 +592,19 @@ mod tests {
             &mut session,
             AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Colorful)),
         );
-        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Colorful);
+        assert_eq!(
+            session.settings.display.tray_icon_style,
+            TrayIconStyle::Colorful
+        );
 
         reduce(
             &mut session,
             AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Monochrome)),
         );
-        assert_eq!(session.settings.tray_icon_style, TrayIconStyle::Monochrome);
+        assert_eq!(
+            session.settings.display.tray_icon_style,
+            TrayIconStyle::Monochrome
+        );
     }
 
     // ── SetQuotaDisplayMode ────────────────────────────
@@ -599,7 +615,7 @@ mod tests {
 
         let mut session = make_session();
         assert_eq!(
-            session.settings.quota_display_mode,
+            session.settings.display.quota_display_mode,
             QuotaDisplayMode::Remaining
         );
 
@@ -608,7 +624,10 @@ mod tests {
             AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(QuotaDisplayMode::Used)),
         );
 
-        assert_eq!(session.settings.quota_display_mode, QuotaDisplayMode::Used);
+        assert_eq!(
+            session.settings.display.quota_display_mode,
+            QuotaDisplayMode::Used
+        );
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::PersistSettings
@@ -626,7 +645,10 @@ mod tests {
             &mut session,
             AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(QuotaDisplayMode::Used)),
         );
-        assert_eq!(session.settings.quota_display_mode, QuotaDisplayMode::Used);
+        assert_eq!(
+            session.settings.display.quota_display_mode,
+            QuotaDisplayMode::Used
+        );
 
         reduce(
             &mut session,
@@ -635,7 +657,7 @@ mod tests {
             )),
         );
         assert_eq!(
-            session.settings.quota_display_mode,
+            session.settings.display.quota_display_mode,
             QuotaDisplayMode::Remaining
         );
     }

@@ -22,19 +22,19 @@ impl SettingsView {
 
         // ── SYSTEM section ───────────────────────────────────
         let login_state = state.clone();
-        let login_checked = settings.start_at_login;
+        let login_checked = settings.system.start_at_login;
 
         // ── AUTOMATION section ───────────────────────────────
         let notif_state = state.clone();
-        let notif_checked = settings.session_quota_notifications;
+        let notif_checked = settings.notification.session_quota_notifications;
         let sound_state = state.clone();
-        let sound_checked = settings.notification_sound;
+        let sound_checked = settings.notification.notification_sound;
 
         // Cadence dropdown (复用现有组件)
-        let cadence_mins = if settings.refresh_interval_mins == 0 {
+        let cadence_mins = if settings.system.refresh_interval_mins == 0 {
             None
         } else {
-            Some(settings.refresh_interval_mins)
+            Some(settings.system.refresh_interval_mins)
         };
 
         div()

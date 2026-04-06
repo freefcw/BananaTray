@@ -92,7 +92,7 @@ pub(crate) fn render_settings_interactive(
     // 获取当前 token 状态
     // resolve_token 使用基于时间的缓存（5秒有效期），避免频繁的文件 I/O
     let settings = view.state.borrow().session.settings.clone();
-    let mem_token = settings.providers.github_token.as_deref();
+    let mem_token = settings.provider.credentials.github_token.as_deref();
     let status = super::resolve_token(mem_token);
 
     let has_token = status.token.is_some();

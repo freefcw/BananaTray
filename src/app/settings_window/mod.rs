@@ -46,7 +46,7 @@ impl SettingsView {
         state: &std::cell::RefCell<AppState>,
         appearance: WindowAppearance,
     ) -> Theme {
-        let user_theme = state.borrow().session.settings.theme;
+        let user_theme = state.borrow().session.settings.display.theme;
         Theme::resolve_for_settings(user_theme, appearance)
     }
 
@@ -120,7 +120,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_tab_bar(&self, active_tab: SettingsTab, theme: &Theme) -> Div {
-        let show_debug = self.state.borrow().session.settings.show_debug_tab;
+        let show_debug = self.state.borrow().session.settings.display.show_debug_tab;
 
         let mut tabs: Vec<(&str, String, SettingsTab)> = vec![
             (

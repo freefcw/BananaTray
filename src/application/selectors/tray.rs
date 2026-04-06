@@ -39,7 +39,7 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
     };
 
     GlobalActionsViewState {
-        show_refresh: session.settings.show_refresh_button,
+        show_refresh: session.settings.display.show_refresh_button,
         refresh: RefreshButtonViewState {
             id,
             is_refreshing,
@@ -138,7 +138,7 @@ pub fn provider_detail_view_state(
         show_dashboard,
         account,
         body,
-        quota_display_mode: session.settings.quota_display_mode,
+        quota_display_mode: session.settings.display.quota_display_mode,
     })
 }
 
@@ -234,8 +234,8 @@ mod tests {
         let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Gemini, true);
-        settings.show_account_info = true;
-        settings.show_dashboard_button = true;
+        settings.display.show_account_info = true;
+        settings.display.show_dashboard_button = true;
 
         let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.account_email = Some("test@example.com".to_string());
@@ -262,8 +262,8 @@ mod tests {
         let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Gemini, true);
-        settings.show_account_info = true;
-        settings.show_dashboard_button = true;
+        settings.display.show_account_info = true;
+        settings.display.show_dashboard_button = true;
 
         let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
@@ -289,7 +289,7 @@ mod tests {
         let _locale_guard = setup_locale();
         let mut settings = AppSettings::default();
         settings.set_provider_enabled(ProviderKind::Gemini, true);
-        settings.quota_display_mode = QuotaDisplayMode::Used;
+        settings.display.quota_display_mode = QuotaDisplayMode::Used;
 
         let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
         provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
