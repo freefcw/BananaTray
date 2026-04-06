@@ -183,7 +183,7 @@ pub use debug::{
 #[allow(unused_imports)] // 函数已就绪，待后续 UI 接入后启用
 pub use format::{
     format_amount, format_last_updated, format_quota_usage, provider_account_label,
-    provider_list_subtitle,
+    provider_list_subtitle, quota_remaining_text, quota_usage_detail_text,
 };
 pub use settings::settings_providers_tab_view_state;
 pub use tray::{header_view_state, provider_detail_view_state, tray_global_actions_view_state};

@@ -1,5 +1,4 @@
 use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
-use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -259,84 +258,6 @@ impl QuotaInfo {
     pub fn is_credit(&self) -> bool {
         self.quota_type == QuotaType::Credit
     }
-
-    // ========================================================================
-    // 格式化输出
-    // ========================================================================
-
-    /// 剩余量摘要文本（用于 UI 主显示）
-    /// - 余额模式: "$X.XX" 或 "X.XX"（直接显示余额数值）
-    /// - Credit 类型: "$X.XX left" 或 "$X.XX over"（负数）
-    /// - 其他类型: "X% left" 或 "X% over"（负数）
-    pub fn remaining_text(&self) -> String {
-        if let Some(balance) = self.remaining_balance {
-            // 余额模式：直接显示余额
-            if matches!(self.quota_type, QuotaType::Credit) {
-                format!("${:.2}", balance)
-            } else {
-                format!("{:.2}", balance)
-            }
-        } else {
-            match self.quota_type {
-                QuotaType::Credit => {
-                    let remaining = self.limit - self.used;
-                    if remaining >= 0.0 {
-                        t!("quota.credit_left", amount = format!("{:.2}", remaining)).to_string()
-                    } else {
-                        t!("quota.credit_over", amount = format!("{:.2}", -remaining)).to_string()
-                    }
-                }
-                _ => {
-                    let pct = self.percent_remaining();
-                    if pct >= 0.0 {
-                        t!("quota.pct_left", pct = format!("{:.0}", pct)).to_string()
-                    } else {
-                        t!("quota.pct_over", pct = format!("{:.0}", -pct)).to_string()
-                    }
-                }
-            }
-        }
-    }
-
-    /// 使用详情文本（用于 UI 详细展示）
-    /// - 余额模式: "Used: $X.XX" 或 空
-    /// - Credit 类型: "$X.XX / $Y.YY"
-    /// - 其他类型: "X used / Y total" 或 "X% used"
-    pub fn usage_detail_text(&self) -> String {
-        if self.remaining_balance.is_some() {
-            // 余额模式：显示已用额度
-            if self.used > 0.0 {
-                if matches!(self.quota_type, QuotaType::Credit) {
-                    format!("Used: ${:.2}", self.used)
-                } else {
-                    format!("Used: {:.2}", self.used)
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            match self.quota_type {
-                QuotaType::Credit => t!(
-                    "quota.credit_detail",
-                    used = format!("{:.2}", self.used),
-                    limit = format!("{:.2}", self.limit)
-                )
-                .to_string(),
-                _ => {
-                    if self.is_percentage_mode() {
-                        t!("quota.pct_used", pct = format!("{:.0}", self.used)).to_string()
-                    } else {
-                        t!(
-                            "quota.count_detail",
-                            used = format!("{:.0}", self.used),
-                            total = format!("{:.0}", self.limit)
-                        )
-                        .to_string()
-                    }
-                }
-            }
-        }
-    }
 }
 
 // ============================================================================
@@ -560,7 +481,7 @@ impl ProviderStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::test_helpers::{make_test_provider, setup_test_locale as setup_locale};
+    use crate::models::test_helpers::make_test_provider;
 
     // ========================================================================
     // QuotaType::stable_key
@@ -753,61 +674,6 @@ mod tests {
     }
 
     // ========================================================================
-    // 格式化输出测试
-    // ========================================================================
-
-    #[test]
-    fn test_remaining_text_percentage() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("test", 30.0, 100.0);
-        assert_eq!(q.remaining_text(), "70% left");
-
-        let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
-        assert_eq!(q_depleted.remaining_text(), "0% left");
-
-        // 测试负数（超出配额）
-        let q_over = QuotaInfo::new("over", 120.0, 100.0);
-        assert_eq!(q_over.remaining_text(), "20% over");
-    }
-
-    #[test]
-    fn test_remaining_text_credit() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(q.remaining_text(), "$15.00 left");
-
-        let q_zero = QuotaInfo::with_details("Credit", 20.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(q_zero.remaining_text(), "$0.00 left");
-
-        let q_exceeded = QuotaInfo::with_details("Credit", 25.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(q_exceeded.remaining_text(), "$5.00 over"); // 显示超出
-    }
-
-    #[test]
-    fn test_usage_detail_text_percentage() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("test", 30.0, 100.0);
-        assert_eq!(q.usage_detail_text(), "30% used");
-
-        let q_full = QuotaInfo::new("full", 100.0, 100.0);
-        assert_eq!(q_full.usage_detail_text(), "100% used");
-
-        // 非 percentage mode（limit != 100）
-        let q_real = QuotaInfo::new("real", 30.0, 50.0);
-        assert_eq!(q_real.usage_detail_text(), "30 used / 50 total");
-    }
-
-    #[test]
-    fn test_usage_detail_text_credit() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(q.usage_detail_text(), "$5.00 / $20.00");
-
-        let q_zero = QuotaInfo::with_details("Credit", 0.0, 100.0, QuotaType::Credit, None);
-        assert_eq!(q_zero.usage_detail_text(), "$0.00 / $100.00");
-    }
-
-    // ========================================================================
     // 余额模式测试
     // ========================================================================
 
@@ -856,34 +722,6 @@ mod tests {
 
         let q_red_zero = QuotaInfo::balance_only("B", 0.0, None, QuotaType::Credit, None);
         assert_eq!(q_red_zero.status_level(), StatusLevel::Red);
-    }
-
-    #[test]
-    fn test_balance_only_remaining_text_credit() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 15.50, None, QuotaType::Credit, None);
-        assert_eq!(q.remaining_text(), "$15.50");
-    }
-
-    #[test]
-    fn test_balance_only_remaining_text_general() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 42.0, None, QuotaType::General, None);
-        assert_eq!(q.remaining_text(), "42.00");
-    }
-
-    #[test]
-    fn test_balance_only_usage_detail_text_with_used() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 10.0, Some(3.50), QuotaType::Credit, None);
-        assert_eq!(q.usage_detail_text(), "Used: $3.50");
-    }
-
-    #[test]
-    fn test_balance_only_usage_detail_text_zero_used() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
-        assert_eq!(q.usage_detail_text(), "");
     }
 
     // ========================================================================
@@ -936,5 +774,15 @@ mod tests {
         assert_eq!(p.error_message.as_deref(), Some("timeout"));
         assert_eq!(p.connection, ConnectionStatus::Error);
         assert_eq!(p.error_kind, ErrorKind::NetworkError);
+    }
+
+    #[test]
+    fn mark_refresh_failed_with_existing_quotas_stays_connected() {
+        let mut p = make_provider(ConnectionStatus::Connected);
+        p.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+        p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
+        // 有旧配额数据时应保持 Connected（展示陈旧数据）
+        assert_eq!(p.connection, ConnectionStatus::Connected);
+        assert_eq!(p.update_status, Some(UpdateStatus::Failed));
     }
 }
