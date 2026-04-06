@@ -337,13 +337,11 @@ impl AppView {
                     style.bg(theme.bg_subtle)
                 }
             })
-            .child(
-                svg()
-                    .path(icon_path)
-                    .size(px(15.0))
-                    .text_color(icon_color)
-                    .flex_shrink_0(),
-            )
+            .child(super::widgets::render_provider_icon(
+                icon_path,
+                px(15.0),
+                icon_color,
+            ))
             .child(
                 div()
                     .text_size(px(13.0))

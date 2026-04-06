@@ -28,7 +28,7 @@ base_url: "https://your-newapi-site.com"
 metadata:
   display_name: "NewAPI"
   brand_name: "NewAPI Relay"
-  icon: "🔄"
+  # icon: "N"                       # 可选，不配则自动取 display_name 首字母（单色渲染，匹配内置图标风格）
   dashboard_url: "/"              # 自动拼接为 base_url
   account_hint: "NewAPI account"
   source_label: "newapi api"

@@ -132,13 +132,11 @@ fn render_sidebar_item_content(
         .px(px(12.0))
         .h(px(40.0)) // 固定高度，防止箭头(▲/▼)出现时撑高整行
         .w_full()
-        .child(
-            svg()
-                .path(icon)
-                .size(px(20.0))
-                .flex_shrink_0()
-                .text_color(icon_color),
-        )
+        .child(crate::app::widgets::render_provider_icon(
+            icon,
+            px(20.0),
+            icon_color,
+        ))
         .child(name_row);
 
     if let Some(arrow_el) = arrows {

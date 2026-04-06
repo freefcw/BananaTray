@@ -33,13 +33,19 @@ impl CustomProvider {
 impl AiProvider for CustomProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         let base = &self.def.base_url;
+        // 当 icon 为空（默认）时，从 display_name 取首字母作为单色图标
+        let icon_asset = if self.def.metadata.icon.is_empty() {
+            first_letter_icon(&self.def.metadata.display_name)
+        } else {
+            self.def.metadata.icon.clone()
+        };
         ProviderDescriptor {
             id: Cow::Owned(self.def.id.clone()),
             metadata: ProviderMetadata {
                 kind: ProviderKind::Custom,
                 display_name: self.def.metadata.display_name.clone(),
                 brand_name: self.def.metadata.brand_name.clone(),
-                icon_asset: self.def.metadata.icon.clone(),
+                icon_asset,
                 dashboard_url: resolve_url(base, &self.def.metadata.dashboard_url),
                 account_hint: self.def.metadata.account_hint.clone(),
                 source_label: self.def.metadata.source_label.clone(),
@@ -60,6 +66,22 @@ impl AiProvider for CustomProvider {
         let raw = fetch(&self.def.base_url, &self.def.source)?;
         extractor::extract(&self.def.parser, &raw, &self.compiled)
     }
+}
+
+// ============================================================================
+// 图标生成
+// ============================================================================
+
+/// 从 display_name 提取首字母（大写）作为单色图标文本
+///
+/// 中文取第一个汉字，英文取首字母大写。
+/// 例：\"NewAPI\" → \"N\"，\"月之暗面\" → \"月\"
+fn first_letter_icon(display_name: &str) -> String {
+    display_name
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().to_string())
+        .unwrap_or_else(|| "?".to_string())
 }
 
 // ============================================================================
@@ -432,6 +454,57 @@ parser:
         assert_eq!(desc.metadata.display_name, "Test Provider");
         assert_eq!(desc.metadata.brand_name, "TestBrand");
         assert_eq!(desc.metadata.kind, ProviderKind::Custom);
+        // 未指定 icon → 自动从 display_name 取首字母
+        assert_eq!(desc.metadata.icon_asset, "T");
+    }
+
+    // ── first_letter_icon ────────────────────────
+
+    #[test]
+    fn test_first_letter_icon_english() {
+        assert_eq!(first_letter_icon("NewAPI"), "N");
+    }
+
+    #[test]
+    fn test_first_letter_icon_lowercase() {
+        assert_eq!(first_letter_icon("myProvider"), "M");
+    }
+
+    #[test]
+    fn test_first_letter_icon_chinese() {
+        assert_eq!(first_letter_icon("月之暗面"), "月");
+    }
+
+    #[test]
+    fn test_first_letter_icon_empty() {
+        assert_eq!(first_letter_icon(""), "?");
+    }
+
+    #[test]
+    fn test_descriptor_explicit_icon_preserved() {
+        let yaml = r#"
+id: "test:cli"
+metadata:
+  display_name: "Test Provider"
+  brand_name: "TestBrand"
+  icon: "X"
+availability:
+  type: cli_exists
+  value: "echo"
+source:
+  type: cli
+  command: "echo"
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let provider = CustomProvider::new(def).unwrap();
+        let desc = provider.descriptor();
+        // 显式指定 icon → 保留原值
+        assert_eq!(desc.metadata.icon_asset, "X");
     }
 
     #[test]
