@@ -45,19 +45,11 @@ pub fn resolve_locale(language: &str) -> &'static str {
     }
 
     // Check if language matches a known concrete code (skip "system")
-    let is_known = SUPPORTED_LANGUAGES
+    SUPPORTED_LANGUAGES
         .iter()
-        .any(|&(code, _)| code != "system" && code == language);
-
-    if is_known {
-        match language {
-            "zh-CN" => "zh-CN",
-            "en" => "en",
-            _ => "en",
-        }
-    } else {
-        "en"
-    }
+        .find(|&&(code, _)| code != "system" && code == language)
+        .map(|&(code, _)| code)
+        .unwrap_or("en")
 }
 
 /// Apply a language setting to the runtime i18n system.
