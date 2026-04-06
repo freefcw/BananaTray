@@ -75,9 +75,9 @@ impl AppView {
             .justify_between()
             .gap(px(12.0))
             .rounded(px(14.0))
-            .bg(theme.bg_card)
+            .bg(theme.bg.card)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             .px(px(14.0))
             .py(px(12.0))
             .cursor_pointer()
@@ -95,13 +95,13 @@ impl AppView {
                                 div()
                                     .text_size(px(14.0))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_primary)
+                                    .text_color(theme.text.primary)
                                     .child(title.to_string()),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.0))
-                                    .text_color(theme.text_secondary)
+                                    .text_color(theme.text.secondary)
                                     .child(desc.to_string()),
                             ),
                     ),

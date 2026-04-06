@@ -21,10 +21,10 @@ fn render_action_button(
             .px(px(16.0))
             .py(px(8.0))
             .rounded(px(10.0))
-            .bg(theme.text_accent)
+            .bg(theme.text.accent)
             .text_size(px(12.0))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.element_active)
+            .text_color(theme.element.active)
             .cursor_pointer()
             .hover(|style| style.opacity(0.85))
             .child(label.to_string())
@@ -67,25 +67,25 @@ impl AppView {
             .px(px(20.0))
             .py(px(40.0))
             .rounded(px(14.0))
-            .bg(theme.bg_card_inner)
+            .bg(theme.bg.card_inner)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             .child(super::widgets::render_provider_icon(
                 vm.icon.clone(),
                 px(32.0),
-                theme.text_muted,
+                theme.text.muted,
             ))
             .child(
                 div()
                     .text_size(px(14.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text_primary)
+                    .text_color(theme.text.primary)
                     .child(vm.title.clone()),
             )
             .child(
                 div()
                     .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .text_align(TextAlign::Center)
                     .line_height(relative(1.4))
                     .child(vm.hint.clone()),
@@ -95,10 +95,10 @@ impl AppView {
                     .px(px(16.0))
                     .py(px(8.0))
                     .rounded(px(10.0))
-                    .bg(theme.text_accent)
+                    .bg(theme.text.accent)
                     .text_size(px(12.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.element_active)
+                    .text_color(theme.element.active)
                     .cursor_pointer()
                     .child(t!("provider.open_settings").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -215,10 +215,10 @@ impl AppView {
                     .px(px(6.0))
                     .py(px(2.0))
                     .rounded(px(4.0))
-                    .bg(theme.text_accent_soft)
+                    .bg(theme.text.accent_soft)
                     .text_size(px(10.0))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(theme.text_accent)
+                    .text_color(theme.text.accent)
                     .child(tier.to_uppercase()),
             );
         }
@@ -231,12 +231,12 @@ impl AppView {
                 .child(super::widgets::render_svg_icon(
                     "src/icons/status.svg",
                     px(12.0),
-                    theme.text_muted,
+                    theme.text.muted,
                 ))
                 .child(
                     div()
                         .text_size(px(11.0))
-                        .text_color(theme.text_muted)
+                        .text_color(theme.text.muted)
                         .child(account.updated_text.clone()),
                 ),
         );
@@ -252,9 +252,9 @@ impl AppView {
             .px(px(12.0))
             .py(px(12.0))
             .rounded(px(14.0))
-            .bg(theme.bg_card_inner)
+            .bg(theme.bg.card_inner)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             // 头像
             .child(
                 div()
@@ -265,12 +265,12 @@ impl AppView {
                     .items_center()
                     .justify_center()
                     .rounded(px(10.0))
-                    .bg(theme.bg_subtle)
+                    .bg(theme.bg.subtle)
                     .border_1()
-                    .border_color(theme.border_subtle)
+                    .border_color(theme.border.subtle)
                     .text_size(px(18.0))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(theme.text_accent)
+                    .text_color(theme.text.accent)
                     .child(avatar_char),
             )
             // 邮箱 + 状态行
@@ -284,7 +284,7 @@ impl AppView {
                         div()
                             .text_size(px(14.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_primary)
+                            .text_color(theme.text.primary)
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .child(account.email.clone()),
@@ -295,7 +295,7 @@ impl AppView {
             .child(div().flex_shrink_0().child(super::widgets::render_svg_icon(
                 "src/icons/chevron-right.svg",
                 px(16.0),
-                theme.text_muted,
+                theme.text.muted,
             )));
 
         if can_click {
@@ -332,16 +332,16 @@ impl AppView {
             .py(px(10.0))
             .rounded(px(10.0))
             .cursor_pointer()
-            .hover(|style| style.bg(theme.bg_subtle))
+            .hover(|style| style.bg(theme.bg.subtle))
             .child(super::widgets::render_svg_icon(
                 icon,
                 px(16.0),
-                theme.text_muted,
+                theme.text.muted,
             ))
             .child(
                 div()
                     .text_size(px(13.0))
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .child(label.to_string()),
             )
             .on_mouse_down(MouseButton::Left, handler)
@@ -354,9 +354,9 @@ impl AppView {
             .gap(px(12.0))
             .py(px(40.0))
             .rounded(px(12.0))
-            .bg(theme.bg_card_inner)
+            .bg(theme.bg.card_inner)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             // spinner 占位
             .child(
                 div().w_full().flex().justify_center().child(
@@ -365,10 +365,10 @@ impl AppView {
                         .h(px(36.0))
                         .rounded_full()
                         .border_3()
-                        .border_color(theme.border_subtle)
+                        .border_color(theme.border.subtle)
                         .border_t_3()
                         .border_r_3()
-                        .border_color(theme.text_accent),
+                        .border_color(theme.text.accent),
                 ),
             )
             // 文字
@@ -377,7 +377,7 @@ impl AppView {
                     .w_full()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .text_align(TextAlign::Center)
                     .child(t!("provider.fetching", name = provider_name).to_string()),
             )
@@ -398,9 +398,9 @@ impl AppView {
             .flex_col()
             .gap(px(8.0))
             .rounded(px(12.0))
-            .bg(theme.bg_card_inner)
+            .bg(theme.bg.card_inner)
             .border_1()
-            .border_color(theme.border_subtle)
+            .border_color(theme.border.subtle)
             .py(px(28.0))
             // 标题居中
             .child(
@@ -409,9 +409,9 @@ impl AppView {
                     .text_size(px(13.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(if vm.is_error {
-                        theme.status_error
+                        theme.status.error
                     } else {
-                        theme.text_primary
+                        theme.text.primary
                     })
                     .text_align(TextAlign::Center)
                     .child(vm.title.clone()),
@@ -425,7 +425,7 @@ impl AppView {
                     .px(px(16.0))
                     .text_size(px(12.0))
                     .line_height(relative(1.4))
-                    .text_color(theme.text_secondary)
+                    .text_color(theme.text.secondary)
                     .text_align(TextAlign::Center)
                     .child(vm.message.clone()),
             );

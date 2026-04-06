@@ -38,13 +38,13 @@ pub(crate) fn render_icon_row(
                     div()
                         .text_size(px(14.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text_primary)
+                        .text_color(theme.text.primary)
                         .child(title.to_string()),
                 )
                 .child(
                     div()
                         .text_size(px(12.0))
-                        .text_color(theme.text_muted)
+                        .text_color(theme.text.muted)
                         .child(description.to_string()),
                 ),
         )

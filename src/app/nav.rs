@@ -70,7 +70,7 @@ impl AppView {
         let prev_index =
             prev_tab.and_then(|pt| nav_items.iter().position(|(_, _, tab)| *tab == pt));
 
-        let border_color = theme.border_subtle;
+        let border_color = theme.border.subtle;
 
         let offset = self.nav_scroll_handle.offset();
         let max_offset = self.nav_scroll_handle.max_offset();
@@ -78,7 +78,7 @@ impl AppView {
         let can_scroll_left = offset.x < threshold.negate();
         let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
 
-        let indicator_color = theme.text_muted;
+        let indicator_color = theme.text.muted;
 
         // 计算点击箭头后要滚动到的目标 item 索引
         let scroll_handle = self.nav_scroll_handle.clone();
@@ -119,7 +119,7 @@ impl AppView {
             .and_then(|ix| self.nav_scroll_handle.bounds_for_item(ix))
             .map(to_visual);
 
-        let slider_bg = theme.nav_pill_active_bg;
+        let slider_bg = theme.nav.pill_active_bg;
 
         // ── 构建滑块元素 ──
         let slider = target_rect
@@ -316,9 +316,9 @@ impl AppView {
         let entity = cx.entity().clone();
 
         let (text_color, icon_color) = if is_active {
-            (theme.nav_pill_active_text, theme.nav_pill_active_text)
+            (theme.nav.pill_active_text, theme.nav.pill_active_text)
         } else {
-            (theme.text_muted, theme.text_muted)
+            (theme.text.muted, theme.text.muted)
         };
 
         div()
@@ -334,7 +334,7 @@ impl AppView {
                 if is_active {
                     style
                 } else {
-                    style.bg(theme.bg_subtle)
+                    style.bg(theme.bg.subtle)
                 }
             })
             .child(super::widgets::render_provider_icon(

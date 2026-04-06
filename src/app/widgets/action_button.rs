@@ -42,13 +42,13 @@ where
 {
     let (bg, border_color, text_color, hover_bg) = match variant {
         ButtonVariant::Danger => (
-            theme.btn_danger_bg,
-            theme.status_error,
-            theme.status_error,
+            theme.button.danger_bg,
+            theme.status.error,
+            theme.status.error,
             Some(hsla(0.0, 0.0, 0.0, 0.15)),
         ),
         ButtonVariant::Outlined => {
-            let accent = theme.text_accent;
+            let accent = theme.text.accent;
             let border = hsla(accent.h, accent.s, accent.l, 0.5);
             let text = hsla(accent.h, accent.s, accent.l, 0.7);
             (
@@ -59,9 +59,9 @@ where
             )
         }
         ButtonVariant::Subtle => (
-            theme.bg_subtle,
-            theme.border_strong,
-            theme.text_primary,
+            theme.bg.subtle,
+            theme.border.strong,
+            theme.text.primary,
             None, // 使用 opacity 替代
         ),
     };

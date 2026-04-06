@@ -45,9 +45,9 @@ fn with_tooltip_impl(
     child: Div,
 ) -> Stateful<Div> {
     let text: SharedString = tooltip_text.to_string().into();
-    let bg = theme.bg_panel;
-    let border = theme.border_subtle;
-    let text_color = theme.text_primary;
+    let bg = theme.bg.panel;
+    let border = theme.border.subtle;
+    let text_color = theme.text.primary;
 
     child.id(id).tooltip(move |_window, cx| {
         cx.new(|_cx| TooltipView {

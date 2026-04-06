@@ -57,7 +57,7 @@ pub(crate) fn render_kv_info_row(
         .child(
             div()
                 .text_size(px(12.5))
-                .text_color(theme.text_muted)
+                .text_color(theme.text.muted)
                 .child(label.to_string()),
         )
         .child(value_el)
@@ -76,7 +76,7 @@ pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, them
         .child(
             div()
                 .text_size(px(12.5))
-                .text_color(theme.text_muted)
+                .text_color(theme.text.muted)
                 .flex_shrink_0()
                 .child(label.to_string()),
         )

@@ -61,11 +61,11 @@ impl RenderOnce for CopilotInputBox {
             .bg(hsla(145.0 / 360.0, 0.6, 0.3, 0.15))
             .border_1()
             .border_color(if is_focused {
-                theme.status_success
+                theme.status.success
             } else {
                 hsla(145.0 / 360.0, 0.6, 0.4, 0.35)
             })
-            .text_color(theme.status_success)
+            .text_color(theme.status.success)
             .on_mouse_down(MouseButton::Left, {
                 let handle = self.focus_handle.clone();
                 move |_, window, _| handle.focus(window)
@@ -104,14 +104,14 @@ pub(crate) fn render_settings_interactive(
         .flex_col()
         .w_full()
         .rounded(px(12.0))
-        .bg(theme.bg_card_inner)
+        .bg(theme.bg.card_inner)
         .border_1()
-        .border_color(theme.border_strong)
+        .border_color(theme.border.strong)
         .px(px(20.0))
         .py(px(20.0))
         .gap(px(14.0));
 
-    let hover_color = theme.text_primary;
+    let hover_color = theme.text.primary;
     let help_icon = crate::app::with_multiline_tooltip(
         "copilot-token-help",
         &t!("copilot.token_sources_tip"),
@@ -123,10 +123,10 @@ pub(crate) fn render_settings_interactive(
             .w(px(18.0))
             .h(px(18.0))
             .rounded(px(9.0))
-            .bg(theme.bg_subtle)
+            .bg(theme.bg.subtle)
             .text_size(px(11.0))
             .font_weight(FontWeight::BOLD)
-            .text_color(theme.text_muted)
+            .text_color(theme.text.muted)
             .cursor_pointer()
             .hover(move |s| s.text_color(hover_color))
             .child("?"),
@@ -141,7 +141,7 @@ pub(crate) fn render_settings_interactive(
                 div()
                     .text_size(px(15.0))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(theme.text_primary)
+                    .text_color(theme.text.primary)
                     .child(t!("copilot.github_login").to_string()),
             )
             .child(help_icon),
@@ -152,7 +152,7 @@ pub(crate) fn render_settings_interactive(
         div()
             .text_size(px(12.5))
             .line_height(relative(1.4))
-            .text_color(theme.text_secondary)
+            .text_color(theme.text.secondary)
             .py(px(4.0))
             .child(t!("copilot.requires_auth").to_string()),
     );
@@ -200,14 +200,14 @@ pub(crate) fn render_settings_interactive(
                 .child(
                     div()
                         .text_size(px(14.0))
-                        .text_color(theme.status_success)
+                        .text_color(theme.status.success)
                         .child("✓"),
                 )
                 .child(
                     div()
                         .text_size(px(13.0))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme.status_success)
+                        .text_color(theme.status.success)
                         .child(t!("copilot.token_configured").to_string()),
                 ),
         );
@@ -222,7 +222,7 @@ pub(crate) fn render_settings_interactive(
                     div()
                         .text_size(px(12.0))
                         .line_height(relative(1.5))
-                        .text_color(theme.text_muted)
+                        .text_color(theme.text.muted)
                         .child(t!("copilot.token_hint").to_string()),
                 ),
         );
@@ -245,11 +245,11 @@ pub(crate) fn render_settings_interactive(
                 source = &source_label
             )
             .to_string(),
-            theme.text_muted,
+            theme.text.muted,
         )
     } else {
         // 编辑模式或未配置时，使用占位字符并设置颜色与背景一致，实现“隐形”站位
-        ("placeholder".to_string(), theme.bg_card_inner)
+        ("placeholder".to_string(), theme.bg.card_inner)
     };
 
     card = card.child(
@@ -300,10 +300,10 @@ fn render_action_buttons(
             .px(px(16.0))
             .py(px(10.0))
             .rounded(px(8.0))
-            .bg(theme.text_accent)
+            .bg(theme.text.accent)
             .text_size(px(13.0))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.element_active)
+            .text_color(theme.element.active)
             .cursor_pointer()
             .hover(|s| s.opacity(0.9))
             .child(left_label)
@@ -352,12 +352,12 @@ fn render_action_buttons(
             .px(px(16.0))
             .py(px(10.0))
             .rounded(px(8.0))
-            .bg(theme.bg_subtle)
+            .bg(theme.bg.subtle)
             .border_1()
-            .border_color(theme.border_strong)
+            .border_color(theme.border.strong)
             .text_size(px(13.0))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.text_primary)
+            .text_color(theme.text.primary)
             .cursor_pointer()
             .hover(|s| s.opacity(0.9))
             .child(right_label)

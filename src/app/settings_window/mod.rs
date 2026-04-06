@@ -78,18 +78,18 @@ impl SettingsView {
                             .items_center()
                             .justify_center()
                             .rounded(px(8.0))
-                            .bg(theme.bg_subtle)
+                            .bg(theme.bg.subtle)
                             .child(render_svg_icon(
                                 "src/icons/overview.svg",
                                 px(18.0),
-                                theme.text_accent,
+                                theme.text.accent,
                             )),
                     )
                     .child(
                         div()
                             .text_size(px(20.0))
                             .font_weight(FontWeight::BOLD)
-                            .text_color(theme.text_primary)
+                            .text_color(theme.text.primary)
                             .child(t!("settings.title").to_string()),
                     ),
             )
@@ -103,11 +103,11 @@ impl SettingsView {
                     .justify_center()
                     .rounded(px(6.0))
                     .cursor_pointer()
-                    .hover(|s| s.bg(theme.bg_subtle))
+                    .hover(|s| s.bg(theme.bg.subtle))
                     .child(render_svg_icon(
                         "src/icons/close.svg",
                         px(14.0),
-                        theme.text_muted,
+                        theme.text.muted,
                     ))
                     .on_mouse_down(MouseButton::Left, |_, window, _| {
                         window.remove_window();
@@ -167,16 +167,16 @@ impl SettingsView {
             let state = self.state.clone();
             let (bg, text_color, icon_color, border_color) = if is_active {
                 (
-                    theme.nav_pill_active_bg,
-                    theme.nav_pill_active_text,
-                    theme.nav_pill_active_text,
-                    theme.nav_pill_active_bg,
+                    theme.nav.pill_active_bg,
+                    theme.nav.pill_active_text,
+                    theme.nav.pill_active_text,
+                    theme.nav.pill_active_bg,
                 )
             } else {
                 (
                     transparent_black(),
-                    theme.text_muted,
-                    theme.text_muted,
+                    theme.text.muted,
+                    theme.text.muted,
                     transparent_black(),
                 )
             };
@@ -197,7 +197,7 @@ impl SettingsView {
                         if is_active {
                             style
                         } else {
-                            style.bg(theme.bg_subtle)
+                            style.bg(theme.bg.subtle)
                         }
                     })
                     .child(
@@ -273,8 +273,8 @@ impl Render for SettingsView {
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme.bg_base)
-            .text_color(theme.text_primary)
+            .bg(theme.bg.base)
+            .text_color(theme.text.primary)
             .rounded(px(14.0))
             .overflow_hidden()
             // 顶部微光效果 (amber glow)
@@ -301,7 +301,7 @@ impl Render for SettingsView {
             // Tab 栏
             .child(self.render_tab_bar(active_tab, &theme))
             // Tab 栏与内容区分隔线
-            .child(div().w_full().h(px(1.0)).bg(theme.border_subtle))
+            .child(div().w_full().h(px(1.0)).bg(theme.border.subtle))
             // 内容区
             .child(content)
     }

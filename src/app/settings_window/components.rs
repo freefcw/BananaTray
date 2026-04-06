@@ -12,7 +12,7 @@ pub(super) fn render_section_header(title: &str, theme: &Theme) -> Div {
     div()
         .text_size(px(11.0))
         .font_weight(FontWeight::BOLD)
-        .text_color(theme.text_muted)
+        .text_color(theme.text.muted)
         .px(px(4.0))
         .pt(px(16.0))
         .pb(px(8.0))
@@ -25,15 +25,15 @@ pub(super) fn render_dark_card(theme: &Theme) -> Div {
         .flex_col()
         .w_full()
         .rounded(px(14.0))
-        .bg(theme.bg_card)
+        .bg(theme.bg.card)
         .border_1()
-        .border_color(theme.border_subtle)
+        .border_color(theme.border.subtle)
         .overflow_hidden()
 }
 
 /// 卡片内分隔线
 pub(super) fn render_divider(theme: &Theme) -> Div {
-    div().h(px(0.5)).w_full().bg(theme.border_subtle)
+    div().h(px(0.5)).w_full().bg(theme.border.subtle)
 }
 
 // ============================================================================
