@@ -108,33 +108,24 @@ pub fn apply_tray_icon(cx: &mut App, style: TrayIconStyle) {
 /// Must be called on the main thread after `cx.set_tray_icon()` has created
 /// the status item at least once.
 #[cfg(target_os = "macos")]
-#[allow(deprecated, unexpected_cfgs)]
 unsafe fn set_status_item_image(png_data: &[u8], is_template: bool) {
-    use cocoa::base::{id, nil, NO, YES};
-    use cocoa::foundation::{NSData, NSSize};
-    use objc::{class, msg_send, sel, sel_impl};
-
-    let template_val = if is_template { YES } else { NO };
+    use objc2::AnyThread;
+    use objc2_app_kit::NSImage;
+    use objc2_foundation::NSData;
 
     // ── Create NSImage from PNG data ──
-    let ns_data: id = NSData::dataWithBytes_length_(
-        nil,
-        png_data.as_ptr() as *const std::ffi::c_void,
-        png_data.len() as u64,
-    );
-    let image_alloc: id = msg_send![class!(NSImage), alloc];
-    let image: id = msg_send![image_alloc, initWithData: ns_data];
-    if image == nil {
+    let ns_data = NSData::with_bytes(png_data);
+    let Some(image) = NSImage::initWithData(NSImage::alloc(), &ns_data) else {
         log::error!(target: "tray", "HACK(setTemplate): failed to create NSImage from PNG data");
         return;
-    }
+    };
     // Match GPUI's sizing (18x18 points).
-    let _: () = msg_send![image, setSize: NSSize::new(18.0, 18.0)];
-    let _: () = msg_send![image, setTemplate: template_val];
+    image.setSize(objc2_foundation::NSSize::new(18.0, 18.0));
+    image.setTemplate(is_template);
 
     // ── Find and update the NSStatusBarButton ──
     if let Some(button) = find_status_bar_button_in_app() {
-        let _: () = msg_send![button, setImage: image];
+        button.setImage(Some(&image));
         log::debug!(
             target: "tray",
             "HACK(setTemplate): set image (template={}) on status bar button",
@@ -153,38 +144,25 @@ unsafe fn set_status_item_image(png_data: &[u8], is_template: bool) {
 /// Looks for a window whose class name contains "StatusBar", then recursively
 /// searches its view hierarchy for an `NSStatusBarButton`.
 #[cfg(target_os = "macos")]
-#[allow(deprecated, unexpected_cfgs)]
-unsafe fn find_status_bar_button_in_app() -> Option<cocoa::base::id> {
-    use cocoa::base::{id, nil};
-    use objc::{class, msg_send, sel, sel_impl};
+unsafe fn find_status_bar_button_in_app() -> Option<objc2::rc::Retained<objc2_app_kit::NSButton>> {
+    use objc2_app_kit::NSApplication;
 
-    let app: id = msg_send![class!(NSApplication), sharedApplication];
-    let windows: id = msg_send![app, windows];
-    let win_count: usize = msg_send![windows, count];
+    let app = NSApplication::sharedApplication(objc2::MainThreadMarker::new_unchecked());
+    let windows = app.windows();
 
-    for i in 0..win_count {
-        let window: id = msg_send![windows, objectAtIndex: i];
-        if window == nil {
-            continue;
-        }
-
-        let window_class: *const objc::runtime::Class = msg_send![window, class];
-        if window_class.is_null() {
-            continue;
-        }
-        let win_class_name = (*window_class).name();
+    for window in windows.iter() {
+        let window_class_name = window.class().name().to_str().unwrap_or("");
         // On macOS 13+ the class may have been renamed. Accept any name
         // containing "StatusBar" to be future-proof.
-        if !win_class_name.contains("StatusBar") {
+        if !window_class_name.contains("StatusBar") {
             continue;
         }
 
-        let content_view: id = msg_send![window, contentView];
-        if content_view == nil {
+        let Some(content_view) = window.contentView() else {
             continue;
-        }
+        };
 
-        if let Some(button) = find_status_bar_button(content_view) {
+        if let Some(button) = find_status_bar_button(&content_view) {
             return Some(button);
         }
     }
@@ -197,41 +175,47 @@ unsafe fn find_status_bar_button_in_app() -> Option<cocoa::base::id> {
 /// Looks for views whose class name contains "StatusBarButton" (the canonical
 /// `NSStatusBarButton`), then falls back to any `NSButton` subclass.
 #[cfg(target_os = "macos")]
-#[allow(deprecated, unexpected_cfgs)]
-unsafe fn find_status_bar_button(view: cocoa::base::id) -> Option<cocoa::base::id> {
-    use cocoa::base::{id, nil};
-    use objc::{msg_send, sel, sel_impl};
+unsafe fn find_status_bar_button(
+    view: &objc2_app_kit::NSView,
+) -> Option<objc2::rc::Retained<objc2_app_kit::NSButton>> {
+    use objc2::ClassType;
+    use objc2_app_kit::NSButton;
+    use objc2_foundation::NSObjectProtocol;
 
-    if view == nil {
-        return None;
-    }
-
-    let view_class: *const objc::runtime::Class = msg_send![view, class];
-    if !view_class.is_null() {
-        let name = (*view_class).name();
-        // Prefer exact NSStatusBarButton match.
-        if name.contains("StatusBarButton") {
-            return Some(view);
-        }
+    let view_class_name = view.class().name().to_str().unwrap_or("");
+    // Prefer exact NSStatusBarButton match.
+    if view_class_name.contains("StatusBarButton") {
+        return Some(retain_view_as_button(view));
     }
 
     // Recurse into subviews.
-    let subviews: id = msg_send![view, subviews];
-    let count: usize = msg_send![subviews, count];
-    for i in 0..count {
-        let subview: id = msg_send![subviews, objectAtIndex: i];
-        if let Some(found) = find_status_bar_button(subview) {
+    let subviews = view.subviews();
+    for subview in subviews.iter() {
+        if let Some(found) = find_status_bar_button(&subview) {
             return Some(found);
         }
     }
 
     // Fallback: check if this view is any NSButton subclass.
-    let is_button: bool = msg_send![view, isKindOfClass: objc::class!(NSButton)];
-    if is_button {
-        return Some(view);
+    if view.isKindOfClass(NSButton::class()) {
+        return Some(retain_view_as_button(view));
     }
 
     None
+}
+
+/// SAFETY: Caller must ensure that `view` is actually an `NSButton` (or subclass).
+///
+/// Retains and casts the `NSView` reference to `Retained<NSButton>`.
+#[cfg(target_os = "macos")]
+unsafe fn retain_view_as_button(
+    view: &objc2_app_kit::NSView,
+) -> objc2::rc::Retained<objc2_app_kit::NSButton> {
+    use objc2::rc::Retained;
+    let retained_view: Retained<objc2_app_kit::NSView> =
+        Retained::retain(view as *const _ as *mut objc2_app_kit::NSView)
+            .expect("view pointer must be non-null");
+    Retained::cast_unchecked(retained_view)
 }
 
 #[cfg(test)]
