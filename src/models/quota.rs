@@ -179,7 +179,7 @@ impl QuotaInfo {
     /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
     #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
-        (self.limit - 100.0).abs() < f64::EPSILON
+        (self.limit - 100.0).abs() < 1e-9
     }
 
     // ========================================================================
