@@ -5,7 +5,7 @@ use crate::notification::{send_system_notification, QuotaAlert};
 use crate::refresh::RefreshRequest;
 use gpui::*;
 use log::{info, warn};
-use rust_i18n::t;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -159,6 +159,12 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
         AppEffect::SendQuotaNotification { alert, with_sound } => {
             send_system_notification(&alert, with_sound);
         }
+        AppEffect::SendPlainNotification { title, body } => {
+            // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
+            std::thread::spawn(move || {
+                crate::notification::send_plain_notification(&title, &body);
+            });
+        }
         AppEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
@@ -177,7 +183,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             use crate::utils::log_capture::LogCapture;
             info!(target: "runtime", "starting debug refresh for {:?}", kind);
             // 1. 保存当前日志级别到 state（供 RestoreLogLevel 使用）
-            state.borrow_mut().session.settings_ui.debug_prev_log_level = Some(log::max_level());
+            state.borrow_mut().session.debug_ui.prev_log_level = Some(log::max_level());
             // 2. 清空并启用日志捕获
             LogCapture::global().clear();
             LogCapture::global().enable();
@@ -200,7 +206,6 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
         AppEffect::ClearDebugLogs => {
             crate::utils::log_capture::LogCapture::global().clear();
         }
-        // 以下 variant 应由上层 context-specific match 处理，不应到达此处
         AppEffect::Render
         | AppEffect::OpenSettingsWindow
         | AppEffect::OpenUrl(_)
@@ -251,21 +256,6 @@ fn send_refresh_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) 
 fn sync_auto_launch(enabled: bool) {
     std::thread::spawn(move || {
         crate::auto_launch::sync(enabled);
-
-        let (title, body) = if enabled {
-            (
-                t!("notification.auto_launch.enabled.title").to_string(),
-                t!("notification.auto_launch.enabled.body").to_string(),
-            )
-        } else {
-            (
-                t!("notification.auto_launch.disabled.title").to_string(),
-                t!("notification.auto_launch.disabled.body").to_string(),
-            )
-        };
-
-        // 使用 osascript 发送通知，绕过 mac-notification-sys 的 "use_default" bug
-        crate::notification::send_plain_notification(&title, &body);
     });
 }
 
