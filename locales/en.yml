@@ -5,6 +5,7 @@ tray.tooltip: "BananaTray - AI Quota Monitor"
 
 # ── Tooltips ──────────────────────────────────────────────
 tooltip.dashboard: "Dashboard"
+tooltip.open_dashboard: "Open Dashboard"
 tooltip.refresh: "Refresh"
 tooltip.settings: "Settings"
 tooltip.quit: "Quit"
