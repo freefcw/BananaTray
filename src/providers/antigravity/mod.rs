@@ -1,87 +1,70 @@
-mod cache_source;
-mod live_source;
-mod parse_strategy;
-
-use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use super::codeium_family::{self, ANTIGRAVITY_SPEC};
+use super::AiProvider;
+use crate::models::RefreshData;
 use anyhow::Result;
 use async_trait::async_trait;
-use log::warn;
-use std::borrow::Cow;
 
 super::define_unit_provider!(AntigravityProvider);
 
-impl AntigravityProvider {
-    fn classify_unavailable() -> Result<()> {
-        if live_source::is_available() || cache_source::is_available() {
-            Ok(())
-        } else {
-            Err(ProviderError::unavailable(
-                "Antigravity live source and local cache are both unavailable",
-            )
-            .into())
-        }
-    }
-
-    fn refresh_with_fallback() -> Result<RefreshData> {
-        match live_source::fetch_refresh_data() {
-            Ok(data) => Ok(data),
-            Err(live_err) => {
-                warn!(
-                    target: "providers",
-                    "Antigravity live source failed: {}, falling back to local cache",
-                    live_err
-                );
-
-                match cache_source::read_refresh_data() {
-                    Ok(data) => Ok(data),
-                    Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
-                        "live source failed: {}; cache fallback failed: {}",
-                        live_err, cache_err
-                    ))
-                    .into()),
-                }
-            }
-        }
-    }
-}
-
 #[async_trait]
 impl AiProvider for AntigravityProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor {
-            id: Cow::Borrowed("antigravity:api"),
-            metadata: ProviderMetadata {
-                kind: ProviderKind::Antigravity,
-                display_name: "Antigravity".into(),
-                brand_name: "Codeium".into(),
-                icon_asset: "src/icons/provider-antigravity.svg".into(),
-                dashboard_url: "https://codeium.com/account".into(),
-                account_hint: "Codeium account".into(),
-                source_label: "local api".into(),
-            },
-        }
+    fn descriptor(&self) -> crate::models::ProviderDescriptor {
+        codeium_family::descriptor(&ANTIGRAVITY_SPEC)
     }
 
     async fn check_availability(&self) -> Result<()> {
-        Self::classify_unavailable()
+        codeium_family::classify_unavailable(&ANTIGRAVITY_SPEC)
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
-        Self::refresh_with_fallback()
+        codeium_family::refresh_with_fallback(&ANTIGRAVITY_SPEC)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::ProviderError;
 
     #[test]
     fn test_classify_unavailable_maps_both_sources_missing() {
-        // 这里只验证错误归类，不依赖本机是否真的安装 Antigravity。
-        let err = ProviderError::unavailable(
-            "Antigravity live source and local cache are both unavailable",
-        );
+        let err = ProviderError::unavailable(ANTIGRAVITY_SPEC.unavailable_message);
         assert!(matches!(err, ProviderError::Unavailable { .. }));
+    }
+
+    #[test]
+    fn test_matches_antigravity_process_with_app_data_dir() {
+        let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc --extension_server_port 57048 --app_data_dir antigravity";
+        assert!(codeium_family::matches_process_line(
+            line,
+            &ANTIGRAVITY_SPEC
+        ));
+    }
+
+    #[test]
+    fn test_matches_antigravity_process_with_path() {
+        let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc";
+        assert!(codeium_family::matches_process_line(
+            line,
+            &ANTIGRAVITY_SPEC
+        ));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_rejects_windsurf() {
+        let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+        assert!(!codeium_family::matches_process_line(
+            line,
+            &ANTIGRAVITY_SPEC
+        ));
+    }
+
+    #[test]
+    fn test_is_antigravity_process_with_dot_antigravity_path() {
+        let line = "12345 /Users/test/.antigravity/bin/language_server_macos_arm --csrf_token abc";
+        assert!(codeium_family::matches_process_line(
+            line,
+            &ANTIGRAVITY_SPEC
+        ));
     }
 }

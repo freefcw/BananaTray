@@ -1,3 +1,4 @@
+pub mod codeium_family;
 pub mod common;
 pub mod custom;
 pub mod manager;
@@ -244,6 +245,7 @@ register_providers!(
     minimax => MiniMaxProvider,
     opencode => OpenCodeProvider,
     vertex_ai => VertexAiProvider,
+    windsurf => WindsurfProvider,
 );
 
 #[cfg(test)]

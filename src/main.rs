@@ -370,6 +370,10 @@ fn listen_for_secondary_instance(
 // ============================================================================
 
 fn main() {
+    if try_run_codeium_family_debug_cli() {
+        return;
+    }
+
     let log_path = match logging::init() {
         Ok(init) => {
             log::info!(target: "app", "logging initialized at {}", init.log_path.display());
@@ -420,4 +424,28 @@ fn main() {
 
             info!(target: "app", "BananaTray is running - look for the tray icon");
         });
+}
+
+fn try_run_codeium_family_debug_cli() -> bool {
+    let mut args = std::env::args().skip(1);
+    let Some(first) = args.next() else {
+        return false;
+    };
+
+    if first != "debug-codeium-family" {
+        return false;
+    }
+
+    let selector = args.next();
+    match crate::providers::codeium_family::debug_report(selector.as_deref()) {
+        Ok(report) => {
+            println!("{}", report);
+            std::process::exit(0);
+        }
+        Err(err) => {
+            eprintln!("debug-codeium-family failed: {err:#}");
+            eprintln!("usage: bananatray debug-codeium-family [antigravity|windsurf|all]");
+            std::process::exit(2);
+        }
+    }
 }

@@ -123,6 +123,7 @@ define_provider_kind!(
     Kilo => "kilo",
     Kiro => "kiro",
     Antigravity => "antigravity",
+    Windsurf => "windsurf",
 );
 
 /// Provider 元数据
@@ -197,6 +198,7 @@ mod tests {
         assert_eq!(ProviderKind::Claude.id_key(), "claude");
         assert_eq!(ProviderKind::Gemini.id_key(), "gemini");
         assert_eq!(ProviderKind::VertexAi.id_key(), "vertexai");
+        assert_eq!(ProviderKind::Windsurf.id_key(), "windsurf");
     }
 
     #[test]
@@ -208,6 +210,10 @@ mod tests {
         assert_eq!(
             ProviderKind::from_id_key(ProviderKind::OpenCode.id_key()),
             Some(ProviderKind::OpenCode)
+        );
+        assert_eq!(
+            ProviderKind::from_id_key("windsurf"),
+            Some(ProviderKind::Windsurf)
         );
         assert_eq!(ProviderKind::from_id_key("unknown"), None);
     }

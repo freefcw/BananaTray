@@ -1,6 +1,6 @@
 # src/providers/
 
-Provider abstraction layer and all 12 AI provider implementations.
+Provider abstraction layer and all 14 AI provider implementations.
 
 ## Core Abstractions
 
@@ -14,6 +14,7 @@ Provider abstraction layer and all 12 AI provider implementations.
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderErrorPresenter`** — maps `ProviderError` to UI message and `ErrorKind`
 - **`common/`** — cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
+- **`codeium_family/`** — shared live/cache/parser/spec logic for Antigravity and Windsurf
 - **`docs/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`register_providers!`** macro — declares provider modules and generates `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
@@ -37,7 +38,8 @@ Aggregation registry holding all provider implementations:
 | `kimi/` | Kimi | `kimi:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
-| `antigravity/` | Antigravity | `antigravity:api` | Local language server API | Split into `live_source.rs`, `cache_source.rs`, `parse_strategy.rs`, `mod.rs` |
+| `antigravity/` | Antigravity | `antigravity:api` | Local language server API | Thin facade over shared `codeium_family/` module |
+| `windsurf.rs` | Windsurf | `windsurf:api` | Local language server API + local cache | Uses shared `codeium_family/` module |
 | `minimax/` | MiniMax | `minimax:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro:cli` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo:ext` | — | Placeholder (returns `Unavailable`) |
