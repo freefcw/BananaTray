@@ -167,7 +167,14 @@ fn append_process_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Resu
         match live_source::parse_process_line(line) {
             Ok(process) => {
                 writeln!(out, "  - pid: {}", process.pid)?;
-                writeln!(out, "  - csrf token: {}", mask_secret(&process.csrf_token))?;
+                writeln!(
+                    out,
+                    "  - csrf token: {}",
+                    match &process.csrf_token {
+                        Some(token) => mask_secret(token),
+                        None => "(not in args)".to_string(),
+                    }
+                )?;
                 writeln!(
                     out,
                     "  - extension_server_port: {:?}",

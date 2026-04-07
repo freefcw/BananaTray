@@ -41,7 +41,8 @@ static PLAIN_AGENT: LazyLock<Agent> = LazyLock::new(|| {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessInfo {
     pub pid: String,
-    pub csrf_token: String,
+    /// 新版 Windsurf 不再通过进程参数传递 csrf_token，改用 stdin_initial_metadata
+    pub csrf_token: Option<String>,
     pub extension_port: Option<u16>,
 }
 
@@ -61,7 +62,12 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
         process.extension_port
     );
 
-    let body = fetch_user_status(port, &process.csrf_token, process.extension_port, spec)?;
+    let body = fetch_user_status(
+        port,
+        process.csrf_token.as_deref(),
+        process.extension_port,
+        spec,
+    )?;
     let strategy = ApiParseStrategy;
     let (quotas, email, plan_name) = strategy.parse(body.as_bytes())?;
     Ok(RefreshData::with_account(quotas, email, plan_name))
@@ -133,8 +139,7 @@ pub(super) fn parse_process_line(line: &str) -> Result<ProcessInfo, ProviderErro
     let csrf_token = CSRF_RE
         .captures(line)
         .and_then(|c| c.get(1))
-        .map(|m| m.as_str().to_string())
-        .ok_or_else(|| ProviderError::parse_failed("--csrf_token not found in process args"))?;
+        .map(|m| m.as_str().to_string());
 
     let extension_port = EXT_PORT_RE
         .captures(line)
@@ -183,7 +188,7 @@ fn parse_listen_port(output: &str) -> Option<u16> {
 
 fn fetch_user_status(
     port: u16,
-    csrf_token: &str,
+    csrf_token: Option<&str>,
     extension_port: Option<u16>,
     spec: &CodeiumFamilySpec,
 ) -> Result<String> {
@@ -219,7 +224,7 @@ fn fetch_user_status(
 
 fn post_api(
     url: &str,
-    csrf_token: &str,
+    csrf_token: Option<&str>,
     body: &str,
     allow_insecure_tls: bool,
     spec: &CodeiumFamilySpec,
@@ -232,11 +237,16 @@ fn post_api(
         &*PLAIN_AGENT
     };
 
-    let response = agent
+    let mut request = agent
         .post(url)
         .header("Content-Type", "application/json")
-        .header("X-Codeium-Csrf-Token", csrf_token)
-        .header("Connect-Protocol-Version", "1")
+        .header("Connect-Protocol-Version", "1");
+
+    if let Some(token) = csrf_token {
+        request = request.header("X-Codeium-Csrf-Token", token);
+    }
+
+    let response = request
         .send(body.as_bytes())
         .with_context(|| format!("POST {} failed", url))?;
 
@@ -312,6 +322,7 @@ mod tests {
                 ".antigravity/",
                 "/antigravity.app/",
             ],
+            cached_plan_info_key_candidates: &[],
         }
     }
 
@@ -322,15 +333,19 @@ mod tests {
         let process = parse_process_line(line).unwrap();
 
         assert_eq!(process.pid, "12345");
-        assert_eq!(process.csrf_token, "abc123");
+        assert_eq!(process.csrf_token, Some("abc123".to_string()));
         assert_eq!(process.extension_port, Some(4242));
     }
 
     #[test]
-    fn test_parse_process_line_requires_csrf_token() {
-        let line = "12345 language_server_macos_arm --extension_server_port 4242";
-        let err = parse_process_line(line).unwrap_err();
-        assert!(matches!(err, ProviderError::ParseFailed { .. }));
+    fn test_parse_process_line_without_csrf_token() {
+        // 新版 Windsurf 不再通过命令行传递 csrf_token
+        let line = "11162 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 59012 --ide_name windsurf --random_port --stdin_initial_metadata";
+        let process = parse_process_line(line).unwrap();
+
+        assert_eq!(process.pid, "11162");
+        assert_eq!(process.csrf_token, None);
+        assert_eq!(process.extension_port, Some(59012));
     }
 
     #[test]
