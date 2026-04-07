@@ -32,46 +32,63 @@
 //! this entire hack can be replaced with a single API call. Search for
 //! `HACK(setTemplate)` to find all related code.
 
-use crate::models::TrayIconStyle;
+use crate::application::TrayIconRequest;
+use crate::models::{StatusLevel, TrayIconStyle};
 use gpui::App;
 use log::info;
 
-/// Return the embedded PNG data for the given icon style.
+/// Return the embedded PNG data for the given icon request.
 ///
 /// This is a pure function, suitable for unit testing without a GUI context.
-pub fn icon_png_data(style: TrayIconStyle) -> &'static [u8] {
-    match style {
-        TrayIconStyle::Monochrome => include_bytes!("tray_icon.png"),
-        TrayIconStyle::Yellow => include_bytes!("tray_icon_yellow.png"),
-        TrayIconStyle::Colorful => include_bytes!("tray_icon_colorful.png"),
+pub fn icon_png_data(request: TrayIconRequest) -> &'static [u8] {
+    match request {
+        TrayIconRequest::Static(TrayIconStyle::Monochrome) => include_bytes!("tray_icon.png"),
+        TrayIconRequest::Static(TrayIconStyle::Yellow) => include_bytes!("tray_icon_yellow.png"),
+        TrayIconRequest::Static(TrayIconStyle::Colorful) => {
+            include_bytes!("tray_icon_colorful.png")
+        }
+        // Dynamic 选项直接传入时回退 Monochrome（正常流程不会到这，reducer 会 resolve）
+        TrayIconRequest::Static(TrayIconStyle::Dynamic) => include_bytes!("tray_icon.png"),
+        // Dynamic 模式：Green 状态用 Monochrome，减少视觉干扰
+        TrayIconRequest::DynamicStatus(StatusLevel::Green) => include_bytes!("tray_icon.png"),
+        TrayIconRequest::DynamicStatus(StatusLevel::Yellow) => {
+            include_bytes!("tray_icon_yellow.png")
+        }
+        TrayIconRequest::DynamicStatus(StatusLevel::Red) => include_bytes!("tray_icon_red.png"),
     }
 }
 
-/// Apply the given tray icon style.
+/// 判断是否应使用 macOS template 模式（系统自动深色/浅色适配）
+fn is_template_mode(request: TrayIconRequest) -> bool {
+    matches!(
+        request,
+        TrayIconRequest::Static(TrayIconStyle::Monochrome)
+            | TrayIconRequest::Static(TrayIconStyle::Dynamic)
+            | TrayIconRequest::DynamicStatus(StatusLevel::Green)
+    )
+}
+
+/// Apply the given tray icon.
 ///
-/// For `Monochrome`, delegates to GPUI's `set_tray_icon()` which sets
-/// `setTemplate:YES` automatically.
+/// For template-mode icons (Monochrome, Dynamic Green), delegates to GPUI's
+/// `set_tray_icon()` which sets `setTemplate:YES` automatically.
 ///
-/// For `Yellow` and `Colorful`, bypasses GPUI entirely and sets the icon
-/// directly via ObjC runtime with `setTemplate:NO` so colors are preserved.
-pub fn apply_tray_icon(cx: &mut App, style: TrayIconStyle) {
-    let png_data = icon_png_data(style);
+/// For colored icons, bypasses GPUI entirely and sets the icon directly via
+/// ObjC runtime with `setTemplate:NO` so colors are preserved.
+pub fn apply_tray_icon(cx: &mut App, request: TrayIconRequest) {
+    let png_data = icon_png_data(request);
 
     #[cfg(target_os = "macos")]
     {
-        if style == TrayIconStyle::Monochrome {
-            // Monochrome: use GPUI's built-in path (sets setTemplate:YES).
+        if is_template_mode(request) {
+            // Monochrome / Dynamic Green: use GPUI's built-in path (sets setTemplate:YES).
             cx.set_tray_icon(Some(png_data));
         } else {
             // HACK(setTemplate): Bypass GPUI and set the icon directly with
             // setTemplate:NO so macOS preserves the colors.
-            //
-            // We call GPUI first with the monochrome icon to ensure the
-            // NSStatusItem exists, then immediately replace the image via ObjC.
-            // This avoids the wasted work of having GPUI decode the colored PNG
-            // only for us to throw it away — the monochrome PNG is smaller and
-            // the result is invisible since we overwrite it immediately.
-            cx.set_tray_icon(Some(icon_png_data(TrayIconStyle::Monochrome)));
+            cx.set_tray_icon(Some(icon_png_data(TrayIconRequest::Static(
+                TrayIconStyle::Monochrome,
+            ))));
             unsafe {
                 set_status_item_image(png_data, false);
             }
@@ -86,8 +103,8 @@ pub fn apply_tray_icon(cx: &mut App, style: TrayIconStyle) {
 
     info!(
         target: "tray",
-        "applied tray icon style: {:?}",
-        style
+        "applied tray icon: {:?}",
+        request
     );
 }
 
@@ -222,47 +239,104 @@ unsafe fn retain_view_as_button(
 mod tests {
     use super::*;
 
+    /// 所有可能的 TrayIconRequest 变体
+    fn all_requests() -> Vec<TrayIconRequest> {
+        vec![
+            TrayIconRequest::Static(TrayIconStyle::Monochrome),
+            TrayIconRequest::Static(TrayIconStyle::Yellow),
+            TrayIconRequest::Static(TrayIconStyle::Colorful),
+            TrayIconRequest::Static(TrayIconStyle::Dynamic),
+            TrayIconRequest::DynamicStatus(StatusLevel::Green),
+            TrayIconRequest::DynamicStatus(StatusLevel::Yellow),
+            TrayIconRequest::DynamicStatus(StatusLevel::Red),
+        ]
+    }
+
     #[test]
-    fn icon_png_data_returns_non_empty_for_all_styles() {
-        for style in [
-            TrayIconStyle::Monochrome,
-            TrayIconStyle::Yellow,
-            TrayIconStyle::Colorful,
-        ] {
-            let data = icon_png_data(style);
+    fn icon_png_data_returns_non_empty_for_all_requests() {
+        for request in all_requests() {
+            let data = icon_png_data(request);
             assert!(
                 !data.is_empty(),
                 "PNG data for {:?} should not be empty",
-                style
+                request
             );
         }
     }
 
     #[test]
     fn icon_png_data_starts_with_png_magic() {
-        // PNG files start with the 8-byte signature: 137 80 78 71 13 10 26 10
         let png_signature: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        for style in [
-            TrayIconStyle::Monochrome,
-            TrayIconStyle::Yellow,
-            TrayIconStyle::Colorful,
-        ] {
-            let data = icon_png_data(style);
+        for request in all_requests() {
+            let data = icon_png_data(request);
             assert!(
                 data.starts_with(&png_signature),
                 "PNG data for {:?} should start with PNG magic bytes",
-                style
+                request
             );
         }
     }
 
     #[test]
-    fn monochrome_and_colored_icons_differ() {
-        let mono = icon_png_data(TrayIconStyle::Monochrome);
-        let yellow = icon_png_data(TrayIconStyle::Yellow);
-        let colorful = icon_png_data(TrayIconStyle::Colorful);
+    fn static_icons_differ_from_each_other() {
+        let mono = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Monochrome));
+        let yellow = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Yellow));
+        let colorful = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Colorful));
         assert_ne!(mono, yellow);
         assert_ne!(mono, colorful);
         assert_ne!(yellow, colorful);
+    }
+
+    #[test]
+    fn dynamic_green_uses_monochrome() {
+        let mono = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Monochrome));
+        let green = icon_png_data(TrayIconRequest::DynamicStatus(StatusLevel::Green));
+        assert_eq!(mono, green, "Dynamic Green should use Monochrome icon");
+    }
+
+    #[test]
+    fn dynamic_yellow_uses_yellow_icon() {
+        let yellow = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Yellow));
+        let dyn_yellow = icon_png_data(TrayIconRequest::DynamicStatus(StatusLevel::Yellow));
+        assert_eq!(yellow, dyn_yellow, "Dynamic Yellow should use Yellow icon");
+    }
+
+    #[test]
+    fn dynamic_red_is_unique() {
+        let mono = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Monochrome));
+        let yellow = icon_png_data(TrayIconRequest::Static(TrayIconStyle::Yellow));
+        let red = icon_png_data(TrayIconRequest::DynamicStatus(StatusLevel::Red));
+        assert_ne!(red, mono, "Red icon should differ from Monochrome");
+        assert_ne!(red, yellow, "Red icon should differ from Yellow");
+    }
+
+    #[test]
+    fn is_template_mode_monochrome() {
+        assert!(is_template_mode(TrayIconRequest::Static(
+            TrayIconStyle::Monochrome
+        )));
+    }
+
+    #[test]
+    fn is_template_mode_dynamic_green() {
+        assert!(is_template_mode(TrayIconRequest::DynamicStatus(
+            StatusLevel::Green
+        )));
+    }
+
+    #[test]
+    fn is_not_template_mode_for_colored_icons() {
+        assert!(!is_template_mode(TrayIconRequest::Static(
+            TrayIconStyle::Yellow
+        )));
+        assert!(!is_template_mode(TrayIconRequest::Static(
+            TrayIconStyle::Colorful
+        )));
+        assert!(!is_template_mode(TrayIconRequest::DynamicStatus(
+            StatusLevel::Yellow
+        )));
+        assert!(!is_template_mode(TrayIconRequest::DynamicStatus(
+            StatusLevel::Red
+        )));
     }
 }

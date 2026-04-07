@@ -280,6 +280,9 @@ pub enum TrayIconStyle {
     Yellow,
     /// 多彩渐变色香蕉
     Colorful,
+    /// 动态模式 — 根据所有已启用 Provider 的额度综合状态自动切换颜色
+    /// Green 状态使用 Monochrome，Yellow/Red 状态使用对应彩色图标
+    Dynamic,
 }
 
 /// 额度显示模式

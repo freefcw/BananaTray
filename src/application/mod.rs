@@ -4,7 +4,7 @@ mod reducer;
 mod selectors;
 
 pub use action::{AppAction, DebugNotificationKind, ProviderOrderDirection, SettingChange};
-pub use effect::AppEffect;
+pub use effect::{AppEffect, TrayIconRequest};
 pub use reducer::{build_config_sync_request, reduce};
 #[allow(unused_imports)]
 pub use selectors::{

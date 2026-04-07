@@ -464,7 +464,6 @@ impl ProviderStatus {
     );
 
     /// 获取最高用量的状态等级（用于总览显示）
-    #[allow(dead_code)]
     pub fn worst_status(&self) -> StatusLevel {
         self.quotas
             .iter()
