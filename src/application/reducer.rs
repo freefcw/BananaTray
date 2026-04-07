@@ -1,6 +1,8 @@
 use crate::app_state::{AppSession, SettingsTab};
-use crate::application::{AppAction, AppEffect, ProviderOrderDirection, SettingChange};
-use crate::models::{NavTab, ProviderId};
+use crate::application::{
+    AppAction, AppEffect, ProviderOrderDirection, SettingChange, TrayIconRequest,
+};
+use crate::models::{NavTab, ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use log::{debug, info};
 
@@ -188,7 +190,9 @@ fn apply_setting_change(
         }
         SettingChange::SetTrayIconStyle(style) => {
             session.settings.display.tray_icon_style = style;
-            effects.push(AppEffect::ApplyTrayIcon(style));
+            effects.push(AppEffect::ApplyTrayIcon(resolve_tray_icon_request(
+                session, style,
+            )));
         }
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.display.quota_display_mode = mode;
@@ -252,6 +256,13 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
     if new_val {
         request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
     } else {
+        // Provider 被禁用后需重新计算动态图标（禁用必然改变参与计算的集合）
+        if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
+            let status = session.overall_worst_status();
+            effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
+                status,
+            )));
+        }
         push_render(effects);
     }
 }
@@ -269,6 +280,9 @@ fn apply_refresh_event(
         RefreshEvent::Finished(outcome) => {
             let is_debug_target = session.debug_ui.refresh_active
                 && session.debug_ui.selected_provider.as_ref() == Some(&outcome.id);
+
+            // 快照刷新前的状态等级，用于判断刷新后是否需要更新图标
+            let prev_status = session.overall_worst_status();
 
             'process: {
                 if session.provider_store.find_by_id(&outcome.id).is_none() {
@@ -335,6 +349,9 @@ fn apply_refresh_event(
                 }
             }
 
+            // 动态图标：刷新结束后检查状态变化，仅在状态实际改变时更新图标
+            maybe_update_dynamic_icon(session, prev_status, effects);
+
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
                 if let Some(prev_level) = session.debug_ui.prev_log_level.take() {
@@ -365,12 +382,39 @@ fn push_render(effects: &mut Vec<AppEffect>) {
     effects.push(AppEffect::Render);
 }
 
+/// 将用户选择的 TrayIconStyle 解析为具体的 TrayIconRequest。
+/// Dynamic 模式时根据当前额度状态计算颜色，其余模式直接映射为静态请求。
+fn resolve_tray_icon_request(session: &AppSession, style: TrayIconStyle) -> TrayIconRequest {
+    if style == TrayIconStyle::Dynamic {
+        TrayIconRequest::DynamicStatus(session.overall_worst_status())
+    } else {
+        TrayIconRequest::Static(style)
+    }
+}
+
+/// 若处于 Dynamic 模式且状态等级发生变化，追加 ApplyTrayIcon effect。
+/// `prev_status` 为变更前的快照，只有新旧不同时才推 effect，避免无效的 OS 调用。
+fn maybe_update_dynamic_icon(
+    session: &AppSession,
+    prev_status: StatusLevel,
+    effects: &mut Vec<AppEffect>,
+) {
+    if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
+        let new_status = session.overall_worst_status();
+        if new_status != prev_status {
+            effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
+                new_status,
+            )));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind};
-    use crate::refresh::{RefreshOutcome, RefreshResult};
+    use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind, RefreshData};
+    use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
 
     fn pid(kind: ProviderKind) -> ProviderId {
         ProviderId::BuiltIn(kind)
@@ -641,7 +685,7 @@ mod tests {
         );
         assert!(has_effect(&effects, |e| matches!(
             e,
-            AppEffect::ApplyTrayIcon(TrayIconStyle::Yellow)
+            AppEffect::ApplyTrayIcon(TrayIconRequest::Static(TrayIconStyle::Yellow))
         )));
         assert!(has_effect(&effects, |e| matches!(
             e,
@@ -673,6 +717,135 @@ mod tests {
             session.settings.display.tray_icon_style,
             TrayIconStyle::Monochrome
         );
+    }
+
+    #[test]
+    fn set_tray_icon_dynamic_produces_dynamic_status_effect() {
+        use crate::models::{StatusLevel, TrayIconStyle};
+
+        let mut session = make_session();
+        let effects = reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Dynamic)),
+        );
+
+        assert_eq!(
+            session.settings.display.tray_icon_style,
+            TrayIconStyle::Dynamic
+        );
+        // 无已连接 provider → DynamicStatus(Green)
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Green))
+        )));
+    }
+
+    #[test]
+    fn refresh_success_in_dynamic_mode_produces_tray_icon_effect() {
+        use crate::models::{QuotaInfo, StatusLevel, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Claude), true);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // Session provider 现在 Red (5% remaining), Dynamic 模式应产出 ApplyTrayIcon
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red))
+        )));
+    }
+
+    #[test]
+    fn refresh_success_in_static_mode_does_not_produce_tray_icon_effect() {
+        use crate::models::{QuotaInfo, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Yellow; // 静态模式
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Claude), true);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // 静态模式下不应产出 ApplyTrayIcon effect
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
+    }
+
+    #[test]
+    fn refresh_success_in_dynamic_mode_no_effect_when_status_unchanged() {
+        use crate::models::{QuotaInfo, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Claude), true);
+
+        // 第一次刷新：Green → Red，产出 effect
+        reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // 第二次刷新：Red → Red（状态不变），不应产出 ApplyTrayIcon
+        let effects = reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 96.0, 100.0)], // 仍是 Red
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
     }
 
     // ── SetQuotaDisplayMode ────────────────────────────

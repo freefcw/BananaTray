@@ -118,7 +118,7 @@ fn run_effect_in_window(
             schedule_open_settings_window(state.clone(), display_id, cx);
         }
         AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
-        AppEffect::ApplyTrayIcon(style) => crate::tray_icon_helper::apply_tray_icon(cx, style),
+        AppEffect::ApplyTrayIcon(request) => crate::tray_icon_helper::apply_tray_icon(cx, request),
         AppEffect::QuitApp => cx.quit(),
         other => run_common_effect(state, other),
     }
@@ -129,7 +129,7 @@ fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut 
         AppEffect::Render => notify_view_entity(state, cx),
         AppEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
         AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
-        AppEffect::ApplyTrayIcon(style) => crate::tray_icon_helper::apply_tray_icon(cx, style),
+        AppEffect::ApplyTrayIcon(request) => crate::tray_icon_helper::apply_tray_icon(cx, request),
         AppEffect::QuitApp => cx.quit(),
         other => run_common_effect(state, other),
     }

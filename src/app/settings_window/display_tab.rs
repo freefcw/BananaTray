@@ -88,6 +88,10 @@ impl SettingsView {
                                 t!("settings.tray_icon.colorful").to_string(),
                                 TrayIconStyle::Colorful,
                             ),
+                            (
+                                t!("settings.tray_icon.dynamic").to_string(),
+                                TrayIconStyle::Dynamic,
+                            ),
                         ],
                         &settings.display.tray_icon_style,
                         theme,

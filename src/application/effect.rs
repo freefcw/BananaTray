@@ -1,7 +1,19 @@
 use crate::application::DebugNotificationKind;
-use crate::models::{ProviderId, TrayIconStyle};
+use crate::models::{ProviderId, StatusLevel, TrayIconStyle};
 use crate::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
+
+/// 托盘图标请求 — 区分用户手选的静态样式和动态模式下的状态着色
+#[derive(Debug, Clone, Copy)]
+pub enum TrayIconRequest {
+    /// 用户手选的静态样式（Monochrome / Yellow / Colorful）
+    Static(TrayIconStyle),
+    /// Dynamic 模式下根据额度状态自动选择的颜色
+    /// - Green → Monochrome（减少视觉干扰）
+    /// - Yellow → 黄色香蕉
+    /// - Red → 红色香蕉
+    DynamicStatus(StatusLevel),
+}
 
 /// Reducer 产出的副作用。
 ///
@@ -38,7 +50,7 @@ pub enum AppEffect {
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区
     ClearDebugLogs,
-    /// 切换托盘图标风格
-    ApplyTrayIcon(TrayIconStyle),
+    /// 切换托盘图标
+    ApplyTrayIcon(TrayIconRequest),
     QuitApp,
 }

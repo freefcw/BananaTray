@@ -237,7 +237,14 @@ fn bootstrap_ui(cx: &mut App) {
     cx.set_keep_alive_without_windows(true);
 
     // 系统托盘
-    crate::tray_icon_helper::apply_tray_icon(cx, settings.display.tray_icon_style);
+    let icon_request = match settings.display.tray_icon_style {
+        crate::models::TrayIconStyle::Dynamic => {
+            // 启动时数据尚未加载，默认 Green（= Monochrome），首次刷新后会自动更新
+            crate::application::TrayIconRequest::DynamicStatus(crate::models::StatusLevel::Green)
+        }
+        style => crate::application::TrayIconRequest::Static(style),
+    };
+    crate::tray_icon_helper::apply_tray_icon(cx, icon_request);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
     cx.set_tray_panel_mode(true);
 
