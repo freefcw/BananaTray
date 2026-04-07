@@ -14,13 +14,17 @@ pub(super) struct CompiledPatterns {
 }
 
 impl CompiledPatterns {
-    /// 从 ParserDef 中预编译所有正则。JSON 模式返回空缓存。
-    pub fn compile(parser: &ParserDef) -> Result<Self> {
+    /// 从 ParserDef 中预编译所有正则。JSON 模式和 None 返回空缓存。
+    pub fn compile(parser: &Option<ParserDef>) -> Result<Self> {
+        let empty = Self {
+            email_regex: None,
+            quota_regexes: Vec::new(),
+        };
+        let Some(parser) = parser else {
+            return Ok(empty);
+        };
         match parser {
-            ParserDef::Json { .. } => Ok(Self {
-                email_regex: None,
-                quota_regexes: Vec::new(),
-            }),
+            ParserDef::Json { .. } => Ok(empty),
             ParserDef::Regex {
                 account_email,
                 quotas,
@@ -277,10 +281,10 @@ mod tests {
         email_pattern: &Option<String>,
         rules: &[RegexQuotaRule],
     ) -> Result<RefreshData> {
-        let parser = ParserDef::Regex {
+        let parser = Some(ParserDef::Regex {
             account_email: email_pattern.clone(),
             quotas: rules.to_vec(),
-        };
+        });
         let compiled = CompiledPatterns::compile(&parser)?;
         extract_regex_compiled(raw, &compiled, rules)
     }

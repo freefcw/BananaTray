@@ -6,7 +6,7 @@
 
 将 YAML 文件放到 `~/.config/bananatray/providers/` 目录（macOS 上是 `~/Library/Application Support/bananatray/providers/`），应用启动时自动加载。
 
-示例文件见 `examples/custom-provider-cli.yaml`、`examples/custom-provider-http.yaml` 和 `examples/custom-provider-newapi.yaml`。
+示例文件见 `docs/examples/` 目录。
 
 详细使用指南见 [docs/custom-provider.md](../../docs/custom-provider.md)。
 
@@ -31,9 +31,10 @@ custom/
 
 | type       | 说明 |
 |------------|------|
-| `cli`      | 执行 CLI 命令，获取 stdout/stderr |
-| `http_get` | HTTP GET 请求 |
-| `http_post`| HTTP POST 请求（JSON body） |
+| `cli`        | 执行 CLI 命令，获取 stdout/stderr |
+| `http_get`   | HTTP GET 请求 |
+| `http_post`  | HTTP POST 请求（JSON body） |
+| `placeholder`| 占位：不获取数据，仅检测安装状态 |
 
 ## 支持的认证方式
 
@@ -44,16 +45,19 @@ custom/
 | `bearer`        | Token 直接写在 YAML 配置中 |
 | `bearer_env`    | 从环境变量读取 token，设置 `Authorization: Bearer {token}` |
 | `header_env`    | 从环境变量读取值，设置自定义 header |
+| `file_token`    | 从本地 JSON 文件读取 token（CLI 工具 OAuth 凭据） |
 | `login`         | 先登录获取 token 再用于请求（备选，部分站点可能不支持） |
 
 ## 支持的可用性检查
 
 | type          | 说明 |
 |---------------|------|
-| `always`      | 始终可用（推荐，适合认证信息已在配置中的场景） |
-| `cli_exists`  | 检查 CLI 命令是否存在 |
-| `env_var`     | 检查环境变量是否设置 |
-| `file_exists` | 检查文件是否存在（支持 ~ 展开） |
+| `always`         | 始终可用（推荐，适合认证信息已在配置中的场景） |
+| `cli_exists`     | 检查 CLI 命令是否存在 |
+| `env_var`        | 检查环境变量是否设置 |
+| `file_exists`    | 检查文件是否存在（支持 ~ 展开） |
+| `file_json_match`| 检查 JSON 文件内容是否匹配指定路径 + 值 |
+| `dir_contains`   | 检查目录中是否包含匹配前缀的条目 |
 
 ## 支持的解析方式
 

@@ -1,0 +1,20 @@
+# Kilo Provider (等价于 src/providers/kilo.rs)
+#
+# 演示 dir_contains 可用性检查 + placeholder source：
+# - 通过扫描 ~/.vscode/extensions/ 目录检测扩展安装
+# - 无公开 API 可供监控配额
+id: "kilo:ext"
+metadata:
+  display_name: "Kilo"
+  brand_name: "KiloCode"
+  icon: "src/icons/provider-kilo.svg"
+  dashboard_url: ""
+  account_hint: "KiloCode account"
+  source_label: "vscode extension"
+availability:
+  type: dir_contains
+  path: "~/.vscode/extensions"
+  prefix: "kilocode.kilo-code"
+source:
+  type: placeholder
+  reason: "Kilo Code extension does not expose usage data"

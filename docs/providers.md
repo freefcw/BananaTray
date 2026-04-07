@@ -28,9 +28,9 @@
 
 | 场景示例 | 模板文件 |
 |----------|----------|
-| NewAPI / OneAPI 中转站 | `examples/custom-provider-newapi.yaml` |
-| HTTP API（POST） | `examples/custom-provider-http.yaml` |
-| CLI 命令行工具 | `examples/custom-provider-cli.yaml` |
+| NewAPI / OneAPI 中转站 | `docs/examples/custom-provider-newapi.yaml` |
+| HTTP API（POST） | `docs/examples/custom-provider-http.yaml` |
+| CLI 命令行工具 | `docs/examples/custom-provider-cli.yaml` |
 
 详细使用说明：[自定义 Provider 使用指南](custom-provider.md)
 
