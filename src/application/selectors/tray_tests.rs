@@ -96,7 +96,7 @@ fn account_card_assembled_when_email_and_setting_on() {
             let account = panel.account.expect("account should be Some");
             assert_eq!(account.email, "test@example.com");
             assert_eq!(account.tier, Some("Pro".to_string()));
-            assert!(!account.dashboard_url.is_empty());
+            assert!(account.dashboard_url.is_some());
             assert!(!panel.show_dashboard);
         }
         _ => panic!("expected Panel variant"),

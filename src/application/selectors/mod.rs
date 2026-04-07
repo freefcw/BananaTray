@@ -65,8 +65,8 @@ pub struct AccountInfoViewState {
     pub tier: Option<String>,
     /// 上次更新时间描述
     pub updated_text: String,
-    /// Dashboard URL（空字符串表示不可点击）
-    pub dashboard_url: String,
+    /// 可打开的 Dashboard 链接（None 表示不可点击）
+    pub dashboard_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]

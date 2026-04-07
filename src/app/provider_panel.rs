@@ -7,6 +7,7 @@ use crate::models::ProviderId;
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
+use gpui::ElementId;
 use gpui::*;
 use rust_i18n::t;
 
@@ -241,10 +242,10 @@ impl AppView {
                 ),
         );
 
-        let can_click = !account.dashboard_url.is_empty();
-        let state_for_click = self.state.clone();
+        let arrow_button =
+            self.render_account_dashboard_button(id, account.dashboard_url.is_some(), theme);
 
-        let mut card = div()
+        div()
             .w_full()
             .flex()
             .items_center()
@@ -291,29 +292,68 @@ impl AppView {
                     )
                     .child(status_row),
             )
-            // 右侧 > 箭头
-            .child(div().flex_shrink_0().child(super::widgets::render_svg_icon(
-                "src/icons/chevron-right.svg",
-                px(16.0),
-                theme.text.muted,
-            )));
+            .child(arrow_button)
+    }
 
-        if can_click {
-            card = card.cursor_pointer().hover(|style| style.opacity(0.85));
-            card = card.on_mouse_down(MouseButton::Left, {
-                let id = id.clone();
-                move |_, window, cx| {
-                    runtime::dispatch_in_window(
-                        &state_for_click,
-                        AppAction::OpenDashboard(id.clone()),
-                        window,
-                        cx,
-                    );
-                }
-            });
+    fn render_account_dashboard_button(
+        &self,
+        id: &ProviderId,
+        enabled: bool,
+        theme: &Theme,
+    ) -> AnyElement {
+        if enabled {
+            let state_for_click = self.state.clone();
+            let tooltip_id = format!("account-dashboard-tooltip-{}", id);
+            let button = div()
+                .w(px(32.0))
+                .h(px(32.0))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(10.0))
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.bg.card_inner_hovered))
+                .child(super::widgets::render_svg_icon(
+                    "src/icons/chevron-right.svg",
+                    px(16.0),
+                    theme.text.primary,
+                ))
+                .on_mouse_down(MouseButton::Left, {
+                    let id = id.clone();
+                    move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state_for_click,
+                            AppAction::OpenDashboard(id.clone()),
+                            window,
+                            cx,
+                        );
+                    }
+                });
+
+            super::widgets::with_tooltip(
+                ElementId::Name(tooltip_id.into()),
+                &t!("tooltip.open_dashboard"),
+                theme,
+                button,
+            )
+            .into_any_element()
+        } else {
+            div()
+                .w(px(32.0))
+                .h(px(32.0))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(10.0))
+                .child(super::widgets::render_svg_icon(
+                    "src/icons/chevron-right.svg",
+                    px(16.0),
+                    theme.text.muted,
+                ))
+                .into_any_element()
         }
-
-        card
     }
 
     /// 操作链接行（类似截图中的 "Usage Dashboard"）

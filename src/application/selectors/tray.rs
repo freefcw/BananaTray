@@ -92,11 +92,9 @@ pub fn provider_detail_view_state(
                 email: email.clone(),
                 tier: provider.account_tier.clone(),
                 updated_text: format_last_updated(&provider),
-                dashboard_url: if flags.has_dashboard_url {
-                    provider.dashboard_url().to_string()
-                } else {
-                    String::new()
-                },
+                dashboard_url: flags
+                    .has_dashboard_url
+                    .then(|| provider.dashboard_url().to_string()),
             })
     } else {
         None

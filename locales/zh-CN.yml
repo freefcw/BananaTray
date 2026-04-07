@@ -5,6 +5,7 @@ tray.tooltip: "BananaTray - AI 配额监控"
 
 # ── 提示文本 ──────────────────────────────────────────────
 tooltip.dashboard: "仪表盘"
+tooltip.open_dashboard: "打开 Dashboard"
 tooltip.refresh: "刷新"
 tooltip.settings: "设置"
 tooltip.quit: "退出"
