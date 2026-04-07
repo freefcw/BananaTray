@@ -14,8 +14,11 @@ pub struct CustomProviderDef {
     pub availability: AvailabilityDef,
     /// 数据获取方式
     pub source: SourceDef,
-    /// 响应解析规则
-    pub parser: ParserDef,
+    /// 响应解析规则（placeholder source 时可省略）
+    pub parser: Option<ParserDef>,
+    /// 响应预处理管道（解析前执行，可选）
+    #[serde(default)]
+    pub preprocess: Vec<PreprocessStep>,
 }
 
 /// Provider 展示元数据
@@ -51,6 +54,26 @@ pub enum AvailabilityDef {
     EnvVar { value: String },
     /// 检查文件是否存在（支持 ~ 展开）
     FileExists { value: String },
+    /// 检查 JSON 文件中特定路径的值是否匹配
+    ///
+    /// 覆盖场景：VertexAI 检查 `~/.gemini/settings.json` 中 `security.auth.selectedType == "vertex-ai"`
+    FileJsonMatch {
+        /// 文件路径（支持 ~ 展开）
+        path: String,
+        /// JSON 点分路径
+        json_path: String,
+        /// 期望值
+        expected: String,
+    },
+    /// 检查目录中是否存在匹配前缀的子项
+    ///
+    /// 覆盖场景：Kilo 检查 `~/.vscode/extensions/` 下是否有 `kilocode.kilo-code` 前缀的目录
+    DirContains {
+        /// 目录路径（支持 ~ 展开）
+        path: String,
+        /// 子项名称前缀
+        prefix: String,
+    },
     /// 始终可用（认证信息已在 YAML 中配置，无需前置检查）
     Always,
 }
@@ -83,6 +106,13 @@ pub enum SourceDef {
         #[serde(default)]
         body: String,
     },
+    /// 占位 Provider：不获取数据，直接返回不可用错误
+    ///
+    /// 覆盖场景：OpenCode / Kilo / VertexAI 等只需检测安装但无法监控的 Provider
+    Placeholder {
+        /// 不可用的原因说明
+        reason: String,
+    },
 }
 
 /// 认证方式
@@ -95,6 +125,15 @@ pub enum AuthDef {
     BearerEnv { env_var: String },
     /// 从环境变量读取自定义 header 值
     HeaderEnv { header: String, env_var: String },
+    /// 从本地 JSON 文件读取 token（自动作为 Bearer token 发送）
+    ///
+    /// 覆盖场景：Codex 从 `~/.codex/auth.json` → `tokens.access_token` 读取 OAuth token
+    FileToken {
+        /// 文件路径（支持 ~ 展开）
+        path: String,
+        /// JSON 点分路径提取 token 值
+        token_path: String,
+    },
     /// 通过登录接口获取 access token（备选方案）
     ///
     /// ⚠️ 大部分 NewAPI 站点启用了 Turnstile 等验证，此方式可能无法使用。
@@ -131,6 +170,17 @@ pub enum AuthDef {
         #[serde(default = "default_session_key")]
         cookie_name: String,
     },
+}
+
+/// 响应预处理步骤
+///
+/// 在将原始响应传给 parser 之前执行的清洗操作。
+/// 覆盖场景：Kiro CLI 输出包含 ANSI 转义码和 Unicode 进度条字符。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreprocessStep {
+    /// 移除 ANSI 转义序列和 Unicode 进度条字符
+    StripAnsi,
 }
 
 fn default_token_path() -> String {
@@ -279,7 +329,7 @@ parser:
             AvailabilityDef::CliExists { .. }
         ));
         assert!(matches!(def.source, SourceDef::Cli { .. }));
-        assert!(matches!(def.parser, ParserDef::Regex { .. }));
+        assert!(matches!(def.parser, Some(ParserDef::Regex { .. })));
     }
 
     #[test]
@@ -315,7 +365,7 @@ parser:
         assert_eq!(def.id, "custom:api");
         assert!(matches!(def.availability, AvailabilityDef::EnvVar { .. }));
         assert!(matches!(def.source, SourceDef::HttpPost { .. }));
-        if let ParserDef::Json { quotas, .. } = &def.parser {
+        if let Some(ParserDef::Json { quotas, .. }) = &def.parser {
             assert_eq!(quotas.len(), 1);
             assert!(matches!(quotas[0].quota_type, QuotaTypeDef::Weekly));
         } else {
@@ -345,7 +395,7 @@ parser:
         let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(def.metadata.icon, "");
         assert_eq!(def.metadata.account_hint, "account");
-        if let ParserDef::Regex { quotas, .. } = &def.parser {
+        if let Some(ParserDef::Regex { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].used_group, 1);
             assert_eq!(quotas[0].limit_group, 2);
             assert!(matches!(quotas[0].quota_type, QuotaTypeDef::General));
@@ -375,7 +425,7 @@ parser:
       divisor: 500000
 "#;
         let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
-        if let ParserDef::Json { quotas, .. } = &def.parser {
+        if let Some(ParserDef::Json { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, Some(500000.0));
             assert!(matches!(quotas[0].quota_type, QuotaTypeDef::Credit));
         } else {
@@ -404,7 +454,7 @@ parser:
       limit: "limit"
 "#;
         let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
-        if let ParserDef::Json { quotas, .. } = &def.parser {
+        if let Some(ParserDef::Json { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, None);
         } else {
             panic!("Expected JSON parser");
@@ -432,7 +482,7 @@ parser:
       divisor: 100
 "#;
         let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
-        if let ParserDef::Regex { quotas, .. } = &def.parser {
+        if let Some(ParserDef::Regex { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, Some(100.0));
         } else {
             panic!("Expected Regex parser");
@@ -581,5 +631,170 @@ parser:
         } else {
             panic!("Expected HttpGet source");
         }
+    }
+
+    // ── Phase 3: new schema types ────────────────
+
+    #[test]
+    fn test_deserialize_placeholder_source() {
+        let yaml = r#"
+id: "opencode:cli"
+metadata:
+  display_name: "OpenCode"
+  brand_name: "OpenCode"
+availability:
+  type: cli_exists
+  value: "opencode"
+source:
+  type: placeholder
+  reason: "No public API available for quota monitoring"
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.id, "opencode:cli");
+        assert!(matches!(def.source, SourceDef::Placeholder { .. }));
+        assert!(def.parser.is_none());
+    }
+
+    #[test]
+    fn test_deserialize_file_json_match_availability() {
+        let yaml = r#"
+id: "vertex:config"
+metadata:
+  display_name: "Vertex AI"
+  brand_name: "Google"
+availability:
+  type: file_json_match
+  path: "~/.gemini/settings.json"
+  json_path: "security.auth.selectedType"
+  expected: "vertex-ai"
+source:
+  type: placeholder
+  reason: "Shares Gemini quota"
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        if let AvailabilityDef::FileJsonMatch {
+            path,
+            json_path,
+            expected,
+        } = &def.availability
+        {
+            assert_eq!(path, "~/.gemini/settings.json");
+            assert_eq!(json_path, "security.auth.selectedType");
+            assert_eq!(expected, "vertex-ai");
+        } else {
+            panic!("Expected FileJsonMatch availability");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_dir_contains_availability() {
+        let yaml = r#"
+id: "kilo:ext"
+metadata:
+  display_name: "Kilo"
+  brand_name: "KiloCode"
+availability:
+  type: dir_contains
+  path: "~/.vscode/extensions"
+  prefix: "kilocode.kilo-code"
+source:
+  type: placeholder
+  reason: "No public API available"
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        if let AvailabilityDef::DirContains { path, prefix } = &def.availability {
+            assert_eq!(path, "~/.vscode/extensions");
+            assert_eq!(prefix, "kilocode.kilo-code");
+        } else {
+            panic!("Expected DirContains availability");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_file_token_auth() {
+        let yaml = r#"
+id: "codex-like:api"
+metadata:
+  display_name: "CodexLike"
+  brand_name: "OpenAI"
+availability:
+  type: file_exists
+  value: "~/.codex/auth.json"
+source:
+  type: http_get
+  url: "https://api.example.com/usage"
+  auth:
+    type: file_token
+    path: "~/.codex/auth.json"
+    token_path: "tokens.access_token"
+parser:
+  format: json
+  quotas:
+    - label: "Usage"
+      used: "usage.used"
+      limit: "usage.limit"
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        if let SourceDef::HttpGet { auth, .. } = &def.source {
+            match auth.as_ref().unwrap() {
+                AuthDef::FileToken { path, token_path } => {
+                    assert_eq!(path, "~/.codex/auth.json");
+                    assert_eq!(token_path, "tokens.access_token");
+                }
+                _ => panic!("Expected FileToken auth"),
+            }
+        } else {
+            panic!("Expected HttpGet source");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_preprocess_strip_ansi() {
+        let yaml = r#"
+id: "kiro-like:cli"
+metadata:
+  display_name: "KiroLike"
+  brand_name: "AWS"
+availability:
+  type: cli_exists
+  value: "kiro-cli"
+source:
+  type: cli
+  command: "kiro-cli"
+  args: ["usage"]
+preprocess:
+  - strip_ansi
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.preprocess.len(), 1);
+        assert!(matches!(def.preprocess[0], PreprocessStep::StripAnsi));
+    }
+
+    #[test]
+    fn test_deserialize_preprocess_defaults_empty() {
+        let yaml = r#"
+id: "test:cli"
+metadata:
+  display_name: "Test"
+  brand_name: "Test"
+availability:
+  type: cli_exists
+  value: "echo"
+source:
+  type: cli
+  command: "echo"
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        assert!(def.preprocess.is_empty());
     }
 }

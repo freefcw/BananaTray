@@ -1,0 +1,20 @@
+# OpenCode Provider (等价于 src/providers/opencode.rs)
+#
+# 演示 placeholder source 能力：
+# - check_availability 只检测 CLI 是否存在
+# - refresh 直接返回 unavailable 错误
+# - 无需 parser 配置
+id: "opencode:cli"
+metadata:
+  display_name: "OpenCode"
+  brand_name: "OpenCode"
+  icon: "src/icons/provider-opencode.svg"
+  dashboard_url: ""
+  account_hint: "OpenCode account"
+  source_label: "opencode cli"
+availability:
+  type: cli_exists
+  value: "opencode"
+source:
+  type: placeholder
+  reason: "OpenCode CLI does not provide usage/quota data yet"

@@ -113,11 +113,20 @@ fn validate_source(source: &SourceDef) -> Result<()> {
                 anyhow::bail!("'source.url' cannot be empty");
             }
         }
+        SourceDef::Placeholder { reason } => {
+            if reason.is_empty() {
+                anyhow::bail!("'source.reason' cannot be empty for placeholder provider");
+            }
+        }
     }
     Ok(())
 }
 
-fn validate_parser(parser: &ParserDef) -> Result<()> {
+fn validate_parser(parser: &Option<ParserDef>) -> Result<()> {
+    let Some(parser) = parser else {
+        // parser 可以为 None（placeholder source）
+        return Ok(());
+    };
     match parser {
         ParserDef::Json { quotas, .. } => {
             if quotas.is_empty() {
@@ -234,7 +243,7 @@ mod tests {
                 command: "echo".to_string(),
                 args: vec![],
             },
-            parser: ParserDef::Regex {
+            parser: Some(ParserDef::Regex {
                 account_email: None,
                 quotas: vec![RegexQuotaRule {
                     label: "Usage".to_string(),
@@ -244,7 +253,8 @@ mod tests {
                     quota_type: QuotaTypeDef::General,
                     divisor: None,
                 }],
-            },
+            }),
+            preprocess: vec![],
         }
     }
 
@@ -293,17 +303,17 @@ mod tests {
     #[test]
     fn test_validate_empty_quotas() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Regex {
+        def.parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![],
-        };
+        });
         assert!(validate(&def).is_err());
     }
 
     #[test]
     fn test_validate_invalid_regex() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Regex {
+        def.parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Bad".to_string(),
@@ -313,7 +323,7 @@ mod tests {
                 quota_type: QuotaTypeDef::General,
                 divisor: None,
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("invalid regex"));
     }
@@ -321,7 +331,7 @@ mod tests {
     #[test]
     fn test_validate_bad_capture_group() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Regex {
+        def.parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Bad".to_string(),
@@ -331,7 +341,7 @@ mod tests {
                 quota_type: QuotaTypeDef::General,
                 divisor: None,
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("limit_group 5"));
     }
@@ -339,7 +349,7 @@ mod tests {
     #[test]
     fn test_validate_empty_json_paths() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -351,14 +361,14 @@ mod tests {
                 detail: None,
                 divisor: None,
             }],
-        };
+        });
         assert!(validate(&def).is_err());
     }
 
     #[test]
     fn test_validate_json_remaining_mode_valid() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -370,14 +380,14 @@ mod tests {
                 detail: None,
                 divisor: None,
             }],
-        };
+        });
         assert!(validate(&def).is_ok());
     }
 
     #[test]
     fn test_validate_json_remaining_and_limit_conflict() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -389,7 +399,7 @@ mod tests {
                 detail: None,
                 divisor: None,
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("mutually exclusive"));
     }
@@ -397,7 +407,7 @@ mod tests {
     #[test]
     fn test_validate_json_limit_without_used() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -409,7 +419,7 @@ mod tests {
                 detail: None,
                 divisor: None,
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("'used' is required"));
     }
@@ -417,7 +427,7 @@ mod tests {
     #[test]
     fn test_validate_json_divisor_zero() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -429,7 +439,7 @@ mod tests {
                 detail: None,
                 divisor: Some(0.0),
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("divisor must be positive"));
     }
@@ -437,7 +447,7 @@ mod tests {
     #[test]
     fn test_validate_regex_divisor_zero() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Regex {
+        def.parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Credits".to_string(),
@@ -447,7 +457,7 @@ mod tests {
                 quota_type: QuotaTypeDef::General,
                 divisor: Some(0.0),
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("divisor must be positive"));
     }
@@ -455,7 +465,7 @@ mod tests {
     #[test]
     fn test_validate_divisor_negative() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -467,7 +477,7 @@ mod tests {
                 detail: None,
                 divisor: Some(-100.0),
             }],
-        };
+        });
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("divisor must be positive"));
     }
@@ -475,7 +485,7 @@ mod tests {
     #[test]
     fn test_validate_divisor_positive_is_ok() {
         let mut def = make_minimal_def();
-        def.parser = ParserDef::Json {
+        def.parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -487,8 +497,52 @@ mod tests {
                 detail: None,
                 divisor: Some(500000.0),
             }],
-        };
+        });
         assert!(validate(&def).is_ok());
+    }
+
+    // ── Phase 3: placeholder validation ──────────
+
+    #[test]
+    fn test_validate_placeholder_source_valid() {
+        let mut def = make_minimal_def();
+        def.source = SourceDef::Placeholder {
+            reason: "No API available".to_string(),
+        };
+        def.parser = None;
+        assert!(validate(&def).is_ok());
+    }
+
+    #[test]
+    fn test_validate_placeholder_source_empty_reason() {
+        let mut def = make_minimal_def();
+        def.source = SourceDef::Placeholder {
+            reason: String::new(),
+        };
+        def.parser = None;
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("reason"));
+    }
+
+    #[test]
+    fn test_load_placeholder_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+id: "placeholder:test"
+metadata:
+  display_name: "Placeholder Test"
+  brand_name: "Test"
+availability:
+  type: cli_exists
+  value: "echo"
+source:
+  type: placeholder
+  reason: "No public API"
+"#;
+        fs::write(dir.path().join("placeholder.yaml"), yaml).unwrap();
+        let providers = load_from_dir(dir.path());
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].id(), "placeholder:test");
     }
 
     // ── load_from_dir ───────────────────────────

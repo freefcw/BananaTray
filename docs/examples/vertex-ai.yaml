@@ -1,0 +1,21 @@
+# Vertex AI Provider (等价于 src/providers/vertex_ai.rs)
+#
+# 演示 file_json_match 可用性检查 + placeholder source：
+# - 通过检查 ~/.gemini/settings.json 中 security.auth.selectedType 字段
+# - Vertex AI 与 Gemini 共享配额，无需单独监控
+id: "vertex-ai:config"
+metadata:
+  display_name: "Vertex AI"
+  brand_name: "Google"
+  icon: "src/icons/provider-vertex-ai.svg"
+  dashboard_url: ""
+  account_hint: "Google Cloud account"
+  source_label: "vertex ai config"
+availability:
+  type: file_json_match
+  path: "~/.gemini/settings.json"
+  json_path: "security.auth.selectedType"
+  expected: "vertex-ai"
+source:
+  type: placeholder
+  reason: "Vertex AI shares quota with Gemini API — monitor via Gemini provider"

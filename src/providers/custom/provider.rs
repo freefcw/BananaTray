@@ -9,7 +9,9 @@ use crate::providers::{AiProvider, ProviderError};
 use crate::utils::http_client;
 
 use super::extractor::{self, CompiledPatterns};
-use super::schema::{AuthDef, AvailabilityDef, CustomProviderDef, HeaderDef, SourceDef};
+use super::schema::{
+    AuthDef, AvailabilityDef, CustomProviderDef, HeaderDef, PreprocessStep, SourceDef,
+};
 
 /// 基于 YAML 定义的自定义 Provider 运行时
 pub struct CustomProvider {
@@ -58,13 +60,23 @@ impl AiProvider for CustomProvider {
             AvailabilityDef::CliExists { value } => check_cli_exists(value),
             AvailabilityDef::EnvVar { value } => check_env_var(value),
             AvailabilityDef::FileExists { value } => check_file_exists(value),
+            AvailabilityDef::FileJsonMatch {
+                path,
+                json_path,
+                expected,
+            } => check_file_json_match(path, json_path, expected),
+            AvailabilityDef::DirContains { path, prefix } => check_dir_contains(path, prefix),
             AvailabilityDef::Always => Ok(()),
         }
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
         let raw = fetch(&self.def.base_url, &self.def.source)?;
-        extractor::extract(&self.def.parser, &raw, &self.compiled)
+        let raw = apply_preprocess(&raw, &self.def.preprocess);
+        let parser = self.def.parser.as_ref().ok_or_else(|| {
+            ProviderError::unavailable("no parser configured (placeholder provider)")
+        })?;
+        extractor::extract(parser, &raw, &self.compiled)
     }
 }
 
@@ -121,6 +133,39 @@ fn check_env_var(var: &str) -> Result<()> {
     }
 }
 
+fn check_file_json_match(path: &str, json_path: &str, expected: &str) -> Result<()> {
+    let json = read_json_file(path)?;
+    let actual = extractor::json_navigate(&json, json_path)
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(ProviderError::config_missing(&format!(
+            "{}:{} (expected '{}', got '{}')",
+            path, json_path, expected, actual
+        ))
+        .into())
+    }
+}
+
+fn check_dir_contains(path: &str, prefix: &str) -> Result<()> {
+    let expanded = expand_tilde(path);
+    if let Ok(entries) = std::fs::read_dir(&expanded) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with(prefix) {
+                    return Ok(());
+                }
+            }
+        }
+    }
+    Err(
+        ProviderError::unavailable(&format!("no entry with prefix '{}' in {}", prefix, path))
+            .into(),
+    )
+}
+
 fn check_file_exists(path: &str) -> Result<()> {
     let expanded = expand_tilde(path);
     if std::path::Path::new(&expanded).exists() {
@@ -144,6 +189,22 @@ fn expand_tilde(path: &str) -> String {
 // 数据获取
 // ============================================================================
 
+/// 应用预处理管道
+fn apply_preprocess(raw: &str, steps: &[PreprocessStep]) -> String {
+    if steps.is_empty() {
+        return raw.to_string();
+    }
+    let mut result = raw.to_string();
+    for step in steps {
+        match step {
+            PreprocessStep::StripAnsi => {
+                result = crate::utils::text_utils::strip_terminal_noise(&result);
+            }
+        }
+    }
+    result
+}
+
 fn fetch(base_url: &Option<String>, source: &SourceDef) -> Result<String> {
     match source {
         SourceDef::Cli { command, args } => fetch_cli(command, args),
@@ -154,6 +215,7 @@ fn fetch(base_url: &Option<String>, source: &SourceDef) -> Result<String> {
             headers,
             body,
         } => fetch_http_post(base_url, url, auth, headers, body),
+        SourceDef::Placeholder { reason } => Err(ProviderError::unavailable(reason).into()),
     }
 }
 
@@ -210,6 +272,10 @@ fn resolve_auth_headers(
             AuthDef::HeaderEnv { header, env_var } => {
                 let value = read_env(env_var)?;
                 result.push(format!("{}: {}", header, value));
+            }
+            AuthDef::FileToken { path, token_path } => {
+                let token = read_file_token(path, token_path)?;
+                result.push(format!("Authorization: Bearer {}", token));
             }
             AuthDef::Login {
                 login_url,
@@ -292,6 +358,24 @@ fn read_env(var: &str) -> Result<String> {
         .ok_or_else(|| ProviderError::config_missing(var).into())
 }
 
+/// 从本地 JSON 文件中读取 token（纯 I/O + JSON 点分路径提取）
+fn read_file_token(path: &str, token_path: &str) -> Result<String> {
+    let json = read_json_file(path)?;
+    extractor::json_string(&json, token_path).ok_or_else(|| {
+        ProviderError::config_missing(&format!("token not found at '{}' in {}", token_path, path))
+            .into()
+    })
+}
+
+/// 读取本地 JSON 文件并解析，公共基础设施
+fn read_json_file(path: &str) -> Result<serde_json::Value> {
+    let expanded = expand_tilde(path);
+    let content = std::fs::read_to_string(&expanded)
+        .map_err(|_| ProviderError::unavailable(&format!("file not found: {}", path)))?;
+    serde_json::from_str(&content)
+        .map_err(|_| ProviderError::parse_failed(&format!("invalid JSON in: {}", path)).into())
+}
+
 /// 展开字符串中的 ${ENV_VAR} 引用
 fn expand_env_vars(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
@@ -325,6 +409,12 @@ fn check_availability_sync(def: &AvailabilityDef) -> bool {
         AvailabilityDef::CliExists { value } => check_cli_exists(value).is_ok(),
         AvailabilityDef::EnvVar { value } => check_env_var(value).is_ok(),
         AvailabilityDef::FileExists { value } => check_file_exists(value).is_ok(),
+        AvailabilityDef::FileJsonMatch {
+            path,
+            json_path,
+            expected,
+        } => check_file_json_match(path, json_path, expected).is_ok(),
+        AvailabilityDef::DirContains { path, prefix } => check_dir_contains(path, prefix).is_ok(),
         AvailabilityDef::Always => true,
     }
 }
@@ -835,5 +925,207 @@ parser:
 
         std::env::remove_var("TEST_LOGIN_USER");
         std::env::remove_var("TEST_LOGIN_PASS");
+    }
+
+    // ── Phase 3: placeholder source ──────────────
+
+    #[test]
+    fn test_placeholder_source_returns_unavailable() {
+        let result = fetch(
+            &None,
+            &SourceDef::Placeholder {
+                reason: "No public API available".to_string(),
+            },
+        );
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("No public API available"));
+    }
+
+    // ── Phase 3: file_json_match availability ────
+
+    #[test]
+    fn test_file_json_match_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let json_path = dir.path().join("settings.json");
+        std::fs::write(
+            &json_path,
+            r#"{"security":{"auth":{"selectedType":"vertex-ai"}}}"#,
+        )
+        .unwrap();
+        let result = check_file_json_match(
+            json_path.to_str().unwrap(),
+            "security.auth.selectedType",
+            "vertex-ai",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_file_json_match_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let json_path = dir.path().join("settings.json");
+        std::fs::write(
+            &json_path,
+            r#"{"security":{"auth":{"selectedType":"gemini"}}}"#,
+        )
+        .unwrap();
+        let result = check_file_json_match(
+            json_path.to_str().unwrap(),
+            "security.auth.selectedType",
+            "vertex-ai",
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("expected 'vertex-ai'"));
+        assert!(err.to_string().contains("got 'gemini'"));
+    }
+
+    #[test]
+    fn test_file_json_match_file_not_found() {
+        let result = check_file_json_match("/nonexistent/path/settings.json", "some.path", "value");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_json_match_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let json_path = dir.path().join("bad.json");
+        std::fs::write(&json_path, "not json").unwrap();
+        let result = check_file_json_match(json_path.to_str().unwrap(), "some.path", "value");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid JSON"));
+    }
+
+    // ── Phase 3: dir_contains availability ───────
+
+    #[test]
+    fn test_dir_contains_success() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("kilocode.kilo-code-1.0.0")).unwrap();
+        let result = check_dir_contains(dir.path().to_str().unwrap(), "kilocode.kilo-code");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_dir_contains_no_match() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("other-extension-1.0")).unwrap();
+        let result = check_dir_contains(dir.path().to_str().unwrap(), "kilocode.kilo-code");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dir_contains_nonexistent_dir() {
+        let result = check_dir_contains("/nonexistent/path/12345", "some-prefix");
+        assert!(result.is_err());
+    }
+
+    // ── Phase 3: file_token auth ─────────────────
+
+    #[test]
+    fn test_read_file_token_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_path = dir.path().join("auth.json");
+        std::fs::write(
+            &auth_path,
+            r#"{"tokens":{"access_token":"sk-test-12345","refresh_token":"rt-abc"}}"#,
+        )
+        .unwrap();
+        let token = read_file_token(auth_path.to_str().unwrap(), "tokens.access_token").unwrap();
+        assert_eq!(token, "sk-test-12345");
+    }
+
+    #[test]
+    fn test_read_file_token_path_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_path = dir.path().join("auth.json");
+        std::fs::write(&auth_path, r#"{"tokens":{"refresh_token":"rt-abc"}}"#).unwrap();
+        let err = read_file_token(auth_path.to_str().unwrap(), "tokens.access_token").unwrap_err();
+        assert!(err.to_string().contains("token not found"));
+    }
+
+    #[test]
+    fn test_read_file_token_file_missing() {
+        let err =
+            read_file_token("/nonexistent/path/auth.json", "tokens.access_token").unwrap_err();
+        assert!(err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn test_read_file_token_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_path = dir.path().join("auth.json");
+        std::fs::write(&auth_path, "not json content").unwrap();
+        let err = read_file_token(auth_path.to_str().unwrap(), "tokens.access_token").unwrap_err();
+        assert!(err.to_string().contains("invalid JSON"));
+    }
+
+    // ── Phase 3: preprocess strip_ansi ───────────
+
+    #[test]
+    fn test_apply_preprocess_empty_steps() {
+        let raw = "hello \x1b[32mworld\x1b[0m";
+        let result = apply_preprocess(raw, &[]);
+        // 没有预处理步骤时，原样返回
+        assert_eq!(result, raw);
+    }
+
+    #[test]
+    fn test_apply_preprocess_strip_ansi() {
+        use super::PreprocessStep;
+        let raw = "Usage: \x1b[1m\x1b[32m25\x1b[0m / \x1b[1m100\x1b[0m requests";
+        let result = apply_preprocess(raw, &[PreprocessStep::StripAnsi]);
+        assert_eq!(result, "Usage: 25 / 100 requests");
+    }
+
+    #[test]
+    fn test_apply_preprocess_strip_ansi_with_progress_chars() {
+        use super::PreprocessStep;
+        // 模拟 Kiro CLI 输出中的进度条字符
+        let raw = "⣾⣽⣻ Loading...\x1b[2K\x1b[1AUsage: 10/50\n";
+        let result = apply_preprocess(raw, &[PreprocessStep::StripAnsi]);
+        assert!(result.contains("Usage: 10/50"));
+        assert!(!result.contains("\x1b["));
+    }
+
+    // ── Phase 3: check_availability_sync for new types ──
+
+    #[test]
+    fn test_availability_sync_file_json_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let json_path = dir.path().join("config.json");
+        std::fs::write(&json_path, r#"{"mode":"enabled"}"#).unwrap();
+
+        let def = AvailabilityDef::FileJsonMatch {
+            path: json_path.to_str().unwrap().to_string(),
+            json_path: "mode".to_string(),
+            expected: "enabled".to_string(),
+        };
+        assert!(check_availability_sync(&def));
+
+        let def_mismatch = AvailabilityDef::FileJsonMatch {
+            path: json_path.to_str().unwrap().to_string(),
+            json_path: "mode".to_string(),
+            expected: "disabled".to_string(),
+        };
+        assert!(!check_availability_sync(&def_mismatch));
+    }
+
+    #[test]
+    fn test_availability_sync_dir_contains() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("my-extension-v1")).unwrap();
+
+        let def = AvailabilityDef::DirContains {
+            path: dir.path().to_str().unwrap().to_string(),
+            prefix: "my-extension".to_string(),
+        };
+        assert!(check_availability_sync(&def));
+
+        let def_miss = AvailabilityDef::DirContains {
+            path: dir.path().to_str().unwrap().to_string(),
+            prefix: "other-extension".to_string(),
+        };
+        assert!(!check_availability_sync(&def_miss));
     }
 }
