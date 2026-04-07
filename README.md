@@ -5,7 +5,7 @@ A cross-platform system tray application for monitoring AI coding assistant quot
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover, right-click opens settings
-- **12 AI provider integrations** — real-time quota monitoring via APIs, CLIs, and local credential files
+- **14 AI provider integrations** — real-time quota monitoring via APIs, CLIs, and local credential files
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
@@ -24,6 +24,8 @@ A cross-platform system tray application for monitoring AI coding assistant quot
 | **Kimi** | HTTP API (`kimi.com`) | Implemented |
 | **Amp** | CLI (`amp usage`) | Implemented |
 | **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Implemented |
+| **Antigravity** | Local language server API + local cache | Implemented |
+| **Windsurf** | Local language server API + local cache | Implemented |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Implemented |
 | **Kiro** | CLI (`kiro-cli` interactive PTY) | Implemented |
 | **Kilo** | — | Placeholder (no public API) |
@@ -88,7 +90,7 @@ src/
   app/                 — GPUI views, settings window, widgets (behind `app` feature)
   app_state.rs         — Pure-logic sub-states (ProviderStore, NavigationState, SettingsUiState)
   models/              — Core data types (ProviderKind, QuotaInfo, AppSettings, etc.)
-  providers/           — AiProvider trait + 12 provider implementations + ProviderManager
+  providers/           — AiProvider trait + 14 provider implementations + ProviderManager
   refresh.rs           — RefreshCoordinator: background event loop for quota polling
   settings_store.rs    — JSON settings persistence (load/save)
   notification.rs      — Quota alert state machine + system notifications

@@ -1,6 +1,6 @@
 # Providers
 
-## Supported Providers (12 built-in + custom)
+## Supported Providers (14 built-in + custom)
 
 | Provider | ID | Data Source | Implementation |
 |----------|-----|-----------|----------------|
@@ -11,7 +11,8 @@
 | Kimi | `kimi:api` | HTTP API | `providers/kimi/` |
 | Amp | `amp:cli` | CLI (`amp usage`) | `providers/amp.rs` |
 | Cursor | `cursor:api` | HTTP API + local SQLite | `providers/cursor/` |
-| Antigravity | `antigravity:api` | Local language server API | `providers/antigravity/` ([API 文档](antigravity-api.md)) |
+| Antigravity | `antigravity:api` | Local language server API + local cache | `providers/antigravity/` + `providers/codeium_family/` ([Codeium-family 架构文档](antigravity-api.md)) |
+| Windsurf | `windsurf:api` | Local language server API + local cache | `providers/windsurf.rs` + `providers/codeium_family/` ([Codeium-family 架构文档](antigravity-api.md)) |
 | MiniMax | `minimax:api` | HTTP API | `providers/minimax/` |
 | Kiro | `kiro:cli` | CLI (`kiro-cli chat --no-interactive /usage`) | `providers/kiro.rs` |
 | Kilo | `kilo:ext` | — (placeholder) | `providers/kilo.rs` |
