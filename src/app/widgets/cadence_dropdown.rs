@@ -7,6 +7,9 @@ use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// 下拉组件统一宽度
+const DROPDOWN_WIDTH: f32 = 140.0;
+
 /// Available refresh cadence options (None = Manual, Some(mins) = Auto)
 const OPTIONS: &[Option<u64>] = &[
     None,
@@ -42,7 +45,7 @@ pub(crate) fn render_cadence_trigger(
         .flex_shrink_0()
         .items_center()
         .justify_between()
-        .min_w(px(110.0))
+        .w(px(DROPDOWN_WIDTH))
         .gap(px(8.0))
         .px(px(12.0))
         .py(px(6.0))
@@ -99,7 +102,7 @@ fn render_cadence_options(
             .absolute()
             .top(px(36.0)) // Slight offset from the trigger button
             .right(px(0.0))
-            .w(px(140.0)) // Explicit width ensures w_full() on children calculates properly
+            .w(px(DROPDOWN_WIDTH)) // 与触发按钮保持一致的宽度
             .p(px(6.0)) // Inner padding for the popup shell
             .rounded(px(8.0))
             .bg(theme.bg.subtle)
