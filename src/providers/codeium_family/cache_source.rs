@@ -1,11 +1,13 @@
 use super::parse_strategy::{CacheParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
-use crate::models::RefreshData;
+use crate::models::{QuotaInfo, QuotaType, RefreshData};
 use crate::providers::ProviderError;
+use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use log::debug;
+use log::{debug, warn};
 use rusqlite::{Connection, OpenFlags};
+use serde::Deserialize;
 use std::path::PathBuf;
 
 pub fn is_available(spec: &CodeiumFamilySpec) -> bool {
@@ -23,11 +25,42 @@ pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
             )
         })?;
 
-    let auth_status_json = query_auth_status_json(&conn, spec)?;
+    // 策略 1: 传统 protobuf 解析
+    let proto_result = read_via_protobuf(&conn, spec);
+    if proto_result.is_ok() {
+        return proto_result;
+    }
+    let proto_err = proto_result.unwrap_err();
+
+    // 策略 2: cachedPlanInfo JSON 回退（新版 Windsurf）
+    if !spec.cached_plan_info_key_candidates.is_empty() {
+        warn!(
+            target: "providers",
+            "{} protobuf decode failed: {}, trying cachedPlanInfo fallback",
+            spec.log_label,
+            proto_err
+        );
+        match read_via_cached_plan_info(&conn, spec) {
+            Ok(data) => return Ok(data),
+            Err(plan_err) => {
+                warn!(
+                    target: "providers",
+                    "{} cachedPlanInfo fallback also failed: {}",
+                    spec.log_label,
+                    plan_err
+                );
+            }
+        }
+    }
+
+    Err(proto_err)
+}
+
+fn read_via_protobuf(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+    let auth_status_json = query_auth_status_json(conn, spec)?;
     let user_status_data = decode_user_status_payload(&auth_status_json)?;
     let strategy = CacheParseStrategy;
     let (quotas, email, plan_name) = strategy.parse(&user_status_data)?;
-
     Ok(RefreshData::with_account(quotas, email, plan_name))
 }
 
@@ -92,9 +125,150 @@ fn decode_user_status_payload(auth_status_json: &str) -> Result<Vec<u8>> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// cachedPlanInfo JSON 回退策略（新版 Windsurf）
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CachedPlanInfo {
+    plan_name: Option<String>,
+    #[serde(default)]
+    quota_usage: Option<QuotaUsageInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QuotaUsageInfo {
+    daily_remaining_percent: Option<f64>,
+    weekly_remaining_percent: Option<f64>,
+    daily_reset_at_unix: Option<i64>,
+    weekly_reset_at_unix: Option<i64>,
+}
+
+fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+    let json_str = query_cached_plan_info(conn, spec)?;
+    let plan_info = parse_cached_plan_info(&json_str)?;
+
+    let plan_name = plan_info.plan_name;
+    let mut quotas = Vec::new();
+
+    if let Some(usage) = plan_info.quota_usage {
+        if let Some(daily_pct) = usage.daily_remaining_percent {
+            let used = 100.0 - daily_pct;
+            let reset_text = usage
+                .daily_reset_at_unix
+                .and_then(|ts| {
+                    chrono::DateTime::from_timestamp(ts, 0)
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                })
+                .as_deref()
+                .and_then(time_utils::format_reset_countdown);
+
+            quotas.push(QuotaInfo::with_details(
+                "Daily Quota",
+                used,
+                100.0,
+                QuotaType::ModelSpecific("Daily Quota".to_string()),
+                reset_text,
+            ));
+        }
+
+        if let Some(weekly_pct) = usage.weekly_remaining_percent {
+            let used = 100.0 - weekly_pct;
+            let reset_text = usage
+                .weekly_reset_at_unix
+                .and_then(|ts| {
+                    chrono::DateTime::from_timestamp(ts, 0)
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                })
+                .as_deref()
+                .and_then(time_utils::format_reset_countdown);
+
+            quotas.push(QuotaInfo::with_details(
+                "Weekly Quota",
+                used,
+                100.0,
+                QuotaType::ModelSpecific("Weekly Quota".to_string()),
+                reset_text,
+            ));
+        }
+    }
+
+    if quotas.is_empty() {
+        anyhow::bail!("no quota data found in cachedPlanInfo");
+    }
+
+    // cachedPlanInfo 中没有 email，但可以从 auth_status_json 中尝试提取
+    let email = query_auth_status_json(conn, spec)
+        .ok()
+        .and_then(|json_str| serde_json::from_str::<serde_json::Value>(&json_str).ok())
+        .and_then(|v| v.get("email")?.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty());
+
+    Ok(RefreshData::with_account(quotas, email, plan_name))
+}
+
+fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<String> {
+    for key in spec.cached_plan_info_key_candidates {
+        match conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |row| {
+            row.get(0)
+        }) {
+            Ok(value) => {
+                debug!(
+                    target: "providers",
+                    "{} found cachedPlanInfo via key '{}'",
+                    spec.log_label,
+                    key
+                );
+                return Ok(value);
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => continue,
+            Err(e) => {
+                return Err(
+                    ProviderError::parse_failed(&format!("cannot query {}: {}", key, e)).into(),
+                )
+            }
+        }
+    }
+
+    Err(ProviderError::parse_failed(&format!(
+        "cannot find cachedPlanInfo key in local cache: {}",
+        spec.cached_plan_info_key_candidates.join(", ")
+    ))
+    .into())
+}
+
+fn parse_cached_plan_info(json_str: &str) -> Result<CachedPlanInfo> {
+    serde_json::from_str(json_str).map_err(|e| {
+        ProviderError::parse_failed(&format!("invalid cachedPlanInfo JSON: {}", e)).into()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_windsurf_spec() -> CodeiumFamilySpec {
+        CodeiumFamilySpec {
+            kind: crate::models::ProviderKind::Windsurf,
+            provider_id: "windsurf:api",
+            display_name: "Windsurf",
+            brand_name: "Codeium",
+            icon_asset: "src/icons/provider-windsurf.svg",
+            dashboard_url: "https://windsurf.com/",
+            account_hint: "Windsurf account",
+            source_label: "local api",
+            log_label: "Windsurf",
+            ide_name: "windsurf",
+            unavailable_message: "Windsurf live source and local cache are both unavailable",
+            cache_db_relative_path:
+                "Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
+            auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
+            process_markers: &["--ide_name windsurf", "/windsurf/", "/windsurf.app/"],
+            cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
+        }
+    }
 
     #[test]
     fn test_decode_user_status_payload_success() {
@@ -126,25 +300,78 @@ mod tests {
         )
         .unwrap();
 
-        let spec = CodeiumFamilySpec {
-            kind: crate::models::ProviderKind::Windsurf,
-            provider_id: "windsurf:api",
-            display_name: "Windsurf",
-            brand_name: "Codeium",
-            icon_asset: "src/icons/provider-windsurf.svg",
-            dashboard_url: "https://windsurf.com/",
-            account_hint: "Windsurf account",
-            source_label: "local api",
-            log_label: "Windsurf",
-            ide_name: "windsurf",
-            unavailable_message: "Windsurf live source and local cache are both unavailable",
-            cache_db_relative_path:
-                "Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
-            auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
-            process_markers: &["--ide_name windsurf", "/windsurf/", "/windsurf.app/"],
-        };
-
+        let spec = test_windsurf_spec();
         let value = query_auth_status_json(&conn, &spec).unwrap();
         assert_eq!(value, "payload-json");
+    }
+
+    #[test]
+    fn test_parse_cached_plan_info_full() {
+        let json = r#"{
+            "planName": "Pro",
+            "quotaUsage": {
+                "dailyRemainingPercent": 41,
+                "weeklyRemainingPercent": 70,
+                "dailyResetAtUnix": 1775462400,
+                "weeklyResetAtUnix": 1775980800
+            }
+        }"#;
+
+        let info = parse_cached_plan_info(json).unwrap();
+        assert_eq!(info.plan_name, Some("Pro".to_string()));
+        let usage = info.quota_usage.unwrap();
+        assert_eq!(usage.daily_remaining_percent, Some(41.0));
+        assert_eq!(usage.weekly_remaining_percent, Some(70.0));
+        assert_eq!(usage.daily_reset_at_unix, Some(1775462400));
+    }
+
+    #[test]
+    fn test_parse_cached_plan_info_minimal() {
+        let json = r#"{"planName": "Free"}"#;
+        let info = parse_cached_plan_info(json).unwrap();
+        assert_eq!(info.plan_name, Some("Free".to_string()));
+        assert!(info.quota_usage.is_none());
+    }
+
+    #[test]
+    fn test_read_via_cached_plan_info() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            [
+                "windsurf.settings.cachedPlanInfo",
+                r#"{"planName":"Pro","quotaUsage":{"dailyRemainingPercent":41,"weeklyRemainingPercent":70,"dailyResetAtUnix":1775462400,"weeklyResetAtUnix":1775980800}}"#,
+            ],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let data = read_via_cached_plan_info(&conn, &spec).unwrap();
+        assert_eq!(data.account_tier, Some("Pro".to_string()));
+        assert_eq!(data.quotas.len(), 2);
+        assert_eq!(data.quotas[0].label, "Daily Quota");
+        assert!((data.quotas[0].used - 59.0).abs() < 0.01); // 100 - 41 = 59
+        assert_eq!(data.quotas[1].label, "Weekly Quota");
+        assert!((data.quotas[1].used - 30.0).abs() < 0.01); // 100 - 70 = 30
+    }
+
+    #[test]
+    fn test_query_cached_plan_info_not_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let err = query_cached_plan_info(&conn, &spec).unwrap_err();
+        let provider_err = ProviderError::classify(&err);
+        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
     }
 }

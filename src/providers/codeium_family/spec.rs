@@ -16,6 +16,8 @@ pub struct CodeiumFamilySpec {
     pub cache_db_relative_path: &'static str,
     pub auth_status_key_candidates: &'static [&'static str],
     pub process_markers: &'static [&'static str],
+    /// 当 protobuf 解码失败时，尝试从这些 key 读取 JSON 格式的 cachedPlanInfo
+    pub cached_plan_info_key_candidates: &'static [&'static str],
 }
 
 pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
@@ -39,6 +41,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
         ".antigravity/",
         "/antigravity.app/",
     ],
+    cached_plan_info_key_candidates: &[],
 };
 
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
@@ -61,4 +64,5 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
         ".windsurf/",
         "/windsurf.app/",
     ],
+    cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
 };
