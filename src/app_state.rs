@@ -75,6 +75,49 @@ impl ProviderStore {
             .map(|p| p.provider_id.clone())
             .collect()
     }
+
+    /// 根据新的状态列表同步自定义 Provider（热重载用）
+    ///
+    /// - 保留所有内置 Provider 状态不变
+    /// - 新增的自定义 Provider 追加
+    /// - 已删除的自定义 Provider 移除
+    /// - 已存在的自定义 Provider 更新 metadata（保留运行时状态到下次刷新）
+    ///
+    /// 返回新增或更新的自定义 Provider ID 列表（用于触发立即刷新）
+    pub fn sync_custom_providers(&mut self, new_statuses: &[ProviderStatus]) -> Vec<ProviderId> {
+        use std::collections::HashSet;
+
+        let new_custom: Vec<_> = new_statuses
+            .iter()
+            .filter(|s| s.provider_id.is_custom())
+            .collect();
+        let new_custom_ids: HashSet<_> = new_custom.iter().map(|s| &s.provider_id).collect();
+
+        // 移除已不存在的自定义 Provider
+        self.providers
+            .retain(|p| !p.provider_id.is_custom() || new_custom_ids.contains(&p.provider_id));
+
+        let mut affected = Vec::new();
+        for new_status in &new_custom {
+            if let Some(existing) = self
+                .providers
+                .iter_mut()
+                .find(|p| p.provider_id == new_status.provider_id)
+            {
+                // 已存在：仅在 metadata 变化时更新并标记
+                if existing.metadata != new_status.metadata {
+                    existing.metadata = new_status.metadata.clone();
+                    affected.push(new_status.provider_id.clone());
+                }
+            } else {
+                // 新增
+                self.providers.push((*new_status).clone());
+                affected.push(new_status.provider_id.clone());
+            }
+        }
+
+        affected
+    }
 }
 
 /// 纯逻辑应用会话状态

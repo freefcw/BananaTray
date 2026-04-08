@@ -222,6 +222,8 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             match std::fs::write(&path, &yaml_content) {
                 Ok(()) => {
                     info!(target: "runtime", "saved custom provider YAML to {}", path.display());
+                    // 写入成功后触发热重载
+                    let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
                 }
                 Err(e) => {
                     warn!(target: "runtime", "failed to write YAML to {}: {}", path.display(), e);

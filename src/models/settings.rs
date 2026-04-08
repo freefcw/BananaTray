@@ -131,6 +131,36 @@ impl ProviderConfig {
             .insert(id.id_key().to_string(), enabled);
     }
 
+    /// 清除已不存在的自定义 Provider ID（热重载后清理残留）
+    ///
+    /// 从 `enabled_providers`、`provider_order`、`hidden_quotas` 中移除
+    /// 不再存在的自定义 Provider 条目。返回 true 表示发生了变更。
+    pub fn prune_stale_custom_ids(&mut self, existing_custom_ids: &[ProviderId]) -> bool {
+        let existing: std::collections::HashSet<String> = existing_custom_ids
+            .iter()
+            .filter_map(|id| match id {
+                ProviderId::Custom(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect();
+
+        let is_valid_key = |key: &String| -> bool {
+            // 内置 Provider key 始终保留
+            ProviderKind::from_id_key(key).is_some() || existing.contains(key)
+        };
+
+        let before =
+            self.enabled_providers.len() + self.provider_order.len() + self.hidden_quotas.len();
+
+        self.enabled_providers.retain(|key, _| is_valid_key(key));
+        self.provider_order.retain(|key| is_valid_key(key));
+        self.hidden_quotas.retain(|key, _| is_valid_key(key));
+
+        let after =
+            self.enabled_providers.len() + self.provider_order.len() + self.hidden_quotas.len();
+        before != after
+    }
+
     /// 按用户自定义顺序返回所有内置 Provider。未在 provider_order 中出现的追加到末尾。
     pub fn ordered_providers(&self) -> Vec<ProviderKind> {
         let mut result = Vec::with_capacity(ProviderKind::all().len());
@@ -879,5 +909,67 @@ mod tests {
         assert!(settings.move_provider_up(&custom, std::slice::from_ref(&custom)));
         assert_eq!(settings.provider.provider_order[0], "myai:cli");
         assert_eq!(settings.provider.provider_order[1], "claude");
+    }
+
+    // ── prune_stale_custom_ids ──────────────────────────────
+
+    #[test]
+    fn prune_removes_stale_custom_from_enabled() {
+        let mut config = ProviderConfig::default();
+        config.set_enabled(&ProviderId::Custom("old:api".to_string()), true);
+        config.set_enabled(&ProviderId::Custom("keep:api".to_string()), true);
+        config.set_provider_enabled(ProviderKind::Claude, true);
+
+        let existing = vec![ProviderId::Custom("keep:api".to_string())];
+        let changed = config.prune_stale_custom_ids(&existing);
+
+        assert!(changed);
+        assert!(!config.is_enabled(&ProviderId::Custom("old:api".to_string())));
+        assert!(config.is_enabled(&ProviderId::Custom("keep:api".to_string())));
+        assert!(config.is_enabled(&ProviderId::BuiltIn(ProviderKind::Claude)));
+    }
+
+    #[test]
+    fn prune_removes_stale_custom_from_provider_order() {
+        let mut config = ProviderConfig::default();
+        config.provider_order = vec![
+            ProviderKind::Claude.id_key().to_string(),
+            "old:api".to_string(),
+            "keep:api".to_string(),
+        ];
+
+        let existing = vec![ProviderId::Custom("keep:api".to_string())];
+        let changed = config.prune_stale_custom_ids(&existing);
+
+        assert!(changed);
+        assert_eq!(config.provider_order.len(), 2);
+        assert!(!config.provider_order.contains(&"old:api".to_string()));
+    }
+
+    #[test]
+    fn prune_returns_false_when_nothing_to_prune() {
+        let mut config = ProviderConfig::default();
+        config.set_provider_enabled(ProviderKind::Claude, true);
+
+        let existing: Vec<ProviderId> = vec![];
+        let changed = config.prune_stale_custom_ids(&existing);
+
+        assert!(!changed);
+    }
+
+    #[test]
+    fn prune_preserves_all_builtin_keys() {
+        let mut config = ProviderConfig::default();
+        for kind in ProviderKind::all() {
+            config.set_provider_enabled(*kind, true);
+        }
+
+        let existing: Vec<ProviderId> = vec![];
+        let changed = config.prune_stale_custom_ids(&existing);
+
+        assert!(!changed);
+        for kind in ProviderKind::all() {
+            assert!(config.is_enabled(&ProviderId::BuiltIn(*kind)));
+        }
     }
 }

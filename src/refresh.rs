@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use smol::channel::{Receiver, Sender};
 
-use crate::models::{ErrorKind, ProviderId, RefreshData};
+use crate::models::{ErrorKind, ProviderId, ProviderStatus, RefreshData};
 use crate::provider_error_presenter::ProviderErrorPresenter;
 use crate::providers::ProviderManager;
 
@@ -37,14 +37,22 @@ pub enum RefreshRequest {
         interval_mins: u64,
         enabled: Vec<ProviderId>,
     },
+    /// 热重载自定义 Provider（重建 ProviderManager 快照）
+    ReloadProviders,
     Shutdown,
 }
 
 /// 协调器发出的事件
 #[derive(Debug)]
 pub enum RefreshEvent {
-    Started { id: ProviderId },
+    Started {
+        id: ProviderId,
+    },
     Finished(RefreshOutcome),
+    /// 自定义 Provider 热重载完成，携带最新的 Provider 状态列表
+    ProvidersReloaded {
+        statuses: Vec<ProviderStatus>,
+    },
 }
 
 /// 单个 Provider 的刷新结果
@@ -326,6 +334,25 @@ impl RefreshCoordinator {
                         log::info!(target: "refresh", "config updated: interval={}min, {} providers enabled", interval_mins, enabled.len());
                         self.interval_mins = interval_mins;
                         self.enabled_providers = enabled;
+                    }
+                    RefreshRequest::ReloadProviders => {
+                        log::info!(target: "refresh", "reloading custom providers");
+                        let new_manager = Arc::new(crate::providers::ProviderManager::new());
+                        let statuses = new_manager.initial_statuses();
+
+                        // 清理已不存在的 provider 的残留状态
+                        let new_ids: std::collections::HashSet<_> =
+                            statuses.iter().map(|s| &s.provider_id).collect();
+                        self.last_refreshed.retain(|id, _| new_ids.contains(id));
+                        self.in_flight.retain(|id, _| new_ids.contains(id));
+
+                        self.manager = new_manager;
+
+                        let _ = self
+                            .event_tx
+                            .send(RefreshEvent::ProvidersReloaded { statuses })
+                            .await;
+                        log::info!(target: "refresh", "custom providers reloaded");
                     }
                     RefreshRequest::Shutdown => {
                         log::info!(target: "refresh", "coordinator shutting down");
