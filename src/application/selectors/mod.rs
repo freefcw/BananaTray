@@ -102,6 +102,8 @@ pub enum ProviderEmptyAction {
 pub struct SettingsProvidersTabViewState {
     pub items: Vec<SettingsProviderListItemViewState>,
     pub detail: SettingsProviderDetailViewState,
+    /// 是否正在添加新 Provider（右侧面板显示 NewAPI 表单）
+    pub adding_newapi: bool,
 }
 
 #[derive(Debug, Clone)]

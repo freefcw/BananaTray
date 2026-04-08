@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use log::warn;
+use log::{debug, info, warn};
 use std::borrow::Cow;
 
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
@@ -71,12 +71,79 @@ impl AiProvider for CustomProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
-        let raw = fetch(&self.def.base_url, &self.def.source)?;
+        let id = &self.def.id;
+        info!(target: "providers::custom", "[{}] refresh started", id);
+
+        let raw = fetch(id, &self.def.base_url, &self.def.source)?;
+
+        debug!(target: "providers::custom", "[{}] raw response ({} bytes): {}", id, raw.len(), truncate_for_log(&raw, 500));
+
         let raw = apply_preprocess(&raw, &self.def.preprocess);
+
         let parser = self.def.parser.as_ref().ok_or_else(|| {
+            warn!(target: "providers::custom", "[{}] no parser configured", id);
             ProviderError::unavailable("no parser configured (placeholder provider)")
         })?;
-        extractor::extract(parser, &raw, &self.compiled)
+
+        let result = extractor::extract(parser, &raw, &self.compiled);
+        match &result {
+            Ok(data) => info!(
+                target: "providers::custom",
+                "[{}] parsed {} quotas, email={:?}",
+                id, data.quotas.len(), data.account_email
+            ),
+            Err(e) => warn!(
+                target: "providers::custom",
+                "[{}] parse failed: {}\n  raw response: {}",
+                id, e, truncate_for_log(&raw, 300)
+            ),
+        }
+        result
+    }
+}
+
+// ============================================================================
+// 日志辅助
+// ============================================================================
+
+/// 截断长文本用于日志输出，避免日志爆炸
+///
+/// 使用 char_indices 确保截断在字符边界上，避免多字节 UTF-8 切割 panic
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        // 找到 <= max_len 的最后一个字符边界
+        let safe_end = s
+            .char_indices()
+            .take_while(|(i, _)| *i <= max_len)
+            .last()
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        format!("{}...(truncated, total {} bytes)", &s[..safe_end], s.len())
+    }
+}
+
+/// 脱敏 auth 头信息：只显示 value 的前几个字符
+fn mask_auth_header(header: &str) -> String {
+    const VISIBLE_LEN: usize = 8;
+    if let Some((name, value)) = header.split_once(':') {
+        let value = value.trim();
+        let masked = if value.len() > VISIBLE_LEN {
+            // 找到安全的字符边界
+            let safe_end = value
+                .char_indices()
+                .take_while(|(i, _)| *i <= VISIBLE_LEN)
+                .last()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            format!("{}...", &value[..safe_end])
+        } else {
+            value.to_string()
+        };
+        format!("{}: {}", name.trim(), masked)
+    } else {
+        header.to_string()
     }
 }
 
@@ -205,17 +272,39 @@ fn apply_preprocess(raw: &str, steps: &[PreprocessStep]) -> String {
     result
 }
 
-fn fetch(base_url: &Option<String>, source: &SourceDef) -> Result<String> {
+fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> Result<String> {
     match source {
-        SourceDef::Cli { command, args } => fetch_cli(command, args),
-        SourceDef::HttpGet { url, auth, headers } => fetch_http_get(base_url, url, auth, headers),
+        SourceDef::Cli { command, args } => {
+            debug!(target: "providers::custom", "[{}] fetching via CLI: {} {:?}", id, command, args);
+            fetch_cli(command, args)
+        }
+        SourceDef::HttpGet { url, auth, headers } => {
+            let resolved = resolve_url(base_url, url);
+            debug!(target: "providers::custom", "[{}] fetching via HTTP GET: {}", id, resolved);
+            let result = fetch_http_get(base_url, url, auth, headers);
+            if let Err(ref e) = result {
+                warn!(target: "providers::custom", "[{}] HTTP GET failed: {}", id, e);
+            }
+            result
+        }
         SourceDef::HttpPost {
             url,
             auth,
             headers,
             body,
-        } => fetch_http_post(base_url, url, auth, headers, body),
-        SourceDef::Placeholder { reason } => Err(ProviderError::unavailable(reason).into()),
+        } => {
+            let resolved = resolve_url(base_url, url);
+            debug!(target: "providers::custom", "[{}] fetching via HTTP POST: {} (body {} bytes)", id, resolved, body.len());
+            let result = fetch_http_post(base_url, url, auth, headers, body);
+            if let Err(ref e) = result {
+                warn!(target: "providers::custom", "[{}] HTTP POST failed: {}", id, e);
+            }
+            result
+        }
+        SourceDef::Placeholder { reason } => {
+            debug!(target: "providers::custom", "[{}] placeholder source, reason: {}", id, reason);
+            Err(ProviderError::unavailable(reason).into())
+        }
     }
 }
 
@@ -233,6 +322,12 @@ fn fetch_http_get(
 ) -> Result<String> {
     let url = resolve_url(base_url, url);
     let header_strings = resolve_auth_headers(base_url, auth, headers)?;
+    debug!(
+        target: "providers::custom",
+        "request headers ({}): {:?}",
+        header_strings.len(),
+        header_strings.iter().map(|h| mask_auth_header(h)).collect::<Vec<_>>()
+    );
     let header_refs: Vec<&str> = header_strings.iter().map(|s| s.as_str()).collect();
     http_client::get(&url, &header_refs)
 }
@@ -246,6 +341,12 @@ fn fetch_http_post(
 ) -> Result<String> {
     let url = resolve_url(base_url, url);
     let header_strings = resolve_auth_headers(base_url, auth, headers)?;
+    debug!(
+        target: "providers::custom",
+        "request headers ({}): {:?}",
+        header_strings.len(),
+        header_strings.iter().map(|h| mask_auth_header(h)).collect::<Vec<_>>()
+    );
     let header_refs: Vec<&str> = header_strings.iter().map(|s| s.as_str()).collect();
     http_client::post_json(&url, &header_refs, body)
 }
@@ -322,9 +423,29 @@ fn login_for_token(
     .to_string();
 
     let login_url = resolve_url(base_url, login_url);
-    let response = http_client::post_json(&login_url, &[], &body)?;
+    info!(target: "providers::custom", "login: POST {} (user={})", login_url, username);
 
-    parse_login_response(&response, token_path)
+    let response = http_client::post_json(&login_url, &[], &body);
+    match &response {
+        Ok(body) => debug!(
+            target: "providers::custom",
+            "login response ({} bytes): {}",
+            body.len(),
+            truncate_for_log(body, 300)
+        ),
+        Err(e) => warn!(target: "providers::custom", "login request failed: {}", e),
+    }
+    let response = response?;
+
+    let result = parse_login_response(&response, token_path);
+    if let Err(ref e) = result {
+        warn!(
+            target: "providers::custom",
+            "login token extraction failed: {} (token_path='{}', response: {})",
+            e, token_path, truncate_for_log(&response, 200)
+        );
+    }
+    result
 }
 
 /// 从登录响应 JSON 中提取 token（纯逻辑，无 I/O，可单元测试）
@@ -932,6 +1053,7 @@ parser:
     #[test]
     fn test_placeholder_source_returns_unavailable() {
         let result = fetch(
+            "test:placeholder",
             &None,
             &SourceDef::Placeholder {
                 reason: "No public API available".to_string(),
@@ -1127,5 +1249,67 @@ parser:
             prefix: "other-extension".to_string(),
         };
         assert!(!check_availability_sync(&def_miss));
+    }
+
+    // ── truncate_for_log ────────────────────────
+
+    #[test]
+    fn test_truncate_short_string_unchanged() {
+        assert_eq!(truncate_for_log("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_exact_length_unchanged() {
+        assert_eq!(truncate_for_log("12345", 5), "12345");
+    }
+
+    #[test]
+    fn test_truncate_long_ascii() {
+        let result = truncate_for_log("abcdefghij", 5);
+        assert!(result.starts_with("abcde"));
+        assert!(result.contains("truncated"));
+        assert!(result.contains("10 bytes"));
+    }
+
+    #[test]
+    fn test_truncate_multibyte_no_panic() {
+        // "你好世界" = 4 chars, 12 bytes; 截断在 5 字节处应安全
+        let s = "你好世界";
+        let result = truncate_for_log(s, 5);
+        // "你" = 3 bytes, "好" starts at 3, ends at 6
+        // 5 字节位置在 "好" 字符中间，应回退到 byte 3（"你"之后）
+        assert!(result.starts_with("你"));
+        assert!(result.contains("truncated"));
+    }
+
+    #[test]
+    fn test_truncate_empty_string() {
+        assert_eq!(truncate_for_log("", 10), "");
+    }
+
+    // ── mask_auth_header ────────────────────────
+
+    #[test]
+    fn test_mask_short_value_unchanged() {
+        assert_eq!(mask_auth_header("X-Key: abc"), "X-Key: abc");
+    }
+
+    #[test]
+    fn test_mask_long_value_truncated() {
+        let result = mask_auth_header("Authorization: Bearer sk-very-long-token-123");
+        assert_eq!(result, "Authorization: Bearer s...");
+    }
+
+    #[test]
+    fn test_mask_no_colon() {
+        assert_eq!(mask_auth_header("no-colon-header"), "no-colon-header");
+    }
+
+    #[test]
+    fn test_mask_multibyte_no_panic() {
+        // value 为中文字符，确保不在多字节中间切割
+        let result = mask_auth_header("Cookie: 这是一个很长的中文值用于测试");
+        assert!(result.starts_with("Cookie:"));
+        assert!(result.contains("..."));
     }
 }

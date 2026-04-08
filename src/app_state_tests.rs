@@ -234,6 +234,7 @@ fn settings_ui_default_values() {
         selected_provider: pid(ProviderKind::Claude),
         cadence_dropdown_open: false,
         copilot_token_editing: false,
+        adding_newapi: false,
     };
     assert_eq!(ui.active_tab, SettingsTab::General);
     assert!(!ui.cadence_dropdown_open);

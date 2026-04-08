@@ -10,6 +10,9 @@ use std::rc::Rc;
 
 use crate::app::AppState;
 
+use crate::app::widgets::{render_provider_icon, render_svg_icon};
+use rust_i18n::t;
+
 /// 单个排序箭头按钮（▲ 或 ▼）
 fn render_sort_arrow_button(
     label: &str,
@@ -132,11 +135,7 @@ fn render_sidebar_item_content(
         .px(px(12.0))
         .h(px(40.0)) // 固定高度，防止箭头(▲/▼)出现时撑高整行
         .w_full()
-        .child(crate::app::widgets::render_provider_icon(
-            icon,
-            px(20.0),
-            icon_color,
-        ))
+        .child(render_provider_icon(icon, px(20.0), icon_color))
         .child(name_row);
 
     if let Some(arrow_el) = arrows {
@@ -192,6 +191,44 @@ fn render_sidebar_item(
         })
 }
 
+/// 「+ 新增中转站」按钮
+fn render_add_relay_button(state: Rc<RefCell<AppState>>, theme: &Theme) -> Div {
+    let accent = theme.text.accent;
+    let muted = theme.text.muted;
+
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .px(px(12.0))
+        .py(px(8.0))
+        .mt(px(8.0))
+        .rounded(px(8.0))
+        .border_1()
+        .border_dashed()
+        .border_color(hsla(0.0, 0.0, 0.3, 0.3))
+        .cursor_pointer()
+        .hover(move |s| {
+            s.border_color(accent)
+                .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.1))
+        })
+        .child(render_svg_icon(
+            "src/icons/provider-custom.svg",
+            px(16.0),
+            muted,
+        ))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(format!("+ {}", t!("newapi.add_button"))),
+        )
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            runtime::dispatch_in_window(&state, AppAction::EnterAddNewApi, window, cx);
+        })
+}
+
 impl SettingsView {
     // ══════ Left sidebar ══════
 
@@ -243,6 +280,9 @@ impl SettingsView {
 
             list = list.child(item);
         }
+
+        // 「+ 新增中转站」按钮
+        list = list.child(render_add_relay_button(self.state.clone(), theme));
 
         // Tab bar ≈ 50px, sidebar top-padding = 8px
         let sidebar_scroll_h = viewport.height - px(50.0) - px(8.0);

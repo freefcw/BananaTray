@@ -1,4 +1,5 @@
 mod detail;
+mod newapi_form;
 mod sidebar;
 
 use super::SettingsView;
@@ -15,6 +16,7 @@ impl SettingsView {
         &mut self,
         theme: &Theme,
         viewport: Size<Pixels>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let view_state = {
@@ -29,12 +31,24 @@ impl SettingsView {
             .py(px(20.0))
             .child(div().w_full().h_full().bg(theme.border.subtle));
 
+        // 状态同步：退出添加模式后释放表单输入实体
+        if !view_state.adding_newapi && self.newapi_inputs.is_some() {
+            self.clear_newapi_inputs();
+        }
+
+        // 右侧面板：adding_newapi 模式时显示表单，否则显示 provider detail
+        let right_panel = if view_state.adding_newapi {
+            self.render_newapi_form(theme, viewport, window, cx)
+        } else {
+            self.render_provider_detail_panel(&view_state.detail, theme, viewport, cx)
+        };
+
         div()
             .flex()
             .h_full()
             .overflow_hidden()
             .child(self.render_provider_sidebar(&view_state.items, theme, viewport, cx))
             .child(divider)
-            .child(self.render_provider_detail_panel(&view_state.detail, theme, viewport, cx))
+            .child(right_panel)
     }
 }

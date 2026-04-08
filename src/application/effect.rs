@@ -52,5 +52,10 @@ pub enum AppEffect {
     ClearDebugLogs,
     /// 切换托盘图标
     ApplyTrayIcon(TrayIconRequest),
+    /// 保存新 Provider YAML 文件到配置目录
+    SaveCustomProviderYaml {
+        yaml_content: String,
+        filename: String,
+    },
     QuitApp,
 }

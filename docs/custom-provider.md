@@ -40,8 +40,8 @@ mkdir -p ~/.config/bananatray/providers/
 
 这是最常用的场景。NewAPI 是基于 OneAPI 的 AI API 中转站管理系统。
 
-> BananaTray 使用浏览器中已登录的 session cookie 来调用 `/api/user/self` 查询额度。
-> 你只需从浏览器中复制 session token 即可，无需输入账号密码。
+> BananaTray 使用浏览器中的 Cookie 来调用 `/api/user/self` 查询额度。
+> 你只需从浏览器中复制完整 Cookie 即可，无需输入账号密码。
 
 ### 第一步：复制模板
 
@@ -55,12 +55,13 @@ cp docs/examples/custom-provider-newapi.yaml \
    ~/.config/bananatray/providers/newapi.yaml
 ```
 
-### 第二步：获取 Session Token
+### 第二步：获取 Cookie
 
 1. 在浏览器中登录你的 NewAPI 站点
 2. 打开 DevTools（F12 或 Cmd+Option+I）
-3. 切换到 Application → Cookies → 找到你的站点域名
-4. 找到名为 `session` 的 cookie，复制其 Value
+3. 切换到 Network 面板，刷新页面
+4. 点击任意请求 → Request Headers → 找到 `Cookie` 一行
+5. 复制完整的 Cookie 值
 
 ### 第三步：编辑配置
 
@@ -73,13 +74,13 @@ base_url: "https://your-newapi-site.com"
 source:
   ...
   auth:
-    type: session_token
-    token: "your_session_token_here"   # ← 粘贴上一步复制的值
+    type: cookie
+    value: "session=eyJ...;cf_clearance=abc123"   # ← 粘贴上一步复制的完整 Cookie
 ```
 
 所有 API 路径（`/api/user/self`）会自动拼接到 `base_url` 上，无需重复填写。
 
-> ⚠️ session token 有有效期，过期后需重新从浏览器获取并更新配置文件。
+> ⚠️ Cookie 有有效期，过期后需重新从浏览器获取并更新配置文件。
 
 ### 第四步：调整 divisor（如需）
 
@@ -225,37 +226,17 @@ source:
 
 | 类型 | 说明 | 适用场景 |
 |------|------|----------|
-| `session_token` | 用浏览器中的 session token 作为 Cookie 认证 | **NewAPI / OneAPI**（推荐） |
-| `cookie` | 直接传递完整的 Cookie 字符串 | 需要传递多个 cookie 的复杂场景 |
+| `cookie` | 直接传递完整的 Cookie 字符串 | **NewAPI / OneAPI**（推荐） |
+| `session_token` | 用单个 session token 作为 Cookie 认证 | 无 CDN 防护的简单站点 |
 | `bearer` | Token 直接写在 YAML 中 | API Key 长期有效的服务 |
 | `bearer_env` | 从环境变量读取 Token | 需要与其他工具共享 Token |
 | `header_env` | 从环境变量读取自定义 Header | 特殊认证方式 |
 | `file_token` | 从本地 JSON 文件读取 Token | CLI 工具存储的 OAuth 凭据 |
 | `login` | 先登录获取 session token，再用于请求 | 少数支持自动登录的站点 |
 
-**`session_token` 认证详细配置（推荐）：**
+**`cookie` 认证详细配置（推荐）：**
 
-从浏览器中复制 session cookie 即可使用，无需账号密码，兼容所有 NewAPI 站点。
-
-```yaml
-auth:
-  type: session_token
-  token: "eyJhbGci..."              # 从浏览器 Cookie 中复制的 session token
-  cookie_name: "session"             # Cookie 名称（默认 "session"，大多数站点无需修改）
-```
-
-获取步骤：
-1. 在浏览器中登录你的 NewAPI 站点
-2. 打开 DevTools（F12 或 Cmd+Option+I）
-3. 切换到 Application → Cookies → 找到你的站点域名
-4. 找到名为 `session` 的 cookie，复制其 Value
-5. 填入 `token` 字段
-
-> ⚠️ session token 有有效期，过期后需重新从浏览器获取并更新配置文件。
-
-**`cookie` 认证详细配置：**
-
-当需要传递多个 cookie 时（如同时需要 `session` 和 `cf_clearance`），可使用完整的 cookie 字符串：
+从浏览器 Network 面板复制完整 Cookie 值即可使用，无需区分具体 cookie 名称，天然兼容 CDN 防护（如 Cloudflare）。
 
 ```yaml
 auth:
@@ -263,10 +244,30 @@ auth:
   value: "session=eyJ...;cf_clearance=abc123"   # 完整的 cookie 字符串
 ```
 
+获取步骤：
+1. 在浏览器中登录你的 NewAPI 站点
+2. 打开 DevTools（F12 或 Cmd+Option+I）
+3. 切换到 Network 面板，刷新页面
+4. 点击任意请求 → Request Headers → 找到 `Cookie` 一行
+5. 复制完整值，填入 `value` 字段
+
+> ⚠️ Cookie 有有效期，过期后需重新从浏览器获取并更新配置文件。
+
+**`session_token` 认证详细配置：**
+
+如果你确定站点没有 CDN 防护，可以只复制 session cookie 的值：
+
+```yaml
+auth:
+  type: session_token
+  token: "eyJhbGci..."              # 仅 session cookie 值
+  cookie_name: "session"             # Cookie 名称（默认 "session"，大多数站点无需修改）
+```
+
 **`login` 认证详细配置：**
 
 > ⚠️ 大部分 NewAPI 站点由于启用了 Cloudflare Turnstile 等防登录验证，
-> 此方式可能无法使用。推荐优先使用 `session_token` 方式。
+> 此方式可能无法使用。推荐优先使用 `cookie` 方式。
 
 ```yaml
 auth:
@@ -412,10 +413,10 @@ parser:
 
 ### Provider 显示为 Disconnected
 
-1. 确认 session token 是否已过期，如过期需重新从浏览器获取
+1. 确认 Cookie 是否已过期，如过期需重新从浏览器获取
 2. 用 curl 手动测试：
    ```bash
-   curl -H "Cookie: session=your_session_token_here" \
+   curl -H "Cookie: session=your_session_token;cf_clearance=abc123" \
      https://your-site.com/api/user/self
    ```
 
@@ -429,7 +430,7 @@ parser:
 ## 更多示例
 
 参见项目 `docs/examples/` 目录：
-- [custom-provider-newapi.yaml](examples/custom-provider-newapi.yaml) — NewAPI 中转站（session cookie 认证）
+- [custom-provider-newapi.yaml](examples/custom-provider-newapi.yaml) — NewAPI 中转站（cookie 认证）
 - [custom-provider-http.yaml](examples/custom-provider-http.yaml) — HTTP POST 模式
 - [custom-provider-cli.yaml](examples/custom-provider-cli.yaml) — CLI 模式
 

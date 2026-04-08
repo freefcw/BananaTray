@@ -40,8 +40,8 @@ custom/
 
 | auth type       | 说明 |
 |-----------------|------|
-| `session_token` | 用浏览器 session cookie 认证（NewAPI/OneAPI 推荐） |
-| `cookie`        | 直接传递完整的 Cookie 字符串（多个 cookie 场景） |
+| `cookie`        | 直接传递完整的 Cookie 字符串（NewAPI/OneAPI 推荐） |
+| `session_token` | 用单个 session cookie 值认证（无 CDN 防护的简单站点） |
 | `bearer`        | Token 直接写在 YAML 配置中 |
 | `bearer_env`    | 从环境变量读取 token，设置 `Authorization: Bearer {token}` |
 | `header_env`    | 从环境变量读取值，设置自定义 header |

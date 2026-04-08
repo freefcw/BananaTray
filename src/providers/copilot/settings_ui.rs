@@ -9,30 +9,9 @@ use rust_i18n::t;
 use super::CopilotTokenSource;
 
 use crate::app::settings_window::SettingsView;
+use crate::app::widgets::register_input_actions;
 use crate::application::AppAction;
 use crate::runtime;
-
-/// 注册所有键盘事件处理器到 InputState entity
-fn register_input_actions(
-    div: Stateful<Div>,
-    input_entity: &Entity<adabraka_ui::components::input_state::InputState>,
-    window: &mut Window,
-) -> Stateful<Div> {
-    use adabraka_ui::components::input_state::InputState;
-
-    div.on_action(window.listener_for(input_entity, InputState::backspace))
-        .on_action(window.listener_for(input_entity, InputState::delete))
-        .on_action(window.listener_for(input_entity, InputState::left))
-        .on_action(window.listener_for(input_entity, InputState::right))
-        .on_action(window.listener_for(input_entity, InputState::select_left))
-        .on_action(window.listener_for(input_entity, InputState::select_right))
-        .on_action(window.listener_for(input_entity, InputState::select_all))
-        .on_action(window.listener_for(input_entity, InputState::home))
-        .on_action(window.listener_for(input_entity, InputState::end))
-        .on_action(window.listener_for(input_entity, InputState::copy))
-        .on_action(window.listener_for(input_entity, InputState::cut))
-        .on_action(window.listener_for(input_entity, InputState::paste))
-}
 
 #[derive(IntoElement)]
 struct CopilotInputBox {
