@@ -46,6 +46,15 @@ pub fn generate_filename(config: &NewApiConfig) -> String {
     format!("newapi-{}.yaml", slug)
 }
 
+/// 从 custom provider id 直接推导文件名，无需读取磁盘。
+///
+/// id 格式为 `{slug}:newapi`（由 `generate_newapi_yaml` 生成），
+/// 对应文件名为 `newapi-{slug}.yaml`。
+pub fn filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":newapi")?;
+    Some(format!("newapi-{}.yaml", slug))
+}
+
 /// 转义 YAML 双引号字符串中的特殊字符
 ///
 /// YAML 双引号字符串中需要转义的关键字符：
@@ -277,6 +286,25 @@ mod tests {
     fn test_generate_filename() {
         let config = make_config();
         assert_eq!(generate_filename(&config), "newapi-my-api-example-com.yaml");
+    }
+
+    #[test]
+    fn test_filename_for_id_roundtrip() {
+        // generate_newapi_yaml 生成的 id 格式为 "{slug}:newapi"
+        // filename_for_id 应能从中还原出与 generate_filename 一致的文件名
+        let config = make_config();
+        let yaml = generate_newapi_yaml(&config);
+        // 从 yaml 中提取 id 行
+        let id_line = yaml.lines().find(|l| l.starts_with("id:")).unwrap();
+        let id = id_line.trim_start_matches("id:").trim().trim_matches('"');
+        assert_eq!(filename_for_id(id), Some(generate_filename(&config)));
+    }
+
+    #[test]
+    fn test_filename_for_id_non_newapi_returns_none() {
+        assert_eq!(filename_for_id("some-provider:cli"), None);
+        assert_eq!(filename_for_id("newapi"), None);
+        assert_eq!(filename_for_id(""), None);
     }
 
     #[test]

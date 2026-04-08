@@ -54,6 +54,10 @@ pub enum AppAction {
     EditNewApi {
         provider_id: ProviderId,
     },
+    /// 删除 NewAPI 自定义 Provider（从磁盘删除 YAML 文件）
+    DeleteNewApi {
+        provider_id: ProviderId,
+    },
     QuitApp,
 }
 

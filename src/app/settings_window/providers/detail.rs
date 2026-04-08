@@ -442,9 +442,12 @@ impl SettingsView {
                 ));
             }
             ProviderSettingsMode::NewApiEditable => {
-                // NewAPI 型自定义 Provider — 显示「编辑配置」按钮
-                let state = self.state.clone();
+                // NewAPI 型自定义 Provider — 显示「编辑配置」和「删除」按钮
+                let state_edit = self.state.clone();
+                let state_delete = self.state.clone();
+                let provider_id_delete = provider_id.clone();
                 let accent = theme.text.accent;
+                let danger = theme.status.error;
                 section = section.child(
                     div()
                         .mt(px(10.0))
@@ -452,6 +455,7 @@ impl SettingsView {
                         .flex()
                         .items_center()
                         .justify_center()
+                        .gap(px(10.0))
                         .child(
                             div()
                                 .flex()
@@ -473,9 +477,39 @@ impl SettingsView {
                                 .child(t!("newapi.edit_button").to_string())
                                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                                     runtime::dispatch_in_window(
-                                        &state,
+                                        &state_edit,
                                         AppAction::EditNewApi {
                                             provider_id: provider_id.clone(),
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .px(px(20.0))
+                                .py(px(10.0))
+                                .rounded(px(8.0))
+                                .bg(theme.bg.subtle)
+                                .border_1()
+                                .border_color(theme.border.strong)
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(danger)
+                                .cursor_pointer()
+                                .hover(|s| s.opacity(0.85))
+                                .child(render_svg_icon("src/icons/trash.svg", px(16.0), danger))
+                                .child(t!("newapi.delete_button").to_string())
+                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                    runtime::dispatch_in_window(
+                                        &state_delete,
+                                        AppAction::DeleteNewApi {
+                                            provider_id: provider_id_delete.clone(),
                                         },
                                         window,
                                         cx,
