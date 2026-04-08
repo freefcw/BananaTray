@@ -447,6 +447,42 @@ fn apply_refresh_event(
                 push_render(effects);
             }
         }
+        RefreshEvent::ProvidersReloaded { statuses } => {
+            info!(target: "providers", "providers reloaded: {} statuses", statuses.len());
+
+            let affected = session.provider_store.sync_custom_providers(&statuses);
+
+            // 清理 settings 中残留的已删除自定义 Provider ID
+            let custom_ids = session.provider_store.custom_provider_ids();
+            if session
+                .settings
+                .provider
+                .prune_stale_custom_ids(&custom_ids)
+            {
+                effects.push(AppEffect::PersistSettings);
+            }
+
+            // 清理可能指向已删除 provider 的导航/设置引用
+            sanitize_stale_refs(session);
+
+            // 同步 coordinator 的 enabled 列表
+            effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
+                session,
+            )));
+
+            // 对新增/更新的自定义 Provider 立即触发刷新
+            for id in &affected {
+                if session.settings.is_enabled(id) {
+                    session.provider_store.mark_refreshing_by_id(id);
+                    effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+                        id: id.clone(),
+                        reason: RefreshReason::ProviderToggled,
+                    }));
+                }
+            }
+
+            push_render(effects);
+        }
     }
 }
 
@@ -462,6 +498,50 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
     RefreshRequest::UpdateConfig {
         interval_mins: session.settings.system.refresh_interval_mins,
         enabled,
+    }
+}
+
+/// 热重载后清理指向已删除 Provider 的引用
+fn sanitize_stale_refs(session: &mut AppSession) {
+    // 导航：如果当前 active_tab 指向的 provider 已不存在，回退
+    if let NavTab::Provider(ref id) = session.nav.active_tab {
+        if session.provider_store.find_by_id(id).is_none() {
+            if let Some(tab) = session.default_provider_tab() {
+                session.nav.switch_to(tab);
+            } else {
+                session.nav.switch_to(NavTab::Settings);
+            }
+        }
+    }
+    // last_provider_id
+    if session
+        .provider_store
+        .find_by_id(&session.nav.last_provider_id)
+        .is_none()
+    {
+        if let Some(first) = session
+            .provider_store
+            .providers
+            .iter()
+            .find(|p| session.settings.is_enabled(&p.provider_id))
+        {
+            session.nav.last_provider_id = first.provider_id.clone();
+        }
+    }
+    // 设置面板选中的 provider
+    if session
+        .provider_store
+        .find_by_id(&session.settings_ui.selected_provider)
+        .is_none()
+    {
+        session.settings_ui.selected_provider =
+            ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
+    }
+    // Debug 面板
+    if let Some(ref id) = session.debug_ui.selected_provider {
+        if session.provider_store.find_by_id(id).is_none() {
+            session.debug_ui.selected_provider = None;
+        }
     }
 }
 
@@ -1465,6 +1545,163 @@ mod tests {
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::RestoreLogLevel(log::LevelFilter::Warn)
+        )));
+    }
+
+    // ── ProvidersReloaded (热重载) ───────────────────────────
+
+    fn make_custom_provider_status(id: &str) -> crate::models::ProviderStatus {
+        let provider_id = ProviderId::Custom(id.to_string());
+        let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+        crate::models::ProviderStatus::new_custom(provider_id, metadata)
+    }
+
+    #[test]
+    fn providers_reloaded_sends_update_config() {
+        let mut session = make_session();
+        let statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendRefreshRequest(RefreshRequest::UpdateConfig { .. })
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn providers_reloaded_refreshes_enabled_new_custom() {
+        let mut session = make_session();
+        let custom_id = ProviderId::Custom("new:api".to_string());
+        session.settings.set_enabled(&custom_id, true);
+
+        let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+        statuses.push(make_custom_provider_status("new:api"));
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+                ref id,
+                ..
+            }) if *id == ProviderId::Custom("new:api".to_string())
+        )));
+    }
+
+    #[test]
+    fn providers_reloaded_does_not_refresh_disabled_custom() {
+        let mut session = make_session();
+
+        let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+        statuses.push(make_custom_provider_status("disabled:api"));
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+                ref id,
+                ..
+            }) if *id == ProviderId::Custom("disabled:api".to_string())
+        )));
+    }
+
+    #[test]
+    fn providers_reloaded_clears_debug_selection_for_deleted_custom() {
+        let mut session = make_session();
+        let custom_id = ProviderId::Custom("old:api".to_string());
+        session
+            .provider_store
+            .providers
+            .push(make_custom_provider_status("old:api"));
+        session.debug_ui.selected_provider = Some(custom_id);
+
+        let statuses: Vec<_> = ProviderKind::all()
+            .iter()
+            .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
+            .collect();
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        assert!(session.debug_ui.selected_provider.is_none());
+    }
+
+    #[test]
+    fn providers_reloaded_repoints_active_tab_when_deleted() {
+        let mut session = make_session();
+        let custom_id = ProviderId::Custom("gone:api".to_string());
+        session
+            .provider_store
+            .providers
+            .push(make_custom_provider_status("gone:api"));
+        session.settings.set_enabled(&custom_id, true);
+        session.nav.switch_to(NavTab::Provider(custom_id.clone()));
+
+        let statuses: Vec<_> = ProviderKind::all()
+            .iter()
+            .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
+            .collect();
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        match &session.nav.active_tab {
+            NavTab::Provider(id) => assert_ne!(*id, custom_id),
+            NavTab::Settings => {}
+        }
+    }
+
+    #[test]
+    fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
+        let mut session = make_session();
+        let custom_id = ProviderId::Custom("stale:api".to_string());
+        session.settings.set_enabled(&custom_id, true);
+        session
+            .provider_store
+            .providers
+            .push(make_custom_provider_status("stale:api"));
+
+        let statuses: Vec<_> = ProviderKind::all()
+            .iter()
+            .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
+            .collect();
+
+        let mut effects = vec![];
+        apply_refresh_event(
+            &mut session,
+            RefreshEvent::ProvidersReloaded { statuses },
+            &mut effects,
+        );
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
         )));
     }
 }
