@@ -154,44 +154,20 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
     let mut quotas = Vec::new();
 
     if let Some(usage) = plan_info.quota_usage {
-        if let Some(daily_pct) = usage.daily_remaining_percent {
-            let used = 100.0 - daily_pct;
-            let reset_text = usage
-                .daily_reset_at_unix
-                .and_then(|ts| {
-                    chrono::DateTime::from_timestamp(ts, 0)
-                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                })
-                .as_deref()
-                .and_then(time_utils::format_reset_countdown);
-
-            quotas.push(QuotaInfo::with_details(
-                "Daily Quota",
-                used,
-                100.0,
-                QuotaType::ModelSpecific("Daily Quota".to_string()),
-                reset_text,
-            ));
+        if let Some(q) = build_quota_from_cached(
+            "Daily Quota",
+            usage.daily_remaining_percent,
+            usage.daily_reset_at_unix,
+        ) {
+            quotas.push(q);
         }
 
-        if let Some(weekly_pct) = usage.weekly_remaining_percent {
-            let used = 100.0 - weekly_pct;
-            let reset_text = usage
-                .weekly_reset_at_unix
-                .and_then(|ts| {
-                    chrono::DateTime::from_timestamp(ts, 0)
-                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                })
-                .as_deref()
-                .and_then(time_utils::format_reset_countdown);
-
-            quotas.push(QuotaInfo::with_details(
-                "Weekly Quota",
-                used,
-                100.0,
-                QuotaType::ModelSpecific("Weekly Quota".to_string()),
-                reset_text,
-            ));
+        if let Some(q) = build_quota_from_cached(
+            "Weekly Quota",
+            usage.weekly_remaining_percent,
+            usage.weekly_reset_at_unix,
+        ) {
+            quotas.push(q);
         }
     }
 
@@ -207,6 +183,46 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
         .filter(|s| !s.is_empty());
 
     Ok(RefreshData::with_account(quotas, email, plan_name))
+}
+
+/// 根据 cachedPlanInfo 的 remaining_percent 和 reset_at_unix 构建配额项。
+///
+/// 关键逻辑：如果 reset 时间已过期，说明配额已被重置，
+/// 缓存中的 remaining_percent 是旧数据，应视为 100% remaining。
+fn build_quota_from_cached(
+    label: &str,
+    remaining_percent: Option<f64>,
+    reset_at_unix: Option<i64>,
+) -> Option<QuotaInfo> {
+    let pct = remaining_percent?;
+
+    let now_ts = chrono::Utc::now().timestamp();
+    let is_stale = reset_at_unix.is_some_and(|ts| ts <= now_ts);
+
+    // 过期 → 配额已重置，视为全部可用
+    let effective_remaining = if is_stale { 100.0 } else { pct };
+    let used = 100.0 - effective_remaining;
+
+    let reset_text = if is_stale {
+        // 重置时间已过，不再展示倒计时
+        None
+    } else {
+        reset_at_unix
+            .and_then(|ts| {
+                chrono::DateTime::from_timestamp(ts, 0)
+                    .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+            })
+            .as_deref()
+            .and_then(time_utils::format_reset_countdown)
+    };
+
+    Some(QuotaInfo::with_details(
+        label,
+        used,
+        100.0,
+        QuotaType::ModelSpecific(label.to_string()),
+        reset_text,
+    ))
 }
 
 fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<String> {
@@ -334,7 +350,15 @@ mod tests {
     }
 
     #[test]
-    fn test_read_via_cached_plan_info() {
+    fn test_read_via_cached_plan_info_fresh() {
+        // 使用未来的 reset 时间，数据不过期
+        let future_daily = chrono::Utc::now().timestamp() + 3600; // 1 小时后
+        let future_weekly = chrono::Utc::now().timestamp() + 86400 * 5; // 5 天后
+        let json_value = format!(
+            r#"{{"planName":"Pro","quotaUsage":{{"dailyRemainingPercent":41,"weeklyRemainingPercent":70,"dailyResetAtUnix":{},"weeklyResetAtUnix":{}}}}}"#,
+            future_daily, future_weekly
+        );
+
         let conn = Connection::open_in_memory().unwrap();
         conn.execute(
             "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -343,10 +367,7 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
-            [
-                "windsurf.settings.cachedPlanInfo",
-                r#"{"planName":"Pro","quotaUsage":{"dailyRemainingPercent":41,"weeklyRemainingPercent":70,"dailyResetAtUnix":1775462400,"weeklyResetAtUnix":1775980800}}"#,
-            ],
+            ["windsurf.settings.cachedPlanInfo", &json_value],
         )
         .unwrap();
 
@@ -358,6 +379,39 @@ mod tests {
         assert!((data.quotas[0].used - 59.0).abs() < 0.01); // 100 - 41 = 59
         assert_eq!(data.quotas[1].label, "Weekly Quota");
         assert!((data.quotas[1].used - 30.0).abs() < 0.01); // 100 - 70 = 30
+    }
+
+    #[test]
+    fn test_build_quota_from_cached_fresh() {
+        let future_ts = chrono::Utc::now().timestamp() + 3600;
+        let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(future_ts)).unwrap();
+        assert_eq!(q.label, "Daily Quota");
+        assert!((q.used - 59.0).abs() < 0.01);
+        assert!(q.detail_text.is_some()); // 有倒计时
+    }
+
+    #[test]
+    fn test_build_quota_from_cached_stale_resets_to_full() {
+        // reset 时间已过期 → 配额已重置，应视为 0% used
+        let past_ts = chrono::Utc::now().timestamp() - 3600;
+        let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(past_ts)).unwrap();
+        assert_eq!(q.label, "Daily Quota");
+        assert!((q.used - 0.0).abs() < 0.01); // 过期后重置为 0% used
+        assert!(q.detail_text.is_none()); // 不展示过期的倒计时
+    }
+
+    #[test]
+    fn test_build_quota_from_cached_no_reset_time() {
+        // 没有 reset 时间 → 按原始数据展示
+        let q = build_quota_from_cached("Weekly Quota", Some(70.0), None).unwrap();
+        assert!((q.used - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_build_quota_from_cached_no_percent() {
+        // 没有百分比数据 → 返回 None
+        let q = build_quota_from_cached("Daily Quota", None, Some(9999999999));
+        assert!(q.is_none());
     }
 
     #[test]
