@@ -15,7 +15,6 @@ impl SettingsView {
     pub(in crate::app::settings_window) fn render_providers_tab(
         &mut self,
         theme: &Theme,
-        viewport: Size<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -43,19 +42,18 @@ impl SettingsView {
                 is_editing,
                 view_state.editing_newapi_data.as_ref(),
                 theme,
-                viewport,
                 window,
                 cx,
             )
         } else {
-            self.render_provider_detail_panel(&view_state.detail, theme, viewport, cx)
+            self.render_provider_detail_panel(&view_state.detail, theme, cx)
         };
 
         div()
             .flex()
             .h_full()
             .overflow_hidden()
-            .child(self.render_provider_sidebar(&view_state.items, theme, viewport, cx))
+            .child(self.render_provider_sidebar(&view_state.items, theme, cx))
             .child(divider)
             .child(right_panel)
     }

@@ -208,7 +208,6 @@ impl SettingsView {
         is_editing: bool,
         edit_data: Option<&NewApiEditData>,
         theme: &Theme,
-        viewport: Size<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -342,11 +341,10 @@ impl SettingsView {
             .child(self.render_form_buttons(theme));
 
         // ── 键盘事件处理 ──
-        let detail_scroll_h = viewport.height - px(65.0);
-
         div()
             .flex_col()
             .flex_1()
+            .h_full()
             .overflow_hidden()
             .on_key_down(cx.listener(|view, ev: &KeyDownEvent, window, cx| {
                 Self::handle_form_key(view, ev, window, cx);
@@ -355,7 +353,7 @@ impl SettingsView {
                 div()
                     .id("newapi-form-scroll")
                     .flex_col()
-                    .h(detail_scroll_h)
+                    .h_full()
                     .overflow_y_scroll()
                     .child(inner),
             )

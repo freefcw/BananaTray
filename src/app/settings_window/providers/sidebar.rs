@@ -236,7 +236,6 @@ impl SettingsView {
         &mut self,
         items: &[SettingsProviderListItemViewState],
         theme: &Theme,
-        viewport: Size<Pixels>,
         _cx: &mut Context<Self>,
     ) -> Div {
         // 设计稿：sidebar 无背景色，直接在暗色底上列出 provider
@@ -284,9 +283,7 @@ impl SettingsView {
         // 「+ 新增中转站」按钮
         list = list.child(render_add_relay_button(self.state.clone(), theme));
 
-        // Tab bar ≈ 50px, sidebar top-padding = 8px
-        let sidebar_scroll_h = viewport.height - px(50.0) - px(8.0);
-
+        // 使用 h_full() 自适应父容器高度（父容器已统一负责可用高度）
         div()
             .flex_col()
             .flex_none()
@@ -294,12 +291,13 @@ impl SettingsView {
             .pl(px(16.0))
             .pr(px(4.0))
             .pt(px(8.0))
+            .h_full()
             .overflow_hidden()
             .child(
                 div()
                     .id("provider-sidebar-scroll")
                     .flex_col()
-                    .h(sidebar_scroll_h)
+                    .h_full()
                     .overflow_y_scroll()
                     .child(list),
             )
