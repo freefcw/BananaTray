@@ -114,6 +114,17 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             effects.push(AppEffect::ClearDebugLogs);
             push_render(&mut effects);
         }
+        AppAction::PopupVisibilityChanged(visible) => {
+            session.popup_visible = visible;
+            if !visible {
+                // 弹窗关闭时同步图标为当前 Provider 的状态
+                if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
+                    effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
+                        session.current_provider_status(),
+                    )));
+                }
+            }
+        }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
 
@@ -256,9 +267,11 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
     if new_val {
         request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
     } else {
-        // Provider 被禁用后需重新计算动态图标（禁用必然改变参与计算的集合）
-        if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
-            let status = session.overall_worst_status();
+        // Provider 被禁用后需重新计算动态图标
+        if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic
+            && !session.popup_visible
+        {
+            let status = session.current_provider_status();
             effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
                 status,
             )));
@@ -282,7 +295,7 @@ fn apply_refresh_event(
                 && session.debug_ui.selected_provider.as_ref() == Some(&outcome.id);
 
             // 快照刷新前的状态等级，用于判断刷新后是否需要更新图标
-            let prev_status = session.overall_worst_status();
+            let prev_status = session.current_provider_status();
 
             'process: {
                 if session.provider_store.find_by_id(&outcome.id).is_none() {
@@ -349,8 +362,8 @@ fn apply_refresh_event(
                 }
             }
 
-            // 动态图标：刷新结束后检查状态变化，仅在状态实际改变时更新图标
-            maybe_update_dynamic_icon(session, prev_status, effects);
+            // 动态图标：仅当刷新的是当前 Provider 时才检查状态变化
+            maybe_update_dynamic_icon(session, &outcome.id, prev_status, effects);
 
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
@@ -383,29 +396,39 @@ fn push_render(effects: &mut Vec<AppEffect>) {
 }
 
 /// 将用户选择的 TrayIconStyle 解析为具体的 TrayIconRequest。
-/// Dynamic 模式时根据当前额度状态计算颜色，其余模式直接映射为静态请求。
+/// Dynamic 模式时根据当前 Provider 状态计算颜色，其余模式直接映射为静态请求。
 fn resolve_tray_icon_request(session: &AppSession, style: TrayIconStyle) -> TrayIconRequest {
     if style == TrayIconStyle::Dynamic {
-        TrayIconRequest::DynamicStatus(session.overall_worst_status())
+        TrayIconRequest::DynamicStatus(session.current_provider_status())
     } else {
         TrayIconRequest::Static(style)
     }
 }
 
-/// 若处于 Dynamic 模式且状态等级发生变化，追加 ApplyTrayIcon effect。
-/// `prev_status` 为变更前的快照，只有新旧不同时才推 effect，避免无效的 OS 调用。
+/// 若处于 Dynamic 模式，且刷新的是当前 Provider，且弹窗不可见，且状态发生变化时，
+/// 追加 ApplyTrayIcon effect。
 fn maybe_update_dynamic_icon(
     session: &AppSession,
+    refreshed_id: &ProviderId,
     prev_status: StatusLevel,
     effects: &mut Vec<AppEffect>,
 ) {
-    if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
-        let new_status = session.overall_worst_status();
-        if new_status != prev_status {
-            effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
-                new_status,
-            )));
-        }
+    if session.settings.display.tray_icon_style != TrayIconStyle::Dynamic {
+        return;
+    }
+    // 弹窗可见时延迟更新，关闭时由 PopupVisibilityChanged(false) 同步
+    if session.popup_visible {
+        return;
+    }
+    // 只响应当前 Provider 的刷新事件
+    if *refreshed_id != session.nav.last_provider_id {
+        return;
+    }
+    let new_status = session.current_provider_status();
+    if new_status != prev_status {
+        effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
+            new_status,
+        )));
     }
 }
 
@@ -749,6 +772,7 @@ mod tests {
         session
             .settings
             .set_enabled(&pid(ProviderKind::Claude), true);
+        // make_session 的 last_provider_id = Claude
 
         let effects = reduce(
             &mut session,
@@ -764,7 +788,7 @@ mod tests {
             })),
         );
 
-        // Session provider 现在 Red (5% remaining), Dynamic 模式应产出 ApplyTrayIcon
+        // 当前 Provider Claude 变 Red → 产出 ApplyTrayIcon
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red))
@@ -842,6 +866,133 @@ mod tests {
             })),
         );
 
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
+    }
+
+    #[test]
+    fn refresh_non_current_provider_does_not_produce_tray_icon_effect() {
+        use crate::models::{QuotaInfo, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+        // 当前 Provider 是 Claude（默认），但刷新的是 Gemini
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Gemini),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // 非当前 Provider 的刷新不影响图标
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
+    }
+
+    #[test]
+    fn refresh_deferred_while_popup_visible() {
+        use crate::models::{QuotaInfo, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+        session.popup_visible = true; // 弹窗打开
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // 弹窗可见时不产出 ApplyTrayIcon
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
+    }
+
+    // ── PopupVisibilityChanged ────────────────────────────
+
+    #[test]
+    fn popup_closed_syncs_dynamic_icon() {
+        use crate::models::{QuotaInfo, StatusLevel, TrayIconStyle};
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+        session.popup_visible = true;
+
+        // 先让 Claude 有 Red 数据（在弹窗打开期间刷新，图标未更新）
+        reduce(
+            &mut session,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result: RefreshResult::Success {
+                    data: RefreshData {
+                        quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                        account_email: None,
+                        account_tier: None,
+                    },
+                },
+            })),
+        );
+
+        // 关闭弹窗 → 同步图标
+        let effects = reduce(&mut session, AppAction::PopupVisibilityChanged(false));
+
+        assert!(!session.popup_visible);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red))
+        )));
+    }
+
+    #[test]
+    fn popup_opened_sets_flag_no_icon_effect() {
+        use crate::models::TrayIconStyle;
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+
+        let effects = reduce(&mut session, AppAction::PopupVisibilityChanged(true));
+
+        assert!(session.popup_visible);
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::ApplyTrayIcon(_)
+        )));
+    }
+
+    #[test]
+    fn popup_closed_in_static_mode_no_icon_effect() {
+        use crate::models::TrayIconStyle;
+
+        let mut session = make_session();
+        session.settings.display.tray_icon_style = TrayIconStyle::Monochrome;
+        session.popup_visible = true;
+
+        let effects = reduce(&mut session, AppAction::PopupVisibilityChanged(false));
+
+        assert!(!session.popup_visible);
+        // 非 Dynamic 模式不产出图标更新
         assert!(!has_effect(&effects, |e| matches!(
             e,
             AppEffect::ApplyTrayIcon(_)

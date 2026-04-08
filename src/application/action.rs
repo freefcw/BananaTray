@@ -36,6 +36,8 @@ pub enum AppAction {
     DebugRefreshProvider,
     /// Debug Tab: 清空日志缓冲区
     ClearDebugLogs,
+    /// 弹窗可见性变化（控制 Dynamic 图标延迟更新）
+    PopupVisibilityChanged(bool),
     QuitApp,
 }
 
