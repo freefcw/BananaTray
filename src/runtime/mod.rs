@@ -230,6 +230,22 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
                 }
             }
         }
+        AppEffect::DeleteCustomProviderYaml { filename } => {
+            let path = dirs::config_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("bananatray")
+                .join("providers")
+                .join(&filename);
+            match std::fs::remove_file(&path) {
+                Ok(()) => {
+                    info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
+                    let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
+                }
+                Err(e) => {
+                    warn!(target: "runtime", "failed to delete YAML {}: {}", path.display(), e);
+                }
+            }
+        }
         AppEffect::Render
         | AppEffect::OpenSettingsWindow
         | AppEffect::OpenUrl(_)

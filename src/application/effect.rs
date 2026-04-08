@@ -57,5 +57,9 @@ pub enum AppEffect {
         yaml_content: String,
         filename: String,
     },
+    /// 删除 Provider YAML 文件
+    DeleteCustomProviderYaml {
+        filename: String,
+    },
     QuitApp,
 }

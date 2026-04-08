@@ -199,6 +199,21 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 }
             }
         }
+        AppAction::DeleteNewApi { provider_id } => {
+            use crate::providers::custom::generator;
+
+            if let ProviderId::Custom(ref custom_id) = provider_id {
+                if let Some(filename) = generator::filename_for_id(custom_id) {
+                    effects.push(AppEffect::DeleteCustomProviderYaml { filename });
+                } else {
+                    log::warn!(
+                        target: "settings",
+                        "DeleteNewApi: not a newapi provider id: {}",
+                        custom_id
+                    );
+                }
+            }
+        }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
 
@@ -1702,6 +1717,48 @@ mod tests {
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::PersistSettings
+        )));
+    }
+
+    // ── DeleteNewApi ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn delete_newapi_produces_delete_effect_with_correct_filename() {
+        let mut session = make_session();
+        let id = ProviderId::Custom("my-api-example-com:newapi".to_string());
+
+        let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::DeleteCustomProviderYaml { filename }
+                if filename == "newapi-my-api-example-com.yaml"
+        )));
+    }
+
+    #[test]
+    fn delete_newapi_ignores_non_newapi_custom_id() {
+        let mut session = make_session();
+        let id = ProviderId::Custom("some-other-provider:cli".to_string());
+
+        let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
+
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::DeleteCustomProviderYaml { .. }
+        )));
+    }
+
+    #[test]
+    fn delete_newapi_ignores_builtin_provider_id() {
+        let mut session = make_session();
+        let id = ProviderId::BuiltIn(ProviderKind::Claude);
+
+        let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
+
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::DeleteCustomProviderYaml { .. }
         )));
     }
 }
