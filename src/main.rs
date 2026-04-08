@@ -67,6 +67,8 @@ impl TrayController {
             display_id = window.display(cx).map(|d| d.id());
             window.remove_window();
         });
+        // 弹窗关闭后同步动态图标
+        runtime::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(false), cx);
         display_id
     }
 
@@ -176,6 +178,8 @@ impl TrayController {
 
         if let Ok(handle) = result {
             info!(target: "tray", "tray popup opened successfully");
+            // 标记弹窗可见
+            runtime::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(true), cx);
             // 监听窗口失焦，自动关闭
             let auto_hide_state = self.state.clone();
             let activation_initialized = Rc::new(Cell::new(false));
@@ -195,6 +199,11 @@ impl TrayController {
                     if should_auto_hide && !window.is_window_active() {
                         info!(target: "tray", "auto-hide closing inactive tray popup");
                         auto_hide_state.borrow_mut().view_entity = None;
+                        crate::runtime::dispatch_in_app(
+                            &auto_hide_state,
+                            AppAction::PopupVisibilityChanged(false),
+                            _cx,
+                        );
                         window.remove_window();
                     }
                 });

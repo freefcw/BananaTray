@@ -84,6 +84,8 @@ pub struct AppSession {
     pub debug_ui: DebugUiState,
     pub settings: AppSettings,
     pub alert_tracker: QuotaAlertTracker,
+    /// 弹窗是否可见（Dynamic 图标在弹窗可见时延迟更新，关闭后同步）
+    pub popup_visible: bool,
 }
 
 impl AppSession {
@@ -116,6 +118,7 @@ impl AppSession {
             debug_ui: DebugUiState::default(),
             settings,
             alert_tracker: QuotaAlertTracker::new(),
+            popup_visible: false,
         }
     }
 
@@ -157,21 +160,16 @@ impl AppSession {
         Some(NavTab::Provider(id))
     }
 
-    /// 计算所有已启用 Provider 的综合状态等级（取最差值）。
+    /// 获取当前选中 Provider 的状态等级。
     /// 仅在 Dynamic 模式下使用，用于决定托盘图标颜色。
     ///
-    /// 只统计 Connected 状态的 Provider（未连接的不影响图标颜色）。
-    /// 无已连接 Provider 时返回 Green（启动时默认状态）。
-    pub fn overall_worst_status(&self) -> StatusLevel {
+    /// 基于 `nav.last_provider_id`（当前/最后选中的 Provider）。
+    /// 若该 Provider 未连接或不存在，返回 Green（安全默认值）。
+    pub fn current_provider_status(&self) -> StatusLevel {
         self.provider_store
-            .providers
-            .iter()
-            .filter(|p| {
-                self.settings.is_enabled(&p.provider_id)
-                    && p.connection == ConnectionStatus::Connected
-            })
+            .find_by_id(&self.nav.last_provider_id)
+            .filter(|p| p.connection == ConnectionStatus::Connected)
             .map(|p| p.worst_status())
-            .max()
             .unwrap_or(StatusLevel::Green)
     }
 }
@@ -985,89 +983,86 @@ mod tests {
         assert_eq!(h, expected);
     }
 
-    // ── overall_worst_status ────────────────────────────────────
+    // ── current_provider_status ────────────────────────────────────
 
     #[test]
-    fn overall_worst_status_no_connected_providers_returns_green() {
-        // 所有 Provider 都 Disconnected — 应返回 Green（默认安全状态）
-        let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
-        let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
+    fn current_provider_status_disconnected_returns_green() {
+        // 当前 Provider 未连接 → 返回 Green（安全默认值）
+        let store = make_store(&[ProviderKind::Claude]);
+        let settings = make_settings(&[ProviderKind::Claude]);
         let session = AppSession::new(settings, store.providers);
-        assert_eq!(session.overall_worst_status(), StatusLevel::Green);
+        assert_eq!(session.current_provider_status(), StatusLevel::Green);
     }
 
     #[test]
-    fn overall_worst_status_single_green_provider() {
+    fn current_provider_status_connected_green() {
         use crate::models::QuotaInfo;
         let mut store = make_store(&[ProviderKind::Claude]);
         let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p.connection = ConnectionStatus::Connected;
-        // 10/100 = 10% used, 90% remaining → Green
-        p.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)];
+        p.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)]; // 90% remaining → Green
 
         let settings = make_settings(&[ProviderKind::Claude]);
         let session = AppSession::new(settings, store.providers);
-        assert_eq!(session.overall_worst_status(), StatusLevel::Green);
+        assert_eq!(session.current_provider_status(), StatusLevel::Green);
     }
 
     #[test]
-    fn overall_worst_status_worst_wins() {
+    fn current_provider_status_connected_red() {
+        use crate::models::QuotaInfo;
+        let mut store = make_store(&[ProviderKind::Claude]);
+        let p = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
+        p.connection = ConnectionStatus::Connected;
+        p.quotas = vec![QuotaInfo::new("session", 95.0, 100.0)]; // 5% remaining → Red
+
+        let settings = make_settings(&[ProviderKind::Claude]);
+        let session = AppSession::new(settings, store.providers);
+        assert_eq!(session.current_provider_status(), StatusLevel::Red);
+    }
+
+    #[test]
+    fn current_provider_status_ignores_other_providers() {
         use crate::models::QuotaInfo;
         let mut store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
 
-        // Claude: Green (90% remaining)
+        // Claude（当前 Provider）：Green
         let p1 = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p1.connection = ConnectionStatus::Connected;
         p1.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)];
 
-        // Gemini: Red (95% used, 5% remaining)
+        // Gemini：Red — 但不影响图标
         let p2 = store.find_by_id_mut(&pid(ProviderKind::Gemini)).unwrap();
         p2.connection = ConnectionStatus::Connected;
         p2.quotas = vec![QuotaInfo::new("session", 95.0, 100.0)];
 
         let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
         let session = AppSession::new(settings, store.providers);
-        // 最差的 Red 胜出
-        assert_eq!(session.overall_worst_status(), StatusLevel::Red);
+        // 当前 Provider = Claude (Green)，Gemini (Red) 不影响
+        assert_eq!(session.current_provider_status(), StatusLevel::Green);
     }
 
     #[test]
-    fn overall_worst_status_disconnected_provider_ignored() {
+    fn current_provider_status_follows_last_provider_id() {
         use crate::models::QuotaInfo;
         let mut store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
 
-        // Claude: Connected + Red
         let p1 = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
         p1.connection = ConnectionStatus::Connected;
-        p1.quotas = vec![QuotaInfo::new("session", 95.0, 100.0)];
+        p1.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)]; // Green
 
-        // Gemini: Disconnected（不参与计算）
-        // 保持默认 Disconnected
-
-        let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
-        let session = AppSession::new(settings, store.providers);
-        assert_eq!(session.overall_worst_status(), StatusLevel::Red);
-    }
-
-    #[test]
-    fn overall_worst_status_disabled_provider_ignored() {
-        use crate::models::QuotaInfo;
-        let mut store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
-
-        // Claude: Connected + Red, but DISABLED
-        let p1 = store.find_by_id_mut(&pid(ProviderKind::Claude)).unwrap();
-        p1.connection = ConnectionStatus::Connected;
-        p1.quotas = vec![QuotaInfo::new("session", 95.0, 100.0)];
-
-        // Gemini: Connected + Green, enabled
         let p2 = store.find_by_id_mut(&pid(ProviderKind::Gemini)).unwrap();
         p2.connection = ConnectionStatus::Connected;
-        p2.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)];
+        p2.quotas = vec![QuotaInfo::new("session", 95.0, 100.0)]; // Red
 
-        // 只启用 Gemini，不启用 Claude
-        let settings = make_settings(&[ProviderKind::Gemini]);
-        let session = AppSession::new(settings, store.providers);
-        // Claude is disabled, so only Gemini (Green) is considered
-        assert_eq!(session.overall_worst_status(), StatusLevel::Green);
+        let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
+        let mut session = AppSession::new(settings, store.providers);
+
+        // 切换到 Gemini
+        session.nav.last_provider_id = pid(ProviderKind::Gemini);
+        assert_eq!(session.current_provider_status(), StatusLevel::Red);
+
+        // 切回 Claude
+        session.nav.last_provider_id = pid(ProviderKind::Claude);
+        assert_eq!(session.current_provider_status(), StatusLevel::Green);
     }
 }
