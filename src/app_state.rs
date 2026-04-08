@@ -114,6 +114,7 @@ impl AppSession {
                 selected_provider: ProviderId::BuiltIn(ProviderKind::Claude),
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
+                adding_newapi: false,
             },
             debug_ui: DebugUiState::default(),
             settings,
@@ -231,6 +232,8 @@ pub struct SettingsUiState {
     pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
     pub copilot_token_editing: bool,
+    /// 是否正在添加 NewAPI 中转站（右侧面板显示表单）
+    pub adding_newapi: bool,
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

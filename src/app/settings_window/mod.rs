@@ -7,7 +7,7 @@ mod providers;
 mod window_mgr;
 
 use super::AppState;
-use crate::app::widgets::render_svg_icon;
+use crate::app::widgets::{render_svg_icon, SimpleInputState};
 use crate::app_state::SettingsTab;
 use crate::application::AppAction;
 use crate::runtime;
@@ -24,11 +24,23 @@ pub use window_mgr::schedule_open_settings_window;
 // 设置视图 — 匹配 Lumina Bar 设计稿
 // ============================================================================
 
+/// NewAPI 表单输入状态（不使用 adabraka-ui InputState，避免 IME 崩溃）
+pub(crate) struct NewApiFormInputs {
+    pub name: SimpleInputState,
+    pub url: SimpleInputState,
+    pub cookie: SimpleInputState,
+    pub user_id: SimpleInputState,
+    pub divisor: SimpleInputState,
+    pub focus_handles: [FocusHandle; 5],
+}
+
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<gpui::Subscription>,
+    /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
+    pub(crate) newapi_inputs: Option<NewApiFormInputs>,
 }
 
 impl SettingsView {
@@ -38,6 +50,7 @@ impl SettingsView {
             state,
             copilot_input: None,
             _appearance_sub: None,
+            newapi_inputs: None,
         }
     }
 
@@ -251,7 +264,7 @@ impl Render for SettingsView {
                 .flex_col()
                 .h(content_h)
                 .overflow_hidden()
-                .child(self.render_providers_tab(&theme, viewport, cx))
+                .child(self.render_providers_tab(&theme, viewport, window, cx))
         } else {
             div()
                 .id("settings-content")

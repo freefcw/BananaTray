@@ -1,5 +1,6 @@
 mod client;
 mod parser;
+#[cfg(feature = "app")]
 pub mod settings_ui;
 mod token;
 

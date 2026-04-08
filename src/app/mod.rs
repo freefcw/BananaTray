@@ -4,7 +4,7 @@ mod nav;
 mod provider_panel;
 pub(crate) mod settings_window;
 mod tray_settings;
-mod widgets;
+pub(crate) mod widgets;
 
 // 对外暴露的核心类型
 pub(crate) use app_state::persist_settings;

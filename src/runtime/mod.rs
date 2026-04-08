@@ -206,6 +206,28 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
         AppEffect::ClearDebugLogs => {
             crate::utils::log_capture::LogCapture::global().clear();
         }
+        AppEffect::SaveCustomProviderYaml {
+            yaml_content,
+            filename,
+        } => {
+            let providers_dir = dirs::config_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("bananatray")
+                .join("providers");
+            if let Err(e) = std::fs::create_dir_all(&providers_dir) {
+                warn!(target: "runtime", "failed to create providers dir: {}", e);
+                return;
+            }
+            let path = providers_dir.join(&filename);
+            match std::fs::write(&path, &yaml_content) {
+                Ok(()) => {
+                    info!(target: "runtime", "saved custom provider YAML to {}", path.display());
+                }
+                Err(e) => {
+                    warn!(target: "runtime", "failed to write YAML to {}: {}", path.display(), e);
+                }
+            }
+        }
         AppEffect::Render
         | AppEffect::OpenSettingsWindow
         | AppEffect::OpenUrl(_)

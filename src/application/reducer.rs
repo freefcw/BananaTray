@@ -20,6 +20,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::SelectSettingsProvider(id) => {
             session.settings_ui.selected_provider = id;
+            session.settings_ui.adding_newapi = false;
             push_render(&mut effects);
         }
         AppAction::ToggleCadenceDropdown => {
@@ -124,6 +125,44 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                     )));
                 }
             }
+        }
+        AppAction::EnterAddNewApi => {
+            session.settings_ui.adding_newapi = true;
+            push_render(&mut effects);
+        }
+        AppAction::CancelAddNewApi => {
+            session.settings_ui.adding_newapi = false;
+            push_render(&mut effects);
+        }
+        AppAction::SubmitNewApi {
+            display_name,
+            base_url,
+            cookie,
+            user_id,
+            divisor,
+        } => {
+            use crate::providers::custom::generator;
+
+            let config = generator::NewApiConfig {
+                display_name,
+                base_url,
+                cookie,
+                user_id,
+                divisor,
+            };
+            let yaml_content = generator::generate_newapi_yaml(&config);
+            let filename = generator::generate_filename(&config);
+
+            effects.push(AppEffect::SaveCustomProviderYaml {
+                yaml_content,
+                filename,
+            });
+            effects.push(AppEffect::SendPlainNotification {
+                title: rust_i18n::t!("newapi.save_success_title").to_string(),
+                body: rust_i18n::t!("newapi.save_success_body").to_string(),
+            });
+            session.settings_ui.adding_newapi = false;
+            push_render(&mut effects);
         }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
@@ -997,6 +1036,108 @@ mod tests {
             e,
             AppEffect::ApplyTrayIcon(_)
         )));
+    }
+
+    // ── NewAPI 快速添加 ────────────────────────────────
+
+    #[test]
+    fn enter_add_newapi_sets_flag_true() {
+        let mut session = make_session();
+        assert!(!session.settings_ui.adding_newapi);
+
+        let effects = reduce(&mut session, AppAction::EnterAddNewApi);
+
+        assert!(session.settings_ui.adding_newapi);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn cancel_add_newapi_resets_flag() {
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+
+        let effects = reduce(&mut session, AppAction::CancelAddNewApi);
+
+        assert!(!session.settings_ui.adding_newapi);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn submit_newapi_produces_save_and_notification_effects() {
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+
+        let effects = reduce(
+            &mut session,
+            AppAction::SubmitNewApi {
+                display_name: "Test Site".to_string(),
+                base_url: "https://api.example.com".to_string(),
+                cookie: "session=tok_123".to_string(),
+                user_id: Some("42".to_string()),
+                divisor: Some(1_000_000.0),
+            },
+        );
+
+        // 状态：表单已关闭
+        assert!(!session.settings_ui.adding_newapi);
+
+        // Effect: SaveCustomProviderYaml（检查文件名和内容包含关键字段）
+        assert!(has_effect(&effects, |e| {
+            matches!(e, AppEffect::SaveCustomProviderYaml { filename, yaml_content }
+                if filename.starts_with("newapi-")
+                && filename.ends_with(".yaml")
+                && yaml_content.contains("Test Site")
+                && yaml_content.contains("https://api.example.com")
+                && yaml_content.contains("session=tok_123")
+                && yaml_content.contains("/api/user/self")
+                && yaml_content.contains("New-Api-User")
+                && yaml_content.contains("42")
+                && yaml_content.contains("1000000")
+            )
+        }));
+
+        // Effect: SendPlainNotification（通知用户重启）
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendPlainNotification { .. }
+        )));
+
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn submit_newapi_without_optional_fields_uses_defaults() {
+        let mut session = make_session();
+
+        let effects = reduce(
+            &mut session,
+            AppAction::SubmitNewApi {
+                display_name: "Minimal".to_string(),
+                base_url: "https://minimal.io".to_string(),
+                cookie: "session=abc".to_string(),
+                user_id: None,
+                divisor: None,
+            },
+        );
+
+        assert!(has_effect(&effects, |e| {
+            matches!(e, AppEffect::SaveCustomProviderYaml { yaml_content, .. }
+                if yaml_content.contains("/api/user/self")
+                && yaml_content.contains("divisor: 500000")
+            )
+        }));
+    }
+
+    #[test]
+    fn select_provider_resets_adding_newapi() {
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+
+        let id = session.provider_store.providers[0].provider_id.clone();
+        let effects = reduce(&mut session, AppAction::SelectSettingsProvider(id));
+
+        assert!(!session.settings_ui.adding_newapi);
+        assert!(has_render(&effects));
     }
 
     // ── SetQuotaDisplayMode ────────────────────────────

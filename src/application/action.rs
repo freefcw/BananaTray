@@ -38,6 +38,18 @@ pub enum AppAction {
     ClearDebugLogs,
     /// 弹窗可见性变化（控制 Dynamic 图标延迟更新）
     PopupVisibilityChanged(bool),
+    /// 进入 NewAPI 添加模式（显示表单）
+    EnterAddNewApi,
+    /// 取消 NewAPI 添加（关闭表单）
+    CancelAddNewApi,
+    /// 提交 NewAPI 配置（生成 YAML + 保存 + 通知重启）
+    SubmitNewApi {
+        display_name: String,
+        base_url: String,
+        cookie: String,
+        user_id: Option<String>,
+        divisor: Option<f64>,
+    },
     QuitApp,
 }
 

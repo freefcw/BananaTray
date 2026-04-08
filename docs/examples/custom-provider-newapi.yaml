@@ -1,19 +1,19 @@
 # 示例：NewAPI / OneAPI 中转站额度监控
 #
 # NewAPI (https://github.com/Calcium-Ion/new-api) 是基于 OneAPI 的 AI API 中转站管理系统。
-# 此配置通过浏览器中已登录的 session cookie 调用 /api/user/self 查询用户额度。
+# 此配置通过浏览器中已登录的 Cookie 调用 /api/user/self 查询用户额度。
 #
-# 获取 session token 步骤：
+# 获取 Cookie 步骤：
 # 1. 在浏览器中登录你的 NewAPI 站点
 # 2. 打开 DevTools（F12 或 Cmd+Option+I）
-# 3. 切换到 Application → Cookies → 找到你的站点域名
-# 4. 找到名为 "session" 的 cookie，复制其 Value
-# 5. 填入下方 token 字段
+# 3. 切换到 Network 面板，刷新页面
+# 4. 点击任意请求 → Request Headers → 找到 Cookie 一行
+# 5. 复制完整的 Cookie 值，填入下方 value 字段
 #
-# ⚠️ 注意：session token 有有效期，过期后需重新从浏览器获取并更新配置文件。
+# ⚠️ 注意：Cookie 有有效期，过期后需重新从浏览器获取并更新配置文件。
 #
 # 使用方法：
-# 1. 修改下方的 base_url 和 token
+# 1. 修改下方的 base_url 和 auth.value
 # 2. 将此文件复制到自定义 Provider 目录：
 #    macOS: ~/Library/Application Support/bananatray/providers/newapi.yaml
 #    Linux: ~/.config/bananatray/providers/newapi.yaml
@@ -40,20 +40,37 @@ source:
   type: http_get
   url: "/api/user/self"           # 自动拼接为 base_url + /api/user/self
   auth:
-    type: session_token
-    # 从浏览器 DevTools → Application → Cookies 中复制 session 值
-    token: "your_session_token_here"
-    # cookie_name: "session"      # 默认就是 "session"，大多数 NewAPI 站点无需修改
+    type: cookie
+    # 从浏览器 DevTools → Network 面板 → 任意请求 → Request Headers → Cookie 复制完整值
+    value: "session=your_session_token_here"
 
 # ========== 高级选项 ==========
-# 如果你的站点使用不同的 cookie 名称（如 "access_token"），取消注释 cookie_name 并修改
+# 如果你的站点要求 New-Api-User header（报错"未提供 New-Api-User"），
+# 需要在 source 中添加 headers 并指定你的用户 ID：
 #
-# 如果需要传递多个 cookie（如同时包含 session 和 cf_clearance），
-# 可改用 cookie 认证类型：
+#   source:
+#     type: http_get
+#     url: "/api/user/12345"         # 使用你的用户 ID 替换 self
+#     auth:
+#       type: cookie
+#       value: "session=eyJ..."
+#     headers:
+#       - name: "New-Api-User"
+#         value: "12345"             # 你的用户 ID
+#
+# 如果你的站点有 CDN 防护（如 Cloudflare JS Challenge），
+# Cookie 中需要包含 cf_clearance 等额外字段，示例：
 #
 #   auth:
 #     type: cookie
-#     value: "session=eyJ...;cf_clearance=abc123"
+#     value: "session=eyJ...;cf_clearance=abc123;_ga=xxx"
+#
+# 如果你知道只需要 session cookie，也可以使用更简洁的 session_token 类型：
+#
+#   auth:
+#     type: session_token
+#     token: "eyJ..."
+#     # cookie_name: "session"      # 默认就是 "session"，大多数站点无需修改
 
 # 响应解析
 parser:

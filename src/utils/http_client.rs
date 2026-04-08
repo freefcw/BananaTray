@@ -51,8 +51,12 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
     debug!(target: "http", "GET {} -> {}", url, status);
 
     if status >= 400 {
-        warn!(target: "http", "GET {} failed with status {}", url, status);
-        bail!("HTTP GET {url} returned status {status}");
+        let body = response
+            .into_body()
+            .read_to_string()
+            .unwrap_or_else(|_| "<unable to read body>".to_string());
+        warn!(target: "http", "GET {} failed with status {}, body: {}", url, status, body);
+        bail!("HTTP GET {url} returned status {status}: {body}");
     }
 
     response
@@ -129,8 +133,12 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
     debug!(target: "http", "POST {} -> {}", url, status);
 
     if status >= 400 {
-        warn!(target: "http", "POST {} failed with status {}", url, status);
-        bail!("HTTP POST {url} returned status {status}");
+        let body = response
+            .into_body()
+            .read_to_string()
+            .unwrap_or_else(|_| "<unable to read body>".to_string());
+        warn!(target: "http", "POST {} failed with status {}, body: {}", url, status, body);
+        bail!("HTTP POST {url} returned status {status}: {body}");
     }
 
     response
@@ -156,8 +164,12 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
     debug!(target: "http", "POST {} -> {}", url, status);
 
     if status >= 400 {
-        warn!(target: "http", "POST {} (form) failed with status {}", url, status);
-        bail!("HTTP POST {url} returned status {status}");
+        let body = response
+            .into_body()
+            .read_to_string()
+            .unwrap_or_else(|_| "<unable to read body>".to_string());
+        warn!(target: "http", "POST {} (form) failed with status {}, body: {}", url, status, body);
+        bail!("HTTP POST {url} returned status {status}: {body}");
     }
 
     response

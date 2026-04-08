@@ -37,6 +37,7 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
     SettingsProvidersTabViewState {
         items,
         detail: settings_provider_detail_view_state(session, selected),
+        adding_newapi: session.settings_ui.adding_newapi,
     }
 }
 
