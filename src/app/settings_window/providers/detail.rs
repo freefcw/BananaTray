@@ -124,7 +124,6 @@ impl SettingsView {
         &mut self,
         detail: &SettingsProviderDetailViewState,
         theme: &Theme,
-        viewport: Size<Pixels>,
         cx: &mut Context<Self>,
     ) -> Div {
         let inner = div()
@@ -169,13 +168,11 @@ impl SettingsView {
                 cx,
             ));
 
-        let detail_scroll_h = viewport.height - px(65.0);
-
-        div().flex_col().flex_1().overflow_hidden().child(
+        div().flex_col().flex_1().h_full().overflow_hidden().child(
             div()
                 .id("provider-detail-scroll")
                 .flex_col()
-                .h(detail_scroll_h)
+                .h_full()
                 .overflow_y_scroll()
                 .child(inner),
         )

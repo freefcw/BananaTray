@@ -264,7 +264,7 @@ impl Render for SettingsView {
                 .flex_col()
                 .h(content_h)
                 .overflow_hidden()
-                .child(self.render_providers_tab(&theme, viewport, window, cx))
+                .child(self.render_providers_tab(&theme, window, cx))
         } else {
             div()
                 .id("settings-content")
