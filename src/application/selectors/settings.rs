@@ -38,6 +38,7 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
         items,
         detail: settings_provider_detail_view_state(session, selected),
         adding_newapi: session.settings_ui.adding_newapi,
+        editing_newapi_data: session.settings_ui.editing_newapi.clone(),
     }
 }
 
@@ -90,6 +91,9 @@ fn settings_provider_detail_view_state(
         usage: settings_provider_usage_view_state(provider, is_enabled),
         settings_mode: match id {
             ProviderId::BuiltIn(ProviderKind::Copilot) => ProviderSettingsMode::Interactive,
+            ProviderId::Custom(custom_id) if custom_id.ends_with(":newapi") => {
+                ProviderSettingsMode::NewApiEditable
+            }
             _ => ProviderSettingsMode::AutoManaged,
         },
         quota_display_mode: session.settings.display.quota_display_mode,

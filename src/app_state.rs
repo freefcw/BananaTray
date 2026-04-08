@@ -5,6 +5,7 @@ use crate::models::{
     AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, ProviderStatus, StatusLevel,
 };
 use crate::notification::QuotaAlertTracker;
+use crate::providers::custom::generator::NewApiEditData;
 
 // ============================================================================
 // Provider 面板可见性规则（单一真理来源，供 selector 和 popup_height 共用）
@@ -115,6 +116,7 @@ impl AppSession {
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
                 adding_newapi: false,
+                editing_newapi: None,
             },
             debug_ui: DebugUiState::default(),
             settings,
@@ -234,6 +236,8 @@ pub struct SettingsUiState {
     pub copilot_token_editing: bool,
     /// 是否正在添加 NewAPI 中转站（右侧面板显示表单）
     pub adding_newapi: bool,
+    /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）
+    pub editing_newapi: Option<NewApiEditData>,
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

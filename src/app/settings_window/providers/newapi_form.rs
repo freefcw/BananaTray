@@ -1,14 +1,18 @@
-//! NewAPI 中转站快速添加表单
+//! NewAPI 中转站快速添加 / 编辑表单
 //!
 //! 内嵌在 Settings → Providers 右侧 detail 面板中，
 //! 用户填写必要字段后自动生成 YAML 配置文件。
+//! 编辑模式下从磁盘读取已有配置回填表单，URL 字段只读。
 //!
 //! 使用自建 SimpleInputState 替代 adabraka-ui InputState，
 //! 避免 macOS IME 触发 character_index_for_point 崩溃。
 
 use super::super::{NewApiFormInputs, SettingsView};
-use crate::app::widgets::{render_simple_input, render_svg_icon, SimpleInputState};
+use crate::app::widgets::{
+    render_simple_input, render_simple_textarea, render_svg_icon, SimpleInputState,
+};
 use crate::application::AppAction;
+use crate::providers::custom::generator::NewApiEditData;
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::*;
@@ -66,27 +70,131 @@ fn render_form_field(
         ))
 }
 
+/// 渲染多行文本表单字段（标签 + 多行输入框，适用于 Cookie 等长文本）
+#[allow(clippy::too_many_arguments)]
+fn render_form_field_textarea(
+    id: &'static str,
+    label: &str,
+    hint: Option<&str>,
+    state: &SimpleInputState,
+    focus_handle: &FocusHandle,
+    is_focused: bool,
+    margin_top: Pixels,
+    theme: &Theme,
+) -> Div {
+    div()
+        .flex_col()
+        .gap(px(6.0))
+        .mt(margin_top)
+        .child(render_field_label(label, hint, theme))
+        .child(render_simple_textarea(
+            id,
+            state,
+            focus_handle,
+            is_focused,
+            theme.bg.card,
+            theme.text.primary,
+            theme.text.muted,
+            theme.border.strong,
+            theme.text.accent,
+        ))
+}
+
+/// 渲染只读字段（编辑模式下身份标识字段不可修改）
+fn render_readonly_field(
+    label: &str,
+    hint: Option<&str>,
+    value: &str,
+    margin_top: Pixels,
+    theme: &Theme,
+) -> Div {
+    let muted = theme.text.muted;
+    div()
+        .flex_col()
+        .gap(px(6.0))
+        .mt(margin_top)
+        .child(render_field_label(label, hint, theme))
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .px(px(12.0))
+                .py(px(8.0))
+                .h(px(36.0))
+                .rounded(px(8.0))
+                .bg(hsla(0.0, 0.0, 0.2, 0.5))
+                .border_1()
+                .border_color(theme.border.subtle)
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .text_color(muted)
+                        .overflow_hidden()
+                        .child(value.to_string()),
+                ),
+        )
+}
+
 impl SettingsView {
-    /// 确保 NewAPI 表单输入状态已创建
-    fn ensure_newapi_inputs(&mut self, cx: &mut Context<Self>) {
+    /// 确保 NewAPI 表单输入状态已创建（编辑模式时预填已有配置数据）
+    fn ensure_newapi_inputs(&mut self, edit_data: Option<&NewApiEditData>, cx: &mut Context<Self>) {
         if self.newapi_inputs.is_some() {
             return;
         }
 
-        self.newapi_inputs = Some(NewApiFormInputs {
-            name: SimpleInputState::new(t!("newapi.field.name.placeholder").to_string()),
-            url: SimpleInputState::new(t!("newapi.field.url.placeholder").to_string()),
-            cookie: SimpleInputState::new(t!("newapi.field.cookie.placeholder").to_string()),
-            user_id: SimpleInputState::new(t!("newapi.field.user_id.placeholder").to_string()),
-            divisor: SimpleInputState::new(t!("newapi.field.divisor.placeholder").to_string()),
-            focus_handles: [
-                cx.focus_handle(),
-                cx.focus_handle(),
-                cx.focus_handle(),
-                cx.focus_handle(),
-                cx.focus_handle(),
-            ],
-        });
+        let inputs = if let Some(data) = edit_data {
+            // 编辑模式：用已有数据预填
+            NewApiFormInputs {
+                name: SimpleInputState::new_with_value(
+                    t!("newapi.field.name.placeholder").to_string(),
+                    &data.display_name,
+                ),
+                url: SimpleInputState::new_with_value(
+                    t!("newapi.field.url.placeholder").to_string(),
+                    &data.base_url,
+                ),
+                cookie: SimpleInputState::new_with_value(
+                    t!("newapi.field.cookie.placeholder").to_string(),
+                    &data.cookie,
+                ),
+                user_id: SimpleInputState::new_with_value(
+                    t!("newapi.field.user_id.placeholder").to_string(),
+                    data.user_id.as_deref().unwrap_or(""),
+                ),
+                divisor: SimpleInputState::new_with_value(
+                    t!("newapi.field.divisor.placeholder").to_string(),
+                    data.divisor
+                        .map(|d| (d as u64).to_string())
+                        .unwrap_or_default(),
+                ),
+                focus_handles: [
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                ],
+            }
+        } else {
+            // 新增模式：空表单
+            NewApiFormInputs {
+                name: SimpleInputState::new(t!("newapi.field.name.placeholder").to_string()),
+                url: SimpleInputState::new(t!("newapi.field.url.placeholder").to_string()),
+                cookie: SimpleInputState::new(t!("newapi.field.cookie.placeholder").to_string()),
+                user_id: SimpleInputState::new(t!("newapi.field.user_id.placeholder").to_string()),
+                divisor: SimpleInputState::new(t!("newapi.field.divisor.placeholder").to_string()),
+                focus_handles: [
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                    cx.focus_handle(),
+                ],
+            }
+        };
+
+        self.newapi_inputs = Some(inputs);
     }
 
     /// 清除所有 NewAPI 表单输入状态
@@ -94,15 +202,17 @@ impl SettingsView {
         self.newapi_inputs = None;
     }
 
-    /// 渲染 NewAPI 添加表单（右侧 detail 面板内嵌）
+    /// 渲染 NewAPI 添加/编辑表单（右侧 detail 面板内嵌）
     pub(in crate::app::settings_window) fn render_newapi_form(
         &mut self,
+        is_editing: bool,
+        edit_data: Option<&NewApiEditData>,
         theme: &Theme,
         viewport: Size<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        self.ensure_newapi_inputs(cx);
+        self.ensure_newapi_inputs(edit_data, cx);
         let inputs = self.newapi_inputs.as_ref().unwrap();
 
         let focused: [bool; 5] = [
@@ -112,6 +222,12 @@ impl SettingsView {
             inputs.focus_handles[3].is_focused(window),
             inputs.focus_handles[4].is_focused(window),
         ];
+
+        let title = if is_editing {
+            t!("newapi.edit_title").to_string()
+        } else {
+            t!("newapi.add_title").to_string()
+        };
 
         let inner = div()
             .flex_col()
@@ -150,7 +266,7 @@ impl SettingsView {
                                     .text_size(px(18.0))
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(theme.text.primary)
-                                    .child(t!("newapi.add_title").to_string()),
+                                    .child(title),
                             )
                             .child(
                                 div()
@@ -171,17 +287,28 @@ impl SettingsView {
                 px(24.0),
                 theme,
             ))
-            .child(render_form_field(
-                "newapi-url",
-                &t!("newapi.field.url"),
-                Some(&t!("newapi.field.url.placeholder")),
-                &inputs.url,
-                &inputs.focus_handles[1],
-                focused[1],
-                px(16.0),
-                theme,
-            ))
-            .child(render_form_field(
+            // URL 字段：编辑模式下显示为只读文本
+            .child(if is_editing {
+                render_readonly_field(
+                    &t!("newapi.field.url"),
+                    Some(&t!("newapi.field.url.readonly_hint")),
+                    inputs.url.content(),
+                    px(16.0),
+                    theme,
+                )
+            } else {
+                render_form_field(
+                    "newapi-url",
+                    &t!("newapi.field.url"),
+                    Some(&t!("newapi.field.url.placeholder")),
+                    &inputs.url,
+                    &inputs.focus_handles[1],
+                    focused[1],
+                    px(16.0),
+                    theme,
+                )
+            })
+            .child(render_form_field_textarea(
                 "newapi-cookie",
                 &t!("newapi.field.cookie"),
                 Some(&t!("newapi.field.cookie.hint")),
@@ -276,8 +403,10 @@ impl SettingsView {
             return;
         }
 
-        // Cmd+A 全选（visual only, 简化处理不做选区）
+        // Cmd+A 全选
         if keystroke.modifiers.platform && keystroke.key.as_str() == "a" {
+            state.select_all();
+            cx.notify();
             return;
         }
 

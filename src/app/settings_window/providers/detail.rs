@@ -162,7 +162,12 @@ impl SettingsView {
                 theme,
             ))
             // ── Settings section ──
-            .child(self.render_settings_section(detail.settings_mode, theme, cx));
+            .child(self.render_settings_section(
+                detail.id.clone(),
+                detail.settings_mode,
+                theme,
+                cx,
+            ));
 
         let detail_scroll_h = viewport.height - px(65.0);
 
@@ -415,6 +420,7 @@ impl SettingsView {
 
     fn render_settings_section(
         &mut self,
+        provider_id: ProviderId,
         settings_mode: ProviderSettingsMode,
         theme: &Theme,
         cx: &mut Context<Self>,
@@ -437,6 +443,49 @@ impl SettingsView {
                         self, theme, cx,
                     ),
                 ));
+            }
+            ProviderSettingsMode::NewApiEditable => {
+                // NewAPI 型自定义 Provider — 显示「编辑配置」按钮
+                let state = self.state.clone();
+                let accent = theme.text.accent;
+                section = section.child(
+                    div()
+                        .mt(px(10.0))
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .px(px(20.0))
+                                .py(px(10.0))
+                                .rounded(px(8.0))
+                                .bg(theme.bg.subtle)
+                                .border_1()
+                                .border_color(theme.border.strong)
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(accent)
+                                .cursor_pointer()
+                                .hover(|s| s.opacity(0.85))
+                                .child(render_svg_icon("src/icons/settings.svg", px(16.0), accent))
+                                .child(t!("newapi.edit_button").to_string())
+                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                    runtime::dispatch_in_window(
+                                        &state,
+                                        AppAction::EditNewApi {
+                                            provider_id: provider_id.clone(),
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                        ),
+                );
             }
             ProviderSettingsMode::AutoManaged => {
                 // 设计稿：无需配置的 provider — 虚线边框 + 居中图标 + 淡色文字，无背景色

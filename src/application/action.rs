@@ -50,6 +50,10 @@ pub enum AppAction {
         user_id: Option<String>,
         divisor: Option<f64>,
     },
+    /// 进入 NewAPI 编辑模式（从磁盘读取已有配置回填表单）
+    EditNewApi {
+        provider_id: ProviderId,
+    },
     QuitApp,
 }
 

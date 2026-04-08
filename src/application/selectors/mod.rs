@@ -10,6 +10,7 @@ mod tray;
 
 use crate::app_state::HeaderStatusKind;
 use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo};
+use crate::providers::custom::generator::NewApiEditData;
 
 // ── Tray 弹出窗口 ──
 
@@ -104,6 +105,8 @@ pub struct SettingsProvidersTabViewState {
     pub detail: SettingsProviderDetailViewState,
     /// 是否正在添加新 Provider（右侧面板显示 NewAPI 表单）
     pub adding_newapi: bool,
+    /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）
+    pub editing_newapi_data: Option<NewApiEditData>,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +175,8 @@ pub enum SettingsProviderUsageViewState {
 pub enum ProviderSettingsMode {
     AutoManaged,
     Interactive,
+    /// NewAPI 型自定义 Provider — 显示「编辑配置」按钮
+    NewApiEditable,
 }
 
 // ============================================================================

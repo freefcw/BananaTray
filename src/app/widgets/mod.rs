@@ -29,7 +29,7 @@ pub(crate) use input_actions::register_input_actions;
 pub(crate) use provider_icon::{render_provider_icon, render_provider_icon_boxed};
 pub(crate) use quota_bar::render_quota_bar;
 pub(crate) use segmented_control::{render_segmented_control, SegmentedSize};
-pub(crate) use simple_input::{render_simple_input, SimpleInputState};
+pub(crate) use simple_input::{render_simple_input, render_simple_textarea, SimpleInputState};
 pub(crate) use toggle::render_toggle_switch;
 #[allow(unused_imports)]
 pub(crate) use tooltip::{with_multiline_tooltip, with_tooltip};
