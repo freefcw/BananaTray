@@ -13,10 +13,15 @@ use std::sync::LazyLock;
 // 预编译的正则表达式
 static EMAIL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Signed in as\s+(\S+)\s+\(").unwrap());
+// "Amp Free: $10/$10 remaining (replenishes ...)" 或 "Monthly credits: $15.00 / $20.00 remaining"
+// 后面可能跟 "(replenishes ...)" 或 "- https://..." 等附加文本。
 static CREDIT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s*/\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining")
         .unwrap()
 });
+// 无 total 的余额格式 — 必须放在 CREDIT_RE 之后作为回退：
+// "Individual credits: $0 remaining" 或 "Credits: $50.00 remaining"
+// 后面可能跟 url 或其他文本（如 "- https://..."），用 \s 终止金额匹配。
 static BALANCE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap());
 
@@ -56,23 +61,32 @@ impl AmpProvider {
                     label,
                     used.max(0.0),
                     total,
-                    QuotaType::General,
+                    QuotaType::Credit,
                     Some(detail),
                 ));
             } else if let Some(caps) = BALANCE_RE.captures(line) {
                 let label = caps.get(1).unwrap().as_str().trim();
                 let balance: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
+
+                // $0 remaining 表示"未购买付费信用额度"，不等同于"额度耗尽"，
+                // 展示为 Red 会误导免费用户。跳过零余额条目。
+                if balance <= 0.0 {
+                    continue;
+                }
+
                 let detail = t!(
                     "quota.label.credit_remaining",
                     remaining = format!("{:.2}", balance),
                     total = format!("{:.2}", balance)
                 )
                 .to_string();
-                quotas.push(QuotaInfo::with_details(
+                // 使用 balance_only 模式：状态由余额绝对值决定（>=5 Green, >=1 Yellow, <1 Red），
+                // 而非百分比——避免 limit=0 时 percent_remaining=0% 误判为 Red。
+                quotas.push(QuotaInfo::balance_only(
                     label,
-                    0.0,
                     balance,
-                    QuotaType::General,
+                    None,
+                    QuotaType::Credit,
                     Some(detail),
                 ));
             }
@@ -139,7 +153,7 @@ mod tests {
         assert_eq!(q.label, "Monthly credits");
         assert_eq!(q.used, 5.0);
         assert_eq!(q.limit, 20.0);
-        assert_eq!(q.quota_type, QuotaType::General);
+        assert_eq!(q.quota_type, QuotaType::Credit);
         assert_eq!(q.detail_text.as_deref(), Some("$15.00 / $20.00 remaining"));
     }
 
@@ -152,10 +166,59 @@ mod tests {
         assert_eq!(data.quotas.len(), 1);
         let q = &data.quotas[0];
         assert_eq!(q.label, "Credits");
+        assert!(q.is_balance_only());
+        assert!((q.remaining_balance.unwrap() - 50.0).abs() < f64::EPSILON);
+        assert_eq!(q.quota_type, QuotaType::Credit);
+        assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
+    }
+
+    /// 实际 amp CLI 输出：$10/$10 格式 + 零余额次要额度
+    #[test]
+    fn test_parse_real_world_free_tier() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Signed in as user@example.com (user)\n\
+            Amp Free: $10/$10 remaining (replenishes +$0.42/hour) - https://ampcode.com/settings#amp-free\n\
+            Individual credits: $0 remaining - https://ampcode.com/settings\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.account_email.as_deref(), Some("user@example.com"));
+        // $0 余额的 Individual credits 应被跳过
+        assert_eq!(data.quotas.len(), 1);
+        let q = &data.quotas[0];
+        assert_eq!(q.label, "Amp Free");
         assert_eq!(q.used, 0.0);
-        assert_eq!(q.limit, 50.0);
-        assert_eq!(q.quota_type, QuotaType::General);
-        assert_eq!(q.detail_text.as_deref(), Some("$50.00 / $50.00 remaining"));
+        assert_eq!(q.limit, 10.0);
+        assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
+    }
+
+    /// 零余额纯信用额度行应被跳过
+    #[test]
+    fn test_parse_zero_balance_only_is_skipped() {
+        let output = "Individual credits: $0 remaining\n";
+        assert!(
+            AmpProvider::parse_usage_output(output).is_err(),
+            "zero-balance-only output should produce no quotas → error"
+        );
+    }
+
+    /// CREDIT_RE + 非零 BALANCE_RE 同时存在时都应产出 quota
+    #[test]
+    fn test_parse_mixed_credit_and_balance() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Monthly credits: $5.00 / $20.00 remaining\n\
+            Bonus credits: $3.00 remaining\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.quotas.len(), 2);
+        assert_eq!(data.quotas[0].label, "Monthly credits");
+        assert!(!data.quotas[0].is_balance_only());
+        assert_eq!(data.quotas[1].label, "Bonus credits");
+        assert!(data.quotas[1].is_balance_only());
+        assert_eq!(
+            data.quotas[1].status_level(),
+            crate::models::StatusLevel::Yellow,
+            "$3.00 should be Yellow (>=1 && <5)"
+        );
     }
 
     #[test]
