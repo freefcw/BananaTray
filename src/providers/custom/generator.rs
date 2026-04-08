@@ -127,6 +127,125 @@ parser:
     )
 }
 
+/// 从 YAML 配置中解析出的编辑数据（GPUI-free，可用于回填表单）
+#[derive(Debug, Clone)]
+pub struct NewApiEditData {
+    /// 显示名称
+    pub display_name: String,
+    /// 站点 URL（身份标识，编辑时只读）
+    pub base_url: String,
+    /// Cookie 字符串
+    pub cookie: String,
+    /// 用户 ID
+    pub user_id: Option<String>,
+    /// 积分换算比例
+    pub divisor: Option<f64>,
+    /// 原始 YAML 文件名（编辑保存时复用，避免身份变更导致文件残留）
+    pub original_filename: String,
+}
+
+/// 从已有 YAML 配置文件中读取 NewAPI 配置，用于编辑模式回填表单。
+///
+/// 遍历 providers 目录，找到 id 匹配的 YAML 文件并解析为 NewApiEditData。
+/// 仅支持 NewAPI 型（HttpGet + Cookie auth）Provider。
+///
+/// **注意**：此函数包含磁盘 I/O。在 reducer 中被 `EditNewApi` 调用，
+/// 作为同步小文件读取可接受的 tradeoff（与 `SubmitNewApi` 生成 YAML 类似）。
+pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
+    use super::schema::CustomProviderDef;
+
+    let providers_dir = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("bananatray")
+        .join("providers");
+
+    if !providers_dir.exists() {
+        return None;
+    }
+
+    let entries = std::fs::read_dir(&providers_dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            continue;
+        }
+
+        // 读取失败或解析失败的文件跳过，不中断搜索
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let def: CustomProviderDef = match serde_yaml::from_str(&content) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        if def.id != provider_custom_id {
+            continue;
+        }
+
+        let filename = match path.file_name().and_then(|f| f.to_str()) {
+            Some(name) => name.to_string(),
+            None => continue,
+        };
+
+        return parse_newapi_edit_data(&def, filename);
+    }
+
+    None
+}
+
+/// 从已解析的 CustomProviderDef 中提取 NewApiEditData（纯函数，无 I/O）。
+///
+/// 与 `read_newapi_config` 分离以便独立测试 roundtrip 一致性。
+fn parse_newapi_edit_data(
+    def: &super::schema::CustomProviderDef,
+    original_filename: String,
+) -> Option<NewApiEditData> {
+    use super::schema::{AuthDef, SourceDef};
+
+    // 从 SourceDef 提取 cookie 和 headers（非 HttpGet 的返回 None）
+    let (cookie, user_id) = match &def.source {
+        SourceDef::HttpGet { auth, headers, .. } => {
+            let cookie = match auth {
+                Some(AuthDef::Cookie { value }) => value.clone(),
+                Some(AuthDef::SessionToken { token, cookie_name }) => {
+                    format!("{}={}", cookie_name, token)
+                }
+                _ => String::new(),
+            };
+            // 从 headers 中查找 New-Api-User
+            let uid = headers
+                .iter()
+                .find(|h| h.name == "New-Api-User")
+                .map(|h| h.value.clone());
+            (cookie, uid)
+        }
+        _ => return None, // 非 HTTP GET 的不支持编辑
+    };
+
+    // 从 parser 提取 divisor
+    let divisor = def.parser.as_ref().and_then(|p| {
+        if let super::schema::ParserDef::Json { quotas, .. } = p {
+            quotas.first().and_then(|q| q.divisor)
+        } else {
+            None
+        }
+    });
+
+    Some(NewApiEditData {
+        display_name: def.metadata.display_name.clone(),
+        base_url: def.base_url.clone().unwrap_or_default(),
+        cookie,
+        user_id,
+        divisor,
+        original_filename,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,5 +427,64 @@ mod tests {
         let def: crate::providers::custom::schema::CustomProviderDef =
             serde_yaml::from_str(&yaml).expect("YAML with special chars should be valid");
         assert_eq!(def.metadata.display_name, r#"My "API" Site"#);
+    }
+
+    // ── roundtrip: generate → parse ──────────────────────────
+
+    /// 辅助：生成 YAML → 解析为 CustomProviderDef → 提取 NewApiEditData
+    fn roundtrip(config: &NewApiConfig) -> NewApiEditData {
+        let yaml = generate_newapi_yaml(config);
+        let filename = generate_filename(config);
+        let def: crate::providers::custom::schema::CustomProviderDef =
+            serde_yaml::from_str(&yaml).expect("Generated YAML must be parseable");
+        parse_newapi_edit_data(&def, filename).expect("parse_newapi_edit_data must succeed")
+    }
+
+    #[test]
+    fn roundtrip_basic_config() {
+        let config = make_config();
+        let edit = roundtrip(&config);
+
+        assert_eq!(edit.display_name, "Test API");
+        assert_eq!(edit.base_url, "https://my-api.example.com");
+        assert_eq!(edit.cookie, "session=eyJhbGciOiJIUzI1NiJ9");
+        assert!(edit.user_id.is_none());
+        // 默认 divisor 是 500000
+        assert_eq!(edit.divisor, Some(500000.0));
+        assert_eq!(edit.original_filename, "newapi-my-api-example-com.yaml");
+    }
+
+    #[test]
+    fn roundtrip_with_user_id() {
+        let config = NewApiConfig {
+            user_id: Some("42".to_string()),
+            ..make_config()
+        };
+        let edit = roundtrip(&config);
+
+        assert_eq!(edit.user_id.as_deref(), Some("42"));
+        assert_eq!(edit.cookie, "session=eyJhbGciOiJIUzI1NiJ9");
+    }
+
+    #[test]
+    fn roundtrip_with_custom_divisor() {
+        let config = NewApiConfig {
+            divisor: Some(1_000_000.0),
+            ..make_config()
+        };
+        let edit = roundtrip(&config);
+
+        assert_eq!(edit.divisor, Some(1_000_000.0));
+    }
+
+    #[test]
+    fn roundtrip_preserves_full_cookie() {
+        let config = NewApiConfig {
+            cookie: "session=eyJ123; cf_clearance=abc456; _ga=xxx".to_string(),
+            ..make_config()
+        };
+        let edit = roundtrip(&config);
+
+        assert_eq!(edit.cookie, "session=eyJ123; cf_clearance=abc456; _ga=xxx");
     }
 }

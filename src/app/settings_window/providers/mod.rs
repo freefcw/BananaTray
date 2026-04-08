@@ -38,7 +38,15 @@ impl SettingsView {
 
         // 右侧面板：adding_newapi 模式时显示表单，否则显示 provider detail
         let right_panel = if view_state.adding_newapi {
-            self.render_newapi_form(theme, viewport, window, cx)
+            let is_editing = view_state.editing_newapi_data.is_some();
+            self.render_newapi_form(
+                is_editing,
+                view_state.editing_newapi_data.as_ref(),
+                theme,
+                viewport,
+                window,
+                cx,
+            )
         } else {
             self.render_provider_detail_panel(&view_state.detail, theme, viewport, cx)
         };

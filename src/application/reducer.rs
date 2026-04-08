@@ -128,10 +128,12 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::EnterAddNewApi => {
             session.settings_ui.adding_newapi = true;
+            session.settings_ui.editing_newapi = None; // 确保进入纯新增模式
             push_render(&mut effects);
         }
         AppAction::CancelAddNewApi => {
             session.settings_ui.adding_newapi = false;
+            session.settings_ui.editing_newapi = None;
             push_render(&mut effects);
         }
         AppAction::SubmitNewApi {
@@ -143,6 +145,13 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         } => {
             use crate::providers::custom::generator;
 
+            let is_editing = session.settings_ui.editing_newapi.is_some();
+            let original_filename = session
+                .settings_ui
+                .editing_newapi
+                .as_ref()
+                .map(|d| d.original_filename.clone());
+
             let config = generator::NewApiConfig {
                 display_name,
                 base_url,
@@ -151,18 +160,44 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 divisor,
             };
             let yaml_content = generator::generate_newapi_yaml(&config);
-            let filename = generator::generate_filename(&config);
+            // 编辑模式：沿用原文件名（身份不变）；新增模式：根据 URL 生成
+            let filename =
+                original_filename.unwrap_or_else(|| generator::generate_filename(&config));
 
             effects.push(AppEffect::SaveCustomProviderYaml {
                 yaml_content,
                 filename,
             });
+
+            let (title_key, body_key) = if is_editing {
+                ("newapi.edit_success_title", "newapi.edit_success_body")
+            } else {
+                ("newapi.save_success_title", "newapi.save_success_body")
+            };
             effects.push(AppEffect::SendPlainNotification {
-                title: rust_i18n::t!("newapi.save_success_title").to_string(),
-                body: rust_i18n::t!("newapi.save_success_body").to_string(),
+                title: rust_i18n::t!(title_key).to_string(),
+                body: rust_i18n::t!(body_key).to_string(),
             });
             session.settings_ui.adding_newapi = false;
+            session.settings_ui.editing_newapi = None;
             push_render(&mut effects);
+        }
+        AppAction::EditNewApi { provider_id } => {
+            use crate::providers::custom::generator;
+
+            if let ProviderId::Custom(ref custom_id) = provider_id {
+                if let Some(edit_data) = generator::read_newapi_config(custom_id) {
+                    session.settings_ui.adding_newapi = true;
+                    session.settings_ui.editing_newapi = Some(edit_data);
+                    push_render(&mut effects);
+                } else {
+                    log::warn!(
+                        target: "settings",
+                        "EditNewApi: failed to read config for {}",
+                        custom_id
+                    );
+                }
+            }
         }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
@@ -1137,6 +1172,98 @@ mod tests {
         let effects = reduce(&mut session, AppAction::SelectSettingsProvider(id));
 
         assert!(!session.settings_ui.adding_newapi);
+        assert!(has_render(&effects));
+    }
+
+    // ── 编辑模式 ──────────────────────────────────────
+
+    #[test]
+    fn submit_newapi_in_edit_mode_uses_original_filename() {
+        use crate::providers::custom::generator::NewApiEditData;
+
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+        session.settings_ui.editing_newapi = Some(NewApiEditData {
+            display_name: "Old Name".to_string(),
+            base_url: "https://old-site.com".to_string(),
+            cookie: "old_cookie".to_string(),
+            user_id: None,
+            divisor: None,
+            original_filename: "original-file.yaml".to_string(),
+        });
+
+        let effects = reduce(
+            &mut session,
+            AppAction::SubmitNewApi {
+                display_name: "Updated Name".to_string(),
+                base_url: "https://old-site.com".to_string(),
+                cookie: "new_cookie".to_string(),
+                user_id: Some("99".to_string()),
+                divisor: Some(1_000_000.0),
+            },
+        );
+
+        // 状态：编辑模式已清除
+        assert!(!session.settings_ui.adding_newapi);
+        assert!(session.settings_ui.editing_newapi.is_none());
+
+        // Effect: 使用原始文件名而非重新生成
+        assert!(has_effect(&effects, |e| {
+            matches!(e, AppEffect::SaveCustomProviderYaml { filename, yaml_content }
+                if filename == "original-file.yaml"
+                && yaml_content.contains("Updated Name")
+                && yaml_content.contains("new_cookie")
+            )
+        }));
+
+        // 通知应包含编辑相关内容
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::SendPlainNotification { .. }
+        )));
+    }
+
+    #[test]
+    fn cancel_add_newapi_clears_editing_state() {
+        use crate::providers::custom::generator::NewApiEditData;
+
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+        session.settings_ui.editing_newapi = Some(NewApiEditData {
+            display_name: "Test".to_string(),
+            base_url: "https://test.com".to_string(),
+            cookie: "c".to_string(),
+            user_id: None,
+            divisor: None,
+            original_filename: "test.yaml".to_string(),
+        });
+
+        let effects = reduce(&mut session, AppAction::CancelAddNewApi);
+
+        assert!(!session.settings_ui.adding_newapi);
+        assert!(session.settings_ui.editing_newapi.is_none());
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn enter_add_newapi_clears_stale_editing_state() {
+        use crate::providers::custom::generator::NewApiEditData;
+
+        let mut session = make_session();
+        // 模拟残留的编辑状态
+        session.settings_ui.editing_newapi = Some(NewApiEditData {
+            display_name: "Stale".to_string(),
+            base_url: "https://stale.com".to_string(),
+            cookie: "c".to_string(),
+            user_id: None,
+            divisor: None,
+            original_filename: "stale.yaml".to_string(),
+        });
+
+        let effects = reduce(&mut session, AppAction::EnterAddNewApi);
+
+        assert!(session.settings_ui.adding_newapi);
+        assert!(session.settings_ui.editing_newapi.is_none()); // 确保进入纯新增模式
         assert!(has_render(&effects));
     }
 
