@@ -182,7 +182,7 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
         .providers
         .iter()
         .map(|provider| {
-            let is_enabled = session.settings.is_enabled(&provider.provider_id);
+            let is_enabled = session.settings.provider.is_enabled(&provider.provider_id);
 
             let (status_text, status_dot) = if !is_enabled {
                 ("Disabled".to_string(), ProviderDiagnosticStatus::Disabled)
@@ -239,7 +239,7 @@ fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> Env
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
         .count();
     let total_count = session.provider_store.providers.len();
 
@@ -308,7 +308,7 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
         .map(|p| (p.provider_id.clone(), p.display_name().to_string()))
         .collect();
 

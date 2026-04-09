@@ -62,58 +62,6 @@ fn provider_config_move_to_index_normalizes_order() {
     assert_eq!(config.provider_order.len(), ProviderKind::all().len());
 }
 
-// ── AppSettings 薄委托测试（验证委托正确性）──────────
-
-#[test]
-fn app_settings_delegates_is_enabled() {
-    let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
-    assert!(settings.is_enabled(&ProviderId::BuiltIn(ProviderKind::Claude)));
-}
-
-#[test]
-fn ordered_providers_ignores_invalid_and_duplicate_keys() {
-    let settings = AppSettings {
-        provider: ProviderConfig {
-            provider_order: vec![
-                "gemini".into(),
-                "invalid".into(),
-                "claude".into(),
-                "gemini".into(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let ordered = settings.ordered_providers();
-    assert_eq!(ordered[0], ProviderKind::Gemini);
-    assert_eq!(ordered[1], ProviderKind::Claude);
-    assert_eq!(ordered.len(), ProviderKind::all().len());
-}
-
-#[test]
-fn move_to_index_normalizes_provider_order() {
-    let mut settings = AppSettings {
-        provider: ProviderConfig {
-            provider_order: vec!["gemini".into(), "gemini".into(), "claude".into()],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-    assert!(settings.move_provider_to_index(&claude, 0, &[]));
-    assert_eq!(
-        settings.provider.provider_order[0],
-        ProviderKind::Claude.id_key()
-    );
-    assert_eq!(
-        settings.provider.provider_order.len(),
-        ProviderKind::all().len()
-    );
-}
-
 // ── TrayIconStyle ────────────────────────────────────
 
 #[test]
@@ -182,30 +130,52 @@ fn app_settings_empty_json_returns_defaults() {
 #[test]
 fn hidden_quotas_default_all_visible() {
     let settings = AppSettings::default();
-    assert!(settings.is_quota_visible(ProviderKind::Claude, "session"));
-    assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "session"));
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
 }
 
 #[test]
 fn toggle_quota_visibility_hides_then_shows() {
     let mut settings = AppSettings::default();
-    assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
 
-    settings.toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
-    assert!(!settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
-    assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Sonnet"));
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+    assert!(!settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "model:Sonnet"));
 
-    settings.toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
-    assert!(settings.is_quota_visible(ProviderKind::Claude, "model:Opus"));
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
 }
 
 #[test]
 fn hidden_quotas_isolated_per_provider() {
     let mut settings = AppSettings::default();
-    settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
 
-    assert!(!settings.is_quota_visible(ProviderKind::Claude, "session"));
-    assert!(settings.is_quota_visible(ProviderKind::Gemini, "session"));
+    assert!(!settings
+        .provider
+        .is_quota_visible(ProviderKind::Claude, "session"));
+    assert!(settings
+        .provider
+        .is_quota_visible(ProviderKind::Gemini, "session"));
 }
 
 // ── ordered_provider_ids ──────────────────────────────
@@ -220,7 +190,7 @@ fn ordered_provider_ids_respects_saved_order() {
         ..Default::default()
     };
 
-    let ids = settings.ordered_provider_ids(&[]);
+    let ids = settings.provider.ordered_provider_ids(&[]);
     assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
     assert_eq!(ids[1], ProviderId::BuiltIn(ProviderKind::Claude));
     assert!(ids.len() >= ProviderKind::all().len());
@@ -237,7 +207,7 @@ fn ordered_provider_ids_includes_custom() {
     };
     let custom = vec![ProviderId::Custom("myai:cli".to_string())];
 
-    let ids = settings.ordered_provider_ids(&custom);
+    let ids = settings.provider.ordered_provider_ids(&custom);
     let pos_gemini = ids
         .iter()
         .position(|id| *id == ProviderId::BuiltIn(ProviderKind::Gemini))
@@ -259,7 +229,7 @@ fn ordered_provider_ids_appends_unseen_custom() {
     let settings = AppSettings::default();
     let custom = vec![ProviderId::Custom("new:provider".to_string())];
 
-    let ids = settings.ordered_provider_ids(&custom);
+    let ids = settings.provider.ordered_provider_ids(&custom);
     assert!(ids.contains(&ProviderId::Custom("new:provider".to_string())));
     assert_eq!(ids.len(), ProviderKind::all().len() + 1);
 }
@@ -274,7 +244,7 @@ fn ordered_provider_ids_deduplicates() {
         ..Default::default()
     };
 
-    let ids = settings.ordered_provider_ids(&[]);
+    let ids = settings.provider.ordered_provider_ids(&[]);
     let claude_count = ids
         .iter()
         .filter(|id| **id == ProviderId::BuiltIn(ProviderKind::Claude))
@@ -358,7 +328,7 @@ fn move_provider_to_index_forward() {
 
     let claude = ProviderId::BuiltIn(ProviderKind::Claude);
     // claude 从 index 0 → index 2
-    assert!(settings.move_provider_to_index(&claude, 2, &[]));
+    assert!(settings.provider.move_provider_to_index(&claude, 2, &[]));
     // ensure_order 展开后 claude 应在第三个位置
     let pos = settings
         .provider
@@ -381,7 +351,7 @@ fn move_provider_to_index_backward() {
 
     let copilot = ProviderId::BuiltIn(ProviderKind::Copilot);
     // copilot 从 index 2 → index 0
-    assert!(settings.move_provider_to_index(&copilot, 0, &[]));
+    assert!(settings.provider.move_provider_to_index(&copilot, 0, &[]));
     let pos = settings
         .provider
         .provider_order
@@ -402,7 +372,7 @@ fn move_provider_to_index_same_position_returns_false() {
     };
 
     let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-    assert!(!settings.move_provider_to_index(&claude, 0, &[]));
+    assert!(!settings.provider.move_provider_to_index(&claude, 0, &[]));
 }
 
 #[test]
@@ -417,7 +387,7 @@ fn move_provider_to_index_clamps_out_of_bounds() {
 
     let claude = ProviderId::BuiltIn(ProviderKind::Claude);
     // target=999 应被 clamp 到末尾
-    assert!(settings.move_provider_to_index(&claude, 999, &[]));
+    assert!(settings.provider.move_provider_to_index(&claude, 999, &[]));
     let pos = settings
         .provider
         .provider_order
@@ -439,7 +409,9 @@ fn move_custom_provider_to_index() {
     };
 
     // myai:cli 从 index 1 → index 0
-    assert!(settings.move_provider_to_index(&custom, 0, std::slice::from_ref(&custom)));
+    assert!(settings
+        .provider
+        .move_provider_to_index(&custom, 0, std::slice::from_ref(&custom)));
     assert_eq!(settings.provider.provider_order[0], "myai:cli");
     assert_eq!(settings.provider.provider_order[1], "claude");
 }

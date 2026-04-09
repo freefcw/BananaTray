@@ -98,7 +98,9 @@ fn provider_diagnostics_all_disabled() {
 #[test]
 fn provider_diagnostics_enabled_disconnected() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
     let session = make_session(settings);
     let items = build_provider_diagnostics(&session);
 
@@ -113,7 +115,9 @@ fn provider_diagnostics_enabled_disconnected() {
 #[test]
 fn provider_diagnostics_connected() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
     let session =
         make_session_with_status(settings, ProviderKind::Claude, ConnectionStatus::Connected);
     let items = build_provider_diagnostics(&session);
@@ -129,7 +133,9 @@ fn provider_diagnostics_connected() {
 #[test]
 fn provider_diagnostics_refreshing() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Cursor, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Cursor, true);
     let session =
         make_session_with_status(settings, ProviderKind::Cursor, ConnectionStatus::Refreshing);
     let items = build_provider_diagnostics(&session);
@@ -145,7 +151,9 @@ fn provider_diagnostics_refreshing() {
 #[test]
 fn provider_diagnostics_error() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     let mut session =
         make_session_with_status(settings, ProviderKind::Gemini, ConnectionStatus::Error);
     if let Some(p) = session
@@ -168,7 +176,9 @@ fn provider_diagnostics_error() {
 #[test]
 fn provider_diagnostics_error_without_message() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     let session = make_session_with_status(settings, ProviderKind::Gemini, ConnectionStatus::Error);
     let items = build_provider_diagnostics(&session);
 
@@ -182,7 +192,9 @@ fn provider_diagnostics_error_without_message() {
 #[test]
 fn provider_diagnostics_disconnected_with_error() {
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
     let mut session = make_session(settings);
     if let Some(p) = session
         .provider_store

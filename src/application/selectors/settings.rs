@@ -27,7 +27,7 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
                     .map(|provider| provider.display_name().to_string())
                     .unwrap_or_else(|| format!("{}", id)),
                 is_selected: id == selected,
-                is_enabled: session.settings.is_enabled(id),
+                is_enabled: session.settings.provider.is_enabled(id),
             }
         })
         .collect();
@@ -80,7 +80,7 @@ fn settings_provider_detail_view_state(
     id: &ProviderId,
 ) -> SettingsProviderDetailViewState {
     let provider = session.provider_store.find_by_id(id);
-    let is_enabled = session.settings.is_enabled(id);
+    let is_enabled = session.settings.provider.is_enabled(id);
 
     let (icon, display_name, subtitle) = if let Some(provider) = provider {
         (
@@ -105,7 +105,10 @@ fn settings_provider_detail_view_state(
                     QuotaVisibilityItem {
                         label: q.label.clone(),
                         quota_key: quota_key.clone(),
-                        visible: session.settings.is_quota_visible(id.kind(), &quota_key),
+                        visible: session
+                            .settings
+                            .provider
+                            .is_quota_visible(id.kind(), &quota_key),
                     }
                 })
                 .collect()

@@ -28,9 +28,15 @@ fn settings_providers_tab_respects_order_and_selection() {
         },
         ..Default::default()
     };
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
-    settings.set_provider_enabled(ProviderKind::Claude, true);
-    settings.set_provider_enabled(ProviderKind::Copilot, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Copilot, true);
 
     let session = make_session(
         settings,
@@ -56,7 +62,9 @@ fn settings_providers_tab_respects_order_and_selection() {
 fn settings_provider_detail_reports_disabled_usage() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, false);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, false);
 
     let session = make_session(
         settings,
@@ -81,7 +89,9 @@ fn settings_provider_detail_reports_disabled_usage() {
 fn settings_provider_detail_reports_error_usage() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Copilot, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Copilot, true);
 
     let mut provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
     provider.error_message = Some("boom".to_string());
@@ -111,9 +121,13 @@ fn settings_detail_builds_quota_visibility_from_stable_key() {
 
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
     // 隐藏 session 类型配额
-    settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
 
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
     provider.quotas = vec![
@@ -143,7 +157,9 @@ fn settings_detail_builds_quota_visibility_from_stable_key() {
 fn settings_detail_quota_visibility_empty_when_no_quotas() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
 
     let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
     let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
@@ -160,7 +176,9 @@ fn settings_detail_inherits_quota_display_mode() {
 
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
     settings.display.quota_display_mode = QuotaDisplayMode::Used;
 
     let session = make_session(
