@@ -169,6 +169,8 @@ impl AppSession {
                 adding_newapi: false,
                 editing_newapi: None,
                 adding_provider: false,
+                confirming_remove_provider: false,
+                confirming_delete_newapi: false,
             },
             debug_ui: DebugUiState::default(),
             settings,
@@ -292,6 +294,10 @@ pub struct SettingsUiState {
     pub editing_newapi: Option<NewApiEditData>,
     /// 是否正在选择要添加的 Provider（右侧面板显示选择列表）
     pub adding_provider: bool,
+    /// 正在确认移除的 Provider（二次确认状态）
+    pub confirming_remove_provider: bool,
+    /// 正在确认删除的 NewAPI Provider（二次确认状态）
+    pub confirming_delete_newapi: bool,
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）
