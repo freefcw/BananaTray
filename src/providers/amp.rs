@@ -29,8 +29,8 @@ super::define_unit_provider!(AmpProvider);
 
 impl AmpProvider {
     fn run_usage() -> Result<String> {
-        let output = cli::run_checked_command("amp", &["usage", "--no-color"])?;
-        Ok(cli::stdout_text(&output))
+        let output = cli::run_lenient_command("amp", &["usage", "--no-color"])?;
+        Ok(output)
     }
 
     fn parse_usage_output(output_str: &str) -> Result<RefreshData> {
