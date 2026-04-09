@@ -40,9 +40,11 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::MoveProviderToIndex { id, target_index } => {
             let custom_ids = session.provider_store.custom_provider_ids();
-            let moved = session
-                .settings
-                .move_provider_to_index(&id, target_index, &custom_ids);
+            let moved =
+                session
+                    .settings
+                    .provider
+                    .move_provider_to_index(&id, target_index, &custom_ids);
             if moved {
                 effects.push(AppEffect::PersistSettings);
                 push_render(&mut effects);
@@ -141,7 +143,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::RemoveProviderFromSidebar(id) => {
             if session.settings.provider.remove_from_sidebar(&id) {
                 // 移除同时 disable
-                session.settings.set_enabled(&id, false);
+                session.settings.provider.set_enabled(&id, false);
                 // 导航回退
                 let providers = &session.provider_store.providers;
                 session
@@ -335,7 +337,10 @@ fn apply_setting_change(
             session.settings.display.quota_display_mode = mode;
         }
         SettingChange::ToggleQuotaVisibility { kind, quota_key } => {
-            session.settings.toggle_quota_visibility(kind, quota_key);
+            session
+                .settings
+                .provider
+                .toggle_quota_visibility(kind, quota_key);
         }
     }
 
@@ -349,7 +354,7 @@ fn request_provider_refresh(
     reason: RefreshReason,
     effects: &mut Vec<AppEffect>,
 ) {
-    if !session.settings.is_enabled(&id) {
+    if !session.settings.provider.is_enabled(&id) {
         debug!(
             target: "refresh",
             "ignoring refresh request for disabled provider {}",
@@ -367,7 +372,7 @@ fn request_provider_refresh(
 }
 
 fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<AppEffect>) {
-    let new_val = !session.settings.is_enabled(&id);
+    let new_val = !session.settings.provider.is_enabled(&id);
     info!(
         target: "providers",
         "toggling provider {} from {} to {}",
@@ -375,7 +380,7 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
         !new_val,
         new_val
     );
-    session.settings.set_enabled(&id, new_val);
+    session.settings.provider.set_enabled(&id, new_val);
 
     if new_val {
         session.nav.switch_to(NavTab::Provider(id.clone()));
@@ -524,7 +529,7 @@ fn apply_refresh_event(
 
             // 对新增/更新的自定义 Provider 立即触发刷新
             for id in &affected {
-                if session.settings.is_enabled(id) {
+                if session.settings.provider.is_enabled(id) {
                     session.provider_store.mark_refreshing_by_id(id);
                     effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
                         id: id.clone(),
@@ -543,7 +548,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
         .map(|p| p.provider_id.clone())
         .collect();
 
@@ -575,7 +580,7 @@ fn sanitize_stale_refs(session: &mut AppSession) {
             .provider_store
             .providers
             .iter()
-            .find(|p| session.settings.is_enabled(&p.provider_id))
+            .find(|p| session.settings.provider.is_enabled(&p.provider_id))
         {
             session.nav.last_provider_id = first.provider_id.clone();
         }
@@ -977,6 +982,7 @@ mod tests {
         session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Claude), true);
         // make_session 的 last_provider_id = Claude
 
@@ -1009,6 +1015,7 @@ mod tests {
         session.settings.display.tray_icon_style = TrayIconStyle::Yellow; // 静态模式
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Claude), true);
 
         let effects = reduce(
@@ -1040,6 +1047,7 @@ mod tests {
         session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Claude), true);
 
         // 第一次刷新：Green → Red，产出 effect
@@ -1461,6 +1469,7 @@ mod tests {
         let mut session = make_session();
         assert!(session
             .settings
+            .provider
             .is_quota_visible(ProviderKind::Claude, "session"));
 
         let effects = reduce(
@@ -1473,6 +1482,7 @@ mod tests {
 
         assert!(!session
             .settings
+            .provider
             .is_quota_visible(ProviderKind::Claude, "session"));
         assert!(has_effect(&effects, |e| matches!(
             e,
@@ -1494,6 +1504,7 @@ mod tests {
         );
         assert!(!session
             .settings
+            .provider
             .is_quota_visible(ProviderKind::Claude, "weekly"));
 
         reduce(
@@ -1505,6 +1516,7 @@ mod tests {
         );
         assert!(session
             .settings
+            .provider
             .is_quota_visible(ProviderKind::Claude, "weekly"));
     }
 
@@ -1631,7 +1643,7 @@ mod tests {
     fn providers_reloaded_refreshes_enabled_new_custom() {
         let mut session = make_session();
         let custom_id = ProviderId::Custom("new:api".to_string());
-        session.settings.set_enabled(&custom_id, true);
+        session.settings.provider.set_enabled(&custom_id, true);
 
         let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
         statuses.push(make_custom_provider_status("new:api"));
@@ -1708,7 +1720,7 @@ mod tests {
             .provider_store
             .providers
             .push(make_custom_provider_status("gone:api"));
-        session.settings.set_enabled(&custom_id, true);
+        session.settings.provider.set_enabled(&custom_id, true);
         session.nav.switch_to(NavTab::Provider(custom_id.clone()));
 
         let statuses: Vec<_> = ProviderKind::all()
@@ -1733,7 +1745,7 @@ mod tests {
     fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
         let mut session = make_session();
         let custom_id = ProviderId::Custom("stale:api".to_string());
-        session.settings.set_enabled(&custom_id, true);
+        session.settings.provider.set_enabled(&custom_id, true);
         session
             .provider_store
             .providers
@@ -1826,7 +1838,7 @@ mod tests {
         let mut session = make_session();
         // 首先获取 claude 的当前位置
         let custom_ids = session.provider_store.custom_provider_ids();
-        let ordered = session.settings.ordered_provider_ids(&custom_ids);
+        let ordered = session.settings.provider.ordered_provider_ids(&custom_ids);
         let claude_index = ordered
             .iter()
             .position(|id| *id == pid(ProviderKind::Claude))
@@ -1901,9 +1913,11 @@ mod tests {
         session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Claude), true);
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Gemini), true);
 
         let effects = reduce(
@@ -1918,7 +1932,10 @@ mod tests {
             .sidebar_providers
             .contains(&"claude".to_string()));
         // claude 被 disable
-        assert!(!session.settings.is_enabled(&pid(ProviderKind::Claude)));
+        assert!(!session
+            .settings
+            .provider
+            .is_enabled(&pid(ProviderKind::Claude)));
         assert!(has_effect(&effects, |e| matches!(
             e,
             AppEffect::PersistSettings
@@ -1932,6 +1949,7 @@ mod tests {
         session.settings.provider.sidebar_providers = vec!["claude".into()];
         session
             .settings
+            .provider
             .set_enabled(&pid(ProviderKind::Claude), true);
 
         let effects = reduce(

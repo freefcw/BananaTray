@@ -20,7 +20,7 @@ fn make_store(kinds: &[ProviderKind]) -> ProviderStore {
 fn make_settings(enabled: &[ProviderKind]) -> AppSettings {
     let mut s = AppSettings::default();
     for k in enabled {
-        s.set_provider_enabled(*k, true);
+        s.provider.set_provider_enabled(*k, true);
     }
     s
 }
@@ -741,7 +741,9 @@ fn popup_height_all_quotas_hidden_shows_one_card() {
 
     let nav = make_nav(ProviderKind::Claude);
     let mut settings = AppSettings::default();
-    settings.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
 
     let h = compute_popup_height(&nav, &store, &settings);
     // 全部隐藏时至少预留 1 个卡片高度，dashboard 仍可见

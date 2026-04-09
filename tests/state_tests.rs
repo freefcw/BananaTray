@@ -54,7 +54,7 @@ impl NavigationState {
         if let Some(next) = ProviderKind::all()
             .iter()
             .map(|k| ProviderId::BuiltIn(*k))
-            .find(|id| id != disabled && settings.is_enabled(id))
+            .find(|id| id != disabled && settings.provider.is_enabled(id))
         {
             self.switch_to(NavTab::Provider(next));
         }
@@ -100,7 +100,7 @@ fn provider_id(kind: ProviderKind) -> ProviderId {
 fn make_settings(enabled: &[ProviderKind]) -> AppSettings {
     let mut s = AppSettings::default();
     for k in enabled {
-        s.set_enabled(&ProviderId::BuiltIn(*k), true);
+        s.provider.set_enabled(&ProviderId::BuiltIn(*k), true);
     }
     s
 }

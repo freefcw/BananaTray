@@ -50,10 +50,10 @@ impl AppView {
         let prev_tab = state_ref.session.nav.prev_active_tab.clone();
         let custom_ids = state_ref.session.provider_store.custom_provider_ids();
         drop(state_ref);
-        let ordered_ids = settings.ordered_provider_ids(&custom_ids);
+        let ordered_ids = settings.provider.ordered_provider_ids(&custom_ids);
         let nav_items: Vec<_> = ordered_ids
             .iter()
-            .filter(|id| settings.is_enabled(id))
+            .filter(|id| settings.provider.is_enabled(id))
             .filter_map(|id| {
                 providers.iter().find(|p| p.provider_id == *id).map(|p| {
                     (

@@ -21,7 +21,9 @@ fn make_session_with_provider(settings: AppSettings, provider: ProviderStatus) -
 fn global_actions_show_refresh_follows_setting() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     settings.display.show_refresh_button = false;
 
     let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
@@ -35,7 +37,9 @@ fn global_actions_show_refresh_follows_setting() {
 fn global_actions_refresh_id_matches_active_provider() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     let session = make_session_with_provider(settings, provider);
@@ -49,7 +53,9 @@ fn global_actions_refresh_id_matches_active_provider() {
 fn global_actions_is_refreshing_when_provider_refreshing() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Refreshing);
     let session = make_session_with_provider(settings, provider);
@@ -79,7 +85,9 @@ fn global_actions_refresh_id_none_on_settings_tab() {
 fn account_card_assembled_when_email_and_setting_on() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     settings.display.show_account_info = true;
     settings.display.show_dashboard_button = true;
 
@@ -107,7 +115,9 @@ fn account_card_assembled_when_email_and_setting_on() {
 fn no_account_card_when_email_absent() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     settings.display.show_account_info = true;
     settings.display.show_dashboard_button = true;
 
@@ -167,7 +177,9 @@ fn detail_prefers_disabled_over_missing_when_disabled_and_absent() {
 fn detail_returns_missing_when_enabled_but_provider_absent() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let session = AppSession::new(settings, vec![]);
     let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
@@ -184,7 +196,9 @@ fn detail_returns_missing_when_enabled_but_provider_absent() {
 fn body_returns_error_empty_when_error_and_no_quotas() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Error);
     provider.error_message = Some("API key invalid".to_string());
@@ -209,7 +223,9 @@ fn body_returns_error_empty_when_error_and_no_quotas() {
 fn body_returns_refreshing_when_connection_is_refreshing() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Refreshing);
 
@@ -231,7 +247,9 @@ fn body_returns_refreshing_when_connection_is_refreshing() {
 fn body_returns_quotas_when_visible_quotas_exist() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     provider.quotas = vec![QuotaInfo::new("requests", 50.0, 100.0)];
@@ -255,9 +273,13 @@ fn body_returns_quotas_when_visible_quotas_exist() {
 fn body_returns_empty_when_all_quotas_hidden() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     // 隐藏 general 类型的配额
-    settings.toggle_quota_visibility(ProviderKind::Gemini, "general".to_string());
+    settings
+        .provider
+        .toggle_quota_visibility(ProviderKind::Gemini, "general".to_string());
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     provider.quotas = vec![QuotaInfo::new("requests", 50.0, 100.0)]; // QuotaType::General
@@ -280,7 +302,9 @@ fn body_returns_empty_when_all_quotas_hidden() {
 fn body_prefers_cached_quotas_over_error_empty() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Error);
     provider.error_message = Some("timeout".to_string());
@@ -313,7 +337,9 @@ fn panel_inherits_quota_display_mode_from_settings() {
 
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
     settings.display.quota_display_mode = QuotaDisplayMode::Used;
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
@@ -334,7 +360,9 @@ fn panel_inherits_quota_display_mode_from_settings() {
 fn panel_defaults_to_remaining_mode() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
-    settings.set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];

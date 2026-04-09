@@ -52,7 +52,7 @@ pub fn provider_detail_view_state(
     session: &AppSession,
     id: &ProviderId,
 ) -> ProviderDetailViewState {
-    let is_enabled = session.settings.is_enabled(id);
+    let is_enabled = session.settings.provider.is_enabled(id);
     let provider = session.provider_store.find_by_id(id).cloned();
 
     if !is_enabled {
@@ -136,6 +136,7 @@ fn provider_body_view_state(
         },
         _ => {
             let visible: Vec<_> = settings
+                .provider
                 .visible_quotas(provider.provider_id.kind(), &provider.quotas)
                 .into_iter()
                 .cloned()

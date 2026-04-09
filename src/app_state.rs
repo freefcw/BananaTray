@@ -144,7 +144,7 @@ impl AppSession {
 
         let first_enabled = providers
             .iter()
-            .find(|p| settings.is_enabled(&p.provider_id))
+            .find(|p| settings.provider.is_enabled(&p.provider_id))
             .map(|p| p.provider_id.clone());
 
         let active_tab = first_enabled
@@ -189,7 +189,7 @@ impl AppSession {
         self.provider_store
             .providers
             .iter()
-            .any(|p| self.settings.is_enabled(&p.provider_id))
+            .any(|p| self.settings.provider.is_enabled(&p.provider_id))
     }
 
     pub fn default_provider_tab(&mut self) -> Option<NavTab> {
@@ -198,14 +198,14 @@ impl AppSession {
         }
 
         let last = self.nav.last_provider_id.clone();
-        let id = if self.settings.is_enabled(&last) {
+        let id = if self.settings.provider.is_enabled(&last) {
             last
         } else {
             let fallback = self
                 .provider_store
                 .providers
                 .iter()
-                .find(|p| self.settings.is_enabled(&p.provider_id))
+                .find(|p| self.settings.provider.is_enabled(&p.provider_id))
                 .map(|p| p.provider_id.clone())
                 .unwrap_or(last);
             self.nav.last_provider_id = fallback.clone();
@@ -263,7 +263,7 @@ impl NavigationState {
         }
         if let Some(next) = providers
             .iter()
-            .find(|p| p.provider_id != *disabled && settings.is_enabled(&p.provider_id))
+            .find(|p| p.provider_id != *disabled && settings.provider.is_enabled(&p.provider_id))
         {
             self.switch_to(NavTab::Provider(next.provider_id.clone()));
         }
@@ -335,7 +335,7 @@ pub fn compute_popup_height(
 
     let quota_count = provider
         .map(|p| {
-            let visible = settings.visible_quota_count(kind, &p.quotas);
+            let visible = settings.provider.visible_quota_count(kind, &p.quotas);
             if visible == 0 && !p.quotas.is_empty() {
                 1 // 全部隐藏时显示空状态，至少预留 1 个卡片高度
             } else {
