@@ -225,20 +225,16 @@ fn render_add_relay_button(state: Rc<RefCell<AppState>>, theme: &Theme) -> Div {
             s.border_color(accent)
                 .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.1))
         })
-        .child(render_svg_icon(
-            "src/icons/provider-custom.svg",
-            px(16.0),
-            muted,
-        ))
+        .child(render_svg_icon("src/icons/plus.svg", px(14.0), muted))
         .child(
             div()
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(muted)
-                .child(format!("+ {}", t!("newapi.add_button"))),
+                .child(t!("provider.add_button").to_string()),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(&state, AppAction::EnterAddNewApi, window, cx);
+            runtime::dispatch_in_window(&state, AppAction::EnterAddProvider, window, cx);
         })
 }
 

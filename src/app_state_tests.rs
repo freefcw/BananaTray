@@ -236,6 +236,7 @@ fn settings_ui_default_values() {
         copilot_token_editing: false,
         adding_newapi: false,
         editing_newapi: None,
+        adding_provider: false,
     };
     assert_eq!(ui.active_tab, SettingsTab::General);
     assert!(!ui.cadence_dropdown_open);
