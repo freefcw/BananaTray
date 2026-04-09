@@ -83,6 +83,35 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
         })
 }
 
+/// NewAPI 操作按钮（编辑 / 删除）
+fn render_action_button(
+    label: &str,
+    icon: &'static str,
+    color: Hsla,
+    theme: &Theme,
+    on_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(8.0))
+        .px(px(20.0))
+        .py(px(10.0))
+        .rounded(px(8.0))
+        .bg(theme.bg.subtle)
+        .border_1()
+        .border_color(theme.border.strong)
+        .text_size(px(13.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(color)
+        .cursor_pointer()
+        .hover(|s| s.opacity(0.85))
+        .child(render_svg_icon(icon, px(16.0), color))
+        .child(label.to_string())
+        .on_mouse_down(MouseButton::Left, on_click)
+}
+
 /// Header 右侧操作区：刷新按钮 + 启用/禁用开关
 fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
@@ -446,8 +475,6 @@ impl SettingsView {
                 let state_edit = self.state.clone();
                 let state_delete = self.state.clone();
                 let provider_id_delete = provider_id.clone();
-                let accent = theme.text.accent;
-                let danger = theme.status.error;
                 section = section.child(
                     div()
                         .mt(px(10.0))
@@ -456,66 +483,38 @@ impl SettingsView {
                         .items_center()
                         .justify_center()
                         .gap(px(10.0))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .gap(px(8.0))
-                                .px(px(20.0))
-                                .py(px(10.0))
-                                .rounded(px(8.0))
-                                .bg(theme.bg.subtle)
-                                .border_1()
-                                .border_color(theme.border.strong)
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(accent)
-                                .cursor_pointer()
-                                .hover(|s| s.opacity(0.85))
-                                .child(render_svg_icon("src/icons/settings.svg", px(16.0), accent))
-                                .child(t!("newapi.edit_button").to_string())
-                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    runtime::dispatch_in_window(
-                                        &state_edit,
-                                        AppAction::EditNewApi {
-                                            provider_id: provider_id.clone(),
-                                        },
-                                        window,
-                                        cx,
-                                    );
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .gap(px(8.0))
-                                .px(px(20.0))
-                                .py(px(10.0))
-                                .rounded(px(8.0))
-                                .bg(theme.bg.subtle)
-                                .border_1()
-                                .border_color(theme.border.strong)
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(danger)
-                                .cursor_pointer()
-                                .hover(|s| s.opacity(0.85))
-                                .child(render_svg_icon("src/icons/trash.svg", px(16.0), danger))
-                                .child(t!("newapi.delete_button").to_string())
-                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    runtime::dispatch_in_window(
-                                        &state_delete,
-                                        AppAction::DeleteNewApi {
-                                            provider_id: provider_id_delete.clone(),
-                                        },
-                                        window,
-                                        cx,
-                                    );
-                                }),
-                        ),
+                        .child(render_action_button(
+                            &t!("newapi.edit_button"),
+                            "src/icons/settings.svg",
+                            theme.text.accent,
+                            theme,
+                            move |_, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state_edit,
+                                    AppAction::EditNewApi {
+                                        provider_id: provider_id.clone(),
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            },
+                        ))
+                        .child(render_action_button(
+                            &t!("newapi.delete_button"),
+                            "src/icons/trash.svg",
+                            theme.status.error,
+                            theme,
+                            move |_, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state_delete,
+                                    AppAction::DeleteNewApi {
+                                        provider_id: provider_id_delete.clone(),
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            },
+                        )),
                 );
             }
             ProviderSettingsMode::AutoManaged => {
