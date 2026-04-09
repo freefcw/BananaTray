@@ -342,6 +342,8 @@ newapi.edit_button: "Edit Config"
 newapi.edit_success_title: "✅ Config Updated"
 newapi.edit_success_body: "Config updated. Reloading…"
 newapi.delete_button: "Delete"
+newapi.confirm_delete: "Confirm"
+newapi.cancel_delete: "Cancel"
 newapi.field.url.readonly_hint: "Site URL is an identity field and cannot be changed"
 
 # ── Provider dynamic list ─────────────────────────────────
@@ -349,3 +351,7 @@ provider.add_button: "Add Provider"
 provider.picker_title: "Select Provider"
 provider.cancel: "Cancel"
 provider.all_added: "All providers have been added"
+
+# ── Common ────────────────────────────────────────────────
+common.confirm: "Confirm"
+common.cancel: "Cancel"

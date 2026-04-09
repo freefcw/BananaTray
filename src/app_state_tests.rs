@@ -237,6 +237,8 @@ fn settings_ui_default_values() {
         adding_newapi: false,
         editing_newapi: None,
         adding_provider: false,
+        confirming_remove_provider: false,
+        confirming_delete_newapi: false,
     };
     assert_eq!(ui.active_tab, SettingsTab::General);
     assert!(!ui.cadence_dropdown_open);

@@ -53,21 +53,21 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
         )
 }
 
-/// 刷新按钮（⟳）— 设计稿：较大尺寸，清晰可见
+/// 刷新按钮（⟳）— 精致小尺寸
 fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &Theme) -> Div {
     div()
-        .w(px(36.0))
-        .h(px(36.0))
+        .w(px(28.0))
+        .h(px(28.0))
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(10.0))
+        .rounded(px(6.0))
         .bg(theme.bg.subtle)
         .cursor_pointer()
         .hover(|s| s.opacity(0.8))
         .child(crate::app::widgets::render_svg_icon(
             "src/icons/refresh.svg",
-            px(22.0),
+            px(16.0),
             theme.text.muted,
         ))
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -83,7 +83,7 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
         })
 }
 
-/// NewAPI 操作按钮（编辑 / 删除）
+/// NewAPI 操作按钮（编辑 / 删除）— 精致小按钮
 fn render_action_button(
     label: &str,
     icon: &'static str,
@@ -95,66 +95,142 @@ fn render_action_button(
         .flex()
         .items_center()
         .justify_center()
-        .gap(px(8.0))
-        .px(px(20.0))
-        .py(px(10.0))
-        .rounded(px(8.0))
+        .gap(px(5.0))
+        .px(px(12.0))
+        .py(px(6.0))
+        .rounded(px(6.0))
         .bg(theme.bg.subtle)
         .border_1()
         .border_color(theme.border.strong)
-        .text_size(px(13.0))
+        .text_size(px(12.0))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(color)
         .cursor_pointer()
         .hover(|s| s.opacity(0.85))
-        .child(render_svg_icon(icon, px(16.0), color))
+        .child(render_svg_icon(icon, px(14.0), color))
         .child(label.to_string())
         .on_mouse_down(MouseButton::Left, on_click)
 }
 
-/// Header 右侧操作区：移除按钮 + 刷新按钮 + 启用/禁用开关
+/// Header 右侧操作区：移除按钮（二次确认） + 刷新按钮 + 启用/禁用开关
 fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
     id: &ProviderId,
     is_enabled: bool,
+    confirming_remove: bool,
     theme: &Theme,
 ) -> Div {
     let state_toggle = state.clone();
     let state_remove = state.clone();
+    let state_confirm = state.clone();
     let id_toggle = id.clone();
     let id_remove = id.clone();
 
-    div()
-        .flex()
-        .items_center()
-        .gap(px(10.0))
-        // 从列表移除按钮
-        .child(
+    let remove_button = if confirming_remove {
+        // 确认态：显示红色确认按钮 + 取消按钮
+        let state_cancel = state.clone();
+        div()
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            // 确认删除按钮
+            .child(
+                div()
+                    .id("confirm-remove")
+                    .h(px(24.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(4.0))
+                    .rounded(px(6.0))
+                    .bg(theme.status.error)
+                    .cursor_pointer()
+                    .hover(|s| s.opacity(0.85))
+                    .child(crate::app::widgets::render_svg_icon(
+                        "src/icons/trash.svg",
+                        px(12.0),
+                        gpui::white(),
+                    ))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(gpui::white())
+                            .child(t!("common.confirm").to_string()),
+                    )
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state_remove,
+                            AppAction::RemoveProviderFromSidebar(id_remove.clone()),
+                            window,
+                            cx,
+                        );
+                    }),
+            )
+            // 取消按钮
+            .child(
+                div()
+                    .id("cancel-remove")
+                    .h(px(24.0))
+                    .px(px(6.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(6.0))
+                    .bg(theme.bg.subtle)
+                    .cursor_pointer()
+                    .hover(|s| s.opacity(0.8))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(theme.text.muted)
+                            .child(t!("common.cancel").to_string()),
+                    )
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        runtime::dispatch_in_window(
+                            &state_cancel,
+                            AppAction::CancelRemoveProvider,
+                            window,
+                            cx,
+                        );
+                    }),
+            )
+    } else {
+        // 常态：小图标按钮
+        div().child(
             div()
                 .id("remove-from-sidebar")
-                .w(px(36.0))
-                .h(px(36.0))
+                .w(px(28.0))
+                .h(px(28.0))
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(10.0))
+                .rounded(px(6.0))
                 .bg(theme.bg.subtle)
                 .cursor_pointer()
                 .hover(|s| s.opacity(0.8))
                 .child(crate::app::widgets::render_svg_icon(
                     "src/icons/trash.svg",
-                    px(18.0),
+                    px(14.0),
                     theme.text.muted,
                 ))
                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                     runtime::dispatch_in_window(
-                        &state_remove,
-                        AppAction::RemoveProviderFromSidebar(id_remove.clone()),
+                        &state_confirm,
+                        AppAction::ConfirmRemoveProvider,
                         window,
                         cx,
                     );
                 }),
         )
+    };
+
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .child(remove_button)
         .child(render_refresh_button(state, id.clone(), theme))
         .child(
             crate::app::widgets::render_toggle_switch(
@@ -201,12 +277,21 @@ impl SettingsView {
                         &detail.subtitle,
                         theme,
                     ))
-                    .child(render_detail_action_buttons(
-                        self.state.clone(),
-                        &detail.id,
-                        detail.is_enabled,
-                        theme,
-                    )),
+                    .child({
+                        let confirming = self
+                            .state
+                            .borrow()
+                            .session
+                            .settings_ui
+                            .confirming_remove_provider;
+                        render_detail_action_buttons(
+                            self.state.clone(),
+                            &detail.id,
+                            detail.is_enabled,
+                            confirming,
+                            theme,
+                        )
+                    }),
             )
             // ── Info table (两列布局) ──
             .child(self.render_info_table(&detail.info, theme))
@@ -500,36 +585,46 @@ impl SettingsView {
                 ));
             }
             ProviderSettingsMode::NewApiEditable => {
-                // NewAPI 型自定义 Provider — 显示「编辑配置」和「删除」按钮
+                // NewAPI 型自定义 Provider — 显示「编辑配置」和「删除」按钮（删除需二次确认）
+                let confirming_delete = self
+                    .state
+                    .borrow()
+                    .session
+                    .settings_ui
+                    .confirming_delete_newapi;
                 let state_edit = self.state.clone();
-                let state_delete = self.state.clone();
                 let provider_id_delete = provider_id.clone();
-                section = section.child(
-                    div()
-                        .mt(px(10.0))
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(10.0))
+                let mut row = div()
+                    .mt(px(10.0))
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(10.0))
+                    .child(render_action_button(
+                        &t!("newapi.edit_button"),
+                        "src/icons/settings.svg",
+                        theme.text.accent,
+                        theme,
+                        move |_, window, cx| {
+                            runtime::dispatch_in_window(
+                                &state_edit,
+                                AppAction::EditNewApi {
+                                    provider_id: provider_id.clone(),
+                                },
+                                window,
+                                cx,
+                            );
+                        },
+                    ));
+
+                if confirming_delete {
+                    // 确认态：红色确认按钮 + 取消按钮
+                    let state_delete = self.state.clone();
+                    let state_cancel = self.state.clone();
+                    row = row
                         .child(render_action_button(
-                            &t!("newapi.edit_button"),
-                            "src/icons/settings.svg",
-                            theme.text.accent,
-                            theme,
-                            move |_, window, cx| {
-                                runtime::dispatch_in_window(
-                                    &state_edit,
-                                    AppAction::EditNewApi {
-                                        provider_id: provider_id.clone(),
-                                    },
-                                    window,
-                                    cx,
-                                );
-                            },
-                        ))
-                        .child(render_action_button(
-                            &t!("newapi.delete_button"),
+                            &t!("newapi.confirm_delete"),
                             "src/icons/trash.svg",
                             theme.status.error,
                             theme,
@@ -543,8 +638,40 @@ impl SettingsView {
                                     cx,
                                 );
                             },
-                        )),
-                );
+                        ))
+                        .child(render_action_button(
+                            &t!("newapi.cancel_delete"),
+                            "src/icons/close.svg",
+                            theme.text.muted,
+                            theme,
+                            move |_, window, cx| {
+                                runtime::dispatch_in_window(
+                                    &state_cancel,
+                                    AppAction::CancelDeleteNewApi,
+                                    window,
+                                    cx,
+                                );
+                            },
+                        ));
+                } else {
+                    let state_confirm = self.state.clone();
+                    row = row.child(render_action_button(
+                        &t!("newapi.delete_button"),
+                        "src/icons/trash.svg",
+                        theme.status.error,
+                        theme,
+                        move |_, window, cx| {
+                            runtime::dispatch_in_window(
+                                &state_confirm,
+                                AppAction::ConfirmDeleteNewApi,
+                                window,
+                                cx,
+                            );
+                        },
+                    ));
+                }
+
+                section = section.child(row);
             }
             ProviderSettingsMode::AutoManaged => {
                 // 设计稿：无需配置的 provider — 虚线边框 + 居中图标 + 淡色文字，无背景色

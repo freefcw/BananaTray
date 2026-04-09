@@ -19,6 +19,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::SelectSettingsProvider(id) => {
             session.settings_ui.selected_provider = id;
             session.settings_ui.adding_newapi = false;
+            session.settings_ui.confirming_remove_provider = false;
+            session.settings_ui.confirming_delete_newapi = false;
             push_render(&mut effects);
         }
         AppAction::ToggleCadenceDropdown => {
@@ -141,6 +143,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             push_render(&mut effects);
         }
         AppAction::RemoveProviderFromSidebar(id) => {
+            session.settings_ui.confirming_remove_provider = false;
             if session.settings.provider.remove_from_sidebar(&id) {
                 // 移除同时 disable
                 session.settings.provider.set_enabled(&id, false);
@@ -162,6 +165,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                     session,
                 )));
             }
+            push_render(&mut effects);
+        }
+        AppAction::ConfirmRemoveProvider => {
+            session.settings_ui.confirming_remove_provider = true;
+            push_render(&mut effects);
+        }
+        AppAction::CancelRemoveProvider => {
+            session.settings_ui.confirming_remove_provider = false;
             push_render(&mut effects);
         }
         AppAction::EnterAddNewApi => {
@@ -241,6 +252,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::DeleteNewApi { provider_id } => {
             use crate::providers::custom::generator;
 
+            session.settings_ui.confirming_delete_newapi = false;
             if let ProviderId::Custom(ref custom_id) = provider_id {
                 if let Some(filename) = generator::filename_for_id(custom_id) {
                     effects.push(AppEffect::DeleteCustomProviderYaml { filename });
@@ -252,6 +264,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                     );
                 }
             }
+        }
+        AppAction::ConfirmDeleteNewApi => {
+            session.settings_ui.confirming_delete_newapi = true;
+            push_render(&mut effects);
+        }
+        AppAction::CancelDeleteNewApi => {
+            session.settings_ui.confirming_delete_newapi = false;
+            push_render(&mut effects);
         }
         AppAction::QuitApp => effects.push(AppEffect::QuitApp),
     }
@@ -1987,6 +2007,81 @@ mod tests {
         )));
         // 仍有 render（push_render 在 if 外）
         assert!(has_render(&effects));
+    }
+
+    // ── 二次确认状态 ──────────────────────────────────────
+
+    #[test]
+    fn confirm_remove_provider_sets_confirming_flag() {
+        let mut session = make_session();
+        assert!(!session.settings_ui.confirming_remove_provider);
+
+        let effects = reduce(&mut session, AppAction::ConfirmRemoveProvider);
+
+        assert!(session.settings_ui.confirming_remove_provider);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn cancel_remove_provider_clears_confirming_flag() {
+        let mut session = make_session();
+        session.settings_ui.confirming_remove_provider = true;
+
+        let effects = reduce(&mut session, AppAction::CancelRemoveProvider);
+
+        assert!(!session.settings_ui.confirming_remove_provider);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn remove_provider_resets_confirming_flag() {
+        let mut session = make_session();
+        session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
+        session.settings_ui.confirming_remove_provider = true;
+
+        reduce(
+            &mut session,
+            AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Claude)),
+        );
+
+        assert!(!session.settings_ui.confirming_remove_provider);
+    }
+
+    #[test]
+    fn confirm_delete_newapi_sets_confirming_flag() {
+        let mut session = make_session();
+        assert!(!session.settings_ui.confirming_delete_newapi);
+
+        let effects = reduce(&mut session, AppAction::ConfirmDeleteNewApi);
+
+        assert!(session.settings_ui.confirming_delete_newapi);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn cancel_delete_newapi_clears_confirming_flag() {
+        let mut session = make_session();
+        session.settings_ui.confirming_delete_newapi = true;
+
+        let effects = reduce(&mut session, AppAction::CancelDeleteNewApi);
+
+        assert!(!session.settings_ui.confirming_delete_newapi);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn select_provider_resets_confirming_flags() {
+        let mut session = make_session();
+        session.settings_ui.confirming_remove_provider = true;
+        session.settings_ui.confirming_delete_newapi = true;
+
+        reduce(
+            &mut session,
+            AppAction::SelectSettingsProvider(pid(ProviderKind::Gemini)),
+        );
+
+        assert!(!session.settings_ui.confirming_remove_provider);
+        assert!(!session.settings_ui.confirming_delete_newapi);
     }
 
     #[test]

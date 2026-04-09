@@ -47,6 +47,10 @@ pub enum AppAction {
     AddProviderToSidebar(ProviderId),
     /// 从 sidebar 列表移除 Provider
     RemoveProviderFromSidebar(ProviderId),
+    /// 进入移除 Provider 的二次确认状态
+    ConfirmRemoveProvider,
+    /// 取消移除 Provider 的二次确认
+    CancelRemoveProvider,
     /// 进入 NewAPI 添加模式（显示表单）
     EnterAddNewApi,
     /// 取消 NewAPI 添加（关闭表单）
@@ -67,6 +71,10 @@ pub enum AppAction {
     DeleteNewApi {
         provider_id: ProviderId,
     },
+    /// 进入删除 NewAPI 的二次确认状态
+    ConfirmDeleteNewApi,
+    /// 取消删除 NewAPI 的二次确认
+    CancelDeleteNewApi,
     QuitApp,
 }
 
