@@ -15,8 +15,7 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
 
     let items = ordered
         .iter()
-        .enumerate()
-        .map(|(index, id)| {
+        .map(|id| {
             let provider = session.provider_store.find_by_id(id);
             SettingsProviderListItemViewState {
                 id: id.clone(),
@@ -28,8 +27,6 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
                     .unwrap_or_else(|| format!("{}", id)),
                 is_selected: id == selected,
                 is_enabled: session.settings.is_enabled(id),
-                can_move_up: index > 0,
-                can_move_down: index + 1 < ordered.len(),
             }
         })
         .collect();

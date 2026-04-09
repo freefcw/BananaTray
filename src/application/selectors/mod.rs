@@ -116,8 +116,6 @@ pub struct SettingsProviderListItemViewState {
     pub display_name: String,
     pub is_selected: bool,
     pub is_enabled: bool,
-    pub can_move_up: bool,
-    pub can_move_down: bool,
 }
 
 #[derive(Debug, Clone)]

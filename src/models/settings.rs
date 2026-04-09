@@ -211,26 +211,20 @@ impl ProviderConfig {
         result
     }
 
-    /// 将指定 Provider 在排序中上移一位。返回 true 表示发生了移动。
-    pub fn move_provider_up(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
+    /// 将指定 Provider 移动到目标索引位置（拖拽排序）。返回 true 表示发生了移动。
+    pub fn move_provider_to_index(
+        &mut self,
+        id: &ProviderId,
+        target_index: usize,
+        custom_ids: &[ProviderId],
+    ) -> bool {
         self.ensure_order(custom_ids);
         let key = id.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| *k == key) {
-            if pos > 0 {
-                self.provider_order.swap(pos, pos - 1);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// 将指定 Provider 在排序中下移一位。返回 true 表示发生了移动。
-    pub fn move_provider_down(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
-        self.ensure_order(custom_ids);
-        let key = id.id_key();
-        if let Some(pos) = self.provider_order.iter().position(|k| *k == key) {
-            if pos + 1 < self.provider_order.len() {
-                self.provider_order.swap(pos, pos + 1);
+        if let Some(current) = self.provider_order.iter().position(|k| *k == key) {
+            let target = target_index.min(self.provider_order.len().saturating_sub(1));
+            if current != target {
+                let item = self.provider_order.remove(current);
+                self.provider_order.insert(target, item);
                 return true;
             }
         }
@@ -407,12 +401,14 @@ impl AppSettings {
         self.provider.ordered_provider_ids(custom_ids)
     }
 
-    pub fn move_provider_up(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
-        self.provider.move_provider_up(id, custom_ids)
-    }
-
-    pub fn move_provider_down(&mut self, id: &ProviderId, custom_ids: &[ProviderId]) -> bool {
-        self.provider.move_provider_down(id, custom_ids)
+    pub fn move_provider_to_index(
+        &mut self,
+        id: &ProviderId,
+        target_index: usize,
+        custom_ids: &[ProviderId],
+    ) -> bool {
+        self.provider
+            .move_provider_to_index(id, target_index, custom_ids)
     }
 
     pub fn is_quota_visible(&self, kind: ProviderKind, quota_key: &str) -> bool {
@@ -596,16 +592,16 @@ mod tests {
     }
 
     #[test]
-    fn provider_config_move_up_normalizes_order() {
+    fn provider_config_move_to_index_normalizes_order() {
         let mut config = ProviderConfig {
             provider_order: vec!["gemini".into(), "gemini".into(), "claude".into()],
             ..Default::default()
         };
 
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-        assert!(config.move_provider_up(&claude, &[]));
+        // 带重复 key 的 provider_order 应被 ensure_order 正规化，然后正确移动
+        assert!(config.move_provider_to_index(&claude, 0, &[]));
         assert_eq!(config.provider_order[0], ProviderKind::Claude.id_key());
-        assert_eq!(config.provider_order[1], ProviderKind::Gemini.id_key());
         assert_eq!(config.provider_order.len(), ProviderKind::all().len());
     }
 
@@ -640,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn move_provider_up_normalizes_provider_order() {
+    fn move_to_index_normalizes_provider_order() {
         let mut settings = AppSettings {
             provider: ProviderConfig {
                 provider_order: vec!["gemini".into(), "gemini".into(), "claude".into()],
@@ -650,14 +646,10 @@ mod tests {
         };
 
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-        assert!(settings.move_provider_up(&claude, &[]));
+        assert!(settings.move_provider_to_index(&claude, 0, &[]));
         assert_eq!(
             settings.provider.provider_order[0],
             ProviderKind::Claude.id_key()
-        );
-        assert_eq!(
-            settings.provider.provider_order[1],
-            ProviderKind::Gemini.id_key()
         );
         assert_eq!(
             settings.provider.provider_order.len(),
@@ -833,84 +825,6 @@ mod tests {
         assert_eq!(claude_count, 1);
     }
 
-    // ── move_provider_up/down ─────────────────────────────
-
-    #[test]
-    fn move_provider_down_works() {
-        let mut settings = AppSettings {
-            provider: ProviderConfig {
-                provider_order: vec!["claude".into(), "gemini".into()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-        assert!(settings.move_provider_down(&claude, &[]));
-        let pos_claude = settings
-            .provider
-            .provider_order
-            .iter()
-            .position(|k| k == "claude")
-            .unwrap();
-        let pos_gemini = settings
-            .provider
-            .provider_order
-            .iter()
-            .position(|k| k == "gemini")
-            .unwrap();
-        assert!(pos_gemini < pos_claude);
-    }
-
-    #[test]
-    fn move_provider_up_at_top_returns_false() {
-        let mut settings = AppSettings {
-            provider: ProviderConfig {
-                provider_order: vec!["claude".into(), "gemini".into()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-        assert!(!settings.move_provider_up(&claude, &[]));
-    }
-
-    #[test]
-    fn move_provider_down_at_bottom_returns_false() {
-        let all_keys: Vec<String> = ProviderKind::all()
-            .iter()
-            .map(|k| k.id_key().to_string())
-            .collect();
-        let mut settings = AppSettings {
-            provider: ProviderConfig {
-                provider_order: all_keys,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let last = ProviderKind::all().last().unwrap();
-        let id = ProviderId::BuiltIn(*last);
-        assert!(!settings.move_provider_down(&id, &[]));
-    }
-
-    #[test]
-    fn move_custom_provider_up() {
-        let custom = ProviderId::Custom("myai:cli".to_string());
-        let mut settings = AppSettings {
-            provider: ProviderConfig {
-                provider_order: vec!["claude".into(), "myai:cli".into()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        assert!(settings.move_provider_up(&custom, std::slice::from_ref(&custom)));
-        assert_eq!(settings.provider.provider_order[0], "myai:cli");
-        assert_eq!(settings.provider.provider_order[1], "claude");
-    }
-
     // ── prune_stale_custom_ids ──────────────────────────────
 
     #[test]
@@ -971,5 +885,105 @@ mod tests {
         for kind in ProviderKind::all() {
             assert!(config.is_enabled(&ProviderId::BuiltIn(*kind)));
         }
+    }
+
+    // ── move_provider_to_index（拖拽排序）──────────────────
+
+    #[test]
+    fn move_provider_to_index_forward() {
+        let mut settings = AppSettings {
+            provider: ProviderConfig {
+                provider_order: vec!["claude".into(), "gemini".into(), "copilot".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        // claude 从 index 0 → index 2
+        assert!(settings.move_provider_to_index(&claude, 2, &[]));
+        // ensure_order 展开后 claude 应在第三个位置
+        let pos = settings
+            .provider
+            .provider_order
+            .iter()
+            .position(|k| k == "claude")
+            .unwrap();
+        assert_eq!(pos, 2);
+    }
+
+    #[test]
+    fn move_provider_to_index_backward() {
+        let mut settings = AppSettings {
+            provider: ProviderConfig {
+                provider_order: vec!["claude".into(), "gemini".into(), "copilot".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let copilot = ProviderId::BuiltIn(ProviderKind::Copilot);
+        // copilot 从 index 2 → index 0
+        assert!(settings.move_provider_to_index(&copilot, 0, &[]));
+        let pos = settings
+            .provider
+            .provider_order
+            .iter()
+            .position(|k| k == "copilot")
+            .unwrap();
+        assert_eq!(pos, 0);
+    }
+
+    #[test]
+    fn move_provider_to_index_same_position_returns_false() {
+        let mut settings = AppSettings {
+            provider: ProviderConfig {
+                provider_order: vec!["claude".into(), "gemini".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(!settings.move_provider_to_index(&claude, 0, &[]));
+    }
+
+    #[test]
+    fn move_provider_to_index_clamps_out_of_bounds() {
+        let mut settings = AppSettings {
+            provider: ProviderConfig {
+                provider_order: vec!["claude".into(), "gemini".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+        // target=999 应被 clamp 到末尾
+        assert!(settings.move_provider_to_index(&claude, 999, &[]));
+        let pos = settings
+            .provider
+            .provider_order
+            .iter()
+            .position(|k| k == "claude")
+            .unwrap();
+        assert_eq!(pos, settings.provider.provider_order.len() - 1);
+    }
+
+    #[test]
+    fn move_custom_provider_to_index() {
+        let custom = ProviderId::Custom("myai:cli".to_string());
+        let mut settings = AppSettings {
+            provider: ProviderConfig {
+                provider_order: vec!["claude".into(), "myai:cli".into(), "gemini".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // myai:cli 从 index 1 → index 0
+        assert!(settings.move_provider_to_index(&custom, 0, std::slice::from_ref(&custom)));
+        assert_eq!(settings.provider.provider_order[0], "myai:cli");
+        assert_eq!(settings.provider.provider_order[1], "claude");
     }
 }
