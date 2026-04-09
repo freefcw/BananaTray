@@ -63,13 +63,13 @@ pub(crate) fn render_quota_bar(
             (QuotaType::Credit, QuotaDisplayMode::Remaining) => {
                 let remaining = q.limit - q.used;
                 if remaining >= 0.0 {
-                    format!("${:.0}", remaining)
+                    format!("${:.2}", remaining)
                 } else {
-                    format!("-${:.0}", -remaining)
+                    format!("-${:.2}", -remaining)
                 }
             }
             (QuotaType::Credit, QuotaDisplayMode::Used) => {
-                format!("${:.0}", q.used)
+                format!("${:.2}", q.used)
             }
             (_, QuotaDisplayMode::Remaining) => {
                 let pct = remaining_pct.max(0.0);
