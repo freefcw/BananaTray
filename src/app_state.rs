@@ -133,7 +133,15 @@ pub struct AppSession {
 }
 
 impl AppSession {
-    pub fn new(settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
+    pub fn new(mut settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
+        // 确保 sidebar 有默认值（新用户 → claude+codex，老用户 → 全集）
+        let custom_ids: Vec<_> = providers
+            .iter()
+            .filter(|p| p.provider_id.is_custom())
+            .map(|p| p.provider_id.clone())
+            .collect();
+        settings.provider.ensure_sidebar_defaults(&custom_ids);
+
         let first_enabled = providers
             .iter()
             .find(|p| settings.is_enabled(&p.provider_id))
@@ -160,6 +168,7 @@ impl AppSession {
                 copilot_token_editing: false,
                 adding_newapi: false,
                 editing_newapi: None,
+                adding_provider: false,
             },
             debug_ui: DebugUiState::default(),
             settings,
@@ -281,6 +290,8 @@ pub struct SettingsUiState {
     pub adding_newapi: bool,
     /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）
     pub editing_newapi: Option<NewApiEditData>,
+    /// 是否正在选择要添加的 Provider（右侧面板显示选择列表）
+    pub adding_provider: bool,
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

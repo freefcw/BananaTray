@@ -112,7 +112,7 @@ fn render_action_button(
         .on_mouse_down(MouseButton::Left, on_click)
 }
 
-/// Header 右侧操作区：刷新按钮 + 启用/禁用开关
+/// Header 右侧操作区：移除按钮 + 刷新按钮 + 启用/禁用开关
 fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
     id: &ProviderId,
@@ -120,12 +120,41 @@ fn render_detail_action_buttons(
     theme: &Theme,
 ) -> Div {
     let state_toggle = state.clone();
+    let state_remove = state.clone();
     let id_toggle = id.clone();
+    let id_remove = id.clone();
 
     div()
         .flex()
         .items_center()
         .gap(px(10.0))
+        // 从列表移除按钮
+        .child(
+            div()
+                .id("remove-from-sidebar")
+                .w(px(36.0))
+                .h(px(36.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(10.0))
+                .bg(theme.bg.subtle)
+                .cursor_pointer()
+                .hover(|s| s.opacity(0.8))
+                .child(crate::app::widgets::render_svg_icon(
+                    "src/icons/trash.svg",
+                    px(18.0),
+                    theme.text.muted,
+                ))
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    runtime::dispatch_in_window(
+                        &state_remove,
+                        AppAction::RemoveProviderFromSidebar(id_remove.clone()),
+                        window,
+                        cx,
+                    );
+                }),
+        )
         .child(render_refresh_button(state, id.clone(), theme))
         .child(
             crate::app::widgets::render_toggle_switch(

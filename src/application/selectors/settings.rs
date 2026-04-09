@@ -10,7 +10,8 @@ use rust_i18n::t;
 
 pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvidersTabViewState {
     let custom_ids = session.provider_store.custom_provider_ids();
-    let ordered = session.settings.ordered_provider_ids(&custom_ids);
+    // 核心变更：仅展示 sidebar 中的 Provider（动态子集）
+    let ordered = session.settings.provider.sidebar_provider_ids(&custom_ids);
     let selected = &session.settings_ui.selected_provider;
 
     let items = ordered
@@ -31,11 +32,44 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
         })
         .collect();
 
+    // 计算可添加的 Provider 列表
+    let manager_metadata = |kind: ProviderKind| -> (String, String) {
+        session
+            .provider_store
+            .providers
+            .iter()
+            .find(|p| p.provider_id == ProviderId::BuiltIn(kind))
+            .map(|p| (p.icon_asset().to_string(), p.display_name().to_string()))
+            .unwrap_or_else(|| {
+                (
+                    "src/icons/provider-unknown.svg".to_string(),
+                    format!("{:?}", kind),
+                )
+            })
+    };
+
+    let available_providers = session
+        .settings
+        .provider
+        .addable_provider_kinds()
+        .into_iter()
+        .map(|kind| {
+            let (icon, display_name) = manager_metadata(kind);
+            AvailableProviderItem {
+                id: ProviderId::BuiltIn(kind),
+                icon,
+                display_name,
+            }
+        })
+        .collect();
+
     SettingsProvidersTabViewState {
         items,
         detail: settings_provider_detail_view_state(session, selected),
         adding_newapi: session.settings_ui.adding_newapi,
         editing_newapi_data: session.settings_ui.editing_newapi.clone(),
+        adding_provider: session.settings_ui.adding_provider,
+        available_providers,
     }
 }
 

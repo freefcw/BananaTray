@@ -107,6 +107,18 @@ pub struct SettingsProvidersTabViewState {
     pub adding_newapi: bool,
     /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）
     pub editing_newapi_data: Option<NewApiEditData>,
+    /// 是否处于"添加 Provider"选择模式
+    pub adding_provider: bool,
+    /// 可添加的 Provider 列表（供选择面板使用）
+    pub available_providers: Vec<AvailableProviderItem>,
+}
+
+/// 可添加到 sidebar 的 Provider 项
+#[derive(Debug, Clone)]
+pub struct AvailableProviderItem {
+    pub id: ProviderId,
+    pub icon: String,
+    pub display_name: String,
 }
 
 #[derive(Debug, Clone)]

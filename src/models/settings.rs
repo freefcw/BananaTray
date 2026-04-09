@@ -107,6 +107,10 @@ pub struct ProviderConfig {
     /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合
     #[serde(default)]
     pub hidden_quotas: HashMap<String, HashSet<String>>,
+    /// 设置页 sidebar 中展示的 Provider id_key 列表（动态子集）
+    /// 空列表由 `ensure_sidebar_defaults()` 在启动时填充
+    #[serde(default)]
+    pub sidebar_providers: Vec<String>,
 }
 
 // ── ProviderConfig 方法（逻辑归属于此，AppSettings 薄委托） ──
@@ -133,7 +137,7 @@ impl ProviderConfig {
 
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）
     ///
-    /// 从 `enabled_providers`、`provider_order`、`hidden_quotas` 中移除
+    /// 从 `enabled_providers`、`provider_order`、`hidden_quotas`、`sidebar_providers` 中移除
     /// 不再存在的自定义 Provider 条目。返回 true 表示发生了变更。
     pub fn prune_stale_custom_ids(&mut self, existing_custom_ids: &[ProviderId]) -> bool {
         let existing: std::collections::HashSet<String> = existing_custom_ids
@@ -149,15 +153,20 @@ impl ProviderConfig {
             ProviderKind::from_id_key(key).is_some() || existing.contains(key)
         };
 
-        let before =
-            self.enabled_providers.len() + self.provider_order.len() + self.hidden_quotas.len();
+        let before = self.enabled_providers.len()
+            + self.provider_order.len()
+            + self.hidden_quotas.len()
+            + self.sidebar_providers.len();
 
         self.enabled_providers.retain(|key, _| is_valid_key(key));
         self.provider_order.retain(|key| is_valid_key(key));
         self.hidden_quotas.retain(|key, _| is_valid_key(key));
+        self.sidebar_providers.retain(|key| is_valid_key(key));
 
-        let after =
-            self.enabled_providers.len() + self.provider_order.len() + self.hidden_quotas.len();
+        let after = self.enabled_providers.len()
+            + self.provider_order.len()
+            + self.hidden_quotas.len()
+            + self.sidebar_providers.len();
         before != after
     }
 
@@ -277,6 +286,85 @@ impl ProviderConfig {
             .into_iter()
             .map(|id| id.id_key().to_string())
             .collect();
+    }
+
+    // ── sidebar 动态列表管理 ──
+
+    /// 设置页 sidebar 应展示的 Provider ID 列表。
+    ///
+    /// 返回 `sidebar_providers` 中有效的 Provider，按 `provider_order` 排序；
+    /// 不在 `sidebar_providers` 中的项不展示。
+    pub fn sidebar_provider_ids(&self, custom_ids: &[ProviderId]) -> Vec<ProviderId> {
+        let sidebar_set: HashSet<&str> =
+            self.sidebar_providers.iter().map(|s| s.as_str()).collect();
+        // 按 provider_order 的顺序，过滤出在 sidebar 中的项
+        self.ordered_provider_ids(custom_ids)
+            .into_iter()
+            .filter(|id| sidebar_set.contains(id.id_key().as_str()))
+            .collect()
+    }
+
+    /// 返回可添加到 sidebar 的内置 Provider 列表。
+    ///
+    /// 规则：全量内置 Provider 中排除已在 sidebar 中的（Custom 类型不在此列，
+    /// NewAPI 有独立入口）。
+    pub fn addable_provider_kinds(&self) -> Vec<ProviderKind> {
+        let sidebar_set: HashSet<&str> =
+            self.sidebar_providers.iter().map(|s| s.as_str()).collect();
+        ProviderKind::all()
+            .iter()
+            .filter(|kind| !sidebar_set.contains(kind.id_key()))
+            .copied()
+            .collect()
+    }
+
+    /// 将 Provider 添加到 sidebar 列表。
+    ///
+    /// 内置 Provider 重复添加返回 false；Custom 类型始终允许。
+    pub fn add_to_sidebar(&mut self, id: &ProviderId) -> bool {
+        let key = id.id_key();
+        // 内置 Provider 去重
+        if id.is_builtin() && self.sidebar_providers.contains(&key) {
+            return false;
+        }
+        self.sidebar_providers.push(key.clone());
+        // 同步到 provider_order（排序列表也需要包含该项）
+        if !self.provider_order.contains(&key) {
+            self.provider_order.push(key);
+        }
+        true
+    }
+
+    /// 从 sidebar 列表移除 Provider。返回 true 表示移除成功。
+    pub fn remove_from_sidebar(&mut self, id: &ProviderId) -> bool {
+        let key = id.id_key();
+        let before = self.sidebar_providers.len();
+        self.sidebar_providers.retain(|k| *k != key);
+        self.sidebar_providers.len() != before
+    }
+
+    /// 若 sidebar_providers 为空，填充默认值。
+    ///
+    /// - 新用户（enabled_providers 也为空）→ 默认 ["claude", "codex"]
+    /// - 老用户（enabled_providers 非空但 sidebar 为空）→ 全量内置 + 已有自定义
+    pub fn ensure_sidebar_defaults(&mut self, custom_ids: &[ProviderId]) {
+        if !self.sidebar_providers.is_empty() {
+            return;
+        }
+        if self.enabled_providers.is_empty() && self.provider_order.is_empty() {
+            // 新用户
+            self.sidebar_providers = vec![
+                ProviderKind::Claude.id_key().to_string(),
+                ProviderKind::Codex.id_key().to_string(),
+            ];
+        } else {
+            // 老用户：保留全集（向后兼容，不丢失现有 Provider）
+            self.sidebar_providers = self
+                .ordered_provider_ids(custom_ids)
+                .into_iter()
+                .map(|id| id.id_key())
+                .collect();
+        }
     }
 }
 
@@ -516,6 +604,7 @@ impl From<LegacyAppSettings> for AppSettings {
                 enabled_providers: old.enabled_providers,
                 provider_order: old.provider_order,
                 hidden_quotas: old.hidden_quotas,
+                sidebar_providers: Vec::new(), // 由 ensure_sidebar_defaults() 填充
             },
         }
     }
@@ -985,5 +1074,184 @@ mod tests {
         assert!(settings.move_provider_to_index(&custom, 0, std::slice::from_ref(&custom)));
         assert_eq!(settings.provider.provider_order[0], "myai:cli");
         assert_eq!(settings.provider.provider_order[1], "claude");
+    }
+
+    // ── sidebar_provider_ids ──────────────────────────────
+
+    #[test]
+    fn sidebar_provider_ids_returns_subset() {
+        let config = ProviderConfig {
+            sidebar_providers: vec!["claude".into(), "gemini".into()],
+            provider_order: vec!["gemini".into(), "claude".into()],
+            ..Default::default()
+        };
+        let ids = config.sidebar_provider_ids(&[]);
+        assert_eq!(ids.len(), 2);
+        // 按 provider_order 排序
+        assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
+        assert_eq!(ids[1], ProviderId::BuiltIn(ProviderKind::Claude));
+    }
+
+    #[test]
+    fn sidebar_provider_ids_excludes_non_sidebar() {
+        let config = ProviderConfig {
+            sidebar_providers: vec!["claude".into()],
+            ..Default::default()
+        };
+        let ids = config.sidebar_provider_ids(&[]);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Claude));
+    }
+
+    #[test]
+    fn sidebar_provider_ids_includes_custom() {
+        let config = ProviderConfig {
+            sidebar_providers: vec!["claude".into(), "myai:newapi".into()],
+            provider_order: vec!["claude".into(), "myai:newapi".into()],
+            ..Default::default()
+        };
+        let custom = vec![ProviderId::Custom("myai:newapi".to_string())];
+        let ids = config.sidebar_provider_ids(&custom);
+        assert_eq!(ids.len(), 2);
+        assert_eq!(ids[1], ProviderId::Custom("myai:newapi".to_string()));
+    }
+
+    // ── addable_provider_kinds ────────────────────────────
+
+    #[test]
+    fn addable_provider_kinds_excludes_existing() {
+        let config = ProviderConfig {
+            sidebar_providers: vec!["claude".into(), "codex".into()],
+            ..Default::default()
+        };
+        let addable = config.addable_provider_kinds();
+        assert!(!addable.contains(&ProviderKind::Claude));
+        assert!(!addable.contains(&ProviderKind::Codex));
+        assert!(addable.contains(&ProviderKind::Gemini));
+        assert_eq!(addable.len(), ProviderKind::all().len() - 2);
+    }
+
+    #[test]
+    fn addable_provider_kinds_all_when_sidebar_empty() {
+        let config = ProviderConfig::default();
+        let addable = config.addable_provider_kinds();
+        assert_eq!(addable.len(), ProviderKind::all().len());
+    }
+
+    // ── add_to_sidebar ───────────────────────────────────
+
+    #[test]
+    fn add_to_sidebar_success() {
+        let mut config = ProviderConfig::default();
+        let id = ProviderId::BuiltIn(ProviderKind::Gemini);
+        assert!(config.add_to_sidebar(&id));
+        assert!(config.sidebar_providers.contains(&"gemini".to_string()));
+        assert!(config.provider_order.contains(&"gemini".to_string()));
+    }
+
+    #[test]
+    fn add_to_sidebar_duplicate_builtin_rejected() {
+        let mut config = ProviderConfig {
+            sidebar_providers: vec!["claude".into()],
+            ..Default::default()
+        };
+        let id = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(!config.add_to_sidebar(&id));
+        // sidebar 中仍只有一个 claude
+        assert_eq!(
+            config
+                .sidebar_providers
+                .iter()
+                .filter(|k| *k == "claude")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn add_to_sidebar_custom_allows_duplicate() {
+        let mut config = ProviderConfig {
+            sidebar_providers: vec!["myai:newapi".into()],
+            ..Default::default()
+        };
+        let id = ProviderId::Custom("myai:newapi".to_string());
+        assert!(config.add_to_sidebar(&id));
+        assert_eq!(
+            config
+                .sidebar_providers
+                .iter()
+                .filter(|k| *k == "myai:newapi")
+                .count(),
+            2
+        );
+    }
+
+    // ── remove_from_sidebar ──────────────────────────────
+
+    #[test]
+    fn remove_from_sidebar_success() {
+        let mut config = ProviderConfig {
+            sidebar_providers: vec!["claude".into(), "gemini".into()],
+            ..Default::default()
+        };
+        let id = ProviderId::BuiltIn(ProviderKind::Claude);
+        assert!(config.remove_from_sidebar(&id));
+        assert!(!config.sidebar_providers.contains(&"claude".to_string()));
+        assert_eq!(config.sidebar_providers.len(), 1);
+    }
+
+    #[test]
+    fn remove_from_sidebar_nonexistent_noop() {
+        let mut config = ProviderConfig {
+            sidebar_providers: vec!["claude".into()],
+            ..Default::default()
+        };
+        let id = ProviderId::BuiltIn(ProviderKind::Gemini);
+        assert!(!config.remove_from_sidebar(&id));
+        assert_eq!(config.sidebar_providers.len(), 1);
+    }
+
+    // ── ensure_sidebar_defaults ──────────────────────────
+
+    #[test]
+    fn ensure_sidebar_defaults_new_user() {
+        let mut config = ProviderConfig::default();
+        config.ensure_sidebar_defaults(&[]);
+        assert_eq!(config.sidebar_providers.len(), 2);
+        assert_eq!(config.sidebar_providers[0], "claude");
+        assert_eq!(config.sidebar_providers[1], "codex");
+    }
+
+    #[test]
+    fn ensure_sidebar_defaults_existing_user_gets_all() {
+        let mut config = ProviderConfig::default();
+        // 模拟老用户：有 enabled_providers 但无 sidebar_providers
+        config.set_provider_enabled(ProviderKind::Claude, true);
+        config.ensure_sidebar_defaults(&[]);
+        // 老用户应保留全集
+        assert!(config.sidebar_providers.len() >= ProviderKind::all().len());
+    }
+
+    #[test]
+    fn ensure_sidebar_defaults_skips_when_non_empty() {
+        let mut config = ProviderConfig {
+            sidebar_providers: vec!["gemini".into()],
+            ..Default::default()
+        };
+        config.ensure_sidebar_defaults(&[]);
+        // 不应被覆盖
+        assert_eq!(config.sidebar_providers.len(), 1);
+        assert_eq!(config.sidebar_providers[0], "gemini");
+    }
+
+    #[test]
+    fn ensure_sidebar_defaults_old_user_with_order_gets_all() {
+        let mut config = ProviderConfig {
+            provider_order: vec!["gemini".into(), "claude".into()],
+            ..Default::default()
+        };
+        config.ensure_sidebar_defaults(&[]);
+        // provider_order 非空视为老用户，应保留全集
+        assert!(config.sidebar_providers.len() >= ProviderKind::all().len());
     }
 }

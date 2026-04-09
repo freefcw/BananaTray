@@ -1,5 +1,6 @@
 mod detail;
 mod newapi_form;
+mod picker;
 mod sidebar;
 
 use super::SettingsView;
@@ -35,8 +36,9 @@ impl SettingsView {
             self.clear_newapi_inputs();
         }
 
-        // 右侧面板：adding_newapi 模式时显示表单，否则显示 provider detail
+        // 右侧面板：三态切换
         let right_panel = if view_state.adding_newapi {
+            // NewAPI 表单
             let is_editing = view_state.editing_newapi_data.is_some();
             self.render_newapi_form(
                 is_editing,
@@ -45,7 +47,11 @@ impl SettingsView {
                 window,
                 cx,
             )
+        } else if view_state.adding_provider {
+            // Provider 选择列表
+            self.render_provider_picker(&view_state.available_providers, theme, cx)
         } else {
+            // Provider 详情
             self.render_provider_detail_panel(&view_state.detail, theme, cx)
         };
 

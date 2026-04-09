@@ -39,6 +39,14 @@ pub enum AppAction {
     ClearDebugLogs,
     /// 弹窗可见性变化（控制 Dynamic 图标延迟更新）
     PopupVisibilityChanged(bool),
+    /// 进入"添加 Provider"选择模式（右面板切换为选择列表）
+    EnterAddProvider,
+    /// 取消添加 Provider（退出选择模式）
+    CancelAddProvider,
+    /// 将 Provider 添加到 sidebar 列表
+    AddProviderToSidebar(ProviderId),
+    /// 从 sidebar 列表移除 Provider
+    RemoveProviderFromSidebar(ProviderId),
     /// 进入 NewAPI 添加模式（显示表单）
     EnterAddNewApi,
     /// 取消 NewAPI 添加（关闭表单）

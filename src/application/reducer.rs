@@ -121,8 +121,50 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 }
             }
         }
+        AppAction::EnterAddProvider => {
+            session.settings_ui.adding_provider = true;
+            session.settings_ui.adding_newapi = false; // 互斥
+            push_render(&mut effects);
+        }
+        AppAction::CancelAddProvider => {
+            session.settings_ui.adding_provider = false;
+            push_render(&mut effects);
+        }
+        AppAction::AddProviderToSidebar(id) => {
+            if session.settings.provider.add_to_sidebar(&id) {
+                effects.push(AppEffect::PersistSettings);
+            }
+            session.settings_ui.adding_provider = false;
+            session.settings_ui.selected_provider = id;
+            push_render(&mut effects);
+        }
+        AppAction::RemoveProviderFromSidebar(id) => {
+            if session.settings.provider.remove_from_sidebar(&id) {
+                // 移除同时 disable
+                session.settings.set_enabled(&id, false);
+                // 导航回退
+                let providers = &session.provider_store.providers;
+                session
+                    .nav
+                    .fallback_on_disable(&id, providers, &session.settings);
+                // 选中下一个可用项
+                let custom_ids = session.provider_store.custom_provider_ids();
+                let remaining = session.settings.provider.sidebar_provider_ids(&custom_ids);
+                if let Some(first) = remaining.first() {
+                    session.settings_ui.selected_provider = first.clone();
+                } else {
+                    session.settings_ui.adding_provider = true;
+                }
+                effects.push(AppEffect::PersistSettings);
+                effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
+                    session,
+                )));
+            }
+            push_render(&mut effects);
+        }
         AppAction::EnterAddNewApi => {
             session.settings_ui.adding_newapi = true;
+            session.settings_ui.adding_provider = false; // 与 picker 互斥
             session.settings_ui.editing_newapi = None; // 确保进入纯新增模式
             push_render(&mut effects);
         }
@@ -1799,5 +1841,145 @@ mod tests {
         );
 
         assert!(effects.is_empty());
+    }
+
+    // ── Sidebar dynamic list ────────────────────────────
+
+    #[test]
+    fn enter_add_provider_sets_flag_and_clears_newapi() {
+        let mut session = make_session();
+        session.settings_ui.adding_newapi = true;
+
+        let effects = reduce(&mut session, AppAction::EnterAddProvider);
+
+        assert!(session.settings_ui.adding_provider);
+        assert!(!session.settings_ui.adding_newapi); // 互斥
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn cancel_add_provider_clears_flag() {
+        let mut session = make_session();
+        session.settings_ui.adding_provider = true;
+
+        let effects = reduce(&mut session, AppAction::CancelAddProvider);
+
+        assert!(!session.settings_ui.adding_provider);
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn add_provider_to_sidebar_persists_and_selects() {
+        let mut session = make_session();
+        // 预设 sidebar 只有 claude
+        session.settings.provider.sidebar_providers = vec!["claude".into()];
+        session.settings_ui.adding_provider = true;
+
+        let id = pid(ProviderKind::Gemini);
+        let effects = reduce(&mut session, AppAction::AddProviderToSidebar(id.clone()));
+
+        // sidebar 现在包含 gemini
+        assert!(session
+            .settings
+            .provider
+            .sidebar_providers
+            .contains(&"gemini".to_string()));
+        // 选中了刚添加的 provider
+        assert_eq!(session.settings_ui.selected_provider, id);
+        // 退出添加模式
+        assert!(!session.settings_ui.adding_provider);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn remove_provider_from_sidebar_disables_and_persists() {
+        let mut session = make_session();
+        session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Claude), true);
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Gemini), true);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Claude)),
+        );
+
+        // claude 不在 sidebar 中了
+        assert!(!session
+            .settings
+            .provider
+            .sidebar_providers
+            .contains(&"claude".to_string()));
+        // claude 被 disable
+        assert!(!session.settings.is_enabled(&pid(ProviderKind::Claude)));
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn remove_last_sidebar_provider_enters_add_mode() {
+        let mut session = make_session();
+        session.settings.provider.sidebar_providers = vec!["claude".into()];
+        session
+            .settings
+            .set_enabled(&pid(ProviderKind::Claude), true);
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Claude)),
+        );
+
+        // sidebar 已空
+        assert!(session.settings.provider.sidebar_providers.is_empty());
+        // 自动进入添加模式
+        assert!(session.settings_ui.adding_provider);
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn remove_nonexistent_provider_from_sidebar_is_noop() {
+        let mut session = make_session();
+        session.settings.provider.sidebar_providers = vec!["claude".into()];
+
+        let effects = reduce(
+            &mut session,
+            AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Gemini)),
+        );
+
+        // sidebar 不变
+        assert_eq!(session.settings.provider.sidebar_providers.len(), 1);
+        // 无持久化
+        assert!(!has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        // 仍有 render（push_render 在 if 外）
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn enter_add_newapi_clears_adding_provider() {
+        let mut session = make_session();
+        session.settings_ui.adding_provider = true;
+
+        let effects = reduce(&mut session, AppAction::EnterAddNewApi);
+
+        assert!(session.settings_ui.adding_newapi);
+        assert!(!session.settings_ui.adding_provider); // 互斥清除
+        assert!(has_render(&effects));
     }
 }
