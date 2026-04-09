@@ -67,8 +67,7 @@ fn resolve_log_path() -> Result<PathBuf> {
         return Ok(path.join("bananatray.log"));
     }
 
-    let base_dir = dirs::state_dir()
-        .or_else(dirs::data_local_dir)
+    let base_dir = platform_log_base_dir()
         .or_else(|| env::current_dir().ok().map(|dir| dir.join("logs")))
         .context("failed to resolve log directory")?;
 
@@ -77,6 +76,49 @@ fn resolve_log_path() -> Result<PathBuf> {
         .with_context(|| format!("failed to create log directory: {}", log_dir.display()))?;
 
     Ok(log_dir.join("bananatray.log"))
+}
+
+/// 返回符合各平台规范的日志根目录：
+/// - macOS: `~/Library/Logs`
+/// - Linux/其他: `$XDG_STATE_HOME`（默认 `~/.local/state`），fallback 到 `data_local_dir`
+fn platform_log_base_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        dirs::home_dir().map(|h| h.join("Library/Logs"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        dirs::state_dir().or_else(dirs::data_local_dir)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_log_base_dir_returns_some() {
+        assert!(platform_log_base_dir().is_some());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn platform_log_base_dir_macos_uses_library_logs() {
+        let base = platform_log_base_dir().unwrap();
+        assert!(
+            base.ends_with("Library/Logs"),
+            "expected Library/Logs, got {base:?}"
+        );
+    }
+
+    #[test]
+    fn resolve_log_path_env_override() {
+        let dir = std::env::temp_dir().join("bananatray_log_test");
+        std::env::set_var("BANANATRAY_LOG_DIR", &dir);
+        let path = resolve_log_path().unwrap();
+        std::env::remove_var("BANANATRAY_LOG_DIR");
+        assert_eq!(path, dir.join("bananatray.log"));
+    }
 }
 
 fn resolve_log_level() -> LevelFilter {

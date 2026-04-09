@@ -75,8 +75,8 @@ Settings are persisted as JSON:
 
 Runtime logs use `fern` with dual output (stdout + file):
 
-- **macOS**: `~/Library/Application State/bananatray/bananatray.log`
-- **Linux**: `$XDG_STATE_HOME/bananatray/bananatray.log`
+- **macOS**: `~/Library/Logs/bananatray/bananatray.log`
+- **Linux**: `$XDG_STATE_HOME/bananatray/bananatray.log` (default `~/.local/state/bananatray/bananatray.log`)
 - **Override**: set `BANANATRAY_LOG_DIR=/path/to/dir` to write logs to a custom directory
 - **Log level**: controlled by `RUST_LOG` (default: `info`)
 - **Format**: `timestamp [LEVEL] target     message`
