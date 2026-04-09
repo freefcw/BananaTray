@@ -4,6 +4,7 @@ use crate::application::SettingsProviderListItemViewState;
 use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -99,25 +100,21 @@ fn render_sidebar_item_content(
             drag_handle_color,
         ));
 
-    // 名称行：名字 + 启用圆点
-    let name_row = div().flex().items_center().gap(px(8.0)).flex_1().child(
-        div()
-            .text_size(px(13.0))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(name_color)
-            .child(display_name),
-    );
-    let name_row = if is_enabled {
-        name_row.child(
-            div()
-                .w(px(7.0))
-                .h(px(7.0))
-                .rounded_full()
-                .bg(theme.status.success),
-        )
-    } else {
-        name_row
-    };
+    // 名称行：名字（flex_1 撑满）
+    let name_row = div()
+        .flex_1()
+        .text_size(px(13.0))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(name_color)
+        .child(display_name);
+
+    // 启用圆点：右对齐，固定在行末
+    let enabled_dot = div()
+        .flex_none()
+        .w(px(7.0))
+        .h(px(7.0))
+        .rounded_full()
+        .when(is_enabled, |d| d.bg(theme.status.success));
 
     div()
         .flex()
@@ -130,6 +127,7 @@ fn render_sidebar_item_content(
         .child(drag_handle)
         .child(render_provider_icon(icon, px(20.0), icon_color))
         .child(name_row)
+        .child(enabled_dot)
 }
 
 /// 组装单个 sidebar 列表项（选中高亮 + 拖拽 + 放置目标 + 点击事件）
