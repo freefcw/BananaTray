@@ -81,10 +81,22 @@ pub fn ensure_success(output: &Output) -> Result<()> {
 }
 
 /// 适用于"成功执行且输出在 stdout"的常规 CLI。
+#[allow(dead_code)]
 pub fn run_checked_command(binary: &str, args: &[&str]) -> Result<Output> {
     let output = run_command(binary, args)?;
     ensure_success(&output)?;
     Ok(output)
+}
+
+/// 适用于偶发非零退出码但仍有有效输出的 CLI（如 amp、kiro-cli）。
+/// 有输出时直接返回，仅在输出为空时才将非零退出码视为错误。
+pub fn run_lenient_command(binary: &str, args: &[&str]) -> Result<String> {
+    let output = run_command(binary, args)?;
+    let text = stdout_or_stderr_text(&output);
+    if text.trim().is_empty() {
+        ensure_success(&output)?;
+    }
+    Ok(text)
 }
 
 pub fn stdout_text(output: &Output) -> String {
@@ -105,6 +117,24 @@ pub fn stdout_or_stderr_text(output: &Output) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    fn make_status(code: i32) -> std::process::ExitStatus {
+        std::os::unix::process::ExitStatusExt::from_raw(code << 8)
+    }
+
+    #[cfg(windows)]
+    fn make_status(code: i32) -> std::process::ExitStatus {
+        std::os::windows::process::ExitStatusExt::from_raw(code as u32)
+    }
+
+    fn success_status() -> std::process::ExitStatus {
+        make_status(0)
+    }
+
+    fn failure_status() -> std::process::ExitStatus {
+        make_status(1)
+    }
+
     #[test]
     fn test_stdout_or_stderr_prefers_stdout() {
         let output = Output {
@@ -112,7 +142,6 @@ mod tests {
             stdout: b"main output".to_vec(),
             stderr: b"fallback output".to_vec(),
         };
-
         assert_eq!(stdout_or_stderr_text(&output), "main output");
     }
 
@@ -123,27 +152,48 @@ mod tests {
             stdout: b"   ".to_vec(),
             stderr: b"fallback output".to_vec(),
         };
-
         assert_eq!(stdout_or_stderr_text(&output), "fallback output");
+    }
+
+    #[test]
+    fn test_run_lenient_returns_output_even_on_nonzero_exit() {
+        // 有输出时，即使退出码非零也应返回 Ok
+        let output = Output {
+            status: failure_status(),
+            stdout: b"quota: 100/200".to_vec(),
+            stderr: b"some warning".to_vec(),
+        };
+        let text = stdout_or_stderr_text(&output);
+        // 模拟 run_lenient_command 的核心逻辑
+        let result: Result<String> = if text.trim().is_empty() {
+            ensure_success(&output).map(|_| text)
+        } else {
+            Ok(text)
+        };
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "quota: 100/200");
+    }
+
+    #[test]
+    fn test_run_lenient_fails_when_output_empty_and_nonzero_exit() {
+        // 无输出且退出码非零时应返回 Err
+        let output = Output {
+            status: failure_status(),
+            stdout: b"".to_vec(),
+            stderr: b"".to_vec(),
+        };
+        let text = stdout_or_stderr_text(&output);
+        let result: Result<String> = if text.trim().is_empty() {
+            ensure_success(&output).map(|_| text)
+        } else {
+            Ok(text)
+        };
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_enriched_path_contains_home_paths() {
         let path = enriched_path();
-        let home = std::env::var("HOME").unwrap_or_default();
-        if !home.is_empty() {
-            // 至少应该包含存在的路径
-            assert!(!path.is_empty());
-        }
-    }
-
-    #[cfg(unix)]
-    fn success_status() -> std::process::ExitStatus {
-        std::os::unix::process::ExitStatusExt::from_raw(0)
-    }
-
-    #[cfg(windows)]
-    fn success_status() -> std::process::ExitStatus {
-        std::os::windows::process::ExitStatusExt::from_raw(0)
+        assert!(!path.is_empty());
     }
 }

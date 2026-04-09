@@ -52,8 +52,11 @@ impl KiroProvider {
             if stdout.trim().is_empty() { "stderr" } else { "stdout" },
         );
 
-        cli::ensure_success(&output)?;
-        Ok(cli::stdout_or_stderr_text(&output))
+        let text = cli::stdout_or_stderr_text(&output);
+        if text.trim().is_empty() {
+            cli::ensure_success(&output)?;
+        }
+        Ok(text)
     }
 
     /// 执行 `kiro-cli whoami` 读取当前登录邮箱。

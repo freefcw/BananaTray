@@ -310,8 +310,7 @@ fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> Result<Stri
 
 fn fetch_cli(command: &str, args: &[String]) -> Result<String> {
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let output = cli::run_checked_command(command, &args_ref)?;
-    Ok(cli::stdout_or_stderr_text(&output))
+    cli::run_lenient_command(command, &args_ref)
 }
 
 fn fetch_http_get(
