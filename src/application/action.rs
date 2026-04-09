@@ -10,9 +10,10 @@ pub enum AppAction {
     ToggleCadenceDropdown,
     SetCopilotTokenEditing(bool),
     SaveCopilotToken(String),
-    ReorderProvider {
+    /// 拖拽排序：将 Provider 移动到目标索引位置
+    MoveProviderToIndex {
         id: ProviderId,
-        direction: ProviderOrderDirection,
+        target_index: usize,
     },
     UpdateSetting(SettingChange),
     RefreshProvider {
@@ -59,12 +60,6 @@ pub enum AppAction {
         provider_id: ProviderId,
     },
     QuitApp,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ProviderOrderDirection {
-    Up,
-    Down,
 }
 
 #[derive(Debug, Clone)]

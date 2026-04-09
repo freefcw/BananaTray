@@ -31,7 +31,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`AppSettings`** — persisted configuration: theme, refresh interval, hotkey, auto-hide, provider toggles, provider ordering, notification preferences, toolbar visibility
   - `is_provider_enabled()` / `set_provider_enabled()` — per-provider on/off
   - `ordered_providers()` — returns providers in user-customized order (with fallback to default)
-  - `move_provider_up()` / `move_provider_down()` — reorder providers in navigation
+  - `move_provider_to_index()` — reorder providers via drag-and-drop (arbitrary index)
 - **`AppTheme`** — `Light` | `Dark`
 - **`ProviderSettings`** — provider-specific config (currently only `github_token` for Copilot)
 

@@ -1,7 +1,5 @@
 use crate::app_state::{AppSession, SettingsTab};
-use crate::application::{
-    AppAction, AppEffect, ProviderOrderDirection, SettingChange, TrayIconRequest,
-};
+use crate::application::{AppAction, AppEffect, SettingChange, TrayIconRequest};
 use crate::models::{NavTab, ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use log::{debug, info};
@@ -40,14 +38,11 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.copilot_token_editing = false;
             push_render(&mut effects);
         }
-        AppAction::ReorderProvider { id, direction } => {
+        AppAction::MoveProviderToIndex { id, target_index } => {
             let custom_ids = session.provider_store.custom_provider_ids();
-            let moved = match direction {
-                ProviderOrderDirection::Up => session.settings.move_provider_up(&id, &custom_ids),
-                ProviderOrderDirection::Down => {
-                    session.settings.move_provider_down(&id, &custom_ids)
-                }
-            };
+            let moved = session
+                .settings
+                .move_provider_to_index(&id, target_index, &custom_ids);
             if moved {
                 effects.push(AppEffect::PersistSettings);
                 push_render(&mut effects);
@@ -1760,5 +1755,49 @@ mod tests {
             e,
             AppEffect::DeleteCustomProviderYaml { .. }
         )));
+    }
+
+    // ── MoveProviderToIndex（拖拽排序）──────────────────
+
+    #[test]
+    fn move_provider_to_index_persists_and_renders() {
+        let mut session = make_session();
+        // Claude 默认在 index 0，移动到末尾以确保触发状态变更
+        let total = ProviderKind::all().len();
+        let effects = reduce(
+            &mut session,
+            AppAction::MoveProviderToIndex {
+                id: pid(ProviderKind::Claude),
+                target_index: total - 1,
+            },
+        );
+
+        assert!(has_effect(&effects, |e| matches!(
+            e,
+            AppEffect::PersistSettings
+        )));
+        assert!(has_render(&effects));
+    }
+
+    #[test]
+    fn move_provider_to_same_index_produces_no_effects() {
+        let mut session = make_session();
+        // 首先获取 claude 的当前位置
+        let custom_ids = session.provider_store.custom_provider_ids();
+        let ordered = session.settings.ordered_provider_ids(&custom_ids);
+        let claude_index = ordered
+            .iter()
+            .position(|id| *id == pid(ProviderKind::Claude))
+            .unwrap();
+
+        let effects = reduce(
+            &mut session,
+            AppAction::MoveProviderToIndex {
+                id: pid(ProviderKind::Claude),
+                target_index: claude_index,
+            },
+        );
+
+        assert!(effects.is_empty());
     }
 }

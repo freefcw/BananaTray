@@ -19,7 +19,7 @@ fn make_session(
 }
 
 #[test]
-fn settings_providers_tab_marks_reorder_boundaries() {
+fn settings_providers_tab_respects_order_and_selection() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings {
         provider: crate::models::ProviderConfig {
@@ -45,12 +45,11 @@ fn settings_providers_tab_marks_reorder_boundaries() {
     let view_state = settings_providers_tab_view_state(&session);
 
     assert_eq!(view_state.items[0].id, pid(ProviderKind::Gemini));
-    assert!(!view_state.items[0].can_move_up);
-    assert!(view_state.items[0].can_move_down);
+    assert!(!view_state.items[0].is_selected);
     assert_eq!(view_state.items[1].id, pid(ProviderKind::Claude));
     assert!(view_state.items[1].is_selected);
-    assert!(view_state.items[1].can_move_up);
-    assert!(view_state.items[1].can_move_down);
+    assert_eq!(view_state.items[2].id, pid(ProviderKind::Copilot));
+    assert!(!view_state.items[2].is_selected);
 }
 
 #[test]
