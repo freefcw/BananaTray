@@ -64,7 +64,7 @@ impl Render for DragPreview {
 // Sidebar 渲染函数
 // ============================================================================
 
-/// Provider 行内容：icon + 名称 + 启用标识点
+/// Provider 行内容：拖拽手柄 + icon + 名称 + 启用标识点
 fn render_sidebar_item_content(
     icon: String,
     display_name: String,
@@ -83,6 +83,21 @@ fn render_sidebar_item_content(
     } else {
         theme.text.muted
     };
+
+    // 拖拽手柄：六点网格图标，基于主题 muted 色降低透明度暗示可拖动
+    let mut drag_handle_color = theme.text.muted;
+    drag_handle_color.a = 0.35;
+    let drag_handle = div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .flex_none()
+        .w(px(10.0))
+        .child(render_svg_icon(
+            "src/icons/drag-handle.svg",
+            px(10.0),
+            drag_handle_color,
+        ));
 
     // 名称行：名字 + 启用圆点
     let name_row = div().flex().items_center().gap(px(8.0)).flex_1().child(
@@ -107,10 +122,12 @@ fn render_sidebar_item_content(
     div()
         .flex()
         .items_center()
-        .gap(px(10.0))
-        .px(px(12.0))
+        .gap(px(6.0))
+        .pl(px(4.0))
+        .pr(px(12.0))
         .h(px(40.0))
         .w_full()
+        .child(drag_handle)
         .child(render_provider_icon(icon, px(20.0), icon_color))
         .child(name_row)
 }
