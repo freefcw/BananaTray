@@ -1,6 +1,6 @@
 use crate::application::{reduce, AppAction, AppEffect, DebugNotificationKind};
 use crate::models::ConnectionStatus;
-use crate::notification::{send_system_notification, QuotaAlert};
+use crate::platform::notification::{send_system_notification, QuotaAlert};
 use crate::refresh::RefreshRequest;
 use crate::ui::{persist_settings, schedule_open_settings_window, AppState};
 use gpui::*;
@@ -117,7 +117,7 @@ fn run_effect_in_window(
             window.remove_window();
             schedule_open_settings_window(state.clone(), display_id, cx);
         }
-        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
+        AppEffect::OpenUrl(url) => crate::platform::system::open_url(&url),
         AppEffect::ApplyTrayIcon(request) => crate::tray::apply_tray_icon(cx, request),
         AppEffect::QuitApp => cx.quit(),
         other => run_common_effect(state, other),
@@ -128,7 +128,7 @@ fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut 
     match effect {
         AppEffect::Render => notify_view_entity(state, cx),
         AppEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
-        AppEffect::OpenUrl(url) => crate::utils::platform::open_url(&url),
+        AppEffect::OpenUrl(url) => crate::platform::system::open_url(&url),
         AppEffect::ApplyTrayIcon(request) => crate::tray::apply_tray_icon(cx, request),
         AppEffect::QuitApp => cx.quit(),
         other => run_common_effect(state, other),
@@ -162,7 +162,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
         AppEffect::SendPlainNotification { title, body } => {
             // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
             std::thread::spawn(move || {
-                crate::notification::send_plain_notification(&title, &body);
+                crate::platform::notification::send_plain_notification(&title, &body);
             });
         }
         AppEffect::SendDebugNotification { kind, with_sound } => {
@@ -171,13 +171,13 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
         AppEffect::OpenLogDirectory => {
             let log_path = state.borrow().log_path.clone();
             if let Some(path) = log_path {
-                crate::utils::platform::open_path_in_finder(&path);
+                crate::platform::system::open_path_in_finder(&path);
             } else {
                 warn!(target: "runtime", "OpenLogDirectory: log_path not available");
             }
         }
         AppEffect::CopyToClipboard(text) => {
-            crate::utils::platform::copy_to_clipboard(&text);
+            crate::platform::system::copy_to_clipboard(&text);
         }
         AppEffect::StartDebugRefresh(kind) => {
             use crate::utils::log_capture::LogCapture;
@@ -295,7 +295,7 @@ fn send_refresh_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) 
 
 fn sync_auto_launch(enabled: bool) {
     std::thread::spawn(move || {
-        crate::auto_launch::sync(enabled);
+        crate::platform::auto_launch::sync(enabled);
     });
 }
 

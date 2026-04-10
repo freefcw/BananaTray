@@ -1,7 +1,7 @@
 use super::SettingsView;
+use crate::platform::system::open_url;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
-use crate::utils::platform::open_url;
 use gpui::*;
 use rust_i18n::t;
 

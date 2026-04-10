@@ -8,10 +8,9 @@ rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod app_state;
 pub mod application;
-pub mod auto_launch;
 pub mod i18n;
 pub mod models;
-pub mod notification;
+pub mod platform;
 pub mod providers;
 pub mod refresh;
 pub mod settings_store;
@@ -20,10 +19,7 @@ pub mod theme;
 mod theme_tests;
 pub mod utils;
 
-// app 模块包含 GPUI 代码，测试时可能触发编译器 bug
-// 因此默认不导出，需要的话可以通过 feature 启用
-#[cfg(feature = "app")]
-pub mod infra;
+// GPUI 视图层和运行时模块，测试时不编译
 #[cfg(feature = "app")]
 pub mod runtime;
 #[cfg(feature = "app")]

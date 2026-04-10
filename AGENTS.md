@@ -32,10 +32,17 @@ src/
   providers/         — AiProvider trait + 14 implementations + ProviderManager
     common/          — Shared provider infra (CLI, JWT, HTTP client, PTY runner)
     error_presenter.rs — Provider error → user-facing message mapping
+  platform/          — Platform adaptation layer
+    assets.rs        — GPUI asset loading (multi-platform path resolution)
+    auto_launch.rs   — Launch at login (macOS SMAppService / Linux XDG)
+    logging.rs       — Log system init (fern + panic hook)
+    notification.rs  — System notifications + quota alert state machine
+    system.rs          — Platform utils (open URL, clipboard, system info)
+    single_instance.rs — Single instance detection (IPC local socket)
   tray/              — TrayController, multi-display positioning, icon management
   refresh/           — RefreshCoordinator (background polling thread)
   runtime/           — Effect executor (GPUI bridge)
-  utils/             — Text/time helpers, log capture, platform utils
+  utils/             — Text/time helpers, log capture
 ```
 
 Each `src/` subdirectory has its own `README.md` with detailed documentation.

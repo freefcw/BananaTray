@@ -1,6 +1,6 @@
 use crate::application::DebugNotificationKind;
 use crate::models::{ProviderId, StatusLevel, TrayIconStyle};
-use crate::notification::QuotaAlert;
+use crate::platform::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
 
 /// 托盘图标请求 — 区分用户手选的静态样式和动态模式下的状态着色

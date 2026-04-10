@@ -49,7 +49,7 @@ Aggregation registry holding all provider implementations:
 ## Design Notes
 
 - Provider layer returns structured facts; it does not format UI strings.
-- Error presentation belongs to `src/provider_error_presenter.rs`.
+- Error presentation belongs to `src/providers/error_presenter.rs`.
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
 - Only introduce extra traits when there are real multiple implementations (for example Claude probe strategies).
 - `Claude::UsageProbe` and `Antigravity::ParseStrategy` are intentionally separate:
@@ -89,7 +89,7 @@ Aggregation registry holding all provider implementations:
 ## Constraints
 
 - Providers run on background threads (via `smol::unblock`). They must be `Send + Sync`.
-- HTTP requests should use `crate::utils::http_client` (shared ureq agent).
-- CLI-based providers should use `crate::utils::interactive_runner::InteractiveRunner` for PTY-based execution when interactive behavior is required.
+- HTTP requests should use `crate::providers::common::http_client` (shared ureq agent).
+- CLI-based providers should use `crate::providers::common::runner::InteractiveRunner` for PTY-based execution when interactive behavior is required.
 - Return `ProviderError` variants (not raw strings) for structured classification.
 - The `descriptor().metadata.kind` must match the `ProviderKind` variant — `ProviderManager::register()` asserts this.

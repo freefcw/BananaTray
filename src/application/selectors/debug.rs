@@ -50,7 +50,7 @@ impl DebugContext {
             log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
             log_path,
             log_file_size,
-            os_info: crate::utils::platform::os_info(),
+            os_info: crate::platform::system::os_info(),
             locale: rust_i18n::locale().to_string(),
             settings_path: crate::settings_store::config_path().display().to_string(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -172,7 +172,7 @@ fn build_log_view_state(ctx: &DebugContext) -> LogViewState {
         log_path: ctx.log_path.as_ref().map(|p| p.display().to_string()),
         log_file_size: ctx
             .log_file_size
-            .map(crate::utils::platform::format_file_size),
+            .map(crate::platform::system::format_file_size),
     }
 }
 
