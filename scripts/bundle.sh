@@ -74,11 +74,20 @@ copy_runtime_resources "$RESOURCES_DIR"
 echo "✅ App Bundle 已创建: $APP_DIR"
 
 # ------------------------------------------------------------------
-# 3. Ad-hoc 代码签名（通知权限需要）
+# 3. Hardened Runtime 代码签名
 # ------------------------------------------------------------------
-echo "🔏 Ad-hoc 代码签名..."
-codesign --force --deep --sign - "$APP_DIR"
-echo "✅ 签名完成"
+# 使用 hardened runtime (--options runtime) + entitlements 签名。
+# 相比简单的 ad-hoc 签名，hardened runtime 让 macOS 能更稳定地
+# 记住 TCC 授权，避免每次重新构建后弹出"需要访问网络卷宗"的弹窗。
+#
+# 如果有 Apple Developer ID，可将 "-" 替换为证书名称以彻底消除弹窗。
+ENTITLEMENTS="$PROJECT_DIR/resources/BananaTray.entitlements"
+echo "🔏 Hardened Runtime 代码签名..."
+codesign --force --deep --sign - \
+    --options runtime \
+    --entitlements "$ENTITLEMENTS" \
+    "$APP_DIR"
+echo "✅ 签名完成（hardened runtime + entitlements）"
 
 echo ""
 echo "📂 目录结构:"

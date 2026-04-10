@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Hardened Runtime Entitlements for BananaTray
+        ============================================
+        启用 hardened runtime 后，macOS 会更稳定地记住 TCC 授权，
+        避免每次重新构建后都弹出"需要访问网络卷宗"的弹窗。
+
+        注意：这些 entitlement 仅在 codesign 时指定 ‑‑options runtime 时生效。
+    -->
+
+    <!-- GPU / Metal：GPUI 框架需要分配可执行内存页 -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- JIT：portable-pty / GPUI 可能使用 mmap(PROT_EXEC) -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- Apple Events：osascript 通知 fallback 需要发送 Apple Events -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>
