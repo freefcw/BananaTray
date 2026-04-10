@@ -76,11 +76,12 @@ ensure_build() {
 
 # 复制运行时资源 (SVG 图标 + tray_icon.png) 到目标目录
 # 用法: copy_runtime_resources <target_dir>
-#   target_dir 下会创建 src/icons/ 和 src/tray_icon.png
+#   target_dir 下会创建 src/icons/ 和 src/tray/tray_icon.png
 copy_runtime_resources() {
     local target_dir="$1"
     mkdir -p "$target_dir/src/icons"
-    cp "$PROJECT_DIR/src/tray_icon.png" "$target_dir/src/tray_icon.png"
+    mkdir -p "$target_dir/src/tray"
+    cp "$PROJECT_DIR/src/tray/tray_icon.png" "$target_dir/src/tray/tray_icon.png"
     cp "$PROJECT_DIR"/src/icons/*.svg "$target_dir/src/icons/"
 }
 
@@ -90,10 +91,10 @@ copy_runtime_resources() {
 # 支持 ImageMagick (convert)、macOS (sips)，否则直接复制原图
 install_icons() {
     local prefix_dir="$1"
-    local icon_src="$PROJECT_DIR/src/tray_icon.png"
+    local icon_src="$PROJECT_DIR/src/tray/tray_icon.png"
 
     if [ ! -f "$icon_src" ]; then
-        echo "⚠️  未找到图标源文件 $icon_src，跳过图标安装"
+        echo "⚠️  未找到图标源文件 ${icon_src}，跳过图标安装"
         return
     fi
 
@@ -118,7 +119,7 @@ install_metainfo() {
     local metainfo_src="$PROJECT_DIR/resources/linux/com.bananatray.app.metainfo.xml"
 
     if [ ! -f "$metainfo_src" ]; then
-        echo "⚠️  未找到 metainfo 文件 $metainfo_src，跳过"
+        echo "⚠️  未找到 metainfo 文件 ${metainfo_src}，跳过"
         return
     fi
 
