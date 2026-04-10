@@ -346,11 +346,7 @@ impl AppView {
                 div()
                     .text_size(px(13.0))
                     .line_height(relative(1.2))
-                    .font_weight(if is_active {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(text_color)
                     .child(label),
             )
