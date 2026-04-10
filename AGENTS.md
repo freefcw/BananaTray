@@ -11,6 +11,7 @@ BananaTray — cross-platform system tray app for monitoring AI coding assistant
 3. If provider-related changes → update `docs/providers.md`
 4. If architecture-level changes → update `docs/architecture.md`
 5. When adding a new subdirectory under `src/`, create a `README.md` for it
+6. **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
 
 ## Commands
 
