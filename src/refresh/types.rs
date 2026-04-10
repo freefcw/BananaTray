@@ -1,0 +1,69 @@
+use crate::models::{ErrorKind, ProviderId, ProviderStatus, RefreshData};
+
+/// 刷新触发原因
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum RefreshReason {
+    Startup,
+    Periodic,
+    Manual,
+    ProviderToggled,
+}
+
+/// 发送给协调器的请求
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum RefreshRequest {
+    RefreshAll {
+        reason: RefreshReason,
+    },
+    RefreshOne {
+        id: ProviderId,
+        reason: RefreshReason,
+    },
+    UpdateConfig {
+        interval_mins: u64,
+        enabled: Vec<ProviderId>,
+    },
+    /// 热重载自定义 Provider（重建 ProviderManager 快照）
+    ReloadProviders,
+    Shutdown,
+}
+
+/// 协调器发出的事件
+#[derive(Debug)]
+pub enum RefreshEvent {
+    Started {
+        id: ProviderId,
+    },
+    Finished(RefreshOutcome),
+    /// 自定义 Provider 热重载完成，携带最新的 Provider 状态列表
+    ProvidersReloaded {
+        statuses: Vec<ProviderStatus>,
+    },
+}
+
+/// 单个 Provider 的刷新结果
+#[derive(Debug)]
+pub struct RefreshOutcome {
+    pub id: ProviderId,
+    pub result: RefreshResult,
+}
+
+/// 刷新结果类型
+#[derive(Debug)]
+pub enum RefreshResult {
+    Success {
+        data: RefreshData,
+    },
+    Unavailable {
+        message: String,
+    },
+    Failed {
+        error: String,
+        error_kind: ErrorKind,
+    },
+    SkippedCooldown,
+    SkippedInFlight,
+    SkippedDisabled,
+}
