@@ -1,4 +1,4 @@
-use crate::app_state::SettingsTab;
+use super::state::SettingsTab;
 use crate::models::{AppTheme, NavTab, ProviderId, ProviderKind, QuotaDisplayMode, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason};
 

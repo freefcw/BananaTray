@@ -6,7 +6,6 @@
 
 rust_i18n::i18n!("locales", fallback = "en");
 
-pub mod app_state;
 pub mod application;
 pub mod i18n;
 pub mod models;

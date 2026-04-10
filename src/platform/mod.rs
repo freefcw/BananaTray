@@ -21,7 +21,7 @@ pub(crate) mod single_instance;
 pub(crate) use assets::Assets;
 
 // --- 纯逻辑 / 平台原生模块 ---
-// 被 app_state、application 等 GPUI-free 模块引用，必须始终可编译
+// 被 application::state、application 等 GPUI-free 模块引用，必须始终可编译
 pub mod auto_launch;
 pub(crate) mod logging;
 pub mod notification;

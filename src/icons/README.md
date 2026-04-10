@@ -13,17 +13,17 @@ SVG icon assets used by the GPUI UI layer.
 ## Current Icons
 
 ### Provider Icons
-`provider-amp.svg`, `provider-claude.svg`, `provider-codex.svg`, `provider-copilot.svg`, `provider-cursor.svg`, `provider-gemini.svg`, `provider-kilo.svg`, `provider-kimi.svg`, `provider-kiro.svg`, `provider-minimax.svg`, `provider-opencode.svg`, `provider-vertexai.svg`
+`provider-amp.svg`, `provider-antigravity.svg`, `provider-claude.svg`, `provider-codex.svg`, `provider-copilot.svg`, `provider-cursor.svg`, `provider-gemini.svg`, `provider-kilo.svg`, `provider-kimi.svg`, `provider-kiro.svg`, `provider-minimax.svg`, `provider-opencode.svg`, `provider-vertexai.svg`, `provider-windsurf.svg`
 
 ### UI Icons
-`about.svg`, `advanced.svg`, `close.svg`, `compass.svg`, `display.svg`, `overview.svg`, `quit.svg`, `refresh.svg`, `settings.svg`, `status.svg`, `switch.svg`, `usage.svg`
+`about.svg`, `advanced.svg`, `chevron-left.svg`, `chevron-right.svg`, `close.svg`, `compass.svg`, `display.svg`, `drag-handle.svg`, `overview.svg`, `plus.svg`, `quit.svg`, `refresh.svg`, `settings.svg`, `status.svg`, `switch.svg`, `trash.svg`, `usage.svg`
 
 ## Usage in Code
 
-Icons are loaded through GPUI's `AssetSource` (see `src/assets.rs`). Rendered via:
+Icons are loaded through GPUI's `AssetSource` (see `src/platform/assets.rs`). Rendered via:
 
 ```rust
-crate::app::widgets::render_svg_icon("src/icons/settings.svg", px(15.0), color)
+crate::ui::widgets::render_svg_icon("src/icons/settings.svg", px(15.0), color)
 ```
 
 The path is relative to the asset root, which resolves to:

@@ -1,6 +1,16 @@
 # AGENTS.md
 
-BananaTray — cross-platform system tray app for monitoring AI coding assistant quota usage. Rust (nightly) + GPUI.
+BananaTray — cross-platform system tray app for monitoring AI coding assistant quota usage. Rust (stable) + GPUI.
+
+## RULES
+
+**MUST**: after update source, should update related docs
+
+1. If module structure changes (add/remove/rename files) → update `AGENTS.md` Module Map section
+2. If a module's public API or architecture changes → update that module's `README.md`
+3. If provider-related changes → update `docs/providers.md`
+4. If architecture-level changes → update `docs/architecture.md`
+5. When adding a new subdirectory under `src/`, create a `README.md` for it
 
 ## Commands
 
@@ -26,11 +36,20 @@ src/
     views/           — AppView, nav, provider panel, tray settings
     settings_window/ — Settings window tabs and provider management
     widgets/         — Reusable UI components
-  app_state.rs       — Pure-logic sub-states (GPUI-free, testable)
-  application/       — Action-Reducer-Effect pipeline (reducer_tests.rs separated)
+  application/       — Action-Reducer-Effect pipeline
+    state.rs         — Pure-logic session state (GPUI-free, testable)
+    reducer.rs       — Pure state transitions (reducer_tests.rs separated)
+    action.rs        — Action enum definitions
+    effect.rs        — Side-effect declarations
+    selectors/       — ViewModel derivation from AppSession
   models/            — Core data types (GPUI-free)
+    settings/        — User preferences (4 sub-structs + migration + domain methods)
+    test_helpers.rs  — Test fixture constructors for ProviderStatus, QuotaInfo, etc.
+  icons/             — SVG icon assets (provider + UI icons)
   providers/         — AiProvider trait + 14 implementations + ProviderManager
     common/          — Shared provider infra (CLI, JWT, HTTP client, PTY runner)
+    custom/          — YAML declarative custom provider system
+    codeium_family/  — Shared Codeium-family logic (Windsurf + Antigravity)
     error_presenter.rs — Provider error → user-facing message mapping
   platform/          — Platform adaptation layer
     assets.rs        — GPUI asset loading (multi-platform path resolution)
@@ -52,7 +71,7 @@ Each `src/` subdirectory has its own `README.md` with detailed documentation.
 
 ## Key Constraints
 
-1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`app_state.rs`, `models/`). The `ui` module is `cfg(feature = "app")` gated.
+1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The `ui` module is `cfg(feature = "app")` gated.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
 

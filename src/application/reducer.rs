@@ -1,4 +1,4 @@
-use crate::app_state::{AppSession, SettingsTab};
+use super::state::{AppSession, SettingsTab};
 use crate::application::{AppAction, AppEffect, SettingChange, TrayIconRequest};
 use crate::models::{NavTab, ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};

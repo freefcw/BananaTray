@@ -8,7 +8,7 @@ mod tray;
 // ViewModel 类型定义（所有 selector 的共享产出物）
 // ============================================================================
 
-use crate::app_state::HeaderStatusKind;
+use super::state::HeaderStatusKind;
 use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo};
 use crate::providers::custom::generator::NewApiEditData;
 

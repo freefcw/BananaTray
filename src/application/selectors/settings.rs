@@ -2,9 +2,9 @@
 //!
 //! 将 AppSession → Settings ViewModel 的转换逻辑集中于此。
 
+use super::super::state::AppSession;
 use super::format::format_last_updated;
 use super::*;
-use crate::app_state::AppSession;
 use crate::models::{ConnectionStatus, ProviderId, ProviderKind, ProviderStatus};
 use rust_i18n::t;
 

@@ -2,9 +2,9 @@
 //!
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
+use super::super::state::{provider_panel_flags, AppSession};
 use super::format::format_last_updated;
 use super::*;
-use crate::app_state::{provider_panel_flags, AppSession};
 use crate::models::{AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderId, ProviderStatus};
 use rust_i18n::t;
 

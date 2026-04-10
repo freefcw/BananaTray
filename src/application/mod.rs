@@ -2,6 +2,7 @@ mod action;
 pub(crate) mod effect;
 mod reducer;
 mod selectors;
+pub(crate) mod state;
 
 pub use action::{AppAction, DebugNotificationKind, SettingChange};
 pub use effect::{AppEffect, TrayIconRequest};
@@ -17,3 +18,4 @@ pub use selectors::{
     SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
+pub use state::{AppSession, HeaderStatusKind, SettingsTab};
