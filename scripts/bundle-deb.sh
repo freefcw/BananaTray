@@ -45,34 +45,40 @@ Description: $DESCRIPTION
 Depends: libgtk-3-0, libayatana-appindicator3-1
 EOF
 
-# 二进制
-mkdir -p "$PKG_DIR/usr/bin"
-cp "$BINARY" "$PKG_DIR/usr/bin/$APP_NAME"
-chmod 755 "$PKG_DIR/usr/bin/$APP_NAME"
-
-# .desktop 启动器
-mkdir -p "$PKG_DIR/usr/share/applications"
-cp "$PROJECT_DIR/resources/linux/bananatray.desktop" \
-   "$PKG_DIR/usr/share/applications/$APP_NAME.desktop"
-
-# 图标 (多尺寸)
-ICON_SRC="$PROJECT_DIR/src/tray_icon.png"
-if [ -f "$ICON_SRC" ]; then
-    for size in 16 32 48 64 128 256; do
-        ICON_DIR="$PKG_DIR/usr/share/icons/hicolor/${size}x${size}/apps"
-        mkdir -p "$ICON_DIR"
-        if command -v convert &>/dev/null; then
-            convert "$ICON_SRC" -resize "${size}x${size}" "$ICON_DIR/$APP_NAME.png"
-        elif command -v sips &>/dev/null; then
-            sips -z "$size" "$size" "$ICON_SRC" --out "$ICON_DIR/$APP_NAME.png" >/dev/null 2>&1
-        else
-            cp "$ICON_SRC" "$ICON_DIR/$APP_NAME.png"
-        fi
-    done
+# DEBIAN/postinst — 安装后更新 desktop 数据库和图标缓存
+cat > "$PKG_DIR/DEBIAN/postinst" <<'POSTINST_EOF'
+#!/bin/sh
+set -e
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
 fi
+if [ -d /usr/share/icons/hicolor ]; then
+    touch --no-create /usr/share/icons/hicolor || true
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache /usr/share/icons/hicolor || true
+    fi
+fi
+POSTINST_EOF
+chmod 755 "$PKG_DIR/DEBIAN/postinst"
 
-# 运行时资源
-copy_runtime_resources "$PKG_DIR/usr/share/$APP_NAME"
+# DEBIAN/postrm — 卸载后清理
+cat > "$PKG_DIR/DEBIAN/postrm" <<'POSTRM_EOF'
+#!/bin/sh
+set -e
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
+fi
+if [ -d /usr/share/icons/hicolor ]; then
+    touch --no-create /usr/share/icons/hicolor || true
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache /usr/share/icons/hicolor || true
+    fi
+fi
+POSTRM_EOF
+chmod 755 "$PKG_DIR/DEBIAN/postrm"
+
+# 标准安装树 (usr/bin, desktop, icons, metainfo, resources)
+assemble_install_tree "$PKG_DIR"
 
 # ------------------------------------------------------------------
 # 2. 构建 .deb 包

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.bananatray.app</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>BananaTray</name>
+  <summary>AI Coding Assistant Quota Monitor</summary>
+  <description>
+    <p>
+      BananaTray is a cross-platform system tray application for monitoring
+      AI coding assistant quota usage. It supports real-time quota tracking
+      for multiple AI providers including Claude, Gemini, GitHub Copilot,
+      Codex, Cursor, and more.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>System tray integration with compact quota popover</li>
+      <li>14 AI provider integrations via APIs, CLIs, and local credentials</li>
+      <li>Configurable auto-refresh with per-provider cooldown</li>
+      <li>Quota alerts via system notifications</li>
+      <li>Launch at login support</li>
+      <li>Global hotkey toggle</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">bananatray.desktop</launchable>
+
+  <url type="homepage">https://github.com/freefcw/BananaTray</url>
+  <url type="bugtracker">https://github.com/freefcw/BananaTray/issues</url>
+
+  <provides>
+    <binary>bananatray</binary>
+  </provides>
+
+  <categories>
+    <category>Utility</category>
+    <category>System</category>
+    <category>Monitor</category>
+  </categories>
+
+  <keywords>
+    <keyword>AI</keyword>
+    <keyword>quota</keyword>
+    <keyword>tray</keyword>
+    <keyword>monitor</keyword>
+    <keyword>Claude</keyword>
+    <keyword>Copilot</keyword>
+    <keyword>Gemini</keyword>
+    <keyword>Codex</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2025-01-01">
+      <description>
+        <p>Initial release with support for 14 AI providers.</p>
+      </description>
+    </release>
+  </releases>
+</component>

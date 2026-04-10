@@ -48,27 +48,16 @@ fi
 # ------------------------------------------------------------------
 echo "📦 组装 AppDir..."
 rm -rf "$APPDIR"
-mkdir -p "$APPDIR/usr/bin"
-mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
-# 二进制
-cp "$BINARY" "$APPDIR/usr/bin/$APP_NAME"
-chmod 755 "$APPDIR/usr/bin/$APP_NAME"
+# 标准安装树 (usr/bin, desktop, icons, metainfo, resources)
+assemble_install_tree "$APPDIR"
 
-# .desktop (顶层 + 标准位置)
+# AppImage 额外要求：顶层 .desktop 和 .png（appimagetool 规范）
 cp "$PROJECT_DIR/resources/linux/bananatray.desktop" "$APPDIR/$APP_NAME.desktop"
-mkdir -p "$APPDIR/usr/share/applications"
-cp "$PROJECT_DIR/resources/linux/bananatray.desktop" "$APPDIR/usr/share/applications/$APP_NAME.desktop"
-
-# 图标
 ICON_SRC="$PROJECT_DIR/src/tray_icon.png"
 if [ -f "$ICON_SRC" ]; then
     cp "$ICON_SRC" "$APPDIR/$APP_NAME.png"
-    cp "$ICON_SRC" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
 fi
-
-# 运行时资源
-copy_runtime_resources "$APPDIR/usr/share/$APP_NAME"
 
 # AppRun 启动脚本
 cat > "$APPDIR/AppRun" <<'APPRUN_EOF'

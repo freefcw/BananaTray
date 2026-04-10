@@ -1,0 +1,61 @@
+name: Release Linux
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            libwayland-dev \
+            dpkg-dev \
+            rpm \
+            imagemagick \
+            libfuse2
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Build .deb package
+        run: bash scripts/bundle-deb.sh --skip-build
+
+      - name: Build .rpm package
+        run: bash scripts/bundle-rpm.sh --skip-build
+
+      - name: Build AppImage
+        run: bash scripts/bundle-appimage.sh --skip-build
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/bundle/*.deb
+            target/release/bundle/*.rpm
+            target/release/bundle/*.AppImage
+          draft: true
+          generate_release_notes: true
