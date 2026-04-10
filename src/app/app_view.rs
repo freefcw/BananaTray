@@ -61,7 +61,7 @@ impl AppView {
                 (theme.badge.healthy, theme.badge.synced_bg)
             }
             crate::app_state::HeaderStatusKind::Syncing => {
-                (theme.text.accent, rgba(0x3b82f61a).into())
+                (theme.text.accent, theme.badge.syncing_bg)
             }
             crate::app_state::HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
             crate::app_state::HeaderStatusKind::Offline => {

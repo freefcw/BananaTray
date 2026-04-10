@@ -206,8 +206,8 @@ pub(crate) fn render_quota_bar(
                 remaining_pct as f32 / 100.0
             };
             let anim_id = ElementId::Name(format!("quota-bar-{}-{}", q.label, generation).into());
-            let gradient_start: Hsla = rgb(0x6366f1).into();
-            let gradient_mid: Hsla = rgb(0x06b6d4).into();
+            let gradient_start = theme.status.bar_gradient_start;
+            let gradient_mid = theme.status.bar_gradient_mid;
             let gradient_end = fill_color;
 
             card.child(

@@ -469,14 +469,14 @@ impl SettingsView {
                         .px(px(12.0))
                         .py(px(5.0))
                         .rounded(px(6.0))
-                        .bg(rgb(0x2d6a4f))
+                        .bg(theme.button.action_bg)
                         .cursor_pointer()
                         .hover(|s| s.opacity(0.85))
                         .child(
                             div()
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(ICON_FG))
+                                .text_color(theme.button.action_text)
                                 .child(btn_label),
                         )
                         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -521,11 +521,11 @@ impl SettingsView {
 
             for entry in &console.log_entries {
                 let level_color = match entry.level_color {
-                    LogLevelColor::Error => rgb(0xe74c3c),
-                    LogLevelColor::Warn => rgb(0xf39c12),
-                    LogLevelColor::Info => rgb(0x27ae60),
-                    LogLevelColor::Debug => rgb(0x3498db),
-                    LogLevelColor::Trace => rgb(0x95a5a6),
+                    LogLevelColor::Error => theme.log.error,
+                    LogLevelColor::Warn => theme.log.warn,
+                    LogLevelColor::Info => theme.log.info,
+                    LogLevelColor::Debug => theme.log.debug,
+                    LogLevelColor::Trace => theme.log.trace,
                 };
 
                 log_panel = log_panel.child(
