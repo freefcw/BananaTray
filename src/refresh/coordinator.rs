@@ -1,107 +1,30 @@
-use std::collections::HashMap;
+//! 刷新协调器 — 事件循环 + 并发执行。
+//!
+//! `RefreshCoordinator` 负责：
+//! 1. 主事件循环：监听请求通道和周期定时器
+//! 2. 并发刷新执行：线程池 + 结果收集
+//! 3. 结果转换：ProviderError → RefreshOutcome
+//!
+//! 所有调度决策（cooldown、eligibility、deadline）委托给 `RefreshScheduler`。
+
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use smol::channel::{Receiver, Sender};
 
-use crate::models::{ErrorKind, ProviderId, ProviderStatus, RefreshData};
+use crate::models::ProviderId;
 use crate::provider_error_presenter::ProviderErrorPresenter;
 use crate::providers::ProviderManager;
 
-// ============================================================================
-// 消息类型
-// ============================================================================
-
-/// 刷新触发原因
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum RefreshReason {
-    Startup,
-    Periodic,
-    Manual,
-    ProviderToggled,
-}
-
-/// 发送给协调器的请求
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum RefreshRequest {
-    RefreshAll {
-        reason: RefreshReason,
-    },
-    RefreshOne {
-        id: ProviderId,
-        reason: RefreshReason,
-    },
-    UpdateConfig {
-        interval_mins: u64,
-        enabled: Vec<ProviderId>,
-    },
-    /// 热重载自定义 Provider（重建 ProviderManager 快照）
-    ReloadProviders,
-    Shutdown,
-}
-
-/// 协调器发出的事件
-#[derive(Debug)]
-pub enum RefreshEvent {
-    Started {
-        id: ProviderId,
-    },
-    Finished(RefreshOutcome),
-    /// 自定义 Provider 热重载完成，携带最新的 Provider 状态列表
-    ProvidersReloaded {
-        statuses: Vec<ProviderStatus>,
-    },
-}
-
-/// 单个 Provider 的刷新结果
-#[derive(Debug)]
-pub struct RefreshOutcome {
-    pub id: ProviderId,
-    pub result: RefreshResult,
-}
-
-/// 刷新结果类型
-#[derive(Debug)]
-pub enum RefreshResult {
-    Success {
-        data: RefreshData,
-    },
-    Unavailable {
-        message: String,
-    },
-    Failed {
-        error: String,
-        error_kind: ErrorKind,
-    },
-    SkippedCooldown,
-    SkippedInFlight,
-    SkippedDisabled,
-}
-
-// ============================================================================
-// RefreshCoordinator
-// ============================================================================
+use super::scheduler::RefreshScheduler;
+use super::types::*;
 
 pub struct RefreshCoordinator {
     manager: Arc<ProviderManager>,
     request_tx: Sender<RefreshRequest>,
     request_rx: Receiver<RefreshRequest>,
     event_tx: Sender<RefreshEvent>,
-    /// Per-provider last successful refresh instant
-    last_refreshed: HashMap<ProviderId, Instant>,
-    /// Per-provider in-flight flag
-    in_flight: HashMap<ProviderId, bool>,
-    /// Current config
-    interval_mins: u64,
-    enabled_providers: Vec<ProviderId>,
+    scheduler: RefreshScheduler,
 }
-
-/// 最小 cooldown 时间（秒），防止过于频繁的刷新
-const MIN_COOLDOWN_SECS: u64 = 30;
-/// 自动刷新禁用时的检查间隔（秒）
-const DISABLED_CHECK_INTERVAL_SECS: u64 = 3600;
 
 impl RefreshCoordinator {
     pub fn new(manager: Arc<ProviderManager>, event_tx: Sender<RefreshEvent>) -> Self {
@@ -111,10 +34,7 @@ impl RefreshCoordinator {
             request_tx,
             request_rx,
             event_tx,
-            last_refreshed: HashMap::new(),
-            in_flight: HashMap::new(),
-            interval_mins: 5,
-            enabled_providers: Vec::new(),
+            scheduler: RefreshScheduler::new(),
         }
     }
 
@@ -123,54 +43,15 @@ impl RefreshCoordinator {
         self.request_tx.clone()
     }
 
-    /// Compute cooldown duration: half the interval, minimum MIN_COOLDOWN_SECS
-    fn cooldown(&self) -> Duration {
-        let interval_secs = self.interval_mins * 60;
-        let half = interval_secs / 2;
-        Duration::from_secs(half.max(MIN_COOLDOWN_SECS))
-    }
-
-    /// Check if a provider was recently refreshed (within cooldown)
-    fn is_on_cooldown(&self, id: &ProviderId) -> bool {
-        if let Some(instant) = self.last_refreshed.get(id) {
-            instant.elapsed() < self.cooldown()
-        } else {
-            false
-        }
-    }
-
-    /// Check if a provider is currently being refreshed
-    fn is_in_flight(&self, id: &ProviderId) -> bool {
-        self.in_flight.get(id).copied().unwrap_or(false)
-    }
-
-    /// Check if a provider is eligible for refresh, returning the skip reason if not.
-    fn check_eligibility(&self, id: &ProviderId, reason: RefreshReason) -> Option<RefreshResult> {
-        if !self.enabled_providers.contains(id) {
-            return Some(RefreshResult::SkippedDisabled);
-        }
-        if self.is_in_flight(id) {
-            return Some(RefreshResult::SkippedInFlight);
-        }
-        if matches!(reason, RefreshReason::Periodic | RefreshReason::Startup)
-            && self.is_on_cooldown(id)
-        {
-            log::info!(target: "refresh", "skipping {} (cooldown)", id);
-            return Some(RefreshResult::SkippedCooldown);
-        }
-        None
-    }
-
-    /// Send a skip event for an ineligible provider.
-    async fn send_skip(&self, id: ProviderId, result: RefreshResult) {
-        let _ = self
-            .event_tx
-            .send(RefreshEvent::Finished(RefreshOutcome { id, result }))
-            .await;
-    }
+    // ========================================================================
+    // 结果转换
+    // ========================================================================
 
     /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
-    fn build_outcome(id: ProviderId, result: anyhow::Result<RefreshData>) -> RefreshOutcome {
+    fn build_outcome(
+        id: ProviderId,
+        result: anyhow::Result<crate::models::RefreshData>,
+    ) -> RefreshOutcome {
         match result {
             Ok(data) => {
                 log::info!(target: "refresh", "provider {} refreshed: {} quotas", id, data.quotas.len());
@@ -207,28 +88,44 @@ impl RefreshCoordinator {
         }
     }
 
+    // ========================================================================
+    // 事件发送
+    // ========================================================================
+
+    /// Send a skip event for an ineligible provider.
+    async fn send_skip(&self, id: ProviderId, result: RefreshResult) {
+        let _ = self
+            .event_tx
+            .send(RefreshEvent::Finished(RefreshOutcome { id, result }))
+            .await;
+    }
+
     /// Record a completed outcome: clear in-flight, update last_refreshed, emit event.
     async fn record_outcome(&mut self, outcome: RefreshOutcome) {
         let id = outcome.id.clone();
-        self.in_flight.insert(id.clone(), false);
+        self.scheduler.clear_in_flight(&id);
         if matches!(outcome.result, RefreshResult::Success { .. }) {
-            self.last_refreshed.insert(id, Instant::now());
+            self.scheduler.record_success(&id);
         }
         let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
     }
 
     /// Mark a provider as in-flight and notify UI.
     async fn begin_refresh(&mut self, id: &ProviderId) {
-        self.in_flight.insert(id.clone(), true);
+        self.scheduler.mark_in_flight(id);
         let _ = self
             .event_tx
             .send(RefreshEvent::Started { id: id.clone() })
             .await;
     }
 
+    // ========================================================================
+    // 刷新执行
+    // ========================================================================
+
     /// Refresh a single provider (used by RefreshOne).
     async fn execute_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
-        if let Some(skip) = self.check_eligibility(&id, reason) {
+        if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
             self.send_skip(id, skip).await;
             return;
         }
@@ -248,7 +145,7 @@ impl RefreshCoordinator {
         // Phase 1: Filter eligible providers, send Started events
         let mut to_refresh = Vec::new();
         for id in ids {
-            if let Some(skip) = self.check_eligibility(&id, reason) {
+            if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
                 self.send_skip(id, skip).await;
                 continue;
             }
@@ -285,22 +182,22 @@ impl RefreshCoordinator {
         }
     }
 
+    // ========================================================================
+    // 事件循环
+    // ========================================================================
+
     /// Run the coordinator event loop. This is the main entry point.
     /// It processes requests and runs periodic refresh in a single loop.
     pub async fn run(mut self) {
         log::info!(target: "refresh", "coordinator started");
 
         loop {
-            // Calculate next periodic refresh time
-            let interval = if self.interval_mins > 0 {
-                Duration::from_secs(self.interval_mins * 60)
-            } else {
-                Duration::from_secs(DISABLED_CHECK_INTERVAL_SECS)
-            };
+            // 使用绝对 deadline 计算剩余等待时间，避免收到请求时定时器被重置
+            let wait = self.scheduler.time_until_next_periodic();
 
             // Wait for either a request or the periodic timer
             let request = smol::future::or(async { Some(self.request_rx.recv().await) }, async {
-                smol::Timer::after(interval).await;
+                smol::Timer::after(wait).await;
                 None
             })
             .await;
@@ -308,19 +205,21 @@ impl RefreshCoordinator {
             match request {
                 // Timer fired — periodic refresh
                 None => {
-                    if self.interval_mins == 0 {
-                        continue; // auto-refresh disabled
+                    if self.scheduler.is_auto_refresh_disabled() {
+                        self.scheduler.advance_disabled_deadline();
+                        continue;
                     }
-                    log::info!(target: "refresh", "periodic refresh triggered (every {} min)", self.interval_mins);
-                    let kinds: Vec<_> = self.enabled_providers.clone();
+                    log::info!(target: "refresh", "periodic refresh triggered (every {} min)", self.scheduler.interval_mins());
+                    let kinds: Vec<_> = self.scheduler.enabled_providers().to_vec();
                     self.execute_refresh_concurrent(kinds, RefreshReason::Periodic)
                         .await;
+                    self.scheduler.advance_periodic_deadline();
                 }
                 // Request received
                 Some(Ok(req)) => match req {
                     RefreshRequest::RefreshAll { reason } => {
                         log::info!(target: "refresh", "refresh all requested ({:?})", reason);
-                        let kinds: Vec<_> = self.enabled_providers.clone();
+                        let kinds: Vec<_> = self.scheduler.enabled_providers().to_vec();
                         self.execute_refresh_concurrent(kinds, reason).await;
                     }
                     RefreshRequest::RefreshOne { id, reason } => {
@@ -331,9 +230,7 @@ impl RefreshCoordinator {
                         interval_mins,
                         enabled,
                     } => {
-                        log::info!(target: "refresh", "config updated: interval={}min, {} providers enabled", interval_mins, enabled.len());
-                        self.interval_mins = interval_mins;
-                        self.enabled_providers = enabled;
+                        self.scheduler.update_config(interval_mins, enabled);
                     }
                     RefreshRequest::ReloadProviders => {
                         log::info!(target: "refresh", "reloading custom providers");
@@ -343,8 +240,7 @@ impl RefreshCoordinator {
                         // 清理已不存在的 provider 的残留状态
                         let new_ids: std::collections::HashSet<_> =
                             statuses.iter().map(|s| &s.provider_id).collect();
-                        self.last_refreshed.retain(|id, _| new_ids.contains(id));
-                        self.in_flight.retain(|id, _| new_ids.contains(id));
+                        self.scheduler.cleanup_stale(&new_ids);
 
                         self.manager = new_manager;
 
@@ -370,74 +266,5 @@ impl RefreshCoordinator {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::provider_error_presenter::ProviderErrorPresenter;
-
-    #[test]
-    fn test_classify_error_kind_config_missing() {
-        let error = crate::providers::ProviderError::ConfigMissing {
-            key: "github_token".to_string(),
-        };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::ConfigMissing
-        );
-    }
-
-    #[test]
-    fn test_classify_error_kind_auth_required() {
-        let error = crate::providers::ProviderError::AuthRequired { hint: None };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::AuthRequired
-        );
-    }
-
-    #[test]
-    fn test_classify_error_kind_session_expired() {
-        let error = crate::providers::ProviderError::SessionExpired {
-            hint: Some("re-login".to_string()),
-        };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::AuthRequired
-        );
-    }
-
-    #[test]
-    fn test_classify_error_kind_network_error() {
-        let error = crate::providers::ProviderError::Timeout;
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::NetworkError
-        );
-
-        let error = crate::providers::ProviderError::NetworkFailed {
-            reason: "timeout".to_string(),
-        };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::NetworkError
-        );
-    }
-
-    #[test]
-    fn test_classify_error_kind_unknown() {
-        let error = crate::providers::ProviderError::CliNotFound {
-            cli_name: "claude".to_string(),
-        };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::Unknown
-        );
-
-        let error = crate::providers::ProviderError::ParseFailed {
-            reason: "invalid json".to_string(),
-        };
-        assert_eq!(
-            ProviderErrorPresenter::to_error_kind(&error),
-            ErrorKind::Unknown
-        );
-    }
-}
+#[path = "coordinator_tests.rs"]
+mod tests;
