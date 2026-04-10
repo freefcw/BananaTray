@@ -1,46 +1,31 @@
-# src/app/
+# src/ui/
 
 GPUI-dependent UI module. Contains all view rendering, window management, and user interaction logic.
 
-> **Build constraint**: This module is behind `cfg(feature = "app")` in `lib.rs`. GPUI proc macros crash during test compilation, so pure logic is extracted to `src/app_state.rs`, `src/application/`, `app/provider_logic.rs`, and `models/`.
+> **Build constraint**: This module is behind `cfg(feature = "app")` in `lib.rs`. GPUI proc macros crash during test compilation, so pure logic is extracted to `src/app_state.rs`, `src/application/` (including `selectors/format.rs`), and `models/`.
 
 ## Files
 
-### `gpui_bridge.rs` — Runtime State Wrapper
+### `bridge.rs` — Runtime State Wrapper
 
 - **`AppState`** — runtime composition container:
   - `session: AppSession` — pure session state from `src/app_state.rs`
   - `refresh_tx: Sender<RefreshRequest>` — channel to `RefreshCoordinator`
   - `view_entity: Option<WeakEntity<AppView>>` — weak ref for UI updates
+  - `log_path: Option<PathBuf>` — log file path for Debug tab
 - **`persist_settings()`** — persists `AppSettings`
 
-### `mod.rs` — AppView + module exports
+### `mod.rs` — Module exports
 
-- **`AppView`** — GPUI view struct implementing `Render`. Renders the tray popup with:
-  - Top navigation bar (provider tabs + settings/close buttons)
-  - Content area (provider detail panel or settings)
-  - Global action footer (dashboard + refresh buttons)
+- **`AppView`** — re-exported from `views/app_view.rs`
 - **`schedule_open_settings_window()`** — re-exported from `settings_window`
 
-### `nav.rs` — Navigation Bar
+### `views/` — GPUI View Components
 
-Renders the tab-style navigation bar at the top of the tray popup. Each enabled provider gets a tab with its icon. Provider order follows `AppSettings::ordered_providers()`.
-
-### `provider_panel.rs` — Provider Detail View
-
-Renders the main content area when a provider tab is selected: header with provider name/account, quota bars, status indicators, error messages.
-
-### `provider_logic.rs` — Pure Display Logic
-
-**No GPUI dependency.** Extracted formatting functions for testability:
-- `format_amount()` / `format_quota_usage()` — number formatting
-- `provider_empty_message()` — contextual empty state messages
-- `provider_account_label()` — account display text
-- `provider_list_subtitle()` — status-aware list subtitle
-
-### `tray_settings.rs` — Inline Settings Panel
-
-Simple settings content rendered inside the tray popup (as opposed to the full settings window).
+- `app_view.rs` — **`AppView`** GPUI view struct implementing `Render`. Renders the tray popup with top navigation bar, content area, and global action footer.
+- `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`.
+- `provider_panel.rs` — Provider detail view: header, quota bars, status indicators, error messages.
+- `tray_settings.rs` — Inline settings content rendered inside the tray popup.
 
 ### `settings_window/` — Full Settings Window
 
@@ -72,12 +57,12 @@ TrayController (tray/controller.rs)
        ├─ User / background event → `runtime::dispatch_*()`
        │   ├─ `application::reduce(&mut state.session, action)`
        │   └─ execute `AppEffect` in GPUI / App context
-       └─ RefreshCoordinator event → `AppAction::ApplyRefreshEvent` → reducer
+       └─ RefreshCoordinator event → `AppAction::RefreshEventReceived` → reducer
 ```
 
 ## Constraints
 
-- All files in this module may import from `gpui`. Test-sensitive logic must be in `src/app_state.rs`, `src/application/`, or `provider_logic.rs`.
+- All files in this module may import from `gpui`. Test-sensitive logic must be in `src/app_state.rs`, `src/application/`, or `models/`.
 - `AppState` is wrapped in `Rc<RefCell<...>>` (single-threaded, GPUI is !Send).
 - Window sizing uses `PopupLayout` constants from `models/layout.rs`.
 - Icon paths are relative to the asset root (e.g. `"src/icons/settings.svg"`).
