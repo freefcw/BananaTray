@@ -175,12 +175,8 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
         anyhow::bail!("no quota data found in cachedPlanInfo");
     }
 
-    // cachedPlanInfo 中没有 email，但可以从 auth_status_json 中尝试提取
-    let email = query_auth_status_json(conn, spec)
-        .ok()
-        .and_then(|json_str| serde_json::from_str::<serde_json::Value>(&json_str).ok())
-        .and_then(|v| v.get("email")?.as_str().map(|s| s.to_string()))
-        .filter(|s| !s.is_empty());
+    // cachedPlanInfo 中没有 email，从 auth status 中单独提取
+    let email = extract_email_from_auth_status(conn, spec);
 
     Ok(RefreshData::with_account(quotas, email, plan_name))
 }
@@ -223,6 +219,104 @@ fn build_quota_from_cached(
         QuotaType::ModelSpecific(label.to_string()),
         reset_text,
     ))
+}
+
+/// UserStatus protobuf 中 email 字段的 field number（来自 Codeium API schema）
+const PROTO_FIELD_EMAIL: u32 = 7;
+
+/// 从 auth status JSON 中提取用户 email。
+///
+/// 支持两种格式：
+/// 1. 旧格式：JSON 顶层有 `email` 字段
+/// 2. 新格式（当前 Windsurf）：JSON 只有 `userStatusProtoBinaryBase64`，
+///    但 protobuf 中含非法 wire type 导致 prost::decode 整体失败。
+///    用宽容扫描在遇到非法字节前提取 email field。
+fn extract_email_from_auth_status(conn: &Connection, spec: &CodeiumFamilySpec) -> Option<String> {
+    let json_str = query_auth_status_json(conn, spec).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+
+    // 旧格式：顶层 email 字段
+    if let Some(email) = v
+        .get("email")
+        .and_then(|e| e.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+    {
+        return Some(email);
+    }
+
+    // 新格式：从 protobuf 二进制做宽容扫描
+    v.get("userStatusProtoBinaryBase64")
+        .and_then(|b| b.as_str())
+        .and_then(|b64| STANDARD.decode(b64).ok())
+        .and_then(|bytes| extract_string_field_permissive(&bytes, PROTO_FIELD_EMAIL))
+        .filter(|s| !s.is_empty())
+}
+
+/// 宽容扫描 protobuf 字节，提取指定 field_number 的第一个 length-delimited（wire=2）string 字段。
+/// 遇到非法 wire type 时停止而不报错，确保在截断数据中也能提取已出现的字段。
+fn extract_string_field_permissive(data: &[u8], field_number: u32) -> Option<String> {
+    let mut i = 0;
+    while i < data.len() {
+        let b = data[i];
+        let wire = b & 0x7;
+        let field = (b >> 3) as u32;
+        i += 1;
+
+        match wire {
+            2 => {
+                // length-delimited：读 varint 长度
+                let mut length: usize = 0;
+                let mut shift = 0usize;
+                loop {
+                    if i >= data.len() {
+                        return None;
+                    }
+                    let b2 = data[i];
+                    i += 1;
+                    length |= ((b2 & 0x7f) as usize) << shift;
+                    if b2 & 0x80 == 0 {
+                        break;
+                    }
+                    shift += 7;
+                }
+                if i + length > data.len() {
+                    return None;
+                }
+                let val = &data[i..i + length];
+                i += length;
+                if field == field_number {
+                    return std::str::from_utf8(val).ok().map(|s| s.to_string());
+                }
+            }
+            0 => {
+                // varint
+                loop {
+                    if i >= data.len() {
+                        return None;
+                    }
+                    let b2 = data[i];
+                    i += 1;
+                    if b2 & 0x80 == 0 {
+                        break;
+                    }
+                }
+            }
+            1 => {
+                // 64-bit
+                i += 8;
+            }
+            5 => {
+                // 32-bit
+                i += 4;
+            }
+            _ => {
+                // 非法 wire type，停止扫描
+                break;
+            }
+        }
+    }
+    None
 }
 
 fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<String> {
@@ -412,6 +506,180 @@ mod tests {
         // 没有百分比数据 → 返回 None
         let q = build_quota_from_cached("Daily Quota", None, Some(9999999999));
         assert!(q.is_none());
+    }
+
+    fn make_proto_with_email(email: &str) -> Vec<u8> {
+        // 构造包含 field=7 (email) 的最小 protobuf
+        // tag = (7 << 3) | 2 = 0x3a
+        let mut data = vec![0x3a, email.len() as u8];
+        data.extend_from_slice(email.as_bytes());
+        data
+    }
+
+    fn make_auth_status_with_proto_email(email: &str) -> String {
+        let proto = make_proto_with_email(email);
+        let b64 = STANDARD.encode(&proto);
+        format!(r#"{{"userStatusProtoBinaryBase64":"{}"}}"#, b64)
+    }
+
+    #[test]
+    fn test_extract_email_old_format_direct_field() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            [
+                "windsurfAuthStatus",
+                r#"{"email":"user@example.com","userStatusProtoBinaryBase64":""}"#,
+            ],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let email = extract_email_from_auth_status(&conn, &spec);
+        assert_eq!(email, Some("user@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_extract_email_new_format_protobuf_scan() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        // 新格式：没有顶层 email 字段，email 在 protobuf 里
+        let auth_status_json = make_auth_status_with_proto_email("user@example.com");
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ["windsurfAuthStatus", &auth_status_json],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let email = extract_email_from_auth_status(&conn, &spec);
+        assert_eq!(email, Some("user@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_extract_email_new_format_with_bad_wire_before_email() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        // 构造一个 protobuf：先有非法 wire type，再有 email
+        // 宽容扫描应在遇到非法字节时停止，返回 None
+        let mut bad_proto = vec![0x07]; // 非法 wire type
+        bad_proto.extend_from_slice(&make_proto_with_email("user@example.com"));
+        let b64 = STANDARD.encode(&bad_proto);
+        let auth_status_json = format!(r#"{{"userStatusProtoBinaryBase64":"{}"}}"#, b64);
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ["windsurfAuthStatus", &auth_status_json],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let email = extract_email_from_auth_status(&conn, &spec);
+        assert!(email.is_none());
+    }
+
+    #[test]
+    fn test_extract_email_returns_none_when_auth_status_absent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let email = extract_email_from_auth_status(&conn, &spec);
+        assert!(email.is_none());
+    }
+
+    #[test]
+    fn test_read_via_cached_plan_info_with_proto_email() {
+        // 集成测试：cachedPlanInfo + auth_status（带 protobuf email）→ email 被提取
+        let future_daily = chrono::Utc::now().timestamp() + 3600;
+        let future_weekly = chrono::Utc::now().timestamp() + 86400 * 5;
+        let plan_json = format!(
+            r#"{{"planName":"Pro","quotaUsage":{{"dailyRemainingPercent":60,"weeklyRemainingPercent":80,"dailyResetAtUnix":{},"weeklyResetAtUnix":{}}}}}"#,
+            future_daily, future_weekly
+        );
+        let auth_status_json = make_auth_status_with_proto_email("integrated@example.com");
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ["windsurf.settings.cachedPlanInfo", &plan_json],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ["windsurfAuthStatus", &auth_status_json],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let data = read_via_cached_plan_info(&conn, &spec).unwrap();
+        assert_eq!(
+            data.account_email,
+            Some("integrated@example.com".to_string())
+        );
+        assert_eq!(data.account_tier, Some("Pro".to_string()));
+        assert_eq!(data.quotas.len(), 2);
+    }
+
+    #[test]
+    fn test_extract_string_field_permissive_finds_email() {
+        // 构造一个最小 protobuf：field=7 wire=2，内容为 "hello@example.com"
+        // tag byte = (7 << 3) | 2 = 58 = 0x3a
+        let email = b"hello@example.com";
+        let mut data = vec![0x3a, email.len() as u8];
+        data.extend_from_slice(email);
+
+        let result = extract_string_field_permissive(&data, 7);
+        assert_eq!(result, Some("hello@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_extract_string_field_permissive_stops_on_bad_wire() {
+        // field=3 wire=2 内容 "name"，然后 field=0 wire=7（非法），然后 field=7 wire=2 内容 "email"
+        // 应该在非法 wire type 处停止，返回 None（email 在非法字节之后）
+        let data = vec![
+            0x1a, 4, b'n', b'a', b'm', b'e', // field 3, wire 2, "name"
+            0x07, // field 0, wire 7 (非法)
+            0x3a, 5, b'e', b'm', b'a', b'i', b'l', // field 7, wire 2, "email"
+        ];
+
+        // email 在非法字节之后，找不到
+        let result = extract_string_field_permissive(&data, 7);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_string_field_permissive_before_bad_wire() {
+        // field=7 wire=2 内容 "hello@example.com"，然后 field=0 wire=7（非法）
+        // email 在非法字节之前，应该能找到
+        let email = b"hello@example.com";
+        let mut data = vec![0x3a, email.len() as u8];
+        data.extend_from_slice(email);
+        data.push(0x07); // 非法 wire type
+
+        let result = extract_string_field_permissive(&data, 7);
+        assert_eq!(result, Some("hello@example.com".to_string()));
     }
 
     #[test]
