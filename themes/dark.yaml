@@ -1,0 +1,59 @@
+# BananaTray Dark Theme
+# 深色主题配色方案
+
+bg:
+  base: "#0a0a0c"
+  panel: "#111114"
+  subtle: "#1c1c20"
+  card: "#1c1c20"
+  card_inner: "#151518"
+  card_inner_hovered: "#272329"
+
+text:
+  primary: "#f4f4f5"
+  secondary: "#a1a1aa"
+  muted: "#71717a"
+  accent: "#3b82f6"
+  accent_soft: "#1e3a8a"
+
+border:
+  subtle: "#2a2a2e"
+  strong: "#3f3f46"
+
+element:
+  active: "#ffffff"
+  selected: "#3b82f6"
+
+status:
+  success: "#22c55e"
+  error: "#ef4444"
+  warning: "#f59e0b"
+  progress_track: "#ffffff1a"
+  bar_gradient_start: "#6366f1"
+  bar_gradient_mid: "#06b6d4"
+
+badge:
+  healthy: "#22c55e"
+  degraded: "#f59e0b"
+  offline: "#ef4444"
+  text: "#0a0a0c"
+  synced_bg: "#22c55e1a"
+  syncing_bg: "#3b82f61a"
+
+button:
+  danger_bg: "#ef44442e"
+  sync_bg: "#1c1c20"
+  sync_text: "#f4f4f5"
+  action_bg: "#2d6a4f"
+  action_text: "#ffffff"
+
+nav:
+  pill_active_bg: "#2c2c30"
+  pill_active_text: "#f4f4f5"
+
+log:
+  error: "#e74c3c"
+  warn: "#f39c12"
+  info: "#27ae60"
+  debug: "#3498db"
+  trace: "#95a5a6"

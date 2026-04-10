@@ -17,6 +17,8 @@ pub mod providers;
 pub mod refresh;
 pub mod settings_store;
 pub mod theme;
+#[cfg(test)]
+mod theme_tests;
 pub mod utils;
 
 // app 模块包含 GPUI 代码，测试时可能触发编译器 bug

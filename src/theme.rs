@@ -1,4 +1,5 @@
 use gpui::*;
+use std::sync::LazyLock;
 
 /// 判断 WindowAppearance 是否为深色系
 pub fn is_dark_appearance(appearance: WindowAppearance) -> bool {
@@ -122,129 +123,119 @@ pub struct Theme {
 
 impl Global for Theme {}
 
+// ── YAML 主题加载 ────────────────────────────────────────
+//
+// 使用 serde_yaml::Value 动态提取颜色值，无需 #[derive(Deserialize)]
+// 中间结构体，避免与 GPUI proc-macro 冲突，也消除了结构体重复。
+
+pub(crate) const LIGHT_YAML: &str = include_str!("../themes/light.yaml");
+const DARK_YAML: &str = include_str!("../themes/dark.yaml");
+
+/// 从 YAML Value 中按 `section.key` 路径提取颜色并转为 Hsla
+pub(crate) fn color(root: &serde_yaml::Value, section: &str, key: &str) -> Hsla {
+    let s = root[section][key]
+        .as_str()
+        .unwrap_or_else(|| panic!("missing theme color: {section}.{key}"));
+    parse_color(s)
+}
+
+/// 解析 `#RRGGBB` 或 `#RRGGBBAA` 颜色字符串为 GPUI Hsla
+///
+/// 无效输入时 panic（主题文件是编译时嵌入的静态配置）。
+pub(crate) fn parse_color(s: &str) -> Hsla {
+    let hex = s.strip_prefix('#').unwrap_or(s);
+    match hex.len() {
+        6 => {
+            let val = u32::from_str_radix(hex, 16).unwrap_or_else(|_| panic!("invalid color: {s}"));
+            rgb(val).into()
+        }
+        8 => {
+            let val = u32::from_str_radix(hex, 16).unwrap_or_else(|_| panic!("invalid color: {s}"));
+            rgba(val).into()
+        }
+        _ => panic!("invalid color format (expected #RRGGBB or #RRGGBBAA): {s}"),
+    }
+}
+
+/// 将 YAML 字符串解析为完整 Theme
+fn load_theme(yaml: &str) -> Theme {
+    let v: serde_yaml::Value = serde_yaml::from_str(yaml).expect("failed to parse theme YAML file");
+
+    Theme {
+        bg: ThemeBg {
+            base: color(&v, "bg", "base"),
+            panel: color(&v, "bg", "panel"),
+            subtle: color(&v, "bg", "subtle"),
+            card: color(&v, "bg", "card"),
+            card_inner: color(&v, "bg", "card_inner"),
+            card_inner_hovered: color(&v, "bg", "card_inner_hovered"),
+        },
+        text: ThemeText {
+            primary: color(&v, "text", "primary"),
+            secondary: color(&v, "text", "secondary"),
+            muted: color(&v, "text", "muted"),
+            accent: color(&v, "text", "accent"),
+            accent_soft: color(&v, "text", "accent_soft"),
+        },
+        border: ThemeBorder {
+            subtle: color(&v, "border", "subtle"),
+            strong: color(&v, "border", "strong"),
+        },
+        element: ThemeElement {
+            active: color(&v, "element", "active"),
+            selected: color(&v, "element", "selected"),
+        },
+        status: ThemeStatus {
+            success: color(&v, "status", "success"),
+            error: color(&v, "status", "error"),
+            warning: color(&v, "status", "warning"),
+            progress_track: color(&v, "status", "progress_track"),
+            bar_gradient_start: color(&v, "status", "bar_gradient_start"),
+            bar_gradient_mid: color(&v, "status", "bar_gradient_mid"),
+        },
+        badge: ThemeBadge {
+            healthy: color(&v, "badge", "healthy"),
+            degraded: color(&v, "badge", "degraded"),
+            offline: color(&v, "badge", "offline"),
+            text: color(&v, "badge", "text"),
+            synced_bg: color(&v, "badge", "synced_bg"),
+            syncing_bg: color(&v, "badge", "syncing_bg"),
+        },
+        button: ThemeButton {
+            danger_bg: color(&v, "button", "danger_bg"),
+            sync_bg: color(&v, "button", "sync_bg"),
+            sync_text: color(&v, "button", "sync_text"),
+            action_bg: color(&v, "button", "action_bg"),
+            action_text: color(&v, "button", "action_text"),
+        },
+        nav: ThemeNav {
+            pill_active_bg: color(&v, "nav", "pill_active_bg"),
+            pill_active_text: color(&v, "nav", "pill_active_text"),
+        },
+        log: ThemeLog {
+            error: color(&v, "log", "error"),
+            warn: color(&v, "log", "warn"),
+            info: color(&v, "log", "info"),
+            debug: color(&v, "log", "debug"),
+            trace: color(&v, "log", "trace"),
+        },
+    }
+}
+
+// ── LazyLock 缓存 ────────────────────────────────────────
+
+static LIGHT_THEME: LazyLock<Theme> = LazyLock::new(|| load_theme(LIGHT_YAML));
+static DARK_THEME: LazyLock<Theme> = LazyLock::new(|| load_theme(DARK_YAML));
+
+// ── 公开 API（签名不变）──────────────────────────────────
+
 impl Theme {
     pub fn light() -> Self {
-        Self {
-            bg: ThemeBg {
-                base: rgb(0xffffff).into(),
-                panel: rgb(0xf6f6f8).into(),
-                subtle: rgb(0xececee).into(),
-                card: rgb(0xf0f0f2).into(),
-                card_inner: rgb(0xffffff).into(),
-                card_inner_hovered: rgb(0xededef).into(),
-            },
-            text: ThemeText {
-                primary: rgb(0x18181b).into(),
-                secondary: rgb(0x71717a).into(),
-                muted: rgb(0xa1a1aa).into(),
-                accent: rgb(0x2563eb).into(),
-                accent_soft: rgb(0xdbeafe).into(),
-            },
-            border: ThemeBorder {
-                subtle: rgb(0xe4e4e7).into(),
-                strong: rgb(0xd0d0d5).into(),
-            },
-            element: ThemeElement {
-                active: rgb(0xffffff).into(),
-                selected: rgb(0x2563eb).into(),
-            },
-            status: ThemeStatus {
-                success: rgb(0x22c55e).into(),
-                error: rgb(0xef4444).into(),
-                warning: rgb(0xf59e0b).into(),
-                progress_track: rgba(0x00000012).into(),
-                bar_gradient_start: rgb(0x6366f1).into(),
-                bar_gradient_mid: rgb(0x06b6d4).into(),
-            },
-            badge: ThemeBadge {
-                healthy: rgb(0x22c55e).into(),
-                degraded: rgb(0xf59e0b).into(),
-                offline: rgb(0xef4444).into(),
-                text: rgb(0xffffff).into(),
-                synced_bg: rgba(0x22c55e1a).into(),
-                syncing_bg: rgba(0x2563eb1a).into(),
-            },
-            button: ThemeButton {
-                danger_bg: rgba(0xef44441a).into(),
-                sync_bg: rgb(0x27272a).into(),
-                sync_text: rgb(0xf4f4f5).into(),
-                action_bg: rgb(0x2d6a4f).into(),
-                action_text: rgb(0xffffff).into(),
-            },
-            nav: ThemeNav {
-                pill_active_bg: rgb(0x18181b).into(),
-                pill_active_text: rgb(0xffffff).into(),
-            },
-            log: ThemeLog {
-                error: rgb(0xdc2626).into(),
-                warn: rgb(0xd97706).into(),
-                info: rgb(0x16a34a).into(),
-                debug: rgb(0x2563eb).into(),
-                trace: rgb(0x78716c).into(),
-            },
-        }
+        LIGHT_THEME.clone()
     }
 
     pub fn dark() -> Self {
-        Self {
-            bg: ThemeBg {
-                base: rgb(0x0a0a0c).into(),
-                panel: rgb(0x111114).into(),
-                subtle: rgb(0x1c1c20).into(),
-                card: rgb(0x1c1c20).into(),
-                card_inner: rgb(0x151518).into(),
-                card_inner_hovered: rgb(0x272329).into(),
-            },
-            text: ThemeText {
-                primary: rgb(0xf4f4f5).into(),
-                secondary: rgb(0xa1a1aa).into(),
-                muted: rgb(0x71717a).into(),
-                accent: rgb(0x3b82f6).into(),
-                accent_soft: rgb(0x1e3a8a).into(),
-            },
-            border: ThemeBorder {
-                subtle: rgb(0x2a2a2e).into(),
-                strong: rgb(0x3f3f46).into(),
-            },
-            element: ThemeElement {
-                active: rgb(0xffffff).into(),
-                selected: rgb(0x3b82f6).into(),
-            },
-            status: ThemeStatus {
-                success: rgb(0x22c55e).into(),
-                error: rgb(0xef4444).into(),
-                warning: rgb(0xf59e0b).into(),
-                progress_track: rgba(0xffffff1a).into(),
-                bar_gradient_start: rgb(0x6366f1).into(),
-                bar_gradient_mid: rgb(0x06b6d4).into(),
-            },
-            badge: ThemeBadge {
-                healthy: rgb(0x22c55e).into(),
-                degraded: rgb(0xf59e0b).into(),
-                offline: rgb(0xef4444).into(),
-                text: rgb(0x0a0a0c).into(),
-                synced_bg: rgba(0x22c55e1a).into(),
-                syncing_bg: rgba(0x3b82f61a).into(),
-            },
-            button: ThemeButton {
-                danger_bg: rgba(0xef44442e).into(),
-                sync_bg: rgb(0x1c1c20).into(),
-                sync_text: rgb(0xf4f4f5).into(),
-                action_bg: rgb(0x2d6a4f).into(),
-                action_text: rgb(0xffffff).into(),
-            },
-            nav: ThemeNav {
-                pill_active_bg: rgb(0x2c2c30).into(),
-                pill_active_text: rgb(0xf4f4f5).into(),
-            },
-            log: ThemeLog {
-                error: rgb(0xe74c3c).into(),
-                warn: rgb(0xf39c12).into(),
-                info: rgb(0x27ae60).into(),
-                debug: rgb(0x3498db).into(),
-                trace: rgb(0x95a5a6).into(),
-            },
-        }
+        DARK_THEME.clone()
     }
 
     /// 根据 WindowAppearance 和用户主题设置解析为具体 Theme
