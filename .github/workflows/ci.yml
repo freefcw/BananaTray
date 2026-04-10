@@ -8,6 +8,7 @@ on:
   pull_request:
 
 jobs:
+  # macOS: 格式检查 + clippy + 单元测试
   rust-checks:
     runs-on: macos-latest
 
@@ -31,3 +32,42 @@ jobs:
 
       - name: Run tests
         run: cargo test --lib --no-default-features
+
+  # Linux: 编译验证 + clippy + 单元测试
+  # 注: cargo fmt --check 只需在 macOS job 中运行一次
+  linux-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            libwayland-dev
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run clippy
+        run: cargo clippy --lib -- -D warnings
+
+      - name: Run tests
+        run: cargo test --lib --no-default-features
+
+      # cargo check 验证完整二进制可编译（含 GPUI），比 build 更快
+      - name: Check full binary compiles
+        run: cargo check --release
