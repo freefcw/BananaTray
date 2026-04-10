@@ -142,59 +142,10 @@ impl SettingsView {
         if self.newapi_inputs.is_some() {
             return;
         }
-
-        let inputs = if let Some(data) = edit_data {
-            // 编辑模式：用已有数据预填
-            NewApiFormInputs {
-                name: SimpleInputState::new_with_value(
-                    t!("newapi.field.name.placeholder").to_string(),
-                    &data.display_name,
-                ),
-                url: SimpleInputState::new_with_value(
-                    t!("newapi.field.url.placeholder").to_string(),
-                    &data.base_url,
-                ),
-                cookie: SimpleInputState::new_with_value(
-                    t!("newapi.field.cookie.placeholder").to_string(),
-                    &data.cookie,
-                ),
-                user_id: SimpleInputState::new_with_value(
-                    t!("newapi.field.user_id.placeholder").to_string(),
-                    data.user_id.as_deref().unwrap_or(""),
-                ),
-                divisor: SimpleInputState::new_with_value(
-                    t!("newapi.field.divisor.placeholder").to_string(),
-                    data.divisor
-                        .map(|d| (d as u64).to_string())
-                        .unwrap_or_default(),
-                ),
-                focus_handles: [
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                ],
-            }
-        } else {
-            // 新增模式：空表单
-            NewApiFormInputs {
-                name: SimpleInputState::new(t!("newapi.field.name.placeholder").to_string()),
-                url: SimpleInputState::new(t!("newapi.field.url.placeholder").to_string()),
-                cookie: SimpleInputState::new(t!("newapi.field.cookie.placeholder").to_string()),
-                user_id: SimpleInputState::new(t!("newapi.field.user_id.placeholder").to_string()),
-                divisor: SimpleInputState::new(t!("newapi.field.divisor.placeholder").to_string()),
-                focus_handles: [
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                    cx.focus_handle(),
-                ],
-            }
-        };
-
-        self.newapi_inputs = Some(inputs);
+        self.newapi_inputs = Some(match edit_data {
+            Some(data) => NewApiFormInputs::new_edit(data, cx),
+            None => NewApiFormInputs::new_add(cx),
+        });
     }
 
     /// 清除所有 NewAPI 表单输入状态
@@ -214,13 +165,7 @@ impl SettingsView {
         self.ensure_newapi_inputs(edit_data, cx);
         let inputs = self.newapi_inputs.as_ref().unwrap();
 
-        let focused: [bool; 5] = [
-            inputs.focus_handles[0].is_focused(window),
-            inputs.focus_handles[1].is_focused(window),
-            inputs.focus_handles[2].is_focused(window),
-            inputs.focus_handles[3].is_focused(window),
-            inputs.focus_handles[4].is_focused(window),
-        ];
+        let focused = inputs.focused_states(window);
 
         let title = if is_editing {
             t!("newapi.edit_title").to_string()
@@ -338,7 +283,7 @@ impl SettingsView {
                 theme,
             ))
             // ── 操作按钮 ──
-            .child(self.render_form_buttons(theme));
+            .child(self.render_form_buttons(inputs, theme));
 
         // ── 键盘事件处理 ──
         div()
@@ -377,13 +322,9 @@ impl SettingsView {
             None => return, // 没有任何输入框有焦点
         };
 
-        let state = match focused_idx {
-            0 => &mut inputs.name,
-            1 => &mut inputs.url,
-            2 => &mut inputs.cookie,
-            3 => &mut inputs.user_id,
-            4 => &mut inputs.divisor,
-            _ => return,
+        let state = match inputs.field_mut(focused_idx) {
+            Some(s) => s,
+            None => return,
         };
 
         let keystroke = &ev.keystroke;
@@ -440,7 +381,9 @@ impl SettingsView {
                 cx.notify();
             }
             "enter" => {
-                // 回车触发保存（交给按钮逻辑）
+                if let Some(action) = self.collect_submit_action() {
+                    runtime::dispatch_in_window(&self.state.clone(), action, window, cx);
+                }
             }
             _ => {
                 // 普通字符输入
@@ -458,10 +401,48 @@ impl SettingsView {
         }
     }
 
+    /// 从表单当前值构造提交 Action；必填字段缺失时返回 None
+    fn collect_submit_action(&self) -> Option<AppAction> {
+        let inputs = self.newapi_inputs.as_ref()?;
+        let name_val = inputs.name.content().trim().to_string();
+        let url_val = inputs.url.content().trim().to_string();
+        let cookie_val = inputs.cookie.content().trim().to_string();
+
+        if name_val.is_empty() || url_val.is_empty() || cookie_val.is_empty() {
+            log::warn!(target: "settings", "NewAPI save: required fields missing");
+            return None;
+        }
+
+        let user_id_val = inputs.user_id.content().trim().to_string();
+        let divisor_val = inputs.divisor.content().trim().to_string();
+
+        Some(AppAction::SubmitNewApi {
+            display_name: name_val,
+            base_url: url_val,
+            cookie: cookie_val,
+            user_id: if user_id_val.is_empty() {
+                None
+            } else {
+                Some(user_id_val)
+            },
+            divisor: if divisor_val.is_empty() {
+                None
+            } else {
+                divisor_val.parse::<f64>().ok()
+            },
+        })
+    }
+
     /// 渲染取消 + 保存按钮
-    fn render_form_buttons(&self, theme: &Theme) -> Div {
+    fn render_form_buttons(&self, inputs: &NewApiFormInputs, theme: &Theme) -> Div {
         let state_save = self.state.clone();
         let state_cancel = self.state.clone();
+
+        let name_val = inputs.name.content().trim().to_string();
+        let url_val = inputs.url.content().trim().to_string();
+        let cookie_val = inputs.cookie.content().trim().to_string();
+        let user_id_val = inputs.user_id.content().trim().to_string();
+        let divisor_val = inputs.divisor.content().trim().to_string();
 
         div()
             .flex()
@@ -496,14 +477,7 @@ impl SettingsView {
                     }),
             )
             // 保存按钮
-            .child({
-                let inputs = self.newapi_inputs.as_ref().unwrap();
-                let name_val = inputs.name.content().trim().to_string();
-                let url_val = inputs.url.content().trim().to_string();
-                let cookie_val = inputs.cookie.content().trim().to_string();
-                let user_id_val = inputs.user_id.content().trim().to_string();
-                let divisor_val = inputs.divisor.content().trim().to_string();
-
+            .child(
                 div()
                     .flex_1()
                     .flex()
@@ -552,7 +526,7 @@ impl SettingsView {
                             window,
                             cx,
                         );
-                    })
-            })
+                    }),
+            )
     }
 }
