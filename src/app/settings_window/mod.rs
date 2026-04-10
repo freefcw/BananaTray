@@ -34,6 +34,69 @@ pub(crate) struct NewApiFormInputs {
     pub focus_handles: [FocusHandle; 5],
 }
 
+impl NewApiFormInputs {
+    /// 新增模式：创建空表单
+    pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
+        Self {
+            name: SimpleInputState::new(t!("newapi.field.name.placeholder").to_string()),
+            url: SimpleInputState::new(t!("newapi.field.url.placeholder").to_string()),
+            cookie: SimpleInputState::new(t!("newapi.field.cookie.placeholder").to_string()),
+            user_id: SimpleInputState::new(t!("newapi.field.user_id.placeholder").to_string()),
+            divisor: SimpleInputState::new(t!("newapi.field.divisor.placeholder").to_string()),
+            focus_handles: std::array::from_fn(|_| cx.focus_handle()),
+        }
+    }
+
+    /// 编辑模式：用已有数据预填表单
+    pub fn new_edit(
+        data: &crate::providers::custom::generator::NewApiEditData,
+        cx: &mut Context<SettingsView>,
+    ) -> Self {
+        Self {
+            name: SimpleInputState::new_with_value(
+                t!("newapi.field.name.placeholder").to_string(),
+                &data.display_name,
+            ),
+            url: SimpleInputState::new_with_value(
+                t!("newapi.field.url.placeholder").to_string(),
+                &data.base_url,
+            ),
+            cookie: SimpleInputState::new_with_value(
+                t!("newapi.field.cookie.placeholder").to_string(),
+                &data.cookie,
+            ),
+            user_id: SimpleInputState::new_with_value(
+                t!("newapi.field.user_id.placeholder").to_string(),
+                data.user_id.as_deref().unwrap_or(""),
+            ),
+            divisor: SimpleInputState::new_with_value(
+                t!("newapi.field.divisor.placeholder").to_string(),
+                data.divisor
+                    .map(|d| (d as u64).to_string())
+                    .unwrap_or_default(),
+            ),
+            focus_handles: std::array::from_fn(|_| cx.focus_handle()),
+        }
+    }
+
+    /// 按索引返回对应字段的可变引用（0=name, 1=url, 2=cookie, 3=user_id, 4=divisor）
+    pub fn field_mut(&mut self, idx: usize) -> Option<&mut SimpleInputState> {
+        match idx {
+            0 => Some(&mut self.name),
+            1 => Some(&mut self.url),
+            2 => Some(&mut self.cookie),
+            3 => Some(&mut self.user_id),
+            4 => Some(&mut self.divisor),
+            _ => None,
+        }
+    }
+
+    /// 返回每个字段是否获得焦点的数组
+    pub fn focused_states(&self, window: &Window) -> [bool; 5] {
+        std::array::from_fn(|i| self.focus_handles[i].is_focused(window))
+    }
+}
+
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
