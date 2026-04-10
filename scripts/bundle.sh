@@ -22,11 +22,11 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 # 1. 生成 .icns 图标
 # ------------------------------------------------------------------
 echo "🎨 生成应用图标..."
-ICON_SRC="$PROJECT_DIR/src/tray_icon.png"
+ICON_SRC="$PROJECT_DIR/src/tray/tray_icon.png"
 ICONSET_DIR="$BUNDLE_DIR/AppIcon.iconset"
 
 if [ ! -f "$ICON_SRC" ]; then
-    echo "⚠️  未找到图标源文件 $ICON_SRC，跳过图标生成"
+    echo "⚠️  未找到图标源文件 ${ICON_SRC}，跳过图标生成"
 else
     rm -rf "$ICONSET_DIR"
     mkdir -p "$ICONSET_DIR"

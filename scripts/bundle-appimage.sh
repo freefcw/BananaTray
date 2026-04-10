@@ -54,7 +54,7 @@ assemble_install_tree "$APPDIR"
 
 # AppImage 额外要求：顶层 .desktop 和 .png（appimagetool 规范）
 cp "$PROJECT_DIR/resources/linux/bananatray.desktop" "$APPDIR/$APP_NAME.desktop"
-ICON_SRC="$PROJECT_DIR/src/tray_icon.png"
+ICON_SRC="$PROJECT_DIR/src/tray/tray_icon.png"
 if [ -f "$ICON_SRC" ]; then
     cp "$ICON_SRC" "$APPDIR/$APP_NAME.png"
 fi
