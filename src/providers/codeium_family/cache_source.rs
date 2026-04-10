@@ -366,7 +366,7 @@ mod tests {
             display_name: "Windsurf",
             brand_name: "Codeium",
             icon_asset: "src/icons/provider-windsurf.svg",
-            dashboard_url: "https://windsurf.com/",
+            dashboard_url: "https://windsurf.com/subscription/usage",
             account_hint: "Windsurf account",
             source_label: "local api",
             log_label: "Windsurf",
