@@ -28,7 +28,7 @@ impl AiProvider for CopilotProvider {
                 display_name: "Copilot".into(),
                 brand_name: "GitHub".into(),
                 icon_asset: "src/icons/provider-copilot.svg".into(),
-                dashboard_url: "https://github.com/settings/copilot".into(),
+                dashboard_url: "https://github.com/settings/copilot/features".into(),
                 account_hint: "GitHub account".into(),
                 source_label: "github api".into(),
             },

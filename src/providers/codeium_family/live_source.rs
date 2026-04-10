@@ -307,7 +307,7 @@ mod tests {
             display_name: "Antigravity",
             brand_name: "Codeium",
             icon_asset: "src/icons/provider-antigravity.svg",
-            dashboard_url: "https://codeium.com/account",
+            dashboard_url: "",
             account_hint: "Codeium account",
             source_label: "local api",
             log_label: "Antigravity",

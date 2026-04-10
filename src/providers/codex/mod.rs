@@ -24,7 +24,7 @@ impl AiProvider for CodexProvider {
                 display_name: "Codex".into(),
                 brand_name: "OpenAI".into(),
                 icon_asset: "src/icons/provider-codex.svg".into(),
-                dashboard_url: "https://chatgpt.com/codex/settings/usage".into(),
+                dashboard_url: "https://platform.openai.com/usage".into(),
                 account_hint: "OpenAI account".into(),
                 source_label: "openai api".into(),
             },
