@@ -54,7 +54,7 @@ Each `src/` subdirectory has its own `README.md` with detailed documentation.
 
 1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`app_state.rs`, `models/`). The `ui` module is `cfg(feature = "app")` gated.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
-3. **`#![recursion_limit = "512"]`** is required in both `main.rs` and `lib.rs` (GPUI macro expansion).
+3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
 
 ## Code Conventions
 
