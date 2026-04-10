@@ -6,8 +6,8 @@ use log::debug;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::gpui_bridge::AppState;
-use super::widgets;
+use crate::ui::bridge::AppState;
+use crate::ui::widgets;
 
 use crate::models::PopupLayout;
 

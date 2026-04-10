@@ -1,15 +1,15 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::widgets::{
-    render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
-    render_segmented_control, ButtonVariant, SegmentedSize,
-};
 use crate::application::{
     build_debug_info_text, debug_tab_view_state, AppAction, DebugContext, DebugNotificationKind,
     DebugTabViewState, LogLevelColor,
 };
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{
+    render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
+    render_segmented_control, ButtonVariant, SegmentedSize,
+};
 use gpui::*;
 use rust_i18n::t;
 
@@ -105,7 +105,7 @@ impl SettingsView {
     fn render_log_level_row(
         current: &str,
         theme: &Theme,
-        state: &std::rc::Rc<std::cell::RefCell<crate::app::AppState>>,
+        state: &std::rc::Rc<std::cell::RefCell<crate::ui::AppState>>,
     ) -> Div {
         let options: Vec<(String, String)> = LOG_LEVELS
             .iter()
@@ -197,7 +197,7 @@ impl SettingsView {
             .gap(px(12.0))
             .px(px(14.0))
             .py(px(12.0))
-            .child(crate::app::widgets::render_colored_icon(
+            .child(crate::ui::widgets::render_colored_icon(
                 "src/icons/status.svg",
                 rgb(ICON_FG).into(),
                 rgb(ICON_BG_FILE).into(),

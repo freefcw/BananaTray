@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
-use super::text_utils;
+use crate::utils::text_utils;
 
 /// Result of running an interactive command
 #[derive(Debug)]

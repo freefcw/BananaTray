@@ -1,4 +1,4 @@
-use crate::utils::http_client;
+use crate::providers::common::http_client;
 use anyhow::Result;
 
 pub(super) fn call_usage_api(access_token: &str) -> Result<String> {

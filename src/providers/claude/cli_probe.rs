@@ -4,8 +4,8 @@
 
 use super::probe::UsageProbe;
 use crate::models::{QuotaInfo, QuotaType};
+use crate::providers::common::runner::{InteractiveOptions, InteractiveRunner};
 use crate::providers::ProviderError;
-use crate::utils::interactive_runner::{InteractiveOptions, InteractiveRunner};
 use crate::utils::text_utils;
 use anyhow::Result;
 use log::debug;

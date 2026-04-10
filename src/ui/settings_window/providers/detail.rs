@@ -1,5 +1,4 @@
 use super::super::SettingsView;
-use crate::app::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use crate::application::{
     AppAction, ProviderSettingsMode, QuotaVisibilityItem, SettingChange,
     SettingsProviderDetailViewState, SettingsProviderInfoViewState, SettingsProviderStatusKind,
@@ -9,12 +8,13 @@ use crate::models::{ProviderId, ProviderKind, QuotaDisplayMode};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use gpui::*;
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::app::AppState;
+use crate::ui::AppState;
 
 /// 配额可见性行是否显示左侧小图标（默认开启，视觉更灵动）
 const SHOW_QUOTA_ROW_ICON: bool = true;
@@ -27,7 +27,7 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
         .flex()
         .items_center()
         .gap(px(14.0))
-        .child(crate::app::widgets::render_provider_icon_boxed(
+        .child(crate::ui::widgets::render_provider_icon_boxed(
             icon,
             px(56.0),
             px(32.0),
@@ -133,7 +133,7 @@ fn render_usage_section(
         SettingsProviderUsageViewState::Quotas { quotas } => {
             for quota in quotas {
                 section = section.child(div().mt(px(10.0)).child(
-                    crate::app::widgets::render_quota_bar(quota, theme, 0, display_mode),
+                    crate::ui::widgets::render_quota_bar(quota, theme, 0, display_mode),
                 ));
             }
         }
@@ -262,7 +262,7 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
         .bg(theme.bg.subtle)
         .cursor_pointer()
         .hover(|s| s.opacity(0.8))
-        .child(crate::app::widgets::render_svg_icon(
+        .child(crate::ui::widgets::render_svg_icon(
             "src/icons/refresh.svg",
             px(16.0),
             theme.text.muted,
@@ -304,7 +304,7 @@ fn render_confirm_cancel_buttons(
                 .bg(theme.status.error)
                 .cursor_pointer()
                 .hover(|s| s.opacity(0.85))
-                .child(crate::app::widgets::render_svg_icon(
+                .child(crate::ui::widgets::render_svg_icon(
                     "src/icons/trash.svg",
                     px(12.0),
                     gpui::white(),
@@ -390,7 +390,7 @@ fn render_detail_action_buttons(
                 .bg(theme.bg.subtle)
                 .cursor_pointer()
                 .hover(|s| s.opacity(0.8))
-                .child(crate::app::widgets::render_svg_icon(
+                .child(crate::ui::widgets::render_svg_icon(
                     "src/icons/trash.svg",
                     px(14.0),
                     theme.text.muted,
@@ -413,7 +413,7 @@ fn render_detail_action_buttons(
         .child(remove_button)
         .child(render_refresh_button(state, id.clone(), theme))
         .child(
-            crate::app::widgets::render_toggle_switch(
+            crate::ui::widgets::render_toggle_switch(
                 is_enabled,
                 px(44.0),
                 px(24.0),
@@ -557,7 +557,7 @@ fn render_quota_visibility_row(
         .hover(|s| s.bg(theme.bg.subtle))
         .child(label_row)
         .child(
-            crate::app::widgets::render_toggle_switch(visible, px(36.0), px(20.0), px(14.0), theme)
+            crate::ui::widgets::render_toggle_switch(visible, px(36.0), px(20.0), px(14.0), theme)
                 .flex_shrink_0(),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -627,7 +627,7 @@ fn render_quota_visibility_section(
 // ══════ SettingsView impl（仅保留必须持有 &mut self 的入口） ══════
 
 impl SettingsView {
-    pub(in crate::app::settings_window) fn render_provider_detail_panel(
+    pub(in crate::ui::settings_window) fn render_provider_detail_panel(
         &mut self,
         detail: &SettingsProviderDetailViewState,
         theme: &Theme,

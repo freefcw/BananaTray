@@ -2,7 +2,6 @@
 
 rust_i18n::i18n!("locales", fallback = "en");
 
-mod app;
 mod app_state;
 mod application;
 mod auto_launch;
@@ -11,13 +10,13 @@ mod i18n;
 mod infra;
 pub mod models;
 pub mod notification;
-mod provider_error_presenter;
 mod providers;
 mod refresh;
 mod runtime;
 mod settings_store;
 mod theme;
 mod tray;
+mod ui;
 mod utils;
 
 use gpui::*;

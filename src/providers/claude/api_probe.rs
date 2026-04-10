@@ -6,8 +6,8 @@
 use super::credentials::{refresh_oauth_token, save_credentials_atomic, ClaudeOAuthCredentials};
 use super::probe::UsageProbe;
 use crate::models::{QuotaInfo, QuotaType};
+use crate::providers::common::http_client;
 use crate::providers::ProviderError;
-use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use log::debug;

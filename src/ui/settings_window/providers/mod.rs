@@ -13,7 +13,7 @@ impl SettingsView {
     // Providers tab (双栏布局：sidebar + detail)
     // ========================================================================
 
-    pub(in crate::app::settings_window) fn render_providers_tab(
+    pub(in crate::ui::settings_window) fn render_providers_tab(
         &mut self,
         theme: &Theme,
         window: &mut Window,

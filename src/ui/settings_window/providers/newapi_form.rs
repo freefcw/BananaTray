@@ -8,13 +8,13 @@
 //! 避免 macOS IME 触发 character_index_for_point 崩溃。
 
 use super::super::{NewApiFormInputs, SettingsView};
-use crate::app::widgets::{
-    render_simple_input, render_simple_textarea, render_svg_icon, SimpleInputState,
-};
 use crate::application::AppAction;
 use crate::providers::custom::generator::NewApiEditData;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{
+    render_simple_input, render_simple_textarea, render_svg_icon, SimpleInputState,
+};
 use gpui::*;
 use rust_i18n::t;
 
@@ -149,12 +149,12 @@ impl SettingsView {
     }
 
     /// 清除所有 NewAPI 表单输入状态
-    pub(in crate::app::settings_window) fn clear_newapi_inputs(&mut self) {
+    pub(in crate::ui::settings_window) fn clear_newapi_inputs(&mut self) {
         self.newapi_inputs = None;
     }
 
     /// 渲染 NewAPI 添加/编辑表单（右侧 detail 面板内嵌）
-    pub(in crate::app::settings_window) fn render_newapi_form(
+    pub(in crate::ui::settings_window) fn render_newapi_form(
         &mut self,
         is_editing: bool,
         edit_data: Option<&NewApiEditData>,

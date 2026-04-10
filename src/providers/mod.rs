@@ -1,6 +1,7 @@
 pub mod codeium_family;
 pub mod common;
 pub mod custom;
+pub mod error_presenter;
 pub mod manager;
 
 use crate::models::{ProviderDescriptor, RefreshData};

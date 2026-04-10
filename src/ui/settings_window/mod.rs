@@ -7,11 +7,11 @@ mod providers;
 mod window_mgr;
 
 use super::AppState;
-use crate::app::widgets::{render_svg_icon, SimpleInputState};
 use crate::app_state::SettingsTab;
 use crate::application::AppAction;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{render_svg_icon, SimpleInputState};
 use gpui::*;
 use log::info;
 use rust_i18n::t;

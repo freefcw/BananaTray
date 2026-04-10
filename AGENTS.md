@@ -19,24 +19,30 @@ cargo fmt                  # format
 ```
 src/
   main.rs            — Entry: Application::run(), CLI dispatch
-  lib.rs             — Crate root. `app` module behind cfg(feature = "app")
+  lib.rs             — Crate root. `ui` module behind cfg(feature = "app")
   bootstrap.rs       — App initialization (UI, refresh, tray events)
-  app/               — GPUI views, settings window, widgets
+  ui/                — GPUI views, settings window, widgets
+    bridge.rs        — AppState (GPUI wrapper over AppSession)
+    views/           — AppView, nav, provider panel, tray settings
+    settings_window/ — Settings window tabs and provider management
+    widgets/         — Reusable UI components
   app_state.rs       — Pure-logic sub-states (GPUI-free, testable)
   application/       — Action-Reducer-Effect pipeline (reducer_tests.rs separated)
   models/            — Core data types (GPUI-free)
   providers/         — AiProvider trait + 14 implementations + ProviderManager
+    common/          — Shared provider infra (CLI, JWT, HTTP client, PTY runner)
+    error_presenter.rs — Provider error → user-facing message mapping
   tray/              — TrayController, multi-display positioning, icon management
-  refresh.rs         — RefreshCoordinator (background polling thread)
+  refresh/           — RefreshCoordinator (background polling thread)
   runtime/           — Effect executor (GPUI bridge)
-  utils/             — HTTP client, PTY runner, text/time helpers
+  utils/             — Text/time helpers, log capture, platform utils
 ```
 
 Each `src/` subdirectory has its own `README.md` with detailed documentation.
 
 ## Key Constraints
 
-1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`app_state.rs`, `app/provider_logic.rs`, `models/`). The `app` module is `cfg(feature = "app")` gated.
+1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`app_state.rs`, `models/`). The `ui` module is `cfg(feature = "app")` gated.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` (GPUI macro expansion).
 
