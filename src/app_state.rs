@@ -4,7 +4,7 @@
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, ProviderStatus, StatusLevel,
 };
-use crate::notification::QuotaAlertTracker;
+use crate::platform::notification::QuotaAlertTracker;
 use crate::providers::custom::generator::NewApiEditData;
 
 // ============================================================================

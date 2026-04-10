@@ -26,7 +26,7 @@ impl AppView {
     pub fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         // 初次创建时通过子进程检测深色模式并设置主题
         // 后续变化通过 observe_window_appearance 自动跟随
-        let is_dark = crate::utils::platform::detect_system_dark_mode();
+        let is_dark = crate::platform::system::detect_system_dark_mode();
         let user_theme = state.borrow().session.settings.display.theme;
         let theme = match user_theme.resolve(is_dark) {
             crate::models::AppTheme::Light => Theme::light(),

@@ -4,12 +4,10 @@ rust_i18n::i18n!("locales", fallback = "en");
 
 mod app_state;
 mod application;
-mod auto_launch;
 mod bootstrap;
 mod i18n;
-mod infra;
 pub mod models;
-pub mod notification;
+mod platform;
 mod providers;
 mod refresh;
 mod runtime;
@@ -20,8 +18,8 @@ mod ui;
 mod utils;
 
 use gpui::*;
-use infra::Assets;
 use log::info;
+use platform::Assets;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -34,7 +32,7 @@ fn main() {
         return;
     }
 
-    let log_path = match infra::logging::init() {
+    let log_path = match platform::logging::init() {
         Ok(init) => {
             log::info!(target: "app", "logging initialized at {}", init.log_path.display());
             Some(init.log_path)
@@ -47,9 +45,9 @@ fn main() {
 
     // Single-instance check: must run before Application::new() so that a
     // secondary process exits immediately without initializing the UI toolkit.
-    let show_rx = match infra::single_instance::ensure_single_instance() {
-        infra::single_instance::InstanceRole::Primary(rx) => rx,
-        infra::single_instance::InstanceRole::Secondary => {
+    let show_rx = match platform::single_instance::ensure_single_instance() {
+        platform::single_instance::InstanceRole::Primary(rx) => rx,
+        platform::single_instance::InstanceRole::Secondary => {
             info!(target: "app", "another instance is already running, exiting");
             std::process::exit(0);
         }
