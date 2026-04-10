@@ -1,10 +1,10 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::widgets::{render_segmented_control, SegmentedSize};
 use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{render_segmented_control, SegmentedSize};
 use gpui::*;
 use rust_i18n::t;
 

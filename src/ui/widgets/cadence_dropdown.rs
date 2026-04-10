@@ -1,7 +1,7 @@
-use crate::app::AppState;
 use crate::application::{AppAction, SettingChange};
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::AppState;
 use gpui::*;
 use rust_i18n::t;
 use std::cell::RefCell;

@@ -9,9 +9,9 @@ use gpui::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::app::AppState;
+use crate::ui::AppState;
 
-use crate::app::widgets::{render_provider_icon, render_svg_icon};
+use crate::ui::widgets::{render_provider_icon, render_svg_icon};
 use rust_i18n::t;
 
 // ============================================================================
@@ -241,7 +241,7 @@ fn render_add_relay_button(state: Rc<RefCell<AppState>>, theme: &Theme) -> Div {
 impl SettingsView {
     // ══════ Left sidebar ══════
 
-    pub(in crate::app::settings_window) fn render_provider_sidebar(
+    pub(in crate::ui::settings_window) fn render_provider_sidebar(
         &mut self,
         items: &[SettingsProviderListItemViewState],
         theme: &Theme,

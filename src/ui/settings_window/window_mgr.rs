@@ -1,5 +1,5 @@
 use super::SettingsView;
-use crate::app::AppState;
+use crate::ui::AppState;
 use gpui::*;
 use log::{error, info};
 use std::cell::RefCell;

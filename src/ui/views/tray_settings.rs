@@ -1,7 +1,7 @@
-use super::AppView;
 use crate::application::{AppAction, SettingChange};
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::AppView;
 use gpui::*;
 use rust_i18n::t;
 
@@ -86,7 +86,7 @@ impl AppView {
                     .flex()
                     .items_center()
                     .gap(px(10.0))
-                    .child(super::widgets::render_footer_glyph(icon, theme))
+                    .child(crate::ui::widgets::render_footer_glyph(icon, theme))
                     .child(
                         div()
                             .flex_col()

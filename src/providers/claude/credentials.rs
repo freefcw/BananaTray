@@ -122,7 +122,7 @@ pub fn refresh_oauth_token(refresh_token: &str) -> Result<TokenRefreshResponse> 
         "scope": SCOPES
     });
 
-    let response = crate::utils::http_client::post_json(
+    let response = crate::providers::common::http_client::post_json(
         REFRESH_URL,
         &["Content-Type: application/json"],
         &body.to_string(),

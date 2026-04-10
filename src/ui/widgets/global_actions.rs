@@ -6,7 +6,7 @@ use crate::theme::Theme;
 use gpui::*;
 
 use super::render_svg_icon;
-use crate::app::AppView;
+use crate::ui::AppView;
 
 impl AppView {
     pub(crate) fn render_global_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {

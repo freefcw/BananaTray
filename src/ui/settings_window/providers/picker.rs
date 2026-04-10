@@ -7,7 +7,7 @@ use rust_i18n::t;
 
 impl SettingsView {
     /// 渲染 Provider 选择面板（右侧面板，添加 Provider 时展示）
-    pub(in crate::app::settings_window) fn render_provider_picker(
+    pub(in crate::ui::settings_window) fn render_provider_picker(
         &self,
         available: &[AvailableProviderItem],
         theme: &Theme,

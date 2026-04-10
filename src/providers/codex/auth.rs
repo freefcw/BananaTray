@@ -1,5 +1,5 @@
+use crate::providers::common::http_client;
 use crate::providers::ProviderError;
-use crate::utils::http_client;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use std::path::PathBuf;

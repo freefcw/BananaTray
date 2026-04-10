@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::ErrorKind;
-use crate::provider_error_presenter::ProviderErrorPresenter;
+use crate::providers::error_presenter::ProviderErrorPresenter;
 
 // ============================================================================
 // ProviderError 分类测试（build_outcome 使用的错误转换）

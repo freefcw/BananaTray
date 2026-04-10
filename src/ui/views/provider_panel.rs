@@ -1,4 +1,3 @@
-use super::AppView;
 use crate::application::{
     provider_detail_view_state, AccountInfoViewState, AppAction, DisabledProviderViewState,
     ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
@@ -7,6 +6,7 @@ use crate::models::ProviderId;
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::AppView;
 use gpui::*;
 use rust_i18n::t;
 
@@ -70,7 +70,7 @@ impl AppView {
             .bg(theme.bg.card_inner)
             .border_1()
             .border_color(theme.border.subtle)
-            .child(super::widgets::render_provider_icon(
+            .child(crate::ui::widgets::render_provider_icon(
                 vm.icon.clone(),
                 px(32.0),
                 theme.text.muted,
@@ -131,7 +131,7 @@ impl AppView {
                     if i > 0 {
                         cards = cards.child(div().h(px(8.0)));
                     }
-                    cards = cards.child(super::widgets::render_quota_bar(
+                    cards = cards.child(crate::ui::widgets::render_quota_bar(
                         quota,
                         &theme,
                         *generation,
@@ -228,7 +228,7 @@ impl AppView {
                 .flex()
                 .items_center()
                 .gap(px(4.0))
-                .child(super::widgets::render_svg_icon(
+                .child(crate::ui::widgets::render_svg_icon(
                     "src/icons/status.svg",
                     px(12.0),
                     theme.text.muted,
@@ -303,10 +303,10 @@ impl AppView {
         let state_for_click = self.state.clone();
         let tooltip_id = format!("account-dashboard-tooltip-{}", id);
 
-        super::widgets::render_icon_tooltip_button(
+        crate::ui::widgets::render_icon_tooltip_button(
             ElementId::Name(tooltip_id.into()),
             "src/icons/chevron-right.svg",
-            super::widgets::IconTooltipButtonOptions {
+            crate::ui::widgets::IconTooltipButtonOptions {
                 tooltip_text: enabled.then(|| t!("tooltip.open_dashboard").to_string()),
                 enabled,
                 icon_color: theme.text.primary,
@@ -345,7 +345,7 @@ impl AppView {
             .rounded(px(10.0))
             .cursor_pointer()
             .hover(|style| style.bg(theme.bg.subtle))
-            .child(super::widgets::render_svg_icon(
+            .child(crate::ui::widgets::render_svg_icon(
                 icon,
                 px(16.0),
                 theme.text.muted,

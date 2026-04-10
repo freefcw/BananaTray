@@ -8,10 +8,10 @@ use rust_i18n::t;
 
 use super::CopilotTokenSource;
 
-use crate::app::settings_window::SettingsView;
-use crate::app::widgets::register_input_actions;
 use crate::application::AppAction;
 use crate::runtime;
+use crate::ui::settings_window::SettingsView;
+use crate::ui::widgets::register_input_actions;
 
 #[derive(IntoElement)]
 struct CopilotInputBox {
@@ -91,7 +91,7 @@ pub(crate) fn render_settings_interactive(
         .gap(px(14.0));
 
     let hover_color = theme.text.primary;
-    let help_icon = crate::app::with_multiline_tooltip(
+    let help_icon = crate::ui::with_multiline_tooltip(
         "copilot-token-help",
         &t!("copilot.token_sources_tip"),
         theme,

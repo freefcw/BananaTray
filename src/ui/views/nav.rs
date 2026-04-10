@@ -1,8 +1,8 @@
-use super::AppView;
 use crate::application::AppAction;
 use crate::models::NavTab;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::AppView;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use std::time::Duration;
@@ -337,7 +337,7 @@ impl AppView {
                     style.bg(theme.bg.subtle)
                 }
             })
-            .child(super::widgets::render_provider_icon(
+            .child(crate::ui::widgets::render_provider_icon(
                 icon_path,
                 px(15.0),
                 icon_color,

@@ -1,10 +1,10 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::app::widgets::{render_action_button, ButtonVariant};
 use crate::application::{AppAction, SettingChange};
 use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::{render_action_button, ButtonVariant};
 use gpui::*;
 use rust_i18n::t;
 
@@ -75,7 +75,7 @@ impl SettingsView {
                         &t!("settings.refresh_cadence"),
                         &t!("settings.refresh_cadence.desc"),
                         theme,
-                        crate::app::widgets::render_cadence_trigger(&state, cadence_mins, theme),
+                        crate::ui::widgets::render_cadence_trigger(&state, cadence_mins, theme),
                     ))
                     .child(render_divider(theme))
                     // Quota Notifications

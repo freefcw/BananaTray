@@ -1,6 +1,6 @@
 use super::SettingsView;
-use crate::app::widgets::{render_icon_row, render_toggle_switch};
 use crate::theme::Theme;
+use crate::ui::widgets::{render_icon_row, render_toggle_switch};
 use gpui::*;
 
 // ============================================================================

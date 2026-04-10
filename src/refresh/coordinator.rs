@@ -12,7 +12,7 @@ use std::sync::Arc;
 use smol::channel::{Receiver, Sender};
 
 use crate::models::ProviderId;
-use crate::provider_error_presenter::ProviderErrorPresenter;
+use crate::providers::error_presenter::ProviderErrorPresenter;
 use crate::providers::ProviderManager;
 
 use super::scheduler::RefreshScheduler;

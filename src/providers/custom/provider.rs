@@ -5,8 +5,8 @@ use std::borrow::Cow;
 
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use crate::providers::common::cli;
+use crate::providers::common::http_client;
 use crate::providers::{AiProvider, ProviderError};
-use crate::utils::http_client;
 
 use super::extractor::{self, CompiledPatterns};
 use super::schema::{

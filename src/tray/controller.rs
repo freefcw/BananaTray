@@ -3,9 +3,9 @@
 //!
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
 
-use crate::app::{schedule_open_settings_window, AppState};
 use crate::application::AppAction;
 use crate::models::NavTab;
+use crate::ui::{schedule_open_settings_window, AppState};
 use gpui::*;
 use log::{debug, error, info};
 use std::cell::Cell;
@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 pub(crate) struct TrayController {
-    window: Option<WindowHandle<crate::app::AppView>>,
+    window: Option<WindowHandle<crate::ui::AppView>>,
     pub(crate) state: Rc<RefCell<AppState>>,
 }
 
@@ -182,7 +182,7 @@ impl TrayController {
                 display_id,
                 ..Default::default()
             },
-            |_window, cx| cx.new(|cx| crate::app::AppView::new(state, cx)),
+            |_window, cx| cx.new(|cx| crate::ui::AppView::new(state, cx)),
         );
 
         if let Ok(handle) = result {

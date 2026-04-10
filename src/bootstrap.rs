@@ -1,9 +1,9 @@
 //! 应用初始化 — 启动时调用一次的设置和注册函数
 
-use crate::app::AppState;
 use crate::application::AppAction;
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::tray::TrayController;
+use crate::ui::AppState;
 use gpui::*;
 use log::info;
 use rust_i18n::t;
