@@ -6,7 +6,7 @@ GPUI-dependent UI module. Contains all view rendering, window management, and us
 
 ## Files
 
-### `app_state.rs` — Runtime State Wrapper
+### `gpui_bridge.rs` — Runtime State Wrapper
 
 - **`AppState`** — runtime composition container:
   - `session: AppSession` — pure session state from `src/app_state.rs`
@@ -66,7 +66,7 @@ Small GPUI components used across views:
 ## Data Flow
 
 ```
-TrayController (main.rs)
+TrayController (tray/controller.rs)
   └─ AppState (Rc<RefCell<...>>)
        ├─ View reads `state.session` or selector output during render
        ├─ User / background event → `runtime::dispatch_*()`

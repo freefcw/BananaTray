@@ -24,8 +24,8 @@ pub mod utils;
 #[cfg(feature = "app")]
 pub mod app;
 #[cfg(feature = "app")]
-pub mod logging;
+pub mod infra;
 #[cfg(feature = "app")]
 pub mod runtime;
 #[cfg(feature = "app")]
-pub mod tray_icon_helper;
+pub mod tray;

@@ -14,7 +14,7 @@
 
 ## AppState Decomposition
 
-`AppState` (in `app/mod.rs`) is a composition container holding:
+`AppState` (in `app/gpui_bridge.rs`) is a composition container holding:
 
 - `ProviderStore` — provider status list + find/mutate methods
 - `NavigationState` — active tab + last provider kind
@@ -24,7 +24,7 @@
 - `alert_tracker` — quota notification state machine
 - `view_entity` — weak ref to AppView for UI updates
 
-Sub-state structs live in `src/app_state.rs` (GPUI-free). Access: `state.provider_store.providers`, `state.nav.active_tab`, etc.
+Sub-state structs live in `src/app_state.rs` (GPUI-free). Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`, etc.
 
 ## Refresh Architecture
 
@@ -52,12 +52,14 @@ Provider credentials are read from local config files or CLI tools, except Copil
 
 ## Testing
 
-134 unit tests, run with `cargo test --lib`. Coverage:
+644 unit tests, run with `cargo test --lib --no-default-features`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `app_state.rs` — ProviderStore, NavigationState, SettingsUiState
+- `application/reducer_tests.rs` — all Action-Reducer-Effect tests
 - `app/provider_logic.rs` — formatting and display logic
 - `providers/` — ProviderError, ProviderManager, individual provider parsers
+- `tray/icon.rs` — tray icon data and template mode tests
 - `utils/` — HTTP header parsing, text stripping, time parsing
 - `notification.rs` — QuotaAlertTracker state machine
 - `auto_launch.rs` — platform-specific launch-at-login

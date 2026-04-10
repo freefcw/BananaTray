@@ -3,7 +3,7 @@
 use crate::app::AppState;
 use crate::application::AppAction;
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
-use crate::tray_controller::TrayController;
+use crate::tray::TrayController;
 use gpui::*;
 use log::info;
 use rust_i18n::t;
@@ -29,7 +29,7 @@ pub(crate) fn bootstrap_ui(cx: &mut App) {
         }
         style => crate::application::TrayIconRequest::Static(style),
     };
-    crate::tray_icon_helper::apply_tray_icon(cx, icon_request);
+    crate::tray::apply_tray_icon(cx, icon_request);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
     cx.set_tray_panel_mode(true);
 

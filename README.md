@@ -85,13 +85,17 @@ Runtime logs use `fern` with dual output (stdout + file):
 
 ```
 src/
-  main.rs              — Entry point: tray setup, window lifecycle, event loop
+  main.rs              — Entry point: Application::run(), CLI dispatch
   lib.rs               — Crate root for lib target (testing entrypoint)
+  bootstrap.rs         — App initialization (UI setup, refresh, tray events)
   app/                 — GPUI views, settings window, widgets (behind `app` feature)
   app_state.rs         — Pure-logic sub-states (ProviderStore, NavigationState, SettingsUiState)
+  application/         — Action-Reducer-Effect pipeline (reducer + separated tests)
   models/              — Core data types (ProviderKind, QuotaInfo, AppSettings, etc.)
   providers/           — AiProvider trait + 14 provider implementations + ProviderManager
+  tray/                — TrayController, multi-display positioning, icon management
   refresh.rs           — RefreshCoordinator: background event loop for quota polling
+  runtime/             — Effect executor (GPUI bridge for dispatch_in_app)
   settings_store.rs    — JSON settings persistence (load/save)
   notification.rs      — Quota alert state machine + system notifications
   auto_launch.rs       — Platform-specific launch-at-login
