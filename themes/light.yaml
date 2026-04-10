@@ -1,0 +1,59 @@
+# BananaTray Light Theme
+# 浅色主题配色方案
+
+bg:
+  base: "#ffffff"
+  panel: "#f6f6f8"
+  subtle: "#ececee"
+  card: "#f0f0f2"
+  card_inner: "#ffffff"
+  card_inner_hovered: "#ededef"
+
+text:
+  primary: "#18181b"
+  secondary: "#71717a"
+  muted: "#a1a1aa"
+  accent: "#2563eb"
+  accent_soft: "#dbeafe"
+
+border:
+  subtle: "#e4e4e7"
+  strong: "#d0d0d5"
+
+element:
+  active: "#ffffff"
+  selected: "#2563eb"
+
+status:
+  success: "#22c55e"
+  error: "#ef4444"
+  warning: "#f59e0b"
+  progress_track: "#00000012"
+  bar_gradient_start: "#6366f1"
+  bar_gradient_mid: "#06b6d4"
+
+badge:
+  healthy: "#22c55e"
+  degraded: "#f59e0b"
+  offline: "#ef4444"
+  text: "#ffffff"
+  synced_bg: "#22c55e1a"
+  syncing_bg: "#2563eb1a"
+
+button:
+  danger_bg: "#ef44441a"
+  sync_bg: "#27272a"
+  sync_text: "#f4f4f5"
+  action_bg: "#2d6a4f"
+  action_text: "#ffffff"
+
+nav:
+  pill_active_bg: "#18181b"
+  pill_active_text: "#ffffff"
+
+log:
+  error: "#dc2626"
+  warn: "#d97706"
+  info: "#16a34a"
+  debug: "#2563eb"
+  trace: "#78716c"
