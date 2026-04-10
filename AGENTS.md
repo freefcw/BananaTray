@@ -18,13 +18,17 @@ cargo fmt                  # format
 
 ```
 src/
-  main.rs            — Entry: TrayController, Application::run()
+  main.rs            — Entry: Application::run(), CLI dispatch
   lib.rs             — Crate root. `app` module behind cfg(feature = "app")
+  bootstrap.rs       — App initialization (UI, refresh, tray events)
   app/               — GPUI views, settings window, widgets
   app_state.rs       — Pure-logic sub-states (GPUI-free, testable)
+  application/       — Action-Reducer-Effect pipeline (reducer_tests.rs separated)
   models/            — Core data types (GPUI-free)
-  providers/         — AiProvider trait + 12 implementations + ProviderManager
+  providers/         — AiProvider trait + 14 implementations + ProviderManager
+  tray/              — TrayController, multi-display positioning, icon management
   refresh.rs         — RefreshCoordinator (background polling thread)
+  runtime/           — Effect executor (GPUI bridge)
   utils/             — HTTP client, PTY runner, text/time helpers
 ```
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! TrayController — 托盘弹窗窗口生命周期管理
 //!
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
@@ -135,11 +136,7 @@ impl TrayController {
 
             #[cfg(target_os = "macos")]
             {
-                return crate::tray_display::compute_tray_popup_bounds(
-                    cx,
-                    window_size,
-                    tray_bounds,
-                );
+                return super::display::compute_tray_popup_bounds(cx, window_size, tray_bounds);
             }
 
             #[cfg(not(target_os = "macos"))]

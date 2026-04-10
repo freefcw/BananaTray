@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! macOS 多显示器感知的托盘弹窗定位
 //!
 //! GPUI 的 tray_icon_bounds() 内部用 NSScreen::mainScreen（焦点屏幕）做 Y 翻转，

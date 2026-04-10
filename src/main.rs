@@ -5,11 +5,10 @@ rust_i18n::i18n!("locales", fallback = "en");
 mod app;
 mod app_state;
 mod application;
-mod assets;
 mod auto_launch;
 mod bootstrap;
 mod i18n;
-mod logging;
+mod infra;
 pub mod models;
 pub mod notification;
 mod provider_error_presenter;
@@ -17,16 +16,12 @@ mod providers;
 mod refresh;
 mod runtime;
 mod settings_store;
-mod single_instance;
 mod theme;
-mod tray_controller;
-#[cfg(target_os = "macos")]
-mod tray_display;
-mod tray_icon_helper;
+mod tray;
 mod utils;
 
-use assets::Assets;
 use gpui::*;
+use infra::Assets;
 use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,7 +35,7 @@ fn main() {
         return;
     }
 
-    let log_path = match logging::init() {
+    let log_path = match infra::logging::init() {
         Ok(init) => {
             log::info!(target: "app", "logging initialized at {}", init.log_path.display());
             Some(init.log_path)
@@ -53,9 +48,9 @@ fn main() {
 
     // Single-instance check: must run before Application::new() so that a
     // secondary process exits immediately without initializing the UI toolkit.
-    let show_rx = match single_instance::ensure_single_instance() {
-        single_instance::InstanceRole::Primary(rx) => rx,
-        single_instance::InstanceRole::Secondary => {
+    let show_rx = match infra::single_instance::ensure_single_instance() {
+        infra::single_instance::InstanceRole::Primary(rx) => rx,
+        infra::single_instance::InstanceRole::Secondary => {
             info!(target: "app", "another instance is already running, exiting");
             std::process::exit(0);
         }
@@ -71,7 +66,7 @@ fn main() {
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
 
             // 3. 窗口控制器
-            let controller = Rc::new(RefCell::new(tray_controller::TrayController::new(
+            let controller = Rc::new(RefCell::new(tray::TrayController::new(
                 refresh_tx,
                 &manager,
                 log_path.clone(),
