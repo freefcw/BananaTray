@@ -8,32 +8,41 @@
 - **HTTP**: ureq v3 (blocking, used from async via `smol::unblock`)
 - **Logging**: fern + log (dual output: stdout + file)
 - **PTY**: portable-pty (CLI-based providers)
-- **Notifications**: notify-rust
+- **Notifications**: notify-rust (Linux) / UNUserNotificationCenter (macOS)
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG autostart (Linux)
 
 ## AppState Decomposition
 
-`AppState` (in `app/gpui_bridge.rs`) is a composition container holding:
+`AppState` (in `ui/bridge.rs`) is a composition container holding:
 
-- `ProviderStore` — provider status list + find/mutate methods
-- `NavigationState` — active tab + last provider kind
-- `SettingsUiState` — settings window tab + dropdown state
-- `AppSettings` — persisted user preferences
+- `session: AppSession` — pure-logic session state (see below)
 - `refresh_tx` — channel to RefreshCoordinator
-- `alert_tracker` — quota notification state machine
 - `view_entity` — weak ref to AppView for UI updates
+- `log_path` — log file path for Debug tab
 
-Sub-state structs live in `src/app_state.rs` (GPUI-free). Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`, etc.
+`AppSession` (in `app_state.rs`, GPUI-free) holds:
+
+- `ProviderStore` — provider status list + find/mutate/sync methods
+- `NavigationState` — active tab + last provider id + generation counter
+- `SettingsUiState` — settings window tab + provider management UI state
+- `DebugUiState` — debug tab state (selected provider, refresh status)
+- `AppSettings` — persisted user preferences
+- `alert_tracker` — quota notification state machine
+- `popup_visible` — popup visibility flag (deferred dynamic icon updates)
+
+Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`, etc.
 
 ## Refresh Architecture
 
-`RefreshCoordinator` runs in a dedicated thread:
+`RefreshCoordinator` runs in a dedicated `std::thread`:
 
 - Receives `RefreshRequest` via `smol::channel`
-- Applies cooldown (half interval, min 30s) and in-flight dedup
-- Spawns concurrent refresh tasks per provider
+- Delegates scheduling decisions to `RefreshScheduler` (cooldown, eligibility, deadline)
+- Uses absolute-deadline timers to avoid timer reset on request receipt
+- Spawns concurrent refresh tasks per provider via `std::thread`
 - Sends `RefreshEvent` results to foreground executor for UI update
+- Supports `ReloadProviders` for custom provider hot-reload
 
 ## Environment Variables
 
@@ -52,15 +61,18 @@ Provider credentials are read from local config files or CLI tools, except Copil
 
 ## Testing
 
-644 unit tests, run with `cargo test --lib --no-default-features`. Coverage:
+683 unit tests, run with `cargo test --lib --no-default-features`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `app_state.rs` — ProviderStore, NavigationState, SettingsUiState
 - `application/reducer_tests.rs` — all Action-Reducer-Effect tests
-- `app/provider_logic.rs` — formatting and display logic
+- `application/selectors/` — format, tray, settings, debug selector tests
 - `providers/` — ProviderError, ProviderManager, individual provider parsers
 - `tray/icon.rs` — tray icon data and template mode tests
-- `utils/` — HTTP header parsing, text stripping, time parsing
-- `notification.rs` — QuotaAlertTracker state machine
-- `auto_launch.rs` — platform-specific launch-at-login
-- `assets.rs` — asset resolution fallback chain
+- `utils/` — text stripping, time parsing, log capture
+- `platform/notification.rs` — QuotaAlertTracker state machine
+- `platform/auto_launch.rs` — platform-specific launch-at-login
+- `platform/assets.rs` — asset resolution fallback chain
+- `refresh/` — coordinator and scheduler tests
+- `theme.rs` — YAML theme parsing
+- `settings_store.rs` — settings persistence round-trip

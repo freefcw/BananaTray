@@ -64,7 +64,9 @@ providers/
 - `common::cli::command_exists()`
 - `common::cli::run_command()`
 - `common::cli::run_checked_command()`
+- `common::cli::run_lenient_command()` — 容忍非零退出码（如 amp、kiro-cli）
 - `common::cli::ensure_success()`
+- `common::cli::stdout_text()` / `stdout_or_stderr_text()`
 
 当前参考：
 - `amp.rs`
@@ -209,6 +211,8 @@ providers/my_placeholder.rs
 已经验证可抽的公共模块：
 - `common/jwt.rs`
 - `common/cli.rs`
+- `common/http_client.rs` — 共享 HTTP 客户端（ureq 封装、认证 header）
+- `common/runner.rs` — PTY 交互式命令执行器
 
 ## 新增 Provider 时的推荐流程
 
