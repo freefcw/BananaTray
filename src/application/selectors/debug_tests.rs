@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_state::AppSession;
+use crate::application::AppSession;
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
 

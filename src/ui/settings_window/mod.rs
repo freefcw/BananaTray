@@ -7,8 +7,8 @@ mod providers;
 mod window_mgr;
 
 use super::AppState;
-use crate::app_state::SettingsTab;
 use crate::application::AppAction;
+use crate::application::SettingsTab;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_svg_icon, SimpleInputState};

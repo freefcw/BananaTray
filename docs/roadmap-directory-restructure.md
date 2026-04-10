@@ -29,15 +29,14 @@
 
 **触发条件**：团队反馈或新成员 onboarding 时评估。
 
-### Phase 5：`app_state.rs` 归入逻辑层（可选）⏳
-
-**动机**：`app_state.rs` 是纯逻辑状态，与 `application/` 的 reducer 紧密关联。
+### Phase 5：`app_state.rs` 归入逻辑层 ✅
 
 **变更**：
 - `app_state.rs` → `application/state.rs`
-- `app_state_tests.rs` → `application/state_tests.rs`（测试文件需随迁）
-
-**触发条件**：Phase 4 完成后评估。
+- `app_state_tests.rs` → `application/state_tests.rs`（测试文件随迁）
+- 所有 `crate::app_state::` 引用更新为 `crate::application::state::` 或 `super::state::`
+- `application/mod.rs` 新增 `pub(crate) mod state;`
+- `lib.rs` / `main.rs` 移除 `mod app_state;` 声明
 
 ## 未纳入规划的模块
 

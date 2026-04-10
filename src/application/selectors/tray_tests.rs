@@ -78,7 +78,7 @@ fn global_actions_refresh_id_none_on_settings_tab() {
 
 // ── Account Info 冒烟测试 ─────────────────────────────────
 // 边界组合（setting off / no email / dashboard off）已在
-// app_state::tests::panel_flags_* 单元测试中覆盖，
+// application::state::tests::panel_flags_* 单元测试中覆盖，
 // 这里只验证 selector 正确集成 flags → ViewModel 的端到端路径。
 
 #[test]

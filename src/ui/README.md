@@ -2,14 +2,14 @@
 
 GPUI-dependent UI module. Contains all view rendering, window management, and user interaction logic.
 
-> **Build constraint**: This module is behind `cfg(feature = "app")` in `lib.rs`. GPUI proc macros crash during test compilation, so pure logic is extracted to `src/app_state.rs`, `src/application/` (including `selectors/format.rs`), and `models/`.
+> **Build constraint**: This module is behind `cfg(feature = "app")` in `lib.rs`. GPUI proc macros crash during test compilation, so pure logic is extracted to `src/application/state.rs`, `src/application/` (including `selectors/format.rs`), and `models/`.
 
 ## Files
 
 ### `bridge.rs` — Runtime State Wrapper
 
 - **`AppState`** — runtime composition container:
-  - `session: AppSession` — pure session state from `src/app_state.rs`
+  - `session: AppSession` — pure session state from `src/application/state.rs`
   - `refresh_tx: Sender<RefreshRequest>` — channel to `RefreshCoordinator`
   - `view_entity: Option<WeakEntity<AppView>>` — weak ref for UI updates
   - `log_path: Option<PathBuf>` — log file path for Debug tab
@@ -62,7 +62,7 @@ TrayController (tray/controller.rs)
 
 ## Constraints
 
-- All files in this module may import from `gpui`. Test-sensitive logic must be in `src/app_state.rs`, `src/application/`, or `models/`.
+- All files in this module may import from `gpui`. Test-sensitive logic must be in `src/application/state.rs`, `src/application/`, or `models/`.
 - `AppState` is wrapped in `Rc<RefCell<...>>` (single-threaded, GPUI is !Send).
 - Window sizing uses `PopupLayout` constants from `models/layout.rs`.
 - Icon paths are relative to the asset root (e.g. `"src/icons/settings.svg"`).

@@ -1,4 +1,4 @@
-use crate::application::header_view_state;
+use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::NavTab;
 use crate::theme::Theme;
 use gpui::*;
@@ -57,16 +57,10 @@ impl AppView {
         };
 
         let (dot_color, badge_bg) = match header.status_kind {
-            crate::app_state::HeaderStatusKind::Synced => {
-                (theme.badge.healthy, theme.badge.synced_bg)
-            }
-            crate::app_state::HeaderStatusKind::Syncing => {
-                (theme.text.accent, theme.badge.syncing_bg)
-            }
-            crate::app_state::HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
-            crate::app_state::HeaderStatusKind::Offline => {
-                (theme.badge.offline, theme.button.danger_bg)
-            }
+            HeaderStatusKind::Synced => (theme.badge.healthy, theme.badge.synced_bg),
+            HeaderStatusKind::Syncing => (theme.text.accent, theme.badge.syncing_bg),
+            HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
+            HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
         };
 
         div()

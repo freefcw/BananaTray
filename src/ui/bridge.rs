@@ -1,4 +1,4 @@
-use crate::app_state::AppSession;
+use crate::application::AppSession;
 use crate::models::AppSettings;
 use crate::providers::ProviderManager;
 use crate::refresh::RefreshRequest;

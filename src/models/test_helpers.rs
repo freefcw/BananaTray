@@ -1,7 +1,7 @@
 //! 共享测试工具函数
 //!
 //! 统一 ProviderStatus / ProviderMetadata 的构造逻辑，
-//! 消除 quota.rs / app_state.rs / provider_logic.rs / selectors.rs 中的重复定义。
+//! 消除 quota.rs / application/state.rs / provider_logic.rs / selectors.rs 中的重复定义。
 
 use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
 use super::quota::{ConnectionStatus, ErrorKind, ProviderStatus};

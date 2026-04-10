@@ -19,6 +19,7 @@ custom/
   extractor.rs    — 响应解析（JSON 路径提取 / 正则匹配）
   provider.rs     — CustomProvider（impl AiProvider）
   loader.rs       — 文件扫描 + 加载 + 校验
+  generator.rs    — NewAPI 中转站 YAML 生成 + 配置回读
 ```
 
 ## 设计原则

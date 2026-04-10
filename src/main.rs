@@ -2,7 +2,6 @@
 
 rust_i18n::i18n!("locales", fallback = "en");
 
-mod app_state;
 mod application;
 mod bootstrap;
 mod i18n;
