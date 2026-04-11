@@ -56,7 +56,6 @@ jobs:
             libxcb1-dev \
             libxcb-xinput-dev \
             libxcb-randr0-dev \
-            libxcb-cursor0-dev \
             libxcb-shape0-dev \
             libxcb-screensaver0-dev \
             libxcb-sync-dev \
