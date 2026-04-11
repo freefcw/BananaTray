@@ -156,6 +156,13 @@ impl AppSession {
                 .unwrap_or(NavTab::Settings)
         };
 
+        // 设置页默认选中 sidebar 列表中的第一个 provider（而非硬编码 Claude）
+        let sidebar_ids = settings.provider.sidebar_provider_ids(&custom_ids);
+        let default_settings_provider = sidebar_ids
+            .first()
+            .cloned()
+            .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude));
+
         Self {
             provider_store: ProviderStore { providers },
             nav: NavigationState {
@@ -167,7 +174,7 @@ impl AppSession {
             },
             settings_ui: SettingsUiState {
                 active_tab: SettingsTab::General,
-                selected_provider: ProviderId::BuiltIn(ProviderKind::Claude),
+                selected_provider: default_settings_provider,
                 cadence_dropdown_open: false,
                 copilot_token_editing: false,
                 adding_newapi: false,

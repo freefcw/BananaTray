@@ -608,10 +608,14 @@ fn sanitize_stale_refs(session: &mut AppSession) {
             session.nav.last_provider_id = first;
         }
     }
-    // 设置面板选中的 provider
+    // 设置面板选中的 provider：回退到 sidebar 列表第一个，而非硬编码 Claude
     if !provider_exists(session, &session.settings_ui.selected_provider) {
-        session.settings_ui.selected_provider =
-            ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
+        let custom_ids = session.provider_store.custom_provider_ids();
+        let sidebar_ids = session.settings.provider.sidebar_provider_ids(&custom_ids);
+        session.settings_ui.selected_provider = sidebar_ids
+            .first()
+            .cloned()
+            .unwrap_or(ProviderId::BuiltIn(crate::models::ProviderKind::Claude));
     }
     // Debug 面板
     let reset_debug_provider = session
