@@ -40,11 +40,11 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 
 ### `layout.rs` — Popup Window Sizing
 
-- **`PopupLayout`** — constants for popup dimensions: `WIDTH`, `BASE_HEIGHT`, `FIRST_QUOTA_HEIGHT`, `EXTRA_QUOTA_HEIGHT`, `MIN_HEIGHT`, `MAX_HEIGHT`, plus Overview card constants
-- **`OverviewLayoutKind`** — enum determining Overview card layout: `SingleRow` (0~1 quota), `DualRow` (2 quotas), `MultiRow { quota_rows }` (3+ quotas, 每行 2 个)
+- **`PopupLayout`** — constants for popup dimensions: `WIDTH`, `BASE_HEIGHT`, `FIRST_QUOTA_HEIGHT`, `EXTRA_QUOTA_HEIGHT`, `MIN_HEIGHT`, `MAX_HEIGHT`, plus Overview card/element sizing constants (`OVERVIEW_DOT_SIZE`, `OVERVIEW_ICON_SIZE`, `OVERVIEW_BAR_W`, `OVERVIEW_BAR_H`, `OVERVIEW_EXPANDED_BAR_H`, `OVERVIEW_VALUE_W`, `OVERVIEW_BADGE_W`, `OVERVIEW_EXPAND_W`, `OVERVIEW_QUOTA_LINE_HEIGHT`, `OVERVIEW_QUOTA_LINE_GAP` 等)
+  - `overview_multi_item_height(quota_rows)` — 计算展开态多行布局的卡片高度
 - **`compute_popup_height_for_quotas()`** — pure function mapping quota count to pixel height (clamped to min/max)
 - **`compute_popup_height_detailed()`** — extended height calculation with dashboard row and account info flags
-- **`compute_popup_height_for_overview_layouts()`** — height calculation from a slice of `OverviewLayoutKind` (supports mixed layout types)
+- **`compute_popup_height_for_overview()`** — height calculation from enabled provider count (all cards collapsed by default)
 
 ### `test_helpers.rs` — Test Fixtures
 

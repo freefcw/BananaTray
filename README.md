@@ -5,7 +5,7 @@ A cross-platform system tray application for monitoring AI coding assistant quot
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover, right-click opens settings
-- **14 AI provider integrations** — real-time quota monitoring via APIs, CLIs, and local credential files
+- **15 AI provider integrations** — real-time quota monitoring via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
@@ -34,14 +34,14 @@ A cross-platform system tray application for monitoring AI coding assistant quot
 
 ## Tech Stack
 
-- **Language**: Rust (nightly toolchain, required by GPUI)
+- **Language**: Rust (stable toolchain)
 - **UI Framework**: [GPUI](https://crates.io/crates/adabraka-gpui) (`adabraka-gpui`) + `adabraka-ui` component library
 - **Async Runtime**: smol v2 (background refresh coordinator)
 - **HTTP Client**: ureq v3
 - **Logging**: fern + log (file + stdout, with panic hook)
 - **Serialization**: serde + serde_json
 - **PTY**: portable-pty (for CLI-based providers)
-- **Notifications**: notify-rust
+- **Notifications**: UNUserNotificationCenter (macOS) / notify-rust (Linux)
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG desktop files (Linux)
 
@@ -85,31 +85,28 @@ Runtime logs use `fern` with dual output (stdout + file):
 
 ```
 src/
-  main.rs              — Entry point: Application::run(), CLI dispatch
-  lib.rs               — Crate root for lib target (testing entrypoint)
-  bootstrap.rs         — App initialization (UI setup, refresh, tray events)
-  app/                 — GPUI views, settings window, widgets (behind `app` feature)
-  app_state.rs         — Pure-logic sub-states (ProviderStore, NavigationState, SettingsUiState)
-  application/         — Action-Reducer-Effect pipeline (reducer + separated tests)
-  models/              — Core data types (ProviderKind, QuotaInfo, AppSettings, etc.)
-  providers/           — AiProvider trait + 14 provider implementations + ProviderManager
-  tray/                — TrayController, multi-display positioning, icon management
-  refresh.rs           — RefreshCoordinator: background event loop for quota polling
-  runtime/             — Effect executor (GPUI bridge for dispatch_in_app)
-  settings_store.rs    — JSON settings persistence (load/save)
-  notification.rs      — Quota alert state machine + system notifications
-  auto_launch.rs       — Platform-specific launch-at-login
-  single_instance.rs   — IPC-based single instance enforcement
-  logging.rs           — fern logger initialization + panic hook
-  assets.rs            — GPUI AssetSource (bundle / system / dev fallback)
-  theme.rs             — Light/dark color theme definitions
-  icons/               — SVG icon assets
-  utils/               — Shared utilities (HTTP client, PTY runner, text/time helpers)
+  main.rs            — Entry point: Application::run(), CLI dispatch
+  lib.rs             — Crate root. `ui` module behind cfg(feature = "app")
+  bootstrap.rs       — App initialization (UI setup, refresh, tray events)
+  ui/                — GPUI views, settings window, widgets
+  application/       — Action-Reducer-Effect pipeline (state, reducer, selectors)
+  models/            — Core data types (GPUI-free: ProviderKind, QuotaInfo, AppSettings, etc.)
+  providers/         — AiProvider trait + 14 implementations + ProviderManager + YAML custom providers
+  platform/          — Platform adaptation layer (assets, auto-launch, logging, notification, paths, single instance)
+  tray/              — TrayController, multi-display positioning, icon management
+  refresh/           — RefreshCoordinator (background polling thread)
+  runtime/           — Effect executor (GPUI bridge)
+  icons/             — SVG icon assets (provider + UI icons)
+  utils/             — Text/time helpers, log capture
+  settings_store.rs  — JSON settings persistence (atomic write)
+  i18n.rs            — Locale detection and i18n configuration
+  theme.rs           — YAML-based theme system (GPUI-free)
 ```
 
 Key design decisions:
 
-1. **AppState decomposition** — `AppState` is a composition container with 3 sub-states (`ProviderStore`, `NavigationState`, `SettingsUiState`) + `AppSettings`. Sub-states are GPUI-free for testability.
-2. **Provider extensibility** — `AiProvider` trait with `metadata() -> ProviderMetadata`. Adding a new provider requires only implementing the trait and registering via `register_providers!` macro.
-3. **GPUI isolation** — `app` module is behind `cfg(feature = "app")` in `lib.rs` because GPUI proc macros crash test compilation. Pure logic lives in `app_state.rs`, `models/`, and `app/provider_logic.rs`.
-4. **Refresh architecture** — `RefreshCoordinator` runs in a dedicated thread, receives `RefreshRequest` messages, applies cooldown/dedup, spawns concurrent refresh tasks, and sends `RefreshEvent` results back to the UI thread.
+1. **AppState decomposition** — `AppState` (`ui/bridge.rs`) wraps `AppSession` (`application/state.rs`), which holds `ProviderStore`, `NavigationState`, `SettingsUiState`, `DebugUiState` + `AppSettings`. Sub-states are GPUI-free for testability.
+2. **Action-Reducer-Effect** — Elm/Redux-style unidirectional data flow: `AppAction → reduce() → Vec<AppEffect> → runtime/`. Pure reducers and selectors are fully testable.
+3. **Provider extensibility** — `AiProvider` trait with `metadata() -> ProviderMetadata`. Adding a new provider requires only implementing the trait and registering via `register_providers!` macro.
+4. **GPUI isolation** — `ui` module is behind `cfg(feature = "app")` in `lib.rs` because GPUI proc macros crash test compilation. Pure logic lives in `application/`, `models/`, and `providers/`.
+5. **Refresh architecture** — `RefreshCoordinator` runs in a dedicated thread, receives `RefreshRequest` messages, applies cooldown/dedup, spawns concurrent refresh tasks, and sends `RefreshEvent` results back to the UI thread.
