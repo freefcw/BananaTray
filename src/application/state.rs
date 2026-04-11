@@ -336,7 +336,7 @@ pub fn compute_popup_height(
     store: &ProviderStore,
     settings: &AppSettings,
 ) -> f32 {
-    // Overview 面板：根据已启用 Provider 数量计算高度
+    // Overview 面板：根据已启用 Provider 数量计算高度（所有卡片默认折叠）
     if nav.active_tab == NavTab::Overview {
         let enabled_count = store
             .providers
