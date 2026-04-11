@@ -53,13 +53,14 @@ jobs:
             libxkbcommon-dev \
             libvulkan-dev \
             libwayland-dev \
-            libxcb-dev \
+            libxcb1-dev \
             libxcb-xinput-dev \
             libxcb-randr0-dev \
-            libxcb-cursor-dev \
+            libxcb-cursor0-dev \
             libxcb-shape0-dev \
             libxcb-screensaver0-dev \
-            libxcb-sync-dev
+            libxcb-sync-dev \
+            libxcb-xkb-dev
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
