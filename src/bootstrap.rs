@@ -1,19 +1,30 @@
 //! 应用初始化 — 启动时调用一次的设置和注册函数
 
 use crate::application::AppAction;
+use crate::models::AppSettings;
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::tray::TrayController;
 use crate::ui::AppState;
 use gpui::*;
-use log::info;
+use log::{info, warn};
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+pub(crate) fn load_settings() -> AppSettings {
+    crate::settings_store::load().unwrap_or_else(|err| {
+        warn!(target: "settings", "failed to load saved settings: {err}");
+        AppSettings::default()
+    })
+}
+
+pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
+    crate::platform::auto_launch::sync(settings.system.start_at_login);
+}
+
 /// 初始化 i18n、UI 工具包、托盘图标（在 GPUI run 闭包内调用）
-pub(crate) fn bootstrap_ui(cx: &mut App) {
+pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     // i18n locale
-    let settings = crate::settings_store::load().unwrap_or_default();
     crate::i18n::apply_locale(&settings.display.language);
 
     // adabraka-ui 工具包
@@ -44,6 +55,10 @@ pub(crate) fn bootstrap_refresh() -> (
     smol::channel::Receiver<crate::refresh::RefreshEvent>,
     std::sync::Arc<crate::providers::ProviderManager>,
 ) {
+    if let Err(err) = crate::platform::paths::migrate_legacy_custom_providers_dir() {
+        warn!(target: "providers::custom", "failed to migrate legacy custom providers dir: {err}");
+    }
+
     let (event_tx, event_rx) = smol::channel::bounded::<crate::refresh::RefreshEvent>(64);
     let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
     let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);

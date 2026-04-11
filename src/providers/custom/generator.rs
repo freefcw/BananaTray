@@ -163,16 +163,15 @@ pub struct NewApiEditData {
 pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
     use super::schema::CustomProviderDef;
 
-    let providers_dir = dirs::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("bananatray")
-        .join("providers");
-
+    let providers_dir = crate::platform::paths::custom_providers_dir();
     if !providers_dir.exists() {
         return None;
     }
 
-    let entries = std::fs::read_dir(&providers_dir).ok()?;
+    let entries = match std::fs::read_dir(&providers_dir) {
+        Ok(entries) => entries,
+        Err(_) => return None,
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if !path
@@ -182,7 +181,6 @@ pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
             continue;
         }
 
-        // 读取失败或解析失败的文件跳过，不中断搜索
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => continue,

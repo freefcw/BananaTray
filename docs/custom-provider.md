@@ -8,7 +8,7 @@ BananaTray 支持通过 YAML 文件声明自定义 Provider，无需编写代码
 
 ```bash
 # macOS
-mkdir -p ~/Library/Application\ Support/bananatray/providers/
+mkdir -p ~/Library/Application\ Support/BananaTray/providers/
 
 # Linux
 mkdir -p ~/.config/bananatray/providers/
@@ -48,7 +48,7 @@ mkdir -p ~/.config/bananatray/providers/
 ```bash
 # macOS
 cp docs/examples/custom-provider-newapi.yaml \
-   ~/Library/Application\ Support/bananatray/providers/newapi.yaml
+   ~/Library/Application\ Support/BananaTray/providers/newapi.yaml
 
 # Linux
 cp docs/examples/custom-provider-newapi.yaml \
@@ -405,8 +405,9 @@ parser:
 ### Provider 没有出现
 
 1. 检查 YAML 文件是否在正确目录下：
-   - macOS: `~/Library/Application Support/bananatray/providers/`
+   - macOS: `~/Library/Application Support/BananaTray/providers/`
    - Linux: `~/.config/bananatray/providers/`
+   - macOS 如历史上使用过旧目录 `~/Library/Application Support/bananatray/providers/`，重启应用后会自动迁移到规范目录
 2. 检查文件扩展名是否为 `.yaml` 或 `.yml`
 3. 检查 YAML 语法是否正确（可用 `yq` 或在线 YAML 校验工具）
 4. 查看应用日志，搜索 `providers::custom` 相关的 warning

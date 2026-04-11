@@ -21,6 +21,8 @@
 - `view_entity` — weak ref to AppView for UI updates
 - `log_path` — log file path for Debug tab
 
+Persisted `AppSettings` are loaded in `bootstrap.rs` and injected into `AppState::new(...)`, so the UI runtime container no longer performs settings I/O during construction.
+
 `AppSession` (in `application/state.rs`, GPUI-free) holds:
 
 - `ProviderStore` — provider status list + find/mutate/sync methods
@@ -59,9 +61,18 @@ Provider credentials are read from local config files or CLI tools, except Copil
 - **macOS**: `~/Library/Application Support/BananaTray/settings.json`
 - **Linux**: `$XDG_CONFIG_HOME/bananatray/settings.json`
 
+## Custom Provider Storage
+
+- **Canonical directory**:
+  - macOS: `~/Library/Application Support/BananaTray/providers/`
+  - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+- **Compatibility**:
+  - On startup, macOS legacy lowercase directory `~/Library/Application Support/bananatray/providers/` is migrated into the canonical directory
+  - After migration, runtime reads and writes only use the canonical directory
+
 ## Testing
 
-683 unit tests, run with `cargo test --lib`. Coverage:
+694 unit tests, run with `cargo test --lib`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `app_state.rs` — ProviderStore, NavigationState, SettingsUiState

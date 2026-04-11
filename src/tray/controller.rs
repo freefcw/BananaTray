@@ -4,6 +4,7 @@
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
 
 use crate::application::AppAction;
+use crate::models::AppSettings;
 use crate::models::NavTab;
 use crate::ui::{schedule_open_settings_window, AppState};
 use gpui::*;
@@ -22,10 +23,13 @@ impl TrayController {
     pub(crate) fn new(
         refresh_tx: smol::channel::Sender<crate::refresh::RefreshRequest>,
         manager: &crate::providers::ProviderManager,
+        settings: AppSettings,
         log_path: Option<std::path::PathBuf>,
     ) -> Self {
         info!(target: "tray", "initializing tray controller");
-        let state = Rc::new(RefCell::new(AppState::new(refresh_tx, manager, log_path)));
+        let state = Rc::new(RefCell::new(AppState::new(
+            refresh_tx, manager, settings, log_path,
+        )));
         Self {
             window: None,
             state,

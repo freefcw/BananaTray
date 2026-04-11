@@ -55,16 +55,21 @@ fn main() {
     Application::new()
         .with_assets(Assets::new())
         .run(move |cx: &mut App| {
+            let settings = bootstrap::load_settings();
+
             // 1. UI + 托盘初始化
-            bootstrap::bootstrap_ui(cx);
+            bootstrap::bootstrap_ui(cx, &settings);
 
             // 2. 后台刷新系统
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
+
+            bootstrap::sync_initial_auto_launch(&settings);
 
             // 3. 窗口控制器
             let controller = Rc::new(RefCell::new(tray::TrayController::new(
                 refresh_tx,
                 &manager,
+                settings,
                 log_path.clone(),
             )));
 

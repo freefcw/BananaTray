@@ -23,6 +23,11 @@
 
 除内置 Provider 外，用户可以通过 YAML 文件声明自定义 Provider，无需编写代码。
 
+配置目录：
+- macOS: `~/Library/Application Support/BananaTray/providers/`
+- Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+- macOS 如存在旧目录 `~/Library/Application Support/bananatray/providers/`，应用会在启动时自动迁移到规范目录
+
 支持的数据获取方式：CLI 命令 / HTTP GET / HTTP POST
 支持的认证方式：Bearer Token / 自定义 Header / Login（用户名密码）/ Cookie / Session Token
 支持的解析方式：JSON 点分路径 / 正则表达式 capture group

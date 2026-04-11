@@ -8,10 +8,7 @@ use super::schema::{CustomProviderDef, ParserDef, RegexQuotaRule, SourceDef};
 
 /// 自定义 Provider YAML 文件的搜索目录
 fn providers_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("bananatray")
-        .join("providers")
+    crate::platform::paths::custom_providers_dir()
 }
 
 /// 扫描默认配置目录，加载所有有效的自定义 Provider 定义

@@ -31,7 +31,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer，将 action 转换为状态变更 + side effects
 - **`build_config_sync_request()`** — 构建配置同步请求
-- 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `sanitize_stale_refs()`
+- 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `process_refresh_outcome()` / `sanitize_stale_refs()`
 
 测试文件：`reducer_tests.rs`（1100+ 行，覆盖所有 action 分支）
 

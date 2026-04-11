@@ -44,6 +44,14 @@
 - **`send_system_notification()`** — macOS 原生通知（UNUserNotificationCenter）
 - **`send_plain_notification()`** — 简单文本通知
 
+#### `paths.rs` — 配置路径解析
+
+- **`app_config_dir()`** — 统一返回应用配置目录
+- **`settings_path()`** — 返回 `settings.json` 的规范路径
+- **`custom_providers_dir()`** — 返回自定义 Provider YAML 的规范目录
+- **`custom_provider_path()`** — 返回单个自定义 Provider YAML 的规范路径
+- **`migrate_legacy_custom_providers_dir()`** — 启动时将 macOS legacy lowercase 目录中的 YAML 迁移到规范目录
+
 #### `system.rs` — 系统工具函数
 
 - **`open_url()`** — 用默认浏览器打开 URL

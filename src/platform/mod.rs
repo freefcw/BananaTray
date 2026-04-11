@@ -3,6 +3,7 @@
 //!
 //! 集中管理所有平台相关的代码：
 //! - `assets` — GPUI 资源加载（多平台路径解析）
+//! - `paths` — 配置目录与自定义 Provider 路径解析
 //! - `auto_launch` — 开机自启动（macOS SMAppService / Linux XDG autostart）
 //! - `logging` — 日志系统初始化（fern + panic hook）
 //! - `notification` — 系统通知 + 配额预警状态机
@@ -25,4 +26,5 @@ pub(crate) use assets::Assets;
 pub mod auto_launch;
 pub(crate) mod logging;
 pub mod notification;
+pub mod paths;
 pub mod system;

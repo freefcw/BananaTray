@@ -27,6 +27,15 @@ Aggregation registry holding all provider implementations:
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `refresh_provider(kind)` — checks availability then delegates to the provider's `refresh()`
 
+### `custom/` — YAML-backed Providers
+
+- Custom provider YAML files are resolved through `crate::platform::paths`
+- Canonical directory:
+  - macOS: `~/Library/Application Support/BananaTray/providers/`
+  - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+- On startup, macOS legacy lowercase directory `~/Library/Application Support/bananatray/providers/` is migrated into the canonical directory
+- After startup migration, runtime only reads and writes the canonical directory
+
 ## Provider Implementations
 
 | File | Provider | ID | Data Source | Notes |
