@@ -46,7 +46,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | ViewModel 类型定义 + 公共 re-export |
+| `mod.rs` | ViewModel 类型定义（含 `OverviewQuotaItem`）+ 公共 re-export |
 | `tray.rs` | 弹窗面板 ViewModel（header / provider detail / nav / global actions） |
 | `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers） |
 | `debug.rs` | Debug Tab ViewModel（系统信息、日志捕获、调试刷新） |

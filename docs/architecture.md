@@ -72,7 +72,7 @@ Provider credentials are read from local config files or CLI tools, except Copil
 
 ## Testing
 
-694 unit tests, run with `cargo test --lib`. Coverage:
+run with `cargo test --lib`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `app_state.rs` — ProviderStore, NavigationState, SettingsUiState

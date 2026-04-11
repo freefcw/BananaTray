@@ -12,6 +12,7 @@ BananaTray — cross-platform system tray app for monitoring AI coding assistant
 4. If architecture-level changes → update `docs/architecture.md`
 5. When adding a new subdirectory under `src/`, create a `README.md` for it
 6. **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
+7. **Task completion check** — after finishing a task, review whether any documentation needs updating based on rules 1–5 above.
 
 ## Commands
 
@@ -69,6 +70,7 @@ src/
   i18n.rs            — Locale detection and i18n configuration
   settings_store.rs  — Settings JSON persistence (atomic write)
   theme.rs           — YAML-based theme system (GPUI-free)
+  theme_tests.rs     — Theme parsing unit tests
 ```
 
 Each `src/` subdirectory has its own `README.md` with detailed documentation.
