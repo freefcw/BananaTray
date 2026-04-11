@@ -45,6 +45,10 @@ rust-i18n = "3"
 sys-locale = "0.3"
 rusqlite = { version = "0.32", features = ["bundled"] }
 prost = "0.13"
+# 静态编译 OpenSSL，避免运行时依赖 Homebrew 的 libssl 动态库。
+# 分发时必须保留：用户机器上不一定有 OpenSSL，且 adhoc 签名 + hardened runtime
+# 会因 Team ID 不匹配拒绝加载 Homebrew 的 dylib。
+openssl-sys = { version = "0.9", features = ["vendored"] }
 
 # -- macOS native deps --
 [target.'cfg(target_os = "macos")'.dependencies]
