@@ -59,6 +59,7 @@ pub fn icon_png_data(request: TrayIconRequest) -> &'static [u8] {
 }
 
 /// 判断是否应使用 macOS template 模式（系统自动深色/浅色适配）
+#[cfg(target_os = "macos")]
 fn is_template_mode(request: TrayIconRequest) -> bool {
     matches!(
         request,
