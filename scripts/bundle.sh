@@ -80,14 +80,23 @@ echo "✅ App Bundle 已创建: $APP_DIR"
 # 相比简单的 ad-hoc 签名，hardened runtime 让 macOS 能更稳定地
 # 记住 TCC 授权，避免每次重新构建后弹出"需要访问网络卷宗"的弹窗。
 #
-# 如果有 Apple Developer ID，可将 "-" 替换为证书名称以彻底消除弹窗。
+# 签名身份优先级：
+#   1. 环境变量 CODESIGN_IDENTITY（如 "Apple Development: you@email.com (TEAMID)"）
+#   2. 回退到 ad-hoc 签名 "-"
 ENTITLEMENTS="$PROJECT_DIR/resources/BananaTray.entitlements"
-echo "🔏 Hardened Runtime 代码签名..."
-codesign --force --deep --sign - \
+SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ "$SIGN_IDENTITY" = "-" ]; then
+    echo "🔏 Hardened Runtime 代码签名 (ad-hoc)..."
+    echo "   💡 设置 CODESIGN_IDENTITY 环境变量可使用 Apple Developer 证书签名"
+else
+    echo "🔏 Hardened Runtime 代码签名..."
+    echo "   🔑 使用证书: $SIGN_IDENTITY"
+fi
+codesign --force --deep --sign "$SIGN_IDENTITY" \
     --options runtime \
     --entitlements "$ENTITLEMENTS" \
     "$APP_DIR"
-echo "✅ 签名完成（hardened runtime + entitlements）"
+echo "✅ 签名完成"
 
 echo ""
 echo "📂 目录结构:"
