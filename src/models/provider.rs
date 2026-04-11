@@ -222,6 +222,8 @@ mod tests {
 /// 底部导航页签
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NavTab {
+    /// 总览面板：所有 Provider 配额概览
+    Overview,
     Provider(ProviderId),
     Settings,
 }

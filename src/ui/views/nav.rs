@@ -7,6 +7,8 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use std::time::Duration;
 
+/// Overview 导航图标路径（与 tray_settings.rs 保持一致）
+const OVERVIEW_ICON: &str = "src/icons/overview.svg";
 /// 两侧指示器区域宽度
 const INDICATOR_WIDTH: f32 = 14.0;
 /// 滚动偏移量超过此阈值才显示指示器
@@ -51,7 +53,7 @@ impl AppView {
         let custom_ids = state_ref.session.provider_store.custom_provider_ids();
         drop(state_ref);
         let ordered_ids = settings.provider.ordered_provider_ids(&custom_ids);
-        let nav_items: Vec<_> = ordered_ids
+        let mut nav_items: Vec<_> = ordered_ids
             .iter()
             .filter(|id| settings.provider.is_enabled(id))
             .filter_map(|id| {
@@ -64,6 +66,18 @@ impl AppView {
                 })
             })
             .collect();
+
+        // Overview pill 始终在所有 Provider 之前
+        if settings.display.show_overview {
+            nav_items.insert(
+                0,
+                (
+                    OVERVIEW_ICON.to_string(),
+                    "Overview".to_string(),
+                    NavTab::Overview,
+                ),
+            );
+        }
 
         // 计算 active / prev pill 在 nav_items 中的索引
         let active_index = nav_items.iter().position(|(_, _, tab)| *tab == active_tab);

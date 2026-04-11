@@ -9,7 +9,7 @@ mod tray;
 // ============================================================================
 
 use super::state::HeaderStatusKind;
-use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo};
+use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo, StatusLevel};
 use crate::providers::custom::generator::NewApiEditData;
 
 // ── Tray 弹出窗口 ──
@@ -95,6 +95,43 @@ pub struct ProviderEmptyViewState {
 pub enum ProviderEmptyAction {
     OpenSettings,
     RetryRefresh,
+}
+
+// ── Overview 总览面板 ──
+
+/// Overview 总览面板 ViewModel
+#[derive(Debug, Clone)]
+pub struct OverviewViewState {
+    pub items: Vec<OverviewItemViewState>,
+}
+
+/// 单个 Provider 在 Overview 中的紧凑展示
+#[derive(Debug, Clone)]
+pub struct OverviewItemViewState {
+    pub id: ProviderId,
+    pub icon: String,
+    pub display_name: String,
+    pub status: OverviewItemStatus,
+}
+
+/// Overview 单项的状态展示
+#[derive(Debug, Clone)]
+pub enum OverviewItemStatus {
+    /// 有有效配额数据（所有展示值已由 selector 预计算）
+    Quota {
+        /// 状态等级（Green/Yellow/Red）
+        status_level: StatusLevel,
+        /// 预计算的显示文本（如 "70%"、"$15.00"）
+        display_text: String,
+        /// 进度条比例 [0.0, 1.0]
+        bar_ratio: f32,
+    },
+    /// 正在刷新
+    Refreshing,
+    /// 错误或无数据
+    Error { message: String },
+    /// 未连接
+    Disconnected,
 }
 
 // ── Settings 窗口 ──
@@ -203,4 +240,7 @@ pub use format::{
     provider_list_subtitle, quota_remaining_text, quota_usage_detail_text,
 };
 pub use settings::settings_providers_tab_view_state;
-pub use tray::{header_view_state, provider_detail_view_state, tray_global_actions_view_state};
+pub use tray::{
+    header_view_state, overview_view_state, provider_detail_view_state,
+    tray_global_actions_view_state,
+};
