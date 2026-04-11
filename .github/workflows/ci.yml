@@ -51,6 +51,7 @@ jobs:
             libssl-dev \
             pkg-config \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
             libvulkan-dev \
             libwayland-dev \
             libxcb1-dev \
