@@ -69,5 +69,7 @@ notify-rust = "4"
 [dev-dependencies]
 tempfile = "3"
 
-# [patch.crates-io]
-# adabraka-gpui = { path = "vendor/adabraka-gpui-0.5.1" }
+[patch.crates-io]
+# 修复 Linux 上 XCBConnection::setup() 缺少 Connection trait import 的编译错误
+# 上游 bug: adabraka-gpui 0.5.1 src/platform/linux/global_hotkey.rs
+adabraka-gpui = { git = "https://github.com/freefcw/adabraka-gpui", rev = "536dbc848498e544d14d7e824f6624c9cf2cd0a4" }
