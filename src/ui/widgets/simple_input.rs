@@ -355,7 +355,7 @@ fn build_input_content(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::SimpleInputState;
 
     #[test]
     fn insert_and_backspace() {

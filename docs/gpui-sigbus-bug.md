@@ -116,10 +116,10 @@ fn store_find_existing() { ... }
 - id: cargo-test
   entry: cargo test --all-targets --all-features
 
-# 修改后（仅运行集成测试）
+# 修改后（排除 GPUI feature，运行全量 lib 测试）
 - id: cargo-test
-  name: cargo test (integration only)
-  entry: cargo test --test state_tests --all-features
+  name: cargo test (lib, no GPUI features)
+  entry: cargo test --lib --no-default-features
 ```
 
 ## 验证结果
@@ -131,8 +131,8 @@ fn store_find_existing() { ... }
 cargo check --all-targets --all-features
 cargo clippy --all-targets --all-features
 
-# ✅ 集成测试
-cargo test --test state_tests --all-features
+# ✅ 全量 lib 测试（717 个，含 ui/tray 模块测试）
+cargo test --lib
 
 # ✅ pre-commit
 pre-commit run --all-files
@@ -156,9 +156,19 @@ pre-commit run --all-files
 
 | 项目 | 状态 | 备注 |
 |------|------|------|
-| adabraka-gpui | 闭源 | 无法确认是否有修复 |
-| 最新版本 | 0.5.1 | 当前仍受影响 |
-| Rust 编译器 | 待报告 | 可能需要向 Rust 团队报告 |
+| adabraka-gpui | 已 fork 并修复 | freefcw/adabraka-gpui commit `4f0bcca` |
+| 最新版本 | 0.5.1 (patched) | `[patch.crates-io]` 指向修复 commit |
+| 上游修复内容 | `doctest=false` + `recursion_limit="512"` | gpui-macros crate |
+
+### 上游修复（freefcw/adabraka-gpui@4f0bcca）
+
+两处改动，缺一不可：
+
+1. **`gpui-macros/Cargo.toml`** — `doctest = false`：proc-macro crate 的 doctest 在测试目标编译时触发 syn 递归入口
+2. **`gpui-macros/src/gpui_macros.rs`** — `#![recursion_limit = "512"]`：防止宏展开深度超过默认 128 导致栈溢出
+
+> 注意：上游修复后 **`cargo test --lib` 仍会 SIGBUS**，因为 BananaTray 的 lib 开启了 default features (`app`)，
+> 导致 GPUI 模块参与 test 目标编译。**必须用 `cargo test --lib --no-default-features`**。
 
 ## 后续维护建议
 
@@ -203,5 +213,19 @@ cargo test --all-targets  # 测试是否修复
 ---
 
 **记录时间**：2026-03-28
-**最后更新**：2026-03-28
-**状态**：已解决（通过架构调整绕过）
+**最后更新**：2026-04-11
+**状态**：已完全解决
+
+### 最终解决方案
+
+真正根因：`src/ui/widgets/simple_input.rs` 文件顶层 `use gpui::*`，测试模块用 `use super::*` 把所有 GPUI 类型（含 `style_helpers!` 展开的数千个方法）带入测试作用域，导致 rustc 在 test 目标编译时递归达深度爆栈。
+
+修复：`simple_input.rs` 测试模块改为精确 import：
+```rust
+// 修改前
+use super::*;
+// 修改后
+use super::SimpleInputState;
+```
+
+修复后 `cargo test --lib` 直接运行，无需 `--no-default-features`，717 个测试全部通过。
