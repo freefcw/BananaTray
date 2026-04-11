@@ -51,8 +51,8 @@ impl PopupLayout {
 
     // ── Overview 紧凑卡片高度 ──
 
-    /// Overview 紧凑卡片高度（单行）: py(12)×2 + content(24) + border(2)
-    pub const OVERVIEW_ITEM_HEIGHT: f32 = 50.0;
+    /// Overview 紧凑卡片高度（单行）: py(8)×2 + content(24) + border(2)
+    pub const OVERVIEW_ITEM_HEIGHT: f32 = 42.0;
     /// Overview 卡片间距
     pub const OVERVIEW_ITEM_SPACER: f32 = 8.0;
 

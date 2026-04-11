@@ -103,7 +103,7 @@ impl AppView {
             .items_center()
             .gap(px(8.0))
             .px(px(12.0))
-            .py(px(12.0))
+            .py(px(8.0))
             .rounded(px(10.0))
             .bg(theme.bg.card_inner)
             .border_1()
