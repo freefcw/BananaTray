@@ -221,6 +221,10 @@ impl RefreshCoordinator {
                         log::info!(target: "refresh", "refresh all requested ({:?})", reason);
                         let kinds: Vec<_> = self.scheduler.enabled_providers().to_vec();
                         self.execute_refresh_concurrent(kinds, reason).await;
+                        // 手动触发全部刷新后重置周期定时器，避免短时间内重复刷新
+                        if matches!(reason, RefreshReason::Manual) {
+                            self.scheduler.advance_periodic_deadline();
+                        }
                     }
                     RefreshRequest::RefreshOne { id, reason } => {
                         log::info!(target: "refresh", "refresh one requested: {} ({:?})", id, reason);

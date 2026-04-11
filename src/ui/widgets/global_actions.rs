@@ -1,5 +1,5 @@
 /// 底部全局操作栏：Sync Data + Settings + Close
-use crate::application::{tray_global_actions_view_state, AppAction};
+use crate::application::{tray_global_actions_view_state, AppAction, RefreshTarget};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -17,7 +17,7 @@ impl AppView {
             tray_global_actions_view_state(&state.session)
         };
 
-        // Sync Data 按钮（触发当前 provider 的刷新）
+        // Sync Data 按钮（触发刷新：Overview 全部刷新 / Provider 单个刷新）
         let sync_btn = {
             let entity = cx.entity().clone();
             let refresh = actions.refresh.clone();
@@ -49,21 +49,18 @@ impl AppView {
                         .child(refresh.label.clone()),
                 );
 
-            if refresh.id.is_some() && !refresh.is_refreshing {
+            if let (Some(target), false) = (refresh.target, refresh.is_refreshing) {
                 btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    if let Some(ref id) = refresh.id {
-                        let id = id.clone();
-                        entity.update(cx, |view, cx| {
-                            runtime::dispatch_in_context(
-                                &view.state,
-                                AppAction::RefreshProvider {
-                                    id,
-                                    reason: RefreshReason::Manual,
-                                },
-                                cx,
-                            );
-                        });
-                    }
+                    entity.update(cx, |view, cx| {
+                        let action = match target.clone() {
+                            RefreshTarget::All => AppAction::RefreshAll,
+                            RefreshTarget::One(id) => AppAction::RefreshProvider {
+                                id,
+                                reason: RefreshReason::Manual,
+                            },
+                        };
+                        runtime::dispatch_in_context(&view.state, action, cx);
+                    });
                 });
             }
 

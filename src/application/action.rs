@@ -20,6 +20,8 @@ pub enum AppAction {
         id: ProviderId,
         reason: RefreshReason,
     },
+    /// Overview 页面刷新所有已启用的 Provider，并重置定期刷新定时器
+    RefreshAll,
     ToggleProvider(ProviderId),
     RefreshEventReceived(RefreshEvent),
     OpenSettings {

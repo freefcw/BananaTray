@@ -58,6 +58,9 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::RefreshProvider { id, reason } => {
             request_provider_refresh(session, id, reason, &mut effects);
         }
+        AppAction::RefreshAll => {
+            refresh_all_providers(session, &mut effects);
+        }
         AppAction::ToggleProvider(id) => {
             toggle_provider(session, id, &mut effects);
         }
@@ -375,6 +378,25 @@ fn apply_setting_change(
     }
 
     effects.push(AppEffect::PersistSettings);
+    push_render(effects);
+}
+
+fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+    let enabled_ids: Vec<ProviderId> = session
+        .provider_store
+        .providers
+        .iter()
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
+        .map(|p| p.provider_id.clone())
+        .collect();
+
+    for id in &enabled_ids {
+        session.provider_store.mark_refreshing_by_id(id);
+    }
+
+    effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll {
+        reason: RefreshReason::Manual,
+    }));
     push_render(effects);
 }
 
