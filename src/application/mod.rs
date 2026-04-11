@@ -16,7 +16,7 @@ pub use selectors::{
     DebugTabViewState, DisabledProviderViewState, LogLevelColor, OverviewItemStatus,
     OverviewItemViewState, OverviewQuotaItem, OverviewViewState, ProviderBodyViewState,
     ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState,
-    ProviderSettingsMode, QuotaVisibilityItem, SettingsProviderDetailViewState,
+    ProviderSettingsMode, QuotaVisibilityItem, RefreshTarget, SettingsProviderDetailViewState,
     SettingsProviderInfoViewState, SettingsProviderListItemViewState, SettingsProviderStatusKind,
     SettingsProviderUsageViewState,
 };

@@ -26,9 +26,19 @@ pub struct GlobalActionsViewState {
     pub refresh: RefreshButtonViewState,
 }
 
+/// 刷新按钮的目标：单个 Provider 或全部
+#[derive(Debug, Clone)]
+pub enum RefreshTarget {
+    /// 刷新指定 Provider（Provider 详情页）
+    One(ProviderId),
+    /// 刷新所有已启用 Provider（Overview 页）
+    All,
+}
+
 #[derive(Debug, Clone)]
 pub struct RefreshButtonViewState {
-    pub id: Option<ProviderId>,
+    /// 刷新目标（None = 无可刷新目标，如 Settings 页）
+    pub target: Option<RefreshTarget>,
     pub is_refreshing: bool,
     pub label: String,
 }
@@ -238,7 +248,7 @@ pub enum ProviderSettingsMode {
 }
 
 // ============================================================================
-// Re-exports：保持 `use crate::application::selectors::xxx` 路径不变
+// Re-exports：保持 crate::application::selectors::xxx 路径不变
 // ============================================================================
 
 pub use debug::{

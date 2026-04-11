@@ -17,20 +17,26 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
 }
 
 pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsViewState {
-    let id = match &session.nav.active_tab {
-        NavTab::Provider(id) => Some(id.clone()),
-        NavTab::Settings | NavTab::Overview => None,
+    let target = match &session.nav.active_tab {
+        NavTab::Provider(id) => Some(RefreshTarget::One(id.clone())),
+        NavTab::Overview => Some(RefreshTarget::All),
+        NavTab::Settings => None,
     };
 
-    let is_refreshing = id
-        .as_ref()
-        .and_then(|id| {
-            session
-                .provider_store
-                .find_by_id(id)
-                .map(|provider| provider.connection == ConnectionStatus::Refreshing)
-        })
-        .unwrap_or(false);
+    let is_refreshing = match &target {
+        Some(RefreshTarget::All) => {
+            // Overview 模式：任何一个已启用 Provider 正在刷新即视为 refreshing
+            session.provider_store.providers.iter().any(|p| {
+                session.settings.provider.is_enabled(&p.provider_id)
+                    && p.connection == ConnectionStatus::Refreshing
+            })
+        }
+        Some(RefreshTarget::One(id)) => session
+            .provider_store
+            .find_by_id(id)
+            .is_some_and(|p| p.connection == ConnectionStatus::Refreshing),
+        None => false,
+    };
 
     let label = if is_refreshing {
         t!("provider.status.refreshing").to_string()
@@ -41,7 +47,7 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
     GlobalActionsViewState {
         show_refresh: session.settings.display.show_refresh_button,
         refresh: RefreshButtonViewState {
-            id,
+            target,
             is_refreshing,
             label,
         },

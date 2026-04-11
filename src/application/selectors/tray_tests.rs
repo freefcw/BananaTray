@@ -47,7 +47,10 @@ fn global_actions_refresh_id_matches_active_provider() {
     let session = make_session_with_provider(settings, provider);
     let actions = tray_global_actions_view_state(&session);
 
-    assert_eq!(actions.refresh.id, Some(pid(ProviderKind::Gemini)));
+    assert!(
+        matches!(actions.refresh.target, Some(RefreshTarget::One(ref id)) if *id == pid(ProviderKind::Gemini)),
+        "expected RefreshTarget::One(Gemini)"
+    );
     assert!(!actions.refresh.is_refreshing);
 }
 
@@ -75,7 +78,47 @@ fn global_actions_refresh_id_none_on_settings_tab() {
     session.nav.active_tab = NavTab::Settings;
     let actions = tray_global_actions_view_state(&session);
 
-    assert!(actions.refresh.id.is_none());
+    assert!(actions.refresh.target.is_none());
+}
+
+#[test]
+fn global_actions_refresh_all_on_overview_tab() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = true;
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+
+    let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    let session = AppSession::new(settings, vec![provider]);
+    // show_overview = true → active_tab 默认为 Overview
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
+
+    let actions = tray_global_actions_view_state(&session);
+    assert!(matches!(actions.refresh.target, Some(RefreshTarget::All)));
+    assert!(!actions.refresh.is_refreshing);
+}
+
+#[test]
+fn global_actions_overview_is_refreshing_when_any_provider_refreshing() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = true;
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let gemini = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    let claude = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
+    let session = AppSession::new(settings, vec![gemini, claude]);
+
+    let actions = tray_global_actions_view_state(&session);
+    assert!(matches!(actions.refresh.target, Some(RefreshTarget::All)));
+    assert!(actions.refresh.is_refreshing);
 }
 
 // ── Account Info 冒烟测试 ─────────────────────────────────

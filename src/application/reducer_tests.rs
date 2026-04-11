@@ -886,6 +886,63 @@ fn clear_debug_logs_produces_effect() {
     )));
     assert!(has_render(&effects));
 }
+// ── RefreshAll ──────────────────────────────────────
+
+#[test]
+fn refresh_all_marks_enabled_providers_refreshing() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Gemini), true);
+
+    let effects = reduce(&mut session, AppAction::RefreshAll);
+
+    // 所有已启用的 provider 应被标记为 Refreshing
+    let claude = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Claude))
+        .unwrap();
+    assert_eq!(claude.connection, ConnectionStatus::Refreshing);
+    let gemini = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Gemini))
+        .unwrap();
+    assert_eq!(gemini.connection, ConnectionStatus::Refreshing);
+
+    // 未启用的 provider 不受影响
+    let copilot = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Copilot))
+        .unwrap();
+    assert_ne!(copilot.connection, ConnectionStatus::Refreshing);
+
+    // 应产出 RefreshAll 请求
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll { .. })
+    )));
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn refresh_all_with_no_enabled_providers_is_safe() {
+    let mut session = make_session();
+    // 默认没有启用任何 provider
+
+    let effects = reduce(&mut session, AppAction::RefreshAll);
+
+    // 仍然应产出 RefreshAll 请求（coordinator 会处理空列表）
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll { .. })
+    )));
+    assert!(has_render(&effects));
+}
 
 // ── RefreshEvent::Finished + debug restore ──────────
 
