@@ -14,9 +14,10 @@ pub use selectors::{
     settings_providers_tab_view_state, tray_global_actions_view_state, AccountInfoViewState,
     AvailableProviderItem, CapturedLogEntry, DebugConsoleViewState, DebugContext,
     DebugTabViewState, DisabledProviderViewState, LogLevelColor, OverviewItemStatus,
-    OverviewItemViewState, OverviewViewState, ProviderBodyViewState, ProviderDetailViewState,
-    ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState, ProviderSettingsMode,
-    QuotaVisibilityItem, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
-    SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
+    OverviewItemViewState, OverviewQuotaItem, OverviewViewState, ProviderBodyViewState,
+    ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState,
+    ProviderSettingsMode, QuotaVisibilityItem, SettingsProviderDetailViewState,
+    SettingsProviderInfoViewState, SettingsProviderListItemViewState, SettingsProviderStatusKind,
+    SettingsProviderUsageViewState,
 };
 pub use state::{AppSession, HeaderStatusKind, SettingsTab};

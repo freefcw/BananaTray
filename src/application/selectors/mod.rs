@@ -119,12 +119,10 @@ pub struct OverviewItemViewState {
 pub enum OverviewItemStatus {
     /// 有有效配额数据（所有展示值已由 selector 预计算）
     Quota {
-        /// 状态等级（Green/Yellow/Red）
+        /// 总体最差状态等级（用于状态点和徽章颜色）
         status_level: StatusLevel,
-        /// 预计算的显示文本（如 "70%"、"$15.00"）
-        display_text: String,
-        /// 进度条比例 [0.0, 1.0]
-        bar_ratio: f32,
+        /// 所有可见配额（按 status_level 降序，最差的在前）
+        quotas: Vec<OverviewQuotaItem>,
     },
     /// 正在刷新
     Refreshing,
@@ -132,6 +130,19 @@ pub enum OverviewItemStatus {
     Error { message: String },
     /// 未连接
     Disconnected,
+}
+
+/// Overview 中单个配额的预计算展示数据
+#[derive(Debug, Clone)]
+pub struct OverviewQuotaItem {
+    /// 配额名称（如 "Session"、"Weekly"）
+    pub label: String,
+    /// 预计算的显示文本（如 "70%"、"$15.00"）
+    pub display_text: String,
+    /// 进度条比例 [0.0, 1.0]
+    pub bar_ratio: f32,
+    /// 此配额的状态等级
+    pub status_level: StatusLevel,
 }
 
 // ── Settings 窗口 ──

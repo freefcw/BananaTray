@@ -242,22 +242,32 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 }
                 // Connected 或 Error（有缓存配额）：展示配额数据
                 ConnectionStatus::Connected | ConnectionStatus::Error => {
-                    // 取可见配额中状态最差的一个
                     let visible = session
                         .settings
                         .provider
                         .visible_quotas(provider.kind(), &provider.quotas);
-                    if let Some(worst) = visible.iter().max_by_key(|q| q.status_level()) {
-                        let status_level = worst.status_level();
-                        let display_text = compact_quota_display_text(worst, display_mode);
-                        let bar_ratio = compact_quota_bar_ratio(worst, status_level, display_mode);
-                        OverviewItemStatus::Quota {
-                            status_level,
-                            display_text,
-                            bar_ratio,
-                        }
-                    } else {
+                    if visible.is_empty() {
                         OverviewItemStatus::Disconnected
+                    } else {
+                        // 收集所有可见配额，按 status_level 降序（最差在前）
+                        let mut quota_items: Vec<OverviewQuotaItem> = visible
+                            .iter()
+                            .map(|q| {
+                                let sl = q.status_level();
+                                OverviewQuotaItem {
+                                    label: q.label.clone(),
+                                    display_text: compact_quota_display_text(q, display_mode),
+                                    bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
+                                    status_level: sl,
+                                }
+                            })
+                            .collect();
+                        quota_items.sort_by(|a, b| b.status_level.cmp(&a.status_level));
+                        let worst = quota_items[0].status_level;
+                        OverviewItemStatus::Quota {
+                            status_level: worst,
+                            quotas: quota_items,
+                        }
                     }
                 }
             };

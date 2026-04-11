@@ -1,9 +1,10 @@
 use crate::application::{header_view_state, HeaderStatusKind};
-use crate::models::NavTab;
+use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
 use gpui::*;
 use log::debug;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::ui::bridge::AppState;
@@ -20,6 +21,8 @@ pub struct AppView {
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
+    /// Overview 面板中展开了配额详情的 Provider 集合（UI-only 状态）
+    pub(crate) overview_expanded: HashSet<ProviderId>,
 }
 
 impl AppView {
@@ -42,6 +45,7 @@ impl AppView {
             _activation_sub: None,
             _appearance_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
+            overview_expanded: HashSet::new(),
         }
     }
 

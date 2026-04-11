@@ -418,12 +418,12 @@ fn overview_shows_quota_for_connected_provider() {
     match &item.status {
         OverviewItemStatus::Quota {
             status_level,
-            display_text,
-            bar_ratio,
+            quotas,
         } => {
             assert_eq!(*status_level, crate::models::StatusLevel::Green);
-            assert_eq!(display_text, "70%"); // 70% remaining (default mode)
-            assert!(*bar_ratio > 0.0 && *bar_ratio <= 1.0);
+            assert_eq!(quotas.len(), 1);
+            assert_eq!(quotas[0].display_text, "70%"); // 70% remaining (default mode)
+            assert!(quotas[0].bar_ratio > 0.0 && quotas[0].bar_ratio <= 1.0);
         }
         other => panic!("expected Quota, got {:?}", other),
     }
@@ -494,7 +494,7 @@ fn overview_shows_disconnected_status() {
 }
 
 #[test]
-fn overview_picks_worst_quota() {
+fn overview_picks_worst_quota_and_sorts_descending() {
     let _locale_guard = setup_locale();
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
     provider.quotas = vec![
@@ -507,9 +507,47 @@ fn overview_picks_worst_quota() {
 
     assert_eq!(vm.items.len(), 1);
     match &vm.items[0].status {
-        OverviewItemStatus::Quota { status_level, .. } => {
-            // weekly (5% remaining) 是 Red，应为最差
+        OverviewItemStatus::Quota {
+            status_level,
+            quotas,
+        } => {
+            // overall worst 是 Red
             assert_eq!(*status_level, crate::models::StatusLevel::Red);
+            // 收集了 2 个配额
+            assert_eq!(quotas.len(), 2);
+            // 最差的在前（Red）
+            assert_eq!(quotas[0].status_level, crate::models::StatusLevel::Red);
+            assert_eq!(quotas[0].label, "weekly");
+            // 较好的在后（Green）
+            assert_eq!(quotas[1].status_level, crate::models::StatusLevel::Green);
+            assert_eq!(quotas[1].label, "session");
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_multi_quota_display_text_precomputed() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("fast", 40.0, 100.0), // 60% remaining
+        QuotaInfo::new("slow", 80.0, 100.0), // 20% remaining
+    ];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { quotas, .. } => {
+            // 每个配额都应有预计算的 display_text
+            for q in quotas {
+                assert!(
+                    !q.display_text.is_empty(),
+                    "display_text should be precomputed"
+                );
+                assert!(q.bar_ratio >= 0.0 && q.bar_ratio <= 1.0);
+            }
         }
         other => panic!("expected Quota, got {:?}", other),
     }
@@ -527,4 +565,44 @@ fn overview_excludes_disabled_providers() {
 
     assert_eq!(vm.items.len(), 1);
     assert_eq!(vm.items[0].id, pid(ProviderKind::Claude));
+}
+
+#[test]
+fn overview_three_plus_quotas_collected_and_sorted() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0), // 90% remaining → Green
+        QuotaInfo::new("weekly", 95.0, 100.0),  // 5% remaining → Red
+        QuotaInfo::new("monthly", 60.0, 100.0), // 40% remaining → Yellow
+    ];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota {
+            status_level,
+            quotas,
+        } => {
+            // overall worst 应为 Red
+            assert_eq!(*status_level, crate::models::StatusLevel::Red);
+            // 收集了全部 3 个配额
+            assert_eq!(quotas.len(), 3);
+            // 按 status_level 降序排列：Red > Yellow > Green
+            assert_eq!(quotas[0].status_level, crate::models::StatusLevel::Red);
+            assert_eq!(quotas[0].label, "weekly");
+            assert_eq!(quotas[1].status_level, crate::models::StatusLevel::Yellow);
+            assert_eq!(quotas[1].label, "monthly");
+            assert_eq!(quotas[2].status_level, crate::models::StatusLevel::Green);
+            assert_eq!(quotas[2].label, "session");
+            // 所有配额都有预计算的 display_text 和有效的 bar_ratio
+            for q in quotas {
+                assert!(!q.display_text.is_empty());
+                assert!(q.bar_ratio >= 0.0 && q.bar_ratio <= 1.0);
+            }
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
 }
