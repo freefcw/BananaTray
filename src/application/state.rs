@@ -147,10 +147,14 @@ impl AppSession {
             .find(|p| settings.provider.is_enabled(&p.provider_id))
             .map(|p| p.provider_id.clone());
 
-        let active_tab = first_enabled
-            .clone()
-            .map(NavTab::Provider)
-            .unwrap_or(NavTab::Settings);
+        let active_tab = if settings.display.show_overview {
+            NavTab::Overview
+        } else {
+            first_enabled
+                .clone()
+                .map(NavTab::Provider)
+                .unwrap_or(NavTab::Settings)
+        };
 
         Self {
             provider_store: ProviderStore { providers },
@@ -326,12 +330,22 @@ pub enum HeaderStatusKind {
 
 /// 根据当前导航状态和 Provider 数据计算弹出窗口高度
 ///
-/// 步骤：解析当前 provider → 过滤可见 quota → 判断面板可见性 → 委托布局计算
+/// 步骤：解析当前 tab → 分派布局计算
 pub fn compute_popup_height(
     nav: &NavigationState,
     store: &ProviderStore,
     settings: &AppSettings,
 ) -> f32 {
+    // Overview 面板：根据已启用 Provider 数量计算高度
+    if nav.active_tab == NavTab::Overview {
+        let enabled_count = store
+            .providers
+            .iter()
+            .filter(|p| settings.provider.is_enabled(&p.provider_id))
+            .count();
+        return crate::models::compute_popup_height_for_overview(enabled_count);
+    }
+
     let id = match &nav.active_tab {
         NavTab::Provider(id) => id.clone(),
         _ => nav.last_provider_id.clone(),
@@ -369,7 +383,7 @@ pub fn compute_header_status(
 ) -> (String, HeaderStatusKind) {
     let id = match &nav.active_tab {
         NavTab::Provider(id) => id.clone(),
-        NavTab::Settings => nav.last_provider_id.clone(),
+        NavTab::Settings | NavTab::Overview => nav.last_provider_id.clone(),
     };
 
     let Some(provider) = store.find_by_id(&id) else {

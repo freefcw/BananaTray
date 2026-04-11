@@ -49,6 +49,13 @@ impl PopupLayout {
     /// 账户信息卡片高度: py(12)×2 + avatar(44) + border(2) + 底部 spacer(8)
     pub const ACCOUNT_INFO_HEIGHT: f32 = 78.0;
 
+    // ── Overview 紧凑卡片高度 ──
+
+    /// Overview 紧凑卡片高度（单行）: py(12)×2 + content(24) + border(2)
+    pub const OVERVIEW_ITEM_HEIGHT: f32 = 50.0;
+    /// Overview 卡片间距
+    pub const OVERVIEW_ITEM_SPACER: f32 = 8.0;
+
     /// 最小窗口高度：1张卡片（不含 dashboard）
     pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT;
     /// 最大窗口高度
@@ -58,6 +65,20 @@ impl PopupLayout {
 /// 根据 quota 数量和是否有 dashboard 行，计算弹出窗口高度
 pub fn compute_popup_height_for_quotas(quota_count: usize) -> f32 {
     compute_popup_height_detailed(quota_count, true, false)
+}
+
+/// 计算 Overview 面板的弹出窗口高度
+pub fn compute_popup_height_for_overview(provider_count: usize) -> f32 {
+    // 至少预留 1 张卡片高度，0 个已启用时用于渲染空状态提示
+    let count = provider_count.max(1);
+    let items_height = count as f32 * PopupLayout::OVERVIEW_ITEM_HEIGHT;
+    let spacers_height = if count > 1 {
+        (count - 1) as f32 * PopupLayout::OVERVIEW_ITEM_SPACER
+    } else {
+        0.0
+    };
+    let raw_height = PopupLayout::FIXED_HEIGHT + items_height + spacers_height;
+    raw_height.clamp(PopupLayout::MIN_HEIGHT, PopupLayout::MAX_HEIGHT)
 }
 
 /// 计算弹出窗口高度（统一所有可选区域的高度因素）

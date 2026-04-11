@@ -19,7 +19,7 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
 pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsViewState {
     let id = match &session.nav.active_tab {
         NavTab::Provider(id) => Some(id.clone()),
-        NavTab::Settings => None,
+        NavTab::Settings | NavTab::Overview => None,
     };
 
     let is_refreshing = id
@@ -211,6 +211,135 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
             t!("provider.connect_to_track", name = provider.display_name()).to_string()
         }
         ConnectionStatus::Connected => t!("provider.no_usage_details").to_string(),
+    }
+}
+
+// ── Overview 总览 ───────────────────────────────────────────
+
+pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
+    let custom_ids = session.provider_store.custom_provider_ids();
+    let ordered_ids = session.settings.provider.ordered_provider_ids(&custom_ids);
+    let display_mode = session.settings.display.quota_display_mode;
+
+    let items: Vec<OverviewItemViewState> = ordered_ids
+        .iter()
+        .filter(|id| session.settings.provider.is_enabled(id))
+        .filter_map(|id| {
+            let provider = session.provider_store.find_by_id(id)?;
+            let icon = provider.icon_asset().to_string();
+            let display_name = provider.display_name().to_string();
+
+            let status = match provider.connection {
+                ConnectionStatus::Refreshing => OverviewItemStatus::Refreshing,
+                ConnectionStatus::Disconnected => OverviewItemStatus::Disconnected,
+                ConnectionStatus::Error if provider.quotas.is_empty() => {
+                    OverviewItemStatus::Error {
+                        message: provider
+                            .error_message
+                            .clone()
+                            .unwrap_or_else(|| t!("provider.refresh_failed").to_string()),
+                    }
+                }
+                // Connected 或 Error（有缓存配额）：展示配额数据
+                ConnectionStatus::Connected | ConnectionStatus::Error => {
+                    // 取可见配额中状态最差的一个
+                    let visible = session
+                        .settings
+                        .provider
+                        .visible_quotas(provider.kind(), &provider.quotas);
+                    if let Some(worst) = visible.iter().max_by_key(|q| q.status_level()) {
+                        let status_level = worst.status_level();
+                        let display_text = compact_quota_display_text(worst, display_mode);
+                        let bar_ratio = compact_quota_bar_ratio(worst, status_level, display_mode);
+                        OverviewItemStatus::Quota {
+                            status_level,
+                            display_text,
+                            bar_ratio,
+                        }
+                    } else {
+                        OverviewItemStatus::Disconnected
+                    }
+                }
+            };
+
+            Some(OverviewItemViewState {
+                id: id.clone(),
+                icon,
+                display_name,
+                status,
+            })
+        })
+        .collect();
+
+    OverviewViewState { items }
+}
+
+/// Overview 紧凑显示文本：根据 display_mode 选择 Remaining/Used 模式
+fn compact_quota_display_text(
+    quota: &crate::models::QuotaInfo,
+    display_mode: crate::models::QuotaDisplayMode,
+) -> String {
+    use crate::models::{QuotaDisplayMode, QuotaType};
+
+    if quota.is_balance_only() {
+        let balance = quota.remaining_balance.unwrap_or(0.0);
+        return if matches!(quota.quota_type, QuotaType::Credit) {
+            format!("${:.2}", balance)
+        } else {
+            format!("{:.2}", balance)
+        };
+    }
+
+    match (&quota.quota_type, display_mode) {
+        (QuotaType::Credit, QuotaDisplayMode::Remaining) => {
+            let remaining = quota.limit - quota.used;
+            if remaining >= 0.0 {
+                format!("${:.2}", remaining)
+            } else {
+                format!("-${:.2}", -remaining)
+            }
+        }
+        (QuotaType::Credit, QuotaDisplayMode::Used) => {
+            format!("${:.2}", quota.used)
+        }
+        (_, QuotaDisplayMode::Remaining) => {
+            format!("{:.0}%", quota.percent_remaining().max(0.0))
+        }
+        (_, QuotaDisplayMode::Used) => {
+            format!("{:.0}%", quota.percentage().clamp(0.0, 100.0))
+        }
+    }
+}
+
+/// Overview 紧凑进度条比例 [0.0, 1.0]
+///
+/// Remaining 模式：进度条表示剩余比例（满→空）
+/// Used 模式：进度条表示已用比例（空→满），与文本语义一致
+fn compact_quota_bar_ratio(
+    quota: &crate::models::QuotaInfo,
+    level: crate::models::StatusLevel,
+    display_mode: crate::models::QuotaDisplayMode,
+) -> f32 {
+    use crate::models::{QuotaDisplayMode, StatusLevel};
+
+    if quota.is_balance_only() {
+        // 余额模式无进度条意义，用状态等级粗略映射
+        match level {
+            StatusLevel::Green => 0.8,
+            StatusLevel::Yellow => 0.4,
+            StatusLevel::Red => 0.1,
+        }
+    } else {
+        match display_mode {
+            QuotaDisplayMode::Remaining => {
+                let pct = quota.percent_remaining().clamp(0.0, 100.0);
+                pct as f32 / 100.0
+            }
+            QuotaDisplayMode::Used => {
+                let pct = quota.percentage().clamp(0.0, 100.0);
+                pct as f32 / 100.0
+            }
+        }
     }
 }
 

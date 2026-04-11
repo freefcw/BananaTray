@@ -190,6 +190,12 @@ impl Render for AppView {
                     .flex_1()
                     .overflow_y_scroll()
                     .child(match &active_tab {
+                        NavTab::Overview => div()
+                            .px(px(12.0))
+                            .pt(px(10.0))
+                            .pb(px(8.0))
+                            .child(self.render_overview_panel(cx))
+                            .into_any_element(),
                         NavTab::Provider(id) => div()
                             .px(px(12.0))
                             .pt(px(10.0))

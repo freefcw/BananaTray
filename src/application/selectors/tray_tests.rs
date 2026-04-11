@@ -8,8 +8,10 @@ fn pid(kind: ProviderKind) -> ProviderId {
     ProviderId::BuiltIn(kind)
 }
 
-fn make_session_with_provider(settings: AppSettings, provider: ProviderStatus) -> AppSession {
+fn make_session_with_provider(mut settings: AppSettings, provider: ProviderStatus) -> AppSession {
     let id = provider.provider_id.clone();
+    // 测试中关闭 overview，确保 active_tab 直接指向 Provider
+    settings.display.show_overview = false;
     let session = AppSession::new(settings, vec![provider]);
     assert_eq!(session.nav.active_tab, NavTab::Provider(id));
     session
@@ -379,4 +381,150 @@ fn panel_defaults_to_remaining_mode() {
         }
         _ => panic!("expected Panel variant"),
     }
+}
+
+// ── overview_view_state ──────────────────────────────────
+
+/// 辅助函数：构建 Overview 测试 session（开启 overview）
+fn make_overview_session(providers: Vec<ProviderStatus>, enabled: &[ProviderKind]) -> AppSession {
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = true;
+    for k in enabled {
+        settings.provider.set_provider_enabled(*k, true);
+    }
+    AppSession::new(settings, providers)
+}
+
+#[test]
+fn overview_empty_when_no_enabled_providers() {
+    let _locale_guard = setup_locale();
+    let session = make_overview_session(vec![], &[]);
+    let vm = overview_view_state(&session);
+    assert!(vm.items.is_empty());
+}
+
+#[test]
+fn overview_shows_quota_for_connected_provider() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("session", 30.0, 100.0)];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    let item = &vm.items[0];
+    assert_eq!(item.id, pid(ProviderKind::Claude));
+    match &item.status {
+        OverviewItemStatus::Quota {
+            status_level,
+            display_text,
+            bar_ratio,
+        } => {
+            assert_eq!(*status_level, crate::models::StatusLevel::Green);
+            assert_eq!(display_text, "70%"); // 70% remaining (default mode)
+            assert!(*bar_ratio > 0.0 && *bar_ratio <= 1.0);
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_shows_refreshing_status() {
+    let _locale_guard = setup_locale();
+    let provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Refreshing);
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Gemini]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    assert!(matches!(vm.items[0].status, OverviewItemStatus::Refreshing));
+}
+
+#[test]
+fn overview_shows_error_when_no_quotas() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+    provider.error_message = Some("auth expired".to_string());
+    // quotas 为空 → Error 分支
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    match &vm.items[0].status {
+        OverviewItemStatus::Error { message } => {
+            assert_eq!(message, "auth expired");
+        }
+        other => panic!("expected Error, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_prefers_cached_quotas_over_error() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+    provider.error_message = Some("timeout".to_string());
+    // 有缓存配额 → 即使出错也应展示 Quota
+    provider.quotas = vec![QuotaInfo::new("session", 50.0, 100.0)];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    assert!(
+        matches!(vm.items[0].status, OverviewItemStatus::Quota { .. }),
+        "cached quotas should trump error status"
+    );
+}
+
+#[test]
+fn overview_shows_disconnected_status() {
+    let _locale_guard = setup_locale();
+    let provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Disconnected);
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Copilot]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    assert!(matches!(
+        vm.items[0].status,
+        OverviewItemStatus::Disconnected
+    ));
+}
+
+#[test]
+fn overview_picks_worst_quota() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0), // 90% remaining → Green
+        QuotaInfo::new("weekly", 95.0, 100.0),  // 5% remaining → Red
+    ];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { status_level, .. } => {
+            // weekly (5% remaining) 是 Red，应为最差
+            assert_eq!(*status_level, crate::models::StatusLevel::Red);
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_excludes_disabled_providers() {
+    let _locale_guard = setup_locale();
+    let claude = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let gemini = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+
+    // 只启用 Claude，不启用 Gemini
+    let session = make_overview_session(vec![claude, gemini], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    assert_eq!(vm.items[0].id, pid(ProviderKind::Claude));
 }

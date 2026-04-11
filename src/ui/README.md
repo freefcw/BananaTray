@@ -23,9 +23,10 @@ GPUI-dependent UI module. Contains all view rendering, window management, and us
 ### `views/` — GPUI View Components
 
 - `app_view.rs` — **`AppView`** GPUI view struct implementing `Render`. Renders the tray popup with top navigation bar, content area, and global action footer.
-- `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`.
+- `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`. Overview pill inserted first when enabled.
+- `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail.
 - `provider_panel.rs` — Provider detail view: header, quota bars, status indicators, error messages.
-- `tray_settings.rs` — Inline settings content rendered inside the tray popup.
+- `tray_settings.rs` — Inline settings content rendered inside the tray popup (overview toggle, auto-hide, account info).
 
 ### `settings_window/` — Full Settings Window
 

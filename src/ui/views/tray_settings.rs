@@ -7,6 +7,7 @@ use rust_i18n::t;
 
 const AUTO_HIDE_ICON: &str = "src/icons/display.svg";
 const ACCOUNT_INFO_ICON: &str = "src/icons/about.svg";
+const OVERVIEW_ICON: &str = "src/icons/overview.svg";
 
 impl AppView {
     pub(crate) fn render_settings_content(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -15,6 +16,7 @@ impl AppView {
 
         let entity_auto_hide = cx.entity().clone();
         let entity_account_info = cx.entity().clone();
+        let entity_overview = cx.entity().clone();
 
         div()
             .px(px(12.0))
@@ -51,6 +53,23 @@ impl AppView {
                         runtime::dispatch_in_context(
                             &view.state,
                             AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
+                            cx,
+                        );
+                    });
+                },
+            ))
+            // Overview toggle
+            .child(self.render_settings_toggle_row(
+                OVERVIEW_ICON,
+                &t!("settings.show_overview"),
+                &t!("settings.show_overview.desc"),
+                settings.display.show_overview,
+                theme,
+                move |_, _, cx| {
+                    entity_overview.update(cx, |view, cx| {
+                        runtime::dispatch_in_context(
+                            &view.state,
+                            AppAction::UpdateSetting(SettingChange::ToggleShowOverview),
                             cx,
                         );
                     });

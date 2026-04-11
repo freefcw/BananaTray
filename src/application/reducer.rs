@@ -333,6 +333,16 @@ fn apply_setting_change(
             session.settings.display.show_account_info =
                 !session.settings.display.show_account_info;
         }
+        SettingChange::ToggleShowOverview => {
+            let new_val = !session.settings.display.show_overview;
+            session.settings.display.show_overview = new_val;
+            // 关闭 Overview 时，如果当前在 Overview tab，则切换到第一个 Provider
+            if !new_val && session.nav.active_tab == NavTab::Overview {
+                if let Some(tab) = session.default_provider_tab() {
+                    session.nav.switch_to(tab);
+                }
+            }
+        }
         SettingChange::Theme(theme) => {
             session.settings.display.theme = theme;
         }

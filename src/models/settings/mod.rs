@@ -75,6 +75,9 @@ pub struct DisplaySettings {
     /// 是否在 Provider 面板显示账户信息卡片
     #[serde(default = "default_true")]
     pub show_account_info: bool,
+    /// 是否在托盘弹窗显示 Overview 总览面板
+    #[serde(default = "default_true")]
+    pub show_overview: bool,
 }
 
 impl Default for DisplaySettings {
@@ -88,6 +91,7 @@ impl Default for DisplaySettings {
             show_refresh_button: true,
             show_debug_tab: false,
             show_account_info: true,
+            show_overview: true,
         }
     }
 }

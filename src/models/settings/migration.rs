@@ -83,6 +83,7 @@ impl From<LegacyAppSettings> for AppSettings {
                 show_refresh_button: old.show_refresh_button,
                 show_debug_tab: old.show_debug_tab,
                 show_account_info: old.show_account_info,
+                show_overview: true,
             },
             provider: ProviderConfig {
                 credentials: old.providers,

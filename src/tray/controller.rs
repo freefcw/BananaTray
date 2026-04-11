@@ -58,33 +58,43 @@ impl TrayController {
     }
 
     pub(crate) fn toggle_provider(&mut self, cx: &mut App) {
-        let provider_tab = {
+        let (show_overview, provider_tab) = {
             let mut state = self.state.borrow_mut();
-            state.session.default_provider_tab()
+            (
+                state.session.settings.display.show_overview,
+                state.session.default_provider_tab(),
+            )
         };
 
-        let Some(provider_tab) = provider_tab else {
+        // Overview 启用时优先展示 Overview tab
+        let target_tab = if show_overview {
+            Some(NavTab::Overview)
+        } else {
+            provider_tab
+        };
+
+        let Some(target_tab) = target_tab else {
             info!(target: "tray", "no providers enabled, opening settings directly");
             self.show_settings(cx);
             return;
         };
-        info!(target: "tray", "toggle provider panel for {:?}", provider_tab);
+        info!(target: "tray", "toggle provider panel for {:?}", target_tab);
 
         // Check if window is actually alive, not just if handle exists
         if self.is_window_alive(cx) {
             let active_tab = self.state.borrow().session.nav.active_tab.clone();
-            if matches!(active_tab, NavTab::Provider(_)) {
+            if matches!(active_tab, NavTab::Provider(_) | NavTab::Overview) {
                 info!(target: "tray", "provider panel already open, closing existing panel");
                 self.close_popup(cx);
             } else {
                 info!(target: "tray", "reusing existing window handle for provider panel");
-                self.show(provider_tab, cx);
+                self.show(target_tab, cx);
             }
         } else {
             // Handle is stale, clear it
             info!(target: "tray", "window handle is stale, clearing and opening fresh panel");
             self.window = None;
-            self.show(provider_tab, cx);
+            self.show(target_tab, cx);
         }
     }
 
