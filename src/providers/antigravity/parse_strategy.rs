@@ -59,25 +59,24 @@ impl ParseStrategy for ApiParseStrategy {
                     .unwrap_or("unknown");
 
                 if let Some(quota_info) = config.get("quotaInfo") {
-                    let remaining_fraction =
-                        quota_info.get("remainingFraction").and_then(|v| v.as_f64());
+                    let fraction = quota_info
+                        .get("remainingFraction")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+                    let used_percent = (1.0 - fraction) * 100.0;
 
-                    if let Some(fraction) = remaining_fraction {
-                        let used_percent = (1.0 - fraction) * 100.0;
+                    let reset_text = quota_info
+                        .get("resetTime")
+                        .and_then(|v| v.as_str())
+                        .and_then(time_utils::format_reset_countdown);
 
-                        let reset_text = quota_info
-                            .get("resetTime")
-                            .and_then(|v| v.as_str())
-                            .and_then(time_utils::format_reset_countdown);
-
-                        quotas.push(QuotaInfo::with_details(
-                            label,
-                            used_percent,
-                            100.0,
-                            QuotaType::ModelSpecific(label.to_string()),
-                            reset_text,
-                        ));
-                    }
+                    quotas.push(QuotaInfo::with_details(
+                        label,
+                        used_percent,
+                        100.0,
+                        QuotaType::ModelSpecific(label.to_string()),
+                        reset_text,
+                    ));
                 }
             }
         }
@@ -122,27 +121,26 @@ impl ParseStrategy for CacheParseStrategy {
                 let label = model_config.label.clone();
 
                 if let Some(quota_info) = model_config.quota_info {
-                    if let Some(remaining_fraction) = quota_info.remaining_fraction {
-                        let used_percent = (1.0 - remaining_fraction) * 100.0;
+                    let remaining_fraction = quota_info.remaining_fraction.unwrap_or(0.0);
+                    let used_percent = (1.0 - remaining_fraction) * 100.0;
 
-                        let reset_text = quota_info
-                            .reset_time_wrapper
-                            .and_then(|wrapper| wrapper.reset_time)
-                            .and_then(|ts| {
-                                chrono::DateTime::from_timestamp(ts, 0)
-                                    .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                            })
-                            .as_deref()
-                            .and_then(time_utils::format_reset_countdown);
+                    let reset_text = quota_info
+                        .reset_time_wrapper
+                        .and_then(|wrapper| wrapper.reset_time)
+                        .and_then(|ts| {
+                            chrono::DateTime::from_timestamp(ts, 0)
+                                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                        })
+                        .as_deref()
+                        .and_then(time_utils::format_reset_countdown);
 
-                        quotas.push(QuotaInfo::with_details(
-                            label.clone(),
-                            used_percent as f64,
-                            100.0,
-                            QuotaType::ModelSpecific(label),
-                            reset_text,
-                        ));
-                    }
+                    quotas.push(QuotaInfo::with_details(
+                        label.clone(),
+                        used_percent as f64,
+                        100.0,
+                        QuotaType::ModelSpecific(label),
+                        reset_text,
+                    ));
                 }
             }
         }
