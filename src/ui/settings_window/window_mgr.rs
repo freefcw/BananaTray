@@ -182,7 +182,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
 
     let settings_state = state.clone();
     let display_id = target_display_id;
-    let window_size = size(px(680.0), px(720.0));
+    let window_size = size(px(600.0), px(720.0));
     // Calculate display-local centered bounds. Bounds::centered() returns global
     // coordinates, but the macOS platform layer adds screen_frame.origin on top,
     // causing double-offset on secondary displays.
@@ -202,7 +202,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     let result = cx.open_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
-            window_min_size: Some(size(px(520.0), px(520.0))),
+            window_min_size: Some(size(px(480.0), px(520.0))),
             titlebar: None,
             kind: WindowKind::Normal,
             display_id,
