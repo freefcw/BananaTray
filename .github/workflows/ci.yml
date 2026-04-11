@@ -31,7 +31,7 @@ jobs:
         run: cargo clippy --lib -- -D warnings
 
       - name: Run tests
-        run: cargo test --lib --no-default-features
+        run: cargo test --lib
 
   # Linux: 编译验证 + clippy + 单元测试
   # 注: cargo fmt --check 只需在 macOS job 中运行一次
@@ -74,7 +74,7 @@ jobs:
         run: cargo clippy --lib -- -D warnings
 
       - name: Run tests
-        run: cargo test --lib --no-default-features
+        run: cargo test --lib
 
       # cargo check 验证完整二进制可编译（含 GPUI），比 build 更快
       - name: Check full binary compiles

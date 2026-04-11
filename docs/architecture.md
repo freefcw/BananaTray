@@ -21,7 +21,7 @@
 - `view_entity` — weak ref to AppView for UI updates
 - `log_path` — log file path for Debug tab
 
-`AppSession` (in `app_state.rs`, GPUI-free) holds:
+`AppSession` (in `application/state.rs`, GPUI-free) holds:
 
 - `ProviderStore` — provider status list + find/mutate/sync methods
 - `NavigationState` — active tab + last provider id + generation counter
@@ -61,7 +61,7 @@ Provider credentials are read from local config files or CLI tools, except Copil
 
 ## Testing
 
-683 unit tests, run with `cargo test --lib --no-default-features`. Coverage:
+683 unit tests, run with `cargo test --lib`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `app_state.rs` — ProviderStore, NavigationState, SettingsUiState

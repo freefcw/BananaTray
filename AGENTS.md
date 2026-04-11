@@ -18,12 +18,14 @@ BananaTray — cross-platform system tray app for monitoring AI coding assistant
 ```bash
 cargo run                  # dev
 cargo build --release      # release
-cargo test --lib           # tests (MUST use --lib, see below)
+cargo test --lib                        # tests (MUST use --lib, see below)
 cargo clippy               # lint
 cargo fmt                  # format
 ```
 
-> **`cargo test --lib` is mandatory.** `cargo test` without `--lib` will fail — the binary target pulls in GPUI which requires a Metal GPU context.
+> **`cargo test --lib --no-default-features` is mandatory.** `cargo test` without `--lib` will fail — the binary target pulls in GPUI which requires a Metal GPU context. `--no-default-features` is required to exclude the `app` feature, which brings in GPUI macros that cause a SIGBUS (rustc stack overflow via syn recursive parsing) when compiled as a test target.
+
+> **Update (2026-04-11):** The root cause was `use gpui::*` + `#[test]` in the same file scope. After fixing `simple_input.rs` to use a precise import (`use super::SimpleInputState`), `cargo test --lib` works without `--no-default-features`. The `--no-default-features` flag is kept as a fallback if new GPUI-macro-heavy files introduce regressions.
 
 ## Module Map
 

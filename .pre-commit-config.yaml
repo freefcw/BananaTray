@@ -45,10 +45,9 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # 注意：内联测试触发 GPUI 宏编译器 bug，因此只运行集成测试
       - id: cargo-test
-        name: cargo test (integration only)
-        entry: cargo test --test state_tests --all-features
+        name: cargo test (lib)
+        entry: cargo test --lib
         language: system
         types: [rust]
         pass_filenames: false

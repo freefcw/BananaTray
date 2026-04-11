@@ -70,6 +70,9 @@ notify-rust = "4"
 tempfile = "3"
 
 [patch.crates-io]
-# 修复 Linux 上 XCBConnection::setup() 缺少 Connection trait import 的编译错误
-# 上游 bug: adabraka-gpui 0.5.1 src/platform/linux/global_hotkey.rs
-adabraka-gpui = { git = "https://github.com/freefcw/adabraka-gpui", rev = "536dbc848498e544d14d7e824f6624c9cf2cd0a4" }
+# 包含两处上游修复:
+# 1. 修复 Linux 上 XCBConnection::setup() 缺少 Connection trait import 的编译错误
+#    (adabraka-gpui 0.5.1 src/platform/linux/global_hotkey.rs)
+# 2. 修复 gpui-macros doctest + 递归限制导致 cargo test 触发 SIGBUS (rustc 栈溢出)
+#    (gpui-macros: doctest=false + recursion_limit="512")
+adabraka-gpui = { git = "https://github.com/freefcw/adabraka-gpui", rev = "4f0bcca" }
