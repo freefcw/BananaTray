@@ -312,6 +312,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn is_template_mode_monochrome() {
         assert!(is_template_mode(TrayIconRequest::Static(
             TrayIconStyle::Monochrome
@@ -319,6 +320,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn is_template_mode_dynamic_green() {
         assert!(is_template_mode(TrayIconRequest::DynamicStatus(
             StatusLevel::Green
@@ -326,6 +328,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn is_not_template_mode_for_colored_icons() {
         assert!(!is_template_mode(TrayIconRequest::Static(
             TrayIconStyle::Yellow
