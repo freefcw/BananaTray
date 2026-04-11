@@ -43,5 +43,9 @@ AppSettings
 
 ## 持久化
 
-配置通过 `settings_store.rs` 以 JSON 格式序列化到 `~/.config/bananatray/settings.json`。
+配置通过 `settings_store.rs` 以 JSON 格式序列化到平台配置目录：
+
+- macOS: `~/Library/Application Support/BananaTray/settings.json`
+- Linux: `~/.config/bananatray/settings.json`
+
 serde 的 `#[serde(default)]` 保证新字段向前兼容。

@@ -36,14 +36,10 @@ impl AppState {
     pub fn new(
         refresh_tx: Sender<RefreshRequest>,
         manager: &ProviderManager,
+        settings: AppSettings,
         log_path: Option<PathBuf>,
     ) -> Self {
         debug!(target: "app", "initializing AppState");
-        let settings = crate::settings_store::load().unwrap_or_else(|err| {
-            warn!(target: "settings", "failed to load saved settings: {err}");
-            AppSettings::default()
-        });
-        crate::platform::auto_launch::sync(settings.system.start_at_login);
         let providers = manager.initial_statuses();
         let session = AppSession::new(settings, providers);
         debug!(

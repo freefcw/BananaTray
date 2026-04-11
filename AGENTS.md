@@ -59,6 +59,7 @@ src/
     auto_launch.rs   — Launch at login (macOS SMAppService / Linux XDG)
     logging.rs       — Log system init (fern + panic hook)
     notification.rs  — System notifications + quota alert state machine
+    paths.rs         — Canonical config/custom-provider paths + macOS legacy fallback
     system.rs          — Platform utils (open URL, clipboard, system info)
     single_instance.rs — Single instance detection (IPC local socket)
   tray/              — TrayController, multi-display positioning, icon management

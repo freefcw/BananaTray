@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
 pub struct ProviderManager {
-    pub(crate) providers: Vec<Arc<dyn AiProvider>>,
+    providers: Vec<Arc<dyn AiProvider>>,
     providers_by_kind: HashMap<ProviderKind, Arc<dyn AiProvider>>,
     metadata_by_kind: HashMap<ProviderKind, ProviderMetadata>,
     provider_ids: HashSet<Cow<'static, str>>,

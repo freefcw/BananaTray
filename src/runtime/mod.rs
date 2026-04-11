@@ -210,15 +210,15 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             yaml_content,
             filename,
         } => {
-            let providers_dir = dirs::config_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join("bananatray")
-                .join("providers");
-            if let Err(e) = std::fs::create_dir_all(&providers_dir) {
+            let path = crate::platform::paths::custom_provider_path(&filename);
+            let Some(providers_dir) = path.parent() else {
+                warn!(target: "runtime", "failed to resolve providers dir for {}", filename);
+                return;
+            };
+            if let Err(e) = std::fs::create_dir_all(providers_dir) {
                 warn!(target: "runtime", "failed to create providers dir: {}", e);
                 return;
             }
-            let path = providers_dir.join(&filename);
             match std::fs::write(&path, &yaml_content) {
                 Ok(()) => {
                     info!(target: "runtime", "saved custom provider YAML to {}", path.display());
@@ -231,11 +231,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             }
         }
         AppEffect::DeleteCustomProviderYaml { filename } => {
-            let path = dirs::config_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join("bananatray")
-                .join("providers")
-                .join(&filename);
+            let path = crate::platform::paths::custom_provider_path(&filename);
             match std::fs::remove_file(&path) {
                 Ok(()) => {
                     info!(target: "runtime", "deleted custom provider YAML: {}", path.display());

@@ -4,7 +4,11 @@
 
 ## 使用方法
 
-将 YAML 文件放到 `~/.config/bananatray/providers/` 目录（macOS 上是 `~/Library/Application Support/bananatray/providers/`），应用启动时自动加载。
+将 YAML 文件放到规范配置目录中，应用启动时自动加载：
+
+- macOS: `~/Library/Application Support/BananaTray/providers/`
+- Linux: `~/.config/bananatray/providers/`
+- macOS 如存在旧目录 `~/Library/Application Support/bananatray/providers/`，应用会在启动时自动迁移到规范目录
 
 示例文件见 `docs/examples/` 目录。
 

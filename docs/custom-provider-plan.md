@@ -7,6 +7,10 @@
 ## 架构设计
 
 ```
+~/Library/Application Support/BananaTray/providers/
+  my-ai.yaml          ← macOS canonical path
+  another-tool.yaml
+
 ~/.config/bananatray/providers/
   my-ai.yaml          ← 用户创建的自定义 Provider 定义
   another-tool.yaml
@@ -96,7 +100,7 @@ parser:
 
 ### Step 5: Loader（`loader.rs`）
 
-- 扫描 `~/.config/bananatray/providers/*.yaml`
+- 扫描规范配置目录中的 `providers/*.yaml`
 - 反序列化 + 校验
 - 为每个有效文件创建 `CustomProvider` 实例
 

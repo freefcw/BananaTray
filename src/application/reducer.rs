@@ -441,6 +441,70 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
     }
 }
 
+fn process_refresh_outcome(
+    session: &mut AppSession,
+    outcome_id: &ProviderId,
+    result: RefreshResult,
+    effects: &mut Vec<AppEffect>,
+) {
+    if session.provider_store.find_by_id(outcome_id).is_none() {
+        return;
+    }
+
+    match result {
+        RefreshResult::Success { data } => {
+            info!(
+                target: "providers",
+                "provider {} refresh succeeded: {} quotas",
+                outcome_id,
+                data.quotas.len()
+            );
+            let provider_name = session
+                .provider_store
+                .find_by_id(outcome_id)
+                .map(|provider| provider.display_name().to_string())
+                .unwrap_or_else(|| format!("{}", outcome_id));
+            if let Some(alert) =
+                session
+                    .alert_tracker
+                    .update(outcome_id, &provider_name, &data.quotas)
+            {
+                if session.settings.notification.session_quota_notifications {
+                    effects.push(AppEffect::SendQuotaNotification {
+                        alert,
+                        with_sound: session.settings.notification.notification_sound,
+                    });
+                }
+            }
+            if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
+                provider.mark_refresh_succeeded(data);
+                push_render(effects);
+            }
+        }
+        RefreshResult::Unavailable { message } => {
+            debug!(
+                target: "providers",
+                "provider {} unavailable: {}",
+                outcome_id,
+                message
+            );
+            if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
+                provider.mark_unavailable(message);
+                push_render(effects);
+            }
+        }
+        RefreshResult::Failed { error, error_kind } => {
+            if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
+                provider.mark_refresh_failed(error, error_kind);
+                push_render(effects);
+            }
+        }
+        RefreshResult::SkippedCooldown
+        | RefreshResult::SkippedInFlight
+        | RefreshResult::SkippedDisabled => {}
+    }
+}
+
 fn apply_refresh_event(
     session: &mut AppSession,
     event: RefreshEvent,
@@ -457,74 +521,12 @@ fn apply_refresh_event(
 
             // 快照刷新前的状态等级，用于判断刷新后是否需要更新图标
             let prev_status = session.current_provider_status();
+            let outcome_id = outcome.id.clone();
 
-            'process: {
-                if session.provider_store.find_by_id(&outcome.id).is_none() {
-                    break 'process;
-                }
-
-                match outcome.result {
-                    RefreshResult::Success { data } => {
-                        info!(
-                            target: "providers",
-                            "provider {} refresh succeeded: {} quotas",
-                            outcome.id,
-                            data.quotas.len()
-                        );
-                        let provider_name = session
-                            .provider_store
-                            .find_by_id(&outcome.id)
-                            .map(|provider| provider.display_name().to_string())
-                            .unwrap_or_else(|| format!("{}", outcome.id));
-                        if let Some(alert) =
-                            session
-                                .alert_tracker
-                                .update(&outcome.id, &provider_name, &data.quotas)
-                        {
-                            if session.settings.notification.session_quota_notifications {
-                                effects.push(AppEffect::SendQuotaNotification {
-                                    alert,
-                                    with_sound: session.settings.notification.notification_sound,
-                                });
-                            }
-                        }
-                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
-                        else {
-                            break 'process;
-                        };
-                        provider.mark_refresh_succeeded(data);
-                        push_render(effects);
-                    }
-                    RefreshResult::Unavailable { message } => {
-                        debug!(
-                            target: "providers",
-                            "provider {} unavailable: {}",
-                            outcome.id,
-                            message
-                        );
-                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
-                        else {
-                            break 'process;
-                        };
-                        provider.mark_unavailable(message);
-                        push_render(effects);
-                    }
-                    RefreshResult::Failed { error, error_kind } => {
-                        let Some(provider) = session.provider_store.find_by_id_mut(&outcome.id)
-                        else {
-                            break 'process;
-                        };
-                        provider.mark_refresh_failed(error, error_kind);
-                        push_render(effects);
-                    }
-                    RefreshResult::SkippedCooldown
-                    | RefreshResult::SkippedInFlight
-                    | RefreshResult::SkippedDisabled => {}
-                }
-            }
+            process_refresh_outcome(session, &outcome_id, outcome.result, effects);
 
             // 动态图标：仅当刷新的是当前 Provider 时才检查状态变化
-            maybe_update_dynamic_icon(session, &outcome.id, prev_status, effects);
+            maybe_update_dynamic_icon(session, &outcome_id, prev_status, effects);
 
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
@@ -592,7 +594,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
 fn sanitize_stale_refs(session: &mut AppSession) {
     // 导航：如果当前 active_tab 指向的 provider 已不存在，回退
     if let NavTab::Provider(ref id) = session.nav.active_tab {
-        if session.provider_store.find_by_id(id).is_none() {
+        if !provider_exists(session, id) {
             if let Some(tab) = session.default_provider_tab() {
                 session.nav.switch_to(tab);
             } else {
@@ -601,35 +603,38 @@ fn sanitize_stale_refs(session: &mut AppSession) {
         }
     }
     // last_provider_id
-    if session
-        .provider_store
-        .find_by_id(&session.nav.last_provider_id)
-        .is_none()
-    {
-        if let Some(first) = session
-            .provider_store
-            .providers
-            .iter()
-            .find(|p| session.settings.provider.is_enabled(&p.provider_id))
-        {
-            session.nav.last_provider_id = first.provider_id.clone();
+    if !provider_exists(session, &session.nav.last_provider_id) {
+        if let Some(first) = first_enabled_provider_id(session) {
+            session.nav.last_provider_id = first;
         }
     }
     // 设置面板选中的 provider
-    if session
-        .provider_store
-        .find_by_id(&session.settings_ui.selected_provider)
-        .is_none()
-    {
+    if !provider_exists(session, &session.settings_ui.selected_provider) {
         session.settings_ui.selected_provider =
             ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
     }
     // Debug 面板
-    if let Some(ref id) = session.debug_ui.selected_provider {
-        if session.provider_store.find_by_id(id).is_none() {
-            session.debug_ui.selected_provider = None;
-        }
+    let reset_debug_provider = session
+        .debug_ui
+        .selected_provider
+        .as_ref()
+        .is_some_and(|id| !provider_exists(session, id));
+    if reset_debug_provider {
+        session.debug_ui.selected_provider = None;
     }
+}
+
+fn provider_exists(session: &AppSession, id: &ProviderId) -> bool {
+    session.provider_store.find_by_id(id).is_some()
+}
+
+fn first_enabled_provider_id(session: &AppSession) -> Option<ProviderId> {
+    session
+        .provider_store
+        .providers
+        .iter()
+        .find(|p| session.settings.provider.is_enabled(&p.provider_id))
+        .map(|p| p.provider_id.clone())
 }
 
 fn push_render(effects: &mut Vec<AppEffect>) {

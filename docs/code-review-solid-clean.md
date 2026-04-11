@@ -8,6 +8,28 @@
 
 整体架构质量**较高**，属于经过深思熟虑的设计，但存在若干值得改进的领域。
 
+## 复查处理结果（2026-04-11）
+
+本轮已对文中问题逐项复查，并完成以下处理：
+
+- **已处理**
+  - 已抽取 `src/platform/paths.rs`，统一 settings/custom provider 路径解析
+  - 已将 `AppState::new` 改为接收外部注入的 `AppSettings`，`settings_store::load()` 与初始 `auto_launch::sync()` 上移到 `bootstrap.rs`
+  - 已收紧 `ProviderManager::providers` 字段可见性，避免对外暴露内部存储
+  - 已将 `apply_refresh_event` 中的 labeled block 拆为 `process_refresh_outcome()` 辅助函数
+  - 已提取 helper，减少 `sanitize_stale_refs` 中重复的“引用失效后重置”逻辑
+
+- **复查补充发现**
+  - 代码与文档在 macOS 自定义 Provider 目录大小写上原本存在不一致：`settings.json` 使用 `BananaTray`，custom providers 却落在 `bananatray`
+  - 本轮已统一规范目录为 `~/Library/Application Support/BananaTray/providers/`，并改为在启动阶段将 legacy lowercase 目录一次性迁移到规范目录，运行期只使用规范目录
+
+- **确认仍成立但本轮暂未处理**
+  - `ProviderConfig` 职责偏重
+  - `bootstrap_ui` 职责仍偏多
+  - `run_effect_in_context` 对上下文不支持的 effect 仍为运行时告警而非类型层隔离
+  - 设置保存失败缺少 UI 反馈
+  - `try_run_codeium_family_debug_cli` 仍在 `main.rs`
+
 ---
 
 ## 一、SOLID 原则逐项评估
@@ -18,14 +40,14 @@
 
 - `AppSession` 的子状态分解清晰：`ProviderStore`、`NavigationState`、`SettingsUiState`、`DebugUiState` 各守一职，代码中甚至有注释 `// SRP: 每个结构体负责一个独立职责`（`src/application/state.rs:44`）
 - `AppSettings` 拆分为 `SystemSettings`、`NotificationSettings`、`DisplaySettings`、`ProviderConfig` 四个独立子结构体
-- `QuotaAlertTracker` 是纯状态机，只负责"检测状态转换"，不负责发送通知（`src/platform/notification.rs:83`）
-- `RefreshScheduler` 与 `RefreshCoordinator` 分离：前者管调度决策，后者管并发执行
+- `QuotaAlertTracker` 是纯状态机，只负责"检测状态转换"，不负责发送通知（`src/platform/notification.rs:84`）
+- `RefreshCoordinator` 内部将调度决策（间隔控制、cooldown）与并发执行分离，职责边界清晰
 
 **⚠️ 问题：**
 
 - **`ProviderConfig` 职责过载**：`models/settings/mod.rs` 中 `ProviderConfig` 同时管理 enabled 状态、顺序排列、隐藏配额、sidebar 列表、Copilot token，为此不得不拆出 3 个额外的子文件（`provider_config_ordering.rs`、`provider_config_quota.rs`、`provider_config_sidebar.rs`），说明该结构体本身已超出单一职责边界。`ProviderSettings`（仅含 `github_token`）作为独立字段存在，但 credentials 管理与 provider 可见性管理混在同一 `ProviderConfig` 里
 
-- **`runtime/mod.rs` 中的文件系统路径逻辑外溢**（`src/runtime/mod.rs:209-247`）：`SaveCustomProviderYaml` / `DeleteCustomProviderYaml` 的处理器中硬编码了路径拼接逻辑（`dirs::config_dir().join("bananatray").join("providers")`），而同样的路径逻辑在 `providers/custom/generator.rs` 中也有定义，属于**职责扩散**
+- **`runtime/mod.rs` 中的文件系统路径逻辑外溢**（`src/runtime/mod.rs:213-248`）：`SaveCustomProviderYaml` / `DeleteCustomProviderYaml` 的处理器中硬编码了路径拼接逻辑（`dirs::config_dir().join("bananatray").join("providers")`），而同样的路径逻辑在 `providers/custom/generator.rs` 中也有定义，属于**职责扩散**
 
 - **`bootstrap_ui` 职责混杂**（`src/bootstrap.rs:14`）：同时负责 i18n 初始化、UI 工具包初始化、系统托盘配置、通知授权 —— 四项互不相关的职责被合并在一个函数中
 
@@ -35,8 +57,8 @@
 
 **✅ 强项：**
 
-- Provider 系统通过 `AiProvider` trait + `register_providers!` 宏实现了良好的 OCP：新增 Provider 只需实现 trait，在宏调用中添加一行，无需修改任何现有代码（`src/providers/mod.rs:222-250`）
-- `ProviderError::classify` 方法的注释中明确说明**不再字符串匹配**，因为"字符串匹配违反 OCP"（`src/providers/mod.rs:128-132`）——设计意识清晰
+- Provider 系统通过 `AiProvider` trait + `register_providers!` 宏实现了良好的 OCP：新增 Provider 只需实现 trait，在宏调用中添加一行，无需修改任何现有代码（`src/providers/mod.rs:222-250`，宏定义 + 调用）
+- `ProviderError::classify` 方法的注释中明确说明**不再字符串匹配**，因为"字符串匹配违反 OCP"（`src/providers/mod.rs:122-132`）——设计意识清晰
 - 自定义 Provider 系统（YAML declarative）允许用户添加新 Provider 而无需修改 Rust 代码，是 OCP 的优秀实践
 
 **⚠️ 问题：**
@@ -55,7 +77,7 @@
 
 **⚠️ 潜在问题：**
 
-- `run_effect_in_context<V>` 中某些 effect（`OpenSettingsWindow`、`OpenUrl`、`ApplyTrayIcon`、`QuitApp`）在 `Context<V>` 中被 **silently ignored**（`src/runtime/mod.rs:96-103`），这违反了 LSP 精神：调用同一函数签名，却因上下文不同产生截然不同的行为。这是 GPUI 架构约束的 workaround，但是用 `warn!` 代替 panic 隐藏了潜在 bug
+- `run_effect_in_context<V>` 中某些 effect（`OpenSettingsWindow`、`OpenUrl`、`ApplyTrayIcon`、`QuitApp`）在 `Context<V>` 中被 **silently ignored**（`src/runtime/mod.rs:93-103`），这违反了 LSP 精神：调用同一函数签名，却因上下文不同产生截然不同的行为。这是 GPUI 架构约束的 workaround，但是用 `warn!` 代替 panic 隐藏了潜在 bug
 
 ---
 
@@ -150,7 +172,7 @@
    ```
    这是 `RefCell` 的合理用法，但频繁出现说明 `AppState` 的字段访问接口可以更友好
 
-3. **`is_custom()` / `is_builtin()` 判断逻辑**散布在多处，通过 `match` 实现，缺少统一封装
+3. ~~**`is_custom()` / `is_builtin()` 判断逻辑**散布在多处~~ —— 已修正：`ProviderId` 已封装 `is_custom()` 和 `is_builtin()` 方法，调用方均通过方法调用而非直接 `match`，此项不再是问题
 
 ---
 
@@ -176,14 +198,14 @@
 
 **⚠️ 问题：**
 
-- `platform/notification.rs` 中 `install_notification_delegate` 函数含有 40+ 行 `unsafe` ObjC 代码，注释密度不足，特别是 `static DELEGATE: OnceLock<usize>` 用 `usize` 存储指针这一 hack（`src/platform/notification.rs:312-319`）仅有简短说明，安全性论证不充分
+- `platform/notification.rs` 中 `install_notification_delegate` 函数含有 40+ 行 `unsafe` ObjC 代码，`static DELEGATE: OnceLock<usize>` 用 `usize` 存储指针这一 hack（`src/platform/notification.rs:311-320`）已有 3 行注释说明原因（弱引用 + Send+Sync + 进程生命周期），但安全性论证可进一步加强
 
 ---
 
 ### 2.6 测试质量
 
 **✅ 强项：**
-- 683 个单元测试，覆盖了 reducer、selectors、状态机、scheduler 等核心逻辑
+- 706 个单元测试，覆盖了 reducer、selectors、状态机、coordinator 等核心逻辑
 - `QuotaAlertTracker` 的测试覆盖了边界条件（首次数据、重复状态、多 quota 取最差值等）
 - 通过 `cfg(feature = "app")` 门控成功隔离了 GPUI 代码，使纯逻辑可独立测试
 
