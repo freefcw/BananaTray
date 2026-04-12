@@ -70,6 +70,14 @@ Provider credentials are read from local config files or CLI tools, except Copil
   - On startup, macOS legacy lowercase directory `~/Library/Application Support/bananatray/providers/` is migrated into the canonical directory
   - After migration, runtime reads and writes only use the canonical directory
 
+## Custom Provider Auto-Registration
+
+Custom providers are automatically registered in `settings.json` through three layers:
+
+1. **Startup** (`AppSession::new`): YAML files that exist on disk but have no corresponding entry in `enabled_providers` are auto-enabled and added to the sidebar
+2. **Save** (`SubmitNewApi` reducer): The provider ID is pre-registered in `enabled_providers` + `sidebar_providers` before the YAML file is written, so it's immediately visible after hot-reload
+3. **Hot-reload** (`ProvidersReloaded` reducer): Newly discovered custom providers (e.g. manually dropped YAML files) are auto-enabled and added to the sidebar
+
 ## Testing
 
 run with `cargo test --lib`. Coverage:

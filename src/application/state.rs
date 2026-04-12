@@ -142,6 +142,19 @@ impl AppSession {
             .collect();
         settings.provider.ensure_sidebar_defaults(&custom_ids);
 
+        // 自动注册已存在但未在 settings 中登记的自定义 Provider
+        // （处理 YAML 文件存在但 settings.json 缺少对应条目的情况）
+        for id in &custom_ids {
+            if !settings
+                .provider
+                .enabled_providers
+                .contains_key(&id.id_key())
+            {
+                settings.provider.set_enabled(id, true);
+                settings.provider.add_to_sidebar(id);
+            }
+        }
+
         let first_enabled = providers
             .iter()
             .find(|p| settings.provider.is_enabled(&p.provider_id))

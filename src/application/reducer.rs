@@ -225,6 +225,20 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             let filename =
                 original_filename.unwrap_or_else(|| generator::generate_filename(&config));
 
+            // ── 预注册 Provider ID：确保热重载后 Provider 立即可见 ──
+            // 编辑模式下 URL 为只读，所以 ID 不会变化，仅需处理新增场景。
+            let new_id = ProviderId::Custom(generator::generate_id(&config));
+            if !session
+                .settings
+                .provider
+                .enabled_providers
+                .contains_key(&new_id.id_key())
+            {
+                session.settings.provider.set_enabled(&new_id, true);
+            }
+            session.settings.provider.add_to_sidebar(&new_id);
+            session.settings_ui.selected_provider = new_id;
+
             effects.push(
                 CommonEffect::SaveCustomProviderYaml {
                     yaml_content,
@@ -232,6 +246,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 }
                 .into(),
             );
+            effects.push(CommonEffect::PersistSettings.into());
 
             let (title_key, body_key) = if is_editing {
                 ("newapi.edit_success_title", "newapi.edit_success_body")
@@ -584,6 +599,30 @@ fn apply_refresh_event(
                 .provider
                 .prune_stale_custom_ids(&custom_ids)
             {
+                effects.push(CommonEffect::PersistSettings.into());
+            }
+
+            // 自动启用新增的自定义 Provider（热重载发现的新 YAML 文件）
+            let mut settings_changed = false;
+            for id in &affected {
+                if !session
+                    .settings
+                    .provider
+                    .enabled_providers
+                    .contains_key(&id.id_key())
+                {
+                    // 首次出现的自定义 Provider：自动启用并加入 sidebar
+                    session.settings.provider.set_enabled(id, true);
+                    session.settings.provider.add_to_sidebar(id);
+                    settings_changed = true;
+                    info!(
+                        target: "providers",
+                        "auto-enabled new custom provider: {}",
+                        id
+                    );
+                }
+            }
+            if settings_changed {
                 effects.push(CommonEffect::PersistSettings.into());
             }
 

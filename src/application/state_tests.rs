@@ -850,3 +850,52 @@ fn current_provider_status_follows_last_provider_id() {
     session.nav.last_provider_id = pid(ProviderKind::Claude);
     assert_eq!(session.current_provider_status(), StatusLevel::Green);
 }
+
+// ── AppSession::new 自动注册 ──────────────────────────────
+
+#[test]
+fn session_new_auto_registers_unregistered_custom_provider() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    let custom_id = ProviderId::Custom("my-relay:newapi".to_string());
+    let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    store
+        .providers
+        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+
+    // settings 中没有 custom provider 的任何条目
+    let settings = make_settings(&[ProviderKind::Claude]);
+    assert!(!settings
+        .provider
+        .enabled_providers
+        .contains_key("my-relay:newapi"));
+
+    let session = AppSession::new(settings, store.providers);
+
+    // 自动启用
+    assert!(session.settings.provider.is_enabled(&custom_id));
+    // 自动加入 sidebar
+    assert!(session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&"my-relay:newapi".to_string()));
+}
+
+#[test]
+fn session_new_preserves_existing_custom_provider_state() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    let custom_id = ProviderId::Custom("my-relay:newapi".to_string());
+    let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    store
+        .providers
+        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+
+    // 已手动禁用的 custom provider 不应被重新启用
+    let mut settings = make_settings(&[ProviderKind::Claude]);
+    settings.provider.set_enabled(&custom_id, false);
+
+    let session = AppSession::new(settings, store.providers);
+
+    // 保持禁用状态（用户显式关闭的不覆盖）
+    assert!(!session.settings.provider.is_enabled(&custom_id));
+}
