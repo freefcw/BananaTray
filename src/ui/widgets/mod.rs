@@ -26,7 +26,7 @@ pub(crate) use colored_icon::{render_colored_icon, render_colored_icon_sized};
 pub(crate) use icon::{render_footer_glyph, render_svg_icon};
 pub(crate) use icon_button::{render_icon_tooltip_button, IconTooltipButtonOptions};
 pub(crate) use icon_row::render_icon_row;
-pub(crate) use info_row::{render_info_cell, render_kv_info_row};
+pub(crate) use info_row::{render_info_cell, render_kv_info_row, render_path_info_cell};
 pub(crate) use input_actions::register_input_actions;
 pub(crate) use provider_icon::{render_provider_icon, render_provider_icon_boxed};
 pub(crate) use quota_bar::render_quota_bar;
