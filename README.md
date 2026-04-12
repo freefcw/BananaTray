@@ -64,6 +64,28 @@ cargo clippy
 cargo fmt
 ```
 
+## macOS Bundle & Code Signing
+
+```bash
+# Build and assemble the macOS .app bundle
+bash scripts/bundle.sh
+
+# Use an Apple Developer signing identity when available
+export CODESIGN_IDENTITY='Apple Development: you@example.com (TEAMID)'
+bash scripts/bundle.sh --skip-build
+```
+
+Notes:
+
+- If `CODESIGN_IDENTITY` is unset, `scripts/bundle.sh` falls back to ad-hoc signing (`-`) for local testing.
+- Before using an Apple Developer certificate, verify that macOS recognizes it as a valid signing identity:
+
+```bash
+security find-identity -v -p codesigning
+```
+
+- If the expected identity does not appear, check the certificate chain and private key in Keychain Access. A common cause is an outdated Apple WWDR intermediate certificate or a missing private key.
+
 ## Configuration
 
 Settings are persisted as JSON:
