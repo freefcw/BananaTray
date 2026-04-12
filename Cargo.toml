@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "A cross-platform system tray application for monitoring AI coding assistant quotas"
 license = "MIT"
+homepage = "https://github.com/freefcw/BananaTray"
+repository = "https://github.com/freefcw/BananaTray"
 
 [lib]
 name = "bananatray"

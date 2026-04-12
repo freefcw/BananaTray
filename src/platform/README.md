@@ -36,6 +36,7 @@
 - **`init()`** — 初始化 fern 日志系统 + panic hook
 - 输出到文件（`~/Library/Logs/` 或 `~/.local/share/`）+ stderr
 - 返回 `LogInit`（含日志路径，供 Debug Tab 使用）
+- **`read_log_tail(path, max_lines)`** — 读取日志文件末尾 N 行（用于 Issue 上报）
 
 #### `notification.rs` — 系统通知 + 配额预警
 

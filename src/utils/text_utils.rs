@@ -62,6 +62,25 @@ pub fn normalize_for_matching(text: &str) -> String {
         .collect()
 }
 
+/// 简易 URL 编码（percent-encoding），避免引入额外依赖
+///
+/// 对非 RFC 3986 unreserved 字符进行 %XX 编码。
+/// 用途：拼接 GitHub issue/new URL 的查询参数。
+pub fn url_encode(s: &str) -> String {
+    let mut encoded = String::with_capacity(s.len() * 2);
+    for byte in s.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                encoded.push_str(&format!("%{:02X}", byte));
+            }
+        }
+    }
+    encoded
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +219,25 @@ mod tests {
             normalized,
             key
         );
+    }
+
+    // --- url_encode ---
+
+    #[test]
+    fn test_url_encode_plain_text() {
+        assert_eq!(url_encode("foo"), "foo");
+    }
+
+    #[test]
+    fn test_url_encode_special_characters() {
+        assert_eq!(url_encode("hello world"), "hello%20world");
+        assert_eq!(url_encode("a=b&c"), "a%3Db%26c");
+    }
+
+    #[test]
+    fn test_url_encode_unicode() {
+        let encoded = url_encode("中文");
+        assert!(encoded.contains("%E4%B8%AD"));
+        assert!(encoded.contains("%E6%96%87"));
     }
 }

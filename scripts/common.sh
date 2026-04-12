@@ -15,8 +15,26 @@
 #
 set -euo pipefail
 
-# 初始化项目路径变量，从 Cargo.toml 读取版本号
-# 调用后可用: PROJECT_DIR, RELEASE_DIR, BUNDLE_DIR, APP_NAME, VERSION, BINARY
+# 读取 Cargo.toml [package] 下的字符串字段。
+cargo_package_field() {
+    local field="$1"
+
+    awk -F ' = ' -v key="$field" '
+        /^\[package\]/ { in_package = 1; next }
+        /^\[/ { in_package = 0 }
+        in_package && $1 == key {
+            value = $2
+            gsub(/^"/, "", value)
+            gsub(/"$/, "", value)
+            print value
+            exit
+        }
+    ' "$PROJECT_DIR/Cargo.toml"
+}
+
+# 初始化项目路径变量，从 Cargo.toml 读取版本号和仓库地址
+# 调用后可用: PROJECT_DIR, RELEASE_DIR, BUNDLE_DIR, APP_NAME, VERSION, BINARY,
+#            HOMEPAGE_URL, REPOSITORY_URL, BUGTRACKER_URL
 init_project_vars() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
     PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -26,10 +44,14 @@ init_project_vars() {
     BUNDLE_DIR="$RELEASE_DIR/bundle"
     BINARY="$RELEASE_DIR/$APP_NAME"
 
-    # 从 Cargo.toml 读取版本号（避免多处硬编码）
-    VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-    if [ -z "$VERSION" ]; then
-        echo "❌ 无法从 Cargo.toml 读取版本号"
+    # 从 Cargo.toml 读取打包元数据（避免多处硬编码）
+    VERSION=$(cargo_package_field version)
+    HOMEPAGE_URL=$(cargo_package_field homepage)
+    REPOSITORY_URL=$(cargo_package_field repository)
+    BUGTRACKER_URL="${REPOSITORY_URL}/issues"
+
+    if [ -z "$VERSION" ] || [ -z "$HOMEPAGE_URL" ] || [ -z "$REPOSITORY_URL" ]; then
+        echo "❌ 无法从 Cargo.toml 读取版本号或仓库地址"
         exit 1
     fi
 }
@@ -116,15 +138,20 @@ install_icons() {
 #   安装到 $prefix_dir/share/metainfo/com.bananatray.app.metainfo.xml
 install_metainfo() {
     local prefix_dir="$1"
-    local metainfo_src="$PROJECT_DIR/resources/linux/com.bananatray.app.metainfo.xml"
+    local metainfo_template="$PROJECT_DIR/resources/linux/com.bananatray.app.metainfo.xml.in"
+    local metainfo_dest="$prefix_dir/share/metainfo/com.bananatray.app.metainfo.xml"
 
-    if [ ! -f "$metainfo_src" ]; then
-        echo "⚠️  未找到 metainfo 文件 ${metainfo_src}，跳过"
+    if [ ! -f "$metainfo_template" ]; then
+        echo "⚠️  未找到 metainfo 模板 ${metainfo_template}，跳过"
         return
     fi
 
     mkdir -p "$prefix_dir/share/metainfo"
-    cp "$metainfo_src" "$prefix_dir/share/metainfo/com.bananatray.app.metainfo.xml"
+    sed \
+        -e "s|@APP_HOMEPAGE_URL@|$HOMEPAGE_URL|g" \
+        -e "s|@APP_BUGTRACKER_URL@|$BUGTRACKER_URL|g" \
+        -e "s|@APP_VERSION@|$VERSION|g" \
+        "$metainfo_template" > "$metainfo_dest"
 }
 
 # 组装标准 Linux 安装树 (FHS 布局)
