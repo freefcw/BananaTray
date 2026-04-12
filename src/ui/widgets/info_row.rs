@@ -1,12 +1,15 @@
-use crate::platform::system::open_url;
+use crate::platform::system::{open_path_in_finder, open_url};
 /// 信息行组件
 ///
 /// 键值对行：左标签（灰色）+ 右值（可选链接）。
 /// 主要用于设置窗口 About 页和 Provider 详情面板。
 use crate::theme::Theme;
+use crate::ui::widgets::with_tooltip;
 use gpui::{
-    div, px, Div, FontWeight, Hsla, InteractiveElement, MouseButton, ParentElement, Styled,
+    div, px, Div, ElementId, FontWeight, Hsla, InteractiveElement, MouseButton, ParentElement,
+    Stateful, Styled,
 };
+use rust_i18n::t;
 
 /// 渲染信息行（左标签 + 右值），支持可选链接
 ///
@@ -89,4 +92,27 @@ pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, them
                 .text_color(value_color)
                 .child(value.to_string()),
         )
+}
+
+/// 可点击的路径信息单元格 — 点击在文件管理器中打开所在目录，悬浮显示 tooltip
+///
+/// # 使用场景
+/// - `settings_window/debug_tab.rs` — 配置文件路径 / 日志路径行
+pub(crate) fn render_path_info_cell(
+    id: impl Into<ElementId>,
+    label: &str,
+    path: &str,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let path_buf = std::path::PathBuf::from(path);
+
+    let row = div()
+        .cursor_pointer()
+        .hover(|s| s.opacity(0.75))
+        .child(render_info_cell(label, path, theme.text.accent, theme))
+        .on_mouse_down(MouseButton::Left, move |_, _, _| {
+            open_path_in_finder(&path_buf);
+        });
+
+    with_tooltip(id, &t!("debug.env.open_in_finder"), theme, row)
 }

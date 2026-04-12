@@ -8,7 +8,7 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
     render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
-    render_segmented_control, ButtonVariant, SegmentedSize,
+    render_path_info_cell, render_segmented_control, ButtonVariant, SegmentedSize,
 };
 use gpui::{
     div, px, rgb, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
@@ -241,16 +241,17 @@ impl SettingsView {
     ) -> Div {
         let env = &debug_state.environment;
 
+        // 可点击的路径行标签（用于区分特殊行）
+        let settings_path_label = t!("debug.env.settings_path").to_string();
+        let log_path_label = t!("debug.env.log_path").to_string();
+
         let env_rows: Vec<(String, String)> = vec![
             (t!("debug.env.version").to_string(), env.app_version.clone()),
             (t!("debug.env.os").to_string(), env.os_info.clone()),
             (t!("debug.env.log_level").to_string(), env.log_level.clone()),
             (t!("debug.env.locale").to_string(), env.locale.clone()),
-            (
-                t!("debug.env.settings_path").to_string(),
-                env.settings_path.clone(),
-            ),
-            (t!("debug.env.log_path").to_string(), env.log_path.clone()),
+            (settings_path_label.clone(), env.settings_path.clone()),
+            (log_path_label.clone(), env.log_path.clone()),
             (
                 t!("debug.env.providers").to_string(),
                 env.providers_summary.clone(),
@@ -288,14 +289,30 @@ impl SettingsView {
                 ),
         );
 
-        // 键值对行 — 使用 render_info_cell
+        // 键值对行 — 使用 render_info_cell，配置文件/日志路径行可点击打开所在目录
         for (label, value) in &env_rows {
-            card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_info_cell(
-                label,
-                value,
-                theme.text.secondary,
-                theme,
-            )));
+            let is_clickable_path = *label == settings_path_label || *label == log_path_label;
+
+            if is_clickable_path {
+                let tooltip_id = if *label == settings_path_label {
+                    "env-settings-path-tooltip"
+                } else {
+                    "env-log-path-tooltip"
+                };
+                card = card.child(
+                    div()
+                        .px(px(14.0))
+                        .py(px(5.0))
+                        .child(render_path_info_cell(tooltip_id, label, value, theme)),
+                );
+            } else {
+                card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_info_cell(
+                    label,
+                    value,
+                    theme.text.secondary,
+                    theme,
+                )));
+            }
         }
 
         // Copy Debug Info 按钮 — 使用 render_action_button
