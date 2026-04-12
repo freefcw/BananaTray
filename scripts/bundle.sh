@@ -85,6 +85,13 @@ echo "✅ App Bundle 已创建: $APP_DIR"
 #   2. 回退到 ad-hoc 签名 "-"
 ENTITLEMENTS="$PROJECT_DIR/resources/BananaTray.entitlements"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ "$SIGN_IDENTITY" != "-" ] && ! security find-identity -v -p codesigning | grep -Fq "\"$SIGN_IDENTITY\""; then
+    echo "❌ 指定的 CODESIGN_IDENTITY 当前不是可用的 macOS 代码签名身份: $SIGN_IDENTITY"
+    echo "   💡 常见原因：证书链不完整、WWDR 中间证书过期、缺少对应私钥，或私钥未授权给 codesign 访问"
+    echo "   💡 运行 'security find-identity -v -p codesigning' 可查看当前可用身份"
+    echo "   💡 如仅需本地测试，请先 unset CODESIGN_IDENTITY 后重试，脚本会回退到 ad-hoc 签名"
+    exit 1
+fi
 if [ "$SIGN_IDENTITY" = "-" ]; then
     echo "🔏 Hardened Runtime 代码签名 (ad-hoc)..."
     echo "   💡 设置 CODESIGN_IDENTITY 环境变量可使用 Apple Developer 证书签名"
