@@ -671,6 +671,120 @@ fn submit_newapi_produces_save_and_notification_effects() {
 }
 
 #[test]
+fn submit_newapi_auto_enables_and_adds_to_sidebar() {
+    let mut session = make_session();
+    session.settings_ui.adding_newapi = true;
+    // sidebar 初始为空（模拟全新用户场景）
+    session.settings.provider.sidebar_providers = vec!["claude".into()];
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SubmitNewApi {
+            display_name: "My Relay".to_string(),
+            base_url: "https://relay.example.com".to_string(),
+            cookie: "c=1".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+
+    let expected_id = ProviderId::Custom("relay-example-com:newapi".to_string());
+
+    // 自动启用
+    assert!(session.settings.provider.is_enabled(&expected_id));
+    // 加入 sidebar
+    assert!(session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&"relay-example-com:newapi".to_string()));
+    // 设置页选中新 Provider
+    assert_eq!(session.settings_ui.selected_provider, expected_id);
+    // 产出 PersistSettings
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::PersistSettings
+    )));
+}
+
+#[test]
+fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
+    use crate::providers::custom::generator::NewApiEditData;
+
+    let mut session = make_session();
+    let custom_id = ProviderId::Custom("old-site-com:newapi".to_string());
+    session.settings.provider.set_enabled(&custom_id, true);
+    session
+        .settings
+        .provider
+        .sidebar_providers
+        .push("old-site-com:newapi".to_string());
+
+    session.settings_ui.adding_newapi = true;
+    session.settings_ui.editing_newapi = Some(NewApiEditData {
+        display_name: "Old Site".to_string(),
+        base_url: "https://old-site.com".to_string(),
+        cookie: "c=old".to_string(),
+        user_id: None,
+        divisor: None,
+        original_filename: "original.yaml".to_string(),
+    });
+
+    reduce(
+        &mut session,
+        AppAction::SubmitNewApi {
+            display_name: "Updated Name".to_string(),
+            base_url: "https://old-site.com".to_string(), // URL 不变
+            cookie: "c=new".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+
+    // 已存在的 enabled 状态不被覆盖
+    assert!(session.settings.provider.is_enabled(&custom_id));
+}
+
+#[test]
+fn providers_reloaded_auto_enables_new_custom_provider() {
+    let mut session = make_session();
+
+    // settings 中没有 "fresh:api" 的任何条目
+    let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+    statuses.push(make_custom_provider_status("fresh:api"));
+
+    let mut effects = vec![];
+    apply_refresh_event(
+        &mut session,
+        RefreshEvent::ProvidersReloaded { statuses },
+        &mut effects,
+    );
+
+    let fresh_id = ProviderId::Custom("fresh:api".to_string());
+    // 自动启用
+    assert!(session.settings.provider.is_enabled(&fresh_id));
+    // 加入 sidebar
+    assert!(session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&"fresh:api".to_string()));
+    // 产出 PersistSettings
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::PersistSettings
+    )));
+    // 触发立即刷新
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+            ref id,
+            ..
+        }) if *id == fresh_id
+    )));
+}
+
+#[test]
 fn submit_newapi_without_optional_fields_uses_defaults() {
     let mut session = make_session();
 
@@ -1120,6 +1234,10 @@ fn providers_reloaded_refreshes_enabled_new_custom() {
 #[test]
 fn providers_reloaded_does_not_refresh_disabled_custom() {
     let mut session = make_session();
+
+    // 明确禁用该 Provider（模拟用户手动关闭的场景）
+    let custom_id = ProviderId::Custom("disabled:api".to_string());
+    session.settings.provider.set_enabled(&custom_id, false);
 
     let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
     statuses.push(make_custom_provider_status("disabled:api"));

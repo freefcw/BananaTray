@@ -46,6 +46,15 @@ pub fn generate_filename(config: &NewApiConfig) -> String {
     format!("newapi-{}.yaml", slug)
 }
 
+/// 根据配置预计算自定义 Provider 的 ID（`{slug}:newapi`）。
+///
+/// 用于在保存 YAML 之前提前将 ID 注册到 settings（sidebar/enabled），
+/// 避免热重载后 Provider 已存在但未启用的问题。
+pub fn generate_id(config: &NewApiConfig) -> String {
+    let slug = extract_domain_slug(&config.base_url);
+    format!("{}:newapi", slug)
+}
+
 /// 从 custom provider id 直接推导文件名，无需读取磁盘。
 ///
 /// id 格式为 `{slug}:newapi`（由 `generate_newapi_yaml` 生成），
