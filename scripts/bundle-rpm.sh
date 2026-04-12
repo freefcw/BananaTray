@@ -56,7 +56,7 @@ Version:        $VERSION
 Release:        1%{?dist}
 Summary:        $DESCRIPTION
 License:        MIT
-URL:            https://github.com/freefcw/BananaTray
+URL:            $HOMEPAGE_URL
 
 AutoReqProv:    no
 Requires:       gtk3

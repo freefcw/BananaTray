@@ -1,6 +1,7 @@
 mod debug;
 #[allow(dead_code)] // 函数已就绪，待后续 UI 接入后启用
 mod format;
+mod issue_report;
 mod settings;
 mod tray;
 
@@ -248,7 +249,7 @@ pub enum ProviderSettingsMode {
 }
 
 // ============================================================================
-// Re-exports：保持 crate::application::selectors::xxx 路径不变
+// Re-exports：保持 `use crate::application::selectors::xxx` 路径不变
 // ============================================================================
 
 pub use debug::{
@@ -260,6 +261,8 @@ pub use format::{
     format_amount, format_last_updated, format_quota_usage, provider_account_label,
     provider_list_subtitle, quota_remaining_text, quota_usage_detail_text,
 };
+#[allow(unused_imports)]
+pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;
 pub use tray::{
     header_view_state, overview_view_state, provider_detail_view_state,

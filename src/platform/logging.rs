@@ -4,6 +4,7 @@ use log::LevelFilter;
 use std::backtrace::Backtrace;
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 pub struct LoggingInit {
@@ -91,6 +92,105 @@ fn platform_log_base_dir() -> Option<PathBuf> {
         dirs::state_dir().or_else(dirs::data_local_dir)
     }
 }
+fn resolve_log_level() -> LevelFilter {
+    match env::var("RUST_LOG") {
+        Ok(value) => match value.to_ascii_lowercase().as_str() {
+            "trace" => LevelFilter::Trace,
+            "debug" => LevelFilter::Debug,
+            "warn" => LevelFilter::Warn,
+            "error" => LevelFilter::Error,
+            "off" => LevelFilter::Off,
+            _ => LevelFilter::Info,
+        },
+        Err(_) => LevelFilter::Info,
+    }
+}
+
+/// 读取日志文件末尾的 N 行
+///
+/// 使用 BufReader 逐行读取，保留最后 `max_lines` 行于 VecDeque ring buffer。
+/// 文件不存在或读取失败时返回空字符串。
+pub fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
+    let file = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return String::new(),
+    };
+
+    let reader = BufReader::new(file);
+    let mut ring: std::collections::VecDeque<String> =
+        std::collections::VecDeque::with_capacity(max_lines);
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if ring.len() >= max_lines {
+            ring.pop_front();
+        }
+        ring.push_back(line);
+    }
+
+    ring.into_iter().collect::<Vec<_>>().join("\n")
+}
+
+/// 读取日志文件中最后 N 条 WARN/ERROR 级别日志行
+///
+/// 使用 ring buffer 扫描整个文件，只保留 `[WARN]` 或 `[ERROR]` 的行，
+/// 返回最后 `max_lines` 条。文件不存在或读取失败时返回空字符串。
+pub fn read_last_errors(path: &std::path::Path, max_lines: usize) -> String {
+    let file = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return String::new(),
+    };
+
+    let reader = BufReader::new(file);
+    let mut ring: std::collections::VecDeque<String> =
+        std::collections::VecDeque::with_capacity(max_lines);
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        if !line.contains("[WARN]") && !line.contains("[ERROR]") {
+            continue;
+        }
+
+        if ring.len() >= max_lines {
+            ring.pop_front();
+        }
+        ring.push_back(line);
+    }
+
+    ring.into_iter().collect::<Vec<_>>().join("\n")
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let location = panic_info
+            .location()
+            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
+
+        let payload = if let Some(msg) = panic_info.payload().downcast_ref::<&str>() {
+            (*msg).to_string()
+        } else if let Some(msg) = panic_info.payload().downcast_ref::<String>() {
+            msg.clone()
+        } else {
+            "unknown panic payload".to_string()
+        };
+
+        log::error!(
+            target: "bananatray::panic",
+            "panic at {}: {}\n{}",
+            location,
+            payload,
+            Backtrace::force_capture()
+        );
+    }));
+}
 
 #[cfg(test)]
 mod tests {
@@ -119,43 +219,102 @@ mod tests {
         std::env::remove_var("BANANATRAY_LOG_DIR");
         assert_eq!(path, dir.join("bananatray.log"));
     }
-}
 
-fn resolve_log_level() -> LevelFilter {
-    match env::var("RUST_LOG") {
-        Ok(value) => match value.to_ascii_lowercase().as_str() {
-            "trace" => LevelFilter::Trace,
-            "debug" => LevelFilter::Debug,
-            "warn" => LevelFilter::Warn,
-            "error" => LevelFilter::Error,
-            "off" => LevelFilter::Off,
-            _ => LevelFilter::Info,
-        },
-        Err(_) => LevelFilter::Info,
+    #[test]
+    fn read_log_tail_nonexistent_returns_empty() {
+        let result = read_log_tail(std::path::Path::new("/nonexistent/path/log.txt"), 10);
+        assert!(result.is_empty());
     }
-}
 
-fn install_panic_hook() {
-    std::panic::set_hook(Box::new(|panic_info| {
-        let location = panic_info
-            .location()
-            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
-            .unwrap_or_else(|| "unknown location".to_string());
+    #[test]
+    fn read_log_tail_fewer_lines_than_max() {
+        let dir = std::env::temp_dir().join("bananatray_tail_test_fewer");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.log");
+        fs::write(&path, "line1\nline2\nline3\n").unwrap();
 
-        let payload = if let Some(msg) = panic_info.payload().downcast_ref::<&str>() {
-            (*msg).to_string()
-        } else if let Some(msg) = panic_info.payload().downcast_ref::<String>() {
-            msg.clone()
-        } else {
-            "unknown panic payload".to_string()
-        };
+        let result = read_log_tail(&path, 10);
+        assert_eq!(result, "line1\nline2\nline3");
 
-        log::error!(
-            target: "bananatray::panic",
-            "panic at {}: {}\n{}",
-            location,
-            payload,
-            Backtrace::force_capture()
-        );
-    }));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_log_tail_more_lines_than_max() {
+        let dir = std::env::temp_dir().join("bananatray_tail_test_more");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.log");
+
+        let lines: Vec<String> = (0..20).map(|i| format!("line {}", i)).collect();
+        fs::write(&path, lines.join("\n")).unwrap();
+
+        let result = read_log_tail(&path, 5);
+        let tail_lines: Vec<&str> = result.lines().collect();
+        assert_eq!(tail_lines.len(), 5);
+        assert_eq!(tail_lines[0], "line 15");
+        assert_eq!(tail_lines[4], "line 19");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_log_tail_empty_file() {
+        let dir = std::env::temp_dir().join("bananatray_tail_test_empty");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("empty.log");
+        fs::write(&path, "").unwrap();
+
+        let result = read_log_tail(&path, 10);
+        assert!(result.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_last_errors_filters_by_level() {
+        let dir = std::env::temp_dir().join("bananatray_errors_test_level");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.log");
+
+        let content = "2026-04-11 10:00:00.000 [INFO] app        normal info\n\
+             2026-04-11 10:00:01.000 [WARN] providers  slow response\n\
+             2026-04-11 10:00:02.000 [DEBUG] refresh   tick\n\
+             2026-04-11 10:00:03.000 [ERROR] providers fetch failed\n";
+        fs::write(&path, content).unwrap();
+
+        let result = read_last_errors(&path, 100);
+        assert!(result.contains("[WARN]"));
+        assert!(result.contains("[ERROR]"));
+        assert!(!result.contains("[INFO]"));
+        assert!(!result.contains("[DEBUG]"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_last_errors_nonexistent_returns_empty() {
+        let result = read_last_errors(std::path::Path::new("/nonexistent/path/log.txt"), 10);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn read_last_errors_respects_max_lines() {
+        let dir = std::env::temp_dir().join("bananatray_errors_test_max");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.log");
+
+        let lines: Vec<String> = (0..20)
+            .map(|i| format!("2026-04-11 10:00:{i:02}.000 [ERROR] test      error {i}"))
+            .collect();
+        fs::write(&path, lines.join("\n")).unwrap();
+
+        let result = read_last_errors(&path, 3);
+        let result_lines: Vec<&str> = result.lines().collect();
+        assert_eq!(result_lines.len(), 3);
+        // 保留最后 3 条
+        assert!(result_lines[0].contains("error 17"));
+        assert!(result_lines[2].contains("error 19"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

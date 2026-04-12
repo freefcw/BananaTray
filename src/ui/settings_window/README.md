@@ -18,7 +18,7 @@
 |------|-----|------|
 | `general_tab.rs` | General | 系统行为设置：自启动、自动隐藏、刷新间隔、全局热键 |
 | `display_tab.rs` | Display | 外观设置：主题、语言、托盘图标样式、配额显示模式、UI 开关 |
-| `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者 |
+| `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者、问题上报（GitHub Issue） |
 | `debug_tab.rs` | Debug | 调试控制台：日志捕获、单 Provider 刷新、通知测试、系统诊断文本 |
 
 ### Provider 管理（双栏布局）

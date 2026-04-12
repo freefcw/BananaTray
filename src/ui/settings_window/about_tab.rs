@@ -1,4 +1,5 @@
 use super::SettingsView;
+use crate::application::{build_issue_report, build_issue_url, IssueReportContext};
 use crate::platform::system::open_url;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
@@ -11,8 +12,8 @@ use rust_i18n::t;
 
 const APP_NAME: &str = "BananaTray";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const APP_REPO: &str = "https://github.com/freefcw/BananaTray";
-const APP_WEBSITE: &str = "https://github.com/freefcw/BananaTray";
+const APP_REPO: &str = env!("CARGO_PKG_REPOSITORY");
+const APP_WEBSITE: &str = env!("CARGO_PKG_HOMEPAGE");
 const APP_LICENSE: &str = "MIT License";
 const APP_AUTHOR: &str = "freefcw";
 const APP_AUTHOR_URL: &str = "https://github.com/freefcw";
@@ -32,7 +33,7 @@ impl SettingsView {
             .py(px(12.0))
             .child(Self::render_app_hero(theme))
             .child(Self::render_link_buttons(theme))
-            .child(Self::render_update_button(theme))
+            .child(self.render_action_buttons_row(theme))
             .child(Self::render_info_section(theme))
             .child(Self::render_copyright(theme))
     }
@@ -202,21 +203,46 @@ impl SettingsView {
     }
 
     // ========================================================================
-    // Check for Updates — 使用 render_action_button
+    // 操作按钮行 — 检查更新 + 上报问题（同行并排）
     // ========================================================================
 
-    fn render_update_button(theme: &Theme) -> Div {
+    fn render_action_buttons_row(&self, theme: &Theme) -> Div {
+        let state = self.state.clone();
         let repo = APP_REPO.to_string();
-        div().w_full().pb(px(14.0)).child(render_action_button(
-            &t!("about.check_updates"),
-            None,
-            ButtonVariant::Outlined,
-            true,
-            theme,
-            move |_, _, _| {
-                open_url(&repo);
-            },
-        ))
+
+        div()
+            .w_full()
+            .flex()
+            .gap(px(10.0))
+            .pb(px(12.0))
+            // 检查更新
+            .child(div().flex_1().child(render_action_button(
+                &t!("about.check_updates"),
+                None,
+                ButtonVariant::Outlined,
+                true,
+                theme,
+                move |_, _, _| {
+                    open_url(&repo);
+                },
+            )))
+            // 上报问题：复制诊断信息到剪贴板 + 打开 GitHub Issue 页
+            .child(div().flex_1().child(render_action_button(
+                &t!("about.report_issue"),
+                Some(("src/icons/status.svg", theme.text.secondary)),
+                ButtonVariant::Outlined,
+                true,
+                theme,
+                move |_, _, _| {
+                    let borrowed = state.borrow();
+                    let log_path = borrowed.log_path.as_deref();
+                    let ctx = IssueReportContext::collect(log_path);
+                    let report = build_issue_report(&borrowed.session, &ctx);
+                    let url = build_issue_url(&report);
+                    drop(borrowed);
+                    open_url(&url);
+                },
+            )))
     }
 
     // ========================================================================
