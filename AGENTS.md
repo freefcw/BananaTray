@@ -24,9 +24,9 @@ cargo clippy               # lint
 cargo fmt                  # format
 ```
 
-> **`cargo test --lib --no-default-features` is mandatory.** `cargo test` without `--lib` will fail — the binary target pulls in GPUI which requires a Metal GPU context. `--no-default-features` is required to exclude the `app` feature, which brings in GPUI macros that cause a SIGBUS (rustc stack overflow via syn recursive parsing) when compiled as a test target.
+> **`cargo test --lib` is the standard test command.** Plain `cargo test` also works but is slower (compiles bin target too). All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented.
 
-> **Update (2026-04-11):** The root cause was `use gpui::*` + `#[test]` in the same file scope. After fixing `simple_input.rs` to use a precise import (`use super::SimpleInputState`), `cargo test --lib` works without `--no-default-features`. The `--no-default-features` flag is kept as a fallback if new GPUI-macro-heavy files introduce regressions.
+> **History:** Before commit `2e36981` (2026-04-13), `use gpui::*` in files with `#[test]` caused rustc SIGBUS (stack overflow via syn recursive parsing). The glob import ban fully resolved this.
 
 ## Module Map
 
