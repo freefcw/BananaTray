@@ -5,7 +5,11 @@ use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
-use gpui::*;
+use gpui::{
+    div, hsla, px, App, AppContext, Context, Div, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, Pixels, Point, Render, Stateful, StatefulInteractiveElement,
+    Styled, Window,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -171,12 +175,15 @@ fn render_sidebar_item(
         .cursor_pointer()
         .child(styled_wrapper)
         // 拖拽源：开始拖动时创建半透明预览
-        .on_drag(dragged.clone(), move |data, _offset, _window, cx| {
-            cx.new(|_| DragPreview {
-                icon: data.icon.clone(),
-                display_name: data.display_name.clone(),
-            })
-        })
+        .on_drag(
+            dragged.clone(),
+            move |data, _offset: Point<Pixels>, _window, cx: &mut App| {
+                cx.new(|_| DragPreview {
+                    icon: data.icon.clone(),
+                    display_name: data.display_name.clone(),
+                })
+            },
+        )
         // 放置目标：拖入时显示视觉反馈（顶部紫色指示线）
         .drag_over::<DraggedProvider>(move |style, _, _, _| {
             style.border_color(hsla(250.0 / 360.0, 0.7, 0.6, 0.6))

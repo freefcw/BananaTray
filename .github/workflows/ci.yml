@@ -27,6 +27,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Forbid GPUI glob imports
+        run: ./scripts/check-gpui-imports.sh
+
       - name: Run clippy
         run: cargo clippy --lib -- -D warnings
 
@@ -69,6 +72,9 @@ jobs:
 
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
+
+      - name: Forbid GPUI glob imports
+        run: ./scripts/check-gpui-imports.sh
 
       - name: Run clippy
         run: cargo clippy --lib -- -D warnings

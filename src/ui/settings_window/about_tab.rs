@@ -3,7 +3,10 @@ use crate::application::{build_issue_report, build_issue_url, IssueReportContext
 use crate::platform::system::open_url;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
-use gpui::*;
+use gpui::{
+    div, hsla, px, relative, svg, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
+    ParentElement, Styled, TextAlign,
+};
 use rust_i18n::t;
 
 // ============================================================================

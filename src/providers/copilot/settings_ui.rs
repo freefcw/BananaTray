@@ -3,7 +3,10 @@
 //! 支持交互式 Token 配置，匹配设计稿卡片样式。
 
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, hsla, px, relative, App, AppContext, Context, Div, Entity, FocusHandle, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
+};
 use rust_i18n::t;
 
 use super::CopilotTokenSource;

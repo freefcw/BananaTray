@@ -38,7 +38,7 @@ pub(crate) use tooltip::{with_multiline_tooltip, with_tooltip};
 
 use super::AppView;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{px, Div};
 
 impl AppView {
     pub(crate) fn render_toggle_switch_small(&self, enabled: bool, theme: &Theme) -> Div {

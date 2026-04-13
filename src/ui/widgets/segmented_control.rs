@@ -3,7 +3,10 @@
 /// 圆角容器 + 多个 pill 选项 + 选中高亮的分段控件。
 /// 主要用于设置窗口中的 Theme / Language / Log Level 选择。
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, transparent_black, App, Div, FontWeight, InteractiveElement, MouseButton,
+    ParentElement, Styled, Window,
+};
 
 /// Div 样式变换函数类型（消除 clippy::type_complexity 警告）
 type DivStyleFn = Box<dyn Fn(Div) -> Div>;

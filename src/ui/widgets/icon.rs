@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, svg, Hsla, IntoElement, ParentElement, Pixels, SharedString, Styled};
 
 pub(crate) fn render_svg_icon(
     path: impl Into<SharedString>,

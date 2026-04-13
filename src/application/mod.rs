@@ -5,7 +5,7 @@ mod selectors;
 pub(crate) mod state;
 
 pub use action::{AppAction, DebugNotificationKind, SettingChange};
-pub use effect::{AppEffect, TrayIconRequest};
+pub use effect::{AppEffect, CommonEffect, ContextEffect, TrayIconRequest};
 pub use reducer::{build_config_sync_request, reduce};
 #[allow(unused_imports)]
 pub use selectors::{

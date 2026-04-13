@@ -16,7 +16,7 @@ mod tray;
 mod ui;
 mod utils;
 
-use gpui::*;
+use gpui::{App, Application};
 use log::info;
 use platform::Assets;
 use std::cell::RefCell;

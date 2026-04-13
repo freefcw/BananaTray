@@ -2,7 +2,10 @@ use crate::application::{AppAction, SettingChange};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
-use gpui::*;
+use gpui::{
+    div, px, AnyElement, App, Context, Div, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement, Styled, Window,
+};
 use rust_i18n::t;
 
 const AUTO_HIDE_ICON: &str = "src/icons/display.svg";

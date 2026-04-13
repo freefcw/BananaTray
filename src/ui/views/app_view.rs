@@ -1,7 +1,10 @@
 use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, size, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, WindowBounds,
+};
 use log::debug;
 use std::cell::RefCell;
 use std::collections::HashSet;

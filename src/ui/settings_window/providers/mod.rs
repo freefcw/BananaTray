@@ -6,7 +6,7 @@ mod sidebar;
 use super::SettingsView;
 use crate::application::settings_providers_tab_view_state;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, Context, Div, ParentElement, Styled, Window};
 
 impl SettingsView {
     // ========================================================================

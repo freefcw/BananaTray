@@ -4,7 +4,7 @@
 /// 主要用于设置窗口中各类带图标的设置行。
 use super::colored_icon::render_colored_icon;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, Div, FontWeight, Hsla, IntoElement, ParentElement, Styled};
 
 /// 渲染通用图标设置行：彩色圆形图标 + 标题/描述 + 右侧任意控件
 ///

@@ -3,7 +3,10 @@
 //! 避免 InputState 的 NSTextInputClient / character_index_for_point 崩溃。
 //! 仅支持 ASCII 输入，适用于 URL、Token、数字等技术型字段。
 
-use gpui::*;
+use gpui::{
+    div, hsla, px, App, ClipboardItem, Div, FocusHandle, Hsla, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, SharedString, Styled,
+};
 
 /// 简易输入框状态（存储文本 + 光标位置 + 全选标记）
 pub struct SimpleInputState {

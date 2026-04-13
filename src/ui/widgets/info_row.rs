@@ -4,7 +4,9 @@ use crate::platform::system::open_url;
 /// 键值对行：左标签（灰色）+ 右值（可选链接）。
 /// 主要用于设置窗口 About 页和 Provider 详情面板。
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, Div, FontWeight, Hsla, InteractiveElement, MouseButton, ParentElement, Styled,
+};
 
 /// 渲染信息行（左标签 + 右值），支持可选链接
 ///

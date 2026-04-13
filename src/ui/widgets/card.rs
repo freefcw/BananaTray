@@ -1,6 +1,9 @@
 use super::render_checkbox;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, relative, App, Div, FontWeight, InteractiveElement, MouseButton, MouseDownEvent,
+    ParentElement, Styled, Window,
+};
 
 /// macOS grouped-style 圆角卡片
 #[allow(dead_code)]

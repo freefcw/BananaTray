@@ -7,7 +7,10 @@ use crate::application::AppAction;
 use crate::models::AppSettings;
 use crate::models::NavTab;
 use crate::ui::{schedule_open_settings_window, AppState};
-use gpui::*;
+use gpui::{
+    px, size, App, AppContext, Bounds, DisplayId, Pixels, Size, WindowBounds, WindowHandle,
+    WindowKind, WindowOptions, WindowPosition,
+};
 use log::{debug, error, info};
 use std::cell::Cell;
 use std::cell::RefCell;

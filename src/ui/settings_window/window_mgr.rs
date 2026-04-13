@@ -1,6 +1,9 @@
 use super::SettingsView;
 use crate::ui::AppState;
-use gpui::*;
+use gpui::{
+    point, px, size, App, AppContext, Bounds, DisplayId, WindowBounds, WindowHandle, WindowKind,
+    WindowOptions,
+};
 use log::{error, info};
 use std::cell::RefCell;
 use std::rc::Rc;

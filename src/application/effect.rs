@@ -15,17 +15,30 @@ pub enum TrayIconRequest {
     DynamicStatus(StatusLevel),
 }
 
-/// Reducer 产出的副作用。
+// ============================================================================
+// 两级 Effect 架构：ContextEffect（需要 GPUI 上下文）/ CommonEffect（GPUI-free）
+// ============================================================================
+
+/// 需要 GPUI 上下文才能执行的 effect。
 ///
-/// Runtime 层（`runtime/mod.rs`）根据当前 GPUI 上下文直接 match 这个枚举，
-/// 不再经过中间的路由层。
+/// Runtime 通过 `run_context_effect` 统一 match 这些变体，再由 capability adapter
+/// 根据当前 GPUI 入口（`Context<V>` / `Window + App` / `App`）执行或降级。
 #[derive(Debug)]
-pub enum AppEffect {
+pub enum ContextEffect {
     Render,
-    PersistSettings,
-    SendRefreshRequest(RefreshRequest),
     OpenSettingsWindow,
     OpenUrl(String),
+    ApplyTrayIcon(TrayIconRequest),
+    QuitApp,
+}
+
+/// 不依赖 GPUI 上下文的 effect，由 `run_common_effect` 统一执行。
+///
+/// 新增变体只需改 2 处：此枚举定义 + `run_common_effect` 实现。
+#[derive(Debug)]
+pub enum CommonEffect {
+    PersistSettings,
+    SendRefreshRequest(RefreshRequest),
     SyncAutoLaunch(bool),
     /// 发送简单文本通知（无 QuotaAlert 包装）
     SendPlainNotification {
@@ -50,8 +63,6 @@ pub enum AppEffect {
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区
     ClearDebugLogs,
-    /// 切换托盘图标
-    ApplyTrayIcon(TrayIconRequest),
     /// 保存新 Provider YAML 文件到配置目录
     SaveCustomProviderYaml {
         yaml_content: String,
@@ -61,5 +72,83 @@ pub enum AppEffect {
     DeleteCustomProviderYaml {
         filename: String,
     },
-    QuitApp,
+}
+
+/// Reducer 产出的副作用（两级路由）。
+///
+/// Runtime 层根据外层 variant 先分流：
+/// - `Context` → `run_context_effect` + capability adapter
+/// - `Common` → `run_common_effect`
+///
+/// 新增 `CommonEffect` 只需改 2 处：枚举定义 + `run_common_effect`
+/// 新增 `ContextEffect` 只需改 2 处：枚举定义 + `run_context_effect`
+#[derive(Debug)]
+pub enum AppEffect {
+    Context(ContextEffect),
+    Common(CommonEffect),
+}
+
+// ── From impls ───────────────────────────────────────
+// reducer 使用 `ContextEffect::Render.into()` / `CommonEffect::PersistSettings.into()`
+// 保持构造简洁，避免为每个 effect 再维护一层样板构造方法。
+
+impl From<ContextEffect> for AppEffect {
+    fn from(e: ContextEffect) -> Self {
+        Self::Context(e)
+    }
+}
+
+impl From<CommonEffect> for AppEffect {
+    fn from(e: CommonEffect) -> Self {
+        Self::Common(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ProviderKind;
+    use crate::refresh::{RefreshReason, RefreshRequest};
+
+    #[test]
+    fn context_effect_into_wraps_context_variant() {
+        let effect: AppEffect = ContextEffect::OpenUrl("https://example.com".to_string()).into();
+
+        assert!(matches!(
+            effect,
+            AppEffect::Context(ContextEffect::OpenUrl(url)) if url == "https://example.com"
+        ));
+    }
+
+    #[test]
+    fn common_effect_into_wraps_common_variant() {
+        let effect: AppEffect = CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+            id: ProviderId::BuiltIn(ProviderKind::Claude),
+            reason: RefreshReason::Manual,
+        })
+        .into();
+
+        assert!(matches!(
+            effect,
+            AppEffect::Common(CommonEffect::SendRefreshRequest(
+                RefreshRequest::RefreshOne {
+                    id: ProviderId::BuiltIn(ProviderKind::Claude),
+                    reason: RefreshReason::Manual,
+                }
+            ))
+        ));
+    }
+
+    #[test]
+    fn tray_icon_request_preserves_dynamic_status() {
+        let effect: AppEffect =
+            ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red)).into();
+
+        assert!(matches!(
+            effect,
+            AppEffect::Context(ContextEffect::ApplyTrayIcon(
+                TrayIconRequest::DynamicStatus(StatusLevel::Red)
+            ))
+        ));
+    }
 }
