@@ -124,65 +124,73 @@ impl ProviderManager {
         statuses
     }
 
-    /// 刷新指定的 Provider
-    pub async fn refresh_provider(&self, kind: ProviderKind) -> Result<crate::models::RefreshData> {
-        debug!(target: "providers", "manager: refreshing provider {:?}", kind);
-        if let Some(provider) = self.provider_for_kind(kind) {
-            if let Err(err) = provider.check_availability().await {
-                let classified = super::ProviderError::classify(&err);
-                let metadata = self.metadata_for(kind);
-                warn!(
-                    target: "providers",
-                    "provider {} is unavailable: {}",
-                    metadata.display_name,
-                    classified
-                );
-                return Err(classified.into());
-            }
-            return provider.refresh().await;
-        }
-        Err(super::ProviderError::unavailable(&format!(
-            "No implementation registered for provider {:?}",
-            kind
-        ))
-        .into())
-    }
-
-    /// 刷新指定 ID 的自定义 Provider
-    pub async fn refresh_custom_provider(&self, id: &str) -> Result<crate::models::RefreshData> {
-        debug!(target: "providers", "manager: refreshing custom provider {}", id);
-        if let Some(provider) = self.custom_provider_by_id(id) {
-            if let Err(err) = provider.check_availability().await {
-                let classified = super::ProviderError::classify(&err);
-                warn!(
-                    target: "providers",
-                    "custom provider {} is unavailable: {}",
-                    id,
-                    classified
-                );
-                return Err(classified.into());
-            }
-            return provider.refresh().await;
-        }
-        Err(super::ProviderError::unavailable(&format!(
-            "No custom provider registered with id: {}",
-            id
-        ))
-        .into())
-    }
-
     /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
     pub async fn refresh_by_id(&self, id: &ProviderId) -> Result<crate::models::RefreshData> {
-        match id {
-            ProviderId::BuiltIn(kind) => self.refresh_provider(*kind).await,
-            ProviderId::Custom(custom_id) => self.refresh_custom_provider(custom_id).await,
+        debug!(target: "providers", "manager: refreshing provider {}", id);
+        let provider = match id {
+            ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
+            ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
+        };
+        match provider {
+            Some(p) => {
+                let display_label = Self::display_label_for(id, p);
+                Self::execute_refresh(p, &display_label).await
+            }
+            None => Err(super::ProviderError::unavailable(&format!(
+                "No provider registered for {}",
+                id
+            ))
+            .into()),
         }
+    }
+
+    fn display_label_for(id: &ProviderId, provider: &dyn AiProvider) -> String {
+        match id {
+            ProviderId::BuiltIn(_) => provider.descriptor().metadata.display_name,
+            ProviderId::Custom(_) => id.to_string(),
+        }
+    }
+
+    /// 通用刷新执行：check_availability → refresh
+    async fn execute_refresh(
+        provider: &dyn AiProvider,
+        display_label: &str,
+    ) -> Result<crate::models::RefreshData> {
+        if let Err(err) = provider.check_availability().await {
+            let classified = super::ProviderError::classify(&err);
+            warn!(
+                target: "providers",
+                "provider {} is unavailable: {}",
+                display_label,
+                classified
+            );
+            return Err(classified.into());
+        }
+        provider.refresh().await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use std::borrow::Cow;
+
+    struct TestProvider {
+        descriptor: crate::models::ProviderDescriptor,
+    }
+
+    #[async_trait]
+    impl AiProvider for TestProvider {
+        fn descriptor(&self) -> crate::models::ProviderDescriptor {
+            self.descriptor.clone()
+        }
+
+        async fn refresh(&self) -> Result<crate::models::RefreshData> {
+            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
+        }
+    }
 
     #[test]
     fn test_all_provider_kinds_have_implementation() {
@@ -221,5 +229,51 @@ mod tests {
                 assert!(kinds.insert(kind), "Duplicate provider kind: {:?}", kind);
             }
         }
+    }
+
+    #[test]
+    fn test_display_label_for_builtin_uses_human_readable_name() {
+        let provider = TestProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed("amp"),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Amp,
+                    display_name: "Amp".to_string(),
+                    brand_name: "Amp".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        };
+
+        let label =
+            ProviderManager::display_label_for(&ProviderId::BuiltIn(ProviderKind::Amp), &provider);
+        assert_eq!(label, "Amp");
+    }
+
+    #[test]
+    fn test_display_label_for_custom_keeps_stable_id() {
+        let provider = TestProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Owned("demo:custom".to_string()),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Custom,
+                    display_name: "Demo Provider".to_string(),
+                    brand_name: "Demo Provider".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        };
+
+        let label = ProviderManager::display_label_for(
+            &ProviderId::Custom("demo:custom".to_string()),
+            &provider,
+        );
+        assert_eq!(label, "demo:custom");
     }
 }

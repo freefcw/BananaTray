@@ -25,7 +25,7 @@ Aggregation registry holding all provider implementations:
 - `register()` — adds a provider (deduplicates by id and kind)
 - `metadata_for(kind)` — returns metadata with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
-- `refresh_provider(kind)` — checks availability then delegates to the provider's `refresh()`
+- `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
 
 ### `custom/` — YAML-backed Providers
 
