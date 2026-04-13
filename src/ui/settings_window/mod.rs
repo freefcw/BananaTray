@@ -11,12 +11,14 @@ use crate::application::AppAction;
 use crate::application::SettingsTab;
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{render_svg_icon, SimpleInputState};
+use crate::ui::widgets::render_svg_icon;
+use adabraka_ui::components::input_state::InputState;
+use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black, Context,
-    Div, Entity, FocusHandle, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window,
-    WindowAppearance,
+    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black, App,
+    AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription,
+    Window, WindowAppearance,
 };
 use log::info;
 use rust_i18n::t;
@@ -29,26 +31,48 @@ pub use window_mgr::schedule_open_settings_window;
 // 设置视图 — 匹配 Lumina Bar 设计稿
 // ============================================================================
 
-/// NewAPI 表单输入状态（不使用 adabraka-ui InputState，避免 IME 崩溃）
+/// NewAPI 表单输入状态（使用 adabraka-ui InputState，支持鼠标选择、光标闪烁等）
 pub(crate) struct NewApiFormInputs {
-    pub name: SimpleInputState,
-    pub url: SimpleInputState,
-    pub cookie: SimpleInputState,
-    pub user_id: SimpleInputState,
-    pub divisor: SimpleInputState,
-    pub focus_handles: [FocusHandle; 5],
+    pub name: Entity<InputState>,
+    pub url: Entity<InputState>,
+    pub cookie: Entity<TextareaState>,
+    pub user_id: Entity<InputState>,
+    pub divisor: Entity<InputState>,
 }
 
 impl NewApiFormInputs {
     /// 新增模式：创建空表单
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
         Self {
-            name: SimpleInputState::new(t!("newapi.field.name.placeholder").to_string()),
-            url: SimpleInputState::new(t!("newapi.field.url.placeholder").to_string()),
-            cookie: SimpleInputState::new(t!("newapi.field.cookie.placeholder").to_string()),
-            user_id: SimpleInputState::new(t!("newapi.field.user_id.placeholder").to_string()),
-            divisor: SimpleInputState::new(t!("newapi.field.divisor.placeholder").to_string()),
-            focus_handles: std::array::from_fn(|_| cx.focus_handle()),
+            name: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.name.placeholder").to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            url: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.url.placeholder").to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            cookie: cx.new(|cx| {
+                let mut s = TextareaState::new(cx);
+                s.placeholder = t!("newapi.field.cookie.placeholder").to_string().into();
+                s
+            }),
+            user_id: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.user_id.placeholder").to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            divisor: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.divisor.placeholder").to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
         }
     }
 
@@ -58,47 +82,56 @@ impl NewApiFormInputs {
         cx: &mut Context<SettingsView>,
     ) -> Self {
         Self {
-            name: SimpleInputState::new_with_value(
-                t!("newapi.field.name.placeholder").to_string(),
-                &data.display_name,
-            ),
-            url: SimpleInputState::new_with_value(
-                t!("newapi.field.url.placeholder").to_string(),
-                &data.base_url,
-            ),
-            cookie: SimpleInputState::new_with_value(
-                t!("newapi.field.cookie.placeholder").to_string(),
-                &data.cookie,
-            ),
-            user_id: SimpleInputState::new_with_value(
-                t!("newapi.field.user_id.placeholder").to_string(),
-                data.user_id.as_deref().unwrap_or(""),
-            ),
-            divisor: SimpleInputState::new_with_value(
-                t!("newapi.field.divisor.placeholder").to_string(),
-                data.divisor
+            name: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.name.placeholder").to_string().into();
+                s.content = data.display_name.clone().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            url: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.url.placeholder").to_string().into();
+                s.content = data.base_url.clone().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            cookie: cx.new(|cx| {
+                let mut s = TextareaState::new(cx);
+                s.placeholder = t!("newapi.field.cookie.placeholder").to_string().into();
+                s.content = data.cookie.clone().into();
+                s
+            }),
+            user_id: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.user_id.placeholder").to_string().into();
+                s.content = data.user_id.as_deref().unwrap_or("").to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            divisor: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("newapi.field.divisor.placeholder").to_string().into();
+                s.content = data
+                    .divisor
                     .map(|d| (d as u64).to_string())
-                    .unwrap_or_default(),
-            ),
-            focus_handles: std::array::from_fn(|_| cx.focus_handle()),
-        }
-    }
-
-    /// 按索引返回对应字段的可变引用（0=name, 1=url, 2=cookie, 3=user_id, 4=divisor）
-    pub fn field_mut(&mut self, idx: usize) -> Option<&mut SimpleInputState> {
-        match idx {
-            0 => Some(&mut self.name),
-            1 => Some(&mut self.url),
-            2 => Some(&mut self.cookie),
-            3 => Some(&mut self.user_id),
-            4 => Some(&mut self.divisor),
-            _ => None,
+                    .unwrap_or_default()
+                    .into();
+                s.trim_on_blur = false;
+                s
+            }),
         }
     }
 
     /// 返回每个字段是否获得焦点的数组
-    pub fn focused_states(&self, window: &Window) -> [bool; 5] {
-        std::array::from_fn(|i| self.focus_handles[i].is_focused(window))
+    pub fn focused_states(&self, window: &Window, cx: &App) -> [bool; 5] {
+        [
+            self.name.read(cx).focus_handle(cx).is_focused(window),
+            self.url.read(cx).focus_handle(cx).is_focused(window),
+            self.cookie.read(cx).focus_handle(cx).is_focused(window),
+            self.user_id.read(cx).focus_handle(cx).is_focused(window),
+            self.divisor.read(cx).focus_handle(cx).is_focused(window),
+        ]
     }
 }
 

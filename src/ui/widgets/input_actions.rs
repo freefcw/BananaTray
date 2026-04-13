@@ -24,4 +24,8 @@ pub(crate) fn register_input_actions(
         .on_action(window.listener_for(input_entity, InputState::copy))
         .on_action(window.listener_for(input_entity, InputState::cut))
         .on_action(window.listener_for(input_entity, InputState::paste))
+        .on_action(window.listener_for(input_entity, InputState::word_left))
+        .on_action(window.listener_for(input_entity, InputState::word_right))
+        .on_action(window.listener_for(input_entity, InputState::select_word_left))
+        .on_action(window.listener_for(input_entity, InputState::select_word_right))
 }

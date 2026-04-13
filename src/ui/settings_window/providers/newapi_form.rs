@@ -4,20 +4,22 @@
 //! 用户填写必要字段后自动生成 YAML 配置文件。
 //! 编辑模式下从磁盘读取已有配置回填表单，URL 字段只读。
 //!
-//! 使用自建 SimpleInputState 替代 adabraka-ui InputState，
-//! 避免 macOS IME 触发 character_index_for_point 崩溃。
+//! 使用 adabraka-ui InputState / TextareaState，
+//! 支持鼠标选择、光标闪烁、Alt+方向键按单词跳转等标准编辑功能。
+//! Cookie 字段使用 Textarea 多行编辑组件，便于查看和编辑长字符串。
 
 use super::super::{NewApiFormInputs, SettingsView};
 use crate::application::AppAction;
 use crate::providers::custom::generator::NewApiEditData;
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{
-    render_simple_input, render_simple_textarea, render_svg_icon, SimpleInputState,
-};
+use crate::ui::widgets::{register_input_actions, render_svg_icon};
+use adabraka_ui::components::input_state::InputState;
+use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, hsla, px, Context, Div, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent,
-    MouseButton, ParentElement, Pixels, StatefulInteractiveElement, Styled, Window,
+    div, hsla, px, App, Context, Div, Entity, Focusable, FontWeight,
+    InteractiveElement, MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
+    Styled, Window,
 };
 use rust_i18n::t;
 
@@ -43,64 +45,143 @@ fn render_field_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
     col
 }
 
-/// 渲染单个表单字段（标签 + 输入框）
+/// 渲染单个表单字段（标签 + InputState 输入框）
 #[allow(clippy::too_many_arguments)]
 fn render_form_field(
     id: &'static str,
     label: &str,
     hint: Option<&str>,
-    state: &SimpleInputState,
-    focus_handle: &FocusHandle,
+    input_entity: &Entity<InputState>,
     is_focused: bool,
     margin_top: Pixels,
     theme: &Theme,
+    window: &mut Window,
+    cx: &App,
 ) -> Div {
+    let focus_handle = input_entity.read(cx).focus_handle(cx);
+
+    let input_div = div()
+        .id(id)
+        .key_context("Input")
+        .track_focus(&focus_handle)
+        .w_full()
+        .flex()
+        .items_center()
+        .px(px(12.0))
+        .py(px(8.0))
+        .h(px(36.0))
+        .rounded(px(8.0))
+        .bg(theme.bg.card)
+        .border_1()
+        .border_color(if is_focused {
+            theme.text.accent
+        } else {
+            theme.border.strong
+        })
+        .text_size(px(13.0))
+        .text_color(theme.text.primary)
+        .on_mouse_down(MouseButton::Left, {
+            let handle = focus_handle.clone();
+            move |_, window, _| handle.focus(window)
+        });
+
+    let input_div = register_input_actions(input_div, input_entity, window);
+
     div()
         .flex_col()
         .gap(px(6.0))
         .mt(margin_top)
         .child(render_field_label(label, hint, theme))
-        .child(render_simple_input(
-            id,
-            state,
-            focus_handle,
-            is_focused,
-            theme.bg.card,
-            theme.text.primary,
-            theme.text.muted,
-            theme.border.strong,
-            theme.text.accent,
-        ))
+        .child(input_div.child(div().flex_1().overflow_hidden().child(input_entity.clone())))
 }
 
-/// 渲染多行文本表单字段（标签 + 多行输入框，适用于 Cookie 等长文本）
+/// 渲染 Textarea 表单字段（标签 + 多行文本编辑框）
+///
+/// Cookie 等长文本字段使用 TextareaState entity 直接渲染，样式与 render_form_field 对齐，
+/// 使用 BananaTray 的 Theme 而非 adabraka-ui 的内置主题，保证视觉一致性。
 #[allow(clippy::too_many_arguments)]
-fn render_form_field_textarea(
+fn render_textarea_field(
     id: &'static str,
     label: &str,
     hint: Option<&str>,
-    state: &SimpleInputState,
-    focus_handle: &FocusHandle,
+    textarea_entity: &Entity<TextareaState>,
     is_focused: bool,
     margin_top: Pixels,
     theme: &Theme,
+    window: &mut Window,
+    cx: &App,
 ) -> Div {
+    let focus_handle = textarea_entity.read(cx).focus_handle(cx);
+
+    let textarea_div = div()
+        .id(id)
+        .key_context("Textarea")
+        .track_focus(&focus_handle)
+        .w_full()
+        .px(px(12.0))
+        .py(px(8.0))
+        .min_h(px(72.0))
+        .max_h(px(140.0))
+        .rounded(px(8.0))
+        .bg(theme.bg.card)
+        .border_1()
+        .border_color(if is_focused {
+            theme.text.accent
+        } else {
+            theme.border.strong
+        })
+        .text_size(px(13.0))
+        .text_color(theme.text.primary)
+        .overflow_y_scroll()
+        .on_mouse_down(MouseButton::Left, {
+            let handle = focus_handle.clone();
+            move |_, window, _| handle.focus(window)
+        });
+
+    let textarea_div = register_textarea_actions(textarea_div, textarea_entity, window);
+
     div()
         .flex_col()
         .gap(px(6.0))
         .mt(margin_top)
         .child(render_field_label(label, hint, theme))
-        .child(render_simple_textarea(
-            id,
-            state,
-            focus_handle,
-            is_focused,
-            theme.bg.card,
-            theme.text.primary,
-            theme.text.muted,
-            theme.border.strong,
-            theme.text.accent,
-        ))
+        .child(textarea_div.child(textarea_entity.clone()))
+}
+
+/// 注册 TextareaState 的所有键盘事件处理器
+///
+/// 与 `register_input_actions` 对称，但针对 TextareaState（多行编辑），
+/// 额外支持上下方向键导航、Enter 换行、Tab 缩进等。
+fn register_textarea_actions(
+    div: Stateful<Div>,
+    entity: &Entity<TextareaState>,
+    window: &mut Window,
+) -> Stateful<Div> {
+    div.on_action(window.listener_for(entity, TextareaState::backspace))
+        .on_action(window.listener_for(entity, TextareaState::delete))
+        .on_action(window.listener_for(entity, TextareaState::left))
+        .on_action(window.listener_for(entity, TextareaState::right))
+        .on_action(window.listener_for(entity, TextareaState::up))
+        .on_action(window.listener_for(entity, TextareaState::down))
+        .on_action(window.listener_for(entity, TextareaState::select_left))
+        .on_action(window.listener_for(entity, TextareaState::select_right))
+        .on_action(window.listener_for(entity, TextareaState::select_up))
+        .on_action(window.listener_for(entity, TextareaState::select_down))
+        .on_action(window.listener_for(entity, TextareaState::select_all))
+        .on_action(window.listener_for(entity, TextareaState::home))
+        .on_action(window.listener_for(entity, TextareaState::end))
+        .on_action(window.listener_for(entity, TextareaState::copy))
+        .on_action(window.listener_for(entity, TextareaState::cut))
+        .on_action(window.listener_for(entity, TextareaState::paste))
+        .on_action(window.listener_for(entity, TextareaState::enter))
+        .on_action(window.listener_for(entity, TextareaState::shift_enter))
+        .on_action(window.listener_for(entity, TextareaState::tab))
+        .on_action(window.listener_for(entity, TextareaState::shift_tab))
+        .on_action(window.listener_for(entity, TextareaState::escape))
+        .on_action(window.listener_for(entity, TextareaState::word_left))
+        .on_action(window.listener_for(entity, TextareaState::word_right))
+        .on_action(window.listener_for(entity, TextareaState::select_word_left))
+        .on_action(window.listener_for(entity, TextareaState::select_word_right))
 }
 
 /// 渲染只读字段（编辑模式下身份标识字段不可修改）
@@ -168,7 +249,7 @@ impl SettingsView {
         self.ensure_newapi_inputs(edit_data, cx);
         let inputs = self.newapi_inputs.as_ref().unwrap();
 
-        let focused = inputs.focused_states(window);
+        let focused = inputs.focused_states(window, cx);
 
         let title = if is_editing {
             t!("newapi.edit_title").to_string()
@@ -229,17 +310,18 @@ impl SettingsView {
                 &t!("newapi.field.name"),
                 Some(&t!("newapi.field.name.placeholder")),
                 &inputs.name,
-                &inputs.focus_handles[0],
                 focused[0],
                 px(24.0),
                 theme,
+                window,
+                cx,
             ))
             // URL 字段：编辑模式下显示为只读文本
             .child(if is_editing {
                 render_readonly_field(
                     &t!("newapi.field.url"),
                     Some(&t!("newapi.field.url.readonly_hint")),
-                    inputs.url.content(),
+                    inputs.url.read(cx).content(),
                     px(16.0),
                     theme,
                 )
@@ -249,175 +331,74 @@ impl SettingsView {
                     &t!("newapi.field.url"),
                     Some(&t!("newapi.field.url.placeholder")),
                     &inputs.url,
-                    &inputs.focus_handles[1],
                     focused[1],
                     px(16.0),
                     theme,
+                    window,
+                    cx,
                 )
             })
-            .child(render_form_field_textarea(
+            .child(render_textarea_field(
                 "newapi-cookie",
                 &t!("newapi.field.cookie"),
                 Some(&t!("newapi.field.cookie.hint")),
                 &inputs.cookie,
-                &inputs.focus_handles[2],
                 focused[2],
                 px(16.0),
                 theme,
+                window,
+                cx,
             ))
             .child(render_form_field(
                 "newapi-userid",
                 &t!("newapi.field.user_id"),
                 Some(&t!("newapi.field.user_id.placeholder")),
                 &inputs.user_id,
-                &inputs.focus_handles[3],
                 focused[3],
                 px(16.0),
                 theme,
+                window,
+                cx,
             ))
             .child(render_form_field(
                 "newapi-divisor",
                 &t!("newapi.field.divisor"),
                 Some(&t!("newapi.field.divisor.placeholder")),
                 &inputs.divisor,
-                &inputs.focus_handles[4],
                 focused[4],
                 px(16.0),
                 theme,
+                window,
+                cx,
             ))
             // ── 操作按钮 ──
-            .child(self.render_form_buttons(inputs, theme));
+            .child(self.render_form_buttons(theme, cx));
 
-        // ── 键盘事件处理 ──
-        div()
-            .flex_col()
-            .flex_1()
-            .h_full()
-            .overflow_hidden()
-            .on_key_down(cx.listener(|view, ev: &KeyDownEvent, window, cx| {
-                Self::handle_form_key(view, ev, window, cx);
-            }))
-            .child(
-                div()
-                    .id("newapi-form-scroll")
-                    .flex_col()
-                    .h_full()
-                    .overflow_y_scroll()
-                    .child(inner),
-            )
-    }
-
-    /// 处理表单键盘事件
-    fn handle_form_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let inputs = match self.newapi_inputs.as_mut() {
-            Some(i) => i,
-            None => return,
-        };
-
-        // 找到当前获得焦点的输入框
-        let focused_idx = inputs
-            .focus_handles
-            .iter()
-            .position(|h| h.is_focused(window));
-
-        let focused_idx = match focused_idx {
-            Some(i) => i,
-            None => return, // 没有任何输入框有焦点
-        };
-
-        let state = match inputs.field_mut(focused_idx) {
-            Some(s) => s,
-            None => return,
-        };
-
-        let keystroke = &ev.keystroke;
-
-        // Cmd+V 粘贴
-        if keystroke.modifiers.platform && keystroke.key.as_str() == "v" {
-            state.paste(cx);
-            cx.notify();
-            return;
-        }
-
-        // Cmd+C 复制
-        if keystroke.modifiers.platform && keystroke.key.as_str() == "c" {
-            state.select_all_and_copy(cx);
-            return;
-        }
-
-        // Cmd+A 全选
-        if keystroke.modifiers.platform && keystroke.key.as_str() == "a" {
-            state.select_all();
-            cx.notify();
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                state.backspace();
-                cx.notify();
-            }
-            "delete" => {
-                state.delete();
-                cx.notify();
-            }
-            "left" => {
-                state.move_left();
-                cx.notify();
-            }
-            "right" => {
-                state.move_right();
-                cx.notify();
-            }
-            "home" => {
-                state.move_home();
-                cx.notify();
-            }
-            "end" => {
-                state.move_end();
-                cx.notify();
-            }
-            "tab" => {
-                // Tab 切换到下一个输入框
-                let next = (focused_idx + 1) % 5;
-                inputs.focus_handles[next].focus(window);
-                cx.notify();
-            }
-            "enter" => {
-                if let Some(action) = self.collect_submit_action() {
-                    runtime::dispatch_in_window(&self.state.clone(), action, window, cx);
-                }
-            }
-            _ => {
-                // 普通字符输入
-                if !keystroke.modifiers.platform && !keystroke.modifiers.control {
-                    if let Some(ref text) = keystroke.key_char {
-                        for ch in text.chars() {
-                            if !ch.is_control() {
-                                state.insert_char(ch);
-                            }
-                        }
-                        cx.notify();
-                    }
-                }
-            }
-        }
+        // ── 外层容器 ──
+        div().flex_col().flex_1().h_full().overflow_hidden().child(
+            div()
+                .id("newapi-form-scroll")
+                .flex_col()
+                .h_full()
+                .overflow_y_scroll()
+                .child(inner),
+        )
     }
 
     /// 从表单当前值构造提交 Action；必填字段缺失时返回 None
-    fn collect_submit_action(&self) -> Option<AppAction> {
+    fn collect_submit_action(&self, cx: &App) -> Option<AppAction> {
         let inputs = self.newapi_inputs.as_ref()?;
-        let name_val = inputs.name.content().trim().to_string();
-        let url_val = inputs.url.content().trim().to_string();
-        let cookie_val = inputs.cookie.content().trim().to_string();
+        let name_val = inputs.name.read(cx).content().trim().to_string();
+        let url_val = inputs.url.read(cx).content().trim().to_string();
+        let cookie_val = inputs.cookie.read(cx).content().trim().to_string();
 
         if name_val.is_empty() || url_val.is_empty() || cookie_val.is_empty() {
             log::warn!(target: "settings", "NewAPI save: required fields missing");
             return None;
         }
 
-        let user_id_val = inputs.user_id.content().trim().to_string();
-        let divisor_val = inputs.divisor.content().trim().to_string();
+        let user_id_val = inputs.user_id.read(cx).content().trim().to_string();
+        let divisor_val = inputs.divisor.read(cx).content().trim().to_string();
 
         Some(AppAction::SubmitNewApi {
             display_name: name_val,
@@ -437,15 +418,10 @@ impl SettingsView {
     }
 
     /// 渲染取消 + 保存按钮
-    fn render_form_buttons(&self, inputs: &NewApiFormInputs, theme: &Theme) -> Div {
+    fn render_form_buttons(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let state_save = self.state.clone();
         let state_cancel = self.state.clone();
-
-        let name_val = inputs.name.content().trim().to_string();
-        let url_val = inputs.url.content().trim().to_string();
-        let cookie_val = inputs.cookie.content().trim().to_string();
-        let user_id_val = inputs.user_id.content().trim().to_string();
-        let divisor_val = inputs.divisor.content().trim().to_string();
+        let view = cx.entity().clone();
 
         div()
             .flex()
@@ -480,7 +456,7 @@ impl SettingsView {
                     }),
             )
             // 保存按钮
-            .child(
+            .child({
                 div()
                     .flex_1()
                     .flex()
@@ -497,39 +473,12 @@ impl SettingsView {
                     .hover(|s| s.opacity(0.9))
                     .child(t!("newapi.save").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        if name_val.is_empty() || url_val.is_empty() || cookie_val.is_empty() {
-                            log::warn!(
-                                target: "settings",
-                                "NewAPI save: required fields missing"
-                            );
-                            return;
+                        let ok =
+                            view.update(cx, |view: &mut Self, cx| view.collect_submit_action(cx));
+                        if let Some(action) = ok {
+                            runtime::dispatch_in_window(&state_save, action, window, cx);
                         }
-
-                        let user_id = if user_id_val.is_empty() {
-                            None
-                        } else {
-                            Some(user_id_val.clone())
-                        };
-
-                        let divisor = if divisor_val.is_empty() {
-                            None
-                        } else {
-                            divisor_val.parse::<f64>().ok()
-                        };
-
-                        runtime::dispatch_in_window(
-                            &state_save,
-                            AppAction::SubmitNewApi {
-                                display_name: name_val.clone(),
-                                base_url: url_val.clone(),
-                                cookie: cookie_val.clone(),
-                                user_id,
-                                divisor,
-                            },
-                            window,
-                            cx,
-                        );
-                    }),
-            )
+                    })
+            })
     }
 }

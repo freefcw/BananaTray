@@ -53,4 +53,4 @@ SettingsView::render()
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - `window_mgr.rs` 使用 `cx.spawn()` 延迟创建窗口，避免在 effect handler 中直接创建导致 RefCell 重入
-- `NewApiFormInputs` 使用自研 `SimpleInputState`（在 `widgets/simple_input.rs` 中），避免 IME 崩溃
+- `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）
