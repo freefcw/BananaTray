@@ -12,7 +12,7 @@
 
 // --- GPUI 依赖模块 ---
 // assets 使用 GPUI AssetSource trait，single_instance 仅在运行时使用
-// 测试时（--no-default-features）不编译这些模块
+// 关闭 `app` feature 时这些模块不编译
 #[cfg(feature = "app")]
 pub(crate) mod assets;
 #[cfg(feature = "app")]

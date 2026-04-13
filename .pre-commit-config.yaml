@@ -47,7 +47,7 @@ repos:
 
       - id: cargo-test
         name: cargo test (lib)
-        entry: cargo test --lib --no-default-features
+        entry: cargo test --lib
         language: system
         types: [rust]
         pass_filenames: false

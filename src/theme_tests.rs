@@ -1,7 +1,6 @@
 //! theme 模块的单元测试 — GPUI-free
 //!
 //! 测试 `parse_color`、YAML 加载、`color()` 提取等纯逻辑。
-//! 独立模块避免 `use gpui::*` 作用域导致 GPUI proc-macro SIGBUS。
 
 #[cfg(test)]
 mod tests {

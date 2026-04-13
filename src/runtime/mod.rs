@@ -418,3 +418,6 @@ fn build_debug_alert(kind: DebugNotificationKind) -> QuotaAlert {
         },
     }
 }
+
+#[cfg(test)]
+mod tests;

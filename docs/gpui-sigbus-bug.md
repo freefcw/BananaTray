@@ -116,10 +116,15 @@ fn store_find_existing() { ... }
 - id: cargo-test
   entry: cargo test --all-targets --all-features
 
-# 修改后（排除 GPUI feature，运行全量 lib 测试）
+# 2026-04-11 临时 workaround（已废弃）
 - id: cargo-test
   name: cargo test (lib, no GPUI features)
   entry: cargo test --lib --no-default-features
+
+# 2026-04-13 当前配置
+- id: cargo-test
+  name: cargo test (lib)
+  entry: cargo test --lib
 ```
 
 ## 验证结果
@@ -131,7 +136,7 @@ fn store_find_existing() { ... }
 cargo check --all-targets --all-features
 cargo clippy --all-targets --all-features
 
-# ✅ 全量 lib 测试（717 个，含 ui/tray 模块测试）
+# ✅ 全量 lib 测试（761 个，含 ui/tray 模块测试）
 cargo test --lib
 
 # ✅ pre-commit
@@ -167,8 +172,8 @@ pre-commit run --all-files
 1. **`gpui-macros/Cargo.toml`** — `doctest = false`：proc-macro crate 的 doctest 在测试目标编译时触发 syn 递归入口
 2. **`gpui-macros/src/gpui_macros.rs`** — `#![recursion_limit = "512"]`：防止宏展开深度超过默认 128 导致栈溢出
 
-> 注意：上游修复后 **`cargo test --lib` 仍会 SIGBUS**，因为 BananaTray 的 lib 开启了 default features (`app`)，
-> 导致 GPUI 模块参与 test 目标编译。**必须用 `cargo test --lib --no-default-features`**。
+> 更新（2026-04-13）：BananaTray 已移除 `--no-default-features` workaround，当前直接运行
+> **`cargo test --lib`** 即可。若手动关闭 `app` feature，`cfg(feature = "app")` 模块仍会按预期跳过编译。
 
 ## 后续维护建议
 
@@ -183,26 +188,22 @@ cargo test --all-targets  # 测试是否修复
 
 ### 如需恢复内联测试
 
-当 bug 修复后，可以：
-1. 删除 `tests/state_tests.rs`
-2. 将测试代码迁回 `src/app/mod.rs`
-3. 恢复 pre-commit 配置为 `--all-targets`
+~~当 bug 修复后，可以：~~
+1. ~~删除 `tests/state_tests.rs`~~ → **已完成 (2026-04-13)**
+2. ~~将测试代码迁回 `src/app/mod.rs`~~ → 已迁入 `src/application/state_tests.rs`
+3. ~~恢复 pre-commit 配置为 `--all-targets`~~ → pre-commit 已更新为 `cargo test --lib`
 
 ### 避免回归
 
-**不要**在 `app/` 模块中添加 `#[cfg(test)]` 测试，直到上游修复确认。
-
-如需新增测试：
-1. 添加到 `tests/` 目录作为集成测试
-2. 或使用纯数据类型（不导入 GPUI）在 lib 中测试
+commit `2e36981` (2026-04-13) 引入了 CI 和 pre-commit 级别的 `use gpui::*` 禁令（`scripts/check-gpui-imports.sh`），从源头防止 SIGBUS 回归。现在可以在任何模块中安全添加 `#[cfg(test)]` 测试。
 
 ## 相关文件
 
-- `src/lib.rs` - 新创建的 lib 入口
-- `src/main.rs` - bin 入口（添加 `pub` 导出）
-- `tests/state_tests.rs` - 迁移的集成测试
+- `src/lib.rs` - lib 入口
+- `src/main.rs` - bin 入口
+- `scripts/check-gpui-imports.sh` - GPUI glob import 禁令脚本
 - `Cargo.toml` - bin + lib 配置
-- `.pre-commit-config.yaml` - 更新后的 hook 配置
+- `.pre-commit-config.yaml` - hook 配置
 
 ## 参考链接
 
@@ -213,19 +214,15 @@ cargo test --all-targets  # 测试是否修复
 ---
 
 **记录时间**：2026-03-28
-**最后更新**：2026-04-11
+**最后更新**：2026-04-13
 **状态**：已完全解决
 
 ### 最终解决方案
 
-真正根因：`src/ui/widgets/simple_input.rs` 文件顶层 `use gpui::*`，测试模块用 `use super::*` 把所有 GPUI 类型（含 `style_helpers!` 展开的数千个方法）带入测试作用域，导致 rustc 在 test 目标编译时递归达深度爆栈。
+真正根因：`use gpui::*` 将 GPUI 类型（含 `style_helpers!` 展开的数千个方法）带入测试作用域，导致 rustc 在 test 目标编译时递归达深度爆栈。
 
-修复：`simple_input.rs` 测试模块改为精确 import：
-```rust
-// 修改前
-use super::*;
-// 修改后
-use super::SimpleInputState;
-```
+修复路径：
+1. (2026-04-11) `simple_input.rs` 测试模块改为精确 import
+2. (2026-04-13) commit `2e36981` 全局禁止 `use gpui::*`，替换为显式导入。CI + pre-commit 中添加 `scripts/check-gpui-imports.sh` 检查。
 
-修复后 `cargo test --lib` 直接运行，无需 `--no-default-features`，717 个测试全部通过。
+效果：`cargo test`、`cargo test --lib`、`cargo test --all-targets` 均正常工作，无需 `--no-default-features`。`tests/state_tests.rs` 冗余集成测试已删除。
