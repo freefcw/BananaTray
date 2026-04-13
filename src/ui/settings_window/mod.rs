@@ -17,8 +17,8 @@ use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
     div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black, App,
     AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription,
-    Window, WindowAppearance,
+    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window,
+    WindowAppearance,
 };
 use log::info;
 use rust_i18n::t;

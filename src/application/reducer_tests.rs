@@ -703,7 +703,7 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
     // 产出 PersistSettings
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
 }
 
@@ -772,15 +772,15 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
     // 产出 PersistSettings
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     // 触发立即刷新
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        }) if *id == fresh_id
+        })) if *id == fresh_id
     )));
 }
 
