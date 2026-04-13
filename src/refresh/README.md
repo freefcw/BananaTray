@@ -39,7 +39,7 @@ UI Thread                          Background Thread
 ─────────                          ─────────────────
 RefreshRequest ──(channel)──→ RefreshCoordinator
                                     ├─ scheduler 决策
-                                    ├─ ProviderManager.refresh_provider()
+                                    ├─ ProviderManager.refresh_by_id()
                                     └─ RefreshEvent ──(channel)──→ UI
                                          → AppAction::RefreshEventReceived
                                            → reducer → effects
