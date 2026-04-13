@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::theme::Theme;
 use gpui::{
     div, px, relative, AppContext, Context, Div, ElementId, Hsla, InteractiveElement, IntoElement,
@@ -77,7 +75,7 @@ pub(crate) fn with_tooltip(
 }
 
 /// 多行 tooltip，适合较长的说明文字（如 token 来源优先级说明）
-pub fn with_multiline_tooltip(
+pub(crate) fn with_multiline_tooltip(
     id: impl Into<ElementId>,
     tooltip_text: &str,
     theme: &Theme,

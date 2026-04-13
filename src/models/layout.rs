@@ -95,6 +95,8 @@ impl PopupLayout {
     pub const OVERVIEW_QUOTA_LINE_HEIGHT: f32 = 20.0;
     /// 展开态配额行间 gap
     pub const OVERVIEW_QUOTA_LINE_GAP: f32 = 6.0;
+    /// 展开态卡片基础高度（不含配额行）: py(8)×2 + header(24) + gap(6) + border(2)
+    pub const OVERVIEW_EXPANDED_BASE_HEIGHT: f32 = 48.0;
 
     /// 最小窗口高度：1张卡片（不含 dashboard）
     pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT;
@@ -126,18 +128,15 @@ pub fn compute_popup_height_for_overview(provider_count: usize) -> f32 {
 
 impl PopupLayout {
     /// 计算展开态多行布局的卡片高度
-    /// py(8)×2 + header(24) + gap(6) + N×line(20) + (N-1)×line_gap(6) + border(2)
     pub fn overview_multi_item_height(quota_rows: usize) -> f32 {
         let rows = quota_rows.max(1);
-        // base = py(8)×2 + header(24) + gap(6) + border(2) = 48
-        let base = 48.0;
         let lines_height = rows as f32 * Self::OVERVIEW_QUOTA_LINE_HEIGHT;
         let lines_gap = if rows > 1 {
             (rows - 1) as f32 * Self::OVERVIEW_QUOTA_LINE_GAP
         } else {
             0.0
         };
-        base + lines_height + lines_gap
+        Self::OVERVIEW_EXPANDED_BASE_HEIGHT + lines_height + lines_gap
     }
 }
 
