@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 pub(crate) struct TrayController {
-    window: Option<WindowHandle<crate::ui::AppView>>,
+    window: Rc<Cell<Option<WindowHandle<crate::ui::AppView>>>>,
     pub(crate) state: Rc<RefCell<AppState>>,
 }
 
@@ -34,8 +34,29 @@ impl TrayController {
             refresh_tx, manager, settings, log_path,
         )));
         Self {
-            window: None,
+            window: Rc::new(Cell::new(None)),
             state,
+        }
+    }
+
+    /// 同步弹窗关闭后的 session 状态。
+    fn finalize_popup_close(state: &Rc<RefCell<AppState>>, cx: &mut App) {
+        state.borrow_mut().view_entity = None;
+        // 弹窗关闭后同步动态图标
+        crate::runtime::dispatch_in_app(state, AppAction::PopupVisibilityChanged(false), cx);
+    }
+
+    /// 仅当 slot 里仍是当前窗口时才清空，避免 auto-hide 误关闭新开的窗口。
+    fn take_window_if_matches(
+        window_slot: &Cell<Option<WindowHandle<crate::ui::AppView>>>,
+        expected: WindowHandle<crate::ui::AppView>,
+    ) -> bool {
+        match window_slot.get() {
+            Some(current) if current == expected => {
+                window_slot.set(None);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -43,20 +64,18 @@ impl TrayController {
     /// Returns the display ID the popup was on, if available.
     pub(crate) fn close_popup(&mut self, cx: &mut App) -> Option<DisplayId> {
         let window = self.window.take()?;
-        self.state.borrow_mut().view_entity = None;
         let mut display_id = None;
         let _ = window.update(cx, |_, window, cx| {
             display_id = window.display(cx).map(|d| d.id());
             window.remove_window();
         });
-        // 弹窗关闭后同步动态图标
-        crate::runtime::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(false), cx);
+        Self::finalize_popup_close(&self.state, cx);
         display_id
     }
 
     /// Check if the window handle is actually valid (window still exists).
     fn is_window_alive(&self, cx: &mut App) -> bool {
-        if let Some(handle) = self.window.as_ref() {
+        if let Some(handle) = self.window.get() {
             // Try to update the window - if this fails, the handle is stale
             handle.update(cx, |_, _, _| {}).is_ok()
         } else {
@@ -100,7 +119,7 @@ impl TrayController {
         } else {
             // Handle is stale, clear it
             info!(target: "tray", "window handle is stale, clearing and opening fresh panel");
-            self.window = None;
+            self.window.set(None);
             self.show(target_tab, cx);
         }
     }
@@ -115,7 +134,7 @@ impl TrayController {
         info!(target: "tray", "show window for tab {:?}", tab);
         crate::runtime::dispatch_in_app(&self.state, AppAction::SelectNavTab(tab), cx);
 
-        if self.window.is_some() {
+        if self.window.get().is_some() {
             info!(target: "tray", "reusing existing tray window");
         } else {
             info!(target: "tray", "opening a fresh tray window");
@@ -210,52 +229,53 @@ impl TrayController {
                 AppAction::PopupVisibilityChanged(true),
                 cx,
             );
-            // 监听窗口失焦，自动关闭
-            let auto_hide_state = self.state.clone();
-            let activation_initialized = Rc::new(Cell::new(false));
-            let _ = handle.update(cx, |view, window, cx| {
-                // 监听窗口失焦，自动关闭
-                let activation_initialized = activation_initialized.clone();
-                let sub = cx.observe_window_activation(window, move |_view, window, _cx| {
-                    if !activation_initialized.replace(true) {
-                        return;
-                    }
-                    let should_auto_hide = auto_hide_state
-                        .borrow()
-                        .session
-                        .settings
-                        .system
-                        .auto_hide_window;
-                    if should_auto_hide && !window.is_window_active() {
-                        info!(target: "tray", "auto-hide closing inactive tray popup");
-                        auto_hide_state.borrow_mut().view_entity = None;
-                        crate::runtime::dispatch_in_app(
-                            &auto_hide_state,
-                            AppAction::PopupVisibilityChanged(false),
-                            _cx,
-                        );
-                        window.remove_window();
-                    }
-                });
-                view._activation_sub = Some(sub);
-
-                // 监听系统外观变化（深色/浅色模式切换），自动更新主题
-                let appearance_state = view.state.clone();
-                let appearance_sub =
-                    cx.observe_window_appearance(window, move |_view, window, cx| {
-                        let user_theme = appearance_state.borrow().session.settings.display.theme;
-                        let theme = crate::theme::Theme::resolve_for_settings(
-                            user_theme,
-                            window.appearance(),
-                        );
-                        cx.set_global(theme);
-                        log::debug!(target: "app", "system appearance changed, tray theme updated");
-                    });
-                view._appearance_sub = Some(appearance_sub);
-            });
-            self.window = Some(handle);
+            self.window.set(Some(handle));
+            self.attach_observers(handle, cx);
         } else if let Err(err) = result {
             error!(target: "tray", "failed to open tray popup: {err:?}");
         }
+    }
+
+    /// 为弹窗窗口注册观察者：失焦自动隐藏 + 系统外观变化同步主题。
+    fn attach_observers(&self, handle: WindowHandle<crate::ui::AppView>, cx: &mut App) {
+        let auto_hide_state = self.state.clone();
+        let window_slot = self.window.clone();
+        let activation_initialized = Rc::new(Cell::new(false));
+        let _ = handle.update(cx, |view, window, cx| {
+            // 监听窗口失焦，自动关闭
+            let activation_initialized = activation_initialized.clone();
+            let window_slot = window_slot.clone();
+            let sub = cx.observe_window_activation(window, move |_view, window, cx| {
+                if !activation_initialized.replace(true) {
+                    return;
+                }
+                let should_auto_hide = auto_hide_state
+                    .borrow()
+                    .session
+                    .settings
+                    .system
+                    .auto_hide_window;
+                if should_auto_hide && !window.is_window_active() {
+                    if !Self::take_window_if_matches(window_slot.as_ref(), handle) {
+                        return;
+                    }
+                    info!(target: "tray", "auto-hide closing inactive tray popup");
+                    window.remove_window();
+                    Self::finalize_popup_close(&auto_hide_state, cx);
+                }
+            });
+            view._activation_sub = Some(sub);
+
+            // 监听系统外观变化（深色/浅色模式切换），自动更新主题
+            let appearance_state = view.state.clone();
+            let appearance_sub = cx.observe_window_appearance(window, move |_view, window, cx| {
+                let user_theme = appearance_state.borrow().session.settings.display.theme;
+                let theme =
+                    crate::theme::Theme::resolve_for_settings(user_theme, window.appearance());
+                cx.set_global(theme);
+                log::debug!(target: "app", "system appearance changed, tray theme updated");
+            });
+            view._appearance_sub = Some(appearance_sub);
+        });
     }
 }
