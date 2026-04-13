@@ -10,7 +10,10 @@ use crate::ui::widgets::{
     render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
     render_segmented_control, ButtonVariant, SegmentedSize,
 };
-use gpui::*;
+use gpui::{
+    div, px, rgb, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
+    StatefulInteractiveElement, Styled,
+};
 use rust_i18n::t;
 
 // 设计稿颜色常量

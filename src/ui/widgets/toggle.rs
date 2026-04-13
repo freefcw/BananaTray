@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, Div, ParentElement, Pixels, Styled};
 
 pub(crate) fn render_toggle_switch(
     enabled: bool,

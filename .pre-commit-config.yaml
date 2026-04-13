@@ -47,11 +47,18 @@ repos:
 
       - id: cargo-test
         name: cargo test (lib)
-        entry: cargo test --lib
+        entry: cargo test --lib --no-default-features
         language: system
         types: [rust]
         pass_filenames: false
         always_run: true
+
+      - id: forbid-gpui-glob-imports
+        name: Forbid GPUI glob imports
+        entry: ./scripts/check-gpui-imports.sh
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.rs$
 
   # 提交信息规范检查（可选）
   # - repo: https://github.com/commitizen-tools/commitizen

@@ -3,7 +3,10 @@ use crate::application::{tray_global_actions_view_state, AppAction, RefreshTarge
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, Context, Div, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Styled,
+};
 
 use super::render_svg_icon;
 use crate::ui::AppView;

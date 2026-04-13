@@ -1,4 +1,4 @@
-use gpui::*;
+use gpui::{rgb, rgba, Global, Hsla, WindowAppearance};
 use std::sync::LazyLock;
 
 /// 判断 WindowAppearance 是否为深色系

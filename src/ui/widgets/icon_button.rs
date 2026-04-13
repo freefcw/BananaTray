@@ -1,5 +1,8 @@
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, AnyElement, App, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, Styled, Window,
+};
 
 use super::icon::render_svg_icon;
 use super::tooltip::with_tooltip;

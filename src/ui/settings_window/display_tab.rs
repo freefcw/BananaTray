@@ -5,7 +5,7 @@ use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_segmented_control, SegmentedSize};
-use gpui::*;
+use gpui::{div, px, rgb, App, Div, FontWeight, ParentElement, Styled, Window};
 use rust_i18n::t;
 
 // 设计稿颜色常量

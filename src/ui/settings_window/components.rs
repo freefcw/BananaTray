@@ -1,7 +1,10 @@
 use super::SettingsView;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_icon_row, render_toggle_switch};
-use gpui::*;
+use gpui::{
+    div, px, App, Div, FontWeight, Hsla, InteractiveElement, MouseButton, MouseDownEvent,
+    ParentElement, Styled, Window,
+};
 
 // ============================================================================
 // 设计稿风格的段落标题和卡片

@@ -1,9 +1,11 @@
-use crate::application::{reduce, AppAction, AppEffect, DebugNotificationKind};
+use crate::application::{
+    reduce, AppAction, AppEffect, CommonEffect, ContextEffect, DebugNotificationKind,
+};
 use crate::models::ConnectionStatus;
 use crate::platform::notification::{send_system_notification, QuotaAlert};
 use crate::refresh::RefreshRequest;
 use crate::ui::{persist_settings, schedule_open_settings_window, AppState};
-use gpui::*;
+use gpui::{App, Context, Window};
 use log::{info, warn};
 
 use std::cell::RefCell;
@@ -82,8 +84,119 @@ fn dispatch_effects(
 }
 
 // ============================================================================
-// Effect 执行：按 GPUI 上下文分派
+// Effect 执行：两级路由 + Capability 适配
+//
+// - CommonEffect  → run_common_effect（单一 match，类型安全）
+// - ContextEffect → run_context_effect（单一 match） + ContextCapabilities trait
+//
+// 新增任意 Effect 只需改 2 处：枚举定义 + 对应的 run_*_effect match。
 // ============================================================================
+
+/// GPUI 上下文能力抽象。
+///
+/// 不同 GPUI 入口（Context<V> / Window+App / App）通过 adapter 实现此 trait，
+/// 将"当前环境能做什么"与"要做什么"解耦。`run_context_effect` 只关心后者。
+trait ContextCapabilities {
+    fn render(&mut self, state: &Rc<RefCell<AppState>>);
+
+    fn open_settings_window(&mut self, _state: &Rc<RefCell<AppState>>) {
+        warn!(target: "runtime", "open_settings_window not available in this context");
+    }
+
+    fn open_url(&mut self, url: &str) {
+        crate::platform::system::open_url(url);
+    }
+
+    fn apply_tray_icon(&mut self, _request: crate::application::TrayIconRequest) {
+        warn!(target: "runtime", "apply_tray_icon not available in this context");
+    }
+
+    fn quit(&mut self) {
+        warn!(target: "runtime", "quit not available in this context");
+    }
+}
+
+// ── Adapter: Context<V>（仅支持 Render）─────────────
+
+struct ViewCaps<'a, 'b, V: 'static>(&'a mut Context<'b, V>);
+
+impl<V: 'static> ContextCapabilities for ViewCaps<'_, '_, V> {
+    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
+        self.0.notify();
+    }
+    // open_settings_window / apply_tray_icon / quit 使用 trait 默认 warn 实现
+    // open_url 使用 trait 默认实现（platform::system::open_url）
+}
+
+// ── Adapter: Window + App（全能力）──────────────────
+
+struct WindowCaps<'a> {
+    window: &'a mut Window,
+    cx: &'a mut App,
+}
+
+impl ContextCapabilities for WindowCaps<'_> {
+    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
+        self.window.refresh();
+    }
+
+    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
+        let display_id = self.window.display(self.cx).map(|display| display.id());
+        state.borrow_mut().view_entity = None;
+        self.window.remove_window();
+        schedule_open_settings_window(state.clone(), display_id, self.cx);
+    }
+
+    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
+        crate::tray::apply_tray_icon(self.cx, request);
+    }
+
+    fn quit(&mut self) {
+        self.cx.quit();
+    }
+}
+
+// ── Adapter: App（大部分能力，Render 使用 view entity）
+
+struct AppCaps<'a> {
+    cx: &'a mut App,
+}
+
+impl ContextCapabilities for AppCaps<'_> {
+    fn render(&mut self, state: &Rc<RefCell<AppState>>) {
+        notify_view_entity(state, self.cx);
+    }
+
+    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
+        schedule_open_settings_window(state.clone(), None, self.cx);
+    }
+
+    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
+        crate::tray::apply_tray_icon(self.cx, request);
+    }
+
+    fn quit(&mut self) {
+        self.cx.quit();
+    }
+}
+
+// ── ContextEffect 统一分派（单一 match）─────────────
+
+fn run_context_effect(
+    state: &Rc<RefCell<AppState>>,
+    effect: ContextEffect,
+    caps: &mut dyn ContextCapabilities,
+) {
+    match effect {
+        ContextEffect::Render => caps.render(state),
+        ContextEffect::OpenSettingsWindow => caps.open_settings_window(state),
+        ContextEffect::OpenUrl(url) => caps.open_url(&url),
+        ContextEffect::ApplyTrayIcon(request) => caps.apply_tray_icon(request),
+        ContextEffect::QuitApp => caps.quit(),
+    }
+}
+
+// ── Effect 入口（Context / Common 两级路由）─────────
 
 fn run_effect_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
@@ -91,15 +204,8 @@ fn run_effect_in_context<V: 'static>(
     cx: &mut Context<V>,
 ) {
     match effect {
-        AppEffect::Render => cx.notify(),
-        // Context<V> 中无法执行以下 effect
-        AppEffect::OpenSettingsWindow
-        | AppEffect::OpenUrl(_)
-        | AppEffect::ApplyTrayIcon(_)
-        | AppEffect::QuitApp => {
-            warn!(target: "runtime", "effect {:?} ignored: not available in Context<V>", effect);
-        }
-        other => run_common_effect(state, other),
+        AppEffect::Context(ctx) => run_context_effect(state, ctx, &mut ViewCaps(cx)),
+        AppEffect::Common(common) => run_common_effect(state, common),
     }
 }
 
@@ -110,65 +216,56 @@ fn run_effect_in_window(
     cx: &mut App,
 ) {
     match effect {
-        AppEffect::Render => window.refresh(),
-        AppEffect::OpenSettingsWindow => {
-            let display_id = window.display(cx).map(|display| display.id());
-            state.borrow_mut().view_entity = None;
-            window.remove_window();
-            schedule_open_settings_window(state.clone(), display_id, cx);
+        AppEffect::Context(ctx) => {
+            run_context_effect(state, ctx, &mut WindowCaps { window, cx });
         }
-        AppEffect::OpenUrl(url) => crate::platform::system::open_url(&url),
-        AppEffect::ApplyTrayIcon(request) => crate::tray::apply_tray_icon(cx, request),
-        AppEffect::QuitApp => cx.quit(),
-        other => run_common_effect(state, other),
+        AppEffect::Common(common) => run_common_effect(state, common),
     }
 }
 
 fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut App) {
     match effect {
-        AppEffect::Render => notify_view_entity(state, cx),
-        AppEffect::OpenSettingsWindow => schedule_open_settings_window(state.clone(), None, cx),
-        AppEffect::OpenUrl(url) => crate::platform::system::open_url(&url),
-        AppEffect::ApplyTrayIcon(request) => crate::tray::apply_tray_icon(cx, request),
-        AppEffect::QuitApp => cx.quit(),
-        other => run_common_effect(state, other),
+        AppEffect::Context(ctx) => {
+            run_context_effect(state, ctx, &mut AppCaps { cx });
+        }
+        AppEffect::Common(common) => run_common_effect(state, common),
     }
 }
 
 // ============================================================================
-// Common Effect 执行：不依赖 GPUI 上下文
+// Common Effect 执行：不依赖 GPUI 上下文（类型安全，无 catch-all 分支）
 // ============================================================================
 
-fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
+fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
     match effect {
-        AppEffect::PersistSettings => {
+        CommonEffect::PersistSettings => {
             persist_current_settings(state);
         }
-        AppEffect::SendRefreshRequest(request) => {
+        CommonEffect::SendRefreshRequest(request) => {
             let _ = send_refresh_request(state, request);
         }
-        AppEffect::SyncAutoLaunch(enabled) => {
+        CommonEffect::SyncAutoLaunch(enabled) => {
             sync_auto_launch(enabled);
         }
-        AppEffect::ApplyLocale(language) => {
+        CommonEffect::ApplyLocale(language) => {
             crate::i18n::apply_locale(&language);
         }
-        AppEffect::UpdateLogLevel(level) => {
+        CommonEffect::UpdateLogLevel(level) => {
             update_log_level(&level);
         }
-        AppEffect::SendQuotaNotification { alert, with_sound } => {
+        CommonEffect::SendQuotaNotification { alert, with_sound } => {
             send_system_notification(&alert, with_sound);
         }
-        AppEffect::SendPlainNotification { title, body } => {
+        CommonEffect::SendPlainNotification { title, body } => {
             // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
             std::thread::spawn(move || {
                 crate::platform::notification::send_plain_notification(&title, &body);
             });
         }
-        AppEffect::SendDebugNotification { kind, with_sound } => {
+        CommonEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
-        AppEffect::OpenLogDirectory => {
+        CommonEffect::OpenLogDirectory => {
             let log_path = state.borrow().log_path.clone();
             if let Some(path) = log_path {
                 crate::platform::system::open_path_in_finder(&path);
@@ -176,10 +273,10 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
                 warn!(target: "runtime", "OpenLogDirectory: log_path not available");
             }
         }
-        AppEffect::CopyToClipboard(text) => {
+        CommonEffect::CopyToClipboard(text) => {
             crate::platform::system::copy_to_clipboard(&text);
         }
-        AppEffect::StartDebugRefresh(kind) => {
+        CommonEffect::StartDebugRefresh(kind) => {
             use crate::utils::log_capture::LogCapture;
             info!(target: "runtime", "starting debug refresh for {:?}", kind);
             // 1. 保存当前日志级别到 state（供 RestoreLogLevel 使用）
@@ -196,17 +293,17 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
             };
             let _ = send_refresh_request(state, request);
         }
-        AppEffect::RestoreLogLevel(level) => {
+        CommonEffect::RestoreLogLevel(level) => {
             use crate::utils::log_capture::LogCapture;
             info!(target: "runtime", "debug refresh complete, restoring log level to {:?}", level);
             // 停用日志捕获，恢复日志级别
             LogCapture::global().disable();
             log::set_max_level(level);
         }
-        AppEffect::ClearDebugLogs => {
+        CommonEffect::ClearDebugLogs => {
             crate::utils::log_capture::LogCapture::global().clear();
         }
-        AppEffect::SaveCustomProviderYaml {
+        CommonEffect::SaveCustomProviderYaml {
             yaml_content,
             filename,
         } => {
@@ -230,7 +327,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
                 }
             }
         }
-        AppEffect::DeleteCustomProviderYaml { filename } => {
+        CommonEffect::DeleteCustomProviderYaml { filename } => {
             let path = crate::platform::paths::custom_provider_path(&filename);
             match std::fs::remove_file(&path) {
                 Ok(()) => {
@@ -241,13 +338,6 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: AppEffect) {
                     warn!(target: "runtime", "failed to delete YAML {}: {}", path.display(), e);
                 }
             }
-        }
-        AppEffect::Render
-        | AppEffect::OpenSettingsWindow
-        | AppEffect::OpenUrl(_)
-        | AppEffect::ApplyTrayIcon(_)
-        | AppEffect::QuitApp => {
-            warn!(target: "runtime", "unexpected effect in run_common_effect: {:?}", effect);
         }
     }
 }

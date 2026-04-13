@@ -30,7 +30,9 @@ fn has_effect(effects: &[AppEffect], f: impl Fn(&AppEffect) -> bool) -> bool {
 }
 
 fn has_render(effects: &[AppEffect]) -> bool {
-    has_effect(effects, |e| matches!(e, AppEffect::Render))
+    has_effect(effects, |e| {
+        matches!(e, AppEffect::Context(ContextEffect::Render))
+    })
 }
 
 // ── Cadence Dropdown ────────────────────────────────
@@ -63,11 +65,11 @@ fn update_refresh_cadence_applies_setting_and_closes_dropdown() {
     assert!(!session.settings_ui.cadence_dropdown_open);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(_)
+        AppEffect::Common(CommonEffect::SendRefreshRequest(_))
     )));
     assert!(has_render(&effects));
 }
@@ -87,15 +89,15 @@ fn toggle_start_at_login_produces_sync_and_notification() {
     assert!(session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SyncAutoLaunch(true)
+        AppEffect::Common(CommonEffect::SyncAutoLaunch(true))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendPlainNotification { .. }
+        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -112,7 +114,7 @@ fn toggle_start_at_login_round_trip() {
     assert!(session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SyncAutoLaunch(true)
+        AppEffect::Common(CommonEffect::SyncAutoLaunch(true))
     )));
 
     // disable
@@ -123,7 +125,7 @@ fn toggle_start_at_login_round_trip() {
     assert!(!session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SyncAutoLaunch(false)
+        AppEffect::Common(CommonEffect::SyncAutoLaunch(false))
     )));
 }
 
@@ -142,7 +144,7 @@ fn toggle_show_account_info_flips_setting() {
     assert!(!session.settings.display.show_account_info);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -201,6 +203,33 @@ fn select_debug_provider_can_change() {
     );
 }
 
+#[test]
+fn open_url_produces_context_effect() {
+    let mut session = make_session();
+
+    let effects = reduce(
+        &mut session,
+        AppAction::OpenUrl("https://example.com".to_string()),
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::OpenUrl(url)) if url == "https://example.com"
+    )));
+}
+
+#[test]
+fn quit_app_produces_context_effect() {
+    let mut session = make_session();
+
+    let effects = reduce(&mut session, AppAction::QuitApp);
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::QuitApp)
+    )));
+}
+
 // ── DebugRefreshProvider ────────────────────────────
 
 #[test]
@@ -211,7 +240,7 @@ fn debug_refresh_without_selection_is_noop() {
     assert!(!session.debug_ui.refresh_active);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::StartDebugRefresh(_)
+        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
     )));
 }
 
@@ -228,7 +257,7 @@ fn debug_refresh_with_selection_produces_effect() {
     assert!(session.debug_ui.refresh_active);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::StartDebugRefresh(_)
+        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
     )));
 }
 
@@ -245,7 +274,7 @@ fn debug_refresh_while_active_is_noop() {
     let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::StartDebugRefresh(_)
+        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
     )));
 }
 
@@ -272,11 +301,13 @@ fn set_tray_icon_style_updates_setting_and_produces_effects() {
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(TrayIconRequest::Static(TrayIconStyle::Yellow))
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(TrayIconRequest::Static(
+            TrayIconStyle::Yellow
+        )))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -323,7 +354,9 @@ fn set_tray_icon_dynamic_produces_dynamic_status_effect() {
     // 无已连接 provider → DynamicStatus(Green)
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Green))
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(
+            TrayIconRequest::DynamicStatus(StatusLevel::Green)
+        ))
     )));
 }
 
@@ -356,7 +389,9 @@ fn refresh_success_in_dynamic_mode_produces_tray_icon_effect() {
     // 当前 Provider Claude 变 Red → 产出 ApplyTrayIcon
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red))
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(
+            TrayIconRequest::DynamicStatus(StatusLevel::Red)
+        ))
     )));
 }
 
@@ -388,7 +423,7 @@ fn refresh_success_in_static_mode_does_not_produce_tray_icon_effect() {
     // 静态模式下不应产出 ApplyTrayIcon effect
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -435,7 +470,7 @@ fn refresh_success_in_dynamic_mode_no_effect_when_status_unchanged() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -464,7 +499,7 @@ fn refresh_non_current_provider_does_not_produce_tray_icon_effect() {
     // 非当前 Provider 的刷新不影响图标
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -493,7 +528,7 @@ fn refresh_deferred_while_popup_visible() {
     // 弹窗可见时不产出 ApplyTrayIcon
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -528,7 +563,9 @@ fn popup_closed_syncs_dynamic_icon() {
     assert!(!session.popup_visible);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(StatusLevel::Red))
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(
+            TrayIconRequest::DynamicStatus(StatusLevel::Red)
+        ))
     )));
 }
 
@@ -544,7 +581,7 @@ fn popup_opened_sets_flag_no_icon_effect() {
     assert!(session.popup_visible);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -562,7 +599,7 @@ fn popup_closed_in_static_mode_no_icon_effect() {
     // 非 Dynamic 模式不产出图标更新
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ApplyTrayIcon(_)
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
 }
 
@@ -611,7 +648,7 @@ fn submit_newapi_produces_save_and_notification_effects() {
 
     // Effect: SaveCustomProviderYaml（检查文件名和内容包含关键字段）
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::SaveCustomProviderYaml { filename, yaml_content }
+        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { filename, yaml_content })
             if filename.starts_with("newapi-")
             && filename.ends_with(".yaml")
             && yaml_content.contains("Test Site")
@@ -627,7 +664,7 @@ fn submit_newapi_produces_save_and_notification_effects() {
     // Effect: SendPlainNotification（通知用户重启）
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendPlainNotification { .. }
+        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
     )));
 
     assert!(has_render(&effects));
@@ -649,7 +686,7 @@ fn submit_newapi_without_optional_fields_uses_defaults() {
     );
 
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::SaveCustomProviderYaml { yaml_content, .. }
+        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { yaml_content, .. })
             if yaml_content.contains("/api/user/self")
             && yaml_content.contains("divisor: 500000")
         )
@@ -702,7 +739,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
 
     // Effect: 使用原始文件名而非重新生成
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::SaveCustomProviderYaml { filename, yaml_content }
+        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { filename, yaml_content })
             if filename == "original-file.yaml"
             && yaml_content.contains("Updated Name")
             && yaml_content.contains("new_cookie")
@@ -712,7 +749,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     // 通知应包含编辑相关内容
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendPlainNotification { .. }
+        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
     )));
 }
 
@@ -783,7 +820,7 @@ fn set_quota_display_mode_updates_setting_and_produces_effects() {
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -839,7 +876,7 @@ fn toggle_quota_visibility_updates_setting_and_produces_effects() {
         .is_quota_visible(ProviderKind::Claude, "session"));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -882,7 +919,7 @@ fn clear_debug_logs_produces_effect() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::ClearDebugLogs
+        AppEffect::Common(CommonEffect::ClearDebugLogs)
     )));
     assert!(has_render(&effects));
 }
@@ -924,7 +961,9 @@ fn refresh_all_marks_enabled_providers_refreshing() {
     // 应产出 RefreshAll 请求
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll { .. })
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::RefreshAll { .. }
+        ))
     )));
     assert!(has_render(&effects));
 }
@@ -939,7 +978,9 @@ fn refresh_all_with_no_enabled_providers_is_safe() {
     // 仍然应产出 RefreshAll 请求（coordinator 会处理空列表）
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll { .. })
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::RefreshAll { .. }
+        ))
     )));
     assert!(has_render(&effects));
 }
@@ -969,7 +1010,7 @@ fn finished_event_restores_debug_state() {
     assert!(session.debug_ui.prev_log_level.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::RestoreLogLevel(log::LevelFilter::Info)
+        AppEffect::Common(CommonEffect::RestoreLogLevel(log::LevelFilter::Info))
     )));
 }
 
@@ -992,7 +1033,7 @@ fn finished_event_for_other_provider_does_not_restore() {
     assert!(session.debug_ui.prev_log_level.is_some());
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::RestoreLogLevel(_)
+        AppEffect::Common(CommonEffect::RestoreLogLevel(_))
     )));
 }
 
@@ -1018,7 +1059,7 @@ fn finished_restore_survives_unknown_provider() {
     assert!(!session.debug_ui.refresh_active);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::RestoreLogLevel(log::LevelFilter::Warn)
+        AppEffect::Common(CommonEffect::RestoreLogLevel(log::LevelFilter::Warn))
     )));
 }
 
@@ -1044,7 +1085,9 @@ fn providers_reloaded_sends_update_config() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::UpdateConfig { .. })
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::UpdateConfig { .. }
+        ))
     )));
     assert!(has_render(&effects));
 }
@@ -1067,10 +1110,10 @@ fn providers_reloaded_refreshes_enabled_new_custom() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        }) if *id == ProviderId::Custom("new:api".to_string())
+        })) if *id == ProviderId::Custom("new:api".to_string())
     )));
 }
 
@@ -1090,10 +1133,10 @@ fn providers_reloaded_does_not_refresh_disabled_custom() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        }) if *id == ProviderId::Custom("disabled:api".to_string())
+        })) if *id == ProviderId::Custom("disabled:api".to_string())
     )));
 }
 
@@ -1175,7 +1218,7 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
 }
 
@@ -1190,7 +1233,7 @@ fn delete_newapi_produces_delete_effect_with_correct_filename() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::DeleteCustomProviderYaml { filename }
+        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { filename })
             if filename == "newapi-my-api-example-com.yaml"
     )));
 }
@@ -1204,7 +1247,7 @@ fn delete_newapi_ignores_non_newapi_custom_id() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::DeleteCustomProviderYaml { .. }
+        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { .. })
     )));
 }
 
@@ -1217,7 +1260,7 @@ fn delete_newapi_ignores_builtin_provider_id() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::DeleteCustomProviderYaml { .. }
+        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { .. })
     )));
 }
 
@@ -1238,7 +1281,7 @@ fn move_provider_to_index_persists_and_renders() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -1312,7 +1355,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     assert!(!session.settings_ui.adding_provider);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -1348,7 +1391,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .is_enabled(&pid(ProviderKind::Claude)));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -1373,7 +1416,7 @@ fn remove_last_sidebar_provider_enters_add_mode() {
     assert!(session.settings_ui.adding_provider);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     assert!(has_render(&effects));
 }
@@ -1393,7 +1436,7 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
     // 无持久化
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::PersistSettings
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
     // 仍有 render（push_render 在 if 外）
     assert!(has_render(&effects));

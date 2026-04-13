@@ -4,7 +4,11 @@ use crate::application::quota_usage_detail_text;
 use crate::models::{QuotaDisplayMode, QuotaInfo, QuotaType, StatusLevel};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
-use gpui::*;
+use gpui::{
+    div, ease_out_quint, linear_color_stop, multi_stop_linear_gradient, px, relative, Animation,
+    AnimationExt, Div, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement,
+    Stateful, StyleRefinement, Styled,
+};
 use rust_i18n::t;
 
 /// 状态徽章文本
@@ -108,7 +112,7 @@ pub(crate) fn render_quota_bar(
         .bg(theme.bg.card_inner)
         .border_1()
         .border_color(theme.border.strong)
-        .hover(move |style| style.bg(hover_bg));
+        .hover(move |style: StyleRefinement| style.bg(hover_bg));
 
     card
         // ── 第一行：● MODEL-NAME + [HEALTHY] ──
@@ -236,7 +240,9 @@ pub(crate) fn render_quota_bar(
                                 anim_id,
                                 Animation::new(Duration::from_millis(1000))
                                     .with_easing(ease_out_quint()),
-                                move |el, delta| el.w(relative(delta * target_ratio)),
+                                move |el: Stateful<Div>, delta| {
+                                    el.w(relative(delta * target_ratio))
+                                },
                             ),
                     ),
             )

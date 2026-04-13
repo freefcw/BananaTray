@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, svg, transparent_black, Div, FontWeight, ParentElement, Styled};
 
 /// 设置窗口顶部 tab 栏项（icon + label + 下划线指示器）
 #[allow(dead_code)]

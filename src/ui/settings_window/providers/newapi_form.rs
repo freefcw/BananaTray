@@ -15,7 +15,10 @@ use crate::theme::Theme;
 use crate::ui::widgets::{
     render_simple_input, render_simple_textarea, render_svg_icon, SimpleInputState,
 };
-use gpui::*;
+use gpui::{
+    div, hsla, px, Context, Div, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent,
+    MouseButton, ParentElement, Pixels, StatefulInteractiveElement, Styled, Window,
+};
 use rust_i18n::t;
 
 /// 渲染字段标签 + 描述（如果有）

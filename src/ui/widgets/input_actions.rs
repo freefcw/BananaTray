@@ -1,5 +1,5 @@
 use adabraka_ui::components::input_state::InputState;
-use gpui::*;
+use gpui::{Div, Entity, InteractiveElement, Stateful, Window};
 
 /// 注册所有键盘事件处理器到 InputState entity
 ///

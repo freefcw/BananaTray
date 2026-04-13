@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{div, px, transparent_black, Div, FontWeight, ParentElement, Pixels, Styled};
 
 /// Render a checkbox element.
 /// Currently unused but kept for potential future use.

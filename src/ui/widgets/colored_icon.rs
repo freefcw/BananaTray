@@ -3,7 +3,7 @@
 /// 设计稿核心元素：圆形背景 + 居中 SVG 图标。
 /// 主要用于设置窗口的各类设置行（General / Display / Debug tab）。
 use super::render_svg_icon;
-use gpui::*;
+use gpui::{div, px, Div, Hsla, ParentElement, Styled};
 
 /// 标准尺寸（36×36 圆形 + 18px 图标），用于设置行
 pub(crate) fn render_colored_icon(icon_path: &'static str, icon_color: Hsla, icon_bg: Hsla) -> Div {

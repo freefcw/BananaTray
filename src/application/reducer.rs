@@ -1,5 +1,7 @@
 use super::state::{AppSession, SettingsTab};
-use crate::application::{AppAction, AppEffect, SettingChange, TrayIconRequest};
+use crate::application::{
+    AppAction, AppEffect, CommonEffect, ContextEffect, SettingChange, TrayIconRequest,
+};
 use crate::models::{NavTab, ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 use log::{debug, info};
@@ -10,35 +12,35 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
     match action {
         AppAction::SelectNavTab(tab) => {
             session.nav.switch_to(tab);
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SetSettingsTab(tab) => {
             session.settings_ui.active_tab = tab;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SelectSettingsProvider(id) => {
             session.settings_ui.selected_provider = id;
             session.settings_ui.adding_newapi = false;
             session.settings_ui.confirming_remove_provider = false;
             session.settings_ui.confirming_delete_newapi = false;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::ToggleCadenceDropdown => {
             session.settings_ui.cadence_dropdown_open = !session.settings_ui.cadence_dropdown_open;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SetCopilotTokenEditing(editing) => {
             session.settings_ui.copilot_token_editing = editing;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SaveCopilotToken(token) => {
             let token = token.trim().to_string();
             if !token.is_empty() {
                 session.settings.provider.credentials.github_token = Some(token);
-                effects.push(AppEffect::PersistSettings);
+                effects.push(CommonEffect::PersistSettings.into());
             }
             session.settings_ui.copilot_token_editing = false;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::MoveProviderToIndex { id, target_index } => {
             let custom_ids = session.provider_store.custom_provider_ids();
@@ -48,8 +50,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                     .provider
                     .move_provider_to_index(&id, target_index, &custom_ids);
             if moved {
-                effects.push(AppEffect::PersistSettings);
-                push_render(&mut effects);
+                effects.push(CommonEffect::PersistSettings.into());
+                effects.push(ContextEffect::Render.into());
             }
         }
         AppAction::UpdateSetting(change) => {
@@ -72,78 +74,84 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 session.settings_ui.selected_provider = id;
                 session.settings_ui.active_tab = SettingsTab::Providers;
             }
-            effects.push(AppEffect::OpenSettingsWindow);
+            effects.push(ContextEffect::OpenSettingsWindow.into());
         }
         AppAction::OpenDashboard(id) => {
             if let Some(provider) = session.provider_store.find_by_id(&id) {
                 let url = provider.dashboard_url().trim();
                 if !url.is_empty() {
-                    effects.push(AppEffect::OpenUrl(url.to_string()));
+                    effects.push(ContextEffect::OpenUrl(url.to_string()).into());
                 }
             }
         }
-        AppAction::OpenUrl(url) => effects.push(AppEffect::OpenUrl(url)),
+        AppAction::OpenUrl(url) => effects.push(ContextEffect::OpenUrl(url).into()),
         AppAction::UpdateLogLevel(level) => {
-            effects.push(AppEffect::UpdateLogLevel(level));
-            push_render(&mut effects);
+            effects.push(CommonEffect::UpdateLogLevel(level).into());
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SendDebugNotification(kind) => {
-            effects.push(AppEffect::SendDebugNotification {
-                kind,
-                with_sound: session.settings.notification.notification_sound,
-            });
+            effects.push(
+                CommonEffect::SendDebugNotification {
+                    kind,
+                    with_sound: session.settings.notification.notification_sound,
+                }
+                .into(),
+            );
         }
         AppAction::OpenLogDirectory => {
-            effects.push(AppEffect::OpenLogDirectory);
+            effects.push(CommonEffect::OpenLogDirectory.into());
         }
         AppAction::CopyToClipboard(text) => {
-            effects.push(AppEffect::CopyToClipboard(text));
+            effects.push(CommonEffect::CopyToClipboard(text).into());
         }
         AppAction::SelectDebugProvider(id) => {
             session.debug_ui.selected_provider = Some(id);
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::DebugRefreshProvider => {
             if let Some(ref id) = session.debug_ui.selected_provider {
                 if !session.debug_ui.refresh_active {
                     session.debug_ui.refresh_active = true;
                     session.provider_store.mark_refreshing_by_id(id);
-                    effects.push(AppEffect::StartDebugRefresh(id.clone()));
-                    push_render(&mut effects);
+                    effects.push(CommonEffect::StartDebugRefresh(id.clone()).into());
+                    effects.push(ContextEffect::Render.into());
                 }
             }
         }
         AppAction::ClearDebugLogs => {
-            effects.push(AppEffect::ClearDebugLogs);
-            push_render(&mut effects);
+            effects.push(CommonEffect::ClearDebugLogs.into());
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::PopupVisibilityChanged(visible) => {
             session.popup_visible = visible;
             if !visible {
                 // 弹窗关闭时同步图标为当前 Provider 的状态
                 if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
-                    effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
-                        session.current_provider_status(),
-                    )));
+                    effects.push(
+                        ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
+                            session.current_provider_status(),
+                        ))
+                        .into(),
+                    );
                 }
             }
         }
         AppAction::EnterAddProvider => {
             session.settings_ui.adding_provider = true;
             session.settings_ui.adding_newapi = false; // 互斥
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::CancelAddProvider => {
             session.settings_ui.adding_provider = false;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::AddProviderToSidebar(id) => {
             if session.settings.provider.add_to_sidebar(&id) {
-                effects.push(AppEffect::PersistSettings);
+                effects.push(CommonEffect::PersistSettings.into());
             }
             session.settings_ui.adding_provider = false;
             session.settings_ui.selected_provider = id;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::RemoveProviderFromSidebar(id) => {
             session.settings_ui.confirming_remove_provider = false;
@@ -163,31 +171,31 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 } else {
                     session.settings_ui.adding_provider = true;
                 }
-                effects.push(AppEffect::PersistSettings);
-                effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
-                    session,
-                )));
+                effects.push(CommonEffect::PersistSettings.into());
+                effects.push(
+                    CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into(),
+                );
             }
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::ConfirmRemoveProvider => {
             session.settings_ui.confirming_remove_provider = true;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::CancelRemoveProvider => {
             session.settings_ui.confirming_remove_provider = false;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::EnterAddNewApi => {
             session.settings_ui.adding_newapi = true;
             session.settings_ui.adding_provider = false; // 与 picker 互斥
             session.settings_ui.editing_newapi = None; // 确保进入纯新增模式
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::CancelAddNewApi => {
             session.settings_ui.adding_newapi = false;
             session.settings_ui.editing_newapi = None;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::SubmitNewApi {
             display_name,
@@ -217,23 +225,29 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             let filename =
                 original_filename.unwrap_or_else(|| generator::generate_filename(&config));
 
-            effects.push(AppEffect::SaveCustomProviderYaml {
-                yaml_content,
-                filename,
-            });
+            effects.push(
+                CommonEffect::SaveCustomProviderYaml {
+                    yaml_content,
+                    filename,
+                }
+                .into(),
+            );
 
             let (title_key, body_key) = if is_editing {
                 ("newapi.edit_success_title", "newapi.edit_success_body")
             } else {
                 ("newapi.save_success_title", "newapi.save_success_body")
             };
-            effects.push(AppEffect::SendPlainNotification {
-                title: rust_i18n::t!(title_key).to_string(),
-                body: rust_i18n::t!(body_key).to_string(),
-            });
+            effects.push(
+                CommonEffect::SendPlainNotification {
+                    title: rust_i18n::t!(title_key).to_string(),
+                    body: rust_i18n::t!(body_key).to_string(),
+                }
+                .into(),
+            );
             session.settings_ui.adding_newapi = false;
             session.settings_ui.editing_newapi = None;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::EditNewApi { provider_id } => {
             use crate::providers::custom::generator;
@@ -242,7 +256,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 if let Some(edit_data) = generator::read_newapi_config(custom_id) {
                     session.settings_ui.adding_newapi = true;
                     session.settings_ui.editing_newapi = Some(edit_data);
-                    push_render(&mut effects);
+                    effects.push(ContextEffect::Render.into());
                 } else {
                     log::warn!(
                         target: "settings",
@@ -258,7 +272,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.confirming_delete_newapi = false;
             if let ProviderId::Custom(ref custom_id) = provider_id {
                 if let Some(filename) = generator::filename_for_id(custom_id) {
-                    effects.push(AppEffect::DeleteCustomProviderYaml { filename });
+                    effects.push(CommonEffect::DeleteCustomProviderYaml { filename }.into());
                 } else {
                     log::warn!(
                         target: "settings",
@@ -270,13 +284,13 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::ConfirmDeleteNewApi => {
             session.settings_ui.confirming_delete_newapi = true;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::CancelDeleteNewApi => {
             session.settings_ui.confirming_delete_newapi = false;
-            push_render(&mut effects);
+            effects.push(ContextEffect::Render.into());
         }
-        AppAction::QuitApp => effects.push(AppEffect::QuitApp),
+        AppAction::QuitApp => effects.push(ContextEffect::QuitApp.into()),
     }
 
     effects
@@ -294,7 +308,7 @@ fn apply_setting_change(
         SettingChange::ToggleStartAtLogin => {
             let new_val = !session.settings.system.start_at_login;
             session.settings.system.start_at_login = new_val;
-            effects.push(AppEffect::SyncAutoLaunch(new_val));
+            effects.push(CommonEffect::SyncAutoLaunch(new_val).into());
             // 自启动状态变更通知（与 SyncAutoLaunch 解耦，各自单一职责）
             let (title, body) = if new_val {
                 (
@@ -307,7 +321,7 @@ fn apply_setting_change(
                     rust_i18n::t!("notification.auto_launch.disabled.body").to_string(),
                 )
             };
-            effects.push(AppEffect::SendPlainNotification { title, body });
+            effects.push(CommonEffect::SendPlainNotification { title, body }.into());
         }
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =
@@ -351,20 +365,19 @@ fn apply_setting_change(
         }
         SettingChange::Language(language) => {
             session.settings.display.language = language.clone();
-            effects.push(AppEffect::ApplyLocale(language));
+            effects.push(CommonEffect::ApplyLocale(language).into());
         }
         SettingChange::RefreshCadence(mins) => {
             session.settings.system.refresh_interval_mins = mins.unwrap_or(0);
             session.settings_ui.cadence_dropdown_open = false;
-            effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
-                session,
-            )));
+            effects
+                .push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
         }
         SettingChange::SetTrayIconStyle(style) => {
             session.settings.display.tray_icon_style = style;
-            effects.push(AppEffect::ApplyTrayIcon(resolve_tray_icon_request(
-                session, style,
-            )));
+            effects.push(
+                ContextEffect::ApplyTrayIcon(resolve_tray_icon_request(session, style)).into(),
+            );
         }
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.display.quota_display_mode = mode;
@@ -377,8 +390,8 @@ fn apply_setting_change(
         }
     }
 
-    effects.push(AppEffect::PersistSettings);
-    push_render(effects);
+    effects.push(CommonEffect::PersistSettings.into());
+    effects.push(ContextEffect::Render.into());
 }
 
 fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
@@ -394,10 +407,13 @@ fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<AppEffect>)
         session.provider_store.mark_refreshing_by_id(id);
     }
 
-    effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshAll {
-        reason: RefreshReason::Manual,
-    }));
-    push_render(effects);
+    effects.push(
+        CommonEffect::SendRefreshRequest(RefreshRequest::RefreshAll {
+            reason: RefreshReason::Manual,
+        })
+        .into(),
+    );
+    effects.push(ContextEffect::Render.into());
 }
 
 fn request_provider_refresh(
@@ -416,11 +432,9 @@ fn request_provider_refresh(
     }
 
     session.provider_store.mark_refreshing_by_id(&id);
-    effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
-        id,
-        reason,
-    }));
-    push_render(effects);
+    effects
+        .push(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne { id, reason }).into());
+    effects.push(ContextEffect::Render.into());
 }
 
 fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<AppEffect>) {
@@ -443,10 +457,8 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
             .fallback_on_disable(&id, providers, &session.settings);
     }
 
-    effects.push(AppEffect::PersistSettings);
-    effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
-        session,
-    )));
+    effects.push(CommonEffect::PersistSettings.into());
+    effects.push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
     if new_val {
         request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
     } else {
@@ -455,11 +467,10 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
             && !session.popup_visible
         {
             let status = session.current_provider_status();
-            effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
-                status,
-            )));
+            effects
+                .push(ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(status)).into());
         }
-        push_render(effects);
+        effects.push(ContextEffect::Render.into());
     }
 }
 
@@ -492,15 +503,18 @@ fn process_refresh_outcome(
                     .update(outcome_id, &provider_name, &data.quotas)
             {
                 if session.settings.notification.session_quota_notifications {
-                    effects.push(AppEffect::SendQuotaNotification {
-                        alert,
-                        with_sound: session.settings.notification.notification_sound,
-                    });
+                    effects.push(
+                        CommonEffect::SendQuotaNotification {
+                            alert,
+                            with_sound: session.settings.notification.notification_sound,
+                        }
+                        .into(),
+                    );
                 }
             }
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
                 provider.mark_refresh_succeeded(data);
-                push_render(effects);
+                effects.push(ContextEffect::Render.into());
             }
         }
         RefreshResult::Unavailable { message } => {
@@ -512,13 +526,13 @@ fn process_refresh_outcome(
             );
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
                 provider.mark_unavailable(message);
-                push_render(effects);
+                effects.push(ContextEffect::Render.into());
             }
         }
         RefreshResult::Failed { error, error_kind } => {
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
                 provider.mark_refresh_failed(error, error_kind);
-                push_render(effects);
+                effects.push(ContextEffect::Render.into());
             }
         }
         RefreshResult::SkippedCooldown
@@ -535,7 +549,7 @@ fn apply_refresh_event(
     match event {
         RefreshEvent::Started { id } => {
             session.provider_store.mark_refreshing_by_id(&id);
-            push_render(effects);
+            effects.push(ContextEffect::Render.into());
         }
         RefreshEvent::Finished(outcome) => {
             let is_debug_target = session.debug_ui.refresh_active
@@ -553,9 +567,9 @@ fn apply_refresh_event(
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
                 if let Some(prev_level) = session.debug_ui.prev_log_level.take() {
-                    effects.push(AppEffect::RestoreLogLevel(prev_level));
+                    effects.push(CommonEffect::RestoreLogLevel(prev_level).into());
                 }
-                push_render(effects);
+                effects.push(ContextEffect::Render.into());
             }
         }
         RefreshEvent::ProvidersReloaded { statuses } => {
@@ -570,29 +584,31 @@ fn apply_refresh_event(
                 .provider
                 .prune_stale_custom_ids(&custom_ids)
             {
-                effects.push(AppEffect::PersistSettings);
+                effects.push(CommonEffect::PersistSettings.into());
             }
 
             // 清理可能指向已删除 provider 的导航/设置引用
             sanitize_stale_refs(session);
 
             // 同步 coordinator 的 enabled 列表
-            effects.push(AppEffect::SendRefreshRequest(build_config_sync_request(
-                session,
-            )));
+            effects
+                .push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
 
             // 对新增/更新的自定义 Provider 立即触发刷新
             for id in &affected {
                 if session.settings.provider.is_enabled(id) {
                     session.provider_store.mark_refreshing_by_id(id);
-                    effects.push(AppEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
-                        id: id.clone(),
-                        reason: RefreshReason::ProviderToggled,
-                    }));
+                    effects.push(
+                        CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+                            id: id.clone(),
+                            reason: RefreshReason::ProviderToggled,
+                        })
+                        .into(),
+                    );
                 }
             }
 
-            push_render(effects);
+            effects.push(ContextEffect::Render.into());
         }
     }
 }
@@ -663,10 +679,6 @@ fn first_enabled_provider_id(session: &AppSession) -> Option<ProviderId> {
         .map(|p| p.provider_id.clone())
 }
 
-fn push_render(effects: &mut Vec<AppEffect>) {
-    effects.push(AppEffect::Render);
-}
-
 /// 将用户选择的 TrayIconStyle 解析为具体的 TrayIconRequest。
 /// Dynamic 模式时根据当前 Provider 状态计算颜色，其余模式直接映射为静态请求。
 fn resolve_tray_icon_request(session: &AppSession, style: TrayIconStyle) -> TrayIconRequest {
@@ -698,9 +710,8 @@ fn maybe_update_dynamic_icon(
     }
     let new_status = session.current_provider_status();
     if new_status != prev_status {
-        effects.push(AppEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
-            new_status,
-        )));
+        effects
+            .push(ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(new_status)).into());
     }
 }
 

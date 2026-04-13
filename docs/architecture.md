@@ -87,3 +87,10 @@ run with `cargo test --lib`. Coverage:
 - `refresh/` — coordinator and scheduler tests
 - `theme.rs` — YAML theme parsing
 - `settings_store.rs` — settings persistence round-trip
+
+## GPUI Import Discipline
+
+- `src/` forbids `use gpui::*;` because glob imports hide the actual GPUI dependency surface and were previously correlated with GPUI test/SIGBUS failure investigation.
+- Enforcement is automated by `scripts/check-gpui-imports.sh`, wired into CI, and exposed through `.pre-commit-config.yaml` for local commits.
+- UI files should use explicit GPUI imports plus explicit extension traits. In practice the most common trait imports are `Styled`, `ParentElement`, `InteractiveElement`, `StatefulInteractiveElement`, `IntoElement`, `AnimationExt`, and `AppContext`.
+- This keeps GPUI-heavy modules readable, makes stateful-builder transitions visible in code review, and reduces the chance of reintroducing the same failure pattern.

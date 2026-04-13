@@ -7,7 +7,10 @@ use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
-use gpui::*;
+use gpui::{
+    div, px, relative, AnyElement, App, Context, Div, ElementId, FontWeight, InteractiveElement,
+    IntoElement, MouseButton, MouseDownEvent, ParentElement, Styled, TextAlign, Window,
+};
 use rust_i18n::t;
 
 /// 通用操作按钮（Lumina风格：半透明背景+圆角）

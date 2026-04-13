@@ -3,8 +3,11 @@ use crate::models::NavTab;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
-use gpui::prelude::FluentBuilder as _;
-use gpui::*;
+use gpui::{
+    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, FontWeight,
+    Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
+    ScrollHandle, StatefulInteractiveElement, StyleRefinement, Styled,
+};
 use std::time::Duration;
 
 /// Overview 导航图标路径（与 tray_settings.rs 保持一致）
@@ -139,6 +142,72 @@ impl AppView {
         let slider = target_rect
             .map(|_| self.render_nav_slider(target_rect, from_rect, generation, slider_bg));
 
+        let mut left_arrow = div()
+            .id("nav-arrow-left")
+            .w(px(INDICATOR_WIDTH))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer();
+        if can_scroll_left {
+            left_arrow = left_arrow
+                .child(
+                    svg()
+                        .path("src/icons/chevron-left.svg")
+                        .size(px(10.0))
+                        .text_color(indicator_color),
+                )
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    if let Some(ix) = left_target {
+                        scroll_handle.scroll_to_item(ix);
+                    }
+                    entity_l.update(cx, |_, cx| cx.notify());
+                });
+        }
+
+        let nav_scroll = div()
+            .id("nav-provider-scroll")
+            .overflow_x_scroll()
+            .scrollbar_width(px(0.0))
+            .flex()
+            .items_center()
+            .gap(px(2.0))
+            .track_scroll(&self.nav_scroll_handle)
+            .children(nav_items.into_iter().map(|(icon, label, tab)| {
+                self.render_nav_pill(icon, label, tab, active_tab.clone(), cx)
+            }));
+
+        let mut center = div().flex_1().min_w_0().overflow_hidden().relative();
+        if let Some(slider) = slider {
+            center = center.child(slider);
+        }
+        center = center.child(nav_scroll);
+
+        let mut right_arrow = div()
+            .id("nav-arrow-right")
+            .w(px(INDICATOR_WIDTH))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer();
+        if can_scroll_right {
+            right_arrow = right_arrow
+                .child(
+                    svg()
+                        .path("src/icons/chevron-right.svg")
+                        .size(px(10.0))
+                        .text_color(indicator_color),
+                )
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    if let Some(ix) = right_target {
+                        scroll_handle_r.scroll_to_item(ix);
+                    }
+                    entity_r.update(cx, |_, cx| cx.notify());
+                });
+        }
+
         div()
             .w_full()
             .border_b_1()
@@ -146,86 +215,9 @@ impl AppView {
             .py(px(4.0))
             .flex()
             .items_center()
-            .child(
-                // ── 左侧箭头指示器 ──
-                div()
-                    .id("nav-arrow-left")
-                    .w(px(INDICATOR_WIDTH))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .when(can_scroll_left, |el| {
-                        el.child(
-                            svg()
-                                .path("src/icons/chevron-left.svg")
-                                .size(px(10.0))
-                                .text_color(indicator_color),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            move |_, _, cx| {
-                                if let Some(ix) = left_target {
-                                    scroll_handle.scroll_to_item(ix);
-                                }
-                                entity_l.update(cx, |_, cx| cx.notify());
-                            },
-                        )
-                    }),
-            )
-            .child(
-                // ── 中间区域：relative wrapper + absolute 滑块 + scroll 容器 ──
-                // 滑块放在 wrapper 内（不在 scroll 容器内），避免影响 scroll children 索引
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .relative()
-                    // 滑块背景层（absolute，z-order 在 scroll 之下）
-                    .when_some(slider, |el, s| el.child(s))
-                    .child(
-                        div()
-                            .id("nav-provider-scroll")
-                            .overflow_x_scroll()
-                            .scrollbar_width(px(0.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(2.0))
-                            .track_scroll(&self.nav_scroll_handle)
-                            .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                                self.render_nav_pill(icon, label, tab, active_tab.clone(), cx)
-                            })),
-                    ),
-            )
-            .child(
-                // ── 右侧箭头指示器 ──
-                div()
-                    .id("nav-arrow-right")
-                    .w(px(INDICATOR_WIDTH))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .when(can_scroll_right, |el| {
-                        el.child(
-                            svg()
-                                .path("src/icons/chevron-right.svg")
-                                .size(px(10.0))
-                                .text_color(indicator_color),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            move |_, _, cx| {
-                                if let Some(ix) = right_target {
-                                    scroll_handle_r.scroll_to_item(ix);
-                                }
-                                entity_r.update(cx, |_, cx| cx.notify());
-                            },
-                        )
-                    }),
-            )
+            .child(left_arrow)
+            .child(center)
+            .child(right_arrow)
     }
 
     /// 渲染导航栏滑块背景（absolute 定位，带果冻动画）
@@ -257,7 +249,7 @@ impl AppView {
             base.with_animation(
                 ElementId::Name(format!("nav-slider-{}", generation).into()),
                 Animation::new(Duration::from_millis(SLIDER_ANIMATION_MS)),
-                move |el, delta| {
+                move |el: Div, delta| {
                     // delta: 0.0 → 1.0 (linear)
                     // 应用果冻过冲映射
                     let t = jelly_overshoot(delta);
@@ -344,7 +336,7 @@ impl AppView {
             .rounded(px(8.0))
             .cursor_pointer()
             // pill 本身不设背景，由滑块层提供
-            .hover(|style| {
+            .hover(|style: StyleRefinement| {
                 if is_active {
                     style
                 } else {

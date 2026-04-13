@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, px, relative, AppContext, Context, Div, ElementId, Hsla, InteractiveElement, IntoElement,
+    ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
+};
 
 /// A simple tooltip view rendered by GPUI's native tooltip system.
 /// Appears at the mouse position, automatically adjusts direction to

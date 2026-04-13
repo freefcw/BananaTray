@@ -68,3 +68,12 @@ TrayController (tray/controller.rs)
 - `AppState` is wrapped in `Rc<RefCell<...>>` (single-threaded, GPUI is !Send).
 - Window sizing uses `PopupLayout` constants from `models/layout.rs`.
 - Icon paths are relative to the asset root (e.g. `"src/icons/settings.svg"`).
+- `use gpui::*;` is forbidden in `src/`. CI enforces this via `scripts/check-gpui-imports.sh`.
+
+## GPUI Import Rules
+
+- Prefer explicit type/function imports such as `use gpui::{div, px, App, Window};`.
+- Import GPUI extension traits explicitly when method chains require them. Common ones are `Styled`, `ParentElement`, `InteractiveElement`, `StatefulInteractiveElement`, `IntoElement`, `AnimationExt`, and `AppContext`.
+- Keep `gpui::prelude::FluentBuilder as _` only where builder helpers are actually used.
+- If a file uses `id()` early and becomes `Stateful<Div>`, expect to need stateful traits like `StatefulInteractiveElement` or animation traits.
+- When a hover or animation closure stops inferring, prefer adding the concrete GPUI type import, for example `StyleRefinement`, instead of widening imports.

@@ -1,4 +1,7 @@
-use gpui::*;
+use gpui::{
+    div, px, relative, svg, AnyElement, Div, FontWeight, Hsla, IntoElement, ParentElement, Pixels,
+    Styled,
+};
 
 /// 判断 icon_asset 是否为 SVG 文件路径（内置 Provider）
 ///

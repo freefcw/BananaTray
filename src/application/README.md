@@ -37,7 +37,10 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `effect.rs` — 副作用声明
 
-- **`AppEffect`** — 副作用枚举（Render / PersistSettings / SendRefreshRequest / OpenUrl / ApplyTrayIcon 等）
+- **`AppEffect`** — 两级副作用枚举（`Context(ContextEffect)` / `Common(CommonEffect)`）
+  - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / QuitApp）
+  - `CommonEffect` — GPUI-free 的 effect（PersistSettings / SendRefreshRequest / 通知 / 文件操作等）
+  - `From<ContextEffect>` / `From<CommonEffect>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）
 
 ### `selectors/` — 视图状态选择器

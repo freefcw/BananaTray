@@ -2,7 +2,10 @@ use super::SettingsView;
 use crate::application::{AppAction, AvailableProviderItem};
 use crate::runtime;
 use crate::theme::Theme;
-use gpui::*;
+use gpui::{
+    div, hsla, px, svg, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, SharedString, StatefulInteractiveElement, Styled,
+};
 use rust_i18n::t;
 
 impl SettingsView {

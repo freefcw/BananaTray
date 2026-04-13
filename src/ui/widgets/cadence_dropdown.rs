@@ -2,7 +2,10 @@ use crate::application::{AppAction, SettingChange};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppState;
-use gpui::*;
+use gpui::{
+    deferred, div, px, App, Deferred, Div, FontWeight, InteractiveElement, MouseButton,
+    MouseDownEvent, ParentElement, Styled, Window,
+};
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;

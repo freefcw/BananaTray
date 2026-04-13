@@ -5,7 +5,7 @@ use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, ButtonVariant};
-use gpui::*;
+use gpui::{div, px, rgb, Div, ParentElement, Styled};
 use rust_i18n::t;
 
 // 设计稿颜色常量 — 各设置项的彩色图标背景

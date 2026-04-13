@@ -12,7 +12,12 @@ use crate::application::SettingsTab;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_svg_icon, SimpleInputState};
-use gpui::*;
+use gpui::{
+    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black, Context,
+    Div, Entity, FocusHandle, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window,
+    WindowAppearance,
+};
 use log::info;
 use rust_i18n::t;
 use std::cell::RefCell;
@@ -101,7 +106,7 @@ pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
     /// 监听系统深色模式变化，自动切换主题
-    pub(crate) _appearance_sub: Option<gpui::Subscription>,
+    pub(crate) _appearance_sub: Option<Subscription>,
     /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
     pub(crate) newapi_inputs: Option<NewApiFormInputs>,
 }

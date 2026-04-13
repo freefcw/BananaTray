@@ -5,7 +5,7 @@ use crate::models::AppSettings;
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::tray::TrayController;
 use crate::ui::AppState;
-use gpui::*;
+use gpui::{App, Keystroke, TrayIconEvent};
 use log::{info, warn};
 use rust_i18n::t;
 use std::cell::RefCell;

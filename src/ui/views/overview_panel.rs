@@ -5,7 +5,10 @@ use crate::models::{NavTab, PopupLayout, StatusLevel};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
-use gpui::*;
+use gpui::{
+    div, px, relative, AnyElement, Context, Div, ElementId, FontWeight, Hsla, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, Stateful, Styled, TextAlign,
+};
 use rust_i18n::t;
 
 /// 状态点颜色

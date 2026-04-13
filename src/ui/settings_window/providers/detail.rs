@@ -9,7 +9,10 @@ use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
-use gpui::*;
+use gpui::{
+    div, hsla, px, relative, App, Context, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
+    MouseDownEvent, ParentElement, StatefulInteractiveElement, Styled, TextAlign, Window,
+};
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
