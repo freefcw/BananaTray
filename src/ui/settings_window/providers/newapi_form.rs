@@ -17,9 +17,8 @@ use crate::ui::widgets::{register_input_actions, render_svg_icon};
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, hsla, px, App, Context, Div, Entity, Focusable, FontWeight,
-    InteractiveElement, MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
-    Styled, Window,
+    div, hsla, px, App, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
+    MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
 

@@ -860,7 +860,7 @@ fn session_new_auto_registers_unregistered_custom_provider() {
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     store
         .providers
-        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     // settings 中没有 custom provider 的任何条目
     let settings = make_settings(&[ProviderKind::Claude]);
@@ -888,7 +888,7 @@ fn session_new_preserves_existing_custom_provider_state() {
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     store
         .providers
-        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     // 已手动禁用的 custom provider 不应被重新启用
     let mut settings = make_settings(&[ProviderKind::Claude]);
