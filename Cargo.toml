@@ -26,6 +26,9 @@ unexpected_cfgs = "allow"
 
 [dependencies]
 adabraka-ui = "0.3.9"
+# 使用 fork 版本，包含 character_index_for_point 崩溃修复
+# (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
+
 anyhow = "1.0"
 async-trait = "0.1"
 dirs = "5"
@@ -76,9 +79,9 @@ notify-rust = "4"
 tempfile = "3"
 
 [patch.crates-io]
-# 包含两处上游修复:
+# 使用 fork 版本，包含两处上游修复:
 # 1. 修复 Linux 上 XCBConnection::setup() 缺少 Connection trait import 的编译错误
-#    (adabraka-gpui 0.5.1 src/platform/linux/global_hotkey.rs)
 # 2. 修复 gpui-macros doctest + 递归限制导致 cargo test 触发 SIGBUS (rustc 栈溢出)
-#    (gpui-macros: doctest=false + recursion_limit="512")
-adabraka-gpui = { git = "https://github.com/freefcw/adabraka-gpui", rev = "4f0bcca" }
+# 不 pin rev，与 adabraka-ui 的裸 git 引用保持同一 source identifier，由 Cargo.lock 锁定。
+adabraka-gpui = { git = "https://github.com/freefcw/adabraka-gpui" }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "dc9f6db" }
