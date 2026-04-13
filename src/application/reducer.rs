@@ -562,7 +562,7 @@ fn apply_refresh_event(
             process_refresh_outcome(session, &outcome_id, outcome.result, effects);
 
             // 动态图标：仅当刷新的是当前 Provider 时才检查状态变化
-            maybe_update_dynamic_icon(session, &outcome_id, prev_status, effects);
+            sync_dynamic_icon_if_needed(session, &outcome_id, prev_status, effects);
 
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
@@ -588,7 +588,7 @@ fn apply_refresh_event(
             }
 
             // 清理可能指向已删除 provider 的导航/设置引用
-            sanitize_stale_refs(session);
+            cleanup_dangling_refs(session);
 
             // 同步 coordinator 的 enabled 列表
             effects
@@ -629,7 +629,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
 }
 
 /// 热重载后清理指向已删除 Provider 的引用
-fn sanitize_stale_refs(session: &mut AppSession) {
+fn cleanup_dangling_refs(session: &mut AppSession) {
     // 导航：如果当前 active_tab 指向的 provider 已不存在，回退
     if let NavTab::Provider(ref id) = session.nav.active_tab {
         if !provider_exists(session, id) {
@@ -642,7 +642,13 @@ fn sanitize_stale_refs(session: &mut AppSession) {
     }
     // last_provider_id
     if !provider_exists(session, &session.nav.last_provider_id) {
-        if let Some(first) = first_enabled_provider_id(session) {
+        if let Some(first) = session
+            .provider_store
+            .providers
+            .iter()
+            .find(|p| session.settings.provider.is_enabled(&p.provider_id))
+            .map(|p| p.provider_id.clone())
+        {
             session.nav.last_provider_id = first;
         }
     }
@@ -670,15 +676,6 @@ fn provider_exists(session: &AppSession, id: &ProviderId) -> bool {
     session.provider_store.find_by_id(id).is_some()
 }
 
-fn first_enabled_provider_id(session: &AppSession) -> Option<ProviderId> {
-    session
-        .provider_store
-        .providers
-        .iter()
-        .find(|p| session.settings.provider.is_enabled(&p.provider_id))
-        .map(|p| p.provider_id.clone())
-}
-
 /// 将用户选择的 TrayIconStyle 解析为具体的 TrayIconRequest。
 /// Dynamic 模式时根据当前 Provider 状态计算颜色，其余模式直接映射为静态请求。
 fn resolve_tray_icon_request(session: &AppSession, style: TrayIconStyle) -> TrayIconRequest {
@@ -691,7 +688,7 @@ fn resolve_tray_icon_request(session: &AppSession, style: TrayIconStyle) -> Tray
 
 /// 若处于 Dynamic 模式，且刷新的是当前 Provider，且弹窗不可见，且状态发生变化时，
 /// 追加 ApplyTrayIcon effect。
-fn maybe_update_dynamic_icon(
+fn sync_dynamic_icon_if_needed(
     session: &AppSession,
     refreshed_id: &ProviderId,
     prev_status: StatusLevel,
