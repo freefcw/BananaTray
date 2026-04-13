@@ -1027,7 +1027,7 @@ fn finished_restore_survives_unknown_provider() {
 fn make_custom_provider_status(id: &str) -> crate::models::ProviderStatus {
     let provider_id = ProviderId::Custom(id.to_string());
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
-    crate::models::ProviderStatus::new_custom(provider_id, metadata)
+    crate::models::ProviderStatus::new(provider_id, metadata)
 }
 
 #[test]

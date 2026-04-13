@@ -111,14 +111,14 @@ impl ProviderManager {
     pub fn initial_statuses(&self) -> Vec<ProviderStatus> {
         let mut statuses: Vec<ProviderStatus> = ProviderKind::all()
             .iter()
-            .map(|kind| ProviderStatus::new(self.metadata_for(*kind)))
+            .map(|kind| ProviderStatus::new(ProviderId::BuiltIn(*kind), self.metadata_for(*kind)))
             .collect();
 
         // 追加自定义 Provider 状态
         for (id, provider) in &self.custom_providers_by_id {
             let descriptor = provider.descriptor();
             let provider_id = ProviderId::Custom(id.clone());
-            statuses.push(ProviderStatus::new_custom(provider_id, descriptor.metadata));
+            statuses.push(ProviderStatus::new(provider_id, descriptor.metadata));
         }
 
         statuses

@@ -4,7 +4,7 @@
 //! 消除 quota.rs / application/state.rs / provider_logic.rs / selectors.rs 中的重复定义。
 
 use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
-use super::quota::{ConnectionStatus, ErrorKind, ProviderStatus};
+use super::quota::{ConnectionStatus, ProviderStatus};
 
 /// 创建测试用的 ProviderMetadata
 pub fn make_test_metadata(kind: ProviderKind) -> ProviderMetadata {
@@ -21,18 +21,9 @@ pub fn make_test_metadata(kind: ProviderKind) -> ProviderMetadata {
 
 /// 创建测试用的 ProviderStatus（指定连接状态）
 pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
-    ProviderStatus {
-        provider_id: ProviderId::BuiltIn(kind),
-        metadata: make_test_metadata(kind),
-        connection,
-        quotas: vec![],
-        account_email: None,
-        account_tier: None,
-        update_status: None,
-        error_message: None,
-        error_kind: ErrorKind::default(),
-        last_refreshed_instant: None,
-    }
+    let mut status = ProviderStatus::new(ProviderId::BuiltIn(kind), make_test_metadata(kind));
+    status.connection = connection;
+    status
 }
 
 /// 设置测试 locale 为英语，并在测试期间独占 locale 全局状态

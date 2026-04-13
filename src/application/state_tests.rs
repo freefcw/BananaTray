@@ -477,7 +477,7 @@ fn store_find_by_id_custom() {
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     store
         .providers
-        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     assert!(store.find_by_id(&custom_id).is_some());
     assert!(store.find_by_id(&pid(ProviderKind::Claude)).is_none());
@@ -490,7 +490,7 @@ fn store_find_by_id_mut_custom() {
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     store
         .providers
-        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     store.find_by_id_mut(&custom_id).unwrap().connection = ConnectionStatus::Error;
     assert_eq!(
@@ -506,7 +506,7 @@ fn store_mark_refreshing_by_id_custom() {
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     store
         .providers
-        .push(ProviderStatus::new_custom(custom_id.clone(), metadata));
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     store.mark_refreshing_by_id(&custom_id);
     assert_eq!(
@@ -521,13 +521,12 @@ fn store_custom_provider_ids() {
     let custom2 = ProviderId::Custom("b:cli".to_string());
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     let mut store = make_store(&[ProviderKind::Claude]);
-    store.providers.push(ProviderStatus::new_custom(
-        custom1.clone(),
-        metadata.clone(),
-    ));
     store
         .providers
-        .push(ProviderStatus::new_custom(custom2.clone(), metadata));
+        .push(ProviderStatus::new(custom1.clone(), metadata.clone()));
+    store
+        .providers
+        .push(ProviderStatus::new(custom2.clone(), metadata));
 
     let ids = store.custom_provider_ids();
     assert_eq!(ids.len(), 2);
@@ -546,14 +545,14 @@ fn store_custom_provider_ids_empty_when_no_custom() {
 fn make_custom_status(id: &str) -> ProviderStatus {
     let provider_id = ProviderId::Custom(id.to_string());
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
-    ProviderStatus::new_custom(provider_id, metadata)
+    ProviderStatus::new(provider_id, metadata)
 }
 
 fn make_custom_status_with_name(id: &str, display_name: &str) -> ProviderStatus {
     let provider_id = ProviderId::Custom(id.to_string());
     let mut metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     metadata.display_name = display_name.to_string();
-    ProviderStatus::new_custom(provider_id, metadata)
+    ProviderStatus::new(provider_id, metadata)
 }
 
 #[test]

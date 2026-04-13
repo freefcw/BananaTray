@@ -26,6 +26,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
   - `remaining_text()` / `usage_detail_text()` — human-readable display strings with credit ($) formatting
 - **`ConnectionStatus`** — provider connection state: `Connected`, `Disconnected`, `Refreshing`, `Error`
 - **`ProviderStatus`** — full runtime state for one provider: metadata + enabled flag + connection status + quotas + account info + error message + timestamps
+  - `ProviderStatus::new(provider_id, metadata)` — unified constructor for built-in and custom providers. Callers must keep `provider_id.kind()` and `metadata.kind` aligned; debug builds assert this invariant.
 - **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `is_paid`, `account_tier`
 
 ### `settings/` — User Preferences (sub-module)
