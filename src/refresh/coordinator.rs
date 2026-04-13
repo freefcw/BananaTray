@@ -140,7 +140,8 @@ impl RefreshCoordinator {
 
     /// Refresh multiple providers concurrently.
     /// Sends Started events for all eligible providers upfront, then executes
-    /// network requests in parallel threads, collecting results via a channel.
+    /// network requests on the smol blocking pool, collecting results in
+    /// completion order via a channel.
     async fn execute_refresh_concurrent(&mut self, ids: Vec<ProviderId>, reason: RefreshReason) {
         // Phase 1: Filter eligible providers, send Started events
         let mut to_refresh = Vec::new();
@@ -157,28 +158,28 @@ impl RefreshCoordinator {
             return;
         }
 
-        // Phase 2: Spawn concurrent refresh threads
+        // Phase 2: Spawn concurrent refresh tasks via smol thread pool.
+        // 内部结果仍按完成顺序回传，避免慢 provider 阻塞已完成 provider 的状态清理/事件上报。
         let (result_tx, result_rx) = smol::channel::bounded::<RefreshOutcome>(to_refresh.len());
-
-        for id in &to_refresh {
+        for id in to_refresh {
             let mgr = self.manager.clone();
             let tx = result_tx.clone();
-            let id = id.clone();
-            std::thread::spawn(move || {
-                let result = smol::block_on(mgr.refresh_by_id(&id));
-                let outcome = RefreshCoordinator::build_outcome(id, result);
-                let _ = smol::block_on(tx.send(outcome));
-            });
+            smol::spawn(async move {
+                let outcome = smol::unblock(move || {
+                    let result = smol::block_on(mgr.refresh_by_id(&id));
+                    RefreshCoordinator::build_outcome(id, result)
+                })
+                .await;
+
+                let _ = tx.send(outcome).await;
+            })
+            .detach();
         }
         drop(result_tx);
 
         // Phase 3: Collect results as they arrive
-        let expected = to_refresh.len();
-        for _ in 0..expected {
-            match result_rx.recv().await {
-                Ok(outcome) => self.record_outcome(outcome).await,
-                Err(_) => break,
-            }
+        while let Ok(outcome) = result_rx.recv().await {
+            self.record_outcome(outcome).await;
         }
     }
 
