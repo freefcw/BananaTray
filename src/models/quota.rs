@@ -387,24 +387,19 @@ impl ProviderStatus {
         self.provider_id.kind()
     }
 
-    pub fn new(metadata: ProviderMetadata) -> Self {
-        let provider_id = ProviderId::BuiltIn(metadata.kind);
-        Self {
+    /// 创建运行时 Provider 状态。
+    ///
+    /// 调用方必须保证 `provider_id.kind()` 与 `metadata.kind` 一致。
+    /// 这里使用 `debug_assert_eq!` 在开发/测试阶段尽早暴露错误组合，
+    /// release 构建则保持零额外开销。
+    pub fn new(provider_id: ProviderId, metadata: ProviderMetadata) -> Self {
+        debug_assert_eq!(
+            provider_id.kind(),
+            metadata.kind,
+            "provider_id 与 metadata.kind 不一致: {:?} vs {:?}",
             provider_id,
-            metadata,
-            connection: ConnectionStatus::Disconnected,
-            quotas: vec![],
-            account_email: None,
-            account_tier: None,
-            update_status: None,
-            error_message: None,
-            error_kind: ErrorKind::default(),
-            last_refreshed_instant: None,
-        }
-    }
-
-    /// 创建自定义 Provider 状态
-    pub fn new_custom(provider_id: ProviderId, metadata: ProviderMetadata) -> Self {
+            metadata.kind
+        );
         Self {
             provider_id,
             metadata,
@@ -480,7 +475,7 @@ impl ProviderStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::test_helpers::make_test_provider;
+    use crate::models::test_helpers::{make_test_metadata, make_test_provider};
 
     // ========================================================================
     // QuotaType::stable_key
@@ -755,6 +750,36 @@ mod tests {
 
         let q_real = QuotaInfo::new("real", 5.0, 10.0);
         assert!(!q_real.is_percentage_mode());
+    }
+
+    // ========================================================================
+    // ProviderStatus 构造测试
+    // ========================================================================
+
+    #[test]
+    fn provider_status_new_supports_builtin_provider_ids() {
+        let metadata = make_test_metadata(ProviderKind::Claude);
+        let status = ProviderStatus::new(ProviderId::BuiltIn(ProviderKind::Claude), metadata);
+
+        assert_eq!(
+            status.provider_id,
+            ProviderId::BuiltIn(ProviderKind::Claude)
+        );
+        assert_eq!(status.kind(), ProviderKind::Claude);
+        assert_eq!(status.metadata.kind, ProviderKind::Claude);
+        assert_eq!(status.connection, ConnectionStatus::Disconnected);
+    }
+
+    #[test]
+    fn provider_status_new_supports_custom_provider_ids() {
+        let provider_id = ProviderId::Custom("demo:cli".to_string());
+        let metadata = make_test_metadata(ProviderKind::Custom);
+        let status = ProviderStatus::new(provider_id.clone(), metadata);
+
+        assert_eq!(status.provider_id, provider_id);
+        assert_eq!(status.kind(), ProviderKind::Custom);
+        assert_eq!(status.metadata.kind, ProviderKind::Custom);
+        assert_eq!(status.connection, ConnectionStatus::Disconnected);
     }
 
     // ========================================================================
