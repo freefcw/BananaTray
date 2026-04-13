@@ -29,9 +29,11 @@ impl ProviderErrorPresenter {
             }
             ProviderError::Unavailable { reason } => reason.clone(),
             ProviderError::ParseFailed { reason } => reason.clone(),
-            ProviderError::Timeout => "Request timeout".to_string(),
-            ProviderError::NoData => "No quota data available".to_string(),
-            ProviderError::NetworkFailed { reason } => format!("Network error: {}", reason),
+            ProviderError::Timeout => t!("error.timeout").to_string(),
+            ProviderError::NoData => t!("error.no_data").to_string(),
+            ProviderError::NetworkFailed { reason } => {
+                t!("error.network_failed", reason = reason).to_string()
+            }
             ProviderError::FetchFailed { reason } => reason.clone(),
         }
     }

@@ -28,9 +28,15 @@ impl PopupLayout {
     /// Footer: py(10)×2 + h(38) btn + 1px border-t
     pub const FOOTER_HEIGHT: f32 = 59.0;
 
-    /// 固定区域总高度 (修正: 真实基础偏移拟合增加 13px，合计 195.0)
-    pub const FIXED_HEIGHT: f32 =
-        Self::HEADER_HEIGHT + Self::NAV_HEIGHT + Self::CONTENT_PADDING + Self::FOOTER_HEIGHT + 13.0;
+    /// GPUI 布局引擎隐式偏移（经验拟合值）
+    pub const GPUI_IMPLICIT_OFFSET: f32 = 13.0;
+
+    /// 固定区域总高度 (各组件之和 + GPUI 隐式偏移)
+    pub const FIXED_HEIGHT: f32 = Self::HEADER_HEIGHT
+        + Self::NAV_HEIGHT
+        + Self::CONTENT_PADDING
+        + Self::FOOTER_HEIGHT
+        + Self::GPUI_IMPLICIT_OFFSET;
 
     // ── Quota 卡片高度 ──
 
@@ -173,14 +179,14 @@ pub fn compute_popup_height_detailed(
 mod tests {
     use super::*;
 
-    /// FIXED_HEIGHT 应等于各组件之和 + 13px GPUI 隐式偏移
+    /// FIXED_HEIGHT 应等于各组件之和 + GPUI 隐式偏移
     #[test]
     fn test_fixed_height_consistency() {
         let sum = PopupLayout::HEADER_HEIGHT
             + PopupLayout::NAV_HEIGHT
             + PopupLayout::CONTENT_PADDING
             + PopupLayout::FOOTER_HEIGHT
-            + 13.0;
+            + PopupLayout::GPUI_IMPLICIT_OFFSET;
         assert!(
             (sum - PopupLayout::FIXED_HEIGHT).abs() < f32::EPSILON,
             "FIXED_HEIGHT ({}) should equal sum of parts ({})",
