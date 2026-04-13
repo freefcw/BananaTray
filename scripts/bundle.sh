@@ -5,6 +5,8 @@
 # 使用方法:
 #   bash scripts/bundle.sh              # 默认 release 构建
 #   bash scripts/bundle.sh --skip-build  # 跳过编译（使用已有二进制）
+#   bash scripts/bundle.sh --dmg        # 构建 .app 并创建 DMG
+#   bash scripts/bundle.sh --dmg --skip-build  # 使用已有 .app 创建 DMG
 #
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
@@ -114,5 +116,86 @@ echo "   │   ├── MacOS/$APP_NAME"
 echo "   │   └── Resources/"
 echo "   │       ├── AppIcon.icns"
 echo "   │       └── src/icons/ ($(ls "$RESOURCES_DIR/src/icons/" | wc -l | tr -d ' ') 个 SVG)"
+# ------------------------------------------------------------------
+# 4. DMG 创建（可选）
+# ------------------------------------------------------------------
+if [[ "$*" == *"--dmg"* ]]; then
+    echo ""
+    echo "� 创建 DMG..."
+
+    # 检查依赖
+    if ! command -v create-dmg >/dev/null 2>&1 && ! command -v hdiutil >/dev/null 2>&1; then
+        echo "❌ 未找到 create-dmg 或 hdiutil"
+        echo "   💡 请安装 create-dmg: brew install create-dmg"
+        exit 1
+    fi
+
+    DMG_DIR="$BUNDLE_DIR/dmg"
+    DMG_PATH="$BUNDLE_DIR/$APP_NAME.dmg"
+
+    # 准备 DMG 内容
+    echo "📁 准备 DMG 内容..."
+    rm -rf "$DMG_DIR"
+    mkdir -p "$DMG_DIR"
+
+    # 复制 .app 和创建 Applications 链接
+    cp -R "$APP_DIR" "$DMG_DIR/"
+    ln -s /Applications "$DMG_DIR/Applications"
+
+    # 可选资源
+    BACKGROUND_SRC="$PROJECT_DIR/resources/dmg-background.png"
+    LICENSE_FILE="$PROJECT_DIR/LICENSE"
+
+    if [ -f "$BACKGROUND_SRC" ]; then
+        cp "$BACKGROUND_SRC" "$DMG_DIR/.background.png"
+    fi
+
+    if [ -f "$LICENSE_FILE" ]; then
+        cp "$LICENSE_FILE" "$DMG_DIR/LICENSE.txt"
+    fi
+
+    # 创建 DMG
+    # 清理已存在的文件
+    rm -f "$DMG_PATH"
+
+    if command -v create-dmg >/dev/null 2>&1; then
+        echo "   使用 create-dmg..."
+        DMG_ARGS=(
+            --volname "$APP_NAME"
+            --volicon "$APP_DIR/Contents/Resources/AppIcon.icns"
+            --window-pos 200 120
+            --window-size 800 600
+            --icon-size 100
+            --icon "$APP_NAME.app" 200 190
+            --hide-extension "$APP_NAME.app"
+            --app-drop-link 600 185
+            --disk-image-size 200
+            --hdiutil-quiet
+        )
+
+        [ -f "$BACKGROUND_SRC" ] && DMG_ARGS+=(--background "$DMG_DIR/.background.png")
+        [ -f "$LICENSE_FILE" ] && DMG_ARGS+=(--license "$DMG_DIR/LICENSE.txt")
+
+        create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$DMG_DIR"
+    else
+        echo "   使用 hdiutil..."
+        TEMP_DMG="$BUNDLE_DIR/temp.dmg"
+        rm -f "$TEMP_DMG"
+        hdiutil create -srcfolder "$DMG_DIR" -volname "$APP_NAME" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -size 200m "$TEMP_DMG"
+
+        DEVICE=$(hdiutil attach -readwrite -noverify -noautoopen "$TEMP_DMG" | egrep '^/dev/' | sed 1q | awk '{print $1}')
+        hdiutil detach "$DEVICE"
+        hdiutil convert "$TEMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
+        rm -f "$TEMP_DMG"
+    fi
+
+    echo "✅ DMG 创建完成: $DMG_PATH"
+    echo "   大小: $(du -h "$DMG_PATH" | cut -f1)"
+fi
+
 echo ""
-echo "🚀 运行: open \"$APP_DIR\""
+echo "�� 运行: open \"$APP_DIR\""
+if [[ "$*" != *"--dmg"* ]]; then
+    echo ""
+    echo "💿 创建 DMG: bash scripts/bundle.sh --dmg"
+fi

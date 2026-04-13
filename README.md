@@ -64,7 +64,9 @@ cargo clippy
 cargo fmt
 ```
 
-## macOS Bundle & Code Signing
+## macOS Bundle & DMG
+
+### App Bundle
 
 ```bash
 # Build and assemble the macOS .app bundle
@@ -75,9 +77,32 @@ export CODESIGN_IDENTITY='Apple Development: you@example.com (TEAMID)'
 bash scripts/bundle.sh --skip-build
 ```
 
-Notes:
+### DMG Creation
 
-- If `CODESIGN_IDENTITY` is unset, `scripts/bundle.sh` falls back to ad-hoc signing (`-`) for local testing.
+```bash
+# Build .app and create DMG (recommended)
+bash scripts/bundle.sh --dmg
+
+# Use existing .app to create DMG
+bash scripts/bundle.sh --dmg --skip-build
+
+# Install create-dmg for better DMG styling
+brew install create-dmg
+```
+
+**DMG Features**:
+- Unified script interface - one script for all packaging needs
+- Custom window size and icon layout
+- Applications symlink for drag-and-drop installation
+- Default background image (auto-generated)
+- Optional custom background (`resources/dmg-background.png`)
+- Optional license display (`LICENSE`)
+- Code signing support (with `CODESIGN_IDENTITY`)
+- Automatic dependency checking and fallback
+
+**Notes**:
+
+- If `CODESIGN_IDENTITY` is unset, scripts fall back to ad-hoc signing (`-`) for local testing.
 - Before using an Apple Developer certificate, verify that macOS recognizes it as a valid signing identity:
 
 ```bash
