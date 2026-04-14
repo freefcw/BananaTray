@@ -204,8 +204,6 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             user_id,
             divisor,
         } => {
-            use crate::providers::custom::generator;
-
             let is_editing = session.settings_ui.editing_newapi.is_some();
             let original_filename = session
                 .settings_ui
@@ -213,21 +211,17 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 .as_ref()
                 .map(|d| d.original_filename.clone());
 
-            let config = generator::NewApiConfig {
+            let config = crate::models::NewApiConfig {
                 display_name,
-                base_url,
+                base_url: base_url.clone(),
                 cookie,
                 user_id,
                 divisor,
             };
-            let yaml_content = generator::generate_newapi_yaml(&config);
-            // 编辑模式：沿用原文件名（身份不变）；新增模式：根据 URL 生成
-            let filename =
-                original_filename.unwrap_or_else(|| generator::generate_filename(&config));
 
             // ── 预注册 Provider ID：确保热重载后 Provider 立即可见 ──
             // 编辑模式下 URL 为只读，所以 ID 不会变化，仅需处理新增场景。
-            let new_id = ProviderId::Custom(generator::generate_id(&config));
+            let new_id = ProviderId::Custom(crate::models::newapi_provider_id(&base_url));
             if !session
                 .settings
                 .provider
@@ -240,62 +234,37 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.selected_provider = new_id;
 
             effects.push(
-                CommonEffect::SaveCustomProviderYaml {
-                    yaml_content,
-                    filename,
+                CommonEffect::SaveNewApiProvider {
+                    config,
+                    original_filename,
+                    is_editing,
                 }
                 .into(),
             );
-            effects.push(CommonEffect::PersistSettings.into());
-
-            let (title_key, body_key) = if is_editing {
-                ("newapi.edit_success_title", "newapi.edit_success_body")
-            } else {
-                ("newapi.save_success_title", "newapi.save_success_body")
-            };
-            effects.push(
-                CommonEffect::SendPlainNotification {
-                    title: rust_i18n::t!(title_key).to_string(),
-                    body: rust_i18n::t!(body_key).to_string(),
-                }
-                .into(),
-            );
+            // PersistSettings 和 SendPlainNotification 由 effect handler
+            // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
             session.settings_ui.adding_newapi = false;
             session.settings_ui.editing_newapi = None;
             effects.push(ContextEffect::Render.into());
         }
         AppAction::EditNewApi { provider_id } => {
-            use crate::providers::custom::generator;
-
-            if let ProviderId::Custom(ref custom_id) = provider_id {
-                if let Some(edit_data) = generator::read_newapi_config(custom_id) {
-                    session.settings_ui.adding_newapi = true;
-                    session.settings_ui.editing_newapi = Some(edit_data);
-                    effects.push(ContextEffect::Render.into());
-                } else {
-                    log::warn!(
-                        target: "settings",
-                        "EditNewApi: failed to read config for {}",
-                        custom_id
-                    );
+            // 磁盘 I/O 委托给 runtime effect handler，保持 reducer 纯函数
+            effects.push(
+                CommonEffect::LoadNewApiConfig {
+                    provider_id: provider_id.clone(),
                 }
-            }
+                .into(),
+            );
+            effects.push(ContextEffect::Render.into());
         }
         AppAction::DeleteNewApi { provider_id } => {
-            use crate::providers::custom::generator;
-
             session.settings_ui.confirming_delete_newapi = false;
-            if let ProviderId::Custom(ref custom_id) = provider_id {
-                if let Some(filename) = generator::filename_for_id(custom_id) {
-                    effects.push(CommonEffect::DeleteCustomProviderYaml { filename }.into());
-                } else {
-                    log::warn!(
-                        target: "settings",
-                        "DeleteNewApi: not a newapi provider id: {}",
-                        custom_id
-                    );
+            effects.push(
+                CommonEffect::DeleteNewApiProvider {
+                    provider_id: provider_id.clone(),
                 }
-            }
+                .into(),
+            );
         }
         AppAction::ConfirmDeleteNewApi => {
             session.settings_ui.confirming_delete_newapi = true;

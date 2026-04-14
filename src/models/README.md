@@ -39,6 +39,15 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - `migration.rs` — legacy flat-JSON settings migration
 - `provider_config_ordering.rs` / `provider_config_quota.rs` / `provider_config_sidebar.rs` — domain method extensions
 
+### `newapi.rs` — NewAPI Provider Data Types
+
+纯数据类型和 ID 计算逻辑，从 `providers/custom/generator.rs` 迁入以消除 `application/` → `providers/` 的反向依赖。
+
+- **`NewApiConfig`** — 用户通过表单提交的 NewAPI 配置（display_name, base_url, cookie, user_id, divisor）
+- **`NewApiEditData`** — 从 YAML 解析出的编辑回填数据（含 `original_filename`）
+- **`extract_domain_slug(base_url)`** — URL → slug 纯函数（如 `https://my-api.example.com` → `my-api-example-com`）
+- **`newapi_provider_id(base_url)`** — 从 URL 计算 Provider ID（`{slug}:newapi`），reducer 用于预注册
+
 ### `layout.rs` — Popup Window Sizing
 
 - **`PopupLayout`** — constants for popup dimensions: `WIDTH`, `BASE_HEIGHT`, `FIRST_QUOTA_HEIGHT`, `EXTRA_QUOTA_HEIGHT`, `MIN_HEIGHT`, `MAX_HEIGHT`, plus Overview card/element sizing constants (`OVERVIEW_DOT_SIZE`, `OVERVIEW_ICON_SIZE`, `OVERVIEW_BAR_W`, `OVERVIEW_BAR_H`, `OVERVIEW_EXPANDED_BAR_H`, `OVERVIEW_VALUE_W`, `OVERVIEW_BADGE_W`, `OVERVIEW_EXPAND_W`, `OVERVIEW_QUOTA_LINE_HEIGHT`, `OVERVIEW_QUOTA_LINE_GAP` 等)

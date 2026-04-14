@@ -1,5 +1,5 @@
 use crate::application::DebugNotificationKind;
-use crate::models::{ProviderId, StatusLevel, TrayIconStyle};
+use crate::models::{NewApiConfig, ProviderId, StatusLevel, TrayIconStyle};
 use crate::platform::notification::QuotaAlert;
 use crate::refresh::RefreshRequest;
 
@@ -63,14 +63,23 @@ pub enum CommonEffect {
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区
     ClearDebugLogs,
-    /// 保存新 Provider YAML 文件到配置目录
-    SaveCustomProviderYaml {
-        yaml_content: String,
-        filename: String,
+    /// 保存 NewAPI Provider：runtime 负责 YAML 生成 + 文件写入 + 持久化 + 通知 + 热重载
+    ///
+    /// 只有写入成功时才执行 PersistSettings 和 SendPlainNotification，
+    /// 确保失败时不会产生幽灵 Provider 或虚假成功通知。
+    SaveNewApiProvider {
+        config: NewApiConfig,
+        original_filename: Option<String>,
+        /// 编辑模式标志：失败时不回滚预注册（旧文件仍有效）
+        is_editing: bool,
     },
-    /// 删除 Provider YAML 文件
-    DeleteCustomProviderYaml {
-        filename: String,
+    /// 删除 NewAPI Provider：runtime 负责文件名推导 + 文件删除 + 热重载
+    DeleteNewApiProvider {
+        provider_id: ProviderId,
+    },
+    /// 从磁盘加载 NewAPI 配置（填充编辑表单），由 runtime 执行 I/O
+    LoadNewApiConfig {
+        provider_id: ProviderId,
     },
 }
 
