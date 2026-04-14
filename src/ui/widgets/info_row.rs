@@ -57,12 +57,14 @@ pub(crate) fn render_kv_info_row(
         .flex()
         .items_center()
         .justify_between()
+        .gap(px(8.0))
         .w_full()
         .py(px(8.0))
         .child(
             div()
                 .text_size(px(12.5))
                 .text_color(theme.text.muted)
+                .flex_shrink_0()
                 .child(label.to_string()),
         )
         .child(value_el)
@@ -77,7 +79,9 @@ pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, them
         .flex()
         .items_center()
         .justify_between()
+        .gap(px(6.0))
         .flex_1()
+        .min_w(px(0.0))
         .child(
             div()
                 .text_size(px(12.5))
@@ -90,6 +94,8 @@ pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, them
                 .text_size(px(13.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(value_color)
+                .overflow_hidden()
+                .whitespace_nowrap()
                 .child(value.to_string()),
         )
 }

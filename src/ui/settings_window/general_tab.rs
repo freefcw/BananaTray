@@ -5,7 +5,7 @@ use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, ButtonVariant};
-use gpui::{div, px, rgb, Div, ParentElement, Styled};
+use gpui::{div, px, relative, rgb, Div, ParentElement, Styled};
 use rust_i18n::t;
 
 // 设计稿颜色常量 — 各设置项的彩色图标背景
@@ -122,18 +122,22 @@ impl SettingsView {
             .child(self.render_quit_button(theme))
     }
 
-    /// 退出按钮 — 使用 render_action_button (Danger 变体)
+    /// 退出按钮 — 使用 render_action_button (Danger 变体)，1/3 宽度右对齐
     fn render_quit_button(&self, theme: &Theme) -> Div {
         let state = self.state.clone();
-        div().mt(px(16.0)).child(render_action_button(
-            &t!("settings.quit"),
-            Some(("src/icons/switch.svg", theme.status.error)),
-            ButtonVariant::Danger,
-            true,
-            theme,
-            move |_, window, cx| {
-                runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
-            },
-        ))
+        div()
+            .mt(px(16.0))
+            .flex()
+            .justify_end()
+            .child(div().w(relative(1.0 / 3.0)).child(render_action_button(
+                &t!("settings.quit"),
+                Some(("src/icons/switch.svg", theme.status.error)),
+                ButtonVariant::Danger,
+                true,
+                theme,
+                move |_, window, cx| {
+                    runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
+                },
+            )))
     }
 }

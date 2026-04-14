@@ -28,11 +28,13 @@ pub(crate) fn render_icon_row(
         .py(px(12.0))
         // 彩色圆形图标
         .child(render_colored_icon(icon_path, icon_color, icon_bg))
-        // 标题 + 描述
+        // 标题 + 描述（min_w(0) 允许 flex 收缩，避免长文本挤走右侧控件）
         .child(
             div()
                 .flex_col()
                 .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
                 .gap(px(2.0))
                 .child(
                     div()

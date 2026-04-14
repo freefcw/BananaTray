@@ -124,7 +124,7 @@ impl SettingsView {
             &t!("debug.log_level"),
             &t!("debug.log_level.desc"),
             theme,
-            render_segmented_control(
+            div().flex_shrink_0().child(render_segmented_control(
                 &options,
                 &current_owned,
                 SegmentedSize::Compact,
@@ -137,7 +137,7 @@ impl SettingsView {
                         cx,
                     );
                 },
-            ),
+            )),
         )
     }
 
@@ -159,6 +159,7 @@ impl SettingsView {
         // 右侧操作按钮组：Open + Copy Path
         let trailing = div()
             .flex()
+            .flex_shrink_0()
             .items_center()
             .gap(px(6.0))
             .child(render_action_button(
@@ -370,7 +371,7 @@ impl SettingsView {
             title,
             desc,
             theme,
-            render_action_button(
+            div().flex_shrink_0().child(render_action_button(
                 &t!("debug.send"),
                 None,
                 ButtonVariant::Subtle,
@@ -384,7 +385,7 @@ impl SettingsView {
                         cx,
                     );
                 },
-            ),
+            )),
         )
     }
 
