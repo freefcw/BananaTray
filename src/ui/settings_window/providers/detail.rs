@@ -39,6 +39,9 @@ fn render_detail_header_info(icon: &str, display_name: &str, subtitle: &str, the
         .child(
             div()
                 .flex_col()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
                 .gap(px(2.0))
                 .child(
                     div()

@@ -252,11 +252,11 @@ where
                 .mr(px(16.0))
                 .child(label.to_string()),
         )
-        .child(render_segmented_control(
+        .child(div().flex_shrink_0().child(render_segmented_control(
             &options,
             current,
             SegmentedSize::Inline,
             theme,
             on_select,
-        ))
+        )))
 }

@@ -92,7 +92,7 @@ impl SettingsView {
             title,
             description,
             theme,
-            dropdown,
+            dropdown.flex_shrink_0(),
         )
     }
 }
