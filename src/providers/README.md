@@ -10,6 +10,15 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `descriptor() -> ProviderDescriptor` — provider ID + `ProviderMetadata`
   - `check_availability() -> Result<()>` — environment/config check with structured error
   - `refresh() -> Result<RefreshData>` — fetch latest quota data
+  - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
+- **`SettingsCapability`** — provider-defined settings capability:
+  - `None` — auto-managed placeholder only
+  - `TokenInput(TokenInputCapability)` — generic token panel driven by static i18n keys + `credential_key`
+  - `NewApiEditable` — NewAPI custom-provider editor actions
+- **`TokenInputCapability`** — token settings contract:
+  - static UI metadata (`title_i18n_key`, `description_i18n_key`, `placeholder_i18n_key`, `create_url`)
+  - `credential_key` for persisted storage in `ProviderSettings`
+- **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderErrorPresenter`** — maps `ProviderError` to UI message and `ErrorKind`
@@ -42,7 +51,7 @@ Aggregation registry holding all provider implementations:
 |------|----------|-----|-----------|-------|
 | `claude/` | Claude | `claude` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
 | `gemini/` | Gemini | `gemini:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot:api` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; `settings_ui.rs` provides custom settings UI |
+| `copilot/` | Copilot | `copilot:api` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
 | `codex/` | Codex | `codex:api` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
 | `kimi/` | Kimi | `kimi:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
@@ -89,11 +98,13 @@ Aggregation registry holding all provider implementations:
        fn descriptor(&self) -> ProviderDescriptor { /* ... */ }
        async fn check_availability(&self) -> anyhow::Result<()> { Ok(()) }
        async fn refresh(&self) -> anyhow::Result<RefreshData> { /* ... */ }
+       fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
    }
    ```
-3. **Add icon**: `src/icons/provider-myprovider.svg`
-4. **Register**: add `my_provider => MyProvider` to `register_providers!` macro in `mod.rs`
-5. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
+3. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
+4. **Add icon**: `src/icons/provider-myprovider.svg`
+5. **Register**: add `my_provider => MyProvider` to `register_providers!` macro in `mod.rs`
+6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
 
 ## Constraints
 

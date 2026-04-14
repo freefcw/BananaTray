@@ -39,6 +39,8 @@ src/
     bridge.rs        — AppState (GPUI wrapper over AppSession)
     views/           — AppView, nav, provider panel, tray settings
     settings_window/ — Settings window tabs and provider management
+      providers/     — Provider detail, sidebar, settings panels
+        token_input_panel.rs — Generic token input panel (driven by SettingsCapability)
     widgets/         — Reusable UI components
   application/       — Action-Reducer-Effect pipeline
     state.rs         — Pure-logic session state (GPUI-free, testable)
@@ -51,7 +53,7 @@ src/
     settings/        — User preferences (4 sub-structs + migration + domain methods)
     test_helpers.rs  — Test fixture constructors for ProviderStatus, QuotaInfo, etc.
   icons/             — SVG icon assets (provider + UI icons)
-  providers/         — AiProvider trait + 14 implementations + ProviderManager
+  providers/         — AiProvider trait (+ settings_capability()) + 14 implementations + ProviderManager
     common/          — Shared provider infra (CLI, JWT, HTTP client, PTY runner)
     custom/          — YAML declarative custom provider system
     codeium_family/  — Shared Codeium-family logic (Windsurf + Antigravity)

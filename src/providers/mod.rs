@@ -4,12 +4,44 @@ pub mod custom;
 pub mod error_presenter;
 pub mod manager;
 
-use crate::models::{ProviderDescriptor, RefreshData};
+use crate::models::{
+    AppSettings, ProviderDescriptor, RefreshData, SettingsCapability, TokenEditMode,
+    TokenInputState,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
 pub use manager::ProviderManager;
+
+pub(crate) fn default_token_input_state(
+    settings: &AppSettings,
+    credential_key: &'static str,
+) -> TokenInputState {
+    let value = settings.provider.credentials.get_credential(credential_key);
+    let has_token = value.is_some();
+    TokenInputState {
+        has_token,
+        masked: value.map(mask_token),
+        source_i18n_key: None,
+        edit_mode: if has_token {
+            TokenEditMode::EditStored
+        } else {
+            TokenEditMode::SetNew
+        },
+    }
+}
+
+fn mask_token(token: &str) -> String {
+    let chars: Vec<char> = token.chars().collect();
+    if chars.len() <= 8 {
+        "•".repeat(chars.len())
+    } else {
+        let prefix: String = chars[..4].iter().collect();
+        let suffix: String = chars[chars.len() - 4..].iter().collect();
+        format!("{}•••{}", prefix, suffix)
+    }
+}
 
 /// 消除零字段 Provider 的重复样板代码（struct + Default + new）
 macro_rules! define_unit_provider {
@@ -217,6 +249,27 @@ pub trait AiProvider: Send + Sync {
 
     /// 核心方法：拉取最新的配额/用量情况
     async fn refresh(&self) -> Result<RefreshData>;
+
+    /// 声明该 Provider 的设置 UI 能力（默认无交互设置）
+    ///
+    /// 返回 `SettingsCapability::TokenInput` 即可让 Settings UI 自动显示
+    /// Token 输入面板，无需在 selector 或 UI 层硬编码。
+    fn settings_capability(&self) -> SettingsCapability {
+        SettingsCapability::None
+    }
+
+    /// 解析 TokenInput 面板的运行时展示状态。
+    ///
+    /// 默认行为：若 provider 声明了 `SettingsCapability::TokenInput`，
+    /// 则仅从 settings 中读取该 credential 的当前值。
+    fn resolve_token_input_state(&self, settings: &AppSettings) -> Option<TokenInputState> {
+        match self.settings_capability() {
+            SettingsCapability::TokenInput(config) => {
+                Some(default_token_input_state(settings, config.credential_key))
+            }
+            _ => None,
+        }
+    }
 }
 
 macro_rules! register_providers {

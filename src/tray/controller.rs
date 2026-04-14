@@ -25,7 +25,7 @@ pub(crate) struct TrayController {
 impl TrayController {
     pub(crate) fn new(
         refresh_tx: smol::channel::Sender<crate::refresh::RefreshRequest>,
-        manager: &crate::providers::ProviderManager,
+        manager: std::sync::Arc<crate::providers::ProviderManager>,
         settings: AppSettings,
         log_path: Option<std::path::PathBuf>,
     ) -> Self {

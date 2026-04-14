@@ -100,7 +100,9 @@ fn app_settings_legacy_migration() {
         "refresh_interval_mins": 10,
         "global_hotkey": "Cmd+Shift+S",
         "auto_hide_window": true,
-        "providers": {},
+        "providers": {
+            "github_token": "ghp_legacy"
+        },
         "language": "zh-CN",
         "show_debug_tab": true,
         "tray_icon_style": "Yellow"
@@ -111,6 +113,10 @@ fn app_settings_legacy_migration() {
     assert_eq!(settings.display.language, "zh-CN");
     assert!(settings.display.show_debug_tab);
     assert_eq!(settings.display.tray_icon_style, TrayIconStyle::Yellow);
+    assert_eq!(
+        settings.provider.credentials.get_credential("github_token"),
+        Some("ghp_legacy")
+    );
     // 默认值
     assert!(settings.notification.session_quota_notifications);
     assert!(settings.display.show_dashboard_button);
@@ -593,4 +599,66 @@ fn ensure_sidebar_defaults_old_user_with_order_gets_all() {
     config.ensure_sidebar_defaults(&[]);
     // provider_order 非空视为老用户，应保留全集
     assert!(config.sidebar_providers.len() >= ProviderKind::all().len());
+}
+
+// ── ProviderSettings credential accessors ──────────────
+
+#[test]
+fn get_credential_existing_key() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("github_token", "ghp_abc123".to_string());
+    assert_eq!(settings.get_credential("github_token"), Some("ghp_abc123"));
+}
+
+#[test]
+fn get_credential_missing_value() {
+    let settings = ProviderSettings::default();
+    assert_eq!(settings.get_credential("github_token"), None);
+}
+
+#[test]
+fn get_credential_unknown_key() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("github_token", "ghp_abc123".to_string());
+    assert_eq!(settings.get_credential("nonexistent_key"), None);
+}
+
+#[test]
+fn set_credential_known_key() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("github_token", "ghp_new".to_string());
+    assert_eq!(settings.get_credential("github_token"), Some("ghp_new"));
+}
+
+#[test]
+fn set_credential_supports_arbitrary_key() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("custom_token", "value".to_string());
+    assert_eq!(settings.get_credential("custom_token"), Some("value"));
+}
+
+#[test]
+fn remove_credential_clears_value() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("github_token", "ghp_new".to_string());
+    assert!(settings.remove_credential("github_token"));
+    assert_eq!(settings.get_credential("github_token"), None);
+}
+
+#[test]
+fn provider_settings_serializes_flattened_credentials() {
+    let mut settings = ProviderSettings::default();
+    settings.set_credential("github_token", "ghp_abc123".to_string());
+    settings.set_credential("custom_token", "custom_value".to_string());
+
+    let json = serde_json::to_value(&settings).unwrap();
+    assert_eq!(json["github_token"], "ghp_abc123");
+    assert_eq!(json["custom_token"], "custom_value");
+
+    let restored: ProviderSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.get_credential("github_token"), Some("ghp_abc123"));
+    assert_eq!(
+        restored.get_credential("custom_token"),
+        Some("custom_value")
+    );
 }

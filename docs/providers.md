@@ -48,12 +48,16 @@ pub trait AiProvider: Send + Sync {
     fn descriptor(&self) -> ProviderDescriptor;
     async fn check_availability(&self) -> Result<()> { Ok(()) }
     async fn refresh(&self) -> Result<RefreshData>;
+    /// 声明设置 UI 能力（默认 None，即自动管理型）
+    fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
 }
 ```
 
 ### Supporting Types
 
 - `ProviderDescriptor` — 收敛 provider 的注册 ID 与展示元数据
+- `SettingsCapability` — provider 声明的设置 UI 能力。`TokenInput(TokenInputCapability)` 会自动启用通用 token 面板，`TokenInputCapability` 只描述静态 UI 元数据和 `credential_key`
+- `AiProvider::resolve_token_input_state()` — provider 侧运行时钩子，返回纯数据 `TokenInputState`；当 provider 需要多来源 token 探测（如 Copilot）时在这里实现，而不是把行为塞进 `SettingsCapability`
 - `ProviderError` — provider 层返回的结构化错误
 - `providers/error_presenter.rs` — 将 `ProviderError` 映射为 UI 文案和 `ErrorKind`
 - [Provider Refactor Retrospective](provider/provider-refactor-retrospective.md) — 本次 provider 重构的根因、决策过程与优化方向
@@ -74,6 +78,8 @@ Providers run on background threads via `smol::unblock`. They must be `Send + Sy
 1. Add variant to `define_provider_kind!` macro in `src/models/provider.rs` — `id_key()` and `from_id_key()` are auto-generated
 2. Create `src/providers/my_provider.rs` (or `src/providers/my_provider/` for multi-file providers)
 3. Implement `AiProvider` for `MyProvider`
-4. Add icon: `src/icons/provider-myprovider.svg`
-5. Register in `src/providers/mod.rs`: add to `register_providers!` macro
-6. `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
+4. (Optional) Override `settings_capability()` to return `SettingsCapability::TokenInput(TokenInputCapability { .. })` for interactive settings
+5. If you use `TokenInputCapability`, choose a stable `credential_key` and ensure the provider reads it through `settings.provider.credentials.get_credential(key)`
+6. Add icon: `src/icons/provider-myprovider.svg`
+7. Register in `src/providers/mod.rs`: add to `register_providers!` macro
+8. `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations

@@ -81,7 +81,7 @@ impl ProviderStore {
     /// - 保留所有内置 Provider 状态不变
     /// - 新增的自定义 Provider 追加
     /// - 已删除的自定义 Provider 移除
-    /// - 已存在的自定义 Provider 更新 metadata（保留运行时状态到下次刷新）
+    /// - 已存在的自定义 Provider 更新 definition（metadata + settings capability），保留运行时状态到下次刷新
     ///
     /// 返回新增或更新的自定义 Provider ID 列表（用于触发立即刷新）
     pub fn sync_custom_providers(&mut self, new_statuses: &[ProviderStatus]) -> Vec<ProviderId> {
@@ -104,9 +104,8 @@ impl ProviderStore {
                 .iter_mut()
                 .find(|p| p.provider_id == new_status.provider_id)
             {
-                // 已存在：仅在 metadata 变化时更新并标记
-                if existing.metadata != new_status.metadata {
-                    existing.metadata = new_status.metadata.clone();
+                // 已存在：同步 definition（metadata + settings capability），保留运行时状态
+                if existing.sync_definition_from(new_status) {
                     affected.push(new_status.provider_id.clone());
                 }
             } else {
@@ -189,7 +188,7 @@ impl AppSession {
                 active_tab: SettingsTab::General,
                 selected_provider: default_settings_provider,
                 cadence_dropdown_open: false,
-                copilot_token_editing: false,
+                token_editing_provider: None,
                 adding_newapi: false,
                 editing_newapi: None,
                 adding_provider: false,
@@ -311,7 +310,8 @@ pub struct SettingsUiState {
     pub active_tab: SettingsTab,
     pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
-    pub copilot_token_editing: bool,
+    /// 正在编辑 Token 的 Provider ID（None = 未编辑）
+    pub token_editing_provider: Option<ProviderId>,
     /// 是否正在添加 NewAPI 中转站（右侧面板显示表单）
     pub adding_newapi: bool,
     /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）

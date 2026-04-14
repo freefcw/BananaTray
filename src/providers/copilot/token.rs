@@ -204,6 +204,14 @@ fn read_copilot_cli_keychain_token() -> Option<String> {
 }
 
 #[cfg(test)]
+pub(crate) fn set_test_cache(oauth: Option<&str>, cli: Option<&str>) {
+    let mut cache = TOKEN_CACHE.lock().unwrap();
+    cache.cached_oauth_token = oauth.map(str::to_string);
+    cache.cached_cli_token = cli.map(str::to_string);
+    cache.last_resolve = Some(Instant::now());
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

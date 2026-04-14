@@ -148,6 +148,61 @@ pub struct ProviderDescriptor {
     pub metadata: ProviderMetadata,
 }
 
+// ============================================================================
+// Provider 设置 UI 能力声明（纯数据模型，不依赖 GPUI）
+// ============================================================================
+
+/// Token 输入型设置的编辑语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenEditMode {
+    /// 当前 token 已存储在设置中，可直接编辑已有值。
+    EditStored,
+    /// 当前 token 来自外部来源或尚未配置，用户只能设置新的本地 override。
+    SetNew,
+}
+
+/// Token 输入面板的运行时展示状态（纯数据，不依赖 UI 框架）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenInputState {
+    pub has_token: bool,
+    pub masked: Option<String>,
+    pub source_i18n_key: Option<&'static str>,
+    pub edit_mode: TokenEditMode,
+}
+
+/// Token 输入型设置的静态配置。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenInputCapability {
+    /// credential 存取 key（对应 `ProviderSettings` 中的存储 key）
+    pub credential_key: &'static str,
+    /// 输入框 placeholder 的 i18n key
+    pub placeholder_i18n_key: &'static str,
+    /// 帮助提示文本的 i18n key
+    pub help_tip_i18n_key: &'static str,
+    /// 标题的 i18n key
+    pub title_i18n_key: &'static str,
+    /// 描述的 i18n key
+    pub description_i18n_key: &'static str,
+    /// Token 创建链接
+    pub create_url: &'static str,
+}
+
+/// Provider 设置 UI 的能力声明
+///
+/// 由 `AiProvider::settings_capability()` 返回，UI 层据此直接渲染对应的交互面板。
+///
+/// 新增支持交互设置的 Provider 只需返回合适的变体，无需修改 selector / UI 代码（OCP）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum SettingsCapability {
+    /// 无交互设置（自动管理型，默认）
+    #[default]
+    None,
+    /// Token 输入型设置（如 Copilot GitHub Token）
+    TokenInput(TokenInputCapability),
+    /// NewAPI 型自定义 Provider — 显示「编辑配置」按钮
+    NewApiEditable,
+}
+
 impl ProviderMetadata {
     /// 用于兜底场景的占位元数据，避免在多个调用点重复构造默认值。
     pub fn fallback(kind: ProviderKind) -> Self {

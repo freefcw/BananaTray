@@ -68,7 +68,7 @@ fn main() {
             // 3. 窗口控制器
             let controller = Rc::new(RefCell::new(tray::TrayController::new(
                 refresh_tx,
-                &manager,
+                manager.clone(),
                 settings,
                 log_path.clone(),
             )));

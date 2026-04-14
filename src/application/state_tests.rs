@@ -1,6 +1,9 @@
 use super::*;
 use crate::models::test_helpers::make_test_provider;
-use crate::models::{ConnectionStatus, DisplaySettings, ProviderId, ProviderKind};
+use crate::models::{
+    ConnectionStatus, DisplaySettings, ProviderId, ProviderKind, SettingsCapability,
+    TokenInputCapability,
+};
 
 /// 快捷构造 ProviderId::BuiltIn
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -233,7 +236,7 @@ fn settings_ui_default_values() {
         active_tab: SettingsTab::General,
         selected_provider: pid(ProviderKind::Claude),
         cadence_dropdown_open: false,
-        copilot_token_editing: false,
+        token_editing_provider: None,
         adding_newapi: false,
         editing_newapi: None,
         adding_provider: false,
@@ -555,6 +558,12 @@ fn make_custom_status_with_name(id: &str, display_name: &str) -> ProviderStatus 
     ProviderStatus::new(provider_id, metadata)
 }
 
+fn make_custom_status_with_capability(id: &str, capability: SettingsCapability) -> ProviderStatus {
+    let mut status = make_custom_status(id);
+    status.settings_capability = capability;
+    status
+}
+
 #[test]
 fn sync_adds_new_custom_provider() {
     let mut store = make_store(&[ProviderKind::Claude]);
@@ -642,6 +651,33 @@ fn sync_preserves_runtime_state_for_existing_custom() {
     assert_eq!(p.metadata.display_name, "Updated Name");
     assert_eq!(p.connection, ConnectionStatus::Connected);
     assert_eq!(p.account_email.as_deref(), Some("user@example.com"));
+}
+
+#[test]
+fn sync_updates_settings_capability_for_changed_custom() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers.push(make_custom_status("myapi:cli"));
+
+    let capability = SettingsCapability::TokenInput(TokenInputCapability {
+        credential_key: "custom_token",
+        placeholder_i18n_key: "copilot.token_placeholder",
+        help_tip_i18n_key: "copilot.token_sources_tip",
+        title_i18n_key: "copilot.github_login",
+        description_i18n_key: "copilot.requires_auth",
+        create_url: "https://example.com/token",
+    });
+    let new_statuses = vec![
+        make_provider(ProviderKind::Claude),
+        make_custom_status_with_capability("myapi:cli", capability.clone()),
+    ];
+
+    let affected = store.sync_custom_providers(&new_statuses);
+
+    let updated = store
+        .find_by_id(&ProviderId::Custom("myapi:cli".to_string()))
+        .unwrap();
+    assert_eq!(updated.settings_capability, capability);
+    assert!(affected.contains(&ProviderId::Custom("myapi:cli".to_string())));
 }
 
 #[test]

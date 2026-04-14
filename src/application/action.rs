@@ -8,8 +8,14 @@ pub enum AppAction {
     SetSettingsTab(SettingsTab),
     SelectSettingsProvider(ProviderId),
     ToggleCadenceDropdown,
-    SetCopilotTokenEditing(bool),
-    SaveCopilotToken(String),
+    SetTokenEditing {
+        provider_id: ProviderId,
+        editing: bool,
+    },
+    SaveProviderToken {
+        provider_id: ProviderId,
+        token: String,
+    },
     /// 拖拽排序：将 Provider 移动到目标索引位置
     MoveProviderToIndex {
         id: ProviderId,

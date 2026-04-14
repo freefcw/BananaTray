@@ -123,13 +123,9 @@ fn settings_provider_detail_view_state(
         is_enabled,
         info: settings_provider_info_view_state(provider, is_enabled),
         usage: settings_provider_usage_view_state(provider, is_enabled),
-        settings_mode: match id {
-            ProviderId::BuiltIn(ProviderKind::Copilot) => ProviderSettingsMode::Interactive,
-            ProviderId::Custom(custom_id) if custom_id.ends_with(":newapi") => {
-                ProviderSettingsMode::NewApiEditable
-            }
-            _ => ProviderSettingsMode::AutoManaged,
-        },
+        settings_capability: provider
+            .map(|p| p.settings_capability.clone())
+            .unwrap_or_default(),
         quota_display_mode: session.settings.display.quota_display_mode,
         quota_visibility,
     }
@@ -241,7 +237,6 @@ fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
         }
     }
 }
-
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod tests;

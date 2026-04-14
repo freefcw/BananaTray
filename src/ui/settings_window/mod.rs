@@ -134,7 +134,8 @@ impl NewApiFormInputs {
 
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
-    pub(crate) copilot_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
+    /// 当前交互设置面板的 Token 输入框（通用，不绑定特定 provider）
+    pub(crate) token_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<Subscription>,
     /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
@@ -146,7 +147,7 @@ impl SettingsView {
         info!(target: "settings", "constructing settings view");
         Self {
             state,
-            copilot_input: None,
+            token_input: None,
             _appearance_sub: None,
             newapi_inputs: None,
         }

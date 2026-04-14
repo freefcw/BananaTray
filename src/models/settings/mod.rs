@@ -1,7 +1,7 @@
 use super::provider::{ProviderId, ProviderKind};
 use super::quota::QuotaInfo;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 // ============================================================================
 // 子结构体定义（按语义职责分组）
@@ -99,7 +99,7 @@ impl Default for DisplaySettings {
 /// Provider 管理配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
-    /// Provider 特定配置（Copilot Token 等）
+    /// Provider 特定凭证（按 key-value 存储，如 github_token / custom_token）
     pub credentials: ProviderSettings,
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
     #[serde(default)]
@@ -249,8 +249,30 @@ impl AppTheme {
 /// Provider 特定配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderSettings {
-    /// Copilot: GitHub Token (Classic PAT with copilot scope)
-    pub github_token: Option<String>,
+    /// Provider-specific credentials, flattened for backward-compatible JSON shape.
+    #[serde(flatten)]
+    entries: BTreeMap<String, String>,
+}
+
+impl ProviderSettings {
+    /// 通过 credential_key 获取凭证值（对应 `SettingsCapability::TokenInput::credential_key`）
+    pub fn get_credential(&self, key: &str) -> Option<&str> {
+        self.entries.get(key).map(String::as_str)
+    }
+
+    /// 通过 credential_key 设置凭证值
+    pub fn set_credential(&mut self, key: &str, value: String) {
+        if key.trim().is_empty() {
+            log::warn!(target: "settings", "empty credential key");
+            return;
+        }
+        self.entries.insert(key.to_string(), value);
+    }
+
+    /// 删除指定 credential。
+    pub fn remove_credential(&mut self, key: &str) -> bool {
+        self.entries.remove(key).is_some()
+    }
 }
 
 // ============================================================================

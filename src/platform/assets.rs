@@ -105,9 +105,16 @@ impl AssetSource for Assets {
 mod tests {
     use super::*;
     use std::env;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn test_from_env_with_valid_dir() {
+        let _guard = env_lock().lock().unwrap();
         // 使用临时目录模拟 BANANATRAY_RESOURCES
         let tmp = env::temp_dir().join("bananatray_test_env");
         fs::create_dir_all(&tmp).unwrap();
@@ -124,6 +131,7 @@ mod tests {
 
     #[test]
     fn test_from_env_with_nonexistent_dir() {
+        let _guard = env_lock().lock().unwrap();
         // SAFETY: 测试串行执行，无并发 env 访问
         unsafe { env::set_var("BANANATRAY_RESOURCES", "/nonexistent/path/bananatray") };
         let result = Assets::from_env();
@@ -133,6 +141,7 @@ mod tests {
 
     #[test]
     fn test_from_env_unset() {
+        let _guard = env_lock().lock().unwrap();
         // SAFETY: 测试串行执行，无并发 env 访问
         unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         let result = Assets::from_env();
@@ -162,6 +171,7 @@ mod tests {
 
     #[test]
     fn test_resolve_base_fallback_to_dev() {
+        let _guard = env_lock().lock().unwrap();
         // 确保没有干扰环境变量
         // SAFETY: 测试串行执行，无并发 env 访问
         unsafe { env::remove_var("BANANATRAY_RESOURCES") };

@@ -1,4 +1,4 @@
-use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
+use super::provider::{ProviderId, ProviderKind, ProviderMetadata, SettingsCapability};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -374,6 +374,9 @@ pub struct ProviderStatus {
     /// 上次成功刷新的时刻（不序列化，用于计算相对时间）
     #[serde(skip)]
     pub last_refreshed_instant: Option<Instant>,
+    /// 设置 UI 能力声明（运行时由 ProviderManager 填充，不序列化）
+    #[serde(skip)]
+    pub settings_capability: SettingsCapability,
 }
 
 /// serde 默认值：反序列化旧数据时，provider_id 用 Claude 作占位
@@ -411,6 +414,7 @@ impl ProviderStatus {
             error_message: None,
             error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
+            settings_capability: SettingsCapability::default(),
         }
     }
 
@@ -434,6 +438,22 @@ impl ProviderStatus {
             self.connection = ConnectionStatus::Disconnected;
         }
         self.error_message = Some(message);
+    }
+
+    /// 同步 provider 定义层数据（metadata + settings capability），保留运行时状态。
+    ///
+    /// 返回 true 表示 definition 发生变化。
+    pub fn sync_definition_from(&mut self, other: &ProviderStatus) -> bool {
+        let mut changed = false;
+        if self.metadata != other.metadata {
+            self.metadata = other.metadata.clone();
+            changed = true;
+        }
+        if self.settings_capability != other.settings_capability {
+            self.settings_capability = other.settings_capability.clone();
+            changed = true;
+        }
+        changed
     }
 
     /// 标记刷新失败，同时设置错误类型

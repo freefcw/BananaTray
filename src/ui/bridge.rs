@@ -32,6 +32,7 @@ pub(crate) fn persist_settings(settings: &AppSettings) -> bool {
 /// 应用持久状态，在窗口生命周期之外保持
 pub struct AppState {
     pub session: AppSession,
+    pub manager: std::sync::Arc<ProviderManager>,
     /// 向 RefreshCoordinator 发送请求的通道
     pub refresh_tx: Sender<RefreshRequest>,
     /// 当前 AppView 的弱引用，用于事件泵通知 UI 刷新
@@ -43,7 +44,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         refresh_tx: Sender<RefreshRequest>,
-        manager: &ProviderManager,
+        manager: std::sync::Arc<ProviderManager>,
         settings: AppSettings,
         log_path: Option<PathBuf>,
     ) -> Self {
@@ -58,6 +59,7 @@ impl AppState {
 
         Self {
             session,
+            manager,
             refresh_tx,
             view_entity: None,
             log_path,

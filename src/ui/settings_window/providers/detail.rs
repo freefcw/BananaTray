@@ -1,10 +1,9 @@
 use super::super::SettingsView;
 use crate::application::{
-    AppAction, ProviderSettingsMode, QuotaVisibilityItem, SettingChange,
-    SettingsProviderDetailViewState, SettingsProviderInfoViewState, SettingsProviderStatusKind,
-    SettingsProviderUsageViewState,
+    AppAction, QuotaVisibilityItem, SettingChange, SettingsProviderDetailViewState,
+    SettingsProviderInfoViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-use crate::models::{ProviderId, ProviderKind, QuotaDisplayMode};
+use crate::models::{ProviderId, ProviderKind, QuotaDisplayMode, SettingsCapability};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -686,7 +685,7 @@ impl SettingsView {
             // ── Settings section ──
             .child(self.render_settings_section(
                 detail.id.clone(),
-                detail.settings_mode,
+                detail.settings_capability.clone(),
                 theme,
                 cx,
             ));
@@ -701,11 +700,11 @@ impl SettingsView {
         )
     }
 
-    // render_settings_section 保留为方法：Interactive 分支需要 &mut self
+    // render_settings_section 保留为方法：TokenInput 分支需要 &mut self（创建 input entity）
     fn render_settings_section(
         &mut self,
         provider_id: ProviderId,
-        settings_mode: ProviderSettingsMode,
+        settings_capability: SettingsCapability,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -719,16 +718,20 @@ impl SettingsView {
                     theme,
                 ));
 
-        match settings_mode {
-            ProviderSettingsMode::Interactive => {
-                // 使用交互式 UI（支持 Token 输入和保存）
+        match settings_capability {
+            SettingsCapability::TokenInput(capability) => {
+                // 直接从 capability 驱动渲染，消费声明的元数据字段（OCP）
                 section = section.child(div().mt(px(10.0)).child(
-                    crate::providers::copilot::settings_ui::render_settings_interactive(
-                        self, theme, cx,
+                    super::token_input_panel::render_token_input_panel(
+                        &provider_id,
+                        capability,
+                        self,
+                        theme,
+                        cx,
                     ),
                 ));
             }
-            ProviderSettingsMode::NewApiEditable => {
+            SettingsCapability::NewApiEditable => {
                 let confirming_delete = self
                     .state
                     .borrow()
@@ -742,7 +745,7 @@ impl SettingsView {
                     theme,
                 ));
             }
-            ProviderSettingsMode::AutoManaged => {
+            SettingsCapability::None => {
                 section = section.child(render_automanaged_placeholder());
             }
         }

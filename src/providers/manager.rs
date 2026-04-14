@@ -1,5 +1,8 @@
 use super::AiProvider;
-use crate::models::{ProviderId, ProviderKind, ProviderMetadata, ProviderStatus};
+use crate::models::{
+    AppSettings, ProviderId, ProviderKind, ProviderMetadata, ProviderStatus, TokenInputCapability,
+    TokenInputState,
+};
 use anyhow::Result;
 use log::{debug, info, warn};
 use std::borrow::Cow;
@@ -111,17 +114,46 @@ impl ProviderManager {
     pub fn initial_statuses(&self) -> Vec<ProviderStatus> {
         let mut statuses: Vec<ProviderStatus> = ProviderKind::all()
             .iter()
-            .map(|kind| ProviderStatus::new(ProviderId::BuiltIn(*kind), self.metadata_for(*kind)))
+            .map(|kind| {
+                let mut status =
+                    ProviderStatus::new(ProviderId::BuiltIn(*kind), self.metadata_for(*kind));
+                if let Some(provider) = self.provider_for_kind(*kind) {
+                    status.settings_capability = provider.settings_capability();
+                }
+                status
+            })
             .collect();
 
         // 追加自定义 Provider 状态
         for (id, provider) in &self.custom_providers_by_id {
             let descriptor = provider.descriptor();
             let provider_id = ProviderId::Custom(id.clone());
-            statuses.push(ProviderStatus::new(provider_id, descriptor.metadata));
+            let mut status = ProviderStatus::new(provider_id, descriptor.metadata);
+            status.settings_capability = provider.settings_capability();
+            statuses.push(status);
         }
 
         statuses
+    }
+
+    /// 根据 ProviderId + capability 解析 TokenInput 面板的运行时展示状态。
+    ///
+    /// 优先走 provider 自定义解析；若 provider 未注册或未覆写，则回落到通用 credential 存储。
+    pub fn resolve_token_input_state(
+        &self,
+        id: &ProviderId,
+        capability: TokenInputCapability,
+        settings: &AppSettings,
+    ) -> TokenInputState {
+        let provider = match id {
+            ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
+            ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
+        };
+        provider
+            .and_then(|provider| provider.resolve_token_input_state(settings))
+            .unwrap_or_else(|| {
+                super::default_token_input_state(settings, capability.credential_key)
+            })
     }
 
     /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
@@ -173,11 +205,19 @@ impl ProviderManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{
+        AppSettings, SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
+    };
     use anyhow::Result;
     use async_trait::async_trait;
     use std::borrow::Cow;
+    use std::collections::{HashMap, HashSet};
 
     struct TestProvider {
+        descriptor: crate::models::ProviderDescriptor,
+    }
+
+    struct DefaultTokenProvider {
         descriptor: crate::models::ProviderDescriptor,
     }
 
@@ -185,6 +225,48 @@ mod tests {
     impl AiProvider for TestProvider {
         fn descriptor(&self) -> crate::models::ProviderDescriptor {
             self.descriptor.clone()
+        }
+
+        fn settings_capability(&self) -> SettingsCapability {
+            SettingsCapability::TokenInput(TokenInputCapability {
+                credential_key: "test_token",
+                placeholder_i18n_key: "copilot.token_placeholder",
+                help_tip_i18n_key: "copilot.token_sources_tip",
+                title_i18n_key: "copilot.github_login",
+                description_i18n_key: "copilot.requires_auth",
+                create_url: "https://example.com/token",
+            })
+        }
+
+        fn resolve_token_input_state(&self, _settings: &AppSettings) -> Option<TokenInputState> {
+            Some(TokenInputState {
+                has_token: true,
+                masked: Some("test•••oken".to_string()),
+                source_i18n_key: Some("copilot.source.env_var"),
+                edit_mode: TokenEditMode::SetNew,
+            })
+        }
+
+        async fn refresh(&self) -> Result<crate::models::RefreshData> {
+            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
+        }
+    }
+
+    #[async_trait]
+    impl AiProvider for DefaultTokenProvider {
+        fn descriptor(&self) -> crate::models::ProviderDescriptor {
+            self.descriptor.clone()
+        }
+
+        fn settings_capability(&self) -> SettingsCapability {
+            SettingsCapability::TokenInput(TokenInputCapability {
+                credential_key: "test_token",
+                placeholder_i18n_key: "copilot.token_placeholder",
+                help_tip_i18n_key: "copilot.token_sources_tip",
+                title_i18n_key: "copilot.github_login",
+                description_i18n_key: "copilot.requires_auth",
+                create_url: "https://example.com/token",
+            })
         }
 
         async fn refresh(&self) -> Result<crate::models::RefreshData> {
@@ -275,5 +357,96 @@ mod tests {
             &provider,
         );
         assert_eq!(label, "demo:custom");
+    }
+
+    #[test]
+    fn test_resolve_token_input_state_routes_to_provider_override() {
+        let mut manager = ProviderManager {
+            providers: Vec::new(),
+            providers_by_kind: HashMap::new(),
+            metadata_by_kind: HashMap::new(),
+            provider_ids: HashSet::new(),
+            custom_providers_by_id: HashMap::new(),
+        };
+        manager.register(Arc::new(TestProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed("amp"),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Amp,
+                    display_name: "Amp".to_string(),
+                    brand_name: "Amp".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        }));
+
+        let state = manager.resolve_token_input_state(
+            &ProviderId::BuiltIn(ProviderKind::Amp),
+            TokenInputCapability {
+                credential_key: "test_token",
+                placeholder_i18n_key: "copilot.token_placeholder",
+                help_tip_i18n_key: "copilot.token_sources_tip",
+                title_i18n_key: "copilot.github_login",
+                description_i18n_key: "copilot.requires_auth",
+                create_url: "https://example.com/token",
+            },
+            &AppSettings::default(),
+        );
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::SetNew);
+        assert_eq!(state.source_i18n_key, Some("copilot.source.env_var"));
+    }
+
+    #[test]
+    fn test_resolve_token_input_state_falls_back_to_default_credential_store() {
+        let mut manager = ProviderManager {
+            providers: Vec::new(),
+            providers_by_kind: HashMap::new(),
+            metadata_by_kind: HashMap::new(),
+            provider_ids: HashSet::new(),
+            custom_providers_by_id: HashMap::new(),
+        };
+        manager.register(Arc::new(DefaultTokenProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed("amp"),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Amp,
+                    display_name: "Amp".to_string(),
+                    brand_name: "Amp".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        }));
+
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .credentials
+            .set_credential("test_token", "abcd1234wxyz".to_string());
+
+        let state = manager.resolve_token_input_state(
+            &ProviderId::BuiltIn(ProviderKind::Amp),
+            TokenInputCapability {
+                credential_key: "test_token",
+                placeholder_i18n_key: "copilot.token_placeholder",
+                help_tip_i18n_key: "copilot.token_sources_tip",
+                title_i18n_key: "copilot.github_login",
+                description_i18n_key: "copilot.requires_auth",
+                create_url: "https://example.com/token",
+            },
+            &settings,
+        );
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::EditStored);
+        assert_eq!(state.source_i18n_key, None);
+        assert_eq!(state.masked.as_deref(), Some("abcd•••wxyz"));
     }
 }

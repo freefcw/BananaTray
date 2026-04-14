@@ -16,8 +16,8 @@ pub use selectors::{
     DebugContext, DebugTabViewState, DisabledProviderViewState, IssueReportContext, LogLevelColor,
     OverviewItemStatus, OverviewItemViewState, OverviewQuotaItem, OverviewViewState,
     ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
-    ProviderPanelViewState, ProviderSettingsMode, QuotaVisibilityItem, RefreshTarget,
-    SettingsProviderDetailViewState, SettingsProviderInfoViewState,
-    SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
+    ProviderPanelViewState, QuotaVisibilityItem, RefreshTarget, SettingsProviderDetailViewState,
+    SettingsProviderInfoViewState, SettingsProviderListItemViewState, SettingsProviderStatusKind,
+    SettingsProviderUsageViewState,
 };
 pub use state::{AppSession, HeaderStatusKind, SettingsTab};

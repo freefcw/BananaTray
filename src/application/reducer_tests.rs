@@ -1,6 +1,9 @@
 use super::*;
 use crate::models::test_helpers::make_test_provider;
-use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind, RefreshData};
+use crate::models::{
+    AppSettings, ConnectionStatus, ProviderId, ProviderKind, RefreshData, SettingsCapability,
+    TokenInputCapability,
+};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
 
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -23,6 +26,25 @@ fn make_session_without(excluded: ProviderKind) -> AppSession {
         .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
         .collect();
     AppSession::new(AppSettings::default(), providers)
+}
+
+fn make_custom_token_provider(
+    id: &str,
+    credential_key: &'static str,
+) -> crate::models::ProviderStatus {
+    let provider_id = ProviderId::Custom(id.to_string());
+    let mut metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    metadata.display_name = "Custom Token".to_string();
+    let mut status = crate::models::ProviderStatus::new(provider_id, metadata);
+    status.settings_capability = SettingsCapability::TokenInput(TokenInputCapability {
+        credential_key,
+        placeholder_i18n_key: "copilot.token_placeholder",
+        help_tip_i18n_key: "copilot.token_sources_tip",
+        title_i18n_key: "copilot.github_login",
+        description_i18n_key: "copilot.requires_auth",
+        create_url: "https://example.com/token",
+    });
+    status
 }
 
 fn has_effect(effects: &[AppEffect], f: impl Fn(&AppEffect) -> bool) -> bool {
@@ -1636,6 +1658,7 @@ fn select_provider_resets_confirming_flags() {
     let mut session = make_session();
     session.settings_ui.confirming_remove_provider = true;
     session.settings_ui.confirming_delete_newapi = true;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     reduce(
         &mut session,
@@ -1644,6 +1667,7 @@ fn select_provider_resets_confirming_flags() {
 
     assert!(!session.settings_ui.confirming_remove_provider);
     assert!(!session.settings_ui.confirming_delete_newapi);
+    assert!(session.settings_ui.token_editing_provider.is_none());
 }
 
 #[test]
@@ -1656,4 +1680,162 @@ fn enter_add_newapi_clears_adding_provider() {
     assert!(session.settings_ui.adding_newapi);
     assert!(!session.settings_ui.adding_provider); // 互斥清除
     assert!(has_render(&effects));
+}
+
+// ── Token Editing / Saving ────────────────────────────
+
+#[test]
+fn set_token_editing_enables_editing() {
+    let mut session = make_session();
+    assert!(session.settings_ui.token_editing_provider.is_none());
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SetTokenEditing {
+            provider_id: pid(ProviderKind::Copilot),
+            editing: true,
+        },
+    );
+
+    assert_eq!(
+        session.settings_ui.token_editing_provider,
+        Some(pid(ProviderKind::Copilot))
+    );
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn set_token_editing_disables_editing() {
+    let mut session = make_session();
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SetTokenEditing {
+            provider_id: pid(ProviderKind::Copilot),
+            editing: false,
+        },
+    );
+
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn save_provider_token_stores_credential_and_persists() {
+    let mut session = make_session();
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SaveProviderToken {
+            provider_id: pid(ProviderKind::Copilot),
+            token: "ghp_test123".to_string(),
+        },
+    );
+
+    // token 已存储
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .credentials
+            .get_credential("github_token"),
+        Some("ghp_test123")
+    );
+    // 编辑状态已关闭
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    // 产出 PersistSettings
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::PersistSettings)
+    )));
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn save_provider_token_empty_does_not_persist() {
+    let mut session = make_session();
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SaveProviderToken {
+            provider_id: pid(ProviderKind::Copilot),
+            token: "   ".to_string(), // 空白
+        },
+    );
+
+    // 不应存储
+    assert!(session
+        .settings
+        .provider
+        .credentials
+        .get_credential("github_token")
+        .is_none());
+    // 编辑状态仍关闭
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    // 不应产出 PersistSettings
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::PersistSettings)
+    )));
+}
+
+#[test]
+fn save_provider_token_without_capability_does_not_persist() {
+    let mut session = make_session();
+    // Claude 没有 TokenInput capability
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Claude));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SaveProviderToken {
+            provider_id: pid(ProviderKind::Claude),
+            token: "some_token".to_string(),
+        },
+    );
+
+    // 不应产出 PersistSettings（capability 不匹配）
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::PersistSettings)
+    )));
+    // 编辑状态仍关闭
+    assert!(session.settings_ui.token_editing_provider.is_none());
+}
+
+#[test]
+fn save_provider_token_supports_arbitrary_credential_key() {
+    let custom_id = ProviderId::Custom("custom-token:api".to_string());
+    let mut session = make_session();
+    session
+        .provider_store
+        .providers
+        .push(make_custom_token_provider(
+            "custom-token:api",
+            "custom_token",
+        ));
+    session.settings_ui.token_editing_provider = Some(custom_id.clone());
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SaveProviderToken {
+            provider_id: custom_id,
+            token: "custom-secret".to_string(),
+        },
+    );
+
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .credentials
+            .get_credential("custom_token"),
+        Some("custom-secret")
+    );
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::PersistSettings)
+    )));
 }

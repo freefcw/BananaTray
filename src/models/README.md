@@ -13,6 +13,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderMetadata`** — display-oriented metadata: `display_name`, `brand_name`, `icon_asset`, `dashboard_url`, `account_hint`, `source_label`. Each provider struct returns this from `AiProvider::metadata()`.
 - **`ProviderId`** — unified provider identifier: `BuiltIn(ProviderKind)` for built-in providers, `Custom(String)` for YAML-declared custom providers. Key methods: `id_key()`, `from_id_key()`, `kind()`, `is_custom()`.
 - **`ProviderDescriptor`** — combines `ProviderId` with `ProviderMetadata` for registration.
+- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, auto-managed), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 
 ### `quota.rs` — Usage Data
@@ -35,6 +36,7 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 
 - **`AppSettings`** — top-level persisted configuration composed of `SystemSettings`, `NotificationSettings`, `DisplaySettings`, `ProviderConfig`
 - **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, credentials
+- **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), keeping JSON backward-compatible while allowing arbitrary `credential_key`
 - **`TrayIconStyle`** / **`QuotaDisplayMode`** / **`AppTheme`** — display enums
 - `migration.rs` — legacy flat-JSON settings migration
 - `provider_config_ordering.rs` / `provider_config_quota.rs` / `provider_config_sidebar.rs` — domain method extensions

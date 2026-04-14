@@ -1,36 +1,40 @@
-//! Copilot provider 的 Settings UI 渲染
+//! 通用 Token 输入设置面板
 //!
-//! 支持交互式 Token 配置，匹配设计稿卡片样式。
+//! 从 `SettingsCapability::TokenInput` 的声明字段驱动渲染（OCP）。
+//! 任何 provider 只要声明了 `TokenInput` capability，即可自动获得此面板，
+//! 无需额外注册或编写 provider-specific UI 代码。
 
+use super::super::SettingsView;
+use crate::application::AppAction;
+use crate::models::{ProviderId, TokenEditMode, TokenInputCapability};
+use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::register_input_actions;
 use gpui::{
     div, hsla, px, relative, App, AppContext, Context, Div, Entity, FocusHandle, FontWeight,
     InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
 };
 use rust_i18n::t;
 
-use super::CopilotTokenSource;
-
-use crate::application::AppAction;
-use crate::runtime;
-use crate::ui::settings_window::SettingsView;
-use crate::ui::widgets::register_input_actions;
+// ============================================================================
+// Token 输入框组件
+// ============================================================================
 
 #[derive(IntoElement)]
-struct CopilotInputBox {
+struct TokenInputBox {
     input_entity: Entity<adabraka_ui::components::input_state::InputState>,
     theme: Theme,
     focus_handle: FocusHandle,
 }
 
-impl RenderOnce for CopilotInputBox {
+impl RenderOnce for TokenInputBox {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let theme = self.theme;
         let input_entity = self.input_entity;
         let is_focused = self.focus_handle.is_focused(window);
 
         let input_div = div()
-            .id("custom_copilot_input")
+            .id("token_input_box")
             .track_focus(&self.focus_handle)
             .w_full()
             .flex()
@@ -53,7 +57,6 @@ impl RenderOnce for CopilotInputBox {
                 move |_, window, _| handle.focus(window)
             });
 
-        // 使用辅助函数注册所有键盘事件
         register_input_actions(input_div, &input_entity, window).child(
             div()
                 .flex_1()
@@ -64,22 +67,40 @@ impl RenderOnce for CopilotInputBox {
     }
 }
 
-/// 渲染 Copilot 设置 UI（带交互，用于设置窗口）
-/// 设计稿：深色卡片容器 → 标题+描述 → 状态徽章 → token 信息 → 操作按钮
-pub(crate) fn render_settings_interactive(
+// ============================================================================
+// 通用渲染入口
+// ============================================================================
+
+/// 渲染 Token 输入型设置面板，完全从 `SettingsCapability::TokenInput` 字段驱动。
+///
+/// 此函数是 TokenInput 类型 provider 的唯一渲染入口。新增 TokenInput provider 时
+/// 只需在 `AiProvider::settings_capability()` 返回正确字段，无需编写额外 UI 代码。
+pub(crate) fn render_token_input_panel(
+    provider_id: &ProviderId,
+    capability: TokenInputCapability,
     view: &mut SettingsView,
     theme: &Theme,
     cx: &mut Context<SettingsView>,
 ) -> Div {
-    // 获取当前 token 状态
-    // resolve_token 使用基于时间的缓存（5秒有效期），避免频繁的文件 I/O
-    let settings = view.state.borrow().session.settings.clone();
-    let mem_token = settings.provider.credentials.github_token.as_deref();
-    let status = super::resolve_token(mem_token);
+    let TokenInputCapability {
+        placeholder_i18n_key,
+        help_tip_i18n_key,
+        title_i18n_key,
+        description_i18n_key,
+        create_url,
+        ..
+    } = capability;
 
-    let has_token = status.token.is_some();
-    let masked = status.masked();
-    let source = status.source;
+    // 统一通过 ProviderManager 解析运行时 token 展示状态。
+    // manager 会优先走 provider 自定义逻辑，必要时自动回落到通用 credential 存储。
+    let display_info = {
+        let state = view.state.borrow();
+        state
+            .manager
+            .resolve_token_input_state(provider_id, capability, &state.session.settings)
+    };
+
+    let has_token = display_info.has_token;
 
     // ── 外层深色卡片容器 ──
     let mut card = div()
@@ -93,10 +114,11 @@ pub(crate) fn render_settings_interactive(
         .py(px(20.0))
         .gap(px(14.0));
 
+    // ── 标题 + 帮助图标 ──
     let hover_color = theme.text.primary;
     let help_icon = crate::ui::with_multiline_tooltip(
-        "copilot-token-help",
-        &t!("copilot.token_sources_tip"),
+        "token-input-help",
+        &t!(help_tip_i18n_key),
         theme,
         div()
             .flex()
@@ -124,7 +146,7 @@ pub(crate) fn render_settings_interactive(
                     .text_size(px(15.0))
                     .font_weight(FontWeight::BOLD)
                     .text_color(theme.text.primary)
-                    .child(t!("copilot.github_login").to_string()),
+                    .child(t!(title_i18n_key).to_string()),
             )
             .child(help_icon),
     );
@@ -136,7 +158,7 @@ pub(crate) fn render_settings_interactive(
             .line_height(relative(1.4))
             .text_color(theme.text.secondary)
             .py(px(4.0))
-            .child(t!("copilot.requires_auth").to_string()),
+            .child(t!(description_i18n_key).to_string()),
     );
 
     // ── Token 状态区 or 输入框 ──
@@ -145,27 +167,28 @@ pub(crate) fn render_settings_interactive(
         .borrow()
         .session
         .settings_ui
-        .copilot_token_editing;
+        .token_editing_provider
+        .as_ref()
+        .is_some_and(|id| id == provider_id);
 
-    // ── Token 状态区 or 输入框 ──
     if is_editing {
-        // 编辑模式：每次都重新创建 InputState
-        view.copilot_input = Some(cx.new(|cx| {
+        // 编辑模式：创建输入框
+        view.token_input = Some(cx.new(|cx| {
             let mut state = adabraka_ui::components::input_state::InputState::new(cx);
-            state.placeholder = "粘贴或输入 GitHub Token (ghp_...)".into();
+            state.placeholder = t!(placeholder_i18n_key).to_string().into();
             state
         }));
 
-        let input_entity = view.copilot_input.as_ref().unwrap().clone();
+        let input_entity = view.token_input.as_ref().unwrap().clone();
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
-        card = card.child(CopilotInputBox {
+        card = card.child(TokenInputBox {
             input_entity,
             theme: theme.clone(),
             focus_handle,
         });
     } else if has_token {
-        // 默认模式：Token 已配置状态
+        // Token 已配置状态
         card = card.child(
             div()
                 .w_full()
@@ -190,47 +213,42 @@ pub(crate) fn render_settings_interactive(
                         .text_size(px(13.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme.status.success)
-                        .child(t!("copilot.token_configured").to_string()),
+                        .child(t!("settings.token.configured").to_string()),
                 ),
         );
     } else {
-        // 默认模式：Token 未配置提示
+        // Token 未配置提示
         card = card.child(
-            div()
-                .h(px(40.0)) // 与 InputBox 高度大致对齐，保持一致性
-                .flex()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(px(12.0))
-                        .line_height(relative(1.5))
-                        .text_color(theme.text.muted)
-                        .child(t!("copilot.token_hint").to_string()),
-                ),
+            div().h(px(40.0)).flex().items_center().child(
+                div()
+                    .text_size(px(12.0))
+                    .line_height(relative(1.5))
+                    .text_color(theme.text.muted)
+                    .child(t!("settings.token.hint").to_string()),
+            ),
         );
     }
 
-    // ── Token 来源信息行 (始终站位，保持布局稳定) ──
+    // ── Token 来源信息行（由 provider 解析器提供 source_i18n_key） ──
     let (source_info, text_color) = if !is_editing && has_token {
-        let source_label = match source {
-            CopilotTokenSource::ConfigFile => t!("copilot.source.config_file").to_string(),
-            CopilotTokenSource::CopilotOAuth => t!("copilot.source.copilot_oauth").to_string(),
-            CopilotTokenSource::CopilotCli => t!("copilot.source.copilot_cli").to_string(),
-            CopilotTokenSource::EnvVar => t!("copilot.source.env_var").to_string(),
-            CopilotTokenSource::None => String::new(),
-        };
-
-        (
-            t!(
-                "copilot.token_via",
-                masked = masked.unwrap_or_default(),
-                source = &source_label
+        if let Some(source_i18n_key) = display_info.source_i18n_key {
+            let masked = display_info.masked.as_deref().unwrap_or_default();
+            (
+                t!(
+                    "settings.token.via",
+                    masked = masked,
+                    source = t!(source_i18n_key).to_string()
+                )
+                .to_string(),
+                theme.text.muted,
             )
-            .to_string(),
-            theme.text.muted,
-        )
+        } else if let Some(masked) = &display_info.masked {
+            (masked.clone(), theme.text.muted)
+        } else {
+            ("placeholder".to_string(), theme.bg.card_inner)
+        }
     } else {
-        // 编辑模式或未配置时，使用占位字符并设置颜色与背景一致，实现“隐形”站位
+        // 编辑模式或未配置时，使用占位字符实现"隐形"站位
         ("placeholder".to_string(), theme.bg.card_inner)
     };
 
@@ -244,34 +262,42 @@ pub(crate) fn render_settings_interactive(
     );
 
     // ── 操作按钮 ──
-    card = card.child(render_action_buttons(
-        view, has_token, source, theme, is_editing,
+    card = card.child(render_token_action_buttons(
+        provider_id.clone(),
+        create_url,
+        view,
+        display_info.edit_mode,
+        theme,
+        is_editing,
     ));
 
     card
 }
 
-fn render_action_buttons(
+// ============================================================================
+// 操作按钮
+// ============================================================================
+
+fn render_token_action_buttons(
+    provider_id: ProviderId,
+    create_url: &'static str,
     view: &mut SettingsView,
-    has_token: bool,
-    source: CopilotTokenSource,
+    edit_mode: TokenEditMode,
     theme: &Theme,
     is_editing: bool,
 ) -> Div {
-    let is_user_configured = source == CopilotTokenSource::ConfigFile;
-
     let mut row = div().flex().gap(px(10.0)).mt(px(2.0));
 
-    // ── 左侧按钮 (原：创建 Token) ──
+    // ── 左侧按钮：编辑模式=保存，浏览模式=创建 Token ──
     let left_label = if is_editing {
-        t!("copilot.save_token").to_string()
+        t!("settings.token.save").to_string()
     } else {
-        t!("copilot.create_token").to_string()
+        t!("settings.token.create").to_string()
     };
 
-    // 编辑模式下用 input 的实体内容，否则跳链
-    let input_entity_opt = view.copilot_input.clone();
-    let state_left_click = view.state.clone();
+    let input_entity_opt = view.token_input.clone();
+    let state_left = view.state.clone();
+    let left_provider_id = provider_id.clone();
 
     row = row.child(
         div()
@@ -291,22 +317,22 @@ fn render_action_buttons(
             .child(left_label)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 if is_editing {
-                    // 保存操作
                     if let Some(entity) = &input_entity_opt {
                         let text = entity.read(cx).content().trim().to_string();
                         runtime::dispatch_in_window(
-                            &state_left_click,
-                            AppAction::SaveCopilotToken(text),
+                            &state_left,
+                            AppAction::SaveProviderToken {
+                                provider_id: left_provider_id.clone(),
+                                token: text,
+                            },
                             window,
                             cx,
                         );
                     }
                 } else {
                     runtime::dispatch_in_window(
-                        &state_left_click,
-                        AppAction::OpenUrl(
-                            "https://github.com/settings/personal-access-tokens".to_string(),
-                        ),
+                        &state_left,
+                        AppAction::OpenUrl(create_url.to_string()),
                         window,
                         cx,
                     );
@@ -314,16 +340,16 @@ fn render_action_buttons(
             }),
     );
 
-    // ── 右侧按钮 (原：修改/设置 Token) ──
+    // ── 右侧按钮：编辑模式=取消，浏览模式=设置/修改 ──
     let right_label = if is_editing {
-        t!("copilot.cancel_setup").to_string()
-    } else if has_token && is_user_configured {
-        t!("copilot.edit_token").to_string()
+        t!("settings.token.cancel").to_string()
+    } else if edit_mode == TokenEditMode::EditStored {
+        t!("settings.token.edit").to_string()
     } else {
-        t!("copilot.set_token").to_string()
+        t!("settings.token.set").to_string()
     };
 
-    let state_right_click = view.state.clone();
+    let state_right = view.state.clone();
 
     row = row.child(
         div()
@@ -345,8 +371,11 @@ fn render_action_buttons(
             .child(right_label)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 runtime::dispatch_in_window(
-                    &state_right_click,
-                    AppAction::SetCopilotTokenEditing(!is_editing),
+                    &state_right,
+                    AppAction::SetTokenEditing {
+                        provider_id: provider_id.clone(),
+                        editing: !is_editing,
+                    },
                     window,
                     cx,
                 );
