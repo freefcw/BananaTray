@@ -371,9 +371,14 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             match std::fs::write(&path, &yaml_content) {
                 Ok(()) => {
                     info!(target: "runtime", "saved custom provider YAML to {}", path.display());
-                    // ✅ 只有成功才 persist + notify + reload
-                    persist_current_settings(state);
-                    let (title_key, body_key) = if is_editing {
+                    // ✅ YAML 写入成功后尝试持久化 settings
+                    let settings_saved = persist_current_settings(state);
+                    let (title_key, body_key) = if !settings_saved {
+                        // YAML 已写入但 settings.json 持久化失败：
+                        // Provider 当前会话可用，重启后会被 ProvidersReloaded 自动恢复，
+                        // 但 sidebar 顺序等设置可能丢失。给用户一个准确的提示。
+                        ("newapi.save_partial_title", "newapi.save_partial_body")
+                    } else if is_editing {
                         ("newapi.edit_success_title", "newapi.edit_success_body")
                     } else {
                         ("newapi.save_success_title", "newapi.save_success_body")
@@ -439,9 +444,9 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
 // Helpers
 // ============================================================================
 
-fn persist_current_settings(state: &Rc<RefCell<AppState>>) {
+fn persist_current_settings(state: &Rc<RefCell<AppState>>) -> bool {
     let settings = state.borrow().session.settings.clone();
-    persist_settings(&settings);
+    persist_settings(&settings)
 }
 
 fn notify_view_entity(state: &Rc<RefCell<AppState>>, cx: &mut App) {
