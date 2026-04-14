@@ -83,7 +83,7 @@ Custom providers are automatically registered in `settings.json` through three l
 run with `cargo test --lib`. Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
-- `app_state.rs` — ProviderStore, NavigationState, SettingsUiState
+- `application/state.rs` — ProviderStore, NavigationState, SettingsUiState
 - `application/reducer_tests.rs` — all Action-Reducer-Effect tests
 - `application/selectors/` — format, tray, settings, debug selector tests
 - `providers/` — ProviderError, ProviderManager, individual provider parsers
@@ -93,7 +93,7 @@ run with `cargo test --lib`. Coverage:
 - `platform/auto_launch.rs` — platform-specific launch-at-login
 - `platform/assets.rs` — asset resolution fallback chain
 - `refresh/` — coordinator and scheduler tests
-- `theme.rs` — YAML theme parsing
+- `theme.rs` — GPUI color token system (depends on gpui; not GPUI-free)
 - `settings_store.rs` — settings persistence round-trip
 
 ## GPUI Import Discipline

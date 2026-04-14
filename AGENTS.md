@@ -73,7 +73,7 @@ src/
   utils/             — Text/time helpers, log capture
   i18n.rs            — Locale detection and i18n configuration
   settings_store.rs  — Settings JSON persistence (atomic write)
-  theme.rs           — YAML-based theme system (GPUI-free)
+  theme.rs           — GPUI color token system (depends on gpui: Hsla, Global, WindowAppearance)
   theme_tests.rs     — Theme parsing unit tests
 ```
 
