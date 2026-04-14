@@ -769,7 +769,7 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
     let mut session = make_session();
 
     // settings 中没有 "fresh:api" 的任何条目
-    let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+    let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("fresh:api"));
 
     let mut effects = vec![];
@@ -1209,7 +1209,7 @@ fn make_custom_provider_status(id: &str) -> crate::models::ProviderStatus {
 #[test]
 fn providers_reloaded_sends_update_config() {
     let mut session = make_session();
-    let statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+    let statuses = session.provider_store.providers.to_vec();
 
     let mut effects = vec![];
     apply_refresh_event(
@@ -1233,7 +1233,7 @@ fn providers_reloaded_refreshes_enabled_new_custom() {
     let custom_id = ProviderId::Custom("new:api".to_string());
     session.settings.provider.set_enabled(&custom_id, true);
 
-    let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+    let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("new:api"));
 
     let mut effects = vec![];
@@ -1260,7 +1260,7 @@ fn providers_reloaded_does_not_refresh_disabled_custom() {
     let custom_id = ProviderId::Custom("disabled:api".to_string());
     session.settings.provider.set_enabled(&custom_id, false);
 
-    let mut statuses: Vec<_> = session.provider_store.providers.iter().cloned().collect();
+    let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("disabled:api"));
 
     let mut effects = vec![];
