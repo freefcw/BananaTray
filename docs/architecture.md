@@ -30,7 +30,7 @@ Persisted `AppSettings` are loaded in `bootstrap.rs` and injected into `AppState
 - `SettingsUiState` — settings window tab + provider management UI state
 - `DebugUiState` — debug tab state (selected provider, refresh status)
 - `AppSettings` — persisted user preferences
-- `alert_tracker` — quota notification state machine
+- `alert_tracker` — quota notification state machine (`application/quota_alert.rs`)
 - `popup_visible` — popup visibility flag (deferred dynamic icon updates)
 
 Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`, etc.
@@ -89,7 +89,7 @@ run with `cargo test --lib`. Coverage:
 - `providers/` — ProviderError, ProviderManager, individual provider parsers
 - `tray/icon.rs` — tray icon data and template mode tests
 - `utils/` — text stripping, time parsing, log capture
-- `platform/notification.rs` — QuotaAlertTracker state machine
+- `application/quota_alert.rs` — QuotaAlertTracker state machine
 - `platform/auto_launch.rs` — platform-specific launch-at-login
 - `platform/assets.rs` — asset resolution fallback chain
 - `refresh/` — coordinator and scheduler tests

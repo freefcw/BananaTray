@@ -1,11 +1,13 @@
 mod action;
 pub(crate) mod effect;
+mod quota_alert;
 mod reducer;
 mod selectors;
 pub(crate) mod state;
 
 pub use action::{AppAction, DebugNotificationKind, SettingChange};
 pub use effect::{AppEffect, CommonEffect, ContextEffect, TrayIconRequest};
+pub use quota_alert::QuotaAlert;
 pub use reducer::{build_config_sync_request, reduce};
 #[allow(unused_imports)]
 pub use selectors::{
