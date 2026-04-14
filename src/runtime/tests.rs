@@ -15,10 +15,10 @@ impl ContextCapabilities for FakeCaps {
 
 fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
-    let manager = ProviderManager::new();
+    let manager = std::sync::Arc::new(ProviderManager::new());
     Rc::new(RefCell::new(AppState::new(
         tx,
-        &manager,
+        manager,
         AppSettings::default(),
         None,
     )))

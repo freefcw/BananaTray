@@ -20,9 +20,16 @@ pub fn make_test_metadata(kind: ProviderKind) -> ProviderMetadata {
 }
 
 /// 创建测试用的 ProviderStatus（指定连接状态）
+///
+/// 自动为 Copilot 设置 `TokenInput` capability（与 `CopilotProvider::settings_capability()` 一致），
+/// 保证测试中 settings capability 的行为与生产环境对齐。
 pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> ProviderStatus {
     let mut status = ProviderStatus::new(ProviderId::BuiltIn(kind), make_test_metadata(kind));
     status.connection = connection;
+    // 与 CopilotProvider::settings_capability() 保持一致
+    if kind == ProviderKind::Copilot {
+        status.settings_capability = crate::providers::copilot::copilot_settings_capability();
+    }
     status
 }
 

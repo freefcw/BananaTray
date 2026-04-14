@@ -20,6 +20,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::SelectSettingsProvider(id) => {
             session.settings_ui.selected_provider = id;
+            session.settings_ui.token_editing_provider = None;
             session.settings_ui.adding_newapi = false;
             session.settings_ui.confirming_remove_provider = false;
             session.settings_ui.confirming_delete_newapi = false;
@@ -29,17 +30,38 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             session.settings_ui.cadence_dropdown_open = !session.settings_ui.cadence_dropdown_open;
             effects.push(ContextEffect::Render.into());
         }
-        AppAction::SetCopilotTokenEditing(editing) => {
-            session.settings_ui.copilot_token_editing = editing;
+        AppAction::SetTokenEditing {
+            provider_id,
+            editing,
+        } => {
+            session.settings_ui.token_editing_provider =
+                if editing { Some(provider_id) } else { None };
             effects.push(ContextEffect::Render.into());
         }
-        AppAction::SaveCopilotToken(token) => {
+        AppAction::SaveProviderToken { provider_id, token } => {
             let token = token.trim().to_string();
             if !token.is_empty() {
-                session.settings.provider.credentials.github_token = Some(token);
-                effects.push(CommonEffect::PersistSettings.into());
+                // 从 ProviderStatus 获取 credential_key，通用化 token 存储
+                let credential_key =
+                    session
+                        .provider_store
+                        .find_by_id(&provider_id)
+                        .and_then(|p| match &p.settings_capability {
+                            crate::models::SettingsCapability::TokenInput(config) => {
+                                Some(config.credential_key)
+                            }
+                            _ => None,
+                        });
+                if let Some(key) = credential_key {
+                    session
+                        .settings
+                        .provider
+                        .credentials
+                        .set_credential(key, token);
+                    effects.push(CommonEffect::PersistSettings.into());
+                }
             }
-            session.settings_ui.copilot_token_editing = false;
+            session.settings_ui.token_editing_provider = None;
             effects.push(ContextEffect::Render.into());
         }
         AppAction::MoveProviderToIndex { id, target_index } => {

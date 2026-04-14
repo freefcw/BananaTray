@@ -10,7 +10,9 @@ mod tray;
 // ============================================================================
 
 use super::state::HeaderStatusKind;
-use crate::models::{NewApiEditData, ProviderId, QuotaDisplayMode, QuotaInfo, StatusLevel};
+use crate::models::{
+    NewApiEditData, ProviderId, QuotaDisplayMode, QuotaInfo, SettingsCapability, StatusLevel,
+};
 
 // ── Tray 弹出窗口 ──
 
@@ -197,7 +199,7 @@ pub struct SettingsProviderDetailViewState {
     pub is_enabled: bool,
     pub info: SettingsProviderInfoViewState,
     pub usage: SettingsProviderUsageViewState,
-    pub settings_mode: ProviderSettingsMode,
+    pub settings_capability: SettingsCapability,
     pub quota_display_mode: QuotaDisplayMode,
     /// 配额可见性列表（用于设置 UI 中的勾选框）
     pub quota_visibility: Vec<QuotaVisibilityItem>,
@@ -237,14 +239,6 @@ pub enum SettingsProviderUsageViewState {
     Error { title: String, message: String },
     Empty { message: String },
     Missing { message: String },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProviderSettingsMode {
-    AutoManaged,
-    Interactive,
-    /// NewAPI 型自定义 Provider — 显示「编辑配置」按钮
-    NewApiEditable,
 }
 
 // ============================================================================

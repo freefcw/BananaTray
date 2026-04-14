@@ -10,10 +10,11 @@ GPUI-dependent UI module. Contains all view rendering, window management, and us
 
 - **`AppState`** — runtime composition container:
   - `session: AppSession` — pure session state from `src/application/state.rs`
+  - `manager: Arc<ProviderManager>` — provider runtime registry used for provider-side settings state resolution
   - `refresh_tx: Sender<RefreshRequest>` — channel to `RefreshCoordinator`
   - `view_entity: Option<WeakEntity<AppView>>` — weak ref for UI updates
   - `log_path: Option<PathBuf>` — log file path for Debug tab
-- `AppState::new(...)` accepts preloaded `AppSettings`; persisted settings are loaded in `src/bootstrap.rs` and injected during startup
+- `AppState::new(...)` accepts `Arc<ProviderManager>` plus preloaded `AppSettings`; persisted settings are loaded in `src/bootstrap.rs` and injected during startup
 - **`persist_settings()`** — persists `AppSettings`
 
 ### `mod.rs` — Module exports

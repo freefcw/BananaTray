@@ -2,7 +2,9 @@ use super::*;
 use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
 };
-use crate::models::{AppSettings, ConnectionStatus, ProviderKind, ProviderStatus};
+use crate::models::{
+    AppSettings, ConnectionStatus, ProviderKind, ProviderStatus, SettingsCapability,
+};
 
 fn pid(kind: ProviderKind) -> ProviderId {
     ProviderId::BuiltIn(kind)
@@ -99,10 +101,10 @@ fn settings_provider_detail_reports_error_usage() {
     let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
     let view_state = settings_providers_tab_view_state(&session);
 
-    assert_eq!(
-        view_state.detail.settings_mode,
-        ProviderSettingsMode::Interactive
-    );
+    assert!(matches!(
+        view_state.detail.settings_capability,
+        SettingsCapability::TokenInput(_)
+    ));
     assert_eq!(
         view_state.detail.info.status_kind,
         SettingsProviderStatusKind::Error
@@ -192,4 +194,61 @@ fn settings_detail_inherits_quota_display_mode() {
 
     let view_state = settings_providers_tab_view_state(&session);
     assert_eq!(view_state.detail.quota_display_mode, QuotaDisplayMode::Used);
+}
+
+// ── settings_capability 透传 ────────────────────────────
+
+#[test]
+fn settings_capability_none_for_plain_builtin() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+    assert_eq!(
+        view_state.detail.settings_capability,
+        SettingsCapability::None
+    );
+}
+
+#[test]
+fn settings_capability_token_input_for_copilot() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
+    let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+    assert!(matches!(
+        view_state.detail.settings_capability,
+        SettingsCapability::TokenInput(_)
+    ));
+}
+
+#[test]
+fn settings_capability_newapi_editable_for_custom_newapi() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let id = ProviderId::Custom("my-site:newapi".to_string());
+    let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    let mut provider = ProviderStatus::new(id.clone(), metadata);
+    provider.settings_capability = SettingsCapability::NewApiEditable;
+    let session = make_session(settings, id, vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+    assert_eq!(
+        view_state.detail.settings_capability,
+        SettingsCapability::NewApiEditable
+    );
+}
+
+#[test]
+fn settings_capability_defaults_when_provider_missing() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    // 没有 provider 数据，capability 应为默认值 None
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![]);
+    let view_state = settings_providers_tab_view_state(&session);
+    assert_eq!(
+        view_state.detail.settings_capability,
+        SettingsCapability::None
+    );
 }

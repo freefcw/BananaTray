@@ -2,6 +2,7 @@ mod detail;
 mod newapi_form;
 mod picker;
 mod sidebar;
+pub(crate) mod token_input_panel;
 
 use super::SettingsView;
 use crate::application::settings_providers_tab_view_state;

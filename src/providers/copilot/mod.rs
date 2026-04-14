@@ -1,11 +1,12 @@
 mod client;
 mod parser;
-#[cfg(feature = "app")]
-pub mod settings_ui;
 mod token;
 
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    AppSettings, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+    SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::debug;
@@ -17,6 +18,54 @@ use parser::{parse_github_user, parse_user_info_response};
 pub use token::{resolve_token, CopilotTokenSource, CopilotTokenStatus};
 
 super::define_unit_provider!(CopilotProvider);
+
+pub(crate) fn copilot_settings_capability() -> SettingsCapability {
+    SettingsCapability::TokenInput(TokenInputCapability {
+        credential_key: "github_token",
+        placeholder_i18n_key: "copilot.token_placeholder",
+        help_tip_i18n_key: "copilot.token_sources_tip",
+        title_i18n_key: "copilot.github_login",
+        description_i18n_key: "copilot.requires_auth",
+        create_url: "https://github.com/settings/personal-access-tokens",
+    })
+}
+
+pub(crate) fn copilot_token_input_state(
+    settings: &AppSettings,
+    credential_key: &'static str,
+) -> TokenInputState {
+    let mem_token = settings.provider.credentials.get_credential(credential_key);
+    let status = resolve_token(mem_token);
+
+    let source_i18n_key = if status.token.is_some() {
+        match status.source {
+            CopilotTokenSource::ConfigFile => Some("copilot.source.config_file"),
+            CopilotTokenSource::CopilotOAuth => Some("copilot.source.copilot_oauth"),
+            CopilotTokenSource::CopilotCli => Some("copilot.source.copilot_cli"),
+            CopilotTokenSource::EnvVar => Some("copilot.source.env_var"),
+            CopilotTokenSource::None => None,
+        }
+    } else {
+        None
+    };
+
+    TokenInputState {
+        has_token: status.token.is_some(),
+        masked: status.masked(),
+        source_i18n_key,
+        edit_mode: match status.source {
+            CopilotTokenSource::ConfigFile if status.token.is_some() => TokenEditMode::EditStored,
+            CopilotTokenSource::CopilotOAuth
+            | CopilotTokenSource::CopilotCli
+            | CopilotTokenSource::EnvVar
+                if status.token.is_some() =>
+            {
+                TokenEditMode::SetNew
+            }
+            _ => TokenEditMode::SetNew,
+        },
+    }
+}
 
 #[async_trait]
 impl AiProvider for CopilotProvider {
@@ -33,6 +82,17 @@ impl AiProvider for CopilotProvider {
                 source_label: "github api".into(),
             },
         }
+    }
+
+    fn settings_capability(&self) -> SettingsCapability {
+        copilot_settings_capability()
+    }
+
+    fn resolve_token_input_state(&self, settings: &AppSettings) -> Option<TokenInputState> {
+        let SettingsCapability::TokenInput(config) = self.settings_capability() else {
+            return None;
+        };
+        Some(copilot_token_input_state(settings, config.credential_key))
     }
 
     async fn check_availability(&self) -> Result<()> {
@@ -67,5 +127,65 @@ impl AiProvider for CopilotProvider {
             .and_then(|(user_body, _)| parse_github_user(&user_body));
 
         parse_user_info_response(&body, &status_code, account_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn copilot_token_input_state_from_config_file_is_editable() {
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+        crate::providers::copilot::token::set_test_cache(None, None);
+
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .credentials
+            .set_credential("github_token", "ghp_local_123456".to_string());
+
+        let state = copilot_token_input_state(&settings, "github_token");
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::EditStored);
+        assert_eq!(state.source_i18n_key, Some("copilot.source.config_file"));
+        assert!(state.masked.is_some());
+    }
+
+    #[test]
+    fn copilot_token_input_state_from_env_is_set_new() {
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("GITHUB_TOKEN", "ghp_env_123456") };
+        crate::providers::copilot::token::set_test_cache(None, None);
+
+        let state = copilot_token_input_state(&AppSettings::default(), "github_token");
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::SetNew);
+        assert_eq!(state.source_i18n_key, Some("copilot.source.env_var"));
+
+        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+    }
+
+    #[test]
+    fn copilot_token_input_state_without_any_source_is_empty() {
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+        crate::providers::copilot::token::set_test_cache(None, None);
+
+        let state = copilot_token_input_state(&AppSettings::default(), "github_token");
+
+        assert!(!state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::SetNew);
+        assert_eq!(state.source_i18n_key, None);
+        assert_eq!(state.masked, None);
     }
 }
