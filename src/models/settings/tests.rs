@@ -278,12 +278,16 @@ fn prune_removes_stale_custom_from_enabled() {
 
 #[test]
 fn prune_removes_stale_custom_from_provider_order() {
-    let mut config = ProviderConfig::default();
-    config.provider_order = vec![
-        ProviderKind::Claude.id_key().to_string(),
-        "old:api".to_string(),
-        "keep:api".to_string(),
-    ];
+    let config = ProviderConfig {
+        provider_order: vec![
+            ProviderKind::Claude.id_key().to_string(),
+            "old:api".to_string(),
+            "keep:api".to_string(),
+        ],
+        ..Default::default()
+    };
+    // prune 需要 &mut，但 clippy 建议初始化时赋值，所以这里重新绑定
+    let mut config = config;
 
     let existing = vec![ProviderId::Custom("keep:api".to_string())];
     let changed = config.prune_stale_custom_ids(&existing);
