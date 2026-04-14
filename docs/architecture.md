@@ -42,7 +42,7 @@ Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`
 - Receives `RefreshRequest` via `smol::channel`
 - Delegates scheduling decisions to `RefreshScheduler` (cooldown, eligibility, deadline)
 - Uses absolute-deadline timers to avoid timer reset on request receipt
-- Spawns concurrent refresh tasks per provider via `std::thread`
+- Spawns concurrent refresh tasks via `smol` blocking pool, collecting results in completion order
 - Sends `RefreshEvent` results to foreground executor for UI update
 - Supports `ReloadProviders` for custom provider hot-reload
 

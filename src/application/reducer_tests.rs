@@ -1556,7 +1556,7 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
         e,
         AppEffect::Common(CommonEffect::PersistSettings)
     )));
-    // 仍有 render（push_render 在 if 外）
+    // 仍有 render（Render effect 在 if 外无条件 push）
     assert!(has_render(&effects));
 }
 

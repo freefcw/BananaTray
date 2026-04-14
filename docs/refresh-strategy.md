@@ -122,7 +122,7 @@ BananaTray 的刷新系统是一个基于后台线程的周期性数据拉取机
 │  ┌─────────────────────────────────┐  │
 │  │  execute_refresh_concurrent()   │  │
 │  │  - Phase 1: 过滤 + 发送 Started │  │
-│  │  - Phase 2: std::thread 并发    │  │
+│  │  - Phase 2: smol 并发           │  │
 │  │  - Phase 3: 收集结果            │  │
 │  └─────────────┬───────────────────┘  │
 └────────────────┼──────────────────────┘
@@ -276,17 +276,19 @@ Phase 1: 过滤 + 标记
 Phase 2: 并发执行
   ┌─────────────────────────────────┐
   │  for each eligible provider:    │
-  │    std::thread::spawn(|| {      │
-  │      mgr.refresh_by_id()        │
+  │    smol::spawn(async {           │
+  │      smol::unblock(|| {          │
+  │        mgr.refresh_by_id()       │
+  │      })                          │
   │      → send outcome to channel  │
-  │    })                           │
+  │    }).detach()                   │
   └─────────────────────────────────┘
                 │
                 ▼
 Phase 3: 结果收集
   ┌─────────────────────────────────┐
-  │  for _ in 0..expected:          │
-  │    outcome = result_rx.recv()   │
+  │  while let Ok(outcome) =        │
+  │      result_rx.recv().await     │
   │    record_outcome(outcome)      │
   │      - clear_in_flight()        │
   │      - record_success()         │
@@ -407,7 +409,7 @@ Reducer::RefreshEventReceived(ProvidersReloaded)
     ├─ provider_store.sync_custom_providers(&statuses)
     ├─ settings.prune_stale_custom_ids()
     ├─ 自动启用新增的 Provider
-    ├─ sanitize_stale_refs()  // 清理导航引用
+    ├─ cleanup_dangling_refs()  // 清理导航引用
     ├─ SendRefreshRequest(UpdateConfig)  // 同步配置
     └─ 对新增/更新的 Provider 立即刷新
 ```
@@ -459,7 +461,7 @@ Reducer::RefreshEventReceived(ProvidersReloaded)
 Dynamic 模式下的托盘图标根据当前 Provider 的配额状态自动更新：
 
 ```rust
-fn maybe_update_dynamic_icon(
+fn sync_dynamic_icon_if_needed(
     session: &AppSession,
     refreshed_id: &ProviderId,
     prev_status: StatusLevel,
@@ -480,9 +482,11 @@ fn maybe_update_dynamic_icon(
     // 状态变化时才更新
     let new_status = session.current_provider_status();
     if new_status != prev_status {
-        effects.push(AppEffect::ApplyTrayIcon(
-            TrayIconRequest::DynamicStatus(new_status)
-        ));
+        effects.push(
+            ContextEffect::ApplyTrayIcon(
+                TrayIconRequest::DynamicStatus(new_status)
+            ).into()
+        );
     }
 }
 ```
@@ -582,8 +586,8 @@ RefreshCoordinator::build_outcome()
 
 ### 并发刷新
 
-- 使用 `std::thread::spawn` 并发执行多个 Provider 刷新
-- 通过 `smol::channel` 收集结果，避免阻塞主线程
+- 使用 `smol::spawn` + `smol::unblock` 并发执行多个 Provider 刷新，结果按完成顺序回传
+- 通过 `smol::channel` 收集结果，避免慢 Provider 阻塞已完成 Provider 的状态上报
 - Phase 1 提前发送 `Started` 事件，UI 立即响应
 
 ### 绝对定时器
