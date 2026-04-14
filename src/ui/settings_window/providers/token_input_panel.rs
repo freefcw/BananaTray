@@ -11,8 +11,9 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::register_input_actions;
 use gpui::{
-    div, hsla, px, relative, App, AppContext, Context, Div, Entity, FocusHandle, FontWeight,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
+    div, hsla, px, relative, App, AppContext, Context, Div, ElementId, Entity, FocusHandle,
+    FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled,
+    Window,
 };
 use rust_i18n::t;
 
@@ -22,6 +23,7 @@ use rust_i18n::t;
 
 #[derive(IntoElement)]
 struct TokenInputBox {
+    provider_id: ProviderId,
     input_entity: Entity<adabraka_ui::components::input_state::InputState>,
     theme: Theme,
     focus_handle: FocusHandle,
@@ -34,7 +36,9 @@ impl RenderOnce for TokenInputBox {
         let is_focused = self.focus_handle.is_focused(window);
 
         let input_div = div()
-            .id("token_input_box")
+            .id(ElementId::Name(
+                format!("token_input_box_{}", self.provider_id.id_key()).into(),
+            ))
             .track_focus(&self.focus_handle)
             .w_full()
             .flex()
@@ -183,6 +187,7 @@ pub(crate) fn render_token_input_panel(
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
         card = card.child(TokenInputBox {
+            provider_id: provider_id.clone(),
             input_entity,
             theme: theme.clone(),
             focus_handle,
