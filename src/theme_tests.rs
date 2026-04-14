@@ -1,6 +1,8 @@
-//! theme 模块的单元测试 — GPUI-free
+//! theme 模块的单元测试
 //!
-//! 测试 `parse_color`、YAML 加载、`color()` 提取等纯逻辑。
+//! 测试 `parse_color`、YAML 加载、`color()` 提取等逻辑。
+//! 注意：theme 模块依赖 gpui（Hsla 等类型），但不使用 GPUI proc-macro，
+//! 因此可在 `cargo test --lib` 中正常编译和运行。
 
 #[cfg(test)]
 mod tests {
