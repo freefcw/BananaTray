@@ -21,9 +21,9 @@
 - **`ensure_single_instance()`** — 通过 IPC local socket（interprocess crate）检测是否已有实例运行
 - **`InstanceRole`** — Primary（首个实例，附带消息接收通道）或 Secondary（退出）
 
-### 纯逻辑 / 平台原生模块（始终编译）
+### 平台模块（始终编译）
 
-被 `application::state`、`application` 等 GPUI-free 模块引用。
+被 bootstrap/runtime 和无 UI 场景复用。
 
 #### `auto_launch.rs` — 开机自启动
 
@@ -38,12 +38,11 @@
 - 返回 `LogInit`（含日志路径，供 Debug Tab 使用）
 - **`read_log_tail(path, max_lines)`** — 读取日志文件末尾 N 行（用于 Issue 上报）
 
-#### `notification.rs` — 系统通知 + 配额预警
+#### `notification.rs` — 系统通知发送
 
-- **`QuotaAlertTracker`** — 配额预警状态机，跟踪各 Provider 的配额变化
-- **`QuotaAlert`** — 预警事件枚举（LowQuota / Exhausted / Recovered）
 - **`send_system_notification()`** — macOS 原生通知（UNUserNotificationCenter）
 - **`send_plain_notification()`** — 简单文本通知
+- 接收 `application::QuotaAlert` 领域事件，并适配到各 OS 通知实现
 
 #### `paths.rs` — 配置路径解析
 
@@ -63,7 +62,7 @@
 
 ## 约束
 
-- 纯逻辑模块（`auto_launch`、`notification`、`system`）**不可导入 `gpui`**
-- `notification.rs` 中的 `QuotaAlertTracker` 是纯状态机，可在测试中验证
+- 平台模块（`auto_launch`、`notification`、`system`）**不可导入 `gpui`**
+- `notification.rs` 只负责 OS 通知发送，不承载 application 业务状态机
 - macOS 特定代码使用 `#[cfg(target_os = "macos")]` 守卫
 - Linux 特定代码使用 `#[cfg(target_os = "linux")]` 守卫

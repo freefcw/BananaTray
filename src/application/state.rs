@@ -1,11 +1,11 @@
 //! Pure-logic application state, free of GPUI dependency.
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
+use super::quota_alert::QuotaAlertTracker;
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
     ProviderStatus, StatusLevel,
 };
-use crate::platform::notification::QuotaAlertTracker;
 
 // ============================================================================
 // Provider 面板可见性规则（单一真理来源，供 selector 和 popup_height 共用）

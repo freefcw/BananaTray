@@ -47,6 +47,7 @@ src/
     reducer.rs       — Pure state transitions (reducer_tests.rs separated)
     action.rs        — Action enum definitions
     effect.rs        — Side-effect declarations
+    quota_alert.rs   — Quota alert state machine + alert domain events
     selectors/       — ViewModel derivation from AppSession
   models/            — Core data types (GPUI-free)
     newapi.rs        — NewAPI pure data types + ID computation (NewApiConfig, NewApiEditData)
@@ -62,7 +63,7 @@ src/
     assets.rs        — GPUI asset loading (multi-platform path resolution)
     auto_launch.rs   — Launch at login (macOS SMAppService / Linux XDG)
     logging.rs       — Log system init (fern + panic hook)
-    notification.rs  — System notifications + quota alert state machine
+    notification.rs  — System notification delivery (OS adapter)
     paths.rs         — Canonical config/custom-provider paths + macOS legacy fallback
     system.rs          — Platform utils (open URL, clipboard, system info)
     single_instance.rs — Single instance detection (IPC local socket)

@@ -1,8 +1,8 @@
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, ContextEffect, DebugNotificationKind,
+    reduce, AppAction, AppEffect, CommonEffect, ContextEffect, DebugNotificationKind, QuotaAlert,
 };
 use crate::models::ConnectionStatus;
-use crate::platform::notification::{send_system_notification, QuotaAlert};
+use crate::platform::notification::send_system_notification;
 use crate::refresh::RefreshRequest;
 use crate::ui::{persist_settings, schedule_open_settings_window, AppState};
 use gpui::{App, Context, Window};

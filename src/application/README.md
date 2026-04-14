@@ -44,6 +44,12 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `From<ContextEffect>` / `From<CommonEffect>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）
 
+### `quota_alert.rs` — 配额告警领域状态机
+
+- **`QuotaAlertTracker`** — 追踪各 Provider 的 quota 状态转换，产出告警事件
+- **`QuotaAlert`** — 告警领域事件（LowQuota / Exhausted / Recovered）
+- 该模块只表达“应该发什么告警”，不关心 OS 通知如何发送
+
 ### `selectors/` — 视图状态选择器
 
 从 `AppSession` 中派生 ViewModel，供 UI 渲染使用：
@@ -71,6 +77,7 @@ User Event / Background Event
 
 - **不可导入 `gpui`** — 这是最核心的测试边界。所有类型必须是纯 Rust。
 - **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`。
+- **不可导入 `platform/notification` 承载业务规则** — quota 告警状态机留在 application，platform 只负责通知发送适配。
 - Reducer 必须是**纯函数**（给定 state + action → 确定的 effects），便于测试。
 - 部分 CommonEffect handler（如 `LoadNewApiConfig`、`StartDebugRefresh`）会直接修改 `AppSession` 状态，这是异步 I/O 回填的必要 tradeoff。
 - Effect handler 不得在执行期间再次调用 `dispatch_*()`（重入保护）。

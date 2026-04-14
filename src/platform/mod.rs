@@ -6,7 +6,7 @@
 //! - `paths` — 配置目录与自定义 Provider 路径解析
 //! - `auto_launch` — 开机自启动（macOS SMAppService / Linux XDG autostart）
 //! - `logging` — 日志系统初始化（fern + panic hook）
-//! - `notification` — 系统通知 + 配额预警状态机
+//! - `notification` — 系统通知发送（OS adapter）
 //! - `single_instance` — 单实例检测（IPC local socket）
 //! - `system` — 系统工具（打开 URL、剪贴板、暗色模式检测、系统信息）
 
@@ -21,8 +21,8 @@ pub(crate) mod single_instance;
 #[cfg(feature = "app")]
 pub(crate) use assets::Assets;
 
-// --- 纯逻辑 / 平台原生模块 ---
-// 被 application::state、application 等 GPUI-free 模块引用，必须始终可编译
+// --- 始终编译的平台模块 ---
+// 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
 pub mod auto_launch;
 pub(crate) mod logging;
 pub mod notification;
