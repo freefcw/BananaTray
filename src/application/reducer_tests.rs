@@ -646,25 +646,22 @@ fn submit_newapi_produces_save_and_notification_effects() {
     // 状态：表单已关闭
     assert!(!session.settings_ui.adding_newapi);
 
-    // Effect: SaveCustomProviderYaml（检查文件名和内容包含关键字段）
+    // Effect: SaveNewApiProvider（检查 config 包含关键字段 + 新增模式）
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { filename, yaml_content })
-            if filename.starts_with("newapi-")
-            && filename.ends_with(".yaml")
-            && yaml_content.contains("Test Site")
-            && yaml_content.contains("https://api.example.com")
-            && yaml_content.contains("session=tok_123")
-            && yaml_content.contains("/api/user/self")
-            && yaml_content.contains("New-Api-User")
-            && yaml_content.contains("42")
-            && yaml_content.contains("1000000")
+        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, is_editing, .. })
+            if config.display_name == "Test Site"
+            && config.base_url == "https://api.example.com"
+            && config.cookie == "session=tok_123"
+            && config.user_id == Some("42".to_string())
+            && config.divisor == Some(1_000_000.0)
+            && !is_editing
         )
     }));
 
-    // Effect: SendPlainNotification（通知用户重启）
-    assert!(has_effect(&effects, |e| matches!(
+    // PersistSettings 和 SendPlainNotification 已移至 runtime 成功路径
+    assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
+        AppEffect::Common(CommonEffect::PersistSettings)
     )));
 
     assert!(has_render(&effects));
@@ -700,8 +697,8 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
         .contains(&"relay-example-com:newapi".to_string()));
     // 设置页选中新 Provider
     assert_eq!(session.settings_ui.selected_provider, expected_id);
-    // 产出 PersistSettings
-    assert!(has_effect(&effects, |e| matches!(
+    // PersistSettings 已移至 runtime 成功路径，reducer 不再发射
+    assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::PersistSettings)
     )));
@@ -709,7 +706,7 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
 
 #[test]
 fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
-    use crate::providers::custom::generator::NewApiEditData;
+    use crate::models::NewApiEditData;
 
     let mut session = make_session();
     let custom_id = ProviderId::Custom("old-site-com:newapi".to_string());
@@ -800,9 +797,10 @@ fn submit_newapi_without_optional_fields_uses_defaults() {
     );
 
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { yaml_content, .. })
-            if yaml_content.contains("/api/user/self")
-            && yaml_content.contains("divisor: 500000")
+        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, is_editing, .. })
+            if config.base_url == "https://minimal.io"
+            && config.divisor.is_none()
+            && !is_editing
         )
     }));
 }
@@ -823,7 +821,7 @@ fn select_provider_resets_adding_newapi() {
 
 #[test]
 fn submit_newapi_in_edit_mode_uses_original_filename() {
-    use crate::providers::custom::generator::NewApiEditData;
+    use crate::models::NewApiEditData;
 
     let mut session = make_session();
     session.settings_ui.adding_newapi = true;
@@ -851,17 +849,18 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     assert!(!session.settings_ui.adding_newapi);
     assert!(session.settings_ui.editing_newapi.is_none());
 
-    // Effect: 使用原始文件名而非重新生成
+    // Effect: 使用原始文件名 + 编辑模式标志
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveCustomProviderYaml { filename, yaml_content })
-            if filename == "original-file.yaml"
-            && yaml_content.contains("Updated Name")
-            && yaml_content.contains("new_cookie")
+        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, original_filename, is_editing })
+            if *original_filename == Some("original-file.yaml".to_string())
+            && config.display_name == "Updated Name"
+            && config.cookie == "new_cookie"
+            && *is_editing
         )
     }));
 
-    // 通知应包含编辑相关内容
-    assert!(has_effect(&effects, |e| matches!(
+    // PersistSettings 和通知已移至 runtime 成功路径
+    assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::SendPlainNotification { .. })
     )));
@@ -869,7 +868,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
 
 #[test]
 fn cancel_add_newapi_clears_editing_state() {
-    use crate::providers::custom::generator::NewApiEditData;
+    use crate::models::NewApiEditData;
 
     let mut session = make_session();
     session.settings_ui.adding_newapi = true;
@@ -891,7 +890,7 @@ fn cancel_add_newapi_clears_editing_state() {
 
 #[test]
 fn enter_add_newapi_clears_stale_editing_state() {
-    use crate::providers::custom::generator::NewApiEditData;
+    use crate::models::NewApiEditData;
 
     let mut session = make_session();
     // 模拟残留的编辑状态
@@ -1343,42 +1342,54 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
 // ── DeleteNewApi ──────────────────────────────────────────────────────────
 
 #[test]
-fn delete_newapi_produces_delete_effect_with_correct_filename() {
+fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
     let mut session = make_session();
     let id = ProviderId::Custom("my-api-example-com:newapi".to_string());
 
-    let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
+    let effects = reduce(
+        &mut session,
+        AppAction::DeleteNewApi {
+            provider_id: id.clone(),
+        },
+    );
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { filename })
-            if filename == "newapi-my-api-example-com.yaml"
+        AppEffect::Common(CommonEffect::DeleteNewApiProvider { provider_id })
+            if *provider_id == id
     )));
 }
 
 #[test]
-fn delete_newapi_ignores_non_newapi_custom_id() {
+fn delete_newapi_emits_effect_for_any_provider_id() {
+    // 文件名推导和 `:newapi` 检查已移至 runtime，reducer 统一发射
     let mut session = make_session();
     let id = ProviderId::Custom("some-other-provider:cli".to_string());
 
-    let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
+    let effects = reduce(
+        &mut session,
+        AppAction::DeleteNewApi {
+            provider_id: id.clone(),
+        },
+    );
 
-    assert!(!has_effect(&effects, |e| matches!(
+    assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { .. })
+        AppEffect::Common(CommonEffect::DeleteNewApiProvider { provider_id })
+            if *provider_id == id
     )));
 }
 
 #[test]
-fn delete_newapi_ignores_builtin_provider_id() {
+fn delete_newapi_emits_effect_for_builtin_provider() {
     let mut session = make_session();
     let id = ProviderId::BuiltIn(ProviderKind::Claude);
 
     let effects = reduce(&mut session, AppAction::DeleteNewApi { provider_id: id });
 
-    assert!(!has_effect(&effects, |e| matches!(
+    assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteCustomProviderYaml { .. })
+        AppEffect::Common(CommonEffect::DeleteNewApiProvider { .. })
     )));
 }
 

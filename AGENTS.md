@@ -47,6 +47,7 @@ src/
     effect.rs        — Side-effect declarations
     selectors/       — ViewModel derivation from AppSession
   models/            — Core data types (GPUI-free)
+    newapi.rs        — NewAPI pure data types + ID computation (NewApiConfig, NewApiEditData)
     settings/        — User preferences (4 sub-structs + migration + domain methods)
     test_helpers.rs  — Test fixture constructors for ProviderStatus, QuotaInfo, etc.
   icons/             — SVG icon assets (provider + UI icons)

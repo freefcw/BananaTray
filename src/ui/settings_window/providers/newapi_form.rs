@@ -10,7 +10,7 @@
 
 use super::super::{NewApiFormInputs, SettingsView};
 use crate::application::AppAction;
-use crate::providers::custom::generator::NewApiEditData;
+use crate::models::NewApiEditData;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{register_input_actions, render_svg_icon};

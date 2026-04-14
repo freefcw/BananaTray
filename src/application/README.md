@@ -32,7 +32,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer，将 action 转换为状态变更 + side effects
 - **`build_config_sync_request()`** — 构建配置同步请求
 - 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `process_refresh_outcome()` / `cleanup_dangling_refs()`
-- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时预注册 ID 到 `enabled_providers` + `sidebar_providers`；`ProvidersReloaded` 热重载时自动启用首次出现的自定义 Provider
+- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `SaveNewApiProvider` effect；`EditNewApi` 的磁盘读取委托给 `LoadNewApiConfig` effect
 
 测试文件：`reducer_tests.rs`（1100+ 行，覆盖所有 action 分支）
 
@@ -40,7 +40,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`AppEffect`** — 两级副作用枚举（`Context(ContextEffect)` / `Common(CommonEffect)`）
   - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / QuitApp）
-  - `CommonEffect` — GPUI-free 的 effect（PersistSettings / SendRefreshRequest / 通知 / 文件操作等）
+  - `CommonEffect` — GPUI-free 的 effect（PersistSettings / SendRefreshRequest / 通知 / SaveNewApiProvider / DeleteNewApiProvider / LoadNewApiConfig 等）
   - `From<ContextEffect>` / `From<CommonEffect>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）
 
@@ -70,5 +70,7 @@ User Event / Background Event
 ## 约束
 
 - **不可导入 `gpui`** — 这是最核心的测试边界。所有类型必须是纯 Rust。
+- **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`。
 - Reducer 必须是**纯函数**（给定 state + action → 确定的 effects），便于测试。
+- 部分 CommonEffect handler（如 `LoadNewApiConfig`、`StartDebugRefresh`）会直接修改 `AppSession` 状态，这是异步 I/O 回填的必要 tradeoff。
 - Effect handler 不得在执行期间再次调用 `dispatch_*()`（重入保护）。

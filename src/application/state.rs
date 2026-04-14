@@ -2,10 +2,10 @@
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
 use crate::models::{
-    AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, ProviderStatus, StatusLevel,
+    AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
+    ProviderStatus, StatusLevel,
 };
 use crate::platform::notification::QuotaAlertTracker;
-use crate::providers::custom::generator::NewApiEditData;
 
 // ============================================================================
 // Provider 面板可见性规则（单一真理来源，供 selector 和 popup_height 共用）

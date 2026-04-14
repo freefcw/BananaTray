@@ -77,10 +77,7 @@ impl NewApiFormInputs {
     }
 
     /// 编辑模式：用已有数据预填表单
-    pub fn new_edit(
-        data: &crate::providers::custom::generator::NewApiEditData,
-        cx: &mut Context<SettingsView>,
-    ) -> Self {
+    pub fn new_edit(data: &crate::models::NewApiEditData, cx: &mut Context<SettingsView>) -> Self {
         Self {
             name: cx.new(|cx| {
                 let mut s = InputState::new(cx);

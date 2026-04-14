@@ -1,4 +1,5 @@
 mod layout;
+pub mod newapi;
 mod provider;
 mod quota;
 mod settings;
@@ -10,6 +11,7 @@ pub use layout::{
     compute_popup_height_detailed, compute_popup_height_for_overview,
     compute_popup_height_for_quotas, PopupLayout,
 };
+pub use newapi::{newapi_provider_id, NewApiConfig, NewApiEditData};
 pub use provider::{NavTab, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata};
 pub use quota::{
     ConnectionStatus, ErrorKind, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel,

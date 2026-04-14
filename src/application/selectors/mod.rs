@@ -10,8 +10,7 @@ mod tray;
 // ============================================================================
 
 use super::state::HeaderStatusKind;
-use crate::models::{ProviderId, QuotaDisplayMode, QuotaInfo, StatusLevel};
-use crate::providers::custom::generator::NewApiEditData;
+use crate::models::{NewApiEditData, ProviderId, QuotaDisplayMode, QuotaInfo, StatusLevel};
 
 // ── Tray 弹出窗口 ──
 
