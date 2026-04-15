@@ -73,6 +73,8 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 | `format.rs` | 共享格式化函数（时间、百分比、quota 文本） |
 | `*_tests.rs` | 各 selector 的单元测试 |
 
+`application/mod.rs` 只 re-export 当前 UI/运行时直接依赖的 selector API，避免把仅供 selector 内部或测试使用的类型持续暴露在根模块 facade 上。
+
 ## 数据流
 
 ```

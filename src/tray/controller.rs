@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! TrayController — 托盘弹窗窗口生命周期管理
 //!
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
@@ -16,12 +15,17 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// lib target 不直接构造托盘控制器，但 bin 启动路径会使用它；
+/// 收窄到 item 级 suppress，避免继续屏蔽本文件其它未来死代码。
+#[allow(dead_code)]
 /// 窗口管理器：持有全局窗口句柄，纯数据，不含任何锁操作
 pub(crate) struct TrayController {
     window: Rc<Cell<Option<WindowHandle<crate::ui::AppView>>>>,
     pub(crate) state: Rc<RefCell<AppState>>,
 }
 
+/// lib target 不直接调用这些方法，但 bin 启动路径与托盘事件会完整覆盖。
+#[allow(dead_code)]
 impl TrayController {
     pub(crate) fn new(
         refresh_tx: smol::channel::Sender<crate::refresh::RefreshRequest>,

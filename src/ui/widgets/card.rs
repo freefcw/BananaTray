@@ -6,6 +6,7 @@ use gpui::{
 };
 
 /// macOS grouped-style 圆角卡片
+/// 预留给后续卡片化布局复用，当前仓库暂无直接调用。
 #[allow(dead_code)]
 pub(crate) fn render_card(theme: &Theme) -> Div {
     div()
@@ -16,6 +17,7 @@ pub(crate) fn render_card(theme: &Theme) -> Div {
 }
 
 /// 卡片内部水平分隔线（左缩进）
+/// 预留给后续卡片化布局复用，当前仓库暂无直接调用。
 #[allow(dead_code)]
 pub(crate) fn render_card_separator(theme: &Theme) -> Div {
     div()
@@ -26,6 +28,7 @@ pub(crate) fn render_card_separator(theme: &Theme) -> Div {
 }
 
 /// 小号段落标签（如 "SYSTEM"、"USAGE"），12px muted
+/// 预留给未来设置/详情分组标题复用，当前仓库暂无直接调用。
 #[allow(dead_code)]
 pub(crate) fn render_section_label(title: &str, theme: &Theme) -> Div {
     div()
@@ -49,6 +52,7 @@ pub(crate) fn render_detail_section_title(title: &str, theme: &Theme) -> Div {
 /// 设置项行：checkbox + 标题 + 描述（不含事件处理，调用方通过 .on_mouse_down 添加）
 /// Render a checkbox row with title and description.
 /// Currently unused but kept for potential future use.
+/// 预留给未来表单设置项复用，避免把交互逻辑绑死在具体页面里。
 #[allow(dead_code)]
 pub(crate) fn render_checkbox_row(
     title: &str,
@@ -86,6 +90,7 @@ pub(crate) fn render_checkbox_row(
 
 /// Render a row with a toggle switch on the right.
 /// Only the switch is clickable, not the entire row.
+/// 预留给未来设置面板复用，当前暂无直接调用。
 #[allow(dead_code)]
 pub(crate) fn render_switch_row<F>(
     title: &str,
@@ -130,6 +135,7 @@ where
 }
 
 /// 键值信息行
+/// 预留给未来紧凑信息表格复用，当前仓库暂无直接调用。
 #[allow(dead_code)]
 pub(crate) fn render_info_row(label: &str, value: &str, theme: &Theme) -> Div {
     div()

@@ -246,8 +246,7 @@ pub enum SettingsProviderUsageViewState {
 // ============================================================================
 
 pub use debug::{
-    build_debug_info_text, debug_tab_view_state, CapturedLogEntry, DebugConsoleViewState,
-    DebugContext, DebugTabViewState, LogLevelColor,
+    build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
 };
 #[allow(unused_imports)] // 函数已就绪，待后续 UI 接入后启用
 pub use format::{
