@@ -30,9 +30,11 @@ Provider abstraction layer and all 14 AI provider implementations.
 
 ### `manager.rs` — ProviderManager
 
-Aggregation registry holding all provider implementations:
+Aggregation registry holding all provider implementations. Maintains exactly two indexes matching `ProviderId`'s two variants: `providers_by_kind` (built-in) and `custom_providers_by_id` (custom).
+
 - `register()` — adds a provider (deduplicates by id and kind)
-- `metadata_for(kind)` — returns metadata with fallback
+- `provider_for_id(id)` — unified lookup by `ProviderId`
+- `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
 

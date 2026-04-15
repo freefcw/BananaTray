@@ -5,17 +5,16 @@ use crate::models::{
 };
 use anyhow::Result;
 use log::{debug, info, warn};
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
+///
+/// 仅维护两个索引，与 `ProviderId` 的两个变体一一对应：
+/// - 内置 Provider 按 `ProviderKind` 查找
+/// - 自定义 Provider 按字符串 ID 查找
 pub struct ProviderManager {
-    providers: Vec<Arc<dyn AiProvider>>,
     providers_by_kind: HashMap<ProviderKind, Arc<dyn AiProvider>>,
-    metadata_by_kind: HashMap<ProviderKind, ProviderMetadata>,
-    provider_ids: HashSet<Cow<'static, str>>,
-    /// 自定义 Provider（按 ID 索引）
     custom_providers_by_id: HashMap<String, Arc<dyn AiProvider>>,
 }
 
@@ -26,14 +25,15 @@ impl Default for ProviderManager {
 }
 
 impl ProviderManager {
-    pub fn new() -> Self {
-        let mut manager = Self {
-            providers: Vec::new(),
+    fn empty() -> Self {
+        Self {
             providers_by_kind: HashMap::new(),
-            metadata_by_kind: HashMap::new(),
-            provider_ids: HashSet::new(),
             custom_providers_by_id: HashMap::new(),
-        };
+        }
+    }
+
+    pub fn new() -> Self {
+        let mut manager = Self::empty();
 
         // 注册所有内置 Provider
         super::register_all(&mut manager);
@@ -48,7 +48,8 @@ impl ProviderManager {
         let descriptor = provider.descriptor();
         let provider_id = descriptor.id.clone();
         let kind = descriptor.kind();
-        if self.provider_ids.contains(&provider_id) {
+
+        if self.has_registered_id(provider_id.as_ref()) {
             warn!(
                 target: "providers",
                 "provider id already registered, skipping duplicate: {}",
@@ -66,19 +67,23 @@ impl ProviderManager {
             return;
         }
         info!(target: "providers", "registering provider: {} ({:?})", provider_id, kind);
-        let metadata = descriptor.metadata;
-        debug_assert_eq!(metadata.kind, kind);
+        debug_assert_eq!(descriptor.metadata.kind, kind);
 
-        self.provider_ids.insert(provider_id.clone());
         if kind == ProviderKind::Custom {
-            // Custom provider 按 ID 索引，不写入 kind 维度的映射（避免互相覆写）
             self.custom_providers_by_id
-                .insert(provider_id.to_string(), provider.clone());
+                .insert(provider_id.to_string(), provider);
         } else {
-            self.metadata_by_kind.insert(kind, metadata);
-            self.providers_by_kind.insert(kind, provider.clone());
+            self.providers_by_kind.insert(kind, provider);
         }
-        self.providers.push(provider);
+    }
+
+    /// 检查某个 provider ID 是否已被注册
+    fn has_registered_id(&self, id: &str) -> bool {
+        self.custom_providers_by_id.contains_key(id)
+            || self
+                .providers_by_kind
+                .values()
+                .any(|p| p.descriptor().id.as_ref() == id)
     }
 
     fn load_custom_providers(&mut self) {
@@ -104,9 +109,8 @@ impl ProviderManager {
     }
 
     pub fn metadata_for(&self, kind: ProviderKind) -> ProviderMetadata {
-        self.metadata_by_kind
-            .get(&kind)
-            .cloned()
+        self.provider_for_kind(kind)
+            .map(|p| p.descriptor().metadata)
             .unwrap_or_else(|| ProviderMetadata::fallback(kind))
     }
 
@@ -136,6 +140,14 @@ impl ProviderManager {
         statuses
     }
 
+    /// 按 ProviderId 统一查找 Provider
+    fn provider_for_id(&self, id: &ProviderId) -> Option<&(dyn AiProvider + '_)> {
+        match id {
+            ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
+            ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
+        }
+    }
+
     /// 根据 ProviderId + capability 解析 TokenInput 面板的运行时展示状态。
     ///
     /// 优先走 provider 自定义解析；若 provider 未注册或未覆写，则回落到通用 credential 存储。
@@ -145,11 +157,7 @@ impl ProviderManager {
         capability: TokenInputCapability,
         settings: &AppSettings,
     ) -> TokenInputState {
-        let provider = match id {
-            ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
-            ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
-        };
-        provider
+        self.provider_for_id(id)
             .and_then(|provider| provider.resolve_token_input_state(settings))
             .unwrap_or_else(|| {
                 super::default_token_input_state(settings, capability.credential_key)
@@ -159,11 +167,7 @@ impl ProviderManager {
     /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
     pub async fn refresh_by_id(&self, id: &ProviderId) -> Result<crate::models::RefreshData> {
         debug!(target: "providers", "manager: refreshing provider {}", id);
-        let provider = match id {
-            ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
-            ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
-        };
-        match provider {
+        match self.provider_for_id(id) {
             Some(p) => {
                 let display_label = Self::display_label_for(id, p);
                 Self::execute_refresh(p, &display_label).await
@@ -211,7 +215,6 @@ mod tests {
     use anyhow::Result;
     use async_trait::async_trait;
     use std::borrow::Cow;
-    use std::collections::{HashMap, HashSet};
 
     struct TestProvider {
         descriptor: crate::models::ProviderDescriptor,
@@ -278,14 +281,10 @@ mod tests {
     fn test_all_provider_kinds_have_implementation() {
         let manager = ProviderManager::new();
         for kind in ProviderKind::all() {
-            let found = manager
-                .providers
-                .iter()
-                .any(|p| p.descriptor().kind() == *kind);
             assert!(
-                found,
+                manager.providers_by_kind.contains_key(kind),
                 "ProviderKind::{:?} is defined in models but NOT registered in ProviderManager.
-                Please add it to register_providers! macro in src/providers/mod.rs",
+                 Please add it to register_providers! macro in src/providers/mod.rs",
                 kind
             );
         }
@@ -295,22 +294,28 @@ mod tests {
     fn test_no_duplicate_provider_ids() {
         let manager = ProviderManager::new();
         let mut ids = std::collections::HashSet::new();
-        for p in &manager.providers {
+        for p in manager.providers_by_kind.values() {
             let id = p.descriptor().id;
             assert!(ids.insert(id.clone()), "Duplicate provider id: {}", id);
+        }
+        for id in manager.custom_providers_by_id.keys() {
+            assert!(
+                ids.insert(id.clone().into()),
+                "Duplicate provider id: {}",
+                id
+            );
         }
     }
 
     #[test]
     fn test_no_duplicate_builtin_provider_kinds() {
         let manager = ProviderManager::new();
-        let mut kinds = std::collections::HashSet::new();
-        for provider in &manager.providers {
-            let kind = provider.descriptor().kind();
-            if kind != ProviderKind::Custom {
-                assert!(kinds.insert(kind), "Duplicate provider kind: {:?}", kind);
-            }
-        }
+        // HashMap 的 key 天然保证唯一性，只需检查数量一致
+        assert_eq!(
+            manager.providers_by_kind.len(),
+            ProviderKind::all().len(),
+            "providers_by_kind count should match ProviderKind::all()"
+        );
     }
 
     #[test]
@@ -361,13 +366,7 @@ mod tests {
 
     #[test]
     fn test_resolve_token_input_state_routes_to_provider_override() {
-        let mut manager = ProviderManager {
-            providers: Vec::new(),
-            providers_by_kind: HashMap::new(),
-            metadata_by_kind: HashMap::new(),
-            provider_ids: HashSet::new(),
-            custom_providers_by_id: HashMap::new(),
-        };
+        let mut manager = ProviderManager::empty();
         manager.register(Arc::new(TestProvider {
             descriptor: crate::models::ProviderDescriptor {
                 id: Cow::Borrowed("amp"),
@@ -403,13 +402,7 @@ mod tests {
 
     #[test]
     fn test_resolve_token_input_state_falls_back_to_default_credential_store() {
-        let mut manager = ProviderManager {
-            providers: Vec::new(),
-            providers_by_kind: HashMap::new(),
-            metadata_by_kind: HashMap::new(),
-            provider_ids: HashSet::new(),
-            custom_providers_by_id: HashMap::new(),
-        };
+        let mut manager = ProviderManager::empty();
         manager.register(Arc::new(DefaultTokenProvider {
             descriptor: crate::models::ProviderDescriptor {
                 id: Cow::Borrowed("amp"),
@@ -448,5 +441,71 @@ mod tests {
         assert_eq!(state.edit_mode, TokenEditMode::EditStored);
         assert_eq!(state.source_i18n_key, None);
         assert_eq!(state.masked.as_deref(), Some("abcd•••wxyz"));
+    }
+
+    fn make_test_provider(id: &'static str, kind: ProviderKind) -> Arc<dyn AiProvider> {
+        Arc::new(TestProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed(id),
+                metadata: ProviderMetadata {
+                    kind,
+                    display_name: id.to_string(),
+                    brand_name: id.to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        })
+    }
+
+    #[test]
+    fn test_register_rejects_duplicate_id() {
+        let mut manager = ProviderManager::empty();
+        manager.register(make_test_provider("amp", ProviderKind::Amp));
+        // 同 ID 不同 kind，应被拒绝
+        manager.register(make_test_provider("amp", ProviderKind::Cursor));
+        assert_eq!(manager.providers_by_kind.len(), 1);
+        assert!(manager.providers_by_kind.contains_key(&ProviderKind::Amp));
+    }
+
+    #[test]
+    fn test_register_rejects_duplicate_builtin_kind() {
+        let mut manager = ProviderManager::empty();
+        manager.register(make_test_provider("amp", ProviderKind::Amp));
+        // 同 kind 不同 ID，应被拒绝
+        manager.register(make_test_provider("amp2", ProviderKind::Amp));
+        assert_eq!(manager.providers_by_kind.len(), 1);
+    }
+
+    #[test]
+    fn test_custom_provider_register_and_lookup() {
+        let mut manager = ProviderManager::empty();
+        manager.register(make_test_provider("my:custom", ProviderKind::Custom));
+
+        assert!(manager.custom_provider_by_id("my:custom").is_some());
+        assert!(manager.custom_provider_by_id("nonexistent").is_none());
+
+        // provider_for_id 统一查找也能找到
+        let found = manager.provider_for_id(&ProviderId::Custom("my:custom".to_string()));
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn test_metadata_for_fallback_when_kind_not_registered() {
+        let manager = ProviderManager::empty();
+        let meta = manager.metadata_for(ProviderKind::Amp);
+        // 未注册时应返回 fallback
+        assert_eq!(meta.kind, ProviderKind::Amp);
+    }
+
+    #[test]
+    fn test_multiple_custom_providers_coexist() {
+        let mut manager = ProviderManager::empty();
+        manager.register(make_test_provider("custom:a", ProviderKind::Custom));
+        manager.register(make_test_provider("custom:b", ProviderKind::Custom));
+        assert_eq!(manager.custom_providers_by_id.len(), 2);
+        assert_eq!(manager.custom_provider_ids().len(), 2);
     }
 }
