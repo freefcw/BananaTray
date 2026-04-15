@@ -123,6 +123,22 @@ impl RefreshCoordinator {
     // 刷新执行
     // ========================================================================
 
+    /// Run a single provider refresh on the blocking thread pool, catching panics.
+    /// Panics are converted to `RefreshResult::Failed` so in-flight state is always cleared.
+    async fn run_refresh(mgr: Arc<ProviderManager>, id: ProviderId) -> RefreshOutcome {
+        smol::unblock(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                smol::block_on(mgr.refresh_by_id(&id))
+            }))
+            .unwrap_or_else(|_| {
+                log::error!(target: "refresh", "provider {} panicked during refresh", id);
+                Err(anyhow::anyhow!("provider panicked"))
+            });
+            RefreshCoordinator::build_outcome(id, result)
+        })
+        .await
+    }
+
     /// Refresh a single provider (used by RefreshOne).
     async fn execute_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
         if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
@@ -131,11 +147,8 @@ impl RefreshCoordinator {
         }
 
         self.begin_refresh(&id).await;
-
-        let mgr = self.manager.clone();
-        let id_clone = id.clone();
-        let result = smol::unblock(move || smol::block_on(mgr.refresh_by_id(&id_clone))).await;
-        self.record_outcome(Self::build_outcome(id, result)).await;
+        let outcome = Self::run_refresh(self.manager.clone(), id).await;
+        self.record_outcome(outcome).await;
     }
 
     /// Refresh multiple providers concurrently.
@@ -165,13 +178,7 @@ impl RefreshCoordinator {
             let mgr = self.manager.clone();
             let tx = result_tx.clone();
             smol::spawn(async move {
-                let outcome = smol::unblock(move || {
-                    let result = smol::block_on(mgr.refresh_by_id(&id));
-                    RefreshCoordinator::build_outcome(id, result)
-                })
-                .await;
-
-                let _ = tx.send(outcome).await;
+                let _ = tx.send(Self::run_refresh(mgr, id).await).await;
             })
             .detach();
         }
