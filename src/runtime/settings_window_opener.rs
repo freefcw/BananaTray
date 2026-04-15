@@ -134,12 +134,19 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
         }
 
         if !should_reopen {
-            handle
+            let ok = handle
                 .update(cx, |_, window, _| {
                     window.show_window();
                     window.activate_window();
                 })
-                .is_ok()
+                .is_ok();
+            if !ok {
+                info!(target: "settings", "existing handle is stale, clearing");
+                SETTINGS_WINDOW.with(|slot| {
+                    *slot.borrow_mut() = None;
+                });
+            }
+            ok
         } else {
             false
         }
@@ -149,12 +156,27 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
 
     if activated_existing {
         cx.activate(true);
+        info!(target: "settings", "activated existing settings window");
         return;
     }
 
+    // 确保旧 slot 已清空（stale handle 或异常关闭场景）
+    SETTINGS_WINDOW.with(|slot| {
+        *slot.borrow_mut() = None;
+    });
+
     let settings_state = state.clone();
-    let window_size = size(px(960.0), px(720.0));
-    let origin = point(px(120.0), px(120.0));
+    let window_size = size(px(600.0), px(640.0));
+    // 计算显示器居中位置，避免多屏场景下 Bounds::centered() 全局坐标偏移
+    let display_bounds = target_display_id
+        .and_then(|id| cx.find_display(id))
+        .or_else(|| cx.primary_display())
+        .map(|d| d.bounds().size)
+        .unwrap_or(window_size);
+    let origin = point(
+        (display_bounds.width - window_size.width) / 2.0,
+        (display_bounds.height - window_size.height) / 2.0,
+    );
     let window_bounds = WindowBounds::Windowed(Bounds {
         origin,
         size: window_size,
@@ -168,7 +190,7 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
     let result = cx.open_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
-            window_min_size: Some(size(px(480.0), px(520.0))),
+            window_min_size: Some(size(px(460.0), px(520.0))),
             titlebar: None,
             kind: WindowKind::Normal,
             display_id: target_display_id,
