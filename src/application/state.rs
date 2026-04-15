@@ -202,7 +202,7 @@ impl AppSession {
         }
     }
 
-    pub fn header_status_text(&self) -> (String, HeaderStatusKind) {
+    pub fn header_status_text(&self) -> (HeaderStatusKind, Option<u64>) {
         compute_header_status(&self.nav, &self.provider_store)
     }
 
@@ -394,40 +394,39 @@ pub fn compute_popup_height(
     crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
 }
 
-/// 计算当前头部应该显示的内容
-/// < 1m: "● Synced", 1~59m: "● Xm ago", ≥ 1h: "● Xh ago"
-/// Refreshing: "● Refreshing", 无数据: "● Offline"
+/// 计算当前头部状态分类和可选的经过秒数
+///
+/// 返回 `(HeaderStatusKind, Option<elapsed_secs>)`，不做任何文本格式化。
+/// 文本翻译和展示格式由 selector 层（`header_view_state`）负责。
 pub fn compute_header_status(
     nav: &NavigationState,
     store: &ProviderStore,
-) -> (String, HeaderStatusKind) {
+) -> (HeaderStatusKind, Option<u64>) {
     let id = match &nav.active_tab {
         NavTab::Provider(id) => id.clone(),
         NavTab::Settings | NavTab::Overview => nav.last_provider_id.clone(),
     };
 
     let Some(provider) = store.find_by_id(&id) else {
-        return ("Offline".to_string(), HeaderStatusKind::Offline);
+        return (HeaderStatusKind::Offline, None);
     };
 
     if provider.connection == ConnectionStatus::Refreshing {
-        return ("Syncing…".to_string(), HeaderStatusKind::Syncing);
+        return (HeaderStatusKind::Syncing, None);
     }
 
     if let Some(instant) = provider.last_refreshed_instant {
         let secs = instant.elapsed().as_secs();
         if secs < 60 {
-            ("Synced".to_string(), HeaderStatusKind::Synced)
-        } else if secs < 3600 {
-            (format!("{}m ago", secs / 60), HeaderStatusKind::Stale)
+            (HeaderStatusKind::Synced, Some(secs))
         } else {
-            (format!("{}h ago", secs / 3600), HeaderStatusKind::Stale)
+            (HeaderStatusKind::Stale, Some(secs))
         }
     } else {
         match provider.connection {
-            ConnectionStatus::Error => ("Error".to_string(), HeaderStatusKind::Offline),
-            ConnectionStatus::Disconnected => ("Offline".to_string(), HeaderStatusKind::Offline),
-            _ => ("Waiting".to_string(), HeaderStatusKind::Syncing),
+            ConnectionStatus::Error => (HeaderStatusKind::Offline, None),
+            ConnectionStatus::Disconnected => (HeaderStatusKind::Offline, None),
+            _ => (HeaderStatusKind::Syncing, None),
         }
     }
 }

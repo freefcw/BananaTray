@@ -9,7 +9,20 @@ use crate::models::{AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderId
 use rust_i18n::t;
 
 pub fn header_view_state(session: &AppSession) -> HeaderViewState {
-    let (status_text, status_kind) = session.header_status_text();
+    let (status_kind, elapsed) = session.header_status_text();
+    let status_text = match status_kind {
+        HeaderStatusKind::Synced => t!("header.synced").to_string(),
+        HeaderStatusKind::Syncing => t!("header.syncing").to_string(),
+        HeaderStatusKind::Offline => t!("header.offline").to_string(),
+        HeaderStatusKind::Stale => {
+            let secs = elapsed.unwrap_or(0);
+            if secs < 3600 {
+                t!("header.minutes_ago", n = secs / 60).to_string()
+            } else {
+                t!("header.hours_ago", n = secs / 3600).to_string()
+            }
+        }
+    };
     HeaderViewState {
         status_text,
         status_kind,

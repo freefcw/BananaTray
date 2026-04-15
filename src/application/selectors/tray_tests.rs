@@ -649,3 +649,90 @@ fn overview_three_plus_quotas_collected_and_sorted() {
         other => panic!("expected Quota, got {:?}", other),
     }
 }
+
+// ── header_view_state ──────────────────────────────────────
+
+#[test]
+fn header_view_state_synced() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.last_refreshed_instant = Some(std::time::Instant::now());
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Synced);
+    assert_eq!(header.status_text, "Synced");
+}
+
+#[test]
+fn header_view_state_syncing() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Syncing);
+    assert_eq!(header.status_text, "Syncing…");
+}
+
+#[test]
+fn header_view_state_offline() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Offline);
+    assert_eq!(header.status_text, "Offline");
+}
+
+#[test]
+fn header_view_state_stale_minutes() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.last_refreshed_instant =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(300));
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Stale);
+    assert_eq!(header.status_text, "5m ago");
+}
+
+#[test]
+fn header_view_state_stale_hours() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.last_refreshed_instant =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(7200));
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Stale);
+    assert_eq!(header.status_text, "2h ago");
+}
