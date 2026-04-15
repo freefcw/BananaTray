@@ -338,11 +338,8 @@ impl SettingsView {
                     .child(
                         div()
                             .text_size(px(13.0))
-                            .font_weight(if is_active {
-                                FontWeight::SEMIBOLD
-                            } else {
-                                FontWeight::MEDIUM
-                            })
+                            // 保持字重恒定，避免顶部 tab 在切换选中态时发生宽度抖动。
+                            .font_weight(FontWeight::MEDIUM)
                             .text_color(text_color)
                             .whitespace_nowrap()
                             .child(label),
