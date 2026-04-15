@@ -13,7 +13,7 @@ use gpui::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::AppState;
+use crate::runtime::AppState;
 
 use crate::ui::widgets::{render_provider_icon, render_svg_icon};
 use rust_i18n::t;

@@ -37,7 +37,7 @@ src/
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
   models/                — Core data types and settings domain models (GPUI-free)
   ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
-  runtime/               — Effect executor, GPUI/context bridge, NewAPI 文件 I/O 适配
+  runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
   tray/                  — Tray controller, icon management, multi-display positioning

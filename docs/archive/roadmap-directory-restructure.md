@@ -1,5 +1,7 @@
 # 目录重组长期规划
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 > 本文档记录 BananaTray 目录结构的理想目标状态，按优先级分阶段实施。
 > 每次迭代保持可编译、可测试，避免一次性大规模重构。
 

@@ -4,12 +4,10 @@ mod debug_tab;
 mod display_tab;
 mod general_tab;
 mod providers;
-mod window_mgr;
-
-use super::AppState;
 use crate::application::AppAction;
 use crate::application::SettingsTab;
 use crate::runtime;
+use crate::runtime::AppState;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use adabraka_ui::components::input_state::InputState;
@@ -25,7 +23,24 @@ use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub use window_mgr::schedule_open_settings_window;
+#[allow(dead_code)]
+pub(crate) fn build_settings_view(
+    state: Rc<RefCell<AppState>>,
+    cx: &mut App,
+) -> Entity<SettingsView> {
+    cx.new(|cx| SettingsView::new(state, cx))
+}
+
+#[allow(dead_code)]
+pub(crate) fn register_runtime_hooks() {
+    crate::runtime::ui_hooks::register_build_settings_view(build_settings_view);
+    crate::runtime::ui_hooks::register_notify_view(|_state, cx| {
+        crate::ui::views::app_view::notify_current_view(cx);
+    });
+    crate::runtime::ui_hooks::register_clear_popup_view(|_state| {
+        crate::ui::views::app_view::clear_current_view();
+    });
+}
 
 // ============================================================================
 // 设置视图 — 匹配 Lumina Bar 设计稿
@@ -143,6 +158,7 @@ pub(crate) struct SettingsView {
 }
 
 impl SettingsView {
+    #[allow(dead_code)]
     pub(crate) fn new(state: Rc<RefCell<AppState>>, _cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
         Self {

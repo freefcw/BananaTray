@@ -1,5 +1,7 @@
 # Custom Provider（YAML 声明式 Provider）实施计划
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 ## 目标
 
 允许用户通过 YAML 文件声明自定义 Provider，无需编写 Rust 代码即可扩展 BananaTray 支持的 AI 工具监控。

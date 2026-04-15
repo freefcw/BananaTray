@@ -1,26 +1,30 @@
 # src/ui/
 
-GPUI-dependent UI module. Contains all view rendering, window management, and user interaction logic.
+GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets, and view-local state. This module consumes `runtime::AppState` but does not own reducer/effect execution.
 
 > **Build constraint**: This module is behind `cfg(feature = "app")` in `lib.rs`. GPUI proc macros crash during test compilation, so pure logic is extracted to `src/application/state.rs`, `src/application/` (including `selectors/format.rs`), and `models/`.
 
 ## Files
 
-### `bridge.rs` — Runtime State Wrapper
+- `mod.rs` — exports `AppView`; shared state now comes from `runtime::AppState`
 
-- **`AppState`** — runtime composition container:
-  - `session: AppSession` — pure session state from `src/application/state.rs`
-  - `manager: Arc<ProviderManager>` — provider runtime registry used for provider-side settings state resolution
-  - `refresh_tx: Sender<RefreshRequest>` — channel to `RefreshCoordinator`
-  - `view_entity: Option<WeakEntity<AppView>>` — weak ref for UI updates
-  - `log_path: Option<PathBuf>` — log file path for Debug tab
-- `AppState::new(...)` accepts `Arc<ProviderManager>` plus preloaded `AppSettings`; persisted settings are loaded in `src/bootstrap.rs` and injected during startup
-- **`persist_settings()`** — persists `AppSettings`
+## Responsibilities
+
+- render tray popup and settings window views
+- keep GPUI-only state local to views
+- translate user interaction into `AppAction`
+- register UI hooks into `runtime` during bootstrap
+
+## Boundaries
+
+- may depend on `gpui`
+- should read/write shared app state only through `runtime::AppState`
+- should not own settings persistence, refresh scheduling, or reducer execution
+- should keep concrete view handles and weak refs inside `ui`, not inside `AppState`
 
 ### `mod.rs` — Module exports
 
 - **`AppView`** — re-exported from `views/app_view.rs`
-- **`schedule_open_settings_window()`** — re-exported from `settings_window`
 
 ### `views/` — GPUI View Components
 
@@ -33,8 +37,7 @@ GPUI-dependent UI module. Contains all view rendering, window management, and us
 ### `settings_window/` — Full Settings Window
 
 Separate desktop window with tabbed settings UI:
-- `mod.rs` — window shell and tab routing
-- `window_mgr.rs` — window lifecycle management (open/close/focus)
+- `mod.rs` — window shell, tab routing, `SettingsView`, and runtime hook registration
 - `general_tab.rs` — theme, refresh cadence, auto-hide, launch-at-login
 - `providers/` — provider sidebar + detail panel
 - `display_tab.rs` / `debug_tab.rs` / `about_tab.rs` — remaining settings tabs
@@ -55,18 +58,24 @@ Small GPUI components used across views:
 
 ```
 TrayController (tray/controller.rs)
-  └─ AppState (Rc<RefCell<...>>)
+  └─ runtime::AppState (Rc<RefCell<...>>)
        ├─ View reads `state.session` or selector output during render
        ├─ User / background event → `runtime::dispatch_*()`
        │   ├─ `application::reduce(&mut state.session, action)`
        │   └─ execute `AppEffect` in GPUI / App context
        └─ RefreshCoordinator event → `AppAction::RefreshEventReceived` → reducer
+
+bootstrap_ui()
+  └─ ui::settings_window::register_runtime_hooks()
+       ├─ runtime requests popup rerender through UI hook
+       ├─ runtime requests popup-view cleanup through UI hook
+       └─ runtime requests settings-window view construction through UI hook
 ```
 
 ## Constraints
 
 - All files in this module may import from `gpui`. Test-sensitive logic must be in `src/application/state.rs`, `src/application/`, or `models/`.
-- `AppState` is wrapped in `Rc<RefCell<...>>` (single-threaded, GPUI is !Send).
+- `runtime::AppState` is wrapped in `Rc<RefCell<...>>` (single-threaded, GPUI is !Send).
 - Window sizing uses `PopupLayout` constants from `models/layout.rs`.
 - Icon paths are relative to the asset root (e.g. `"src/icons/settings.svg"`).
 - `use gpui::*;` is forbidden in `src/`. CI enforces this via `scripts/check-gpui-imports.sh`.

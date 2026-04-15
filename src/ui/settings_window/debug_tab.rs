@@ -108,7 +108,7 @@ impl SettingsView {
     fn render_log_level_row(
         current: &str,
         theme: &Theme,
-        state: &std::rc::Rc<std::cell::RefCell<crate::ui::AppState>>,
+        state: &std::rc::Rc<std::cell::RefCell<crate::runtime::AppState>>,
     ) -> Div {
         let options: Vec<(String, String)> = LOG_LEVELS
             .iter()

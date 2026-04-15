@@ -1,7 +1,7 @@
 use crate::application::{AppAction, SettingChange};
 use crate::runtime;
+use crate::runtime::AppState;
 use crate::theme::Theme;
-use crate::ui::AppState;
 use gpui::{
     deferred, div, px, App, Deferred, Div, FontWeight, InteractiveElement, MouseButton,
     MouseDownEvent, ParentElement, Styled, Window,

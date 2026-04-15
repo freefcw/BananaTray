@@ -88,9 +88,11 @@ cx.notify(entity_id)
                 → "window not found" ✗
 ```
 
-### 2.3 确定根因
+### 2.3 确定根因（历史版本）
 
-**根因：tray popup 窗口被 `remove_window()` 关闭后，`AppState.view_entity` 仍然持有指向该窗口 view 的 `WeakEntity<AppView>` 引用。**
+**根因（当时）：tray popup 窗口被 `remove_window()` 关闭后，`AppState.view_entity` 仍然持有指向该窗口 view 的 `WeakEntity<AppView>` 引用。**
+
+> 后续重构说明：当前代码已进一步演进，`view_entity` 已从 `AppState` 中移除，popup view 的弱引用改由 `ui` 模块内部持有，并通过 `runtime/ui_hooks.rs` 与 `runtime` 交互。本文档保留的是该问题发生时的分析与修复过程。
 
 时序图：
 
@@ -106,7 +108,7 @@ T+1.2s+ 每个后续刷新事件重复触发 → 连续错误
 
 `WeakEntity` 能成功 `upgrade()` 是因为 entity 本身尚未被 GPUI 的 entity_map 释放（强引用仍存在于 GPUI 内部的 observer 闭包中），但它关联的窗口已从 `windows` slab 中移除。这是 entity 生命周期与窗口生命周期不一致造成的间隙。
 
-### 2.4 受影响的关闭路径
+### 2.4 受影响的关闭路径（历史版本）
 
 排查所有调用 `remove_window()` 的位置：
 
@@ -120,7 +122,7 @@ T+1.2s+ 每个后续刷新事件重复触发 → 连续错误
 
 5 条路径，修复前**无一清理 `view_entity`**。
 
-## 3. 解决方案
+## 3. 解决方案（该次修复）
 
 ### 设计原则
 
@@ -187,6 +189,8 @@ impl Drop for AppView {
 使用 `try_borrow_mut` 而非 `borrow_mut`，防止 GPUI 内部 effect flush 期间 `RefCell` 已被借用时发生 panic。
 
 ### 3.4 防御层次总结
+
+> 当前状态补充：这套修复之后，代码又继续重构，关闭 popup 的清理职责已通过 UI hook 与 `TrayController` 协同完成，而不是继续把 `view_entity` 保存在 `AppState` 上。
 
 ```
 Layer 1: close_popup()        — controller 发起的关闭（toggle/settings）

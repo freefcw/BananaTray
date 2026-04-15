@@ -14,14 +14,17 @@
 
 ## AppState Decomposition
 
-`AppState` (in `ui/bridge.rs`) is a composition container holding:
+`AppState` (in `runtime/app_state.rs`) is a composition container holding:
 
 - `session: AppSession` — pure-logic session state (see below)
+- `manager: Arc<ProviderManager>` — provider runtime registry for refresh and provider-side settings resolution
 - `refresh_tx` — channel to RefreshCoordinator
-- `view_entity` — weak ref to AppView for UI updates
+- `settings_writer` — debounced settings persistence executor
 - `log_path` — log file path for Debug tab
 
-Persisted `AppSettings` are loaded in `bootstrap.rs` and injected into `AppState::new(...)`, so the UI runtime container no longer performs settings I/O during construction.
+Persisted `AppSettings` are loaded in `bootstrap.rs` and injected into `AppState::new(...)`. `AppState` now lives in `runtime`, so both `runtime` and `ui` depend on a shared state container instead of `runtime` depending on `ui::AppState`.
+
+Important boundary: `AppState` no longer stores GPUI view handles such as `WeakEntity<AppView>`. Popup-view notification and settings-window view creation are registered into `runtime` through `runtime/ui_hooks.rs`, keeping shared state free of UI handle ownership.
 
 `AppSession` (in `application/state.rs`, GPUI-free) holds:
 
@@ -35,6 +38,98 @@ Persisted `AppSettings` are loaded in `bootstrap.rs` and injected into `AppState
 
 Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`, etc.
 
+## Layering and Ownership
+
+The current architecture is organized around four layers:
+
+1. **`application/`** — pure Action → Reducer → Effect pipeline
+   - owns domain state transitions
+   - emits `AppEffect` values only
+   - must stay GPUI-free
+2. **`runtime/`** — effect execution and foreground integration
+   - owns `AppState`, dispatch entrypoints, settings persistence, window-opening orchestration
+   - bridges reducer output into platform/UI side effects
+3. **`ui/`** — GPUI views and rendering
+   - owns `AppView`, `SettingsView`, widgets, and view-local state
+   - registers UI hooks into `runtime` during bootstrap
+4. **platform / refresh / providers** — infrastructure services
+   - `refresh/` handles background scheduling and event production
+   - `providers/` owns provider implementations and runtime registry
+   - `platform/` owns OS integration such as notifications, autostart, paths, and URL open
+
+Target dependency direction:
+
+```text
+ui ───────────────▶ runtime ─────────────▶ application
+ │                    │                     │
+ │                    ├────────────────────▶ refresh / providers / platform
+ │                    │
+ └─ register hooks ───┘
+```
+
+This is intentionally not a fully inverted ports-and-adapters design. Instead, BananaTray uses a pragmatic boundary: shared state and effect orchestration live in `runtime`, while concrete GPUI view types remain in `ui` and are exposed to `runtime` only through a narrow hook registration layer.
+
+## Action → Effect → Runtime Flow
+
+The main foreground path is:
+
+1. UI or background event produces an `AppAction`
+2. `runtime::dispatch_*()` borrows `AppState.session`
+3. `application::reduce(&mut session, action)` returns `Vec<AppEffect>`
+4. `runtime` executes each effect through the appropriate runner
+
+`AppEffect` is split into two sub-enums:
+
+- `ContextEffect`
+  - requires a GPUI-capable foreground context
+  - examples: `Render`, `OpenSettingsWindow`, `OpenUrl`, `ApplyTrayIcon`, `QuitApp`
+- `CommonEffect`
+  - does not require a concrete GPUI context
+  - examples: `PersistSettings`, `SendRefreshRequest`, notifications, YAML I/O
+
+This split keeps reducer output explicit while letting `runtime` centralize the imperative work.
+
+## Runtime Dispatch and UI Hooks
+
+`runtime/mod.rs` owns three dispatch entrypoints:
+
+- `dispatch_in_context<V>()` — for view callbacks running under `Context<V>`
+- `dispatch_in_window()` — for handlers that have `Window + App`
+- `dispatch_in_app()` — for global app callbacks and refresh-event delivery
+
+These share the same reducer pipeline and differ only in what capabilities are available during effect execution.
+
+`runtime/ui_hooks.rs` provides the remaining bridge points that need UI participation:
+
+- notify the current popup view to rerender
+- clear popup-view registration when the popup closes
+- construct the settings-window view entity
+
+Hooks are registered from `bootstrap::bootstrap_ui()` via `ui::settings_window::register_runtime_hooks()`. This keeps:
+
+- popup-view weak references inside `ui`
+- settings-window view construction inside `ui`
+- effect routing and open-window orchestration inside `runtime`
+
+## Window Ownership
+
+BananaTray has two foreground window surfaces with different responsibilities:
+
+- **Tray popup**
+  - opened and owned by `tray/controller.rs`
+  - content view is `ui::AppView`
+  - popup lifecycle, auto-hide, and display positioning are tray concerns
+- **Settings window**
+  - open/reuse scheduling is owned by `runtime/settings_window_opener.rs`
+  - content view is `ui::settings_window::SettingsView`
+  - cross-display reopen and delayed creation live in `runtime`
+
+Why the delayed settings-window open exists:
+
+- some actions emit `OpenSettingsWindow` while the popup is still borrowing `Rc<RefCell<AppState>>`
+- opening a window immediately from the same call stack risks `RefCell` reentrancy
+- `schedule_open_settings_window()` delays creation to the next foreground turn, avoiding this class of panic
+
 ## Refresh Architecture
 
 `RefreshCoordinator` runs in a dedicated `std::thread`:
@@ -45,6 +140,24 @@ Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`
 - Spawns concurrent refresh tasks via `smol` blocking pool, collecting results in completion order
 - Sends `RefreshEvent` results to foreground executor for UI update
 - Supports `ReloadProviders` for custom provider hot-reload
+
+Foreground integration path:
+
+- `bootstrap::start_event_pump()` receives `RefreshEvent`
+- it forwards each event onto the GPUI foreground executor
+- `runtime::dispatch_in_app()` turns the event into state updates and follow-up effects
+- UI redraw is requested through the registered runtime UI hook when needed
+
+## Settings Persistence
+
+Settings persistence is intentionally centralized in `runtime/settings_writer.rs`:
+
+- `CommonEffect::PersistSettings` schedules a debounced write
+- all writes are serialized through a dedicated background thread
+- `flush()` is used when a synchronous “write now” boundary is required
+- persistence uses `settings_store` directly rather than routing through `ui`
+
+This avoids the old architectural smell where runtime-owned logic reached back into `ui` just to save settings.
 
 ## Environment Variables
 
@@ -97,6 +210,12 @@ run with `cargo test --lib`. Coverage:
 - `refresh/` — coordinator and scheduler tests
 - `theme.rs` — GPUI color token system (depends on gpui; not GPUI-free)
 - `settings_store.rs` — settings persistence round-trip
+
+Architectural testability notes:
+
+- `application/` and `models/` remain GPUI-free and are the primary unit-test surface
+- `runtime/settings_writer.rs` is tested directly because it is thread-based but GPUI-free in behavior
+- `runtime` itself still compiles only under the `app` feature, but its shared state and execution responsibilities are now more isolated from concrete UI storage than before
 
 ## GPUI Import Discipline
 

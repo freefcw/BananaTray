@@ -1,5 +1,7 @@
 # GPUI 弹窗高度校准：排查流程与经验教训
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 > 背景：BananaTray 是一个 macOS 菜单栏 Rust 应用（使用 adabraka-gpui 框架）。弹窗高度需要在 `render()` 中通过 `window.resize()` 显式设置，不支持"内容自适应"。我们需要一个公式 `W(N) = FIXED + N × CARD + (N-1) × SPACER + DASHBOARD` 来精确计算窗口高度。
 
 ---
