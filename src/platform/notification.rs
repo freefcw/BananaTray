@@ -135,12 +135,19 @@ pub fn request_notification_authorization() {
 unsafe fn install_notification_delegate(
     center: &objc2_user_notifications::UNUserNotificationCenter,
 ) {
+    use std::cell::OnceCell;
     use std::sync::Once;
 
+    use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject, ClassBuilder, Sel};
     use objc2_user_notifications::UNNotificationPresentationOptions;
 
     static REGISTER: Once = Once::new();
+
+    assert!(
+        is_main_thread(),
+        "install_notification_delegate must be called on the main thread"
+    );
 
     REGISTER.call_once(|| {
         // 注册一个 ObjC 类 BananaTrayNotificationDelegate : NSObject
@@ -175,25 +182,41 @@ unsafe fn install_notification_delegate(
         let _cls = builder.register();
     });
 
-    // 创建 delegate 实例并设置到 center
-    // 注意：UNUserNotificationCenter 持有 delegate 的弱引用，
-    // 所以需要用 static 保持实例存活。
-    // 使用 usize 存储指针以满足 Send+Sync，delegate 存活整个进程生命周期。
-    use std::sync::OnceLock;
-    static DELEGATE: OnceLock<usize> = OnceLock::new();
+    // 创建 delegate 实例并设置到 center。
+    // 注意：UNUserNotificationCenter 仅弱引用 delegate，
+    // 所以需要由当前线程长期持有对象。该函数当前只在 UI 启动主线程调用。
+    thread_local! {
+        static DELEGATE: OnceCell<Retained<AnyObject>> = const { OnceCell::new() };
+    }
 
-    let delegate_ptr = *DELEGATE.get_or_init(|| {
-        let cls = AnyClass::get(c"BananaTrayNotificationDelegate").unwrap();
-        let obj: *mut AnyObject = objc2::msg_send![cls, alloc];
-        let obj: *mut AnyObject = objc2::msg_send![obj, init];
-        obj as usize
+    DELEGATE.with(|cell| {
+        let delegate = cell.get_or_init(|| create_notification_delegate());
+        let delegate_obj: &AnyObject = std::ops::Deref::deref(delegate);
+        let _: () = objc2::msg_send![center, setDelegate: delegate_obj];
     });
 
-    let delegate = &*(delegate_ptr as *const AnyObject);
-    // setDelegate: 是 UNUserNotificationCenter 的方法，接受 id<UNUserNotificationCenterDelegate>
-    let _: () = objc2::msg_send![center, setDelegate: delegate];
-
     info!(target: "notification", "notification delegate installed for foreground banner support");
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn create_notification_delegate() -> objc2::rc::Retained<objc2::runtime::AnyObject> {
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    let cls = AnyClass::get(c"BananaTrayNotificationDelegate").unwrap();
+    let obj: *mut AnyObject = objc2::msg_send![cls, alloc];
+    let obj: *mut AnyObject = objc2::msg_send![obj, init];
+
+    Retained::from_raw(obj).expect("delegate pointer must be non-null")
+}
+
+#[cfg(target_os = "macos")]
+fn is_main_thread() -> bool {
+    unsafe extern "C" {
+        fn pthread_main_np() -> std::ffi::c_int;
+    }
+
+    unsafe { pthread_main_np() == 1 }
 }
 
 #[cfg(not(target_os = "macos"))]
