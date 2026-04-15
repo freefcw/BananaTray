@@ -2,7 +2,6 @@ use crate::models::{ErrorKind, ProviderId, ProviderStatus, RefreshData};
 
 /// 刷新触发原因
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
 pub enum RefreshReason {
     Startup,
     Periodic,
@@ -12,7 +11,6 @@ pub enum RefreshReason {
 
 /// 发送给协调器的请求
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum RefreshRequest {
     RefreshAll {
         reason: RefreshReason,
@@ -27,6 +25,8 @@ pub enum RefreshRequest {
     },
     /// 热重载自定义 Provider（重建 ProviderManager 快照）
     ReloadProviders,
+    /// 预留给未来显式关闭协调器的退出路径；当前由 channel 关闭兜底。
+    #[allow(dead_code)]
     Shutdown,
 }
 
