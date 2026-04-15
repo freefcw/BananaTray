@@ -17,7 +17,8 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `NewApiEditable` — NewAPI custom-provider editor actions
 - **`TokenInputCapability`** — token settings contract:
   - static UI metadata (`title_i18n_key`, `description_i18n_key`, `placeholder_i18n_key`, `create_url`)
-  - `credential_key` for persisted storage in `ProviderSettings`
+  - `credential_key` for persisted storage in `ProviderConfig::credentials`
+  - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`

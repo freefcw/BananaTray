@@ -35,8 +35,8 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 Refactored into a sub-directory with its own [README](settings/README.md). Key types:
 
 - **`AppSettings`** — top-level persisted configuration composed of `SystemSettings`, `NotificationSettings`, `DisplaySettings`, `ProviderConfig`
-- **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, credentials
-- **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), keeping JSON backward-compatible while allowing arbitrary `credential_key`
+- **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, and app-managed credentials
+- **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), stored under `ProviderConfig::credentials` for provider-scoped persisted tokens owned by BananaTray
 - **`TrayIconStyle`** / **`QuotaDisplayMode`** / **`AppTheme`** — display enums
 - `migration.rs` — legacy flat-JSON settings migration
 - `provider_config_ordering.rs` / `provider_config_quota.rs` / `provider_config_sidebar.rs` — domain method extensions
