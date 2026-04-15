@@ -6,7 +6,7 @@ BananaTray — cross-platform system tray app for monitoring AI coding assistant
 
 **MUST**: after update source, should update related docs
 
-1. If module structure changes (add/remove/rename files) → update `AGENTS.md` Module Map section
+1. If high-level module structure or ownership changes (top-level modules, major responsibilities, key entry files) → update `AGENTS.md` Architecture Map section
 2. If a module's public API or architecture changes → update that module's `README.md`
 3. If provider-related changes → update `docs/providers.md`
 4. If architecture-level changes → update `docs/architecture.md`
@@ -28,56 +28,29 @@ cargo fmt                  # format
 
 > **History:** Before commit `2e36981` (2026-04-13), `use gpui::*` in files with `#[test]` caused rustc SIGBUS (stack overflow via syn recursive parsing). The glob import ban fully resolved this.
 
-## Module Map
+## Architecture Map
 
 ```
 src/
-  main.rs            — Entry: Application::run(), CLI dispatch
-  lib.rs             — Crate root. `ui` module behind cfg(feature = "app")
-  bootstrap.rs       — App initialization (UI, refresh, tray events)
-  ui/                — GPUI views, settings window, widgets
-    bridge.rs        — AppState (GPUI wrapper over AppSession)
-    views/           — AppView, nav, provider panel, tray settings
-    settings_window/ — Settings window tabs and provider management
-      providers/     — Provider detail, sidebar, settings panels
-        token_input_panel.rs — Generic token input panel (driven by SettingsCapability)
-    widgets/         — Reusable UI components
-  application/       — Action-Reducer-Effect pipeline
-    state.rs         — Pure-logic session state (GPUI-free, testable)
-    reducer.rs       — Pure state transitions (reducer_tests.rs separated)
-    action.rs        — Action enum definitions
-    effect.rs        — Side-effect declarations
-    quota_alert.rs   — Quota alert state machine + alert domain events
-    selectors/       — ViewModel derivation from AppSession
-  models/            — Core data types (GPUI-free)
-    newapi.rs        — NewAPI pure data types + ID computation (NewApiConfig, NewApiEditData)
-    settings/        — User preferences (4 sub-structs + migration + domain methods)
-    test_helpers.rs  — Test fixture constructors for ProviderStatus, QuotaInfo, etc.
-  icons/             — SVG icon assets (provider + UI icons)
-  providers/         — AiProvider trait (+ settings_capability()) + 14 implementations + ProviderManager
-    common/          — Shared provider infra (CLI, JWT, HTTP client, PTY runner)
-    custom/          — YAML declarative custom provider system
-    codeium_family/  — Shared Codeium-family logic (Windsurf + Antigravity)
-    error_presenter.rs — Provider error → user-facing message mapping
-  platform/          — Platform adaptation layer
-    assets.rs        — GPUI asset loading (multi-platform path resolution)
-    auto_launch.rs   — Launch at login (macOS SMAppService / Linux XDG)
-    logging.rs       — Log system init (fern + panic hook)
-    notification.rs  — System notification delivery (OS adapter)
-    paths.rs         — Canonical config/custom-provider paths + macOS legacy fallback
-    system.rs          — Platform utils (open URL, clipboard, system info)
-    single_instance.rs — Single instance detection (IPC local socket)
-  tray/              — TrayController, multi-display positioning, icon management
-  refresh/           — RefreshCoordinator (background polling thread)
-  runtime/           — Effect executor (GPUI bridge)
-  utils/             — Text/time helpers, log capture
-  i18n.rs            — Locale detection and i18n configuration
-  settings_store.rs  — Settings JSON persistence (atomic write)
-  theme.rs           — GPUI color token system (depends on gpui: Hsla, Global, WindowAppearance)
-  theme_tests.rs     — Theme parsing unit tests
+  main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup
+  lib.rs                 — Crate root; `ui` compiled behind `cfg(feature = "app")`
+  application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
+  models/                — Core data types and settings domain models (GPUI-free)
+  ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
+  runtime/               — Effect executor, GPUI/context bridge, NewAPI 文件 I/O 适配
+  providers/             — AiProvider trait, built-in/custom providers, ProviderManager
+  refresh/               — Background refresh coordinator and scheduling
+  tray/                  — Tray controller, icon management, multi-display positioning
+  platform/              — OS integration (assets, auto-launch, notifications, paths, system)
+  icons/                 — SVG assets
+  utils/                 — Shared text/time/log helpers
+  i18n.rs                — Locale detection and i18n configuration
+  settings_store.rs      — Settings JSON persistence
+  theme.rs               — YAML-based theme system (GPUI-free)
+  theme_tests.rs         — Theme parsing unit tests
 ```
 
-Each `src/` subdirectory has its own `README.md` with detailed documentation.
+This map is intentionally high-level. File-level structure and public APIs live in each module's `README.md` and in `docs/architecture.md`.
 
 ## Key Constraints
 
