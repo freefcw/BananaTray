@@ -99,7 +99,10 @@ impl Default for DisplaySettings {
 /// Provider 管理配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
-    /// Provider 特定凭证（按 key-value 存储，如 github_token / custom_token）
+    /// BananaTray 自己管理的 Provider 凭证覆盖值（如 github_token / custom_token）。
+    ///
+    /// 注意：这不代表 Provider 的完整认证状态；部分 Provider 还会从外部配置文件、
+    /// CLI 登录态或环境变量读取凭证。
     pub credentials: ProviderSettings,
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
     #[serde(default)]
@@ -246,7 +249,7 @@ impl AppTheme {
     }
 }
 
-/// Provider 特定配置
+/// Provider 设置中由 BananaTray 自己持久化的凭证存储
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderSettings {
     /// Provider-specific credentials, flattened for backward-compatible JSON shape.
@@ -288,7 +291,7 @@ pub struct AppSettings {
     pub notification: NotificationSettings,
     /// 显示/外观：主题、语言、托盘图标、各 UI 开关
     pub display: DisplaySettings,
-    /// Provider 管理：启用状态、排序、隐藏配额、Copilot Token
+    /// Provider 管理：启用状态、排序、隐藏配额、sidebar、以及 app-managed credentials
     pub provider: ProviderConfig,
 }
 

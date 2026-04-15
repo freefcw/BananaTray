@@ -58,6 +58,7 @@ pub trait AiProvider: Send + Sync {
 - `ProviderDescriptor` — 收敛 provider 的注册 ID 与展示元数据
 - `SettingsCapability` — provider 声明的设置 UI 能力。`TokenInput(TokenInputCapability)` 会自动启用通用 token 面板，`TokenInputCapability` 只描述静态 UI 元数据和 `credential_key`
 - `AiProvider::resolve_token_input_state()` — provider 侧运行时钩子，返回纯数据 `TokenInputState`；当 provider 需要多来源 token 探测（如 Copilot）时在这里实现，而不是把行为塞进 `SettingsCapability`
+- `provider.credentials` — 仅保存 BananaTray 自己管理的 token override；provider 实际认证信息也可能来自外部配置文件、CLI 登录态或环境变量
 - `ProviderError` — provider 层返回的结构化错误
 - `providers/error_presenter.rs` — 将 `ProviderError` 映射为 UI 文案和 `ErrorKind`
 - [Provider Refactor Retrospective](provider/provider-refactor-retrospective.md) — 本次 provider 重构的根因、决策过程与优化方向

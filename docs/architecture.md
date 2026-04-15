@@ -54,12 +54,14 @@ Access: `state.session.provider_store.providers`, `state.session.nav.active_tab`
 | `BANANATRAY_LOG_DIR` | Override log file directory |
 | `BANANATRAY_RESOURCES` | Override asset directory (AppImage packaging) |
 
-Provider credentials are read from local config files or CLI tools, except Copilot which reads a GitHub token from settings.
+Provider credentials may come from local config files, CLI tools, environment variables, or BananaTray-managed provider settings. For providers using `TokenInputCapability`, BananaTray persists only its own token overrides under `provider.credentials` in `settings.json`; this is not the full source of truth for every provider's auth state.
 
 ## Settings Storage
 
 - **macOS**: `~/Library/Application Support/BananaTray/settings.json`
 - **Linux**: `$XDG_CONFIG_HOME/bananatray/settings.json`
+
+`settings.json` keeps provider preferences and BananaTray-managed provider token overrides together under `provider`. External provider auth state (for example CLI login sessions, provider-owned config files, or env vars) is resolved separately at runtime and is not mirrored into `settings.json`.
 
 ## Custom Provider Storage
 

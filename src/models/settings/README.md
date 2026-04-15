@@ -9,7 +9,7 @@ AppSettings
 ├── system: SystemSettings        — 系统行为
 ├── notification: NotificationSettings — 通知
 ├── display: DisplaySettings      — 显示/外观
-└── provider: ProviderConfig      — Provider 管理
+└── provider: ProviderConfig      — Provider 管理（含 app-managed credentials）
 ```
 
 ## 文件说明
@@ -22,6 +22,8 @@ AppSettings
 - **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / 各 UI 开关
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`
   - `is_enabled()` / `set_enabled()` / `prune_stale_custom_ids()`
+- **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
+  - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量
 - 枚举：**`TrayIconStyle`**（Monochrome/Yellow/Colorful/Dynamic）、**`QuotaDisplayMode`**（Remaining/Used）、**`AppTheme`**（Light/Dark/System）
 
 ### 领域方法文件（ProviderConfig 的扩展 impl）
