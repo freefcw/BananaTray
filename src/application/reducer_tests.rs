@@ -828,15 +828,64 @@ fn submit_newapi_without_optional_fields_uses_defaults() {
 }
 
 #[test]
-fn select_provider_resets_adding_newapi() {
+fn select_provider_is_noop_during_newapi_form() {
+    // 中转站表单打开时，侧栏点击应完全忽略：
+    // 不修改 selected_provider，避免侧栏高亮与表单编辑目标不一致的分叉状态
     let mut session = make_session();
     session.settings_ui.adding_newapi = true;
+    let original_selected = session.settings_ui.selected_provider.clone();
+
+    let other_id = session.provider_store.providers[1].provider_id.clone();
+    assert_ne!(original_selected, other_id); // 确保测试有意义
+
+    let effects = reduce(&mut session, AppAction::SelectSettingsProvider(other_id));
+
+    assert!(session.settings_ui.adding_newapi); // 表单保留
+    assert_eq!(session.settings_ui.selected_provider, original_selected); // 选中不变
+    assert!(effects.is_empty()); // 完全 no-op
+}
+
+#[test]
+fn select_provider_clears_adding_provider() {
+    // 添加内置服务商的 picker 是轻量操作，点选已有服务商应退出
+    let mut session = make_session();
+    session.settings_ui.adding_provider = true;
 
     let id = session.provider_store.providers[0].provider_id.clone();
     let effects = reduce(&mut session, AppAction::SelectSettingsProvider(id));
 
-    assert!(!session.settings_ui.adding_newapi);
+    assert!(!session.settings_ui.adding_provider); // picker 已退出
     assert!(has_render(&effects));
+}
+
+#[test]
+fn set_settings_tab_clears_adding_provider() {
+    // 切换 tab 时应退出 picker
+    let mut session = make_session();
+    session.settings_ui.adding_provider = true;
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SetSettingsTab(SettingsTab::General),
+    );
+
+    assert!(!session.settings_ui.adding_provider);
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn set_settings_tab_preserves_adding_newapi() {
+    // 中转站表单是复杂操作，切换 tab 不应丢失表单状态；
+    // 用户切回 Providers tab 时应恢复表单界面
+    let mut session = make_session();
+    session.settings_ui.adding_newapi = true;
+
+    reduce(
+        &mut session,
+        AppAction::SetSettingsTab(SettingsTab::General),
+    );
+
+    assert!(session.settings_ui.adding_newapi); // 表单状态保留
 }
 
 // ── 编辑模式 ──────────────────────────────────────
