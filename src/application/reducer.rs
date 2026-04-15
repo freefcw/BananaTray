@@ -16,12 +16,20 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::SetSettingsTab(tab) => {
             session.settings_ui.active_tab = tab;
+            // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）
+            session.settings_ui.adding_provider = false;
             effects.push(ContextEffect::Render.into());
         }
         AppAction::SelectSettingsProvider(id) => {
+            // 中转站表单打开时忽略侧栏点击：
+            // 避免 selected_provider 与表单编辑目标不一致的分叉状态
+            if session.settings_ui.adding_newapi {
+                return effects;
+            }
             session.settings_ui.selected_provider = id;
             session.settings_ui.token_editing_provider = None;
-            session.settings_ui.adding_newapi = false;
+            // 点选已有服务商时退出 picker（轻量操作）
+            session.settings_ui.adding_provider = false;
             session.settings_ui.confirming_remove_provider = false;
             session.settings_ui.confirming_delete_newapi = false;
             effects.push(ContextEffect::Render.into());
