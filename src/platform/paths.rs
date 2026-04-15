@@ -123,7 +123,11 @@ fn same_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
 
     #[cfg(not(unix))]
     {
-        meta_a.len() == meta_b.len()
+        let _ = (meta_a, meta_b);
+        match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+            (Ok(ca), Ok(cb)) => ca == cb,
+            _ => false,
+        }
     }
 }
 
