@@ -8,6 +8,8 @@ use crate::ui::{persist_settings, schedule_open_settings_window, AppState};
 use gpui::{App, Context, Window};
 use log::{info, warn};
 
+mod newapi_io;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -308,81 +310,18 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             original_filename,
             is_editing,
         } => {
+            use crate::application::newapi_ops;
             use crate::providers::custom::generator;
-            let yaml_content = generator::generate_newapi_yaml(&config);
+
             let filename =
                 original_filename.unwrap_or_else(|| generator::generate_filename(&config));
-            let path = crate::platform::paths::custom_provider_path(&filename);
 
-            // 统一的回滚闭包：失败时恢复 UI 状态让用户可以重试
-            let rollback = |state: &std::cell::RefCell<crate::ui::AppState>| {
-                let mut s = state.borrow_mut();
-                if is_editing {
-                    // 编辑模式：旧文件仍在磁盘上，不需要回滚 enabled/sidebar。
-                    // 从 config 重建 NewApiEditData 回填表单，避免用户输入丢失。
-                    s.session.settings_ui.adding_newapi = true;
-                    s.session.settings_ui.editing_newapi = Some(crate::models::NewApiEditData {
-                        display_name: config.display_name.clone(),
-                        base_url: config.base_url.clone(),
-                        cookie: config.cookie.clone(),
-                        user_id: config.user_id.clone(),
-                        divisor: config.divisor,
-                        original_filename: filename.clone(),
-                    });
-                } else {
-                    // 新增模式：回滚 reducer 预注册的 provider ID
-                    let rollback_id = crate::models::ProviderId::Custom(
-                        crate::models::newapi_provider_id(&config.base_url),
-                    );
-                    s.session.settings.provider.set_enabled(&rollback_id, false);
-                    s.session
-                        .settings
-                        .provider
-                        .remove_from_sidebar(&rollback_id);
-                    // 重新打开空表单让用户可以重试
-                    s.session.settings_ui.adding_newapi = true;
-                    s.session.settings_ui.editing_newapi = None;
-                    // 恢复 selected_provider 到 sidebar 第一项
-                    let custom_ids = s.session.provider_store.custom_provider_ids();
-                    let sidebar_ids = s
-                        .session
-                        .settings
-                        .provider
-                        .sidebar_provider_ids(&custom_ids);
-                    s.session.settings_ui.selected_provider = sidebar_ids
-                        .first()
-                        .cloned()
-                        .unwrap_or(crate::models::ProviderId::BuiltIn(
-                            crate::models::ProviderKind::Claude,
-                        ));
-                }
-            };
-
-            let Some(providers_dir) = path.parent() else {
-                warn!(target: "runtime", "failed to resolve providers dir for {}", filename);
-                rollback(state);
-                return;
-            };
-            if let Err(e) = std::fs::create_dir_all(providers_dir) {
-                warn!(target: "runtime", "failed to create providers dir: {}", e);
-                rollback(state);
-                return;
-            }
-            match std::fs::write(&path, &yaml_content) {
-                Ok(()) => {
+            match newapi_io::save_newapi_yaml(&config, &filename) {
+                Ok(path) => {
                     info!(target: "runtime", "saved custom provider YAML to {}", path.display());
-                    // ✅ YAML 写入成功后尝试持久化 settings
                     let settings_saved = persist_current_settings(state);
-                    let (title_key, body_key) = if !settings_saved {
-                        // YAML 已写入但 settings.json 持久化失败：
-                        // Provider 当前会话可用，重启后会被 ProvidersReloaded 自动恢复，
-                        // 但 sidebar 顺序等设置可能丢失。给用户一个准确的提示。
-                        ("newapi.save_partial_title", "newapi.save_partial_body")
-                    } else if is_editing {
-                        ("newapi.edit_success_title", "newapi.edit_success_body")
-                    } else {
-                        ("newapi.save_success_title", "newapi.save_success_body")
-                    };
+                    let (title_key, body_key) =
+                        newapi_ops::newapi_save_notification_keys(is_editing, settings_saved);
                     // 在独立线程中发送通知，与 SendPlainNotification handler 保持一致，
                     // 防止 macOS 系统事件导致 GPUI RefCell 重入 panic
                     let title = rust_i18n::t!(title_key).to_string();
@@ -393,8 +332,13 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
                     let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
                 }
                 Err(e) => {
-                    warn!(target: "runtime", "failed to write YAML to {}: {}", path.display(), e);
-                    rollback(state);
+                    warn!(target: "runtime", "failed to save newapi: {}", e);
+                    let mut s = state.borrow_mut();
+                    if is_editing {
+                        newapi_ops::rollback_newapi_edit(&mut s.session, &config, &filename);
+                    } else {
+                        newapi_ops::rollback_newapi_create(&mut s.session, &config);
+                    }
                 }
             }
         }

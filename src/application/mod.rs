@@ -1,5 +1,6 @@
 mod action;
 pub(crate) mod effect;
+pub(crate) mod newapi_ops;
 mod quota_alert;
 mod reducer;
 mod selectors;
