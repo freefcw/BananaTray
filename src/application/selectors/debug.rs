@@ -47,7 +47,9 @@ impl DebugContext {
             .map(|m| m.len());
 
         Self {
-            log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            // 读取实际生效的日志级别（log::max_level 是 source of truth），
+            // 而非 RUST_LOG 环境变量（仅为启动时初始配置，运行时不会同步更新）。
+            log_level: log::max_level().to_string().to_lowercase(),
             log_path,
             log_file_size,
             os_info: crate::platform::system::os_info(),

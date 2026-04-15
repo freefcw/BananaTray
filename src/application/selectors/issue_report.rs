@@ -42,7 +42,7 @@ impl IssueReportContext {
                 .to_string(),
             os_info: crate::platform::system::os_info(),
             locale: rust_i18n::locale().to_string(),
-            log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            log_level: log::max_level().to_string().to_lowercase(),
             recent_errors,
         }
     }
