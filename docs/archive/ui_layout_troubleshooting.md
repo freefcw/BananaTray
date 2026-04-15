@@ -1,5 +1,7 @@
 # BananaTray UI 弹窗高度自适应折叠布局踩坑与修复文档
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 本文档详细记录了在开发 BananaTray 弹出窗口时，为了实现 `无界弹窗与内容精准贴合 (Auto-fit Height)` 遇到的一系列极其隐蔽的排查过程及最终完美解法。
 
 ## 1. 核心现象与痛点

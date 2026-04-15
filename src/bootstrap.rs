@@ -3,8 +3,8 @@
 use crate::application::AppAction;
 use crate::models::AppSettings;
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
+use crate::runtime::AppState;
 use crate::tray::TrayController;
-use crate::ui::AppState;
 use gpui::{App, Keystroke, TrayIconEvent};
 use log::{info, warn};
 use rust_i18n::t;
@@ -26,6 +26,7 @@ pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
 pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     // i18n locale
     crate::i18n::apply_locale(&settings.display.language);
+    crate::ui::settings_window::register_runtime_hooks();
 
     // adabraka-ui 工具包
     adabraka_ui::init(cx);

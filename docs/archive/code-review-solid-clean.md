@@ -1,5 +1,7 @@
 # BananaTray 代码库 SOLID & Clean Code 深度分析
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 > 分析时间：2026-04-11
 > 分析范围：全量源码（`src/`）
 > 分析原则：SOLID（SRP / OCP / LSP / ISP / DIP）+ Clean Code
@@ -103,7 +105,7 @@
 
 **⚠️ 问题：**
 
-- **`AppState::new` 在构造时直接调用 `crate::settings_store::load()` 和 `crate::platform::auto_launch::sync()`**（`src/ui/bridge.rs:42-46`）：`AppState` 直接依赖具体的 I/O 操作，而非通过注入的接口。这导致 `AppState` 无法在测试中单独构造
+- **历史问题（已修复）**：`AppState::new` 曾在构造时直接调用 `crate::settings_store::load()` 和 `crate::platform::auto_launch::sync()`（当时位于 `src/ui/bridge.rs`）。现已改为由 `bootstrap.rs` 预加载 `AppSettings` 并注入 `AppState::new(...)`，因此该问题不再是当前现状
 - `runtime/mod.rs` 直接调用 `crate::platform::system::open_url` 等具体平台函数，没有通过 trait 隔离，硬编码了平台依赖
 
 ---
@@ -184,7 +186,7 @@
 
 **⚠️ 问题：**
 
-- `save()` 返回 `Result<PathBuf>`，但调用方 `bridge.rs::persist_settings` 只是 `warn!` 后丢弃错误（`src/ui/bridge.rs:14-17`）。用户可能在不知情的情况下丢失设置变更，至少应有 UI 层反馈机制
+- **历史问题（已修复）**：设置持久化曾通过 `bridge.rs::persist_settings` 间接执行。当前实现已迁移到 `runtime/settings_writer.rs` + `settings_store`，不再通过 `ui` 承担保存职责。是否需要用户可见的保存失败反馈，仍可作为后续体验优化点
 
 - **`try_run_codeium_family_debug_cli` 与主 `main()` 耦合**（`src/main.rs:86-108`）：debug CLI 分发逻辑放在 `main.rs` 而非独立模块，是职责外溢
 
@@ -210,7 +212,7 @@
 - 通过 `cfg(feature = "app")` 门控成功隔离了 GPUI 代码，使纯逻辑可独立测试
 
 **⚠️ 问题：**
-- `AppState::new` 直接调用 I/O 操作（`settings_store::load()`），导致**它自身无法被单元测试**，这是上文 DIP 问题的直接后果
+- **历史问题（已修复）**：`AppState::new` 曾直接调用 I/O；目前 settings 加载已上移到 `bootstrap.rs`，`AppState::new` 可通过传入 `AppSettings` 构造
 - `runtime/mod.rs` 完全没有测试：effect 执行逻辑（文件系统操作、通知发送等）是黑盒
 
 ---

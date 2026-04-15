@@ -4,14 +4,21 @@ use crate::application::{
 use crate::models::ConnectionStatus;
 use crate::platform::notification::send_system_notification;
 use crate::refresh::RefreshRequest;
-use crate::ui::{persist_settings, schedule_open_settings_window, AppState};
 use gpui::{App, Context, Window};
 use log::{info, warn};
 
+mod app_state;
 mod newapi_io;
+mod settings_window_opener;
+mod settings_writer;
+pub mod ui_hooks;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
+pub use app_state::AppState;
+pub use settings_window_opener::schedule_open_settings_window;
+pub(crate) use settings_writer::SettingsWriter;
 
 pub fn dispatch_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
@@ -144,7 +151,7 @@ impl ContextCapabilities for WindowCaps<'_> {
 
     fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
         let display_id = self.window.display(self.cx).map(|display| display.id());
-        state.borrow_mut().view_entity = None;
+        ui_hooks::clear_popup_view(state);
         self.window.remove_window();
         schedule_open_settings_window(state.clone(), display_id, self.cx);
     }
@@ -241,7 +248,8 @@ fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut 
 fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
     match effect {
         CommonEffect::PersistSettings => {
-            persist_current_settings(state);
+            let s = state.borrow();
+            s.settings_writer.schedule(s.session.settings.clone());
         }
         CommonEffect::SendRefreshRequest(request) => {
             let _ = send_refresh_request(state, request);
@@ -319,7 +327,9 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             match newapi_io::save_newapi_yaml(&config, &filename) {
                 Ok(path) => {
                     info!(target: "runtime", "saved custom provider YAML to {}", path.display());
-                    let settings_saved = persist_current_settings(state);
+                    let s = state.borrow();
+                    let settings_saved = s.settings_writer.flush(s.session.settings.clone());
+                    drop(s);
                     let (title_key, body_key) =
                         newapi_ops::newapi_save_notification_keys(is_editing, settings_saved);
                     // 在独立线程中发送通知，与 SendPlainNotification handler 保持一致，
@@ -388,18 +398,8 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
 // Helpers
 // ============================================================================
 
-fn persist_current_settings(state: &Rc<RefCell<AppState>>) -> bool {
-    let settings = state.borrow().session.settings.clone();
-    persist_settings(&settings)
-}
-
 fn notify_view_entity(state: &Rc<RefCell<AppState>>, cx: &mut App) {
-    let view_entity = state.borrow().view_entity.clone();
-    if let Some(entity) = view_entity {
-        let _ = entity.update(cx, |_, cx| {
-            cx.notify();
-        });
-    }
+    ui_hooks::notify_view(state, cx);
 }
 
 fn send_refresh_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) -> bool {

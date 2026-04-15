@@ -16,7 +16,7 @@ use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::AppState;
+use crate::runtime::AppState;
 
 /// 配额可见性行是否显示左侧小图标（默认开启，视觉更灵动）
 const SHOW_QUOTA_ROW_ICON: bool = true;

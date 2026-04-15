@@ -1,3 +1,4 @@
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
 现状判断
 
   src/app 的代码有很明显的共性：
@@ -443,7 +444,7 @@
   3. 再把副作用抽成 AppEffect
       - persist_settings
       - send_refresh
-      - schedule_open_settings_window
+      - schedule_open_settings_window（当前已由 `runtime/settings_window_opener.rs` 承担，而不是旧的 UI 窗口管理入口）
       - open url
       - auto_launch::sync
   4. 最后才考虑是否需要 trait 化 runtime 依赖

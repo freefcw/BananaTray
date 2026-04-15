@@ -9,7 +9,7 @@
 | 文件 | 职责 |
 |------|------|
 | `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `NewApiFormInputs` 表单状态管理 |
-| `window_mgr.rs` | 窗口生命周期管理 — `schedule_open_settings_window()`：延迟到下一帧创建窗口（避免 RefCell 重入）；多显示器定位 |
+| `mod.rs` | 窗口壳层与 `build_settings_view()` 工厂，供 `runtime` 创建设置窗口内容 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 
 ### Tab 内容页
@@ -52,5 +52,5 @@ SettingsView::render()
 ## 约束
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
-- `window_mgr.rs` 使用 `cx.spawn()` 延迟创建窗口，避免在 effect handler 中直接创建导致 RefCell 重入
+- 设置窗口的异步调度与多显示器复用逻辑已迁至 `runtime/settings_window_opener.rs`
 - `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）

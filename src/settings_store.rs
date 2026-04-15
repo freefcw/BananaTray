@@ -8,6 +8,21 @@ pub fn load() -> Result<AppSettings> {
     load_from(&config_path())
 }
 
+/// 将 AppSettings 持久化到磁盘。
+///
+/// 返回 `true` 表示成功，`false` 表示失败（已记录日志）。
+/// 大多数调用点可忽略返回值（fire-and-forget），仅在需要区分
+/// 成功/失败并给用户不同反馈时才检查（如 SaveNewApiProvider）。
+pub fn persist(settings: &AppSettings) -> bool {
+    match save(settings) {
+        Ok(_) => true,
+        Err(err) => {
+            log::warn!(target: "settings", "failed to save settings: {err}");
+            false
+        }
+    }
+}
+
 /// 原子写入设置文件。
 ///
 /// 策略：先写入同目录的临时文件，再 `rename` 到目标路径。

@@ -5,7 +5,8 @@
 use crate::application::AppAction;
 use crate::models::AppSettings;
 use crate::models::NavTab;
-use crate::ui::{schedule_open_settings_window, AppState};
+use crate::runtime::schedule_open_settings_window;
+use crate::runtime::AppState;
 use gpui::{
     px, size, App, AppContext, Bounds, DisplayId, Pixels, Size, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, WindowPosition,
@@ -45,7 +46,7 @@ impl TrayController {
 
     /// 同步弹窗关闭后的 session 状态。
     fn finalize_popup_close(state: &Rc<RefCell<AppState>>, cx: &mut App) {
-        state.borrow_mut().view_entity = None;
+        crate::runtime::ui_hooks::clear_popup_view(state);
         // 弹窗关闭后同步动态图标
         crate::runtime::dispatch_in_app(state, AppAction::PopupVisibilityChanged(false), cx);
     }

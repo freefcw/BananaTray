@@ -10,10 +10,32 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::ui::bridge::AppState;
+use crate::runtime::AppState;
 use crate::ui::widgets;
 
 use crate::models::PopupLayout;
+
+thread_local! {
+    static APP_VIEW_ENTITY: RefCell<Option<gpui::WeakEntity<AppView>>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn register_current_view(entity: gpui::WeakEntity<AppView>) {
+    APP_VIEW_ENTITY.with(|slot| *slot.borrow_mut() = Some(entity));
+}
+
+pub(crate) fn clear_current_view() {
+    APP_VIEW_ENTITY.with(|slot| *slot.borrow_mut() = None);
+}
+
+#[allow(dead_code)]
+pub(crate) fn notify_current_view(cx: &mut gpui::App) {
+    let entity = APP_VIEW_ENTITY.with(|slot| slot.borrow().clone());
+    if let Some(entity) = entity {
+        let _ = entity.update(cx, |_, cx| {
+            cx.notify();
+        });
+    }
+}
 
 // ============================================================================
 // 窗口视图 (可多次创建/销毁)
@@ -41,7 +63,7 @@ impl AppView {
         };
         cx.set_global(theme);
 
-        state.borrow_mut().view_entity = Some(cx.entity().downgrade());
+        register_current_view(cx.entity().downgrade());
 
         Self {
             state,
@@ -219,8 +241,6 @@ impl Render for AppView {
 
 impl Drop for AppView {
     fn drop(&mut self) {
-        if let Ok(mut state) = self.state.try_borrow_mut() {
-            state.view_entity = None;
-        }
+        clear_current_view();
     }
 }

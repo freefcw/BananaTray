@@ -1,5 +1,7 @@
 ## 总结
 
+> Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
+
 最终选择第二版方案
 
 ## 第一版结论
