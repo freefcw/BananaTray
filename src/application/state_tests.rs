@@ -266,9 +266,9 @@ fn header_status_missing_provider() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "Offline");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Offline);
+    assert!(elapsed.is_none());
 }
 
 #[test]
@@ -283,9 +283,9 @@ fn header_status_refreshing() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "Syncing…");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Syncing);
+    assert!(elapsed.is_none());
 }
 
 #[test]
@@ -300,9 +300,9 @@ fn header_status_disconnected() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "Offline");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Offline);
+    assert!(elapsed.is_none());
 }
 
 #[test]
@@ -318,9 +318,9 @@ fn header_status_synced_now() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "Synced");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Synced);
+    assert!(elapsed.unwrap() < 60);
 }
 
 #[test]
@@ -337,9 +337,9 @@ fn header_status_synced_minutes_ago() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "5m ago");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Stale);
+    assert!(elapsed.unwrap() >= 300);
 }
 
 #[test]
@@ -356,9 +356,9 @@ fn header_status_synced_hours_ago() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "2h ago");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Stale);
+    assert!(elapsed.unwrap() >= 7200);
 }
 
 // ── provider_panel_flags ──────────────────────────────────
@@ -459,9 +459,9 @@ fn header_status_error() {
         prev_active_tab: None,
         generation: 0,
     };
-    let (text, kind) = compute_header_status(&nav, &store);
-    assert_eq!(text, "Error");
+    let (kind, elapsed) = compute_header_status(&nav, &store);
     assert_eq!(kind, HeaderStatusKind::Offline);
+    assert!(elapsed.is_none());
 }
 
 // ── ProviderStore: find_by_id / custom_provider_ids ──────

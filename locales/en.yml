@@ -3,6 +3,13 @@ _version: 1
 # ── Tray ──────────────────────────────────────────────────
 tray.tooltip: "BananaTray - AI Quota Monitor"
 
+# ── Header status ─────────────────────────────────────────
+header.synced: "Synced"
+header.syncing: "Syncing…"
+header.offline: "Offline"
+header.minutes_ago: "%{n}m ago"
+header.hours_ago: "%{n}h ago"
+
 # ── Tooltips ──────────────────────────────────────────────
 tooltip.dashboard: "Dashboard"
 tooltip.open_dashboard: "Open Dashboard"

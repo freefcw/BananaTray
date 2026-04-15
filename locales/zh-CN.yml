@@ -3,6 +3,13 @@ _version: 1
 # ── 托盘 ──────────────────────────────────────────────────
 tray.tooltip: "BananaTray - AI 配额监控"
 
+# ── 头部状态 ──────────────────────────────────────────────
+header.synced: "已同步"
+header.syncing: "同步中…"
+header.offline: "离线"
+header.minutes_ago: "%{n} 分钟前"
+header.hours_ago: "%{n} 小时前"
+
 # ── 提示文本 ──────────────────────────────────────────────
 tooltip.dashboard: "仪表盘"
 tooltip.open_dashboard: "打开 Dashboard"
