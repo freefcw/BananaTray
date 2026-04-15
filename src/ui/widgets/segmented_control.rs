@@ -96,11 +96,8 @@ where
                 transparent_black()
             })
             .text_size(px(text_size_val))
-            .font_weight(if is_active {
-                FontWeight::BOLD
-            } else {
-                FontWeight::MEDIUM
-            })
+            // 选中态仅切换颜色与底色，避免字重变化导致宽度和视觉重心抖动。
+            .font_weight(FontWeight::MEDIUM)
             .text_color(if is_active {
                 theme.element.active
             } else {
