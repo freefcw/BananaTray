@@ -54,8 +54,8 @@
 
 #### `notification.rs` — 系统通知发送
 
-- **`send_system_notification()`** — macOS 原生通知（UNUserNotificationCenter）
-- **`send_plain_notification()`** — 简单文本通知
+- **`send_system_notification()`** — 异步发送额度相关系统通知；macOS bundle 使用 `UNUserNotificationCenter`
+- **`send_plain_notification()`** — 异步发送简单文本通知（无 `QuotaAlert` 包装）
 - 接收 `application::QuotaAlert` 领域事件，并适配到各 OS 通知实现
 
 #### `paths.rs` — 配置路径解析

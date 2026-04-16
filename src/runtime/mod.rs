@@ -267,10 +267,7 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             send_system_notification(&alert, with_sound);
         }
         CommonEffect::SendPlainNotification { title, body } => {
-            // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
-            std::thread::spawn(move || {
-                crate::platform::notification::send_plain_notification(&title, &body);
-            });
+            crate::platform::notification::send_plain_notification(&title, &body);
         }
         CommonEffect::SendDebugNotification { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
@@ -332,13 +329,9 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
                     drop(s);
                     let (title_key, body_key) =
                         newapi_ops::newapi_save_notification_keys(is_editing, settings_saved);
-                    // 在独立线程中发送通知，与 SendPlainNotification handler 保持一致，
-                    // 防止 macOS 系统事件导致 GPUI RefCell 重入 panic
                     let title = rust_i18n::t!(title_key).to_string();
                     let body = rust_i18n::t!(body_key).to_string();
-                    std::thread::spawn(move || {
-                        crate::platform::notification::send_plain_notification(&title, &body);
-                    });
+                    crate::platform::notification::send_plain_notification(&title, &body);
                     let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
                 }
                 Err(e) => {
