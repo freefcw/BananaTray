@@ -74,9 +74,18 @@
 - **`is_dark_mode()`** — 查询系统暗色模式状态
 - **`system_info_text()`** — 收集系统信息（调试用）
 
+#### `core_graphics.rs` — macOS 鼠标/显示器几何查询
+
+- 仅在 `cfg(feature = "app", target_os = "macos")` 下编译
+- 集中封装少量 CoreGraphics FFI，避免 `tray/` 与 `runtime/` 重复声明 `CGPoint/CGRect` 和 `extern "C"`
+- **`mouse_position()`** — 读取当前鼠标全局坐标
+- **`display_bounds(display_id)`** — 读取指定显示器的全局边界
+- **`DisplayBounds::contains()`** — 判断坐标是否位于显示器范围内
+
 ## 约束
 
 - 平台模块（`auto_launch`、`notification`、`system`）**不可导入 `gpui`**
 - `notification.rs` 只负责 OS 通知发送，不承载 application 业务状态机
 - macOS 特定代码使用 `#[cfg(target_os = "macos")]` 守卫
 - Linux 特定代码使用 `#[cfg(target_os = "linux")]` 守卫
+- `core_graphics.rs` 对外只暴露安全 Rust 包装类型，不向业务模块泄漏裸 FFI 结构体

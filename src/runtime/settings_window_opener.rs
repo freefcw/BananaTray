@@ -9,59 +9,14 @@ use std::time::Duration;
 
 #[cfg(target_os = "macos")]
 mod platform_display {
+    use crate::platform::core_graphics::{display_bounds, mouse_position};
     use gpui::{App, DisplayId};
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct CGPoint {
-        x: f64,
-        y: f64,
-    }
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct CGSize {
-        width: f64,
-        height: f64,
-    }
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct CGRect {
-        origin: CGPoint,
-        size: CGSize,
-    }
-
-    type CGEventRef = *const std::ffi::c_void;
-
-    extern "C" {
-        fn CGEventCreate(source: *const std::ffi::c_void) -> CGEventRef;
-        fn CGEventGetLocation(event: CGEventRef) -> CGPoint;
-        fn CFRelease(cf: *const std::ffi::c_void);
-        fn CGDisplayBounds(display: u32) -> CGRect;
-    }
-
-    fn mouse_position() -> Option<CGPoint> {
-        unsafe {
-            let event = CGEventCreate(std::ptr::null());
-            if event.is_null() {
-                return None;
-            }
-            let loc = CGEventGetLocation(event);
-            CFRelease(event);
-            Some(loc)
-        }
-    }
 
     pub fn find_mouse_display(cx: &App) -> Option<DisplayId> {
         let pos = mouse_position()?;
         cx.displays().into_iter().find_map(|d| {
-            let rect = unsafe { CGDisplayBounds(u32::from(d.id())) };
-            let contains = pos.x >= rect.origin.x
-                && pos.x < rect.origin.x + rect.size.width
-                && pos.y >= rect.origin.y
-                && pos.y < rect.origin.y + rect.size.height;
-            if contains {
+            let rect = display_bounds(u32::from(d.id()));
+            if rect.contains(pos) {
                 Some(d.id())
             } else {
                 None

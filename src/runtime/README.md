@@ -88,6 +88,7 @@
 - **`schedule_open_settings_window()`** — 延迟到下一帧打开设置窗口，避免 effect handler 中立即建窗导致 `RefCell` 重入
 - 内部维护 `SETTINGS_WINDOW` 句柄，优先复用现有窗口
 - 跨显示器时自动关闭旧窗口并在目标显示器重建
+- macOS 上通过 `platform/core_graphics.rs` 判断鼠标所在显示器，避免在 `runtime` 内重复维护 CoreGraphics FFI
 - 通过 `ui_hooks` 请求 UI 构造 settings view，`runtime` 不再依赖 UI 的窗口管理函数
 
 ### `settings_writer.rs` — 设置文件 Debounce 写入器

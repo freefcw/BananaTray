@@ -41,7 +41,7 @@ src/
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
   tray/                  — Tray controller, icon management, multi-display positioning
-  platform/              — OS integration (assets, auto-launch, notifications, paths, system)
+  platform/              — OS integration (assets, auto-launch, notifications, paths, system, macOS display helpers)
   icons/                 — SVG assets
   utils/                 — Shared text/time/log helpers
   i18n.rs                — Locale detection and i18n configuration
