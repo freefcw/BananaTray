@@ -7,33 +7,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-#[cfg(target_os = "macos")]
-mod platform_display {
-    use crate::platform::core_graphics::{display_bounds, mouse_position};
-    use gpui::{App, DisplayId};
-
-    pub fn find_mouse_display(cx: &App) -> Option<DisplayId> {
-        let pos = mouse_position()?;
-        cx.displays().into_iter().find_map(|d| {
-            let rect = display_bounds(u32::from(d.id()));
-            if rect.contains(pos) {
-                Some(d.id())
-            } else {
-                None
-            }
-        })
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod platform_display {
-    use gpui::{App, DisplayId};
-
-    pub fn find_mouse_display(_cx: &App) -> Option<DisplayId> {
-        None
-    }
-}
-
 thread_local! {
     static SETTINGS_WINDOW: RefCell<Option<WindowHandle<crate::ui::settings_window::SettingsView>>> = const { RefCell::new(None) };
 }
@@ -59,7 +32,7 @@ pub fn schedule_open_settings_window(
 
 fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<DisplayId>, cx: &mut App) {
     info!(target: "settings", "requested settings window");
-    let target_display_id = display_id.or_else(|| platform_display::find_mouse_display(cx));
+    let target_display_id = display_id.or_else(|| cx.tray_icon_anchor().map(|a| a.display_id));
 
     let existing_handle = SETTINGS_WINDOW.with(|slot| *slot.borrow());
     let activated_existing = if let Some(handle) = existing_handle {

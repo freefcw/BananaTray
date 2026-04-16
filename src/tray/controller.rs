@@ -157,36 +157,32 @@ impl TrayController {
 
     /// 计算弹窗的首选位置和目标显示器。
     ///
-    /// macOS 上使用 CoreGraphics 直接定位，避免 GPUI 内部
-    /// mainScreen/primaryScreen 高度不一致导致的多屏偏移问题。
+    /// 使用 GPUI 的 `TrayAnchored` 定位，自动处理多显示器坐标转换。
     fn preferred_window_bounds(
         cx: &App,
         window_size: Size<Pixels>,
     ) -> (Bounds<Pixels>, Option<DisplayId>) {
-        let tray_bounds = cx
-            .tray_icon_bounds()
-            .filter(|b| b.size.width > px(0.0) && b.size.height > px(0.0));
-
-        if let Some(tray_bounds) = tray_bounds {
+        if let Some(anchor) = cx
+            .tray_icon_anchor()
+            .filter(|a| a.bounds.size.width > px(0.0) && a.bounds.size.height > px(0.0))
+        {
             debug!(
                 target: "tray",
-                "tray_icon_bounds: origin=({:.1},{:.1}) size=({:.1}x{:.1})",
-                tray_bounds.origin.x, tray_bounds.origin.y,
-                tray_bounds.size.width, tray_bounds.size.height,
+                "tray_icon_anchor: display={:?} origin=({:.1},{:.1}) size=({:.1}x{:.1})",
+                anchor.display_id,
+                anchor.bounds.origin.x, anchor.bounds.origin.y,
+                anchor.bounds.size.width, anchor.bounds.size.height,
             );
 
-            #[cfg(target_os = "macos")]
-            {
-                return super::display::compute_tray_popup_bounds(cx, window_size, tray_bounds);
-            }
-
-            #[cfg(not(target_os = "macos"))]
-            {
-                let position = WindowPosition::TrayCenter(tray_bounds);
-                return (cx.compute_window_bounds(window_size, &position), None);
-            }
+            let display_id = anchor.display_id;
+            let position = WindowPosition::TrayAnchored(anchor);
+            return (
+                cx.compute_window_bounds(window_size, &position),
+                Some(display_id),
+            );
         }
 
+        debug!(target: "tray", "tray anchor unavailable or invalid, using fallback position");
         let position = if cfg!(target_os = "linux") {
             WindowPosition::TopRight { margin: px(16.0) }
         } else {
