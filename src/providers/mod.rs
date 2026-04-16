@@ -67,7 +67,7 @@ pub(crate) use define_unit_provider;
 ///
 /// 设计原则：
 /// - **面向用户的提示**（CliNotFound, AuthRequired, SessionExpired, FolderTrustRequired,
-///   UpdateRequired, ConfigMissing）→ 在 `format_for_display()` 中国际化
+///   UpdateRequired, ConfigMissing）→ 由 `ProviderErrorPresenter::to_message()` 国际化展示
 /// - **技术性错误**（Unavailable, ParseFailed, Timeout, NoData, NetworkFailed,
 ///   FetchFailed）→ 保留英文 reason，便于调试
 #[derive(Debug, Clone)]

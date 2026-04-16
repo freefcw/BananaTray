@@ -1,37 +1,11 @@
 //! 格式化与展示文案函数
 //!
-//! 将 Provider/Quota → 展示文本 的转换逻辑集中于此。
+//! 将 Provider 状态/Quota → 展示文本 的转换逻辑集中于此。
+//! 上次更新时间、配额使用详情。
 //! 从原 `app/provider_logic.rs` 合并而来。
 
 use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo, QuotaType, UpdateStatus};
 use rust_i18n::t;
-
-/// 格式化数值：整数不带小数点，非整数保留一位
-pub fn format_amount(value: f64) -> String {
-    if (value.fract() - 0.0).abs() < f64::EPSILON {
-        format!("{:.0}", value)
-    } else {
-        format!("{:.1}", value)
-    }
-}
-
-/// 格式化配额使用情况（用于 UI 展示）
-pub fn format_quota_usage(quota: &QuotaInfo) -> String {
-    if quota.is_percentage_mode() {
-        t!(
-            "provider.remaining_pct",
-            pct = format_amount(quota.limit - quota.used)
-        )
-        .to_string()
-    } else {
-        t!(
-            "provider.used_of_total",
-            used = format_amount(quota.used),
-            total = format_amount(quota.limit)
-        )
-        .to_string()
-    }
-}
 
 /// 格式化上次刷新的相对时间
 ///
@@ -57,87 +31,6 @@ pub fn format_last_updated(provider: &ProviderStatus) -> String {
             ConnectionStatus::Refreshing => t!("provider.status.refreshing").to_string(),
             ConnectionStatus::Error => t!("provider.needs_attention").to_string(),
             ConnectionStatus::Disconnected => t!("provider.not_connected").to_string(),
-        }
-    }
-}
-
-/// 生成 Provider 账号标签（优先显示邮箱，否则显示品牌名/账号提示）
-pub fn provider_account_label(provider: &ProviderStatus, compact: bool) -> String {
-    if let Some(email) = &provider.account_email {
-        return email.clone();
-    }
-
-    if compact {
-        provider.brand_name().to_string()
-    } else {
-        provider.account_hint().to_string()
-    }
-}
-
-/// 生成 Provider 列表副标题（连接状态相关的描述文案）
-pub fn provider_list_subtitle(provider: &ProviderStatus, enabled: bool) -> String {
-    if !enabled {
-        return t!("provider.disabled_source", source = provider.source_label()).to_string();
-    }
-    match provider.connection {
-        ConnectionStatus::Connected => {
-            if let Some(ref email) = provider.account_email {
-                email.clone()
-            } else {
-                provider.source_label().to_string()
-            }
-        }
-        ConnectionStatus::Disconnected => t!(
-            "provider.source_not_detected",
-            source = provider.source_label()
-        )
-        .to_string(),
-        ConnectionStatus::Refreshing => t!("provider.refreshing_label").to_string(),
-        ConnectionStatus::Error => {
-            let base = provider.source_label();
-            if provider.error_message.is_some() {
-                t!("provider.source_last_failed", source = base).to_string()
-            } else {
-                t!("provider.source_failed", source = base).to_string()
-            }
-        }
-    }
-}
-
-/// 剩余量摘要文本（用于 UI 主显示）
-///
-/// 从 `QuotaInfo` 的实例方法提取到 selector 层，
-/// 消除数据模型对 i18n 的依赖（DIP 原则）。
-///
-/// - 余额模式: "$X.XX" 或 "X.XX"（直接显示余额数值）
-/// - Credit 类型: "$X.XX left" 或 "$X.XX over"（负数）
-/// - 其他类型: "X% left" 或 "X% over"（负数）
-pub fn quota_remaining_text(quota: &QuotaInfo) -> String {
-    if let Some(balance) = quota.remaining_balance {
-        // 余额模式：直接显示余额
-        if matches!(quota.quota_type, QuotaType::Credit) {
-            format!("${:.2}", balance)
-        } else {
-            format!("{:.2}", balance)
-        }
-    } else {
-        match quota.quota_type {
-            QuotaType::Credit => {
-                let remaining = quota.limit - quota.used;
-                if remaining >= 0.0 {
-                    t!("quota.credit_left", amount = format!("{:.2}", remaining)).to_string()
-                } else {
-                    t!("quota.credit_over", amount = format!("{:.2}", -remaining)).to_string()
-                }
-            }
-            _ => {
-                let pct = quota.percent_remaining();
-                if pct >= 0.0 {
-                    t!("quota.pct_left", pct = format!("{:.0}", pct)).to_string()
-                } else {
-                    t!("quota.pct_over", pct = format!("{:.0}", -pct)).to_string()
-                }
-            }
         }
     }
 }
@@ -193,43 +86,6 @@ mod tests {
         make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
     use crate::models::{ConnectionStatus, ProviderKind, QuotaInfo, QuotaType, UpdateStatus};
-
-    // ── format_amount ────────────────────────────────────────
-
-    #[test]
-    fn format_amount_integer() {
-        assert_eq!(format_amount(100.0), "100");
-        assert_eq!(format_amount(0.0), "0");
-    }
-
-    #[test]
-    fn format_amount_decimal() {
-        assert_eq!(format_amount(3.5), "3.5");
-        assert_eq!(format_amount(99.9), "99.9");
-    }
-
-    // ── format_quota_usage ───────────────────────────────────
-
-    #[test]
-    fn format_quota_usage_integers() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("Daily", 50.0, 200.0);
-        assert_eq!(format_quota_usage(&q), "50 / 200 used");
-    }
-
-    #[test]
-    fn format_quota_usage_percentage_mode() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("Model", 65.0, 100.0);
-        assert_eq!(format_quota_usage(&q), "35% remaining");
-    }
-
-    #[test]
-    fn format_quota_usage_decimals() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("Session", 3.5, 10.0);
-        assert_eq!(format_quota_usage(&q), "3.5 / 10 used");
-    }
 
     // ── format_last_updated ──────────────────────────────────
 
@@ -303,117 +159,6 @@ mod tests {
         p.update_status = Some(UpdateStatus::Failed);
         // instant 存在时，优先显示时间，不显示 "Update failed"
         assert_eq!(format_last_updated(&p), "Updated just now");
-    }
-
-    // ── provider_account_label ───────────────────────────────
-
-    #[test]
-    fn account_label_with_email() {
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        p.account_email = Some("user@example.com".into());
-        assert_eq!(provider_account_label(&p, true), "user@example.com");
-        assert_eq!(provider_account_label(&p, false), "user@example.com");
-    }
-
-    #[test]
-    fn account_label_compact_without_email() {
-        let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
-        p.metadata.brand_name = "GitHub".to_string();
-        assert_eq!(provider_account_label(&p, true), "GitHub");
-    }
-
-    #[test]
-    fn account_label_verbose_without_email() {
-        let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
-        p.metadata.account_hint = "GitHub account".to_string();
-        assert_eq!(provider_account_label(&p, false), "GitHub account");
-    }
-
-    #[test]
-    fn account_label_all_providers_compact() {
-        let cases = [
-            (ProviderKind::Claude, "Anthropic"),
-            (ProviderKind::Gemini, "Google"),
-            (ProviderKind::Copilot, "GitHub"),
-            (ProviderKind::Codex, "OpenAI"),
-            (ProviderKind::Kimi, "Moonshot"),
-            (ProviderKind::Amp, "Amp CLI"),
-        ];
-        for (kind, expected) in cases {
-            let mut p = make_provider(kind, ConnectionStatus::Connected);
-            p.metadata.brand_name = expected.to_string();
-            assert_eq!(provider_account_label(&p, true), expected);
-        }
-    }
-
-    // ── provider_list_subtitle ───────────────────────────────
-
-    #[test]
-    fn subtitle_disabled_shows_source() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        let subtitle = provider_list_subtitle(&p, false);
-        assert!(subtitle.contains("test"));
-    }
-
-    #[test]
-    fn subtitle_connected_with_email() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        p.account_email = Some("user@example.com".into());
-        assert_eq!(provider_list_subtitle(&p, true), "user@example.com");
-    }
-
-    #[test]
-    fn subtitle_error_with_message() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.error_message = Some("auth expired".into());
-        let subtitle = provider_list_subtitle(&p, true);
-        assert!(subtitle.contains("test")); // source_label
-    }
-
-    // ── quota_remaining_text ─────────────────────────────────
-
-    #[test]
-    fn remaining_text_percentage() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::new("test", 30.0, 100.0);
-        assert_eq!(quota_remaining_text(&q), "70% left");
-
-        let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
-        assert_eq!(quota_remaining_text(&q_depleted), "0% left");
-
-        // 测试负数（超出配额）
-        let q_over = QuotaInfo::new("over", 120.0, 100.0);
-        assert_eq!(quota_remaining_text(&q_over), "20% over");
-    }
-
-    #[test]
-    fn remaining_text_credit() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::with_details("Credit", 5.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(quota_remaining_text(&q), "$15.00 left");
-
-        let q_zero = QuotaInfo::with_details("Credit", 20.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(quota_remaining_text(&q_zero), "$0.00 left");
-
-        let q_exceeded = QuotaInfo::with_details("Credit", 25.0, 20.0, QuotaType::Credit, None);
-        assert_eq!(quota_remaining_text(&q_exceeded), "$5.00 over");
-    }
-
-    #[test]
-    fn remaining_text_balance_credit() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 15.50, None, QuotaType::Credit, None);
-        assert_eq!(quota_remaining_text(&q), "$15.50");
-    }
-
-    #[test]
-    fn remaining_text_balance_general() {
-        let _locale_guard = setup_locale();
-        let q = QuotaInfo::balance_only("B", 42.0, None, QuotaType::General, None);
-        assert_eq!(quota_remaining_text(&q), "42.00");
     }
 
     // ── quota_usage_detail_text ──────────────────────────────

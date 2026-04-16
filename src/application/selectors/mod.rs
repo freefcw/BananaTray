@@ -1,5 +1,4 @@
 mod debug;
-#[allow(dead_code)] // 函数已就绪，待后续 UI 接入后启用
 mod format;
 mod issue_report;
 mod settings;
@@ -248,11 +247,7 @@ pub enum SettingsProviderUsageViewState {
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
 };
-#[allow(unused_imports)] // 函数已就绪，待后续 UI 接入后启用
-pub use format::{
-    format_amount, format_last_updated, format_quota_usage, provider_account_label,
-    provider_list_subtitle, quota_remaining_text, quota_usage_detail_text,
-};
+pub use format::quota_usage_detail_text;
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;

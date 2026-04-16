@@ -58,6 +58,10 @@ unsafe extern "C" {
 
 /// 获取鼠标光标的全局位置（CoreGraphics 坐标系：主屏幕左上角为原点，Y 向下）。
 pub(crate) fn mouse_position() -> Option<MousePosition> {
+    // SAFETY: CGEventCreate(NULL) is documented to create a blank event — NULL source is valid.
+    // event.is_null() guards all subsequent dereferences. CFRelease is called after loc fields
+    // are copied into MousePosition (no use-after-free). All FFI symbols are system CoreGraphics
+    // functions available on macOS.
     unsafe {
         let event = CGEventCreate(std::ptr::null());
         if event.is_null() {
@@ -71,6 +75,8 @@ pub(crate) fn mouse_position() -> Option<MousePosition> {
 
 /// 查询指定显示器在 CoreGraphics 全局坐标系中的边界。
 pub(crate) fn display_bounds(display_id: CGDirectDisplayID) -> DisplayBounds {
+    // SAFETY: CGDisplayBounds returns an empty CGRect for invalid display IDs rather than
+    // causing undefined behavior. Callers pass GPUI's DisplayId which is always valid.
     unsafe {
         let rect = CGDisplayBounds(display_id);
         DisplayBounds {
