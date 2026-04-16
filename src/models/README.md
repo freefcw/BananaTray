@@ -38,7 +38,6 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, and app-managed credentials
 - **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), stored under `ProviderConfig::credentials` for provider-scoped persisted tokens owned by BananaTray
 - **`TrayIconStyle`** / **`QuotaDisplayMode`** / **`AppTheme`** — display enums
-- `migration.rs` — legacy flat-JSON settings migration
 - `provider_config_ordering.rs` / `provider_config_quota.rs` / `provider_config_sidebar.rs` — domain method extensions
 
 ### `newapi.rs` — NewAPI Provider Data Types

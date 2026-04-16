@@ -120,7 +120,6 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub hidden_quotas: HashMap<String, HashSet<String>>,
     /// 设置页 sidebar 中展示的 Provider id_key 列表（动态子集）
-    /// 空列表由 `ensure_sidebar_defaults()` 在启动时填充
     #[serde(default)]
     pub sidebar_providers: Vec<String>,
 }
@@ -309,10 +308,5 @@ fn default_language() -> String {
 }
 
 // ============================================================================
-// 旧格式迁移（独立文件）
-// ============================================================================
-
-mod migration;
-
 #[cfg(test)]
 mod tests;

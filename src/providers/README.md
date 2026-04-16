@@ -45,8 +45,6 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - Canonical directory:
   - macOS: `~/Library/Application Support/BananaTray/providers/`
   - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
-- On startup, macOS legacy lowercase directory `~/Library/Application Support/bananatray/providers/` is migrated into the canonical directory
-- After startup migration, runtime only reads and writes the canonical directory
 
 ## Provider Implementations
 

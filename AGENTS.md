@@ -36,6 +36,7 @@ src/
   lib.rs                 — Crate root; `ui` compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
   models/                — Core data types and settings domain models (GPUI-free)
+                           settings/            — User preferences with nested sub-structures
   ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
   runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager

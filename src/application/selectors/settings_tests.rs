@@ -26,6 +26,7 @@ fn settings_providers_tab_respects_order_and_selection() {
     let mut settings = AppSettings {
         provider: crate::models::ProviderConfig {
             provider_order: vec!["gemini".into(), "claude".into(), "copilot".into()],
+            sidebar_providers: vec!["gemini".into(), "claude".into(), "copilot".into()],
             ..Default::default()
         },
         ..Default::default()
