@@ -27,6 +27,7 @@
 
 - 接收 `RefreshRequest`，委托 `ProviderManager` 执行刷新
 - 通过 `smol::unblock` 并发执行多个 Provider 刷新
+- 对每个 Provider 刷新施加协调器级 timeout guard，避免单个卡死任务阻塞整轮结果回收
 - 将结果封装为 `RefreshEvent` 发回 UI 线程
 - 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）
 
@@ -47,6 +48,7 @@ RefreshRequest ──(channel)──→ RefreshCoordinator
 
 ## 约束
 
-- 协调器运行在独立线程，通过 `crossbeam_channel` 与 UI 通信
+- 协调器运行在独立线程，通过 `smol::channel` 与 UI 通信
 - Provider 刷新通过 `smol::block_on` + `smol::unblock` 执行异步代码
 - Cooldown 机制防止短时间内对同一 Provider 重复刷新
+- Provider panic 会被转换为 `RefreshResult::Failed`；timeout 则由协调器兜底清理 in-flight 状态

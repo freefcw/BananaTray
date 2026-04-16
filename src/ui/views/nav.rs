@@ -232,9 +232,9 @@ impl AppView {
 
         // 如果有 from_rect 且和 target 不同 → 播放动画
         // 否则直接定位到 target（无动画）
-        let should_animate = from_rect
-            .map(|(fl, fw, _)| (fl - to_left).abs() > px(1.0) || (fw - to_width).abs() > px(1.0))
-            .unwrap_or(false);
+        let animation_start = from_rect.filter(|&(fl, fw, _)| {
+            (fl - to_left).abs() > px(1.0) || (fw - to_width).abs() > px(1.0)
+        });
 
         let base = div()
             .absolute()
@@ -243,9 +243,7 @@ impl AppView {
             .rounded(px(8.0))
             .bg(bg);
 
-        if should_animate {
-            let (from_left, from_width, _) = from_rect.unwrap();
-
+        if let Some((from_left, from_width, _)) = animation_start {
             base.with_animation(
                 ElementId::Name(format!("nav-slider-{}", generation).into()),
                 Animation::new(Duration::from_millis(SLIDER_ANIMATION_MS)),

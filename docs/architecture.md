@@ -138,8 +138,15 @@ Why the delayed settings-window open exists:
 - Delegates scheduling decisions to `RefreshScheduler` (cooldown, eligibility, deadline)
 - Uses absolute-deadline timers to avoid timer reset on request receipt
 - Spawns concurrent refresh tasks via `smol` blocking pool, collecting results in completion order
+- Wraps each provider refresh with a coordinator-side timeout guard so one hung provider cannot wedge result collection forever
 - Sends `RefreshEvent` results to foreground executor for UI update
 - Supports `ReloadProviders` for custom provider hot-reload
+
+Timeout model:
+
+- shared HTTP requests use a global `ureq` timeout in `providers/common/http_client.rs`
+- non-interactive CLI commands use a polled child-process timeout in `providers/common/cli.rs`
+- coordinator timeout is the final safety net that clears in-flight state even if provider code still blocks internally
 
 Foreground integration path:
 

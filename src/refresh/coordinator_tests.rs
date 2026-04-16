@@ -158,6 +158,61 @@ fn test_execute_refresh_concurrent_reports_completion_order() {
     });
 }
 
+#[test]
+fn test_timeout_in_provider_clears_in_flight() {
+    smol::block_on(async {
+        let id = ProviderId::Custom("test:timeout".to_string());
+        let mut manager = ProviderManager::new();
+        manager.register(Arc::new(DelayedProvider::new(
+            "test:timeout",
+            Duration::from_millis(250),
+        )));
+
+        let (event_tx, event_rx) = smol::channel::bounded(8);
+        let mut coordinator = RefreshCoordinator::new(Arc::new(manager), event_tx);
+        coordinator.scheduler.update_config(10, vec![id.clone()]);
+
+        coordinator
+            .execute_refresh_concurrent(vec![id.clone()], RefreshReason::Manual)
+            .await;
+
+        let mut outcomes = Vec::new();
+        while let Ok(event) = event_rx.try_recv() {
+            if let RefreshEvent::Finished(o) = event {
+                outcomes.push(o);
+            }
+        }
+        assert_eq!(outcomes.len(), 1);
+        assert!(
+            matches!(
+                outcomes[0].result,
+                RefreshResult::Failed {
+                    error_kind: ErrorKind::NetworkError,
+                    ..
+                }
+            ),
+            "timeout should produce Failed(NetworkError), got {:?}",
+            outcomes[0].result
+        );
+
+        coordinator
+            .execute_refresh_concurrent(vec![id.clone()], RefreshReason::Manual)
+            .await;
+
+        let mut second_outcomes = Vec::new();
+        while let Ok(event) = event_rx.try_recv() {
+            if let RefreshEvent::Finished(o) = event {
+                second_outcomes.push(o);
+            }
+        }
+        assert_eq!(second_outcomes.len(), 1);
+        assert!(
+            !matches!(second_outcomes[0].result, RefreshResult::SkippedInFlight),
+            "in-flight should have been cleared after timeout"
+        );
+    });
+}
+
 struct PanicProvider {
     id: String,
 }

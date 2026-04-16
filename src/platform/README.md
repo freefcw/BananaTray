@@ -30,6 +30,10 @@
 
 - **`ensure_single_instance()`** — 通过 IPC local socket（interprocess crate）检测是否已有实例运行
 - **`InstanceRole`** — Primary（首个实例，附带消息接收通道）或 Secondary（退出）
+- 平台策略：
+  - Windows 使用 named pipe
+  - Linux 使用 abstract Unix socket
+  - macOS 使用 `~/Library/Caches/bananatray.sock`，避免 `/tmp` 世界可写路径
 
 ### 平台模块（始终编译）
 

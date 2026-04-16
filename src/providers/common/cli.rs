@@ -1,7 +1,14 @@
 use crate::providers::ProviderError;
 use anyhow::Result;
 use rust_i18n::t;
-use std::process::{Command, Output};
+use std::io::Read;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
+
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+const COMMAND_EXISTS_TIMEOUT: Duration = Duration::from_secs(3);
+const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// 构建包含常见工具路径的 PATH 环境变量。
 ///
@@ -51,20 +58,63 @@ fn enriched_path() -> String {
 
 /// 检查 CLI 是否可执行。
 pub fn command_exists(binary: &str) -> bool {
-    Command::new(binary)
-        .arg("--version")
-        .env("PATH", enriched_path())
-        .output()
-        .is_ok()
+    run_command_with_timeout(binary, &["--version"], COMMAND_EXISTS_TIMEOUT).is_ok()
 }
 
 /// 执行命令，并将"命令不存在"统一映射为 `CliNotFound`。
 pub fn run_command(binary: &str, args: &[&str]) -> Result<Output> {
-    Command::new(binary)
+    run_command_with_timeout(binary, args, COMMAND_TIMEOUT)
+}
+
+fn run_command_with_timeout(binary: &str, args: &[&str], timeout: Duration) -> Result<Output> {
+    let mut child = Command::new(binary)
         .args(args)
         .env("PATH", enriched_path())
-        .output()
-        .map_err(|_| ProviderError::cli_not_found(binary).into())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| ProviderError::cli_not_found(binary))?;
+
+    let stdout_reader = child.stdout.take().map(|mut handle| {
+        thread::spawn(move || {
+            let mut stdout = Vec::new();
+            let _ = handle.read_to_end(&mut stdout);
+            stdout
+        })
+    });
+    let stderr_reader = child.stderr.take().map(|mut handle| {
+        thread::spawn(move || {
+            let mut stderr = Vec::new();
+            let _ = handle.read_to_end(&mut stderr);
+            stderr
+        })
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ProviderError::Timeout.into());
+        }
+        thread::sleep(COMMAND_POLL_INTERVAL);
+    };
+
+    let stdout = stdout_reader
+        .map(|reader| reader.join().unwrap_or_default())
+        .unwrap_or_default();
+    let stderr = stderr_reader
+        .map(|reader| reader.join().unwrap_or_default())
+        .unwrap_or_default();
+
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// 统一处理非零退出码，避免各个 CLI provider 重复拼接错误文案。
@@ -195,5 +245,27 @@ mod tests {
     fn test_enriched_path_contains_home_paths() {
         let path = enriched_path();
         assert!(!path.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_run_command_with_timeout_returns_timeout_error() {
+        let err = run_command_with_timeout("sh", &["-c", "sleep 1"], Duration::from_millis(50))
+            .unwrap_err();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::Timeout));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_run_command_with_timeout_handles_large_stdout() {
+        let output = run_command_with_timeout(
+            "sh",
+            &["-c", "yes x | head -n 100000"],
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        let stdout = stdout_text(&output);
+        assert!(stdout.lines().count() >= 100000);
     }
 }

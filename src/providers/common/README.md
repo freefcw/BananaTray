@@ -14,6 +14,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`run_checked_command()`** — 严格模式，非零退出码即报错
 - **`run_lenient_command()`** — 宽容模式，有输出就返回 Ok（适用于 amp/kiro-cli 偶发非零退出码）
 - **`stdout_or_stderr_text()`** — 某些 CLI 把业务输出写到 stderr 的兜底方案
+- 非交互式 CLI 统一带超时，超时映射为 `ProviderError::Timeout`
 
 ### `http_client.rs` — HTTP 客户端（ureq）
 
@@ -22,6 +23,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`get()` / `get_with_headers()` / `get_with_status()`** — GET 请求变体
 - **`post_json()` / `post_form()`** — POST 请求（JSON / form-urlencoded）
 - 全局共享 `LazyLock<Agent>`，`http_status_as_error(false)` 确保非 2xx 也能读取 body
+- 全局 `ureq` agent 配置了统一 timeout，transport timeout 统一映射为 `ProviderError::Timeout`
 - `set_headers!` 宏统一处理 `"Key: Value"` 格式的 header 注入
 
 ### `jwt.rs` — JWT 解码

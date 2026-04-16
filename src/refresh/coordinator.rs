@@ -8,6 +8,7 @@
 //! 所有调度决策（cooldown、eligibility、deadline）委托给 `RefreshScheduler`。
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use smol::channel::{Receiver, Sender};
 
@@ -27,6 +28,14 @@ pub struct RefreshCoordinator {
 }
 
 impl RefreshCoordinator {
+    fn provider_refresh_timeout() -> Duration {
+        if cfg!(test) {
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(30)
+        }
+    }
+
     pub fn new(manager: Arc<ProviderManager>, event_tx: Sender<RefreshEvent>) -> Self {
         let (request_tx, request_rx) = smol::channel::bounded(32);
         Self {
@@ -139,6 +148,35 @@ impl RefreshCoordinator {
         .await
     }
 
+    /// Run a refresh with a coordinator-side timeout guard.
+    ///
+    /// This is the last-resort protection when a provider blocks inside CLI / HTTP / parser code.
+    /// The underlying blocking task may continue running until its own I/O timeout fires, but the
+    /// coordinator will stop waiting and clear in-flight state so future refreshes are not wedged.
+    async fn run_refresh_with_timeout(
+        mgr: Arc<ProviderManager>,
+        id: ProviderId,
+        reason: RefreshReason,
+    ) -> RefreshOutcome {
+        let timeout = Self::provider_refresh_timeout();
+        let timeout_id = id.clone();
+        smol::future::or(Self::run_refresh(mgr, id), async move {
+            smol::Timer::after(timeout).await;
+            log::warn!(
+                target: "refresh",
+                "provider {} refresh timed out after {:?} ({:?})",
+                timeout_id,
+                timeout,
+                reason
+            );
+            Self::build_outcome(
+                timeout_id,
+                Err(crate::providers::ProviderError::Timeout.into()),
+            )
+        })
+        .await
+    }
+
     /// Refresh a single provider (used by RefreshOne).
     async fn execute_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
         if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
@@ -147,7 +185,7 @@ impl RefreshCoordinator {
         }
 
         self.begin_refresh(&id).await;
-        let outcome = Self::run_refresh(self.manager.clone(), id).await;
+        let outcome = Self::run_refresh_with_timeout(self.manager.clone(), id, reason).await;
         self.record_outcome(outcome).await;
     }
 
@@ -178,7 +216,9 @@ impl RefreshCoordinator {
             let mgr = self.manager.clone();
             let tx = result_tx.clone();
             smol::spawn(async move {
-                let _ = tx.send(Self::run_refresh(mgr, id).await).await;
+                let _ = tx
+                    .send(Self::run_refresh_with_timeout(mgr, id, reason).await)
+                    .await;
             })
             .detach();
         }

@@ -4,15 +4,21 @@
 //! On subsequent launches, connects to the existing socket, sends a "SHOW" command,
 //! and exits.
 //!
-//! Platform mapping (handled by `interprocess::local_socket::GenericNamespaced`):
+//! Platform mapping:
 //! - **Windows**: Named Pipe (`\\.\pipe\bananatray`)
 //! - **Linux**: Abstract Unix Domain Socket
-//! - **macOS**: Unix Domain Socket at `/tmp/bananatray`
+//! - **macOS**: Per-user Unix Domain Socket at `~/Library/Caches/bananatray.sock`
 
 use interprocess::local_socket::prelude::*;
-use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Name, Stream};
+#[cfg(target_os = "macos")]
+use interprocess::local_socket::GenericFilePath;
+#[cfg(not(target_os = "macos"))]
+use interprocess::local_socket::GenericNamespaced;
+use interprocess::local_socket::{ListenerOptions, Name, Stream};
 use log::{error, info, warn};
 use std::io::{BufRead, BufReader, Write};
+#[cfg(target_os = "macos")]
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use super::APP_ID_LOWER;
@@ -30,10 +36,27 @@ pub enum InstanceRole {
     Secondary,
 }
 
+#[cfg(not(target_os = "macos"))]
 fn socket_name() -> Name<'static> {
     SOCKET_NAME
         .to_ns_name::<GenericNamespaced>()
         .expect("invalid socket name")
+}
+
+#[cfg(target_os = "macos")]
+fn socket_name() -> Name<'static> {
+    socket_file_path()
+        .into_os_string()
+        .to_fs_name::<GenericFilePath>()
+        .expect("invalid socket path")
+        .into_owned()
+}
+
+#[cfg(target_os = "macos")]
+fn socket_file_path() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(crate::platform::paths::app_config_dir)
+        .join(format!("{APP_ID_LOWER}.sock"))
 }
 
 /// Try to become the primary instance. If another instance is already running,
@@ -142,7 +165,7 @@ fn notify_existing_instance() -> bool {
 }
 
 /// Clean up stale socket file from a dead instance.
-/// On macOS, the socket file is at /tmp/{APP_ID_LOWER} (interprocess GenericNamespaced convention).
+/// On macOS, the socket file is under `~/Library/Caches/{APP_ID_LOWER}.sock`.
 /// On Linux, abstract sockets don't leave files, so no cleanup needed.
 /// On Windows, named pipes don't leave files either.
 ///
@@ -150,16 +173,20 @@ fn notify_existing_instance() -> bool {
 /// so a symlink at this path cannot be used to delete arbitrary files.
 #[cfg(target_os = "macos")]
 fn cleanup_stale_socket() {
-    let socket_path = std::path::Path::new("/tmp").join(APP_ID_LOWER);
-    match std::fs::symlink_metadata(&socket_path) {
+    cleanup_stale_socket_path(&socket_file_path());
+}
+
+#[cfg(target_os = "macos")]
+fn cleanup_stale_socket_path(socket_path: &Path) {
+    match std::fs::symlink_metadata(socket_path) {
         Ok(meta) if meta.file_type().is_dir() => {
             // 攻击者可能预先创建同名目录阻止 bind；尝试删除空目录
-            if let Err(e) = std::fs::remove_dir(&socket_path) {
+            if let Err(e) = std::fs::remove_dir(socket_path) {
                 warn!(target: "single_instance", "stale path is a directory and could not be removed: {e}");
             }
         }
         Ok(_) => {
-            if let Err(e) = std::fs::remove_file(&socket_path) {
+            if let Err(e) = std::fs::remove_file(socket_path) {
                 warn!(target: "single_instance", "failed to remove stale socket file: {e}");
             }
         }
@@ -171,4 +198,34 @@ fn cleanup_stale_socket() {
 fn cleanup_stale_socket() {
     // On Linux (abstract sockets) and Windows (named pipes),
     // there are no persistent files to clean up.
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "macos")]
+    use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn socket_file_path_uses_user_cache_dir() {
+        let path = socket_file_path();
+        assert_eq!(
+            path.file_name().and_then(|s| s.to_str()),
+            Some("bananatray.sock")
+        );
+        assert!(path.to_string_lossy().contains("/Library/Caches/"));
+        assert!(path.to_string_lossy().contains(APP_ID_LOWER));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn cleanup_stale_socket_path_removes_stale_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("single-instance.sock");
+        std::fs::write(&socket_path, "stale").unwrap();
+
+        cleanup_stale_socket_path(&socket_path);
+
+        assert!(!socket_path.exists());
+    }
 }
