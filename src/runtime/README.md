@@ -112,7 +112,7 @@
 
 - 本模块在 `cfg(feature = "app")` 下编译，依赖 GPUI
 - Effect handler 中**不得**调用 `dispatch_*()` — 使用 `schedule_*` 延迟到下一轮事件循环
-- 通知发送在独立线程中执行，防止 macOS 系统事件导致 GPUI RefCell 重入
+- 通知线程切换统一由 `platform::notification` 负责，runtime 只触发通知 effect，避免重复 `spawn`
 
 ## Data Flow
 

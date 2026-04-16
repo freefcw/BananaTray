@@ -71,17 +71,22 @@ pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
         ),
     };
 
-    // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
-    std::thread::spawn(move || {
-        platform_send_notification(&title, &body, with_sound);
-    });
+    spawn_notification(title, body, with_sound);
 }
 
 /// 发送简单的系统通知（无声音）。
 ///
-/// 供不需要 QuotaAlert 包装的场景使用（如 auto-launch 通知）。
+/// 在独立线程中发送通知，供不需要 QuotaAlert 包装的场景使用
+/// （如 auto-launch 通知）。
 pub fn send_plain_notification(title: &str, body: &str) {
-    platform_send_notification(title, body, false);
+    spawn_notification(title.to_string(), body.to_string(), false);
+}
+
+fn spawn_notification(title: String, body: String, with_sound: bool) {
+    // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
+    std::thread::spawn(move || {
+        platform_send_notification(&title, &body, with_sound);
+    });
 }
 
 // ---- macOS: 原生通知 (UNUserNotificationCenter) + osascript fallback ----
