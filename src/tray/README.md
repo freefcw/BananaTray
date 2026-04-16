@@ -13,12 +13,6 @@
 - 处理托盘点击事件和全局快捷键
 - 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠幂等守卫清理当前窗口，避免 stale handle 和误关新窗口
 
-### `display.rs` — 多显示器定位（macOS only）
-
-- 通过 `platform/core_graphics.rs` 的安全包装获取当前鼠标所在显示器
-- 计算弹窗在托盘图标下方的精确位置
-- `#[cfg(target_os = "macos")]` 守卫
-
 ### `icon.rs` — 托盘图标管理
 
 - **`apply_tray_icon(cx, request)`** — 根据 `TrayIconRequest` 更新系统托盘图标

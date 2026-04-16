@@ -9,7 +9,6 @@
 //! - `notification` — 系统通知发送（OS adapter）
 //! - `single_instance` — 单实例检测（IPC local socket）
 //! - `system` — 系统工具（打开 URL、剪贴板、暗色模式检测、系统信息）
-//! - `core_graphics` — macOS 鼠标/显示器几何查询安全包装
 
 // ============================================================================
 // 应用标识常量（单一来源）
@@ -32,11 +31,6 @@ pub(crate) mod single_instance;
 
 #[cfg(feature = "app")]
 pub(crate) use assets::Assets;
-
-// --- 运行时平台辅助模块 ---
-// 供 app 运行时复用，不承载 application 业务状态机
-#[cfg(all(feature = "app", target_os = "macos"))]
-pub(crate) mod core_graphics;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
