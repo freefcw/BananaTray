@@ -44,11 +44,7 @@ fn load_from(path: &Path) -> Result<AppSettings> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("failed to read settings file at {}", path.display()))?;
 
-    // 支持新旧两种 JSON 格式：新格式嵌套子结构体，旧格式扁平字段自动迁移
-    let value: serde_json::Value = serde_json::from_str(&content)
-        .with_context(|| format!("failed to parse settings file at {}", path.display()))?;
-
-    let settings = AppSettings::from_json_value(value)
+    let settings: AppSettings = serde_json::from_str(&content)
         .with_context(|| format!("failed to deserialize settings from {}", path.display()))?;
 
     debug!(target: "settings", "loaded settings from {}", path.display());

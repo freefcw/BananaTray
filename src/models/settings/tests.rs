@@ -93,44 +93,6 @@ fn app_settings_new_format_round_trip() {
     assert_eq!(restored.system.refresh_interval_mins, 5);
 }
 
-#[test]
-fn app_settings_legacy_migration() {
-    let json = serde_json::json!({
-        "theme": "Dark",
-        "refresh_interval_mins": 10,
-        "global_hotkey": "Cmd+Shift+S",
-        "auto_hide_window": true,
-        "providers": {
-            "github_token": "ghp_legacy"
-        },
-        "language": "zh-CN",
-        "show_debug_tab": true,
-        "tray_icon_style": "Yellow"
-    });
-    let settings = AppSettings::from_json_value(json).unwrap();
-    assert_eq!(settings.display.theme, AppTheme::Dark);
-    assert_eq!(settings.system.refresh_interval_mins, 10);
-    assert_eq!(settings.display.language, "zh-CN");
-    assert!(settings.display.show_debug_tab);
-    assert_eq!(settings.display.tray_icon_style, TrayIconStyle::Yellow);
-    assert_eq!(
-        settings.provider.credentials.get_credential("github_token"),
-        Some("ghp_legacy")
-    );
-    // 默认值
-    assert!(settings.notification.session_quota_notifications);
-    assert!(settings.display.show_dashboard_button);
-}
-
-#[test]
-fn app_settings_empty_json_returns_defaults() {
-    let json = serde_json::json!({});
-    let settings = AppSettings::from_json_value(json).unwrap();
-    assert_eq!(settings.display.theme, AppTheme::Dark);
-    assert_eq!(settings.system.refresh_interval_mins, 5);
-    assert!(settings.system.auto_hide_window);
-}
-
 // ── hidden_quotas ────────────────────────────────────
 
 #[test]
@@ -559,50 +521,6 @@ fn remove_from_sidebar_nonexistent_noop() {
     let id = ProviderId::BuiltIn(ProviderKind::Gemini);
     assert!(!config.remove_from_sidebar(&id));
     assert_eq!(config.sidebar_providers.len(), 1);
-}
-
-// ── ensure_sidebar_defaults ──────────────────────────
-
-#[test]
-fn ensure_sidebar_defaults_new_user() {
-    let mut config = ProviderConfig::default();
-    config.ensure_sidebar_defaults(&[]);
-    assert_eq!(config.sidebar_providers.len(), 2);
-    assert_eq!(config.sidebar_providers[0], "claude");
-    assert_eq!(config.sidebar_providers[1], "codex");
-}
-
-#[test]
-fn ensure_sidebar_defaults_existing_user_gets_all() {
-    let mut config = ProviderConfig::default();
-    // 模拟老用户：有 enabled_providers 但无 sidebar_providers
-    config.set_provider_enabled(ProviderKind::Claude, true);
-    config.ensure_sidebar_defaults(&[]);
-    // 老用户应保留全集
-    assert!(config.sidebar_providers.len() >= ProviderKind::all().len());
-}
-
-#[test]
-fn ensure_sidebar_defaults_skips_when_non_empty() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["gemini".into()],
-        ..Default::default()
-    };
-    config.ensure_sidebar_defaults(&[]);
-    // 不应被覆盖
-    assert_eq!(config.sidebar_providers.len(), 1);
-    assert_eq!(config.sidebar_providers[0], "gemini");
-}
-
-#[test]
-fn ensure_sidebar_defaults_old_user_with_order_gets_all() {
-    let mut config = ProviderConfig {
-        provider_order: vec!["gemini".into(), "claude".into()],
-        ..Default::default()
-    };
-    config.ensure_sidebar_defaults(&[]);
-    // provider_order 非空视为老用户，应保留全集
-    assert!(config.sidebar_providers.len() >= ProviderKind::all().len());
 }
 
 // ── ProviderSettings credential accessors ──────────────

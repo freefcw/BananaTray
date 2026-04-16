@@ -57,28 +57,4 @@ impl ProviderConfig {
         self.sidebar_providers.retain(|k| *k != key);
         self.sidebar_providers.len() != before
     }
-
-    /// 若 sidebar_providers 为空，填充默认值。
-    ///
-    /// - 新用户（enabled_providers 也为空）→ 默认 ["claude", "codex"]
-    /// - 老用户（enabled_providers 非空但 sidebar 为空）→ 全量内置 + 已有自定义
-    pub fn ensure_sidebar_defaults(&mut self, custom_ids: &[ProviderId]) {
-        if !self.sidebar_providers.is_empty() {
-            return;
-        }
-        if self.enabled_providers.is_empty() && self.provider_order.is_empty() {
-            // 新用户
-            self.sidebar_providers = vec![
-                ProviderKind::Claude.id_key().to_string(),
-                ProviderKind::Codex.id_key().to_string(),
-            ];
-        } else {
-            // 老用户：保留全集（向后兼容，不丢失现有 Provider）
-            self.sidebar_providers = self
-                .ordered_provider_ids(custom_ids)
-                .into_iter()
-                .map(|id| id.id_key())
-                .collect();
-        }
-    }
 }

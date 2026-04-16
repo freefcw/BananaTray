@@ -133,16 +133,13 @@ pub struct AppSession {
 
 impl AppSession {
     pub fn new(mut settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
-        // 确保 sidebar 有默认值（新用户 → claude+codex，老用户 → 全集）
+        // 自动注册已存在但未在 settings 中登记的自定义 Provider
+        // （处理 YAML 文件存在但 settings.json 缺少对应条目的情况）
         let custom_ids: Vec<_> = providers
             .iter()
             .filter(|p| p.provider_id.is_custom())
             .map(|p| p.provider_id.clone())
             .collect();
-        settings.provider.ensure_sidebar_defaults(&custom_ids);
-
-        // 自动注册已存在但未在 settings 中登记的自定义 Provider
-        // （处理 YAML 文件存在但 settings.json 缺少对应条目的情况）
         for id in &custom_ids {
             if !settings
                 .provider

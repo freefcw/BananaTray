@@ -33,16 +33,11 @@ AppSettings
 |------|------|
 | `provider_config_ordering.rs` | Provider 排序逻辑：`ordered_provider_ids()` / `move_provider()` / `ensure_order_defaults()` |
 | `provider_config_quota.rs` | 配额可见性：`is_quota_visible()` / `set_quota_visible()` |
-| `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `add_to_sidebar()` / `remove_from_sidebar()` / `ensure_sidebar_defaults()` |
-
-### `migration.rs` — 旧格式迁移
-
-- `try_migrate()` — 将旧版扁平 JSON 设置迁移到当前四组子结构体格式
-- 自动检测旧格式标志字段（如顶层 `auto_hide_window`），逐字段映射
+| `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `add_to_sidebar()` / `remove_from_sidebar()` |
 
 ### `tests.rs` — 单元测试
 
-覆盖所有配置方法（排序、可见性、sidebar、迁移、序列化/反序列化兼容性）。
+覆盖所有配置方法（排序、可见性、sidebar、序列化/反序列化兼容性）。
 
 ## 持久化
 

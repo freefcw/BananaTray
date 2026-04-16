@@ -56,10 +56,6 @@ pub(crate) fn bootstrap_refresh() -> (
     smol::channel::Receiver<crate::refresh::RefreshEvent>,
     std::sync::Arc<crate::providers::ProviderManager>,
 ) {
-    if let Err(err) = crate::platform::paths::migrate_legacy_custom_providers_dir() {
-        warn!(target: "providers::custom", "failed to migrate legacy custom providers dir: {err}");
-    }
-
     let (event_tx, event_rx) = smol::channel::bounded::<crate::refresh::RefreshEvent>(64);
     let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
     let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
