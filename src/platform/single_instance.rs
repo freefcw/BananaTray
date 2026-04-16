@@ -142,16 +142,28 @@ fn notify_existing_instance() -> bool {
 }
 
 /// Clean up stale socket file from a dead instance.
-/// On macOS, the socket file is at /tmp/{APP_ID_LOWER}.
+/// On macOS, the socket file is at /tmp/{APP_ID_LOWER} (interprocess GenericNamespaced convention).
 /// On Linux, abstract sockets don't leave files, so no cleanup needed.
 /// On Windows, named pipes don't leave files either.
+///
+/// Note: `std::fs::remove_file` does NOT follow symlinks — it removes the symlink node itself,
+/// so a symlink at this path cannot be used to delete arbitrary files.
 #[cfg(target_os = "macos")]
 fn cleanup_stale_socket() {
     let socket_path = std::path::Path::new("/tmp").join(APP_ID_LOWER);
-    if socket_path.exists() {
-        if let Err(e) = std::fs::remove_file(&socket_path) {
-            warn!(target: "single_instance", "failed to remove stale socket file: {e}");
+    match std::fs::symlink_metadata(&socket_path) {
+        Ok(meta) if meta.file_type().is_dir() => {
+            // 攻击者可能预先创建同名目录阻止 bind；尝试删除空目录
+            if let Err(e) = std::fs::remove_dir(&socket_path) {
+                warn!(target: "single_instance", "stale path is a directory and could not be removed: {e}");
+            }
         }
+        Ok(_) => {
+            if let Err(e) = std::fs::remove_file(&socket_path) {
+                warn!(target: "single_instance", "failed to remove stale socket file: {e}");
+            }
+        }
+        Err(_) => {} // 不存在或无权访问，忽略
     }
 }
 
