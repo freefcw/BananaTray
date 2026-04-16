@@ -78,7 +78,7 @@ pub fn load_from_dir(dir: &Path) -> Vec<CustomProvider> {
 
 fn load_one(path: &Path) -> Result<CustomProvider> {
     let content = std::fs::read_to_string(path)?;
-    let def: CustomProviderDef = serde_yaml::from_str(&content)?;
+    let def: CustomProviderDef = serde_yml::from_str(&content)?;
     validate(&def)?;
     CustomProvider::new(def)
 }

@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn color_extractor_valid_key() {
-        let v: serde_yaml::Value = serde_yaml::from_str(LIGHT_YAML).unwrap();
+        let v: serde_yml::Value = serde_yml::from_str(LIGHT_YAML).unwrap();
         let c = color(&v, "bg", "base");
         // #ffffff → lightness = 1.0
         assert!((c.l - 1.0).abs() < 0.01, "bg.base in light should be white");
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "missing theme color")]
     fn color_extractor_missing_key() {
-        let v: serde_yaml::Value = serde_yaml::from_str(LIGHT_YAML).unwrap();
+        let v: serde_yml::Value = serde_yml::from_str(LIGHT_YAML).unwrap();
         color(&v, "bg", "nonexistent_key");
     }
 }

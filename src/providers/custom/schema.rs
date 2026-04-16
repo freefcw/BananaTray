@@ -321,7 +321,7 @@ parser:
       used_group: 1
       limit_group: 2
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert_eq!(def.id, "myai:cli");
         assert_eq!(def.metadata.display_name, "My AI");
         assert!(matches!(
@@ -361,7 +361,7 @@ parser:
       limit: "usage.limit"
       quota_type: weekly
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert_eq!(def.id, "custom:api");
         assert!(matches!(def.availability, AvailabilityDef::EnvVar { .. }));
         assert!(matches!(def.source, SourceDef::HttpPost { .. }));
@@ -392,7 +392,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert_eq!(def.metadata.icon, "");
         assert_eq!(def.metadata.account_hint, "account");
         if let Some(ParserDef::Regex { quotas, .. }) = &def.parser {
@@ -424,7 +424,7 @@ parser:
       quota_type: credit
       divisor: 500000
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let Some(ParserDef::Json { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, Some(500000.0));
             assert!(matches!(quotas[0].quota_type, QuotaTypeDef::Credit));
@@ -453,7 +453,7 @@ parser:
       used: "used"
       limit: "limit"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let Some(ParserDef::Json { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, None);
         } else {
@@ -481,7 +481,7 @@ parser:
       pattern: '(\d+)/(\d+)'
       divisor: 100
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let Some(ParserDef::Regex { quotas, .. }) = &def.parser {
             assert_eq!(quotas[0].divisor, Some(100.0));
         } else {
@@ -513,7 +513,7 @@ parser:
       quota_type: credit
       divisor: 500000
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert!(matches!(def.availability, AvailabilityDef::Always));
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
@@ -547,7 +547,7 @@ parser:
       used: "data.used_quota"
       limit: "data.quota"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
                 AuthDef::Cookie { value } => {
@@ -582,7 +582,7 @@ parser:
       used: "data.used_quota"
       limit: "data.quota"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
                 AuthDef::SessionToken { token, cookie_name } => {
@@ -619,7 +619,7 @@ parser:
       used: "data.used_quota"
       limit: "data.quota"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
                 AuthDef::SessionToken { token, cookie_name } => {
@@ -649,7 +649,7 @@ source:
   type: placeholder
   reason: "No public API available for quota monitoring"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert_eq!(def.id, "opencode:cli");
         assert!(matches!(def.source, SourceDef::Placeholder { .. }));
         assert!(def.parser.is_none());
@@ -671,7 +671,7 @@ source:
   type: placeholder
   reason: "Shares Gemini quota"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let AvailabilityDef::FileJsonMatch {
             path,
             json_path,
@@ -701,7 +701,7 @@ source:
   type: placeholder
   reason: "No public API available"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let AvailabilityDef::DirContains { path, prefix } = &def.availability {
             assert_eq!(path, "~/.vscode/extensions");
             assert_eq!(prefix, "kilocode.kilo-code");
@@ -734,7 +734,7 @@ parser:
       used: "usage.used"
       limit: "usage.limit"
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
                 AuthDef::FileToken { path, token_path } => {
@@ -770,7 +770,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert_eq!(def.preprocess.len(), 1);
         assert!(matches!(def.preprocess[0], PreprocessStep::StripAnsi));
     }
@@ -794,7 +794,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         assert!(def.preprocess.is_empty());
     }
 }

@@ -665,7 +665,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         let provider = CustomProvider::new(def).unwrap();
         let desc = provider.descriptor();
 
@@ -719,7 +719,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         let provider = CustomProvider::new(def).unwrap();
         let desc = provider.descriptor();
         // 显式指定 icon → 保留原值
@@ -747,7 +747,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         let provider = CustomProvider::new(def).unwrap();
         let desc = provider.descriptor();
         assert_eq!(
@@ -855,7 +855,7 @@ parser:
       limit: "data.quota"
       divisor: 500000
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         if let SourceDef::HttpGet { auth, .. } = &def.source {
             match auth.as_ref().unwrap() {
                 AuthDef::Login {
@@ -933,7 +933,7 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
         let provider = CustomProvider::new(def).unwrap();
         let desc = provider.descriptor();
         assert_eq!(desc.metadata.dashboard_url, "https://my-site.com/dashboard");
