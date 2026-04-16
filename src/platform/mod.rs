@@ -10,6 +10,17 @@
 //! - `single_instance` — 单实例检测（IPC local socket）
 //! - `system` — 系统工具（打开 URL、剪贴板、暗色模式检测、系统信息）
 
+// ============================================================================
+// 应用标识常量（单一来源）
+// ============================================================================
+
+/// 应用显示名称（macOS 路径、通知、桌面条目等）
+pub const APP_NAME: &str = "BananaTray";
+/// 应用小写 ID（Linux 路径、日志目录、socket 名称等）
+pub const APP_ID_LOWER: &str = "bananatray";
+/// 应用 Bundle ID（macOS plist、Linux desktop entry ID）
+pub const APP_BUNDLE_ID: &str = "com.bananatray.app";
+
 // --- GPUI 依赖模块 ---
 // assets 使用 GPUI AssetSource trait，single_instance 仅在运行时使用
 // 关闭 `app` feature 时这些模块不编译

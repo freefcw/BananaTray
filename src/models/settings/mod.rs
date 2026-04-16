@@ -24,10 +24,15 @@ impl Default for SystemSettings {
         Self {
             auto_hide_window: true,
             start_at_login: false,
-            refresh_interval_mins: 5,
+            refresh_interval_mins: Self::DEFAULT_REFRESH_INTERVAL_MINS,
             global_hotkey: "Cmd+Shift+S".to_string(),
         }
     }
+}
+
+impl SystemSettings {
+    /// 默认刷新间隔（分钟）— 供 RefreshScheduler 等模块引用，保持单一来源。
+    pub const DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5;
 }
 
 /// 通知设置

@@ -18,6 +18,7 @@ AppSettings
 
 - **`AppSettings`** — 顶层设置结构体
 - **`SystemSettings`** — `auto_hide_window` / `start_at_login` / `refresh_interval_mins` / `global_hotkey`
+  - 关联常量 `DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5`，供 `RefreshScheduler` 等模块引用，保持默认值单一来源
 - **`NotificationSettings`** — `session_quota_notifications` / `notification_sound`
 - **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / 各 UI 开关
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`

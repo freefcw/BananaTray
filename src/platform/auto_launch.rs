@@ -48,6 +48,7 @@ mod platform {
     use std::path::{Path, PathBuf};
 
     /// Old LaunchAgent plist identifier — used for migration cleanup.
+    /// 保持字面量：历史文件名必须与磁盘上的旧文件一致，不随 APP_BUNDLE_ID 变化。
     const LEGACY_PLIST_NAME: &str = "com.bananatray.app.plist";
 
     pub fn enable() -> Result<()> {
@@ -108,8 +109,7 @@ mod platform {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    const APP_ID: &str = "com.bananatray.app";
-    const APP_NAME: &str = "BananaTray";
+    use crate::platform::{APP_BUNDLE_ID, APP_NAME};
 
     pub fn enable() -> Result<()> {
         let exe = std::env::current_exe().context("failed to determine current executable")?;
@@ -138,7 +138,7 @@ mod platform {
     pub(super) fn entry_path_under(config_dir: &Path) -> PathBuf {
         config_dir
             .join("autostart")
-            .join(format!("{APP_ID}.desktop"))
+            .join(format!("{APP_BUNDLE_ID}.desktop"))
     }
 
     pub(super) fn entry_content(exe: &Path) -> String {

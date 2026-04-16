@@ -270,7 +270,8 @@ fn send_native_notification(title: &str, body: &str, with_sound: bool) {
 
         // 使用时间戳作为唯一 ID，避免通知覆盖
         let identifier = NSString::from_str(&format!(
-            "bananatray-{}",
+            "{}-{}",
+            crate::platform::APP_ID_LOWER,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -349,7 +350,10 @@ fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
 #[cfg(not(target_os = "macos"))]
 fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
     let mut notification = notify_rust::Notification::new();
-    notification.appname("BananaTray").summary(title).body(body);
+    notification
+        .appname(crate::platform::APP_NAME)
+        .summary(title)
+        .body(body);
 
     if with_sound {
         notification.sound_name("default");

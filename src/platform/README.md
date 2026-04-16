@@ -2,6 +2,16 @@
 
 平台适配层，集中管理所有与操作系统交互的代码。
 
+## 应用标识常量（`mod.rs`）
+
+所有模块通过 `crate::platform::` 引用，保持单一来源：
+
+| 常量 | 值 | 用途 |
+|------|----|------|
+| `APP_NAME` | `"BananaTray"` | macOS 路径、通知 appname、桌面条目 Name |
+| `APP_ID_LOWER` | `"bananatray"` | Linux 路径、日志目录、socket 名称、通知 ID 前缀 |
+| `APP_BUNDLE_ID` | `"com.bananatray.app"` | macOS plist、Linux desktop entry ID |
+
 ## 模块分类
 
 ### GPUI 依赖模块（`cfg(feature = "app")`）
