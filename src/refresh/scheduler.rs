@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::models::ProviderId;
+use crate::models::{ProviderId, SystemSettings};
 
 use super::types::{RefreshReason, RefreshResult};
 
@@ -14,8 +14,8 @@ use super::types::{RefreshReason, RefreshResult};
 const MIN_COOLDOWN_SECS: u64 = 30;
 /// 自动刷新禁用时的检查间隔（秒）
 const DISABLED_CHECK_INTERVAL_SECS: u64 = 3600;
-/// 默认刷新间隔（分钟）
-const DEFAULT_INTERVAL_MINS: u64 = 5;
+/// 默认刷新间隔（分钟）— 与 SystemSettings::DEFAULT_REFRESH_INTERVAL_MINS 保持一致
+const DEFAULT_INTERVAL_MINS: u64 = SystemSettings::DEFAULT_REFRESH_INTERVAL_MINS;
 
 /// 纯调度决策引擎
 pub(super) struct RefreshScheduler {

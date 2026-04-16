@@ -100,10 +100,14 @@ pub(crate) fn start_event_pump(
 /// 发送初始配置同步 + 启动首次刷新
 pub(crate) fn trigger_initial_refresh(state: &Rc<RefCell<AppState>>) {
     let config_request = crate::application::build_config_sync_request(&state.borrow().session);
-    let _ = state.borrow().send_refresh(config_request);
-    let _ = state.borrow().send_refresh(RefreshRequest::RefreshAll {
+    if let Err(e) = state.borrow().send_refresh(config_request) {
+        warn!(target: "app", "failed to send initial config sync: {e}");
+    }
+    if let Err(e) = state.borrow().send_refresh(RefreshRequest::RefreshAll {
         reason: RefreshReason::Startup,
-    });
+    }) {
+        warn!(target: "app", "failed to send initial refresh: {e}");
+    }
 }
 
 /// 注册托盘图标事件（左键/右键）

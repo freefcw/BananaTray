@@ -7,6 +7,8 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use super::APP_ID_LOWER;
+
 pub struct LoggingInit {
     pub log_path: PathBuf,
 }
@@ -65,18 +67,18 @@ fn resolve_log_path() -> Result<PathBuf> {
         let path = PathBuf::from(dir);
         fs::create_dir_all(&path)
             .with_context(|| format!("failed to create log directory: {}", path.display()))?;
-        return Ok(path.join("bananatray.log"));
+        return Ok(path.join(format!("{APP_ID_LOWER}.log")));
     }
 
     let base_dir = platform_log_base_dir()
         .or_else(|| env::current_dir().ok().map(|dir| dir.join("logs")))
         .context("failed to resolve log directory")?;
 
-    let log_dir = base_dir.join("bananatray");
+    let log_dir = base_dir.join(APP_ID_LOWER);
     fs::create_dir_all(&log_dir)
         .with_context(|| format!("failed to create log directory: {}", log_dir.display()))?;
 
-    Ok(log_dir.join("bananatray.log"))
+    Ok(log_dir.join(format!("{APP_ID_LOWER}.log")))
 }
 
 /// 返回符合各平台规范的日志根目录：

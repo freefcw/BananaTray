@@ -15,7 +15,9 @@ use log::{error, info, warn};
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc;
 
-const SOCKET_NAME: &str = "bananatray";
+use super::APP_ID_LOWER;
+
+const SOCKET_NAME: &str = APP_ID_LOWER;
 const SHOW_CMD: &[u8] = b"SHOW\n";
 
 /// Outcome of the single-instance check.
@@ -140,14 +142,14 @@ fn notify_existing_instance() -> bool {
 }
 
 /// Clean up stale socket file from a dead instance.
-/// On macOS, the socket file is at /tmp/bananatray.
+/// On macOS, the socket file is at /tmp/{APP_ID_LOWER}.
 /// On Linux, abstract sockets don't leave files, so no cleanup needed.
 /// On Windows, named pipes don't leave files either.
 #[cfg(target_os = "macos")]
 fn cleanup_stale_socket() {
-    let socket_path = std::path::Path::new("/tmp/bananatray");
+    let socket_path = std::path::Path::new("/tmp").join(APP_ID_LOWER);
     if socket_path.exists() {
-        if let Err(e) = std::fs::remove_file(socket_path) {
+        if let Err(e) = std::fs::remove_file(&socket_path) {
             warn!(target: "single_instance", "failed to remove stale socket file: {e}");
         }
     }

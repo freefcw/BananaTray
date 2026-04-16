@@ -139,8 +139,8 @@ impl AppView {
         let slider_bg = theme.nav.pill_active_bg;
 
         // ── 构建滑块元素 ──
-        let slider = target_rect
-            .map(|_| self.render_nav_slider(target_rect, from_rect, generation, slider_bg));
+        let slider =
+            target_rect.map(|tr| self.render_nav_slider(tr, from_rect, generation, slider_bg));
 
         let mut left_arrow = div()
             .id("nav-arrow-left")
@@ -223,12 +223,12 @@ impl AppView {
     /// 渲染导航栏滑块背景（absolute 定位，带果冻动画）
     fn render_nav_slider(
         &self,
-        target_rect: Option<(Pixels, Pixels, Pixels)>,
+        target_rect: (Pixels, Pixels, Pixels),
         from_rect: Option<(Pixels, Pixels, Pixels)>,
         generation: u64,
         bg: Hsla,
     ) -> impl IntoElement {
-        let (to_left, to_width, to_height) = target_rect.unwrap();
+        let (to_left, to_width, to_height) = target_rect;
 
         // 如果有 from_rect 且和 target 不同 → 播放动画
         // 否则直接定位到 target（无动画）
