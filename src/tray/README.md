@@ -15,7 +15,7 @@
 
 ### `display.rs` — 多显示器定位（macOS only）
 
-- 通过 CoreGraphics FFI 获取当前鼠标所在显示器
+- 通过 `platform/core_graphics.rs` 的安全包装获取当前鼠标所在显示器
 - 计算弹窗在托盘图标下方的精确位置
 - `#[cfg(target_os = "macos")]` 守卫
 

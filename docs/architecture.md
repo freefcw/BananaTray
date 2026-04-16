@@ -55,7 +55,7 @@ The current architecture is organized around four layers:
 4. **platform / refresh / providers** — infrastructure services
    - `refresh/` handles background scheduling and event production
    - `providers/` owns provider implementations and runtime registry
-   - `platform/` owns OS integration such as notifications, autostart, paths, and URL open
+   - `platform/` owns OS integration such as notifications, autostart, paths, URL open, and shared macOS display/mouse geometry helpers
 
 Target dependency direction:
 
@@ -118,11 +118,11 @@ BananaTray has two foreground window surfaces with different responsibilities:
 - **Tray popup**
   - opened and owned by `tray/controller.rs`
   - content view is `ui::AppView`
-  - popup lifecycle, auto-hide, and display positioning are tray concerns
+  - popup lifecycle and auto-hide are tray concerns; macOS display geometry comes from `platform/core_graphics.rs`
 - **Settings window**
   - open/reuse scheduling is owned by `runtime/settings_window_opener.rs`
   - content view is `ui::settings_window::SettingsView`
-  - cross-display reopen and delayed creation live in `runtime`
+  - cross-display reopen and delayed creation live in `runtime`, while mouse-display detection reuses `platform/core_graphics.rs`
 
 Why the delayed settings-window open exists:
 
