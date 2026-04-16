@@ -1,8 +1,8 @@
 use super::*;
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
-    AppSettings, ConnectionStatus, ProviderId, ProviderKind, RefreshData, SettingsCapability,
-    TokenInputCapability,
+    AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, RefreshData,
+    SettingsCapability, TokenInputCapability,
 };
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
 
@@ -186,6 +186,70 @@ fn toggle_show_account_info_round_trip() {
         AppAction::UpdateSetting(SettingChange::ToggleShowAccountInfo),
     );
     assert!(session.settings.display.show_account_info);
+}
+
+// ── ToggleShowOverview ──────────────────────────────
+
+#[test]
+fn toggle_show_overview_off_switches_to_first_enabled_provider() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowOverview),
+    );
+
+    assert!(!session.settings.display.show_overview);
+    assert!(matches!(session.nav.active_tab, NavTab::Provider(_)));
+}
+
+#[test]
+fn toggle_show_overview_off_with_all_disabled_stays_on_overview() {
+    let mut session = make_session();
+    // 所有 provider 默认禁用，无需额外设置
+    session.nav.switch_to(NavTab::Overview);
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowOverview),
+    );
+
+    assert!(!session.settings.display.show_overview);
+    // default_provider_tab() 返回 None，tab 不切换
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
+}
+
+#[test]
+fn toggle_show_overview_round_trip() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    let initial_tab = session.nav.active_tab.clone();
+
+    // 关闭 Overview
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowOverview),
+    );
+    assert!(!session.settings.display.show_overview);
+    let tab_after_close = session.nav.active_tab.clone();
+    assert_ne!(tab_after_close, initial_tab); // 应该切换了
+
+    // 重新打开 Overview
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowOverview),
+    );
+    assert!(session.settings.display.show_overview);
+    // 打开 Overview 不影响 active_tab
+    assert_eq!(session.nav.active_tab, tab_after_close);
 }
 
 // ── SelectDebugProvider ─────────────────────────────
