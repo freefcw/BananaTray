@@ -5,12 +5,16 @@
 use anyhow::{bail, Context, Result};
 use log::{debug, warn};
 use std::sync::LazyLock;
+use std::time::Duration;
 use ureq::Agent;
+
+const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
 static AGENT: LazyLock<Agent> = LazyLock::new(|| {
     Agent::new_with_config(
         ureq::config::Config::builder()
             .http_status_as_error(false)
+            .timeout_global(Some(HTTP_TIMEOUT))
             .build(),
     )
 });
@@ -36,6 +40,13 @@ macro_rules! set_headers {
     }};
 }
 
+fn map_http_error(err: ureq::Error) -> anyhow::Error {
+    match err {
+        ureq::Error::Timeout(_) => crate::providers::ProviderError::Timeout.into(),
+        other => anyhow::anyhow!(other),
+    }
+}
+
 /// Perform an HTTP GET and return the response body as a String.
 ///
 /// `headers` is a list of header strings like `"Authorization: Bearer xxx"`.
@@ -45,7 +56,7 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
 
     let response = set_headers!(AGENT.get(url), headers)
         .call()
-        .with_context(|| format!("HTTP GET {url} failed"))?;
+        .map_err(map_http_error)?;
 
     let status = response.status().as_u16();
     debug!(target: "http", "GET {} -> {}", url, status);
@@ -62,6 +73,7 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
     response
         .into_body()
         .read_to_string()
+        .map_err(map_http_error)
         .with_context(|| format!("Failed to read response body from {url}"))
 }
 
@@ -74,7 +86,7 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
 
     let response = set_headers!(AGENT.get(url), headers)
         .call()
-        .with_context(|| format!("HTTP GET {url} failed"))?;
+        .map_err(map_http_error)?;
 
     let status = response.status().as_u16();
 
@@ -93,6 +105,7 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
     let body = response
         .into_body()
         .read_to_string()
+        .map_err(map_http_error)
         .with_context(|| format!("Failed to read response body from {url}"))?;
     raw.push_str(&body);
 
@@ -105,7 +118,7 @@ pub fn get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> 
 
     let response = set_headers!(AGENT.get(url), headers)
         .call()
-        .with_context(|| format!("HTTP GET {url} failed"))?;
+        .map_err(map_http_error)?;
 
     let status = response.status().as_u16().to_string();
     debug!(target: "http", "GET {} -> {}", url, status);
@@ -113,6 +126,7 @@ pub fn get_with_status(url: &str, headers: &[&str]) -> Result<(String, String)> 
     let body = response
         .into_body()
         .read_to_string()
+        .map_err(map_http_error)
         .with_context(|| format!("Failed to read response body from {url}"))?;
 
     Ok((body, status))
@@ -127,7 +141,7 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
         headers
     )
     .send(body.as_bytes())
-    .with_context(|| format!("HTTP POST {url} failed"))?;
+    .map_err(map_http_error)?;
 
     let status = response.status().as_u16();
     debug!(target: "http", "POST {} -> {}", url, status);
@@ -144,6 +158,7 @@ pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
     response
         .into_body()
         .read_to_string()
+        .map_err(map_http_error)
         .with_context(|| format!("Failed to read response body from POST {url}"))
 }
 
@@ -158,7 +173,7 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
         headers
     )
     .send(body.as_bytes())
-    .with_context(|| format!("HTTP POST {url} failed"))?;
+    .map_err(map_http_error)?;
 
     let status = response.status().as_u16();
     debug!(target: "http", "POST {} -> {}", url, status);
@@ -175,6 +190,7 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
     response
         .into_body()
         .read_to_string()
+        .map_err(map_http_error)
         .with_context(|| format!("Failed to read response body from POST {url}"))
 }
 
