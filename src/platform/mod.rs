@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_imports)]
 //! 平台适配层
 //!
 //! 集中管理所有平台相关的代码：
@@ -19,6 +18,7 @@ pub const APP_NAME: &str = "BananaTray";
 /// 应用小写 ID（Linux 路径、日志目录、socket 名称等）
 pub const APP_ID_LOWER: &str = "bananatray";
 /// 应用 Bundle ID（macOS plist、Linux desktop entry ID）
+#[cfg(target_os = "linux")]
 pub const APP_BUNDLE_ID: &str = "com.bananatray.app";
 
 // --- GPUI 依赖模块 ---
@@ -28,9 +28,6 @@ pub const APP_BUNDLE_ID: &str = "com.bananatray.app";
 pub(crate) mod assets;
 #[cfg(feature = "app")]
 pub(crate) mod single_instance;
-
-#[cfg(feature = "app")]
-pub(crate) use assets::Assets;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机

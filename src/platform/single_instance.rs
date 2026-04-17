@@ -23,10 +23,10 @@ use std::sync::mpsc;
 
 use super::APP_ID_LOWER;
 
-const SOCKET_NAME: &str = APP_ID_LOWER;
 const SHOW_CMD: &[u8] = b"SHOW\n";
 
 /// Outcome of the single-instance check.
+#[allow(dead_code)]
 pub enum InstanceRole {
     /// This is the first (primary) instance.
     /// The `mpsc::Receiver<()>` yields a value each time a secondary instance
@@ -38,7 +38,7 @@ pub enum InstanceRole {
 
 #[cfg(not(target_os = "macos"))]
 fn socket_name() -> Name<'static> {
-    SOCKET_NAME
+    APP_ID_LOWER
         .to_ns_name::<GenericNamespaced>()
         .expect("invalid socket name")
 }
@@ -61,6 +61,7 @@ fn socket_file_path() -> PathBuf {
 
 /// Try to become the primary instance. If another instance is already running,
 /// send a "SHOW" command and return `Secondary`.
+#[allow(dead_code)]
 pub fn ensure_single_instance() -> InstanceRole {
     // Try to create a listener (become primary).
     let listener = ListenerOptions::new().name(socket_name()).create_sync();
