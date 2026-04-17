@@ -18,7 +18,7 @@
 - **`apply_tray_icon(cx, request)`** — 根据 `TrayIconRequest` 更新系统托盘图标
 - 支持 `TrayIconStyle`：Monochrome / Colorful / Dynamic
 - Dynamic 模式根据当前 Provider 的 `StatusLevel` 切换图标颜色（Green/Yellow/Red）
-- macOS 使用 `setTemplate` hack 确保图标在亮/暗模式下正确显示
+- macOS 使用 GPUI 原生 `set_tray_icon_rendering_mode` API 控制图标渲染模式（Adaptive / Original），确保亮/暗模式下正确显示
 
 ## 图标资产
 
