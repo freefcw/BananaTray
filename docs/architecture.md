@@ -2,7 +2,7 @@
 
 ## Tech Stack
 
-- **Language**: Rust (nightly — required by GPUI)
+- **Language**: Rust (stable)
 - **UI**: GPUI (`adabraka-gpui` v0.5.x) + `adabraka-ui` v0.3.x
 - **Async**: smol v2 (background refresh coordinator)
 - **HTTP**: ureq v3 (blocking, used from async via `smol::unblock`)
@@ -256,3 +256,35 @@ Architectural testability notes:
 - Enforcement is automated by `scripts/check-gpui-imports.sh`, wired into CI, and exposed through `.pre-commit-config.yaml` for local commits.
 - UI files should use explicit GPUI imports plus explicit extension traits. In practice the most common trait imports are `Styled`, `ParentElement`, `InteractiveElement`, `StatefulInteractiveElement`, `IntoElement`, `AnimationExt`, and `AppContext`.
 - This keeps GPUI-heavy modules readable, makes stateful-builder transitions visible in code review, and reduces the chance of reintroducing the same failure pattern.
+
+## Workaround Ledger
+
+The following workarounds exist in the codebase with clear purpose and removal criteria. Do not remove them without verifying the underlying issue has been resolved.
+
+### W1. 10ms delayed settings-window open
+
+- **Location**: `src/runtime/settings_window_opener.rs` — `schedule_open_settings_window()`
+- **Purpose**: Avoids `RefCell` reentrancy panic. Some actions emit `OpenSettingsWindow` while the popup is still borrowing `Rc<RefCell<AppState>>`. Opening a window immediately from the same call stack risks reentrant `borrow_mut()`.
+- **Trigger condition**: Every `OpenSettingsWindow` action that fires while popup code holds a borrow on `AppState`.
+- **Removal condition**: When GPUI provides a deferred-window-creation API that guarantees the borrow is released first, or when the popup view no longer shares the same `Rc<RefCell<AppState>>` with the settings-window path.
+
+### W2. +1px resize nudge on settings window
+
+- **Location**: `src/runtime/settings_window_opener.rs` — `open_settings_window()`
+- **Purpose**: Forces GPUI to recalculate the window layout after initial render. Without the nudge, the settings window may render with incorrect content size on first open (content clipped or offset).
+- **Trigger condition**: Every time a new settings window is created.
+- **Removal condition**: When GPUI's `open_window` + `show_window` reliably produces correct initial layout without an extra resize cycle.
+
+### W3. Per-notification thread spawning
+
+- **Location**: `src/platform/notification.rs` — `spawn_notification()`
+- **Purpose**: Prevents macOS system notification calls from causing GPUI `RefCell` reentrancy panics. On macOS, both `UNUserNotificationCenter` and `osascript` can trigger synchronous callbacks into the app's main run loop, which may re-enter GPUI state while a borrow is active.
+- **Trigger condition**: Every system notification dispatch (`send_system_notification`, `send_plain_notification`).
+- **Removal condition**: When GPUI provides a notification-safe dispatch mechanism (e.g. `cx.spawn()` that defers the notification send to a safe turn), or when the macOS notification path no longer synchronously calls back into the app.
+
+### W4. Coordinator timeout guard (stop-waiting-only)
+
+- **Location**: `src/refresh/coordinator.rs` — `run_refresh_with_timeout()`
+- **Purpose**: Last-resort protection when a provider blocks inside CLI / HTTP / parser code. The coordinator stops waiting and clears in-flight state so future refreshes are not wedged. However, the underlying blocking task may continue running until its own I/O timeout fires — the coordinator cannot truly cancel it.
+- **Trigger condition**: A provider refresh exceeds the coordinator timeout (30s production / 100ms test).
+- **Removal condition**: When all provider implementations use truly cancellable I/O (e.g. cooperative `smol::unblock` with cancellation tokens, or async ureq with abort handles), so that a timeout can stop both the wait and the underlying work.
