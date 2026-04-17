@@ -12,6 +12,12 @@
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG autostart (Linux)
 
+## Feature Contract
+
+- 默认受支持的产品路径是 `app` feature 开启的托盘应用构建。
+- `bananatray` 二进制目标通过 Cargo `required-features = ["app"]` 显式要求 `app` feature。
+- `--no-default-features` 不再表示“完整 app 可构建”；它只保留给 GPUI-free `lib` 层的本地检查/测试。
+
 ## AppState Decomposition
 
 `AppState` (in `runtime/app_state.rs`) is a composition container holding:
@@ -203,7 +209,9 @@ Custom providers are automatically registered in `settings.json` through three l
 
 ## Testing
 
-run with `cargo test --lib`. Coverage:
+标准测试命令是 `cargo test --lib`。如果只想验证纯逻辑层，也可以本地运行 `cargo test --lib --no-default-features` 或 `cargo check --lib --no-default-features`。这类命令只覆盖 `lib` 面，不代表 BananaTray app shell 支持在无 `app` feature 下构建。
+
+Coverage:
 
 - `models/` — ProviderKind, QuotaInfo, AppSettings, PopupLayout
 - `application/state.rs` — ProviderStore, NavigationState, SettingsUiState
@@ -224,6 +232,7 @@ Architectural testability notes:
 - `application/` and `models/` remain GPUI-free and are the primary unit-test surface
 - `runtime/settings_writer.rs` is tested directly because it is thread-based but GPUI-free in behavior
 - `runtime` itself still compiles only under the `app` feature, but its shared state and execution responsibilities are now more isolated from concrete UI storage than before
+- `application/newapi_ops.rs` is intentionally compiled only when `app` is enabled or when unit tests need it, because its production caller is the app runtime
 
 ## GPUI Import Discipline
 

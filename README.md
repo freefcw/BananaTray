@@ -54,8 +54,11 @@ cargo run
 # Build release
 cargo build --release
 
-# Run tests (lib only — binary tests require Metal/GPUI context)
+# Run tests (standard command)
 cargo test --lib
+
+# Optional local verification of the GPUI-free lib surface only
+cargo test --lib --no-default-features
 
 # Lint
 cargo clippy
@@ -63,6 +66,12 @@ cargo clippy
 # Format
 cargo fmt
 ```
+
+Feature contract:
+
+- Default build enables `app` and is the supported application path for `cargo run` / `cargo build`.
+- `--no-default-features` is **not** a supported app build mode. It is kept only for GPUI-free `lib` checks/tests.
+- The `bananatray` binary target explicitly requires the `app` feature.
 
 ## macOS Bundle & DMG
 
@@ -132,8 +141,8 @@ Runtime logs use `fern` with dual output (stdout + file):
 
 ```
 src/
-  main.rs            — Entry point: Application::run(), CLI dispatch
-  lib.rs             — Crate root. `ui` module behind cfg(feature = "app")
+  main.rs            — App binary entry point (requires `app` feature): Application::run(), CLI dispatch
+  lib.rs             — Crate root for reusable/testable logic; `runtime` / `tray` / `ui` compile behind `cfg(feature = "app")`
   bootstrap.rs       — App initialization (UI setup, refresh, tray events)
   ui/                — GPUI views, settings window, widgets
   application/       — Action-Reducer-Effect pipeline (state, reducer, selectors)
@@ -155,5 +164,5 @@ Key design decisions:
 1. **AppState decomposition** — `AppState` (`ui/bridge.rs`) wraps `AppSession` (`application/state.rs`), which holds `ProviderStore`, `NavigationState`, `SettingsUiState`, `DebugUiState` + `AppSettings`. Sub-states are GPUI-free for testability.
 2. **Action-Reducer-Effect** — Elm/Redux-style unidirectional data flow: `AppAction → reduce() → Vec<AppEffect> → runtime/`. Pure reducers and selectors are fully testable.
 3. **Provider extensibility** — `AiProvider` trait with `metadata() -> ProviderMetadata`. Adding a new provider requires only implementing the trait and registering via `register_providers!` macro.
-4. **GPUI isolation** — `ui` module is behind `cfg(feature = "app")` in `lib.rs` because GPUI proc macros crash test compilation. Pure logic lives in `application/`, `models/`, and `providers/`.
+4. **GPUI isolation** — `runtime` / `tray` / `ui` compile only with `feature = "app"` in `lib.rs`. Pure logic lives in `application/`, `models/`, and `providers/`, and `--no-default-features` is kept only for local `lib` verification.
 5. **Refresh architecture** — `RefreshCoordinator` runs in a dedicated thread, receives `RefreshRequest` messages, applies cooldown/dedup, spawns concurrent refresh tasks, and sends `RefreshEvent` results back to the UI thread.

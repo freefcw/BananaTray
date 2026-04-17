@@ -58,7 +58,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`rollback_newapi_create()`** — 新增模式失败回滚：撤销预注册的 provider ID + 恢复空表单 + 回退 `selected_provider`
 - **`newapi_save_notification_keys()`** — 根据保存结果选择通知 i18n key（partial / edit_success / save_success）
 
-本模块为纯函数，不包含 I/O 或 GPUI 依赖。
+本模块为纯函数，不包含 I/O 或 GPUI 依赖。生产构建中它只在 `app` feature 开启时参与编译；无 `app` 的 `lib` 本地测试场景仍会编译该模块以保留单元测试覆盖。
 
 ### `selectors/` — 视图状态选择器
 

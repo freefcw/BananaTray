@@ -14,8 +14,11 @@ path = "src/lib.rs"
 [[bin]]
 name = "bananatray"
 path = "src/main.rs"
+required-features = ["app"]
 
 [features]
+# `app` gates the GPUI tray application shell.
+# `--no-default-features` is kept only for lib-layer local verification.
 default = ["app"]
 app = []
 

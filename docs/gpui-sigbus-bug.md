@@ -172,8 +172,8 @@ pre-commit run --all-files
 1. **`gpui-macros/Cargo.toml`** — `doctest = false`：proc-macro crate 的 doctest 在测试目标编译时触发 syn 递归入口
 2. **`gpui-macros/src/gpui_macros.rs`** — `#![recursion_limit = "512"]`：防止宏展开深度超过默认 128 导致栈溢出
 
-> 更新（2026-04-13）：BananaTray 已移除 `--no-default-features` workaround，当前直接运行
-> **`cargo test --lib`** 即可。若手动关闭 `app` feature，`cfg(feature = "app")` 模块仍会按预期跳过编译。
+> 更新（2026-04-16）：BananaTray 的正式产品路径是默认开启 `app` feature 的托盘应用构建。
+> **`cargo test --lib`** 是标准测试命令；`--no-default-features` 仅保留给 GPUI-free `lib` 层局部验证，不再表示 app shell 的受支持构建模式。
 
 ## 后续维护建议
 
@@ -214,7 +214,7 @@ commit `2e36981` (2026-04-13) 引入了 CI 和 pre-commit 级别的 `use gpui::*
 ---
 
 **记录时间**：2026-03-28
-**最后更新**：2026-04-13
+**最后更新**：2026-04-16
 **状态**：已完全解决
 
 ### 最终解决方案
@@ -225,4 +225,4 @@ commit `2e36981` (2026-04-13) 引入了 CI 和 pre-commit 级别的 `use gpui::*
 1. (2026-04-11) `simple_input.rs` 测试模块改为精确 import
 2. (2026-04-13) commit `2e36981` 全局禁止 `use gpui::*`，替换为显式导入。CI + pre-commit 中添加 `scripts/check-gpui-imports.sh` 检查。
 
-效果：`cargo test`、`cargo test --lib`、`cargo test --all-targets` 均正常工作，无需 `--no-default-features`。`tests/state_tests.rs` 冗余集成测试已删除。
+效果：默认 feature 下，`cargo test`、`cargo test --lib`、`cargo test --all-targets` 均正常工作，无需 `--no-default-features`。关闭默认 feature 的场景仅保留给 `lib` 层局部验证；`tests/state_tests.rs` 冗余集成测试已删除。
