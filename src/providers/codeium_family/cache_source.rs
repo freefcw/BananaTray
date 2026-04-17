@@ -1,8 +1,7 @@
 use super::parse_strategy::{CacheParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
-use crate::models::{QuotaInfo, QuotaType, RefreshData};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
 use crate::providers::ProviderError;
-use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use log::{debug, warn};
@@ -199,17 +198,11 @@ fn build_quota_from_cached(
     let effective_remaining = if is_stale { 100.0 } else { pct };
     let used = 100.0 - effective_remaining;
 
-    let reset_text = if is_stale {
+    let reset_detail = if is_stale {
         // 重置时间已过，不再展示倒计时
         None
     } else {
-        reset_at_unix
-            .and_then(|ts| {
-                chrono::DateTime::from_timestamp(ts, 0)
-                    .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-            })
-            .as_deref()
-            .and_then(time_utils::format_reset_countdown)
+        reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
     };
 
     Some(QuotaInfo::with_details(
@@ -217,7 +210,7 @@ fn build_quota_from_cached(
         used,
         100.0,
         QuotaType::ModelSpecific(label.to_string()),
-        reset_text,
+        reset_detail,
     ))
 }
 
@@ -469,9 +462,15 @@ mod tests {
         let data = read_via_cached_plan_info(&conn, &spec).unwrap();
         assert_eq!(data.account_tier, Some("Pro".to_string()));
         assert_eq!(data.quotas.len(), 2);
-        assert_eq!(data.quotas[0].label, "Daily Quota");
+        assert_eq!(
+            data.quotas[0].label_spec,
+            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
+        );
         assert!((data.quotas[0].used - 59.0).abs() < 0.01); // 100 - 41 = 59
-        assert_eq!(data.quotas[1].label, "Weekly Quota");
+        assert_eq!(
+            data.quotas[1].label_spec,
+            crate::models::QuotaLabelSpec::Raw("Weekly Quota".to_string())
+        );
         assert!((data.quotas[1].used - 30.0).abs() < 0.01); // 100 - 70 = 30
     }
 
@@ -479,9 +478,15 @@ mod tests {
     fn test_build_quota_from_cached_fresh() {
         let future_ts = chrono::Utc::now().timestamp() + 3600;
         let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(future_ts)).unwrap();
-        assert_eq!(q.label, "Daily Quota");
+        assert_eq!(
+            q.label_spec,
+            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
+        );
         assert!((q.used - 59.0).abs() < 0.01);
-        assert!(q.detail_text.is_some()); // 有倒计时
+        assert!(matches!(
+            q.detail_spec,
+            Some(QuotaDetailSpec::ResetAt { .. })
+        )); // 有倒计时
     }
 
     #[test]
@@ -489,9 +494,12 @@ mod tests {
         // reset 时间已过期 → 配额已重置，应视为 0% used
         let past_ts = chrono::Utc::now().timestamp() - 3600;
         let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(past_ts)).unwrap();
-        assert_eq!(q.label, "Daily Quota");
+        assert_eq!(
+            q.label_spec,
+            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
+        );
         assert!((q.used - 0.0).abs() < 0.01); // 过期后重置为 0% used
-        assert!(q.detail_text.is_none()); // 不展示过期的倒计时
+        assert!(q.detail_spec.is_none()); // 不展示过期的倒计时
     }
 
     #[test]

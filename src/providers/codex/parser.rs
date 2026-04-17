@@ -1,8 +1,6 @@
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::ProviderError;
-use crate::utils::time_utils;
 use anyhow::Result;
-use rust_i18n::t;
 
 pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
     let mut quotas = Vec::new();
@@ -18,7 +16,10 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
     let first_line = headers.lines().next().unwrap_or("");
     if first_line.contains("401") || first_line.contains("403") {
         return Err(
-            ProviderError::session_expired(Some(&t!("hint.relogin_cli", cli = "codex"))).into(),
+            ProviderError::session_expired(Some(FailureAdvice::ReloginCli {
+                cli: "codex".to_string(),
+            }))
+            .into(),
         );
     }
 
@@ -50,7 +51,7 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
     if found_headers {
         if let Some(primary) = primary_percent {
             quotas.push(QuotaInfo::with_details(
-                t!("quota.label.session").to_string(),
+                QuotaLabelSpec::Session,
                 primary,
                 100.0,
                 QuotaType::Session,
@@ -59,7 +60,7 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
         }
         if let Some(secondary) = secondary_percent {
             quotas.push(QuotaInfo::with_details(
-                t!("quota.label.weekly").to_string(),
+                QuotaLabelSpec::Weekly,
                 secondary,
                 100.0,
                 QuotaType::Weekly,
@@ -68,7 +69,7 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
         }
         if let Some(credits) = credits_balance {
             quotas.push(QuotaInfo::with_details(
-                t!("quota.label.credits").to_string(),
+                QuotaLabelSpec::Credits,
                 0.0,
                 credits,
                 QuotaType::Credit,
@@ -94,11 +95,11 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
             let reset_at = primary.get("reset_at").and_then(|v| v.as_i64());
 
             quotas.push(QuotaInfo::with_details(
-                t!("quota.label.session").to_string(),
+                QuotaLabelSpec::Session,
                 used,
                 100.0,
                 QuotaType::Session,
-                reset_at.map(time_utils::format_reset_from_epoch),
+                reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs }),
             ));
         }
 
@@ -110,11 +111,11 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
             let reset_at = secondary.get("reset_at").and_then(|v| v.as_i64());
 
             quotas.push(QuotaInfo::with_details(
-                t!("quota.label.weekly").to_string(),
+                QuotaLabelSpec::Weekly,
                 used,
                 100.0,
                 QuotaType::Weekly,
-                reset_at.map(time_utils::format_reset_from_epoch),
+                reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs }),
             ));
         }
     }
@@ -136,9 +137,9 @@ mod tests {
         let raw = "HTTP/1.1 200 OK\r\nx-codex-primary-used-percent: 25\r\nx-codex-secondary-used-percent: 80\r\nx-codex-credits-balance: 12.5\r\n\r\n";
         let quotas = parse_usage_response(raw).unwrap();
         assert_eq!(quotas.len(), 3);
-        assert_eq!(quotas[0].label, "Session (5h)");
-        assert_eq!(quotas[1].label, "Weekly");
-        assert_eq!(quotas[2].label, "Credits");
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::Session);
+        assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Weekly);
+        assert_eq!(quotas[2].label_spec, QuotaLabelSpec::Credits);
     }
 
     #[test]
@@ -154,6 +155,9 @@ mod tests {
         assert_eq!(quotas.len(), 2);
         assert_eq!(quotas[0].used, 33.0);
         assert_eq!(quotas[1].used, 66.0);
-        assert!(quotas[0].detail_text.is_some());
+        assert!(matches!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetAt { .. })
+        ));
     }
 }

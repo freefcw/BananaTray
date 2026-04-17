@@ -5,13 +5,12 @@
 
 use super::credentials::{refresh_oauth_token, save_credentials_atomic, ClaudeOAuthCredentials};
 use super::probe::UsageProbe;
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::http_client;
 use crate::providers::ProviderError;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
 use log::debug;
-use rust_i18n::t;
 use serde::Deserialize;
 
 /// Claude API 获取方式（无状态）
@@ -57,18 +56,20 @@ impl ClaudeApiProbe {
 
         let status_code: u16 = status.parse().unwrap_or(0);
         if status_code == 401 || status_code == 403 {
-            return Err(ProviderError::session_expired(Some(&t!(
-                "hint.relogin_cli",
-                cli = "claude"
-            )))
-            .into());
+            return Err(
+                ProviderError::session_expired(Some(FailureAdvice::ReloginCli {
+                    cli: "claude".to_string(),
+                }))
+                .into(),
+            );
         }
         if status_code >= 400 {
-            return Err(ProviderError::fetch_failed(&t!(
-                "hint.api_http_error",
-                status = status_code
-            ))
-            .into());
+            return Err(
+                ProviderError::fetch_failed_with_advice(FailureAdvice::ApiHttpError {
+                    status: status_code.to_string(),
+                })
+                .into(),
+            );
         }
 
         let usage: UsageResponse =
@@ -81,13 +82,14 @@ impl ClaudeApiProbe {
     fn push_percent_quota(
         quotas: &mut Vec<QuotaInfo>,
         data: Option<UsageQuotaData>,
-        label: &str,
+        label: QuotaLabelSpec,
         kind: QuotaType,
     ) {
         if let Some(d) = data {
             if let Some(utilization) = d.utilization {
                 let reset_at = d.resets_at.as_ref().and_then(|s| {
-                    time_utils::parse_iso8601_to_epoch(s).map(time_utils::format_reset_from_epoch)
+                    time_utils::parse_iso8601_to_epoch(s)
+                        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
                 });
                 quotas.push(QuotaInfo::with_details(
                     label,
@@ -104,32 +106,32 @@ impl ClaudeApiProbe {
     fn parse_usage(usage: UsageResponse) -> Vec<QuotaInfo> {
         let mut quotas = Vec::new();
 
-        let session_label = t!("quota.label.session").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.five_hour,
-            &session_label,
+            QuotaLabelSpec::Session,
             QuotaType::Session,
         );
-        let weekly_label = t!("quota.label.weekly").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.seven_day,
-            &weekly_label,
+            QuotaLabelSpec::Weekly,
             QuotaType::Weekly,
         );
-        let sonnet_label = t!("quota.label.weekly_model", model = "Sonnet").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.seven_day_sonnet,
-            &sonnet_label,
+            QuotaLabelSpec::WeeklyModel {
+                model: "Sonnet".to_string(),
+            },
             QuotaType::ModelSpecific("Sonnet".to_string()),
         );
-        let opus_label = t!("quota.label.weekly_model", model = "Opus").to_string();
         Self::push_percent_quota(
             &mut quotas,
             usage.seven_day_opus,
-            &opus_label,
+            QuotaLabelSpec::WeeklyModel {
+                model: "Opus".to_string(),
+            },
             QuotaType::ModelSpecific("Opus".to_string()),
         );
 
@@ -140,7 +142,7 @@ impl ClaudeApiProbe {
                     (extra.used_credits, extra.monthly_limit)
                 {
                     quotas.push(QuotaInfo::with_details(
-                        t!("quota.label.extra_usage").to_string(),
+                        QuotaLabelSpec::ExtraUsage,
                         used_credits / 100.0,
                         monthly_limit / 100.0,
                         QuotaType::Credit,

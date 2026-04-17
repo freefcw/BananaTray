@@ -77,7 +77,7 @@ impl RefreshCoordinator {
                         RefreshOutcome {
                             id,
                             result: RefreshResult::Unavailable {
-                                message: ProviderErrorPresenter::to_message(&classified),
+                                failure: ProviderErrorPresenter::to_failure(&classified),
                             },
                         }
                     }
@@ -87,7 +87,7 @@ impl RefreshCoordinator {
                         RefreshOutcome {
                             id,
                             result: RefreshResult::Failed {
-                                error: ProviderErrorPresenter::to_message(&classified),
+                                failure: ProviderErrorPresenter::to_failure(&classified),
                                 error_kind,
                             },
                         }

@@ -44,6 +44,133 @@ impl QuotaType {
 }
 
 // ============================================================================
+// 配额展示语义
+// ============================================================================
+
+/// 配额标题的展示语义。
+///
+/// Provider 负责解释原始响应，selector/UI 再基于当前 locale 生成最终文案。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QuotaLabelSpec {
+    /// 上游或用户自定义原文，保持原样展示
+    Raw(String),
+    Session,
+    Weekly,
+    WeeklyModel {
+        model: String,
+    },
+    /// 周配额 + 套餐层级（如 Kimi 的 Moderato）
+    WeeklyTier {
+        tier: String,
+    },
+    Credits,
+    BonusCredits,
+    ExtraUsage,
+    PremiumRequests {
+        plan: String,
+    },
+    ChatCompletions {
+        plan: String,
+    },
+    MonthlyTier {
+        tier: String,
+    },
+    OnDemand,
+    Team,
+}
+
+impl QuotaLabelSpec {
+    /// 语言无关的稳定 key，用于设置持久化与 UI identity。
+    pub fn stable_key(&self, quota_type: &QuotaType) -> String {
+        match self {
+            Self::Raw(label) => slugify_key(label),
+            Self::Session => "session".into(),
+            Self::Weekly | Self::WeeklyTier { .. } => "weekly".into(),
+            Self::WeeklyModel { model } => format!("model:{model}"),
+            Self::Credits => {
+                if *quota_type == QuotaType::Credit {
+                    "credit".into()
+                } else {
+                    quota_type.stable_key()
+                }
+            }
+            Self::BonusCredits => "bonus-credits".into(),
+            Self::ExtraUsage => "extra-usage".into(),
+            Self::PremiumRequests { .. } => "premium-requests".into(),
+            Self::ChatCompletions { .. } => "chat-completions".into(),
+            Self::MonthlyTier { .. } => "monthly-tier".into(),
+            Self::OnDemand => "on-demand".into(),
+            Self::Team => "team".into(),
+        }
+    }
+}
+
+impl From<String> for QuotaLabelSpec {
+    fn from(value: String) -> Self {
+        Self::Raw(value)
+    }
+}
+
+impl From<&str> for QuotaLabelSpec {
+    fn from(value: &str) -> Self {
+        Self::Raw(value.to_string())
+    }
+}
+
+impl From<&String> for QuotaLabelSpec {
+    fn from(value: &String) -> Self {
+        Self::Raw(value.clone())
+    }
+}
+
+/// 配额详情的展示语义（卡片第四行）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum QuotaDetailSpec {
+    /// 上游或用户自定义原文，保持原样展示
+    Raw(String),
+    Unlimited,
+    RequestCount {
+        used: u32,
+        total: u32,
+    },
+    CreditRemaining {
+        remaining: f64,
+        total: f64,
+    },
+    /// 重置时间戳（selector 按当前 locale 格式化倒计时）
+    ResetAt {
+        epoch_secs: i64,
+    },
+    /// 仅有日期文本，外壳文案由 selector 本地化
+    ResetDate {
+        date: String,
+    },
+    ExpiresInDays {
+        days: u32,
+    },
+}
+
+fn slugify_key(raw: &str) -> String {
+    let mut key = String::new();
+    let mut last_was_sep = false;
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch.to_ascii_lowercase());
+            last_was_sep = false;
+        } else if !last_was_sep {
+            key.push('-');
+            last_was_sep = true;
+        }
+    }
+    let key = key.trim_matches('-');
+    if key.is_empty() {
+        "general".to_string()
+    } else {
+        key.to_string()
+    }
+}
+
+// ============================================================================
 // 用量状态等级
 // ============================================================================
 
@@ -89,13 +216,17 @@ pub struct QuotaInfo {
     pub used: f64,
     /// 总配额
     pub limit: f64,
-    /// 配额类型标签（如 "Session (5h)", "Weekly", "Pro"）
-    pub label: String,
     /// 配额类型
     #[serde(default = "default_quota_type")]
     pub quota_type: QuotaType,
-    /// 第四行详情文本（由 Provider 提供，如重置时间、额度详情等）
-    pub detail_text: Option<String>,
+    /// 配额 identity（语言无关，用于设置持久化、UI key、动画 key）
+    #[serde(default)]
+    pub stable_key: String,
+    /// 标题展示语义
+    #[serde(default = "default_quota_label_spec")]
+    pub label_spec: QuotaLabelSpec,
+    /// 第四行详情展示语义
+    pub detail_spec: Option<QuotaDetailSpec>,
     /// 余额模式：直接存储剩余额度值（与 used/limit 进度条模式互斥）
     #[serde(default)]
     pub remaining_balance: Option<f64>,
@@ -105,50 +236,102 @@ fn default_quota_type() -> QuotaType {
     QuotaType::General
 }
 
+fn default_quota_label_spec() -> QuotaLabelSpec {
+    QuotaLabelSpec::Raw("quota".to_string())
+}
+
 impl QuotaInfo {
     pub fn new(label: impl Into<String>, used: f64, limit: f64) -> Self {
+        let label = label.into();
         Self {
             used,
             limit,
-            label: label.into(),
             quota_type: QuotaType::General,
-            detail_text: None,
+            stable_key: slugify_key(&label),
+            label_spec: QuotaLabelSpec::Raw(label),
+            detail_spec: None,
             remaining_balance: None,
         }
     }
 
     /// 创建带完整信息的配额
     pub fn with_details(
-        label: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
         used: f64,
         limit: f64,
         quota_type: QuotaType,
-        detail_text: Option<String>,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        let label_spec = label.into();
+        let stable_key = label_spec.stable_key(&quota_type);
+        Self {
+            used,
+            limit,
+            quota_type,
+            stable_key,
+            label_spec,
+            detail_spec,
+            remaining_balance: None,
+        }
+    }
+
+    /// 创建带显式 key 的配额
+    pub fn with_key(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        used: f64,
+        limit: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
     ) -> Self {
         Self {
             used,
             limit,
-            label: label.into(),
             quota_type,
-            detail_text,
+            stable_key: stable_key.into(),
+            label_spec: label.into(),
+            detail_spec,
             remaining_balance: None,
         }
     }
 
     /// 创建余额模式的配额（无进度条，仅展示余额和已用）
     pub fn balance_only(
-        label: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
         remaining: f64,
         used: Option<f64>,
         quota_type: QuotaType,
-        detail_text: Option<String>,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        let label_spec = label.into();
+        let stable_key = label_spec.stable_key(&quota_type);
+        Self {
+            used: used.unwrap_or(0.0),
+            limit: 0.0,
+            quota_type,
+            stable_key,
+            label_spec,
+            detail_spec,
+            remaining_balance: Some(remaining),
+        }
+    }
+
+    /// 创建带显式 key 的余额模式配额
+    pub fn balance_only_with_key(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        remaining: f64,
+        used: Option<f64>,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
     ) -> Self {
         Self {
             used: used.unwrap_or(0.0),
             limit: 0.0,
-            label: label.into(),
             quota_type,
-            detail_text,
+            stable_key: stable_key.into(),
+            label_spec: label.into(),
+            detail_spec,
             remaining_balance: Some(remaining),
         }
     }
@@ -261,6 +444,54 @@ impl QuotaInfo {
 }
 
 // ============================================================================
+// Provider 失败语义
+// ============================================================================
+
+/// Provider 最近一次失败的稳定语义载荷。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderFailure {
+    pub reason: FailureReason,
+    #[serde(default)]
+    pub advice: Option<FailureAdvice>,
+    #[serde(default)]
+    pub raw_detail: Option<String>,
+}
+
+/// 失败原因主类型。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FailureReason {
+    CliNotFound { cli_name: String },
+    AuthRequired,
+    SessionExpired,
+    FolderTrustRequired,
+    UpdateRequired { version: Option<String> },
+    ConfigMissing { key: String },
+    Unavailable,
+    ParseFailed,
+    Timeout,
+    NoData,
+    NetworkFailed,
+    FetchFailed,
+}
+
+/// Provider 建议动作/补充说明的稳定语义。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FailureAdvice {
+    LoginCli { cli: String },
+    ReloginCli { cli: String },
+    RefreshCli { cli: String },
+    LoginApp { app: String },
+    CliExitFailed { code: i32 },
+    ApiHttpError { status: String },
+    ApiError { message: String },
+    NoOauthCreds { cli: String },
+    BothUnavailable { name: String },
+    TrustFolder { cli: String },
+    CannotParseQuota,
+    TokenStillInvalid,
+}
+
+// ============================================================================
 // 刷新结果数据
 // ============================================================================
 
@@ -366,8 +597,9 @@ pub struct ProviderStatus {
     /// 上次刷新的结果状态（结构化，selector 层负责 i18n 格式化）
     #[serde(default)]
     pub update_status: Option<UpdateStatus>,
-    /// 最近一次刷新失败时的提示文案
-    pub error_message: Option<String>,
+    /// 最近一次失败的稳定语义载荷
+    #[serde(default)]
+    pub last_failure: Option<ProviderFailure>,
     /// 错误类型分类（用于 UI 决定操作）
     #[serde(default)]
     pub error_kind: ErrorKind,
@@ -411,7 +643,7 @@ impl ProviderStatus {
             account_email: None,
             account_tier: None,
             update_status: None,
-            error_message: None,
+            last_failure: None,
             error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
             settings_capability: SettingsCapability::default(),
@@ -429,15 +661,15 @@ impl ProviderStatus {
         self.connection = ConnectionStatus::Connected;
         self.last_refreshed_instant = Some(Instant::now());
         self.update_status = None;
-        self.error_message = None;
+        self.last_failure = None;
         self.error_kind = ErrorKind::default();
     }
 
-    pub fn mark_unavailable(&mut self, message: String) {
+    pub fn mark_unavailable(&mut self, failure: ProviderFailure) {
         if self.connection != ConnectionStatus::Connected {
             self.connection = ConnectionStatus::Disconnected;
         }
-        self.error_message = Some(message);
+        self.last_failure = Some(failure);
     }
 
     /// 同步 provider 定义层数据（metadata + settings capability），保留运行时状态。
@@ -457,14 +689,14 @@ impl ProviderStatus {
     }
 
     /// 标记刷新失败，同时设置错误类型
-    pub fn mark_refresh_failed(&mut self, error: String, error_kind: ErrorKind) {
+    pub fn mark_refresh_failed(&mut self, failure: ProviderFailure, error_kind: ErrorKind) {
         if self.quotas.is_empty() {
             self.connection = ConnectionStatus::Error;
         } else {
             self.connection = ConnectionStatus::Connected;
         }
         self.update_status = Some(UpdateStatus::Failed);
-        self.error_message = Some(error);
+        self.last_failure = Some(failure);
         self.error_kind = error_kind;
     }
 
@@ -813,9 +1045,14 @@ mod tests {
     #[test]
     fn mark_refresh_failed_sets_update_status() {
         let mut p = make_provider(ConnectionStatus::Connected);
-        p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
+        let failure = ProviderFailure {
+            reason: FailureReason::Timeout,
+            advice: None,
+            raw_detail: None,
+        };
+        p.mark_refresh_failed(failure.clone(), ErrorKind::NetworkError);
         assert_eq!(p.update_status, Some(UpdateStatus::Failed));
-        assert_eq!(p.error_message.as_deref(), Some("timeout"));
+        assert_eq!(p.last_failure, Some(failure));
         assert_eq!(p.connection, ConnectionStatus::Error);
         assert_eq!(p.error_kind, ErrorKind::NetworkError);
     }
@@ -824,7 +1061,14 @@ mod tests {
     fn mark_refresh_failed_with_existing_quotas_stays_connected() {
         let mut p = make_provider(ConnectionStatus::Connected);
         p.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
-        p.mark_refresh_failed("timeout".to_string(), ErrorKind::NetworkError);
+        p.mark_refresh_failed(
+            ProviderFailure {
+                reason: FailureReason::Timeout,
+                advice: None,
+                raw_detail: None,
+            },
+            ErrorKind::NetworkError,
+        );
         // 有旧配额数据时应保持 Connected（展示陈旧数据）
         assert_eq!(p.connection, ConnectionStatus::Connected);
         assert_eq!(p.update_status, Some(UpdateStatus::Failed));

@@ -1,7 +1,7 @@
+use crate::models::FailureAdvice;
 use crate::providers::common::jwt;
 use crate::providers::ProviderError;
 use anyhow::Result;
-use rust_i18n::t;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -24,18 +24,20 @@ pub(super) fn read_access_token() -> Result<String> {
         .map_err(|_| ProviderError::cli_not_found("sqlite3"))?;
 
     if !output.status.success() {
-        return Err(ProviderError::fetch_failed(&t!(
-            "hint.cli_exit_failed",
-            code = output.status.code().unwrap_or(-1)
-        ))
-        .into());
+        return Err(
+            ProviderError::fetch_failed_with_advice(FailureAdvice::CliExitFailed {
+                code: output.status.code().unwrap_or(-1),
+            })
+            .into(),
+        );
     }
 
     let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if token.is_empty() {
-        return Err(
-            ProviderError::auth_required(Some(&t!("hint.login_app", app = "Cursor"))).into(),
-        );
+        return Err(ProviderError::auth_required(Some(FailureAdvice::LoginApp {
+            app: "Cursor".to_string(),
+        }))
+        .into());
     }
 
     Ok(token)

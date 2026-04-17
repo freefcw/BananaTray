@@ -2,7 +2,9 @@ use super::*;
 use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
 };
-use crate::models::{AppSettings, ConnectionStatus, ProviderKind, QuotaInfo};
+use crate::models::{
+    AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind, QuotaInfo,
+};
 
 fn pid(kind: ProviderKind) -> ProviderId {
     ProviderId::BuiltIn(kind)
@@ -15,6 +17,14 @@ fn make_session_with_provider(mut settings: AppSettings, provider: ProviderStatu
     let session = AppSession::new(settings, vec![provider]);
     assert_eq!(session.nav.active_tab, NavTab::Provider(id));
     session
+}
+
+fn test_failure(message: &str) -> ProviderFailure {
+    ProviderFailure {
+        reason: FailureReason::FetchFailed,
+        advice: None,
+        raw_detail: Some(message.to_string()),
+    }
 }
 
 // ── tray_global_actions_view_state ──────────────────────────
@@ -246,7 +256,7 @@ fn body_returns_error_empty_when_error_and_no_quotas() {
         .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Error);
-    provider.error_message = Some("API key invalid".to_string());
+    provider.last_failure = Some(test_failure("API key invalid"));
     // quotas 为空 → 走 Error + empty 分支
 
     let session = make_session_with_provider(settings, provider);
@@ -324,7 +334,7 @@ fn body_returns_empty_when_all_quotas_hidden() {
     // 隐藏 general 类型的配额
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Gemini, "general".to_string());
+        .toggle_quota_visibility(ProviderKind::Gemini, "requests".to_string());
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     provider.quotas = vec![QuotaInfo::new("requests", 50.0, 100.0)]; // QuotaType::General
@@ -352,7 +362,7 @@ fn body_prefers_cached_quotas_over_error_empty() {
         .set_provider_enabled(ProviderKind::Gemini, true);
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Error);
-    provider.error_message = Some("timeout".to_string());
+    provider.last_failure = Some(test_failure("timeout"));
     // 有缓存配额 → 即使出错也应展示配额而非 Empty
     provider.quotas = vec![QuotaInfo::new("requests", 50.0, 100.0)];
 
@@ -488,7 +498,7 @@ fn overview_shows_refreshing_status() {
 fn overview_shows_error_when_no_quotas() {
     let _locale_guard = setup_locale();
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-    provider.error_message = Some("auth expired".to_string());
+    provider.last_failure = Some(test_failure("auth expired"));
     // quotas 为空 → Error 分支
 
     let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
@@ -507,7 +517,7 @@ fn overview_shows_error_when_no_quotas() {
 fn overview_prefers_cached_quotas_over_error() {
     let _locale_guard = setup_locale();
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-    provider.error_message = Some("timeout".to_string());
+    provider.last_failure = Some(test_failure("timeout"));
     // 有缓存配额 → 即使出错也应展示 Quota
     provider.quotas = vec![QuotaInfo::new("session", 50.0, 100.0)];
 

@@ -1,4 +1,4 @@
-use crate::models::{QuotaInfo, QuotaType, RefreshData};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
 use crate::providers::ProviderError;
 use anyhow::{bail, Result};
 use regex::Regex;
@@ -92,6 +92,7 @@ fn extract_json(
     let mut quotas = Vec::new();
     for rule in rules {
         let detail = rule.detail.as_ref().and_then(|p| json_string(&json, p));
+        let detail_spec = detail.map(QuotaDetailSpec::Raw);
         let quota_type = map_quota_type(&rule.quota_type);
 
         if let Some(ref remaining_path) = rule.remaining {
@@ -109,7 +110,7 @@ fn extract_json(
                 remaining,
                 used,
                 quota_type,
-                detail,
+                detail_spec,
             ));
         } else {
             // 传统模式：used + limit
@@ -133,7 +134,7 @@ fn extract_json(
                 used,
                 limit,
                 quota_type,
-                detail,
+                detail_spec,
             ));
         }
     }
@@ -352,10 +353,16 @@ mod tests {
         assert_eq!(data.account_email.as_deref(), Some("test@example.com"));
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
         assert_eq!(data.quotas.len(), 1);
-        assert_eq!(data.quotas[0].label, "Monthly");
+        assert_eq!(
+            data.quotas[0].label_spec,
+            crate::models::QuotaLabelSpec::Raw("Monthly".to_string())
+        );
         assert_eq!(data.quotas[0].used, 75.0);
         assert_eq!(data.quotas[0].limit, 100.0);
-        assert_eq!(data.quotas[0].detail_text.as_deref(), Some("2026-05-01"));
+        assert_eq!(
+            data.quotas[0].detail_spec,
+            Some(QuotaDetailSpec::Raw("2026-05-01".to_string()))
+        );
     }
 
     #[test]

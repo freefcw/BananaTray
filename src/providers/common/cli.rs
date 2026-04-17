@@ -1,6 +1,6 @@
+use crate::models::FailureAdvice;
 use crate::providers::ProviderError;
 use anyhow::Result;
-use rust_i18n::t;
 use std::io::Read;
 use std::process::{Command, Output, Stdio};
 use std::thread;
@@ -123,11 +123,12 @@ pub fn ensure_success(output: &Output) -> Result<()> {
         return Ok(());
     }
 
-    Err(ProviderError::fetch_failed(&t!(
-        "hint.cli_exit_failed",
-        code = output.status.code().unwrap_or(-1)
-    ))
-    .into())
+    Err(
+        ProviderError::fetch_failed_with_advice(FailureAdvice::CliExitFailed {
+            code: output.status.code().unwrap_or(-1),
+        })
+        .into(),
+    )
 }
 
 /// 适用于"成功执行且输出在 stdout"的常规 CLI。

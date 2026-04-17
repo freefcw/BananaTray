@@ -87,7 +87,7 @@ pub enum ProviderBodyViewState {
         provider_name: String,
     },
     Quotas {
-        quotas: Vec<QuotaInfo>,
+        quotas: Vec<QuotaDisplayViewState>,
         generation: u64,
     },
     Empty(ProviderEmptyViewState),
@@ -154,6 +154,17 @@ pub struct OverviewQuotaItem {
     pub bar_ratio: f32,
     /// 此配额的状态等级
     pub status_level: StatusLevel,
+}
+
+/// 单个配额的展示 ViewModel。
+///
+/// `quota` 保留数值语义与状态计算能力，`label/detail` 则由 selector 基于当前 locale
+/// 生成，避免把最终展示字符串缓存在 `ProviderStatus` 中。
+#[derive(Debug, Clone)]
+pub struct QuotaDisplayViewState {
+    pub quota: QuotaInfo,
+    pub label: String,
+    pub detail: String,
 }
 
 // ── Settings 窗口 ──
@@ -234,7 +245,7 @@ pub enum SettingsProviderStatusKind {
 #[derive(Debug, Clone)]
 pub enum SettingsProviderUsageViewState {
     Disabled { message: String },
-    Quotas { quotas: Vec<QuotaInfo> },
+    Quotas { quotas: Vec<QuotaDisplayViewState> },
     Error { title: String, message: String },
     Empty { message: String },
     Missing { message: String },

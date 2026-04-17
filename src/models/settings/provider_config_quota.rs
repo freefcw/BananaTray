@@ -6,7 +6,7 @@ use super::*;
 
 impl ProviderConfig {
     /// 判断某个 quota 是否在托盘弹窗中可见（未被隐藏）
-    /// `quota_key` 应使用 `QuotaType::stable_key()`，而非 i18n label
+    /// `quota_key` 应使用 `QuotaInfo::stable_key`，而非 i18n label
     pub fn is_quota_visible(&self, kind: ProviderKind, quota_key: &str) -> bool {
         self.hidden_quotas
             .get(kind.id_key())
@@ -17,7 +17,7 @@ impl ProviderConfig {
     pub fn visible_quota_count(&self, kind: ProviderKind, quotas: &[QuotaInfo]) -> usize {
         quotas
             .iter()
-            .filter(|q| self.is_quota_visible(kind, &q.quota_type.stable_key()))
+            .filter(|q| self.is_quota_visible(kind, &q.stable_key))
             .count()
     }
 
@@ -29,7 +29,7 @@ impl ProviderConfig {
     ) -> Vec<&'a QuotaInfo> {
         quotas
             .iter()
-            .filter(|q| self.is_quota_visible(kind, &q.quota_type.stable_key()))
+            .filter(|q| self.is_quota_visible(kind, &q.stable_key))
             .collect()
     }
 

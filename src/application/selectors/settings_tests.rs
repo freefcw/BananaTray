@@ -3,7 +3,8 @@ use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
 };
 use crate::models::{
-    AppSettings, ConnectionStatus, ProviderKind, ProviderStatus, SettingsCapability,
+    AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind, ProviderStatus,
+    QuotaLabelSpec, SettingsCapability,
 };
 
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -18,6 +19,14 @@ fn make_session(
     let mut session = AppSession::new(settings, providers);
     session.settings_ui.selected_provider = selected_provider;
     session
+}
+
+fn test_failure(message: &str) -> ProviderFailure {
+    ProviderFailure {
+        reason: FailureReason::FetchFailed,
+        advice: None,
+        raw_detail: Some(message.to_string()),
+    }
 }
 
 #[test]
@@ -97,7 +106,7 @@ fn settings_provider_detail_reports_error_usage() {
         .set_provider_enabled(ProviderKind::Copilot, true);
 
     let mut provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Error);
-    provider.error_message = Some("boom".to_string());
+    provider.last_failure = Some(test_failure("boom"));
 
     let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
     let view_state = settings_providers_tab_view_state(&session);
@@ -135,13 +144,13 @@ fn settings_detail_builds_quota_visibility_from_stable_key() {
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
     provider.quotas = vec![
         QuotaInfo::with_details(
-            String::from("Session (5h)"),
+            QuotaLabelSpec::Session,
             30.0,
             100.0,
             QuotaType::Session,
             None,
         ),
-        QuotaInfo::with_details(String::from("Weekly"), 50.0, 100.0, QuotaType::Weekly, None),
+        QuotaInfo::with_details(QuotaLabelSpec::Weekly, 50.0, 100.0, QuotaType::Weekly, None),
     ];
 
     let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);

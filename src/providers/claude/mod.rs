@@ -13,12 +13,13 @@ use api_probe::ClaudeApiProbe;
 use async_trait::async_trait;
 use cli_probe::ClaudeCliProbe;
 use log::debug;
-use rust_i18n::t;
 
 use std::borrow::Cow;
 
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use anyhow::Result;
 
 /// Claude Provider
@@ -74,7 +75,10 @@ impl ClaudeProvider {
     }
 
     fn both_unavailable_error() -> anyhow::Error {
-        ProviderError::unavailable(&t!("hint.both_unavailable", name = "Claude")).into()
+        ProviderError::unavailable_with_advice(FailureAdvice::BothUnavailable {
+            name: "Claude".to_string(),
+        })
+        .into()
     }
 
     fn ensure_cli_available(&self) -> Result<()> {
@@ -90,8 +94,10 @@ impl ClaudeProvider {
             Ok(())
         } else {
             Err(
-                ProviderError::auth_required(Some(&t!("hint.no_oauth_creds", cli = "claude")))
-                    .into(),
+                ProviderError::auth_required(Some(FailureAdvice::NoOauthCreds {
+                    cli: "claude".to_string(),
+                }))
+                .into(),
             )
         }
     }
@@ -232,7 +238,10 @@ mod tests {
 
         let data = provider.refresh_auto().unwrap();
         assert_eq!(data.quotas.len(), 1);
-        assert_eq!(data.quotas[0].label, "api");
+        assert_eq!(
+            data.quotas[0].label_spec,
+            crate::models::QuotaLabelSpec::Raw("api".to_string())
+        );
     }
 
     #[test]
@@ -250,7 +259,10 @@ mod tests {
         );
 
         let data = provider.refresh_auto().unwrap();
-        assert_eq!(data.quotas[0].label, "cli");
+        assert_eq!(
+            data.quotas[0].label_spec,
+            crate::models::QuotaLabelSpec::Raw("cli".to_string())
+        );
     }
 
     #[test]
@@ -262,7 +274,11 @@ mod tests {
             },
             StubProbe {
                 available: true,
-                outcome: StubOutcome::Error(ProviderError::session_expired(Some("expired"))),
+                outcome: StubOutcome::Error(ProviderError::session_expired(Some(
+                    FailureAdvice::LoginCli {
+                        cli: "expired".to_string(),
+                    },
+                ))),
             },
             ProbeMode::Auto,
         );

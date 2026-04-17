@@ -3,7 +3,9 @@
 //! 将 AppSession → Settings ViewModel 的转换逻辑集中于此。
 
 use super::super::state::AppSession;
-use super::format::format_last_updated;
+use super::format::{
+    format_failure_message, format_last_updated, format_quota_label, quota_display_view_state,
+};
 use super::*;
 use crate::models::{ConnectionStatus, ProviderId, ProviderKind, ProviderStatus};
 use rust_i18n::t;
@@ -101,9 +103,9 @@ fn settings_provider_detail_view_state(
             p.quotas
                 .iter()
                 .map(|q| {
-                    let quota_key = q.quota_type.stable_key();
+                    let quota_key = q.stable_key.clone();
                     QuotaVisibilityItem {
-                        label: q.label.clone(),
+                        label: format_quota_label(q),
                         quota_key: quota_key.clone(),
                         visible: session
                             .settings
@@ -198,7 +200,11 @@ fn settings_provider_usage_view_state(
 
     if !provider.quotas.is_empty() {
         return SettingsProviderUsageViewState::Quotas {
-            quotas: provider.quotas.clone(),
+            quotas: provider
+                .quotas
+                .iter()
+                .map(quota_display_view_state)
+                .collect(),
         };
     }
 
@@ -206,8 +212,9 @@ fn settings_provider_usage_view_state(
         return SettingsProviderUsageViewState::Error {
             title: t!("provider.last_fetch_failed", name = provider.display_name()).to_string(),
             message: provider
-                .error_message
-                .clone()
+                .last_failure
+                .as_ref()
+                .map(format_failure_message)
                 .unwrap_or_else(|| t!("provider.unknown_error").to_string()),
         };
     }

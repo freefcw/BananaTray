@@ -17,8 +17,8 @@ pub use provider::{
     TokenEditMode, TokenInputCapability, TokenInputState,
 };
 pub use quota::{
-    ConnectionStatus, ErrorKind, ProviderStatus, QuotaInfo, QuotaType, RefreshData, StatusLevel,
-    UpdateStatus,
+    ConnectionStatus, ErrorKind, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,
+    QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData, StatusLevel, UpdateStatus,
 };
 pub use settings::{
     AppSettings, AppTheme, DisplaySettings, NotificationSettings, ProviderConfig, ProviderSettings,

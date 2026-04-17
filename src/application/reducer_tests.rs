@@ -1247,7 +1247,11 @@ fn finished_event_restores_debug_state() {
     let outcome = RefreshOutcome {
         id,
         result: RefreshResult::Failed {
-            error: "test error".to_string(),
+            failure: crate::models::ProviderFailure {
+                reason: crate::models::FailureReason::FetchFailed,
+                advice: None,
+                raw_detail: Some("test error".to_string()),
+            },
             error_kind: crate::models::ErrorKind::NetworkError,
         },
     };
@@ -1297,7 +1301,11 @@ fn finished_restore_survives_unknown_provider() {
     let outcome = RefreshOutcome {
         id,
         result: RefreshResult::Failed {
-            error: "gone".to_string(),
+            failure: crate::models::ProviderFailure {
+                reason: crate::models::FailureReason::FetchFailed,
+                advice: None,
+                raw_detail: Some("gone".to_string()),
+            },
             error_kind: crate::models::ErrorKind::Unknown,
         },
     };

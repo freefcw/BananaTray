@@ -1,4 +1,4 @@
-use crate::models::{ErrorKind, ProviderId, ProviderStatus, RefreshData};
+use crate::models::{ErrorKind, ProviderFailure, ProviderId, ProviderStatus, RefreshData};
 
 /// 刷新触发原因
 #[derive(Debug, Clone, Copy)]
@@ -57,10 +57,10 @@ pub enum RefreshResult {
         data: RefreshData,
     },
     Unavailable {
-        message: String,
+        failure: ProviderFailure,
     },
     Failed {
-        error: String,
+        failure: ProviderFailure,
         error_kind: ErrorKind,
     },
     SkippedCooldown,

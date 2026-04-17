@@ -1,6 +1,5 @@
-use crate::models::{QuotaInfo, QuotaType, RefreshData};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
 use anyhow::{bail, Context, Result};
-use rust_i18n::t;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -66,38 +65,39 @@ pub(super) fn parse_user_info_response(
         if let Some(interactions) = snapshots.premium_interactions {
             if interactions.unlimited.unwrap_or(false) {
                 QuotaInfo::with_details(
-                    t!("quota.label.premium_requests", plan = plan_label).to_string(),
+                    QuotaLabelSpec::PremiumRequests {
+                        plan: plan_label.clone(),
+                    },
                     0.0,
                     0.0,
                     QuotaType::General,
-                    Some(t!("quota.label.unlimited").to_string()),
+                    Some(QuotaDetailSpec::Unlimited),
                 )
             } else {
                 let used_count = (interactions.entitlement - interactions.remaining).max(0);
                 let total_count = interactions.entitlement;
                 let used = used_count as f64;
                 let limit = total_count as f64;
-                let detail = t!(
-                    "quota.label.request_detail",
-                    used = used_count,
-                    total = total_count
-                )
-                .to_string();
                 QuotaInfo::with_details(
-                    t!("quota.label.premium_requests", plan = plan_label).to_string(),
+                    QuotaLabelSpec::PremiumRequests {
+                        plan: plan_label.clone(),
+                    },
                     used,
                     limit,
                     QuotaType::Weekly,
-                    Some(detail),
+                    Some(QuotaDetailSpec::RequestCount {
+                        used: used_count as u32,
+                        total: total_count as u32,
+                    }),
                 )
             }
         } else {
             QuotaInfo::with_details(
-                t!("quota.label.chat_completions", plan = plan_label).to_string(),
+                QuotaLabelSpec::ChatCompletions { plan: plan_label },
                 0.0,
                 0.0,
                 QuotaType::General,
-                Some(t!("quota.label.unlimited").to_string()),
+                Some(QuotaDetailSpec::Unlimited),
             )
         }
     } else {
@@ -107,7 +107,7 @@ pub(super) fn parse_user_info_response(
     Ok(RefreshData::with_account(
         vec![quota],
         account_name,
-        Some(plan_label),
+        Some(capitalize_first(&plan)),
     ))
 }
 
@@ -130,7 +130,7 @@ mod tests {
         let data = parse_user_info_response(body, "200", None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
         assert_eq!(data.quotas.len(), 1);
-        assert_eq!(data.quotas[0].detail_text.as_deref(), Some("Unlimited"));
+        assert_eq!(data.quotas[0].detail_spec, Some(QuotaDetailSpec::Unlimited));
     }
 
     #[test]
@@ -142,8 +142,11 @@ mod tests {
         assert_eq!(data.quotas[0].used, 375.0);
         assert_eq!(data.quotas[0].limit, 500.0);
         assert_eq!(
-            data.quotas[0].detail_text.as_deref(),
-            Some("375 / 500 requests")
+            data.quotas[0].detail_spec,
+            Some(QuotaDetailSpec::RequestCount {
+                used: 375,
+                total: 500,
+            })
         );
     }
 

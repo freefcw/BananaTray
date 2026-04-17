@@ -50,6 +50,7 @@ The current architecture is organized around four layers:
 
 1. **`application/`** — pure Action → Reducer → Effect pipeline
    - owns domain state transitions
+   - owns selector-side presentation formatting (`application/selectors/format.rs`)
    - emits `AppEffect` values only
    - must stay GPUI-free
 2. **`runtime/`** — effect execution and foreground integration
@@ -94,6 +95,21 @@ The main foreground path is:
   - examples: `PersistSettings`, `SendRefreshRequest`, notifications, YAML I/O
 
 This split keeps reducer output explicit while letting `runtime` centralize the imperative work.
+
+## Localization Boundary
+
+Provider / refresh / reducer layers now persist only stable semantics instead of locale-bound strings:
+
+- `QuotaInfo` stores `stable_key`, `QuotaLabelSpec`, `QuotaDetailSpec`
+- `ProviderStatus` stores `last_failure: Option<ProviderFailure>`
+- `ProviderErrorPresenter` converts provider-layer errors into stable failure payloads
+- `application/selectors/format.rs` performs the final i18n string generation on read
+
+Consequence:
+
+- switching language does **not** require refreshing provider data
+- cached/offline provider data can still fully switch display language
+- state no longer needs to “wash away” old localized strings by forcing refresh
 
 ## Runtime Dispatch and UI Hooks
 
