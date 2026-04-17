@@ -75,6 +75,10 @@ Aggregation registry holding all provider implementations. Maintains exactly two
   - 错误用 `ProviderError` / `ProviderFailure`
 - `src/providers/error_presenter.rs` 负责把 `ProviderError` 降为可持久化的失败语义；`application/selectors/format.rs` 负责最终 i18n 文案。
 - 语言切换不应触发 provider refresh；selector 基于最新 locale 即时重算展示字符串。
+- When a provider already knows the user-facing remediation, return a structured `ProviderError`
+  directly and keep technical diagnostics in logs instead of `anyhow::Context`.
+- Shared HTTP transport failures should surface as `common::http_client::HttpError`; provider code
+  upgrades them to `ProviderError` only when it knows a clearer remediation.
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
 - Only introduce extra traits when there are real multiple implementations (for example Claude probe strategies).
 - `Claude::UsageProbe` and `Antigravity::ParseStrategy` are intentionally separate:
@@ -119,4 +123,6 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - HTTP requests should use `crate::providers::common::http_client` (shared ureq agent).
 - CLI-based providers should use `crate::providers::common::runner::InteractiveRunner` for PTY-based execution when interactive behavior is required.
 - Return `ProviderError` variants (not raw strings) for structured classification.
+- Do not hide user remediation inside `anyhow::Context`; reserve context for technical details
+  that stay in logs/debugging paths.
 - The `descriptor().metadata.kind` must match the `ProviderKind` variant — `ProviderManager::register()` asserts this.

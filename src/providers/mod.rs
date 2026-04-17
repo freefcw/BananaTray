@@ -189,21 +189,44 @@ impl std::error::Error for ProviderError {}
 impl ProviderError {
     /// 从 anyhow::Error 提取错误类型。
     ///
-    /// 设计原则：
-    /// - Provider 应直接返回 `ProviderError`（推荐）
-    /// - 非 `ProviderError` 的错误统一归类为 `FetchFailed`
-    ///
-    /// 注意：此方法不再进行字符串匹配，因为：
-    /// 1. 所有 Provider 都已直接返回 `ProviderError`
-    /// 2. 字符串匹配不可靠且违反 OCP
-    /// 3. Display 输出是英文技术描述，不适合直接展示给用户
+    /// 分类优先级：
+    /// 1. 已经是 `ProviderError` → 直接使用
+    /// 2. 是 `HttpError` → 按状态码映射（401/403 → AuthRequired, 超时 → Timeout, 其余 → FetchFailed）
+    /// 3. 其他 → `FetchFailed`
     pub fn classify(err: &anyhow::Error) -> Self {
-        // 只检查是否已经是 ProviderError
+        use crate::providers::common::http_client::HttpError;
+
+        // 1. 已经是 ProviderError
         if let Some(provider_error) = err.downcast_ref::<Self>() {
             return provider_error.clone();
         }
 
-        // 非 ProviderError 错误统一归类为 FetchFailed
+        // 2. HTTP 结构化错误 → 按状态码分类
+        if let Some(http_error) = err.downcast_ref::<HttpError>() {
+            return match http_error {
+                HttpError::Timeout => Self::Timeout,
+                HttpError::Transport(reason) => Self::NetworkFailed {
+                    reason: reason.clone(),
+                },
+                HttpError::HttpStatus { code, body } => match *code {
+                    401 | 403 => Self::AuthRequired { advice: None },
+                    429 => Self::FetchFailed {
+                        advice: Some(FailureAdvice::ApiHttpError {
+                            status: code.to_string(),
+                        }),
+                        raw_detail: Some(format!("rate limited (HTTP 429): {}", body)),
+                    },
+                    _ => Self::FetchFailed {
+                        advice: Some(FailureAdvice::ApiHttpError {
+                            status: code.to_string(),
+                        }),
+                        raw_detail: Some(format!("HTTP {}: {}", code, body)),
+                    },
+                },
+            };
+        }
+
+        // 3. 其他错误统一归类为 FetchFailed
         Self::FetchFailed {
             advice: None,
             raw_detail: Some(err.to_string()),
@@ -566,5 +589,83 @@ mod tests {
         let anyhow_err: anyhow::Error = original.into();
         let classified = ProviderError::classify(&anyhow_err);
         assert!(matches!(classified, ProviderError::SessionExpired { .. }));
+    }
+
+    // ── classify + HttpError ────────────────────────────────
+
+    #[test]
+    fn test_classify_http_401_as_auth_required() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::HttpStatus {
+            code: 401,
+            body: "Unauthorized".into(),
+        }
+        .into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::AuthRequired { .. }));
+    }
+
+    #[test]
+    fn test_classify_http_403_as_auth_required() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::HttpStatus {
+            code: 403,
+            body: "Forbidden".into(),
+        }
+        .into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::AuthRequired { .. }));
+    }
+
+    #[test]
+    fn test_classify_http_429_as_fetch_failed() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::HttpStatus {
+            code: 429,
+            body: "Too Many Requests".into(),
+        }
+        .into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(
+            classified,
+            ProviderError::FetchFailed {
+                advice: Some(FailureAdvice::ApiHttpError { ref status }),
+                raw_detail: Some(ref raw_detail),
+            } if status == "429" && raw_detail.contains("429")
+        ));
+    }
+
+    #[test]
+    fn test_classify_http_500_as_fetch_failed() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::HttpStatus {
+            code: 500,
+            body: "Internal Server Error".into(),
+        }
+        .into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(
+            classified,
+            ProviderError::FetchFailed {
+                advice: Some(FailureAdvice::ApiHttpError { ref status }),
+                raw_detail: Some(ref raw_detail),
+            } if status == "500" && raw_detail.contains("500")
+        ));
+    }
+
+    #[test]
+    fn test_classify_http_timeout() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::Timeout.into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::Timeout));
+    }
+
+    #[test]
+    fn test_classify_http_transport_as_network_failed() {
+        use crate::providers::common::http_client::HttpError;
+        let err: anyhow::Error = HttpError::Transport("DNS resolution failed".into()).into();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::NetworkFailed { .. }));
     }
 }

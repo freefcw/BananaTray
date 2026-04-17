@@ -1,4 +1,4 @@
-use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::ProviderError;
 use anyhow::Result;
 
@@ -13,15 +13,8 @@ pub(super) fn parse_usage_response(raw: &str) -> Result<Vec<QuotaInfo>> {
         ("", raw.trim())
     };
 
-    let first_line = headers.lines().next().unwrap_or("");
-    if first_line.contains("401") || first_line.contains("403") {
-        return Err(
-            ProviderError::session_expired(Some(FailureAdvice::ReloginCli {
-                cli: "codex".to_string(),
-            }))
-            .into(),
-        );
-    }
+    // 注意：401/403 认证错误已在 http_client 层通过 HttpError::HttpStatus 结构化返回，
+    // 不再需要在此处做字符串匹配。
 
     let mut found_headers = false;
     let mut primary_percent: Option<f64> = None;

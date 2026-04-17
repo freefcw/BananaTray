@@ -7,6 +7,7 @@ use crate::models::{
     AppSettings, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
     SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
 };
+use crate::providers::common::http_client::HttpError;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::debug;
@@ -118,15 +119,49 @@ impl AiProvider for CopilotProvider {
             "GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.",
         )?;
 
-        // 并行获取 Copilot 配额和 GitHub 用户信息
-        let (body, status_code) = fetch_user_info(&token)?;
+        let body = match fetch_user_info(&token) {
+            Ok(body) => body,
+            Err(e) => {
+                // 将 HTTP 状态码映射为用户可操作的提示
+                if let Some(http_err) = e.downcast_ref::<HttpError>() {
+                    match http_err {
+                        HttpError::HttpStatus { code: 401, .. } => {
+                            return Err(ProviderError::session_expired(Some(
+                                crate::models::FailureAdvice::LoginApp {
+                                    app: "GitHub".to_string(),
+                                },
+                            ))
+                            .into());
+                        }
+                        HttpError::HttpStatus { code: 403, .. } => {
+                            return Err(ProviderError::auth_required(Some(
+                                crate::models::FailureAdvice::ApiError {
+                                    message: "GitHub token lacks required Copilot permissions; use a Classic PAT with 'copilot' scope.".to_string(),
+                                },
+                            )).into());
+                        }
+                        HttpError::HttpStatus { code: 404, .. } => {
+                            return Err(ProviderError::fetch_failed_with_advice(
+                                crate::models::FailureAdvice::ApiError {
+                                    message: "GitHub Copilot is not enabled for this account."
+                                        .to_string(),
+                                },
+                            )
+                            .into());
+                        }
+                        _ => {}
+                    }
+                }
+                return Err(e);
+            }
+        };
 
         // /user API 获取账户标识（best-effort，失败不影响配额数据）
         let account_name = fetch_github_user(&token)
             .ok()
-            .and_then(|(user_body, _)| parse_github_user(&user_body));
+            .and_then(|user_body| parse_github_user(&user_body));
 
-        parse_user_info_response(&body, &status_code, account_name)
+        parse_user_info_response(&body, account_name)
     }
 }
 
