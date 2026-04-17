@@ -13,6 +13,14 @@
 - 处理托盘点击事件和全局快捷键
 - 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠幂等守卫清理当前窗口，避免 stale handle 和误关新窗口
 
+**多显示器定位**（`preferred_window_bounds`）：
+
+- 通过 GPUI `cx.tray_icon_anchor()` 获取被点击托盘图标所在的 `DisplayId` 与菜单栏局部 bounds
+- 用 `WindowPosition::TrayAnchored(anchor)` + `cx.compute_window_bounds()` 计算弹窗在该显示器上的局部坐标
+- 返回的 `DisplayId` 连同 bounds 一起透传给 `WindowOptions.display_id`，确保 GPUI 在目标显示器创建窗口
+- anchor 不可用时回退：Linux `TopRight`，其他平台 `Center`
+- 关闭 popup 切换到设置窗口时，`close_popup` 会记录当前 `window.display(cx)`，`show_settings` 透传给 `schedule_open_settings_window`，保证设置窗口开在同一显示器
+
 ### `icon.rs` — 托盘图标管理
 
 - **`apply_tray_icon(cx, request)`** — 根据 `TrayIconRequest` 更新系统托盘图标

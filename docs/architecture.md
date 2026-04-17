@@ -62,7 +62,7 @@ The current architecture is organized around four layers:
 4. **platform / refresh / providers** — infrastructure services
    - `refresh/` handles background scheduling and event production
    - `providers/` owns provider implementations and runtime registry
-   - `platform/` owns OS integration such as notifications, autostart, paths, URL open, and shared macOS display/mouse geometry helpers
+   - `platform/` owns OS integration such as notifications, autostart, paths, and URL open
 
 Target dependency direction:
 
@@ -140,17 +140,42 @@ BananaTray has two foreground window surfaces with different responsibilities:
 - **Tray popup**
   - opened and owned by `tray/controller.rs`
   - content view is `ui::AppView`
-  - popup lifecycle and auto-hide are tray concerns; macOS display geometry comes from `platform/core_graphics.rs`
+  - popup lifecycle and auto-hide are tray concerns; multi-display positioning uses GPUI's `cx.tray_icon_anchor()` + `WindowPosition::TrayAnchored`, so the popup always opens on the display that owns the clicked tray icon
 - **Settings window**
   - open/reuse scheduling is owned by `runtime/settings_window_opener.rs`
   - content view is `ui::settings_window::SettingsView`
-  - cross-display reopen and delayed creation live in `runtime`, while mouse-display detection reuses `platform/core_graphics.rs`
+  - cross-display reopen and delayed creation live in `runtime`; the target display is either inherited from the closing popup or resolved via `cx.tray_icon_anchor()`, then passed through `WindowOptions.display_id`
 
 Why the delayed settings-window open exists:
 
 - some actions emit `OpenSettingsWindow` while the popup is still borrowing `Rc<RefCell<AppState>>`
 - opening a window immediately from the same call stack risks `RefCell` reentrancy
 - `schedule_open_settings_window()` delays creation to the next foreground turn, avoiding this class of panic
+
+### Manual verification: multi-display popup positioning
+
+Multi-display positioning depends on GPUI's platform-level `tray_icon_anchor()` and cannot be exercised in unit tests. Run the following checklist after any change that touches `tray/controller.rs`, `runtime/settings_window_opener.rs`, or an upstream GPUI bump that affects tray / window APIs.
+
+Setup:
+
+- at least two physical or virtual displays with **different resolutions / scale factors** (e.g. built-in Retina + external 1080p); heterogeneous heights are the regression hot spot
+- `RUST_LOG=debug cargo run` so the `tray` / `settings` log targets print anchor and bounds
+- on macOS, try both display arrangements in *System Settings → Displays* (primary on left vs. primary on right)
+
+Checklist (run each step on **every** connected display):
+
+1. **Tray popup position** — left-click the tray icon. The popup must appear on the display whose menu bar was clicked, with its top edge just under the menu bar and horizontally aligned with the icon. Logs should show `tray_icon_anchor: display=DisplayId(..) origin=(..) size=(..)` and `popup bounds: ... display=Some(DisplayId(..))` with matching ids.
+2. **Re-open on the same display** — left-click the tray icon on display A, close the popup, then immediately left-click the tray icon on display B. The popup must follow to display B (not stick on A).
+3. **Settings window inherits display** — open the popup on display A, right-click (or trigger `OpenSettingsWindow` from the popup). Settings window must open on display A, centered within that display's local bounds (not straddling displays).
+4. **Settings window cross-display reopen** — with the settings window open on display A, right-click the tray icon on display B. The existing window should close and reopen on display B; no flicker on A should remain.
+5. **Auto-hide does not mis-target** — open the popup on display A, click elsewhere on display B to defocus. The popup must close on A only; a subsequent click on B's tray icon must open a fresh popup on B.
+6. **Fallback path** — disconnect extra displays and repeat step 1 on the single display to confirm the `TopRight` (Linux) / `Center` (macOS) fallback still works when anchor data is marginal.
+
+Red flags to watch for:
+
+- popup appears on the wrong display or clipped to the menu bar of the primary screen
+- popup Y coordinate jumps by the height difference between displays (classic `mainScreen` vs `primaryScreen` regression)
+- settings window opens with a global-coordinate origin that lands off-screen on non-primary displays
 
 ## Refresh Architecture
 
