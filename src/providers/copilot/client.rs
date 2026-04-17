@@ -11,17 +11,20 @@ fn github_api_headers(token: &str) -> [String; 2] {
     ]
 }
 
-pub(super) fn fetch_user_info(token: &str) -> Result<(String, String)> {
+/// 获取 Copilot 用户配额信息
+///
+/// 4xx/5xx → `HttpError::HttpStatus`（由 http_client 层自动返回）
+pub(super) fn fetch_user_info(token: &str) -> Result<String> {
     let headers = github_api_headers(token);
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
-    http_client::get_with_status(COPILOT_USER_URL, &header_refs)
+    http_client::get(COPILOT_USER_URL, &header_refs)
 }
 
 /// 获取 GitHub 用户基本信息（login / email）
-pub(super) fn fetch_github_user(token: &str) -> Result<(String, String)> {
+pub(super) fn fetch_github_user(token: &str) -> Result<String> {
     let headers = github_api_headers(token);
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
-    http_client::get_with_status(GITHUB_USER_URL, &header_refs)
+    http_client::get(GITHUB_USER_URL, &header_refs)
 }
 
 #[cfg(test)]

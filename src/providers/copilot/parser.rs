@@ -39,22 +39,14 @@ pub(super) fn parse_github_user(body: &str) -> Option<String> {
         .or(resp.login.filter(|l| !l.is_empty()))
 }
 
+/// 解析 Copilot 配额响应。
+///
+/// 注意：401/403/404 等 HTTP 错误已在 http_client 层通过 HttpError::HttpStatus 结构化返回，
+/// 不再需要在此处做状态码匹配。
 pub(super) fn parse_user_info_response(
     body: &str,
-    status_code: &str,
     account_name: Option<String>,
 ) -> Result<RefreshData> {
-    match status_code {
-        "401" => {
-            bail!("GitHub token is invalid or expired. Update your token in Settings → Providers.")
-        }
-        "403" => bail!("Token lacks required permissions. Use a Classic PAT with 'copilot' scope."),
-        "404" => {
-            bail!("Copilot not enabled for this account. Check your GitHub Copilot subscription.")
-        }
-        _ => {}
-    }
-
     let resp: CopilotInternalResponse =
         serde_json::from_str(body).context("Failed to parse Copilot Internal API response.")?;
 
@@ -127,7 +119,7 @@ mod tests {
     fn test_parse_unlimited_plan() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"pro","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":300,"percent_remaining":100,"unlimited":true}}}"#;
-        let data = parse_user_info_response(body, "200", None).unwrap();
+        let data = parse_user_info_response(body, None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
         assert_eq!(data.quotas.len(), 1);
         assert_eq!(data.quotas[0].detail_spec, Some(QuotaDetailSpec::Unlimited));
@@ -137,7 +129,7 @@ mod tests {
     fn test_parse_limited_plan() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"business","quota_snapshots":{"premium_interactions":{"entitlement":500,"remaining":125,"percent_remaining":25,"unlimited":false}}}"#;
-        let data = parse_user_info_response(body, "200", None).unwrap();
+        let data = parse_user_info_response(body, None).unwrap();
         assert_eq!(data.account_tier.as_deref(), Some("Business"));
         assert_eq!(data.quotas[0].used, 375.0);
         assert_eq!(data.quotas[0].limit, 500.0);
@@ -151,16 +143,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_404_error() {
-        let err = parse_user_info_response("{}", "404", None).unwrap_err();
-        assert!(err.to_string().contains("Copilot not enabled"));
-    }
-
-    #[test]
     fn test_parse_with_account_name() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let body = r#"{"copilot_plan":"pro","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":300,"percent_remaining":100,"unlimited":true}}}"#;
-        let data = parse_user_info_response(body, "200", Some("octocat".to_string())).unwrap();
+        let data = parse_user_info_response(body, Some("octocat".to_string())).unwrap();
         assert_eq!(data.account_email.as_deref(), Some("octocat"));
         assert_eq!(data.account_tier.as_deref(), Some("Pro"));
     }

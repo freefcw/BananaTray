@@ -6,6 +6,7 @@ use super::{AiProvider, ProviderError};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
+use crate::providers::common::http_client::HttpError;
 use crate::utils::time_utils;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -96,10 +97,9 @@ impl AiProvider for GeminiProvider {
         match fetch_quota_via_api(&access_token) {
             Ok(quotas) => Ok(RefreshData::with_account(quotas, account_email, None)),
             Err(e) => {
-                let err_str = e.to_string();
-                let is_auth_error = err_str.contains("status 401")
-                    || err_str.contains("status 403")
-                    || err_str.contains("Unauthorized");
+                let is_auth_error = e
+                    .downcast_ref::<HttpError>()
+                    .is_some_and(|h| h.is_auth_error());
 
                 if is_auth_error {
                     log::info!(target: "providers", "Gemini API returned auth error, attempting CLI refresh");

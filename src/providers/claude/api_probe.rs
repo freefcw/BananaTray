@@ -5,7 +5,7 @@
 
 use super::credentials::{refresh_oauth_token, save_credentials_atomic, ClaudeOAuthCredentials};
 use super::probe::UsageProbe;
-use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::http_client;
 use crate::providers::ProviderError;
 use crate::utils::time_utils;
@@ -39,12 +39,15 @@ impl ClaudeApiProbe {
     }
 
     /// 调用 Usage API
+    ///
+    /// 4xx/5xx → `HttpError::HttpStatus`（由 http_client 层自动返回），
+    /// 上层通过 `ProviderError::classify` 自动分类为 AuthRequired / FetchFailed 等。
     fn fetch_usage(access_token: &str) -> Result<UsageResponse> {
         const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 
         let auth_header = format!("Authorization: Bearer {}", access_token);
 
-        let (body, status) = http_client::get_with_status(
+        let body = http_client::get(
             USAGE_URL,
             &[
                 &auth_header,
@@ -53,24 +56,6 @@ impl ClaudeApiProbe {
                 "anthropic-beta: oauth-2025-04-20",
             ],
         )?;
-
-        let status_code: u16 = status.parse().unwrap_or(0);
-        if status_code == 401 || status_code == 403 {
-            return Err(
-                ProviderError::session_expired(Some(FailureAdvice::ReloginCli {
-                    cli: "claude".to_string(),
-                }))
-                .into(),
-            );
-        }
-        if status_code >= 400 {
-            return Err(
-                ProviderError::fetch_failed_with_advice(FailureAdvice::ApiHttpError {
-                    status: status_code.to_string(),
-                })
-                .into(),
-            );
-        }
 
         let usage: UsageResponse =
             serde_json::from_str(&body).with_context(|| "cannot parse Usage API response")?;

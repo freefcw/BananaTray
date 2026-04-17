@@ -63,6 +63,8 @@ pub trait AiProvider: Send + Sync {
 - `QuotaLabelSpec` / `QuotaDetailSpec` — provider 层输出的 quota 展示语义载荷，selector/UI 再基于当前 locale 生成最终文案
 - `providers/error_presenter.rs` — 将 `ProviderError` 映射为 `ProviderFailure` 和 `ErrorKind`
 - `application/selectors/format.rs` — 最终的错误/配额文案格式化入口；provider 层不再缓存本地化字符串
+- 已知的用户 remediation 应直接编码为 `ProviderError`（如 `AuthRequired` / `SessionExpired`），
+  技术性上下文写入日志；不要把用户提示塞进 `anyhow::Context` 再交给分类器猜测
 - [Provider Refactor Retrospective](provider/provider-refactor-retrospective.md) — 本次 provider 重构的根因、决策过程与优化方向
 - `providers/common/cli.rs` — CLI provider 共享的可用性检查、命令执行与退出码处理
 - [Provider Blueprints](provider-blueprints.md) — 后续新增/重构 provider 的复用蓝图
@@ -81,6 +83,8 @@ Providers run on background threads via `smol::unblock`. They must be `Send + Sy
   - 详情用 `QuotaDetailSpec`
   - 错误用 `ProviderError` / `ProviderFailure`
 - 这样切换语言时无需重新刷新 provider 数据；selector 会按当前 locale 即时重算展示文本
+- HTTP 4xx/5xx、超时、传输错误优先在 `providers/common/http_client.rs` 转成 `HttpError`；
+  provider 若已知明确 remediation，再额外映射成 `ProviderError`
 
 ## Adding a New Provider
 
