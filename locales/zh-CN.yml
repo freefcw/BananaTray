@@ -220,6 +220,8 @@ quota.credit_over: "超出 $%{amount}"
 quota.credit_detail: "$%{used} / $%{limit}"
 quota.pct_used: "已用 %{pct}%"
 quota.count_detail: "已用 %{used} / 共 %{total}"
+quota.used_credit: "已用 $%{amount}"
+quota.used_amount: "已用 %{amount}"
 quota.update_failed: "更新失败"
 
 # ── 服务商状态 (format_last_updated) ─────────────────────

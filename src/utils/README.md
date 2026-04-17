@@ -15,7 +15,6 @@ Shared time utilities consolidating logic previously duplicated across providers
 - `epoch_to_iso8601(epoch)` — converts epoch to ISO 8601 UTC string
 - `now_epoch_secs()` — current time as epoch seconds
 - `format_countdown(delta_secs)` — human-readable countdown (e.g. "Resets in 2d 5h", "Resets in 45m", "Resets soon")
-- `format_reset_countdown(iso)` — combines parse + countdown
 - `format_reset_from_epoch(epoch)` — countdown from epoch seconds
 - `is_expired_epoch_secs(expiry)` — token expiry check
 - `is_older_than(iso, max_age_secs)` — staleness check

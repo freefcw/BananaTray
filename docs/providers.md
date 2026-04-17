@@ -60,7 +60,9 @@ pub trait AiProvider: Send + Sync {
 - `AiProvider::resolve_token_input_state()` — provider 侧运行时钩子，返回纯数据 `TokenInputState`；当 provider 需要多来源 token 探测（如 Copilot）时在这里实现，而不是把行为塞进 `SettingsCapability`
 - `provider.credentials` — 仅保存 BananaTray 自己管理的 token override；provider 实际认证信息也可能来自外部配置文件、CLI 登录态或环境变量
 - `ProviderError` — provider 层返回的结构化错误
-- `providers/error_presenter.rs` — 将 `ProviderError` 映射为 UI 文案和 `ErrorKind`
+- `QuotaLabelSpec` / `QuotaDetailSpec` — provider 层输出的 quota 展示语义载荷，selector/UI 再基于当前 locale 生成最终文案
+- `providers/error_presenter.rs` — 将 `ProviderError` 映射为 `ProviderFailure` 和 `ErrorKind`
+- `application/selectors/format.rs` — 最终的错误/配额文案格式化入口；provider 层不再缓存本地化字符串
 - [Provider Refactor Retrospective](provider/provider-refactor-retrospective.md) — 本次 provider 重构的根因、决策过程与优化方向
 - `providers/common/cli.rs` — CLI provider 共享的可用性检查、命令执行与退出码处理
 - [Provider Blueprints](provider-blueprints.md) — 后续新增/重构 provider 的复用蓝图
@@ -73,6 +75,12 @@ Providers run on background threads via `smol::unblock`. They must be `Send + Sy
 - `Antigravity` 的 `ParseStrategy` 解决"API JSON 和本地缓存 protobuf 如何解析"
 - 两者都体现了 fallback / strategy 思想，但抽象层级不同，不应硬统一成单一 trait
 - `Claude` 现在采用显式 source 编排：`mod.rs` 只负责 mode + fallback，source 细节留在 `api_probe.rs` / `cli_probe.rs`
+- provider 解析层只负责“把上游响应解释成稳定语义”：
+  - 配额 identity 用 `stable_key`
+  - 标题用 `QuotaLabelSpec`
+  - 详情用 `QuotaDetailSpec`
+  - 错误用 `ProviderError` / `ProviderFailure`
+- 这样切换语言时无需重新刷新 provider 数据；selector 会按当前 locale 即时重算展示文本
 
 ## Adding a New Provider
 

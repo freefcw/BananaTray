@@ -1,4 +1,4 @@
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType};
 use crate::providers::common::jwt;
 use crate::providers::ProviderError;
 use crate::utils::time_utils;
@@ -53,20 +53,21 @@ pub(super) fn parse_quota_response(response_str: &str) -> Result<Vec<QuotaInfo>>
     let mut quotas: Vec<QuotaInfo> = label_quotas
         .into_iter()
         .map(|(label, (used_percent, reset))| {
-            let reset_text = reset
+            let reset_detail = reset
                 .as_deref()
-                .and_then(time_utils::format_reset_countdown);
+                .and_then(time_utils::parse_iso8601_to_epoch)
+                .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
             QuotaInfo::with_details(
                 label.clone(),
                 used_percent,
                 100.0,
                 QuotaType::ModelSpecific(label),
-                reset_text,
+                reset_detail,
             )
         })
         .collect();
 
-    quotas.sort_by(|a, b| a.label.cmp(&b.label));
+    quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
     if quotas.is_empty() {
         return Err(ProviderError::no_data().into());
@@ -120,8 +121,14 @@ mod tests {
 
         let quotas = parse_quota_response(body).unwrap();
         assert_eq!(quotas.len(), 2);
-        assert_eq!(quotas[0].label, "Flash");
-        assert_eq!(quotas[1].label, "Pro");
+        assert_eq!(
+            quotas[0].label_spec,
+            crate::models::QuotaLabelSpec::Raw("Flash".to_string())
+        );
+        assert_eq!(
+            quotas[1].label_spec,
+            crate::models::QuotaLabelSpec::Raw("Pro".to_string())
+        );
         assert_eq!(quotas[1].used, 70.0);
     }
 

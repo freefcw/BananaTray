@@ -1,6 +1,8 @@
 use super::*;
 use crate::models::ErrorKind;
-use crate::models::{ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    FailureAdvice, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData,
+};
 use crate::providers::error_presenter::ProviderErrorPresenter;
 use crate::providers::{AiProvider, ProviderManager, ProviderManagerHandle};
 use anyhow::Result;
@@ -26,7 +28,7 @@ fn test_classify_error_kind_config_missing() {
 
 #[test]
 fn test_classify_error_kind_auth_required() {
-    let error = crate::providers::ProviderError::AuthRequired { hint: None };
+    let error = crate::providers::ProviderError::AuthRequired { advice: None };
     assert_eq!(
         ProviderErrorPresenter::to_error_kind(&error),
         ErrorKind::AuthRequired
@@ -36,7 +38,9 @@ fn test_classify_error_kind_auth_required() {
 #[test]
 fn test_classify_error_kind_session_expired() {
     let error = crate::providers::ProviderError::SessionExpired {
-        hint: Some("re-login".to_string()),
+        advice: Some(FailureAdvice::ReloginCli {
+            cli: "test-cli".to_string(),
+        }),
     };
     assert_eq!(
         ProviderErrorPresenter::to_error_kind(&error),
@@ -72,7 +76,8 @@ fn test_classify_error_kind_unknown() {
     );
 
     let error = crate::providers::ProviderError::ParseFailed {
-        reason: "invalid json".to_string(),
+        advice: None,
+        raw_detail: Some("invalid json".to_string()),
     };
     assert_eq!(
         ProviderErrorPresenter::to_error_kind(&error),

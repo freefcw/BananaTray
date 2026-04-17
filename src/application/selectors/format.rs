@@ -1,10 +1,14 @@
 //! 格式化与展示文案函数
 //!
-//! 将 Provider 状态/Quota → 展示文本 的转换逻辑集中于此。
-//! 上次更新时间、配额使用详情。
+//! 将 Provider 状态/Quota/Failure → 展示文本 的转换逻辑集中于此。
+//! 上次更新时间、配额标签/详情、错误文案等。
 //! 从原 `app/provider_logic.rs` 合并而来。
 
-use crate::models::{ConnectionStatus, ProviderStatus, QuotaInfo, QuotaType, UpdateStatus};
+use super::QuotaDisplayViewState;
+use crate::models::{
+    ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,
+    QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
+};
 use rust_i18n::t;
 
 /// 格式化上次刷新的相对时间
@@ -35,6 +39,133 @@ pub fn format_last_updated(provider: &ProviderStatus) -> String {
     }
 }
 
+/// 格式化 Provider 最近一次失败消息。
+pub fn format_failure_message(failure: &ProviderFailure) -> String {
+    match &failure.reason {
+        FailureReason::CliNotFound { cli_name } => {
+            t!("error.cli_not_found", cli = cli_name).to_string()
+        }
+        FailureReason::AuthRequired => failure
+            .advice
+            .as_ref()
+            .map(format_failure_advice)
+            .unwrap_or_else(|| t!("error.auth_required_default").to_string()),
+        FailureReason::SessionExpired => failure
+            .advice
+            .as_ref()
+            .map(format_failure_advice)
+            .unwrap_or_else(|| t!("error.session_expired_default").to_string()),
+        FailureReason::FolderTrustRequired => t!("error.folder_trust").to_string(),
+        FailureReason::UpdateRequired { version } => match version {
+            Some(v) => t!("error.update_required_ver", version = v).to_string(),
+            None => t!("error.update_required").to_string(),
+        },
+        FailureReason::ConfigMissing { key } => t!("error.config_missing", key = key).to_string(),
+        FailureReason::Unavailable | FailureReason::ParseFailed | FailureReason::FetchFailed => {
+            failure
+                .advice
+                .as_ref()
+                .map(format_failure_advice)
+                .or_else(|| failure.raw_detail.clone())
+                .unwrap_or_else(|| t!("provider.unknown_error").to_string())
+        }
+        FailureReason::Timeout => t!("error.timeout").to_string(),
+        FailureReason::NoData => t!("error.no_data").to_string(),
+        FailureReason::NetworkFailed => match failure.raw_detail.as_deref() {
+            Some(reason) => t!("error.network_failed", reason = reason).to_string(),
+            None => t!("error.timeout").to_string(),
+        },
+    }
+}
+
+fn format_failure_advice(advice: &FailureAdvice) -> String {
+    match advice {
+        FailureAdvice::LoginCli { cli } => t!("hint.login_cli", cli = cli).to_string(),
+        FailureAdvice::ReloginCli { cli } => t!("hint.relogin_cli", cli = cli).to_string(),
+        FailureAdvice::RefreshCli { cli } => t!("hint.refresh_cli", cli = cli).to_string(),
+        FailureAdvice::LoginApp { app } => t!("hint.login_app", app = app).to_string(),
+        FailureAdvice::CliExitFailed { code } => {
+            t!("hint.cli_exit_failed", code = code).to_string()
+        }
+        FailureAdvice::ApiHttpError { status } => {
+            t!("hint.api_http_error", status = status).to_string()
+        }
+        FailureAdvice::ApiError { message } => t!("hint.api_error", msg = message).to_string(),
+        FailureAdvice::NoOauthCreds { cli } => t!("hint.no_oauth_creds", cli = cli).to_string(),
+        FailureAdvice::BothUnavailable { name } => {
+            t!("hint.both_unavailable", name = name).to_string()
+        }
+        FailureAdvice::TrustFolder { cli } => t!("hint.trust_folder", cli = cli).to_string(),
+        FailureAdvice::CannotParseQuota => t!("hint.cannot_parse_quota").to_string(),
+        FailureAdvice::TokenStillInvalid => t!("hint.token_still_invalid").to_string(),
+    }
+}
+
+/// 格式化配额标题。
+pub fn format_quota_label(quota: &QuotaInfo) -> String {
+    match &quota.label_spec {
+        QuotaLabelSpec::Raw(label) => label.clone(),
+        QuotaLabelSpec::Session => t!("quota.label.session").to_string(),
+        QuotaLabelSpec::Weekly => t!("quota.label.weekly").to_string(),
+        QuotaLabelSpec::WeeklyModel { model } => {
+            t!("quota.label.weekly_model", model = model).to_string()
+        }
+        QuotaLabelSpec::WeeklyTier { tier } => {
+            format!("{} ({})", t!("quota.label.weekly"), tier)
+        }
+        QuotaLabelSpec::Credits => t!("quota.label.credits").to_string(),
+        QuotaLabelSpec::BonusCredits => t!("quota.label.bonus_credits").to_string(),
+        QuotaLabelSpec::ExtraUsage => t!("quota.label.extra_usage").to_string(),
+        QuotaLabelSpec::PremiumRequests { plan } => {
+            t!("quota.label.premium_requests", plan = plan).to_string()
+        }
+        QuotaLabelSpec::ChatCompletions { plan } => {
+            t!("quota.label.chat_completions", plan = plan).to_string()
+        }
+        QuotaLabelSpec::MonthlyTier { tier } => {
+            t!("quota.label.monthly_tier", tier = tier).to_string()
+        }
+        QuotaLabelSpec::OnDemand => t!("quota.label.on_demand").to_string(),
+        QuotaLabelSpec::Team => t!("quota.label.team").to_string(),
+    }
+}
+
+/// 格式化配额详情（卡片第四行）。
+pub fn format_quota_detail(quota: &QuotaInfo) -> String {
+    match &quota.detail_spec {
+        Some(QuotaDetailSpec::Raw(text)) => text.clone(),
+        Some(QuotaDetailSpec::Unlimited) => t!("quota.label.unlimited").to_string(),
+        Some(QuotaDetailSpec::RequestCount { used, total }) => {
+            t!("quota.label.request_detail", used = used, total = total).to_string()
+        }
+        Some(QuotaDetailSpec::CreditRemaining { remaining, total }) => t!(
+            "quota.label.credit_remaining",
+            remaining = format!("{remaining:.2}"),
+            total = format!("{total:.2}")
+        )
+        .to_string(),
+        Some(QuotaDetailSpec::ResetAt { epoch_secs }) => {
+            crate::utils::time_utils::format_reset_from_epoch(*epoch_secs)
+        }
+        Some(QuotaDetailSpec::ResetDate { date }) => {
+            t!("quota.label.resets_on", date = date).to_string()
+        }
+        Some(QuotaDetailSpec::ExpiresInDays { days }) => {
+            t!("quota.label.expires_in_days", days = days).to_string()
+        }
+        None => String::new(),
+    }
+}
+
+/// 将 domain quota 转为 UI 可直接消费的展示 ViewState。
+pub fn quota_display_view_state(quota: &QuotaInfo) -> QuotaDisplayViewState {
+    QuotaDisplayViewState {
+        quota: quota.clone(),
+        label: format_quota_label(quota),
+        detail: format_quota_detail(quota),
+    }
+}
+
 /// 使用详情文本（用于 UI 详细展示）
 ///
 /// 从 `QuotaInfo` 的实例方法提取到 selector 层，
@@ -48,9 +179,9 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
         // 余额模式：显示已用额度
         if quota.used > 0.0 {
             if matches!(quota.quota_type, QuotaType::Credit) {
-                format!("Used: ${:.2}", quota.used)
+                t!("quota.used_credit", amount = format!("{:.2}", quota.used)).to_string()
             } else {
-                format!("Used: {:.2}", quota.used)
+                t!("quota.used_amount", amount = format!("{:.2}", quota.used)).to_string()
             }
         } else {
             String::new()
@@ -85,7 +216,10 @@ mod tests {
     use crate::models::test_helpers::{
         make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
-    use crate::models::{ConnectionStatus, ProviderKind, QuotaInfo, QuotaType, UpdateStatus};
+    use crate::models::{
+        ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderKind,
+        QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
+    };
 
     // ── format_last_updated ──────────────────────────────────
 
@@ -159,6 +293,66 @@ mod tests {
         p.update_status = Some(UpdateStatus::Failed);
         // instant 存在时，优先显示时间，不显示 "Update failed"
         assert_eq!(format_last_updated(&p), "Updated just now");
+    }
+
+    // ── format_failure_message ──────────────────────────────
+
+    #[test]
+    fn failure_message_uses_advice() {
+        let _locale_guard = setup_locale();
+        let failure = ProviderFailure {
+            reason: FailureReason::AuthRequired,
+            advice: Some(FailureAdvice::LoginCli {
+                cli: "claude".to_string(),
+            }),
+            raw_detail: None,
+        };
+        assert_eq!(
+            format_failure_message(&failure),
+            "Please run `claude` to login"
+        );
+    }
+
+    #[test]
+    fn failure_message_falls_back_to_raw_detail() {
+        let _locale_guard = setup_locale();
+        let failure = ProviderFailure {
+            reason: FailureReason::FetchFailed,
+            advice: None,
+            raw_detail: Some("upstream 502".to_string()),
+        };
+        assert_eq!(format_failure_message(&failure), "upstream 502");
+    }
+
+    // ── quota label/detail ─────────────────────────────────
+
+    #[test]
+    fn format_quota_label_weekly_tier() {
+        let _locale_guard = setup_locale();
+        let quota = QuotaInfo::with_details(
+            QuotaLabelSpec::WeeklyTier {
+                tier: "Moderato".to_string(),
+            },
+            25.0,
+            100.0,
+            QuotaType::Weekly,
+            None,
+        );
+        assert_eq!(format_quota_label(&quota), "Weekly (Moderato)");
+    }
+
+    #[test]
+    fn format_quota_detail_reset_at() {
+        let _locale_guard = setup_locale();
+        let future = crate::utils::time_utils::now_epoch_secs() + 3600;
+        let quota = QuotaInfo::with_details(
+            QuotaLabelSpec::Session,
+            10.0,
+            100.0,
+            QuotaType::Session,
+            Some(QuotaDetailSpec::ResetAt { epoch_secs: future }),
+        );
+        assert!(format_quota_detail(&quota).contains("Resets in 1h"));
     }
 
     // ── quota_usage_detail_text ──────────────────────────────

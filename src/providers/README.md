@@ -22,7 +22,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
-- **`ProviderErrorPresenter`** — maps `ProviderError` to UI message and `ErrorKind`
+- **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — shared live/cache/parser/spec logic for Antigravity and Windsurf
 - **`docs/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
@@ -69,7 +69,12 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 ## Design Notes
 
 - Provider layer returns structured facts; it does not format UI strings.
-- Error presentation belongs to `src/providers/error_presenter.rs`.
+- Provider 应返回稳定语义而不是最终展示文案：
+  - quota 标题用 `QuotaLabelSpec`
+  - quota 第四行详情用 `QuotaDetailSpec`
+  - 错误用 `ProviderError` / `ProviderFailure`
+- `src/providers/error_presenter.rs` 负责把 `ProviderError` 降为可持久化的失败语义；`application/selectors/format.rs` 负责最终 i18n 文案。
+- 语言切换不应触发 provider refresh；selector 基于最新 locale 即时重算展示字符串。
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
 - Only introduce extra traits when there are real multiple implementations (for example Claude probe strategies).
 - `Claude::UsageProbe` and `Antigravity::ParseStrategy` are intentionally separate:

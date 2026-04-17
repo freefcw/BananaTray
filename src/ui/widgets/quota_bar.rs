@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use crate::application::quota_usage_detail_text;
-use crate::models::{QuotaDisplayMode, QuotaInfo, QuotaType, StatusLevel};
+use crate::application::{quota_usage_detail_text, QuotaDisplayViewState};
+use crate::models::{QuotaDisplayMode, QuotaType, StatusLevel};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -40,11 +40,12 @@ fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
 
 /// Lumina Bar 风格的 quota 卡片
 pub(crate) fn render_quota_bar(
-    q: &QuotaInfo,
+    quota_view: &QuotaDisplayViewState,
     theme: &Theme,
     generation: u64,
     display_mode: QuotaDisplayMode,
 ) -> impl IntoElement {
+    let q = &quota_view.quota;
     let status = q.status_level();
     let badge_color = status_badge_color(status, theme);
     let badge_label = status_badge_label(status);
@@ -102,7 +103,9 @@ pub(crate) fn render_quota_bar(
     let hover_bg = theme.bg.card_inner_hovered;
 
     let card = div()
-        .id(ElementId::Name(format!("quota-card-{}", q.label).into()))
+        .id(ElementId::Name(
+            format!("quota-card-{}", q.stable_key).into(),
+        ))
         .w_full()
         .flex_col()
         .gap(px(6.0))
@@ -137,7 +140,7 @@ pub(crate) fn render_quota_bar(
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text.secondary)
                                 .whitespace_nowrap()
-                                .child(q.label.to_uppercase()),
+                                .child(quota_view.label.to_uppercase()),
                         ),
                 )
                 // 状态徽章
@@ -209,7 +212,8 @@ pub(crate) fn render_quota_bar(
             } else {
                 remaining_pct as f32 / 100.0
             };
-            let anim_id = ElementId::Name(format!("quota-bar-{}-{}", q.label, generation).into());
+            let anim_id =
+                ElementId::Name(format!("quota-bar-{}-{}", q.stable_key, generation).into());
             let gradient_start = theme.status.bar_gradient_start;
             let gradient_mid = theme.status.bar_gradient_mid;
             let gradient_end = fill_color;
@@ -249,18 +253,18 @@ pub(crate) fn render_quota_bar(
         })
         // ── 第四行：详情文本 ──
         .child({
-            // 余额模式显示已用额度，传统模式显示 detail_text
+            // 余额模式显示已用额度，传统模式显示 selector 已格式化的 detail
             let detail_str = if is_balance {
                 let used_text = quota_usage_detail_text(q);
                 if used_text.is_empty() {
-                    q.detail_text.clone().unwrap_or_default()
-                } else if let Some(ref detail) = q.detail_text {
-                    format!("{} · {}", used_text, detail)
-                } else {
+                    quota_view.detail.clone()
+                } else if quota_view.detail.is_empty() {
                     used_text
+                } else {
+                    format!("{} · {}", used_text, quota_view.detail)
                 }
             } else {
-                q.detail_text.clone().unwrap_or_default()
+                quota_view.detail.clone()
             };
             div().flex().items_center().gap(px(4.0)).mt(px(12.0)).child(
                 div()

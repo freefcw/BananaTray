@@ -220,6 +220,8 @@ quota.credit_over: "$%{amount} over"
 quota.credit_detail: "$%{used} / $%{limit}"
 quota.pct_used: "%{pct}% used"
 quota.count_detail: "%{used} used / %{total} total"
+quota.used_credit: "Used: $%{amount}"
+quota.used_amount: "Used: %{amount}"
 quota.update_failed: "Update failed"
 
 # ── Provider status (format_last_updated) ─────────────────

@@ -3,7 +3,9 @@
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
 use super::super::state::{provider_panel_flags, AppSession};
-use super::format::format_last_updated;
+use super::format::{
+    format_failure_message, format_last_updated, format_quota_label, quota_display_view_state,
+};
 use super::*;
 use crate::models::{AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderId, ProviderStatus};
 use rust_i18n::t;
@@ -164,7 +166,10 @@ fn provider_body_view_state(
                 ProviderBodyViewState::Empty(provider_empty_view_state(provider))
             } else {
                 ProviderBodyViewState::Quotas {
-                    quotas: visible,
+                    quotas: visible
+                        .into_iter()
+                        .map(|quota| quota_display_view_state(&quota))
+                        .collect(),
                     generation,
                 }
             }
@@ -182,7 +187,11 @@ fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewStat
     let (title, message) = if is_error {
         (
             t!("provider.refresh_failed").to_string(),
-            provider.error_message.clone().unwrap_or_default(),
+            provider
+                .last_failure
+                .as_ref()
+                .map(format_failure_message)
+                .unwrap_or_default(),
         )
     } else {
         let title = match provider.connection {
@@ -215,8 +224,8 @@ fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewStat
 }
 
 fn provider_empty_message(provider: &ProviderStatus) -> String {
-    if let Some(error) = &provider.error_message {
-        return error.clone();
+    if let Some(failure) = &provider.last_failure {
+        return format_failure_message(failure);
     }
 
     match provider.connection {
@@ -254,8 +263,9 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 ConnectionStatus::Error if provider.quotas.is_empty() => {
                     OverviewItemStatus::Error {
                         message: provider
-                            .error_message
-                            .clone()
+                            .last_failure
+                            .as_ref()
+                            .map(format_failure_message)
                             .unwrap_or_else(|| t!("provider.refresh_failed").to_string()),
                     }
                 }
@@ -274,7 +284,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                             .map(|q| {
                                 let sl = q.status_level();
                                 OverviewQuotaItem {
-                                    label: q.label.clone(),
+                                    label: format_quota_label(q),
                                     display_text: compact_quota_display_text(q, display_mode),
                                     bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
                                     status_level: sl,

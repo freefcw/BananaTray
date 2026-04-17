@@ -1,8 +1,7 @@
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::ProviderError;
 use crate::utils::time_utils;
 use anyhow::Result;
-use rust_i18n::t;
 
 pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     let json: serde_json::Value = serde_json::from_str(body)
@@ -23,17 +22,20 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     let reset_at = json
         .get("billingCycleEnd")
         .and_then(|v| v.as_str())
-        .and_then(time_utils::format_reset_countdown);
+        .and_then(time_utils::parse_iso8601_to_epoch)
+        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
     let tier_label = membership_type.to_uppercase();
 
     if is_unlimited {
         quotas.push(QuotaInfo::with_details(
-            t!("quota.label.monthly_tier", tier = tier_label).to_string(),
+            QuotaLabelSpec::MonthlyTier {
+                tier: tier_label.clone(),
+            },
             0.0,
             1.0,
             QuotaType::General,
-            Some(t!("quota.label.unlimited").to_string()),
+            Some(QuotaDetailSpec::Unlimited),
         ));
         return Ok(quotas);
     }
@@ -67,7 +69,9 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
                 };
 
                 quotas.push(QuotaInfo::with_details(
-                    t!("quota.label.monthly_tier", tier = tier_label).to_string(),
+                    QuotaLabelSpec::MonthlyTier {
+                        tier: tier_label.clone(),
+                    },
                     effective_used,
                     effective_limit,
                     QuotaType::General,
@@ -93,7 +97,7 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
                 .unwrap_or(0.0);
             if limit > 0.0 {
                 quotas.push(QuotaInfo::with_details(
-                    t!("quota.label.on_demand").to_string(),
+                    QuotaLabelSpec::OnDemand,
                     used,
                     limit,
                     QuotaType::Credit,
@@ -120,7 +124,7 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
                     .unwrap_or(0.0);
                 if limit > 0.0 {
                     quotas.push(QuotaInfo::with_details(
-                        t!("quota.label.team").to_string(),
+                        QuotaLabelSpec::Team,
                         used,
                         limit,
                         QuotaType::Credit,
@@ -148,7 +152,7 @@ mod tests {
         let body = r#"{"membershipType":"pro","isUnlimited":true,"billingCycleEnd":"2026-05-01T00:00:00Z"}"#;
         let quotas = parse_usage_response(body).unwrap();
         assert_eq!(quotas.len(), 1);
-        assert_eq!(quotas[0].detail_text.as_deref(), Some("Unlimited"));
+        assert_eq!(quotas[0].detail_spec, Some(QuotaDetailSpec::Unlimited));
     }
 
     #[test]

@@ -5,8 +5,8 @@ pub mod error_presenter;
 pub mod manager;
 
 use crate::models::{
-    AppSettings, ProviderDescriptor, RefreshData, SettingsCapability, TokenEditMode,
-    TokenInputState,
+    AppSettings, ErrorKind, FailureAdvice, FailureReason, ProviderDescriptor, ProviderFailure,
+    RefreshData, SettingsCapability, TokenEditMode, TokenInputState,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -66,20 +66,19 @@ pub(crate) use define_unit_provider;
 /// Provider 刷新失败的结构化错误类型
 ///
 /// 设计原则：
-/// - **面向用户的提示**（CliNotFound, AuthRequired, SessionExpired, FolderTrustRequired,
-///   UpdateRequired, ConfigMissing）→ 由 `ProviderErrorPresenter::to_message()` 国际化展示
-/// - **技术性错误**（Unavailable, ParseFailed, Timeout, NoData, NetworkFailed,
-///   FetchFailed）→ 保留英文 reason，便于调试
-#[derive(Debug, Clone)]
+/// - Provider 层只返回稳定语义，不直接生成最终展示文案
+/// - selector/UI 再基于 `ProviderFailure` 和当前 locale 生成字符串
+/// - `raw_detail` 只承载技术细节或上游原文，不承载本地化外壳文案
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)] // 某些变体预留给未来使用
 pub enum ProviderError {
     // ── 面向用户的提示（国际化）──────────────────────────
     /// CLI 未安装或找不到
     CliNotFound { cli_name: String },
     /// 需要登录认证
-    AuthRequired { hint: Option<String> },
+    AuthRequired { advice: Option<FailureAdvice> },
     /// OAuth 会话已过期
-    SessionExpired { hint: Option<String> },
+    SessionExpired { advice: Option<FailureAdvice> },
     /// 需要信任文件夹（Claude CLI 特有）
     FolderTrustRequired,
     /// CLI 需要更新
@@ -89,9 +88,15 @@ pub enum ProviderError {
 
     // ── 技术性错误（不国际化，保留英文）────────────────────
     /// Provider 在当前环境不可用（文件不存在、服务未运行等）
-    Unavailable { reason: String },
+    Unavailable {
+        advice: Option<FailureAdvice>,
+        raw_detail: Option<String>,
+    },
     /// 解析响应失败
-    ParseFailed { reason: String },
+    ParseFailed {
+        advice: Option<FailureAdvice>,
+        raw_detail: Option<String>,
+    },
     /// 网络请求超时
     Timeout,
     /// 无配额数据
@@ -99,7 +104,10 @@ pub enum ProviderError {
     /// 网络请求失败
     NetworkFailed { reason: String },
     /// 其他获取失败
-    FetchFailed { reason: String },
+    FetchFailed {
+        advice: Option<FailureAdvice>,
+        raw_detail: Option<String>,
+    },
 }
 
 impl std::fmt::Display for ProviderError {
@@ -109,16 +117,29 @@ impl std::fmt::Display for ProviderError {
             Self::CliNotFound { cli_name } => {
                 write!(f, "CLI not found: {}", cli_name)
             }
-            Self::Unavailable { reason } => {
-                write!(f, "unavailable: {}", reason)
+            Self::Unavailable { advice, raw_detail } => {
+                write!(f, "unavailable")?;
+                if let Some(advice) = advice {
+                    write!(f, " ({})", advice.summary())?;
+                }
+                if let Some(detail) = raw_detail {
+                    write!(f, ": {}", detail)?;
+                }
+                Ok(())
             }
-            Self::AuthRequired { hint } => {
-                let msg = hint.as_deref().unwrap_or("please run login command");
-                write!(f, "auth required: {}", msg)
+            Self::AuthRequired { advice } => {
+                write!(f, "auth required")?;
+                if let Some(advice) = advice {
+                    write!(f, ": {}", advice.summary())?;
+                }
+                Ok(())
             }
-            Self::SessionExpired { hint } => {
-                let msg = hint.as_deref().unwrap_or("please re-login");
-                write!(f, "session expired: {}", msg)
+            Self::SessionExpired { advice } => {
+                write!(f, "session expired")?;
+                if let Some(advice) = advice {
+                    write!(f, ": {}", advice.summary())?;
+                }
+                Ok(())
             }
             Self::FolderTrustRequired => {
                 write!(f, "folder trust required")
@@ -127,8 +148,15 @@ impl std::fmt::Display for ProviderError {
                 Some(v) => write!(f, "update required: version {}", v),
                 None => write!(f, "update required: latest version"),
             },
-            Self::ParseFailed { reason } => {
-                write!(f, "parse failed: {}", reason)
+            Self::ParseFailed { advice, raw_detail } => {
+                write!(f, "parse failed")?;
+                if let Some(advice) = advice {
+                    write!(f, " ({})", advice.summary())?;
+                }
+                if let Some(detail) = raw_detail {
+                    write!(f, ": {}", detail)?;
+                }
+                Ok(())
             }
             Self::Timeout => {
                 write!(f, "request timeout")
@@ -142,8 +170,15 @@ impl std::fmt::Display for ProviderError {
             Self::ConfigMissing { key } => {
                 write!(f, "config missing: {}", key)
             }
-            Self::FetchFailed { reason } => {
-                write!(f, "fetch failed: {}", reason)
+            Self::FetchFailed { advice, raw_detail } => {
+                write!(f, "fetch failed")?;
+                if let Some(advice) = advice {
+                    write!(f, " ({})", advice.summary())?;
+                }
+                if let Some(detail) = raw_detail {
+                    write!(f, ": {}", detail)?;
+                }
+                Ok(())
             }
         }
     }
@@ -170,7 +205,8 @@ impl ProviderError {
 
         // 非 ProviderError 错误统一归类为 FetchFailed
         Self::FetchFailed {
-            reason: err.to_string(),
+            advice: None,
+            raw_detail: Some(err.to_string()),
         }
     }
 
@@ -184,22 +220,27 @@ impl ProviderError {
     /// Provider 不可用
     pub fn unavailable(reason: &str) -> Self {
         Self::Unavailable {
-            reason: reason.to_string(),
+            advice: None,
+            raw_detail: Some(reason.to_string()),
+        }
+    }
+
+    /// Provider 不可用（结构化建议）
+    pub fn unavailable_with_advice(advice: FailureAdvice) -> Self {
+        Self::Unavailable {
+            advice: Some(advice),
+            raw_detail: None,
         }
     }
 
     /// 需要认证
-    pub fn auth_required(hint: Option<&str>) -> Self {
-        Self::AuthRequired {
-            hint: hint.map(|s| s.to_string()),
-        }
+    pub fn auth_required(advice: Option<FailureAdvice>) -> Self {
+        Self::AuthRequired { advice }
     }
 
     /// 会话过期
-    pub fn session_expired(hint: Option<&str>) -> Self {
-        Self::SessionExpired {
-            hint: hint.map(|s| s.to_string()),
-        }
+    pub fn session_expired(advice: Option<FailureAdvice>) -> Self {
+        Self::SessionExpired { advice }
     }
 
     /// 需要更新
@@ -212,7 +253,16 @@ impl ProviderError {
     /// 解析失败
     pub fn parse_failed(reason: &str) -> Self {
         Self::ParseFailed {
-            reason: reason.to_string(),
+            advice: None,
+            raw_detail: Some(reason.to_string()),
+        }
+    }
+
+    /// 解析失败（结构化建议）
+    pub fn parse_failed_with_advice(advice: FailureAdvice) -> Self {
+        Self::ParseFailed {
+            advice: Some(advice),
+            raw_detail: None,
         }
     }
 
@@ -231,7 +281,114 @@ impl ProviderError {
     /// 获取失败（通用）
     pub fn fetch_failed(reason: &str) -> Self {
         Self::FetchFailed {
-            reason: reason.to_string(),
+            advice: None,
+            raw_detail: Some(reason.to_string()),
+        }
+    }
+
+    /// 获取失败（结构化建议）
+    pub fn fetch_failed_with_advice(advice: FailureAdvice) -> Self {
+        Self::FetchFailed {
+            advice: Some(advice),
+            raw_detail: None,
+        }
+    }
+
+    /// 将 provider 层错误转换为状态/UI 可持有的稳定语义。
+    pub fn to_failure(&self) -> ProviderFailure {
+        match self {
+            Self::CliNotFound { cli_name } => ProviderFailure {
+                reason: FailureReason::CliNotFound {
+                    cli_name: cli_name.clone(),
+                },
+                advice: None,
+                raw_detail: None,
+            },
+            Self::AuthRequired { advice } => ProviderFailure {
+                reason: FailureReason::AuthRequired,
+                advice: advice.clone(),
+                raw_detail: None,
+            },
+            Self::SessionExpired { advice } => ProviderFailure {
+                reason: FailureReason::SessionExpired,
+                advice: advice.clone(),
+                raw_detail: None,
+            },
+            Self::FolderTrustRequired => ProviderFailure {
+                reason: FailureReason::FolderTrustRequired,
+                advice: None,
+                raw_detail: None,
+            },
+            Self::UpdateRequired { version } => ProviderFailure {
+                reason: FailureReason::UpdateRequired {
+                    version: version.clone(),
+                },
+                advice: None,
+                raw_detail: None,
+            },
+            Self::ConfigMissing { key } => ProviderFailure {
+                reason: FailureReason::ConfigMissing { key: key.clone() },
+                advice: None,
+                raw_detail: None,
+            },
+            Self::Unavailable { advice, raw_detail } => ProviderFailure {
+                reason: FailureReason::Unavailable,
+                advice: advice.clone(),
+                raw_detail: raw_detail.clone(),
+            },
+            Self::ParseFailed { advice, raw_detail } => ProviderFailure {
+                reason: FailureReason::ParseFailed,
+                advice: advice.clone(),
+                raw_detail: raw_detail.clone(),
+            },
+            Self::Timeout => ProviderFailure {
+                reason: FailureReason::Timeout,
+                advice: None,
+                raw_detail: None,
+            },
+            Self::NoData => ProviderFailure {
+                reason: FailureReason::NoData,
+                advice: None,
+                raw_detail: None,
+            },
+            Self::NetworkFailed { reason } => ProviderFailure {
+                reason: FailureReason::NetworkFailed,
+                advice: None,
+                raw_detail: Some(reason.clone()),
+            },
+            Self::FetchFailed { advice, raw_detail } => ProviderFailure {
+                reason: FailureReason::FetchFailed,
+                advice: advice.clone(),
+                raw_detail: raw_detail.clone(),
+            },
+        }
+    }
+
+    pub fn error_kind(&self) -> ErrorKind {
+        match self {
+            Self::ConfigMissing { .. } => ErrorKind::ConfigMissing,
+            Self::AuthRequired { .. } | Self::SessionExpired { .. } => ErrorKind::AuthRequired,
+            Self::Timeout | Self::NetworkFailed { .. } => ErrorKind::NetworkError,
+            _ => ErrorKind::Unknown,
+        }
+    }
+}
+
+impl FailureAdvice {
+    fn summary(&self) -> String {
+        match self {
+            Self::LoginCli { cli } => format!("login cli {}", cli),
+            Self::ReloginCli { cli } => format!("relogin cli {}", cli),
+            Self::RefreshCli { cli } => format!("refresh cli {}", cli),
+            Self::LoginApp { app } => format!("login app {}", app),
+            Self::CliExitFailed { code } => format!("cli exit {}", code),
+            Self::ApiHttpError { status } => format!("http {}", status),
+            Self::ApiError { message } => format!("api error {}", message),
+            Self::NoOauthCreds { cli } => format!("missing oauth creds {}", cli),
+            Self::BothUnavailable { name } => format!("both unavailable {}", name),
+            Self::TrustFolder { cli } => format!("trust folder {}", cli),
+            Self::CannotParseQuota => "cannot parse quota".to_string(),
+            Self::TokenStillInvalid => "token still invalid".to_string(),
         }
     }
 }
@@ -316,20 +473,24 @@ mod tests {
 
     #[test]
     fn test_display_auth_required_with_hint() {
-        let err = ProviderError::auth_required(Some("run `claude` to login"));
-        assert_eq!(err.to_string(), "auth required: run `claude` to login");
+        let err = ProviderError::auth_required(Some(FailureAdvice::LoginCli {
+            cli: "claude".to_string(),
+        }));
+        assert_eq!(err.to_string(), "auth required: login cli claude");
     }
 
     #[test]
     fn test_display_auth_required_without_hint() {
         let err = ProviderError::auth_required(None);
-        assert_eq!(err.to_string(), "auth required: please run login command");
+        assert_eq!(err.to_string(), "auth required");
     }
 
     #[test]
     fn test_display_session_expired() {
-        let err = ProviderError::session_expired(Some("run `codex` to re-login"));
-        assert_eq!(err.to_string(), "session expired: run `codex` to re-login");
+        let err = ProviderError::session_expired(Some(FailureAdvice::ReloginCli {
+            cli: "codex".to_string(),
+        }));
+        assert_eq!(err.to_string(), "session expired: relogin cli codex");
     }
 
     #[test]
@@ -400,7 +561,8 @@ mod tests {
     #[test]
     fn test_error_chain() {
         // 测试错误可以正确转换为 anyhow::Error 并恢复
-        let original = ProviderError::session_expired(Some("test"));
+        let original =
+            ProviderError::session_expired(Some(FailureAdvice::LoginCli { cli: "test".into() }));
         let anyhow_err: anyhow::Error = original.into();
         let classified = ProviderError::classify(&anyhow_err);
         assert!(matches!(classified, ProviderError::SessionExpired { .. }));

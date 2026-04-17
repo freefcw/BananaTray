@@ -1,8 +1,6 @@
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaType};
 use crate::providers::ProviderError;
-use crate::utils::time_utils;
 use anyhow::{Context, Result};
-use rust_i18n::t;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -40,7 +38,10 @@ pub(super) fn parse_remains_response(response_str: &str) -> Result<Vec<QuotaInfo
             .base_resp
             .status_msg
             .unwrap_or_else(|| "unknown error".to_string());
-        return Err(ProviderError::fetch_failed(&t!("hint.api_error", msg = msg)).into());
+        return Err(
+            ProviderError::fetch_failed_with_advice(FailureAdvice::ApiError { message: msg })
+                .into(),
+        );
     }
 
     let model_remains = resp.model_remains.unwrap_or_default();
@@ -54,15 +55,15 @@ pub(super) fn parse_remains_response(response_str: &str) -> Result<Vec<QuotaInfo
             let total = model.current_interval_total_count;
             let remaining = model.current_interval_usage_count.clamp(0, total);
             let used = total - remaining;
-            let reset_at = model
-                .end_time
-                .map(|ms| time_utils::format_reset_from_epoch(ms / 1000));
-            let label = model.model_name.clone();
+            let reset_at = model.end_time.map(|ms| QuotaDetailSpec::ResetAt {
+                epoch_secs: ms / 1000,
+            });
+            let label = model.model_name;
             QuotaInfo::with_details(
-                &label,
+                label.clone(),
                 used as f64,
                 total as f64,
-                QuotaType::ModelSpecific(model.model_name),
+                QuotaType::ModelSpecific(label),
                 reset_at,
             )
         })

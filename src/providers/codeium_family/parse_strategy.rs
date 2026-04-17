@@ -1,5 +1,5 @@
-use crate::models::{QuotaInfo, QuotaType};
-use crate::utils::time_utils;
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType};
+use crate::utils::time_utils::parse_iso8601_to_epoch;
 use anyhow::Result;
 use prost::Message;
 
@@ -62,23 +62,24 @@ impl ParseStrategy for ApiParseStrategy {
                         .unwrap_or(0.0);
                     let used_percent = (1.0 - fraction) * 100.0;
 
-                    let reset_text = quota_info
+                    let reset_detail = quota_info
                         .get("resetTime")
                         .and_then(|v| v.as_str())
-                        .and_then(time_utils::format_reset_countdown);
+                        .and_then(parse_iso8601_to_epoch)
+                        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
                     quotas.push(QuotaInfo::with_details(
                         label,
                         used_percent,
                         100.0,
                         QuotaType::ModelSpecific(label.to_string()),
-                        reset_text,
+                        reset_detail,
                     ));
                 }
             }
         }
 
-        quotas.sort_by(|a, b| a.label.cmp(&b.label));
+        quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
         if quotas.is_empty() {
             anyhow::bail!("no model quotas found in API response");
@@ -119,28 +120,23 @@ impl ParseStrategy for CacheParseStrategy {
                     let remaining_fraction = quota_info.remaining_fraction.unwrap_or(0.0);
                     let used_percent = (1.0 - remaining_fraction) * 100.0;
 
-                    let reset_text = quota_info
+                    let reset_detail = quota_info
                         .reset_time_wrapper
                         .and_then(|wrapper| wrapper.reset_time)
-                        .and_then(|ts| {
-                            chrono::DateTime::from_timestamp(ts, 0)
-                                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                        })
-                        .as_deref()
-                        .and_then(time_utils::format_reset_countdown);
+                        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
                     quotas.push(QuotaInfo::with_details(
                         label.clone(),
                         used_percent as f64,
                         100.0,
                         QuotaType::ModelSpecific(label),
-                        reset_text,
+                        reset_detail,
                     ));
                 }
             }
         }
 
-        quotas.sort_by(|a, b| a.label.cmp(&b.label));
+        quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
         if quotas.is_empty() {
             anyhow::bail!("no model quotas found in cache");

@@ -3,14 +3,13 @@
 //! 通过执行 `claude /usage` 命令获取配额信息。
 
 use super::probe::UsageProbe;
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::runner::{InteractiveOptions, InteractiveRunner};
 use crate::providers::ProviderError;
 use crate::utils::text_utils;
 use anyhow::Result;
 use log::debug;
 use regex::Regex;
-use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -77,17 +76,17 @@ impl ClaudeCliProbe {
 
             // 确定配额类型和显示标签
             let (quota_type, label) = if header_lower.contains("extra usage") {
-                (QuotaType::Credit, t!("quota.label.extra_usage").to_string())
+                (QuotaType::Credit, QuotaLabelSpec::ExtraUsage)
             } else if header_lower.contains("session") {
-                (QuotaType::Session, t!("quota.label.session").to_string())
+                (QuotaType::Session, QuotaLabelSpec::Session)
             } else if header_lower.contains("week") {
                 if let Some(model) = Self::extract_model_name(header) {
                     (
                         QuotaType::ModelSpecific(model.clone()),
-                        t!("quota.label.weekly_model", model = model).to_string(),
+                        QuotaLabelSpec::WeeklyModel { model },
                     )
                 } else {
-                    (QuotaType::Weekly, t!("quota.label.weekly").to_string())
+                    (QuotaType::Weekly, QuotaLabelSpec::Weekly)
                 }
             } else {
                 continue;
@@ -99,7 +98,9 @@ impl ClaudeCliProbe {
             let reset_at = lines.iter().find_map(|line| {
                 RESET_RE
                     .captures(line)
-                    .map(|caps| format!("⏱ Resets {}", caps[1].trim()))
+                    .map(|caps| QuotaDetailSpec::ResetDate {
+                        date: caps[1].trim().to_string(),
+                    })
             });
 
             // 对于 Credit 类型，优先尝试提取美元金额（可能没有百分比）
@@ -204,9 +205,10 @@ impl UsageProbe for ClaudeCliProbe {
         let output_lower = result.output.to_lowercase();
 
         if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-            return Err(
-                ProviderError::auth_required(Some(&t!("hint.login_cli", cli = "claude"))).into(),
-            );
+            return Err(ProviderError::auth_required(Some(FailureAdvice::LoginCli {
+                cli: "claude".to_string(),
+            }))
+            .into());
         }
         if output_lower.contains("update") && output_lower.contains("required") {
             return Err(ProviderError::update_required(None).into());
@@ -218,10 +220,9 @@ impl UsageProbe for ClaudeCliProbe {
         if quotas.is_empty() {
             // 检查特定问题
             if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-                return Err(ProviderError::auth_required(Some(&t!(
-                    "hint.login_cli",
-                    cli = "claude"
-                )))
+                return Err(ProviderError::auth_required(Some(FailureAdvice::LoginCli {
+                    cli: "claude".to_string(),
+                }))
                 .into());
             }
             if output_lower.contains("update") && output_lower.contains("required") {
@@ -231,10 +232,15 @@ impl UsageProbe for ClaudeCliProbe {
             if output_lower.contains("trust the files") && !output_lower.contains("current session")
             {
                 return Err(
-                    ProviderError::unavailable(&t!("hint.trust_folder", cli = "claude")).into(),
+                    ProviderError::unavailable_with_advice(FailureAdvice::TrustFolder {
+                        cli: "claude".to_string(),
+                    })
+                    .into(),
                 );
             }
-            return Err(ProviderError::parse_failed(&t!("hint.cannot_parse_quota")).into());
+            return Err(
+                ProviderError::parse_failed_with_advice(FailureAdvice::CannotParseQuota).into(),
+            );
         }
 
         Ok(quotas)
@@ -289,12 +295,12 @@ Current week
         assert_eq!(quotas.len(), 2);
 
         // Session
-        assert_eq!(quotas[0].label, "Session (5h)");
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::Session);
         assert_eq!(quotas[0].used, 45.0);
         assert_eq!(quotas[0].quota_type, QuotaType::Session);
 
         // Weekly
-        assert_eq!(quotas[1].label, "Weekly");
+        assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Weekly);
         assert_eq!(quotas[1].used, 70.0); // 30% left = 70% used
     }
 
@@ -310,13 +316,23 @@ Current week (Sonnet)
         let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 2);
 
-        assert_eq!(quotas[0].label, "Weekly (Opus)");
+        assert_eq!(
+            quotas[0].label_spec,
+            QuotaLabelSpec::WeeklyModel {
+                model: "Opus".to_string()
+            }
+        );
         assert_eq!(
             quotas[0].quota_type,
             QuotaType::ModelSpecific("Opus".to_string())
         );
 
-        assert_eq!(quotas[1].label, "Weekly (Sonnet)");
+        assert_eq!(
+            quotas[1].label_spec,
+            QuotaLabelSpec::WeeklyModel {
+                model: "Sonnet".to_string()
+            }
+        );
         assert_eq!(
             quotas[1].quota_type,
             QuotaType::ModelSpecific("Sonnet".to_string())
@@ -332,7 +348,7 @@ $5.00 / $20.00
         let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 1);
 
-        assert_eq!(quotas[0].label, "Extra Usage");
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
         assert_eq!(quotas[0].used, 5.0);
         assert_eq!(quotas[0].limit, 20.0);
         assert_eq!(quotas[0].quota_type, QuotaType::Credit);

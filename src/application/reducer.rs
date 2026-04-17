@@ -380,11 +380,6 @@ fn apply_setting_change(
         SettingChange::Language(language) => {
             session.settings.display.language = language.clone();
             effects.push(CommonEffect::ApplyLocale(language).into());
-            // 语言切换后刷新所有 Provider，使缓存的本地化字符串（quota label、
-            // error message、detail_text）以新 locale 重新生成。
-            // Provider 层在 refresh 时调用 t!() 生成标签和提示文本，这些字符串
-            // 被缓存在 ProviderStatus 中；不刷新的话会停留在旧语言直到下次定时刷新。
-            refresh_all_providers(session, effects);
         }
         SettingChange::RefreshCadence(mins) => {
             session.settings.system.refresh_interval_mins = mins.unwrap_or(0);
@@ -536,21 +531,24 @@ fn process_refresh_outcome(
                 effects.push(ContextEffect::Render.into());
             }
         }
-        RefreshResult::Unavailable { message } => {
+        RefreshResult::Unavailable { failure } => {
             debug!(
                 target: "providers",
-                "provider {} unavailable: {}",
+                "provider {} unavailable: {:?}",
                 outcome_id,
-                message
+                failure
             );
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
-                provider.mark_unavailable(message);
+                provider.mark_unavailable(failure);
                 effects.push(ContextEffect::Render.into());
             }
         }
-        RefreshResult::Failed { error, error_kind } => {
+        RefreshResult::Failed {
+            failure,
+            error_kind,
+        } => {
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
-                provider.mark_refresh_failed(error, error_kind);
+                provider.mark_refresh_failed(failure, error_kind);
                 effects.push(ContextEffect::Render.into());
             }
         }

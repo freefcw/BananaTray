@@ -3,11 +3,12 @@ mod client;
 mod parser;
 
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use crate::utils::time_utils;
 use anyhow::Result;
 use async_trait::async_trait;
-use rust_i18n::t;
 use std::borrow::Cow;
 
 use auth::{check_auth_type, credentials_path, load_credentials, refresh_token_via_cli};
@@ -26,7 +27,9 @@ impl GeminiProvider {
         let token = creds
             .access_token
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| ProviderError::session_expired(Some(&t!("hint.token_still_invalid"))))?;
+            .ok_or_else(|| {
+                ProviderError::session_expired(Some(FailureAdvice::TokenStillInvalid))
+            })?;
         let quotas = fetch_quota_via_api(&token)?;
         Ok(RefreshData::with_account(quotas, email, None))
     }
@@ -67,7 +70,9 @@ impl AiProvider for GeminiProvider {
             .as_deref()
             .filter(|t| !t.is_empty())
             .ok_or_else(|| {
-                ProviderError::auth_required(Some(&t!("hint.login_cli", cli = "gemini")))
+                ProviderError::auth_required(Some(FailureAdvice::LoginCli {
+                    cli: "gemini".to_string(),
+                }))
             })?
             .to_string();
 
@@ -81,7 +86,9 @@ impl AiProvider for GeminiProvider {
             log::info!(target: "providers", "Gemini token expired, attempting CLI refresh");
             refresh_token_via_cli().map_err(|e| {
                 log::warn!(target: "providers", "Gemini CLI token refresh failed: {e}");
-                ProviderError::session_expired(Some(&t!("hint.refresh_cli", cli = "gemini")))
+                ProviderError::session_expired(Some(FailureAdvice::RefreshCli {
+                    cli: "gemini".to_string(),
+                }))
             })?;
             return self.fetch_quota_from_current_creds(account_email);
         }

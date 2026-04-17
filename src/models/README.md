@@ -19,16 +19,27 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 ### `quota.rs` — Usage Data
 
 - **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit`, `General`
+- **`QuotaLabelSpec`** — quota title semantic payload. Providers store stable meaning (`Session`, `WeeklyModel { .. }`, `Credits`, `Raw(String)` etc.); selector/UI turns it into locale-specific text.
+- **`QuotaDetailSpec`** — quota detail semantic payload for the 4th line (`Unlimited`, `RequestCount`, `CreditRemaining`, `ResetAt`, `ResetDate`, `ExpiresInDays`, `Raw(String)`).
 - **`StatusLevel`** — traffic-light severity: `Green`, `Yellow`, `Red` (implements `Ord`)
-- **`QuotaInfo`** — single quota entry with `used`, `limit`, `label`, `quota_type`, `detail_text`. Key methods:
+- **`QuotaInfo`** — single quota entry with numeric state plus display semantics:
+  - numeric fields: `used`, `limit`, `quota_type`, `remaining_balance`
+  - stable identity: `stable_key` (used for settings persistence / UI keys / hidden quota matching)
+  - display payloads: `label_spec`, `detail_spec`
+  - constructors: `with_details(...)`, `with_key(...)`, `balance_only(...)`, `balance_only_with_key(...)`
+  - note: `QuotaInfo` no longer stores locale-dependent display strings
+  - key methods:
   - `percentage()` / `percent_remaining()` — usage ratios (not clamped, allows >100% for over-quota)
   - `status_level()` — maps percentage to `StatusLevel` (thresholds: <80% Green, <95% Yellow, else Red)
   - `is_percentage_mode()` — true when `limit == 100.0` (data is already a percentage)
-  - `remaining_text()` / `usage_detail_text()` — human-readable display strings with credit ($) formatting
+  - `is_balance_only()` — true when the quota is modeled as remaining balance instead of progress-bar usage
 - **`ConnectionStatus`** — provider connection state: `Connected`, `Disconnected`, `Refreshing`, `Error`
-- **`ProviderStatus`** — full runtime state for one provider: metadata + enabled flag + connection status + quotas + account info + error message + timestamps
+- **`FailureReason`** / **`FailureAdvice`** / **`ProviderFailure`** — stable provider failure payload stored in state and formatted later by selectors
+- **`ProviderStatus`** — full runtime state for one provider: metadata + connection status + quotas + account info + `last_failure` + timestamps
+  - `last_failure` holds structured failure semantics, replacing the old cached `error_message`
+  - locale switching should only re-render selector/UI text; it should not require provider refresh to clear cached strings
   - `ProviderStatus::new(provider_id, metadata)` — unified constructor for built-in and custom providers. Callers must keep `provider_id.kind()` and `metadata.kind` aligned; debug builds assert this invariant.
-- **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `is_paid`, `account_tier`
+- **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `account_tier`
 
 ### `settings/` — User Preferences (sub-module)
 

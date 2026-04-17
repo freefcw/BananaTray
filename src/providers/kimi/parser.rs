@@ -1,8 +1,7 @@
-use crate::models::{QuotaInfo, QuotaType};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::ProviderError;
 use crate::utils::time_utils;
 use anyhow::{Context, Result};
-use rust_i18n::t;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -65,13 +64,16 @@ pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>>
         let limit = parse_num(&detail.limit);
         let tier = detect_tier(limit);
         let label = match tier {
-            Some(t_name) => format!("{} ({})", t!("quota.label.weekly"), t_name),
-            None => t!("quota.label.weekly").to_string(),
+            Some(tier) => QuotaLabelSpec::WeeklyTier {
+                tier: tier.to_string(),
+            },
+            None => QuotaLabelSpec::Weekly,
         };
         let reset_at = detail
             .reset_time
             .as_deref()
-            .and_then(time_utils::format_reset_countdown);
+            .and_then(time_utils::parse_iso8601_to_epoch)
+            .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
         quotas.push(QuotaInfo::with_details(
             label,
@@ -99,10 +101,11 @@ pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>>
                     let reset_at = detail
                         .reset_time
                         .as_deref()
-                        .and_then(time_utils::format_reset_countdown);
+                        .and_then(time_utils::parse_iso8601_to_epoch)
+                        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
                     quotas.push(QuotaInfo::with_details(
-                        t!("quota.label.session").to_string(),
+                        QuotaLabelSpec::Session,
                         used,
                         limit,
                         QuotaType::Session,
@@ -154,7 +157,12 @@ mod tests {
         }"#;
         let quotas = parse_usage_response(body).unwrap();
         assert_eq!(quotas.len(), 2);
-        assert_eq!(quotas[0].label, "Weekly (Moderato)");
-        assert_eq!(quotas[1].label, "Session (5h)");
+        assert_eq!(
+            quotas[0].label_spec,
+            QuotaLabelSpec::WeeklyTier {
+                tier: "Moderato".to_string()
+            }
+        );
+        assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Session);
     }
 }

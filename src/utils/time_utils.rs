@@ -78,15 +78,6 @@ pub fn format_countdown(delta_secs: i64) -> String {
     }
 }
 
-/// Parse an ISO 8601 timestamp and return a human-readable countdown string.
-///
-/// This is the primary entry point used by most providers.
-pub fn format_reset_countdown(iso: &str) -> Option<String> {
-    let reset_epoch = parse_iso8601_to_epoch(iso)?;
-    let delta = reset_epoch - now_epoch_secs();
-    Some(format_countdown(delta))
-}
-
 /// Convert a Unix timestamp (seconds) to a human-readable countdown string.
 pub fn format_reset_from_epoch(epoch_secs: i64) -> String {
     let delta = epoch_secs - now_epoch_secs();

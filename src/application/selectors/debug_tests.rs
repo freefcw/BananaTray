@@ -1,7 +1,7 @@
 use super::*;
 use crate::application::AppSession;
 use crate::models::test_helpers::make_test_provider;
-use crate::models::{AppSettings, ConnectionStatus, ProviderKind};
+use crate::models::{AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind};
 
 /// 构造一个不含 I/O 的测试 DebugContext
 fn test_context() -> DebugContext {
@@ -41,6 +41,14 @@ fn make_session_with_status(
         })
         .collect();
     AppSession::new(settings, providers)
+}
+
+fn test_failure(message: &str) -> ProviderFailure {
+    ProviderFailure {
+        reason: FailureReason::FetchFailed,
+        advice: None,
+        raw_detail: Some(message.to_string()),
+    }
 }
 
 // ── LogViewState 测试 ───────────────────────────────
@@ -160,7 +168,7 @@ fn provider_diagnostics_error() {
         .provider_store
         .find_by_id_mut(&ProviderId::BuiltIn(ProviderKind::Gemini))
     {
-        p.error_message = Some("auth expired".to_string());
+        p.last_failure = Some(test_failure("auth expired"));
     }
     let items = build_provider_diagnostics(&session);
 
@@ -200,7 +208,7 @@ fn provider_diagnostics_disconnected_with_error() {
         .provider_store
         .find_by_id_mut(&ProviderId::BuiltIn(ProviderKind::Claude))
     {
-        p.error_message = Some("connection reset".to_string());
+        p.last_failure = Some(test_failure("connection reset"));
     }
     let items = build_provider_diagnostics(&session);
 

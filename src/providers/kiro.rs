@@ -1,13 +1,13 @@
 use super::{AiProvider, ProviderError};
 use crate::models::{
-    ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaInfo, QuotaType, RefreshData,
+    ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
+    QuotaType, RefreshData,
 };
 use crate::providers::common::cli;
 use crate::utils::text_utils;
 use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
-use rust_i18n::t;
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
@@ -97,7 +97,9 @@ impl KiroProvider {
 
         let reset_text = RESET_RE
             .captures(&clean)
-            .map(|c| t!("quota.label.resets_on", date = &c[1]).to_string());
+            .map(|c| QuotaDetailSpec::ResetDate {
+                date: c[1].to_string(),
+            });
 
         // Bonus credits
         if let Some(caps) = BONUS_RE.captures(&clean) {
@@ -106,13 +108,12 @@ impl KiroProvider {
             let days: u32 = caps[3].parse().unwrap_or(0);
 
             if total > 0.0 {
-                let expiry = t!("quota.label.expires_in_days", days = days).to_string();
                 quotas.push(QuotaInfo::with_details(
-                    t!("quota.label.bonus_credits").to_string(),
+                    QuotaLabelSpec::BonusCredits,
                     used,
                     total,
                     QuotaType::Credit,
-                    Some(expiry),
+                    Some(QuotaDetailSpec::ExpiresInDays { days }),
                 ));
             }
         }
@@ -124,7 +125,7 @@ impl KiroProvider {
 
             if total > 0.0 {
                 quotas.push(QuotaInfo::with_details(
-                    t!("quota.label.credits").to_string(),
+                    QuotaLabelSpec::Credits,
                     used,
                     total,
                     QuotaType::General,
@@ -237,13 +238,15 @@ Overages: Disabled
         assert_eq!(quotas.len(), 1);
 
         let credits = &quotas[0];
-        assert_eq!(credits.label, "Credits");
+        assert_eq!(credits.label_spec, QuotaLabelSpec::Credits);
         assert!((credits.used - 12.39).abs() < 0.01);
         assert!((credits.limit - 50.0).abs() < 0.01);
         assert_eq!(credits.quota_type, QuotaType::General);
         assert_eq!(
-            credits.detail_text.as_deref(),
-            Some("⏱ Resets on 2026-04-01")
+            credits.detail_spec,
+            Some(QuotaDetailSpec::ResetDate {
+                date: "2026-04-01".to_string()
+            })
         );
     }
 
@@ -255,8 +258,10 @@ Overages: Disabled
         assert!((quotas[0].used - 25.50).abs() < 0.01);
         assert!((quotas[0].limit - 100.0).abs() < 0.01);
         assert_eq!(
-            quotas[0].detail_text.as_deref(),
-            Some("⏱ Resets on 2026-05-15")
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetDate {
+                date: "2026-05-15".to_string()
+            })
         );
     }
 
@@ -266,7 +271,12 @@ Overages: Disabled
             "Estimated Usage | resets on 03/01 | KIRO FREE\nCredits (5.0 of 50 covered in plan)\n";
         let quotas = KiroProvider::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 1);
-        assert_eq!(quotas[0].detail_text.as_deref(), Some("⏱ Resets on 03/01"));
+        assert_eq!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetDate {
+                date: "03/01".to_string()
+            })
+        );
     }
 
     #[test]
@@ -275,18 +285,26 @@ Overages: Disabled
         assert_eq!(quotas.len(), 2);
 
         let bonus = &quotas[0];
-        assert_eq!(bonus.label, "Bonus Credits");
+        assert_eq!(bonus.label_spec, QuotaLabelSpec::BonusCredits);
         assert!((bonus.used - 122.54).abs() < 0.01);
         assert!((bonus.limit - 500.0).abs() < 0.01);
         assert_eq!(bonus.quota_type, QuotaType::Credit);
-        assert_eq!(bonus.detail_text.as_deref(), Some("⏱ Expires in 29 days"));
+        assert_eq!(
+            bonus.detail_spec,
+            Some(QuotaDetailSpec::ExpiresInDays { days: 29 })
+        );
 
         let regular = &quotas[1];
-        assert_eq!(regular.label, "Credits");
+        assert_eq!(regular.label_spec, QuotaLabelSpec::Credits);
         assert!((regular.used - 0.0).abs() < 0.01);
         assert!((regular.limit - 50.0).abs() < 0.01);
         assert_eq!(regular.quota_type, QuotaType::General);
-        assert_eq!(regular.detail_text.as_deref(), Some("⏱ Resets on 03/01"));
+        assert_eq!(
+            regular.detail_spec,
+            Some(QuotaDetailSpec::ResetDate {
+                date: "03/01".to_string()
+            })
+        );
     }
 
     #[test]
@@ -294,12 +312,12 @@ Overages: Disabled
         let output = "Bonus credits: 10.5/100 credits used, expires in 5 days\n";
         let quotas = KiroProvider::parse_usage_output(output).unwrap();
         assert_eq!(quotas.len(), 1);
-        assert_eq!(quotas[0].label, "Bonus Credits");
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::BonusCredits);
         assert!((quotas[0].used - 10.5).abs() < 0.01);
         assert!((quotas[0].limit - 100.0).abs() < 0.01);
         assert_eq!(
-            quotas[0].detail_text.as_deref(),
-            Some("⏱ Expires in 5 days")
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ExpiresInDays { days: 5 })
         );
     }
 

@@ -5,7 +5,7 @@
 //! 所有 I/O 和环境变量读取都在 DebugContext 构造时完成。
 
 use super::super::state::AppSession;
-use super::format::format_last_updated;
+use super::format::{format_failure_message, format_last_updated};
 use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
 use std::path::PathBuf;
@@ -202,14 +202,20 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                         ProviderDiagnosticStatus::Refreshing,
                     ),
                     ConnectionStatus::Error => {
-                        let msg = provider.error_message.as_deref().unwrap_or("unknown error");
+                        let msg = provider
+                            .last_failure
+                            .as_ref()
+                            .map(format_failure_message)
+                            .unwrap_or_else(|| "unknown error".to_string());
                         (format!("Error · {}", msg), ProviderDiagnosticStatus::Error)
                     }
                     ConnectionStatus::Disconnected => {
                         let msg = provider
-                            .error_message
-                            .as_deref()
-                            .map(|m| format!("Disconnected · {}", m))
+                            .last_failure
+                            .as_ref()
+                            .map(|failure| {
+                                format!("Disconnected · {}", format_failure_message(failure))
+                            })
                             .unwrap_or_else(|| "Disconnected".to_string());
                         (msg, ProviderDiagnosticStatus::Disconnected)
                     }
@@ -227,7 +233,7 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                 status_dot,
                 quota_count,
                 error_message: if is_enabled {
-                    provider.error_message.clone()
+                    provider.last_failure.as_ref().map(format_failure_message)
                 } else {
                     None
                 },
