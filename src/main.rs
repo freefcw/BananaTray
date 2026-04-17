@@ -18,7 +18,7 @@ mod utils;
 
 use gpui::{App, Application};
 use log::info;
-use platform::Assets;
+use platform::assets::Assets;
 use std::cell::RefCell;
 use std::rc::Rc;
 

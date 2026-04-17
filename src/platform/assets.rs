@@ -4,11 +4,14 @@ use std::path::PathBuf;
 
 use gpui::{AssetSource, SharedString};
 
+// 仅由 bin 入口构造；lib crate 编译 `feature = "app"` 时不会直接引用。
+#[allow(dead_code)]
 pub(crate) struct Assets {
     base: PathBuf,
 }
 
 impl Assets {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             base: Self::resolve_base(),

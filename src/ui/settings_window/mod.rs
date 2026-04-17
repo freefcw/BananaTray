@@ -23,7 +23,6 @@ use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-#[allow(dead_code)]
 pub(crate) fn build_settings_view(
     state: Rc<RefCell<AppState>>,
     cx: &mut App,

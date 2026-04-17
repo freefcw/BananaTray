@@ -14,17 +14,14 @@ thread_local! {
     static CLEAR_POPUP_VIEW_FN: RefCell<Option<ClearPopupViewFn>> = const { RefCell::new(None) };
 }
 
-#[allow(dead_code)]
 pub(crate) fn register_notify_view(f: NotifyViewFn) {
     NOTIFY_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
 }
 
-#[allow(dead_code)]
 pub(crate) fn register_build_settings_view(f: BuildSettingsFn) {
     BUILD_SETTINGS_FN.with(|slot| *slot.borrow_mut() = Some(f));
 }
 
-#[allow(dead_code)]
 pub(crate) fn register_clear_popup_view(f: ClearPopupViewFn) {
     CLEAR_POPUP_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
 }

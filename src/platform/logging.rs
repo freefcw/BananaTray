@@ -1,18 +1,29 @@
+#[cfg(feature = "app")]
 use anyhow::{Context, Result};
+#[cfg(feature = "app")]
 use chrono::Local;
+#[cfg(feature = "app")]
 use log::LevelFilter;
+#[cfg(feature = "app")]
 use std::backtrace::Backtrace;
+#[cfg(feature = "app")]
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader};
+#[cfg(feature = "app")]
 use std::path::PathBuf;
 
+#[cfg(feature = "app")]
 use super::APP_ID_LOWER;
 
+#[cfg(feature = "app")]
+#[allow(dead_code)]
 pub struct LoggingInit {
     pub log_path: PathBuf,
 }
 
+#[cfg(feature = "app")]
+#[allow(dead_code)]
 pub fn init() -> Result<LoggingInit> {
     let log_path = resolve_log_path()?;
     let level = resolve_log_level();
@@ -62,6 +73,7 @@ pub fn init() -> Result<LoggingInit> {
     Ok(LoggingInit { log_path })
 }
 
+#[cfg(feature = "app")]
 fn resolve_log_path() -> Result<PathBuf> {
     if let Ok(dir) = env::var("BANANATRAY_LOG_DIR") {
         let path = PathBuf::from(dir);
@@ -84,6 +96,7 @@ fn resolve_log_path() -> Result<PathBuf> {
 /// 返回符合各平台规范的日志根目录：
 /// - macOS: `~/Library/Logs`
 /// - Linux/其他: `$XDG_STATE_HOME`（默认 `~/.local/state`），fallback 到 `data_local_dir`
+#[cfg(feature = "app")]
 fn platform_log_base_dir() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
@@ -94,6 +107,7 @@ fn platform_log_base_dir() -> Option<PathBuf> {
         dirs::state_dir().or_else(dirs::data_local_dir)
     }
 }
+#[cfg(feature = "app")]
 fn resolve_log_level() -> LevelFilter {
     match env::var("RUST_LOG") {
         Ok(value) => match value.to_ascii_lowercase().as_str() {
@@ -108,11 +122,12 @@ fn resolve_log_level() -> LevelFilter {
     }
 }
 
-/// 读取日志文件末尾的 N 行
+/// 读取日志文件末尾的 N 行。
 ///
-/// 使用 BufReader 逐行读取，保留最后 `max_lines` 行于 VecDeque ring buffer。
-/// 文件不存在或读取失败时返回空字符串。
-pub fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
+/// 目前仅服务于单元测试，因此只在 `cfg(test)` 下编译，避免对生产代码引入
+/// 额外的 dead_code suppress。
+#[cfg(test)]
+fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
     let file = match fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return String::new(),
@@ -169,6 +184,7 @@ pub fn read_last_errors(path: &std::path::Path, max_lines: usize) -> String {
     ring.into_iter().collect::<Vec<_>>().join("\n")
 }
 
+#[cfg(feature = "app")]
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
         let location = panic_info
