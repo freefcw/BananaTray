@@ -6,7 +6,53 @@ use crate::models::{
 use anyhow::Result;
 use log::{debug, info, warn};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+
+/// ProviderManager 的共享快照句柄。
+///
+/// 前台 UI 和后台 refresh 协调器通过同一个句柄读取当前快照；
+/// 热重载自定义 provider 时，仅替换内部 `Arc<ProviderManager>`，
+/// 避免前后台各自持有不同 manager 实例。
+#[derive(Clone)]
+pub struct ProviderManagerHandle {
+    inner: Arc<RwLock<Arc<ProviderManager>>>,
+}
+
+impl ProviderManagerHandle {
+    /// 使用给定 manager 创建共享句柄。
+    pub fn new(manager: ProviderManager) -> Self {
+        Self::from_arc(Arc::new(manager))
+    }
+
+    /// 使用已有的 manager 快照创建共享句柄。
+    pub fn from_arc(manager: Arc<ProviderManager>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(manager)),
+        }
+    }
+
+    /// 读取当前 manager 快照，供单次操作使用。
+    pub fn snapshot(&self) -> Arc<ProviderManager> {
+        self.inner
+            .read()
+            .expect("provider manager handle read lock poisoned")
+            .clone()
+    }
+
+    /// 原子替换当前 manager 快照。
+    pub fn replace(&self, manager: Arc<ProviderManager>) {
+        *self
+            .inner
+            .write()
+            .expect("provider manager handle write lock poisoned") = manager;
+    }
+}
+
+impl Default for ProviderManagerHandle {
+    fn default() -> Self {
+        Self::new(ProviderManager::new())
+    }
+}
 
 /// Provider 聚合管理器，持有各类实际 Provider 实现
 ///
@@ -441,6 +487,19 @@ mod tests {
         assert_eq!(state.edit_mode, TokenEditMode::EditStored);
         assert_eq!(state.source_i18n_key, None);
         assert_eq!(state.masked.as_deref(), Some("abcd•••wxyz"));
+    }
+
+    #[test]
+    fn test_manager_handle_replaces_snapshot() {
+        let handle = ProviderManagerHandle::new(ProviderManager::new());
+        let original = handle.snapshot();
+        let replacement = Arc::new(ProviderManager::new());
+
+        handle.replace(replacement.clone());
+
+        let current = handle.snapshot();
+        assert!(Arc::ptr_eq(&current, &replacement));
+        assert!(!Arc::ptr_eq(&current, &original));
     }
 
     fn make_test_provider(id: &'static str, kind: ProviderKind) -> Arc<dyn AiProvider> {

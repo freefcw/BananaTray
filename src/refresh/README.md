@@ -25,11 +25,11 @@
 
 后台线程上运行的事件循环：
 
-- 接收 `RefreshRequest`，委托 `ProviderManager` 执行刷新
+- 接收 `RefreshRequest`，通过 `ProviderManagerHandle` 读取当前 `ProviderManager` 快照并执行刷新
 - 通过 `smol::unblock` 并发执行多个 Provider 刷新
 - 对每个 Provider 刷新施加协调器级 timeout guard，避免单个卡死任务阻塞整轮结果回收
 - 将结果封装为 `RefreshEvent` 发回 UI 线程
-- 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）
+- 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）并原子替换共享快照，保证前后台看到的是同一个 registry
 
 测试文件：`coordinator_tests.rs`
 

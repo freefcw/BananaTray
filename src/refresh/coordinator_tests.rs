@@ -2,7 +2,7 @@ use super::*;
 use crate::models::ErrorKind;
 use crate::models::{ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData};
 use crate::providers::error_presenter::ProviderErrorPresenter;
-use crate::providers::{AiProvider, ProviderManager};
+use crate::providers::{AiProvider, ProviderManager, ProviderManagerHandle};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -133,7 +133,8 @@ fn test_execute_refresh_concurrent_reports_completion_order() {
         )));
 
         let (event_tx, event_rx) = smol::channel::bounded(8);
-        let mut coordinator = RefreshCoordinator::new(Arc::new(manager), event_tx);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
         coordinator
             .scheduler
             .update_config(10, vec![slow_id.clone(), fast_id.clone()]);
@@ -169,7 +170,8 @@ fn test_timeout_in_provider_clears_in_flight() {
         )));
 
         let (event_tx, event_rx) = smol::channel::bounded(8);
-        let mut coordinator = RefreshCoordinator::new(Arc::new(manager), event_tx);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
         coordinator.scheduler.update_config(10, vec![id.clone()]);
 
         coordinator
@@ -250,7 +252,8 @@ fn test_panic_in_provider_clears_in_flight() {
         }));
 
         let (event_tx, event_rx) = smol::channel::bounded(8);
-        let mut coordinator = RefreshCoordinator::new(Arc::new(manager), event_tx);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
         coordinator.scheduler.update_config(10, vec![id.clone()]);
 
         // 第一次刷新：provider panic，应产出 Failed outcome
@@ -287,5 +290,34 @@ fn test_panic_in_provider_clears_in_flight() {
             !matches!(second_outcomes[0].result, RefreshResult::SkippedInFlight),
             "in-flight should have been cleared after panic"
         );
+    });
+}
+
+#[test]
+fn test_reload_providers_replaces_shared_manager_snapshot() {
+    smol::block_on(async {
+        let (event_tx, event_rx) = smol::channel::bounded(8);
+        let manager = ProviderManagerHandle::default();
+        let initial = manager.snapshot();
+        let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
+        let request_tx = coordinator.sender();
+
+        let task = smol::spawn(coordinator.run());
+
+        request_tx
+            .send(RefreshRequest::ReloadProviders)
+            .await
+            .unwrap();
+
+        match event_rx.recv().await.unwrap() {
+            RefreshEvent::ProvidersReloaded { statuses } => assert!(!statuses.is_empty()),
+            other => panic!("unexpected refresh event: {other:?}"),
+        }
+
+        let reloaded = manager.snapshot();
+        assert!(!Arc::ptr_eq(&initial, &reloaded));
+
+        request_tx.send(RefreshRequest::Shutdown).await.unwrap();
+        task.await;
     });
 }

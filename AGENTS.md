@@ -13,6 +13,7 @@ BananaTray — cross-platform system tray app for monitoring AI coding assistant
 5. When adding a new subdirectory under `src/`, create a `README.md` for it
 6. **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
 7. **Task completion check** — after finishing a task, review whether any documentation needs updating based on rules 1–5 above.
+8. **Lockfile before blame** — if build/test/check fails after dependency-related changes (especially patched git crates, new upstream APIs, or code that clearly expects newer dependency behavior), first run `cargo update` or targeted `cargo update -p <crate>` to refresh `Cargo.lock`, then judge whether the failure is a real source issue.
 
 ## Commands
 

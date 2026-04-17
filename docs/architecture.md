@@ -17,7 +17,7 @@
 `AppState` (in `runtime/app_state.rs`) is a composition container holding:
 
 - `session: AppSession` — pure-logic session state (see below)
-- `manager: Arc<ProviderManager>` — provider runtime registry for refresh and provider-side settings resolution
+- `manager: ProviderManagerHandle` — shared provider registry handle; foreground UI and background refresh both read snapshots from it, and hot-reload swaps the inner `Arc<ProviderManager>` atomically
 - `refresh_tx` — channel to RefreshCoordinator
 - `settings_writer` — debounced settings persistence executor
 - `log_path` — log file path for Debug tab
@@ -137,10 +137,11 @@ Why the delayed settings-window open exists:
 - Receives `RefreshRequest` via `smol::channel`
 - Delegates scheduling decisions to `RefreshScheduler` (cooldown, eligibility, deadline)
 - Uses absolute-deadline timers to avoid timer reset on request receipt
+- Reads the current `ProviderManager` snapshot from `ProviderManagerHandle`
 - Spawns concurrent refresh tasks via `smol` blocking pool, collecting results in completion order
 - Wraps each provider refresh with a coordinator-side timeout guard so one hung provider cannot wedge result collection forever
 - Sends `RefreshEvent` results to foreground executor for UI update
-- Supports `ReloadProviders` for custom provider hot-reload
+- Supports `ReloadProviders` for custom provider hot-reload and atomically replaces the shared registry snapshot so UI and refresh stay on the same manager instance
 
 Timeout model:
 

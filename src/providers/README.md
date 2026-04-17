@@ -38,6 +38,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
+- `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
 ### `custom/` — YAML-backed Providers
 

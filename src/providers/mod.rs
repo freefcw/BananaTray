@@ -12,7 +12,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-pub use manager::ProviderManager;
+pub use manager::{ProviderManager, ProviderManagerHandle};
 
 pub(crate) fn default_token_input_state(
     settings: &AppSettings,
