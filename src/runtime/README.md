@@ -64,12 +64,14 @@
 定义 `AppState`，作为 `runtime` 与 `ui` 共同使用的组合状态：
 
 - `session: AppSession` — 纯状态树
-- `manager: Arc<ProviderManager>` — provider 运行时注册表
+- `manager: ProviderManagerHandle` — provider 运行时注册表共享句柄；UI 每次按需读取当前快照，后台 reload 时原子替换
 - `refresh_tx` — 后台刷新请求通道
 - `settings_writer: SettingsWriter` — 设置持久化串行写入器
 - `log_path` — Debug 页展示的日志路径
 
 `AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用与设置窗口构造入口通过 `ui_hooks` 注册到 `runtime`，避免把 UI 句柄直接存进 `AppState`。
+
+`ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。
 
 ### `ui_hooks.rs` — UI 注册边界
 

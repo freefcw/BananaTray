@@ -99,9 +99,11 @@ pub(crate) fn render_token_input_panel(
     // manager 会优先走 provider 自定义逻辑，必要时自动回落到通用 credential 存储。
     let display_info = {
         let state = view.state.borrow();
-        state
-            .manager
-            .resolve_token_input_state(provider_id, capability, &state.session.settings)
+        state.manager.snapshot().resolve_token_input_state(
+            provider_id,
+            capability,
+            &state.session.settings,
+        )
     };
 
     let has_token = display_info.has_token;

@@ -14,13 +14,13 @@ use smol::channel::{Receiver, Sender};
 
 use crate::models::ProviderId;
 use crate::providers::error_presenter::ProviderErrorPresenter;
-use crate::providers::ProviderManager;
+use crate::providers::{ProviderManager, ProviderManagerHandle};
 
 use super::scheduler::RefreshScheduler;
 use super::types::*;
 
 pub struct RefreshCoordinator {
-    manager: Arc<ProviderManager>,
+    manager: ProviderManagerHandle,
     request_tx: Sender<RefreshRequest>,
     request_rx: Receiver<RefreshRequest>,
     event_tx: Sender<RefreshEvent>,
@@ -36,7 +36,7 @@ impl RefreshCoordinator {
         }
     }
 
-    pub fn new(manager: Arc<ProviderManager>, event_tx: Sender<RefreshEvent>) -> Self {
+    pub fn new(manager: ProviderManagerHandle, event_tx: Sender<RefreshEvent>) -> Self {
         let (request_tx, request_rx) = smol::channel::bounded(32);
         Self {
             manager,
@@ -185,7 +185,7 @@ impl RefreshCoordinator {
         }
 
         self.begin_refresh(&id).await;
-        let outcome = Self::run_refresh_with_timeout(self.manager.clone(), id, reason).await;
+        let outcome = Self::run_refresh_with_timeout(self.manager.snapshot(), id, reason).await;
         self.record_outcome(outcome).await;
     }
 
@@ -213,7 +213,7 @@ impl RefreshCoordinator {
         // 内部结果仍按完成顺序回传，避免慢 provider 阻塞已完成 provider 的状态清理/事件上报。
         let (result_tx, result_rx) = smol::channel::bounded::<RefreshOutcome>(to_refresh.len());
         for id in to_refresh {
-            let mgr = self.manager.clone();
+            let mgr = self.manager.snapshot();
             let tx = result_tx.clone();
             smol::spawn(async move {
                 let _ = tx
@@ -294,7 +294,7 @@ impl RefreshCoordinator {
                             statuses.iter().map(|s| &s.provider_id).collect();
                         self.scheduler.cleanup_stale(&new_ids);
 
-                        self.manager = new_manager;
+                        self.manager.replace(new_manager);
 
                         let _ = self
                             .event_tx

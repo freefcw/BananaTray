@@ -51,7 +51,6 @@ Historical material has been moved under `docs/archive/`.
 These files may describe old paths, old module names, or intermediate refactor plans that no longer reflect the current codebase.
 
 - `archive/code-review-solid-clean.md`
-- `archive/review-20260405.md`
 - `archive/roadmap-directory-restructure.md`
 - `archive/custom-provider-plan.md`
 - `archive/lessons-gpui-height-calibration.md`

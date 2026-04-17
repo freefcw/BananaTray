@@ -54,10 +54,10 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
 pub(crate) fn bootstrap_refresh() -> (
     smol::channel::Sender<RefreshRequest>,
     smol::channel::Receiver<crate::refresh::RefreshEvent>,
-    std::sync::Arc<crate::providers::ProviderManager>,
+    crate::providers::ProviderManagerHandle,
 ) {
     let (event_tx, event_rx) = smol::channel::bounded::<crate::refresh::RefreshEvent>(64);
-    let manager = std::sync::Arc::new(crate::providers::ProviderManager::new());
+    let manager = crate::providers::ProviderManagerHandle::default();
     let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
     let refresh_tx = coordinator.sender();
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::AppSettings;
-use crate::providers::ProviderManager;
+use crate::providers::ProviderManagerHandle;
 
 #[derive(Default)]
 struct FakeCaps {
@@ -15,7 +15,7 @@ impl ContextCapabilities for FakeCaps {
 
 fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
-    let manager = std::sync::Arc::new(ProviderManager::new());
+    let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
         tx,
         manager,
