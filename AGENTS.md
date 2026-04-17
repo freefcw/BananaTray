@@ -25,7 +25,7 @@ cargo clippy               # lint
 cargo fmt                  # format
 ```
 
-> **`cargo test --lib` is the standard test command.** Plain `cargo test` also works but is slower (compiles bin target too). All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented.
+> **`cargo test --lib` is the standard test command.** 默认支持的应用构建路径始终带 `app` feature。`--no-default-features` 只保留给 `lib` 层局部验证，不是受支持的 app 构建契约。All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented.
 
 > **History:** Before commit `2e36981` (2026-04-13), `use gpui::*` in files with `#[test]` caused rustc SIGBUS (stack overflow via syn recursive parsing). The glob import ban fully resolved this.
 
@@ -33,8 +33,8 @@ cargo fmt                  # format
 
 ```
 src/
-  main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup
-  lib.rs                 — Crate root; `ui` compiled behind `cfg(feature = "app")`
+  main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup (`main.rs` requires `app` feature)
+  lib.rs                 — Crate root; `runtime` / `tray` / `ui` compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
   models/                — Core data types and settings domain models (GPUI-free)
                            settings/            — User preferences with nested sub-structures
@@ -56,7 +56,7 @@ This map is intentionally high-level. File-level structure and public APIs live 
 
 ## Key Constraints
 
-1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The `ui` module is `cfg(feature = "app")` gated.
+1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The app shell is behind `cfg(feature = "app")`; `--no-default-features` only exists for `lib`-layer checks/tests.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
 
