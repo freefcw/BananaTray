@@ -1544,6 +1544,7 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
 fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
     let mut session = make_session();
     let id = ProviderId::Custom("my-api-example-com:newapi".to_string());
+    session.settings_ui.confirming_delete_newapi = true;
 
     let effects = reduce(
         &mut session,
@@ -1557,6 +1558,8 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
         AppEffect::Common(CommonEffect::DeleteNewApiProvider { provider_id })
             if *provider_id == id
     )));
+    assert!(!session.settings_ui.confirming_delete_newapi);
+    assert!(has_render(&effects));
 }
 
 #[test]
