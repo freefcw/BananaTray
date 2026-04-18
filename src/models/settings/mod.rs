@@ -146,6 +146,15 @@ impl ProviderConfig {
             .insert(id.id_key().to_string(), enabled);
     }
 
+    /// 移除指定 Provider 的显式启用记录。
+    ///
+    /// 这与 `set_enabled(false)` 语义不同：
+    /// - `set_enabled(false)` 会保留一个显式 disabled 记录
+    /// - `remove_enabled_record()` 会回到“未登记”状态，供热重载/冷启动按首次出现逻辑处理
+    pub fn remove_enabled_record(&mut self, id: &ProviderId) -> Option<bool> {
+        self.enabled_providers.remove(&id.id_key())
+    }
+
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）
     ///
     /// 从 `enabled_providers`、`provider_order`、`hidden_quotas`、`sidebar_providers` 中移除

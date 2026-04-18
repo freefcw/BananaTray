@@ -17,6 +17,17 @@ fn provider_config_set_and_check_enabled() {
 }
 
 #[test]
+fn provider_config_remove_enabled_record_clears_explicit_state() {
+    let mut config = ProviderConfig::default();
+    let custom = ProviderId::Custom("retry:newapi".to_string());
+
+    config.set_enabled(&custom, false);
+    assert_eq!(config.remove_enabled_record(&custom), Some(false));
+    assert!(!config.enabled_providers.contains_key(&custom.id_key()));
+    assert!(!config.is_enabled(&custom));
+}
+
+#[test]
 fn provider_config_ordered_providers_ignores_invalid() {
     let config = ProviderConfig {
         provider_order: vec![

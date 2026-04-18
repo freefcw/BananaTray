@@ -32,7 +32,10 @@ pub fn rollback_newapi_edit(session: &mut AppSession, config: &NewApiConfig, fil
 /// 3. 恢复 `selected_provider` 到 sidebar 的第一项
 pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
     let rollback_id = ProviderId::Custom(crate::models::newapi_provider_id(&config.base_url));
-    session.settings.provider.set_enabled(&rollback_id, false);
+    session
+        .settings
+        .provider
+        .remove_enabled_record(&rollback_id);
     session.settings.provider.remove_from_sidebar(&rollback_id);
 
     // 重新打开空表单让用户可以重试
@@ -122,6 +125,11 @@ mod tests {
 
         // 验证预注册已回滚
         assert!(!session.settings.provider.is_enabled(&pre_id));
+        assert!(!session
+            .settings
+            .provider
+            .enabled_providers
+            .contains_key(&pre_id.id_key()));
         assert!(!session
             .settings
             .provider

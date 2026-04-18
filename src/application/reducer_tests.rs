@@ -829,6 +829,62 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
 }
 
 #[test]
+fn submit_newapi_reenables_same_provider_after_create_rollback() {
+    let mut session = make_session();
+    session.settings_ui.adding_newapi = true;
+
+    let base_url = "https://retry.example.com";
+    let retry_id = ProviderId::Custom("retry-example-com:newapi".to_string());
+
+    reduce(
+        &mut session,
+        AppAction::SubmitNewApi {
+            display_name: "Retry Relay".to_string(),
+            base_url: base_url.to_string(),
+            cookie: "c=1".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+    assert!(session.settings.provider.is_enabled(&retry_id));
+
+    crate::application::newapi_ops::rollback_newapi_create(
+        &mut session,
+        &crate::models::NewApiConfig {
+            display_name: "Retry Relay".to_string(),
+            base_url: base_url.to_string(),
+            cookie: "c=1".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&retry_id.id_key()));
+
+    reduce(
+        &mut session,
+        AppAction::SubmitNewApi {
+            display_name: "Retry Relay".to_string(),
+            base_url: base_url.to_string(),
+            cookie: "c=2".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+
+    assert!(session.settings.provider.is_enabled(&retry_id));
+    assert!(session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&retry_id.id_key()));
+    assert_eq!(session.settings_ui.selected_provider, retry_id);
+}
+
+#[test]
 fn providers_reloaded_auto_enables_new_custom_provider() {
     let mut session = make_session();
 
