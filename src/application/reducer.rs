@@ -289,6 +289,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::DeleteNewApi { provider_id } => {
             session.settings_ui.confirming_delete_newapi = false;
+            // 先刷新 UI 关闭确认态，避免等待文件删除 / 热重载结果才消失。
+            effects.push(ContextEffect::Render.into());
             effects.push(
                 CommonEffect::DeleteNewApiProvider {
                     provider_id: provider_id.clone(),

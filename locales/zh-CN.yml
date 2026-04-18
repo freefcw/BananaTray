@@ -361,6 +361,8 @@ newapi.edit_success_body: "配置已更新，正在重新加载…"
 newapi.delete_button: "删除"
 newapi.confirm_delete: "确认删除"
 newapi.cancel_delete: "取消"
+newapi.delete_failed_title: "⚠️ 删除失败"
+newapi.delete_failed_body: "无法删除中转站配置文件，请检查权限后重试。"
 newapi.field.url.readonly_hint: "站点 URL 为身份标识，不可修改"
 
 # ── Provider 动态列表 ─────────────────────────────────────

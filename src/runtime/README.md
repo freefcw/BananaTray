@@ -107,8 +107,9 @@
 封装 `SaveNewApiProvider` 的磁盘写入操作：
 
 - **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
+- **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 推导文件路径 + 删除 YAML 文件
 
-回滚和通知逻辑位于 `application/newapi_ops.rs`（纯函数，可测试），本模块仅负责 I/O。
+回滚逻辑位于 `application/newapi_ops.rs`（纯函数，可测试）；runtime 在删除失败时负责记录日志并发送用户通知。
 
 ## 约束
 

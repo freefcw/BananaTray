@@ -346,25 +346,16 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
             }
         }
         CommonEffect::DeleteNewApiProvider { provider_id } => {
-            use crate::providers::custom::generator;
-            if let crate::models::ProviderId::Custom(ref custom_id) = provider_id {
-                if let Some(filename) = generator::filename_for_id(custom_id) {
-                    let path = crate::platform::paths::custom_provider_path(&filename);
-                    match std::fs::remove_file(&path) {
-                        Ok(()) => {
-                            info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
-                            let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
-                        }
-                        Err(e) => {
-                            warn!(target: "runtime", "failed to delete YAML {}: {}", path.display(), e);
-                        }
-                    }
-                } else {
-                    warn!(
-                        target: "settings",
-                        "DeleteNewApiProvider: not a newapi provider id: {}",
-                        custom_id
-                    );
+            match newapi_io::delete_newapi_yaml(&provider_id) {
+                Ok(path) => {
+                    info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
+                    let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
+                }
+                Err(err) => {
+                    warn!(target: "runtime", "{err}");
+                    let title = rust_i18n::t!("newapi.delete_failed_title").to_string();
+                    let body = rust_i18n::t!("newapi.delete_failed_body").to_string();
+                    crate::platform::notification::send_plain_notification(&title, &body);
                 }
             }
         }
