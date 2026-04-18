@@ -4,16 +4,28 @@ BananaTray — macOS/Linux system tray app for monitoring AI coding assistant qu
 
 ## RULES
 
-**MUST**: after update source, should update related docs
+### 文档同步
 
-1. If high-level module structure or ownership changes (top-level modules, major responsibilities, key entry files) → update `AGENTS.md` Architecture Map section
-2. If a module's public API or architecture changes → update that module's `README.md`
-3. If provider-related changes → update `docs/providers.md`
-4. If architecture-level changes → update `docs/architecture.md`
-5. When adding a new subdirectory under `src/`, create a `README.md` for it
-6. **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
-7. **Task completion check** — after finishing a task, review whether any documentation needs updating based on rules 1–5 above.
-8. **Lockfile before blame** — if build/test/check fails after dependency-related changes (especially patched git crates, new upstream APIs, or code that clearly expects newer dependency behavior), first run `cargo update` or targeted `cargo update -p <crate>` to refresh `Cargo.lock`, then judge whether the failure is a real source issue.
+**核心规则**：每次任务结束前必须执行"文档影响评估"——不是机械匹配某个清单，而是做一次主动判断：
+
+> "本次改动引入 / 修改 / 移除的信息里，有没有任何一条是**未来的维护者或用户会期望从文档里读到**的？如果有，对应文档现在是否仍然准确？"
+
+如果答案是"有 / 不准确"，更新文档是任务的一部分，不是后续可选项。
+
+下列文档位置是常见落点（**不是穷举，也不是判断依据**，只是提醒哪里容易被遗漏）：
+
+- `AGENTS.md` Architecture Map — 顶层模块结构 / 责任边界
+- 各子模块的 `README.md` — 该模块的公共 API、内部数据流、对外契约
+- `docs/providers.md` — provider 行为契约，含错误处理 / fallback / 降级语义等用户可观察行为
+- `docs/architecture.md` — 跨模块架构决策
+- 新建 `src/` 下子目录时配套新建 `README.md`
+
+判断不清时的倾向：**"是不是用户会问的问题，或接手的人会踩的坑？"** 只要答案偏是，就更新。
+
+### 环境与构建
+
+- **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
+- **Lockfile before blame** — if build/test/check fails after dependency-related changes (especially patched git crates, new upstream APIs, or code that clearly expects newer dependency behavior), first run `cargo update` or targeted `cargo update -p <crate>` to refresh `Cargo.lock`, then judge whether the failure is a real source issue.
 
 ## Commands
 
