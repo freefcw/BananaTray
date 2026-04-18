@@ -1,235 +1,67 @@
-# Codeium-family Providers — Antigravity / Windsurf 架构与运行时校验
+# Codeium-family Providers
 
-## 概述
+本文件说明 BananaTray 当前对 Antigravity / Windsurf 的共享实现方式。
 
-BananaTray 现在将 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in provider：
+它是专题参考文档，不是 provider 注册表的完整契约。对外稳定边界请以 `docs/providers.md` 为准。
 
-- `antigravity:api`
-- `windsurf:api`
+## 当前定位
 
-它们在 UI、注册表、ProviderKind、图标、显示名、错误提示上都保持独立身份；
-但在实现层共享同一套 **Codeium-family** 底层能力：
+BananaTray 把 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in provider：
+
+- UI 中独立展示
+- 各自拥有独立的 metadata、图标和可用性判断
+- 共享一套底层 Codeium-family 实现
+
+共享实现位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf.rs`。
+
+## Stable Design
+
+共享层只处理长期稳定的共性：
 
 - 本地 language server 进程发现
-- 本地 API 请求（gRPC-over-HTTP / Connect 风格）
-- 本地 SQLite cache fallback
+- 本地接口调用
+- 本地 cache fallback
 - JSON / protobuf 解析
 
-共享代码位于：
+provider facade 只负责提供产品差异：
 
-- [src/providers/codeium_family/mod.rs](../src/providers/codeium_family/mod.rs)
-- [src/providers/codeium_family/spec.rs](../src/providers/codeium_family/spec.rs)
-- [src/providers/codeium_family/live_source.rs](../src/providers/codeium_family/live_source.rs)
-- [src/providers/codeium_family/cache_source.rs](../src/providers/codeium_family/cache_source.rs)
-- [src/providers/codeium_family/parse_strategy.rs](../src/providers/codeium_family/parse_strategy.rs)
-
-Provider facade 位于：
-
-- [src/providers/antigravity/mod.rs](../src/providers/antigravity/mod.rs)
-- [src/providers/windsurf.rs](../src/providers/windsurf.rs)
-
-## 设计原则
-
-### 1. provider 身份独立
-
-不要把 Windsurf 折叠进 Antigravity provider。
-
-原因：
-
-- 用户在 UI 上需要看到独立 provider
-- `ProviderKind` / metadata / icon / settings 都按 provider 身份组织
-- 运行时进程识别规则不同
-- 本地 cache 路径与 key 候选可能不同
-
-因此 BananaTray 采用：
-
-- **独立 provider 身份**
-- **共享底层实现**
-
-### 2. 只参数化稳定差异
-
-`CodeiumFamilySpec` 只承载稳定且长期存在的产品差异：
-
-- provider id
-- `ProviderKind`
-- display / brand / icon metadata
+- provider kind 与展示元数据
 - `ide_name`
-- cache DB 路径
-- auth-status key candidates
-- process markers
-- unavailable message / log label
+- cache DB 相对路径
+- auth status key 候选
+- 进程识别 marker
+- provider-specific unavailable message
 
-共享层负责通用流程；provider facade 只提供 spec。
+这意味着：
 
-## 数据获取流程
+- 不要把 Windsurf 折叠成 Antigravity 的别名。
+- 也不要把产品差异反向塞进共享流程逻辑里。
 
-```text
-1. pgrep 检测 language_server_macos / language_server_macos_arm 进程
-2. 用 process markers 判断该进程属于 Antigravity 还是 Windsurf
-3. 从进程参数提取：
-   - --csrf_token
-   - --extension_server_port
-4. 用 lsof 查找 LISTEN 端口
-5. 依次尝试候选 endpoint：
-   - https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus
-   - http://127.0.0.1:{extension_port}/exa.language_server_pb.LanguageServerService/GetUserStatus
-   - http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus
-6. Body 使用 provider-specific ideName：
-   - antigravity => {"metadata":{"ideName":"antigravity"}}
-   - windsurf    => {"metadata":{"ideName":"windsurf"}}
-7. 如果 live source 失败，则回退本地 state.vscdb cache
-```
+## Refresh Path
 
-## 共享实现分层
+当前 refresh 策略保持为：
 
-### `spec.rs`
+1. 优先尝试 live source
+2. live source 失败时回退本地 cache
+3. 两条路径都失败时返回结构化错误
 
-定义 `CodeiumFamilySpec`，并内置：
+这里的关键不是“两个 provider 完全相同”，而是“它们共享同一个 fallback 形状”。
 
-- `ANTIGRAVITY_SPEC`
-- `WINDSURF_SPEC`
+## Stable Difference Dimensions
 
-其中当前关键差异如下：
+当前真正稳定、值得文档化的差异维度只有这些：
 
-| 字段 | Antigravity | Windsurf |
-|---|---|---|
-| provider id | `antigravity:api` | `windsurf:api` |
-| ide name | `antigravity` | `windsurf` |
-| cache DB | `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb` | `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb` |
-| auth key candidates | `antigravityAuthStatus` | `windsurfAuthStatus`, fallback `antigravityAuthStatus` |
-| process markers | `--app_data_dir antigravity`, `/antigravity/`, `.antigravity/`, `/antigravity.app/` | `--ide_name windsurf`, `/windsurf/`, `.windsurf/`, `/windsurf.app/` |
+- provider 身份与展示名
+- 本地 cache DB 路径
+- auth status key 候选
+- 进程参数 / 路径 marker
+- dashboard URL
 
-### `live_source.rs`
+如果未来还有差异，应优先继续加到 spec，而不是复制整套 provider 实现。
 
-负责：
+## Runtime Validation
 
-- 发现本地 language server
-- 识别 provider 所属进程
-- 提取 csrf token / port
-- 探测 endpoint
-- 调用 `GetUserStatus`
-
-### `cache_source.rs`
-
-负责：
-
-- 定位 `state.vscdb`
-- 读取 `ItemTable`
-- 按 candidate key 查找 auth status
-- 解 base64 protobuf payload
-
-### `parse_strategy.rs`
-
-负责解析两种载荷：
-
-- API JSON
-- cache protobuf
-
-并统一输出：
-
-- model quotas
-- email
-- plan name
-
-## GetUserStatus 关键结构
-
-```json
-{
-  "userStatus": {
-    "email": "user@example.com",
-    "userTier": {
-      "id": "g1-ultra-tier",
-      "name": "Google AI Ultra"
-    },
-    "planStatus": {
-      "planInfo": {
-        "planName": "Pro"
-      }
-    },
-    "cascadeModelConfigData": {
-      "clientModelConfigs": [
-        {
-          "label": "Claude Opus 4.6 (Thinking)",
-          "quotaInfo": {
-            "remainingFraction": 1.0,
-            "resetTime": "2026-04-01T07:42:12Z"
-          }
-        }
-      ]
-    }
-  }
-}
-```
-
-## 订阅等级识别注意点
-
-### 问题
-
-`planStatus.planInfo.planName` 对更高等级用户可能不够可靠，曾出现高等级用户依然显示为 `"Pro"` 的情况。
-
-### 当前策略
-
-解析时优先读取：
-
-- `userTier.name`
-
-回退到：
-
-- `planStatus.planInfo.planName`
-
-即：
-
-```rust
-let plan_name = user_status
-    .pointer("/userTier/name")
-    .and_then(|v| v.as_str())
-    .filter(|s| !s.is_empty())
-    .or_else(|| {
-        user_status
-            .pointer("/planStatus/planInfo/planName")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-    })
-    .map(|s| s.to_string());
-```
-
-## 配额提取
-
-每个模型的 quota 来自：
-
-- `cascadeModelConfigData.clientModelConfigs[].label`
-- `cascadeModelConfigData.clientModelConfigs[].quotaInfo.remainingFraction`
-- `cascadeModelConfigData.clientModelConfigs[].quotaInfo.resetTime`
-
-转换公式：
-
-```text
-used_percent = (1.0 - remainingFraction) * 100.0
-```
-
-## 回退策略
-
-Codeium-family provider 的刷新策略是：
-
-1. 优先 live source
-2. live source 失败时回退 local cache
-3. 两者都失败时返回结构化 `FetchFailed`
-
-这层回退由 [src/providers/codeium_family/mod.rs](../src/providers/codeium_family/mod.rs) 统一 orchestrate。
-
-## 运行时校验建议
-
-虽然当前实现已经通过测试，但不同机器上的真实安装状态仍建议做一次本地校验，尤其是 Windsurf：
-
-- cache DB 路径是否存在
-- auth-status key 实际名称
-- process args 是否包含预期 marker
-- `--csrf_token` / `--extension_server_port` 是否可提取
-- `lsof` 是否能发现 LISTEN 端口
-
-### 内置调试 helper
-
-可直接运行：
+当你修改 Codeium-family 实现后，建议在本机做一次运行时校验：
 
 ```bash
 cargo run -- debug-codeium-family all
@@ -237,40 +69,27 @@ cargo run -- debug-codeium-family antigravity
 cargo run -- debug-codeium-family windsurf
 ```
 
-这个命令会输出：
+这个命令适合检查：
 
-- provider id / ide_name
-- candidate cache DB 路径及是否存在
-- 本地 cache 中的关键 key 候选是否存在
-- 发现到的相关 ItemTable keys
-- 匹配到的 language server 进程行
-- 提取出的 pid / masked csrf token / extension port
-- `lsof` 发现的 listen port
-- 推导出的 endpoint hints
+- cache DB 是否存在
+- 关键 key 是否存在
+- 进程 marker 是否仍能识别
+- 端口 / csrf token 是否还能提取
+- endpoint 提示是否合理
 
-## 已知限制
+## Known Limits
 
-1. Windsurf 的真实本地 key 名在不同版本中可能变化
-   - 当前实现优先 `windsurfAuthStatus`
-   - 回退 `antigravityAuthStatus`
-2. 本地 HTTPS endpoint 使用自签证书，因此实现里会跳过 TLS 校验
-3. 进程识别依赖 marker；如果上游进程参数格式变化，需要同步调整 `CodeiumFamilySpec`
+- 本地服务的参数格式和 marker 可能随上游版本变化。
+- 本地 cache key 名称可能因产品版本变化而漂移。
+- 本地 HTTPS endpoint 可能使用自签证书。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致。
 
-## 与其他项目方案的差异
+## Maintenance Rule
 
-有些外部项目会直接使用用户 OAuth access token 请求远端接口来判断计划等级。
+如果你只是新增一个普通 provider，不需要读这份文档。
 
-BananaTray 不依赖这种方式，原因是：
+只有在以下场景才需要同步更新这里：
 
-1. BananaTray 不持有用户远端 access token
-2. 本地 language server 已能提供足够信息
-3. 本地 API + cache fallback 更符合 BananaTray 现有 provider 架构
-
-## 结论
-
-Codeium-family 架构的核心原则是：
-
-- **Antigravity / Windsurf 身份分离**
-- **底层 transport / cache / parser 共享**
-- **通过 spec 参数化稳定差异**
-- **运行时通过 debug helper 做真实环境确认**
+- 修改 `codeium_family` 共享层边界
+- 修改 Antigravity / Windsurf 的差异建模方式
+- 修改运行时校验命令或关键诊断入口

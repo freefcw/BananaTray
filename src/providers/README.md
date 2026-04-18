@@ -25,7 +25,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — shared live/cache/parser/spec logic for Antigravity and Windsurf
-- **`docs/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
+- **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`register_providers!`** macro — declares provider modules and generates `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
 
@@ -52,19 +52,19 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 | File | Provider | ID | Data Source | Notes |
 |------|----------|-----|-----------|-------|
 | `claude/` | Claude | `claude` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
-| `gemini/` | Gemini | `gemini:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot:api` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
-| `codex/` | Codex | `codex:api` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `kimi/` | Kimi | `kimi:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `gemini/` | Gemini | `gemini` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
+| `copilot/` | Copilot | `copilot` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
+| `codex/` | Codex | `codex` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
+| `kimi/` | Kimi | `kimi` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
-| `cursor/` | Cursor | `cursor:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
-| `antigravity/` | Antigravity | `antigravity:api` | Local language server API | Thin facade over shared `codeium_family/` module |
-| `windsurf.rs` | Windsurf | `windsurf:api` | Local language server API + local cache | Uses shared `codeium_family/` module |
-| `minimax/` | MiniMax | `minimax:api` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `cursor/` | Cursor | `cursor` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
+| `antigravity/` | Antigravity | `antigravity` | Local language server API | Thin facade over shared `codeium_family/` module |
+| `windsurf.rs` | Windsurf | `windsurf` | Local language server API + local cache | Uses shared `codeium_family/` module |
+| `minimax/` | MiniMax | `minimax` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro:cli` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo:ext` | — | Placeholder (returns `Unavailable`) |
 | `opencode.rs` | OpenCode | `opencode:cli` | — | Placeholder (returns `Unavailable`) |
-| `vertex_ai.rs` | Vertex AI | `vertexai:gcloud` | — | Placeholder (redirects to Gemini) |
+| `vertex_ai.rs` | Vertex AI | `vertexai` | — | Placeholder (redirects to Gemini) |
 
 ## Design Notes
 

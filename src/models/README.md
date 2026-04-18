@@ -10,9 +10,9 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
   - `all()` — static slice of all variants (defines canonical ordering)
   - `id_key()` — lowercase string identifier used in settings serialization (e.g. `"claude"`, `"vertexai"`)
   - `from_id_key()` — reverse lookup from string
-- **`ProviderMetadata`** — display-oriented metadata: `display_name`, `brand_name`, `icon_asset`, `dashboard_url`, `account_hint`, `source_label`. Each provider struct returns this from `AiProvider::metadata()`.
+- **`ProviderMetadata`** — display-oriented metadata: `display_name`, `brand_name`, `icon_asset`, `dashboard_url`, `account_hint`, `source_label`. Providers expose it via `ProviderDescriptor`.
 - **`ProviderId`** — unified provider identifier: `BuiltIn(ProviderKind)` for built-in providers, `Custom(String)` for YAML-declared custom providers. Key methods: `id_key()`, `from_id_key()`, `kind()`, `is_custom()`.
-- **`ProviderDescriptor`** — combines `ProviderId` with `ProviderMetadata` for registration.
+- **`ProviderDescriptor`** — combines a stable provider id with `ProviderMetadata` for registration and UI lookup.
 - **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, auto-managed), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 

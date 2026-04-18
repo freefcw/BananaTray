@@ -1,441 +1,317 @@
 # 自定义 Provider 使用指南
 
-BananaTray 支持通过 YAML 文件声明自定义 Provider，无需编写代码即可监控任意 AI 服务的额度用量。
+BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 代码。
+
+本文件只保留当前稳定可用的工作流和 Schema 摘要。更细的实现细节请以 `docs/examples/` 和当前代码为准。
+
+## 先说结论
+
+- 如果你只是想接入一个常见 NewAPI / OneAPI 中转站，优先使用设置页里的 NewAPI 表单。
+- 如果你需要自定义 HTTP / CLI / 安装检测逻辑，再使用手写 YAML。
+- 当前没有监视 providers 目录的自动 watcher；手工新增或编辑 YAML 后，通常需要重启应用才能重新加载。
+
+## 配置目录
+
+- macOS: `~/Library/Application Support/BananaTray/providers/`
+- Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+
+如果 macOS 上存在旧目录 `~/Library/Application Support/bananatray/providers/`，应用启动时会迁移到规范目录。
 
 ## 快速开始
 
-### 1. 创建配置目录
+1. 选一个最接近的示例文件。
+2. 复制到 providers 目录。
+3. 修改站点地址、认证信息和解析规则。
+4. 重启 BananaTray。
 
-```bash
-# macOS
-mkdir -p ~/Library/Application\ Support/BananaTray/providers/
+常用示例：
 
-# Linux
-mkdir -p ~/.config/bananatray/providers/
-```
+- `docs/examples/custom-provider-newapi.yaml`
+- `docs/examples/custom-provider-http.yaml`
+- `docs/examples/custom-provider-cli.yaml`
+- `docs/examples/opencode.yaml`
+- `docs/examples/kilo.yaml`
+- `docs/examples/vertex-ai.yaml`
 
-### 2. 创建 YAML 配置文件
-
-将 `.yaml` 或 `.yml` 文件放到上述目录中，应用启动时自动加载。
-
-### 3. 重启 BananaTray
-
-自定义 Provider 会自动出现在主界面中。
-
----
-
-## 内置模板
-
-项目 `docs/examples/` 目录提供了三种模板，覆盖常见场景：
-
-| 模板 | 文件 | 适用场景 |
-|------|------|----------|
-| **NewAPI 中转站** | `custom-provider-newapi.yaml` | NewAPI / OneAPI 中转站额度监控 |
-| HTTP Provider | `custom-provider-http.yaml` | 通过 HTTP API（POST）获取额度 |
-| CLI Provider | `custom-provider-cli.yaml` | 通过命令行工具获取额度 |
-
----
-
-## NewAPI / OneAPI 中转站配置
-
-这是最常用的场景。NewAPI 是基于 OneAPI 的 AI API 中转站管理系统。
-
-> BananaTray 使用浏览器中的 Cookie 来调用 `/api/user/self` 查询额度。
-> 你只需从浏览器中复制完整 Cookie 即可，无需输入账号密码。
-
-### 第一步：复制模板
-
-```bash
-# macOS
-cp docs/examples/custom-provider-newapi.yaml \
-   ~/Library/Application\ Support/BananaTray/providers/newapi.yaml
-
-# Linux
-cp docs/examples/custom-provider-newapi.yaml \
-   ~/.config/bananatray/providers/newapi.yaml
-```
-
-### 第二步：获取 Cookie
-
-1. 在浏览器中登录你的 NewAPI 站点
-2. 打开 DevTools（F12 或 Cmd+Option+I）
-3. 切换到 Network 面板，刷新页面
-4. 点击任意请求 → Request Headers → 找到 `Cookie` 一行
-5. 复制完整的 Cookie 值
-
-### 第三步：编辑配置
-
-打开复制后的 `newapi.yaml`，只需修改 2 项：
+## 顶层结构
 
 ```yaml
-# 你的中转站地址（不含末尾斜杠）
-base_url: "https://your-newapi-site.com"
-
-source:
-  ...
-  auth:
-    type: cookie
-    value: "session=eyJ...;cf_clearance=abc123"   # ← 粘贴上一步复制的完整 Cookie
+id: "provider-name:source"
+base_url: "https://example.com"   # 可选
+metadata: { ... }
+availability: { ... }
+source: { ... }
+parser: { ... }                   # placeholder source 时可省略
+preprocess: [ ... ]               # 可选
 ```
 
-所有 API 路径（`/api/user/self`）会自动拼接到 `base_url` 上，无需重复填写。
+字段说明：
 
-> ⚠️ Cookie 有有效期，过期后需重新从浏览器获取并更新配置文件。
+- `id`
+  - 自定义 provider 的稳定标识，必须唯一。
+- `base_url`
+  - 可选前缀；其他 URL 字段若以 `/` 开头，会自动拼接该前缀。
+- `metadata`
+  - 展示名称、品牌、dashboard 链接等。
+- `availability`
+  - 刷新前的可用性检查。
+- `source`
+  - 真正的数据获取方式。
+- `parser`
+  - 把原始输出解析成额度数据。
+- `preprocess`
+  - 在解析前做输出清洗。
 
-### 第四步：调整 divisor（如需）
-
-NewAPI 使用积分制，默认换算关系为 `500000 积分 = $1 USD`。
-
-如果你的站点使用不同的汇率，修改 `divisor` 值：
-
-```yaml
-quotas:
-  - label: "Balance"
-    remaining: "data.quota"     # 剩余额度（余额模式）
-    used: "data.used_quota"     # 已用额度（可选，用于展示）
-    quota_type: credit
-    divisor: 500000    # ← 修改为你站点的实际汇率
-```
-
-### 第五步：重启 BananaTray
-
-重启后，系统托盘会显示 NewAPI 的额度余额（如 `$0.50 / $2.00`）。
-
-### 多站点支持
-
-如果你使用多个中转站，创建多个 YAML 文件即可，每个文件使用不同的 `id`：
-
-```yaml
-# newapi-site-a.yaml
-id: "newapi-a:api"
-metadata:
-  display_name: "站点 A"
-  ...
-
-# newapi-site-b.yaml
-id: "newapi-b:api"
-metadata:
-  display_name: "站点 B"
-  ...
-```
-
----
-
-## YAML Schema 完整参考
-
-### 顶层结构
-
-```yaml
-id: "provider-name:source"     # 唯一标识符（必填）
-base_url: "https://..."        # 基础 URL（可选，其他 URL 字段以 / 开头时自动拼接）
-metadata: { ... }              # 展示信息（必填）
-availability: { ... }          # 可用性检查（必填）
-source: { ... }                # 数据获取方式（必填）
-preprocess: [...]              # 响应预处理管道（可选，解析前执行）
-parser: { ... }                # 响应解析规则（placeholder source 时可省略）
-```
-
-**`base_url` 字段：**
-设置后，`source.url`、`auth.login_url`、`metadata.dashboard_url` 若以 `/` 开头，会自动拼接 `base_url` 前缀。避免重复填写域名。
-
-### metadata — 展示信息
+## metadata
 
 ```yaml
 metadata:
-  display_name: "My Provider"  # 界面显示名称（必填）
-  brand_name: "MyBrand"        # 品牌名称（必填）
-  # icon: "N"                   # 可选，不填则自动取 display_name 首字母（单色渲染）
-  dashboard_url: "https://..."  # 面板跳转链接（可选）
-  account_hint: "account"       # 账户提示文本（默认 "account"）
-  source_label: "api"           # 数据源标签（可选）
+  display_name: "My Provider"
+  brand_name: "My Brand"
+  icon: "M"                  # 可选；留空时会回退到 display_name 首字母
+  dashboard_url: "/usage"    # 可选
+  account_hint: "account"    # 可选
+  source_label: "api"        # 可选
 ```
 
-### availability — 可用性检查
+## availability
 
-在每次刷新前检查目标服务是否可用。
+当前支持：
+
+- `always`
+- `cli_exists`
+- `env_var`
+- `file_exists`
+- `file_json_match`
+- `dir_contains`
+
+示例：
 
 ```yaml
-# 方式 1：始终可用（推荐，适合认证信息已写在配置中的场景）
-availability:
-  type: always
-
-# 方式 2：检查 CLI 命令是否存在
-availability:
-  type: cli_exists
-  value: "myai"
-
-# 方式 3：检查环境变量是否设置
 availability:
   type: env_var
   value: "MY_API_KEY"
-
-# 方式 4：检查文件是否存在
-availability:
-  type: file_exists
-  value: "~/.myai/config"
-
-# 方式 5：检查 JSON 文件内容是否匹配
-availability:
-  type: file_json_match
-  path: "~/.gemini/settings.json"          # 文件路径（支持 ~ 展开）
-  json_path: "security.auth.selectedType"  # JSON 点分路径
-  expected: "vertex-ai"                    # 期望值
-
-# 方式 6：检查目录中是否包含匹配前缀的条目
-availability:
-  type: dir_contains
-  path: "~/.vscode/extensions"             # 目录路径
-  prefix: "kilocode.kilo-code"             # 子项名称前缀
 ```
-
-### source — 数据获取
 
 ```yaml
-# 方式 1：HTTP GET（最常用）
-source:
-  type: http_get
-  url: "https://api.example.com/usage"
-  auth:
-    type: bearer
-    token: "sk-xxxx"
-
-# 方式 2：HTTP POST
-source:
-  type: http_post
-  url: "https://api.example.com/usage"
-  auth:
-    type: bearer
-    token: "sk-xxxx"
-  body: '{"scope":"coding"}'
-
-# 方式 3：CLI 命令
-source:
-  type: cli
-  command: "myai"
-  args: ["usage", "--json"]
-
-# 方式 4：占位（无数据获取，仅检测安装状态）
-source:
-  type: placeholder
-  reason: "此服务未提供公开 API——仅检测安装"  # 显示给用户的原因
+availability:
+  type: file_json_match
+  path: "~/.gemini/settings.json"
+  json_path: "security.auth.selectedType"
+  expected: "vertex-ai"
 ```
 
-> ℹ️ `placeholder` source 时无需配置 `parser` 字段，`refresh()` 会直接返回不可用状态。
+说明：
 
-**认证方式：**
+- `~` 会展开到用户 home 目录。
+- 当前 loader 对 `availability` payload 的 fail-fast 校验仍然比较保守；某些空值问题可能要到运行时才暴露。
 
-| 类型 | 说明 | 适用场景 |
-|------|------|----------|
-| `cookie` | 直接传递完整的 Cookie 字符串 | **NewAPI / OneAPI**（推荐） |
-| `session_token` | 用单个 session token 作为 Cookie 认证 | 无 CDN 防护的简单站点 |
-| `bearer` | Token 直接写在 YAML 中 | API Key 长期有效的服务 |
-| `bearer_env` | 从环境变量读取 Token | 需要与其他工具共享 Token |
-| `header_env` | 从环境变量读取自定义 Header | 特殊认证方式 |
-| `file_token` | 从本地 JSON 文件读取 Token | CLI 工具存储的 OAuth 凭据 |
-| `login` | 先登录获取 session token，再用于请求 | 少数支持自动登录的站点 |
+## source
 
-**`cookie` 认证详细配置（推荐）：**
+当前支持四种 source：
 
-从浏览器 Network 面板复制完整 Cookie 值即可使用，无需区分具体 cookie 名称，天然兼容 CDN 防护（如 Cloudflare）。
+### 1. `http_get`
+
+```yaml
+source:
+  type: http_get
+  url: "/api/usage"
+  auth:
+    type: bearer_env
+    env_var: "MY_TOKEN"
+```
+
+### 2. `http_post`
+
+```yaml
+source:
+  type: http_post
+  url: "/api/usage"
+  auth:
+    type: cookie
+    value: "session=...;cf_clearance=..."
+  body: '{"scope":"coding"}'
+```
+
+### 3. `cli`
+
+```yaml
+source:
+  type: cli
+  command: "mycli"
+  args: ["usage", "--json"]
+```
+
+### 4. `placeholder`
+
+```yaml
+source:
+  type: placeholder
+  reason: "仅做安装检测，不支持真实额度拉取"
+```
+
+## auth
+
+HTTP source 当前支持：
+
+- `bearer`
+- `bearer_env`
+- `header_env`
+- `file_token`
+- `login`
+- `cookie`
+- `session_token`
+
+常见场景：
+
+- NewAPI / OneAPI 且需要完整 Cookie：
 
 ```yaml
 auth:
   type: cookie
-  value: "session=eyJ...;cf_clearance=abc123"   # 完整的 cookie 字符串
+  value: "session=...;cf_clearance=..."
 ```
 
-获取步骤：
-1. 在浏览器中登录你的 NewAPI 站点
-2. 打开 DevTools（F12 或 Cmd+Option+I）
-3. 切换到 Network 面板，刷新页面
-4. 点击任意请求 → Request Headers → 找到 `Cookie` 一行
-5. 复制完整值，填入 `value` 字段
-
-> ⚠️ Cookie 有有效期，过期后需重新从浏览器获取并更新配置文件。
-
-**`session_token` 认证详细配置：**
-
-如果你确定站点没有 CDN 防护，可以只复制 session cookie 的值：
+- 只持有单个 session cookie：
 
 ```yaml
 auth:
   type: session_token
-  token: "eyJhbGci..."              # 仅 session cookie 值
-  cookie_name: "session"             # Cookie 名称（默认 "session"，大多数站点无需修改）
+  token: "eyJhbGci..."
+  cookie_name: "session"   # 默认就是 session
 ```
 
-**`login` 认证详细配置：**
-
-> ⚠️ 大部分 NewAPI 站点由于启用了 Cloudflare Turnstile 等防登录验证，
-> 此方式可能无法使用。推荐优先使用 `cookie` 方式。
+- 共享环境变量中的 Bearer token：
 
 ```yaml
 auth:
-  type: login
-  login_url: "https://site.com/api/user/login"   # 登录接口 URL
-  username: "your_username"                        # 用户名
-  password: "your_password"                        # 密码
-  token_path: "data"                               # 从响应 JSON 提取 token 的路径（默认 "data"）
+  type: bearer_env
+  env_var: "MY_API_TOKEN"
 ```
 
-工作流程：
-1. POST `login_url`，body 为 `{"username":"...","password":"..."}`
-2. 从响应 JSON 中用 `token_path` 提取 access token
-3. 用该 token 作为 `Authorization: Bearer <token>` 进行实际请求
+说明：
 
-**`file_token` 认证详细配置：**
+- `login` 是备选方案，不适合大多数启用了额外登录验证的站点。
+- `file_token` 适合复用 CLI 工具写到本地 JSON 文件里的 OAuth token。
 
-从本地 JSON 文件中读取 token（如 CLI 工具存储的 OAuth 凭据）：
+## parser
 
-```yaml
-auth:
-  type: file_token
-  path: "~/.codex/auth.json"              # 文件路径（支持 ~ 展开）
-  token_path: "tokens.access_token"       # JSON 点分路径提取 token 值
-```
+当前支持两种 parser：
 
-工作流程：
-1. 读取指定路径的 JSON 文件
-2. 用 `token_path` 点分路径提取 token 值
-3. 自动作为 `Authorization: Bearer <token>` header 发送
+### 1. `json`
 
-### preprocess — 响应预处理
+支持两种额度模式：
 
-在解析响应前对原始输出进行清洗，适用于 CLI 输出包含干扰字符的场景：
-
-```yaml
-preprocess:
-  - strip_ansi    # 移除 ANSI 转义序列和 Unicode 进度条字符
-```
-
-| 预处理步骤 | 说明 | 适用场景 |
-|----------|------|----------|
-| `strip_ansi` | 移除 ANSI 转义码、Unicode 进度条字符 | CLI 输出包含彩色/动画字符 |
-
-### parser — 响应解析
-
-#### JSON 格式
-
-支持两种模式：
-
-**传统模式**（`used` + `limit`）—— 有进度条：
+- `used + limit`
+- `remaining`（余额模式）
 
 ```yaml
 parser:
   format: json
-  account_email: "data.user.email"   # 账户邮箱的 JSON 路径（可选）
-  account_tier: "data.plan.name"     # 账户等级的 JSON 路径（可选）
+  account_email: "data.user.email"
+  account_tier: "data.plan.name"
   quotas:
-    - label: "Monthly"               # 显示标签（必填）
-      used: "data.usage.used"        # 已用量的 JSON 路径（必填）
-      limit: "data.usage.limit"      # 总额度的 JSON 路径（必填）
-      quota_type: credit             # 类型：general / session / weekly / credit
-      detail: "data.usage.reset_at"  # 详情文本的 JSON 路径（可选）
-      divisor: 500000                # 除数，用于单位换算（可选）
+    - label: "Monthly"
+      used: "data.usage.used"
+      limit: "data.usage.limit"
+      quota_type: credit
+      divisor: 500000
 ```
-
-**余额模式**（`remaining`）—— 无进度条，仅展示余额和已用：
 
 ```yaml
 parser:
   format: json
   quotas:
     - label: "Balance"
-      remaining: "data.quota"        # 剩余额度的 JSON 路径（必填）
-      used: "data.used_quota"        # 已用额度的 JSON 路径（可选，用于展示）
+      remaining: "data.quota"
+      used: "data.used_quota"
       quota_type: credit
       divisor: 500000
 ```
 
-> ⚠️ `remaining` 和 `limit` 互斥，不能同时指定。当使用 `remaining` 时，进度条隐藏，
-> 卡片以大号数字展示余额，底部展示已用额度。适用于 NewAPI 等只返回剩余额度的场景。
-
-**JSON 路径语法：**
-- 点分路径：`data.usage.used` → `json["data"]["usage"]["used"]`
-- 数组索引：`items.0.value` → `json["items"][0]["value"]`
-- 支持字符串数字自动转换：`"256"` → `256.0`
-
-**divisor 字段：**
-提取的数值会自动除以 `divisor`。适用于需要单位换算的场景：
-- NewAPI：`500000` 积分 = `$1 USD` → 设置 `divisor: 500000`
-- 某些站点 `1000` 积分 = `$1` → 设置 `divisor: 1000`
-
-#### Regex 格式
+### 2. `regex`
 
 ```yaml
 parser:
   format: regex
-  account_email: 'Signed in as\s+(\S+)'   # 提取邮箱的正则（可选）
+  account_email: 'Signed in as\\s+(\\S+)'
   quotas:
     - label: "Credits"
-      pattern: 'Credits:\s*(\d+)/(\d+)'   # 正则表达式（必填）
-      used_group: 1                         # used 值的 capture group（默认 1）
-      limit_group: 2                        # limit 值的 capture group（默认 2）
+      pattern: 'Credits:\\s*(\\d+)/(\\d+)'
+      used_group: 1
+      limit_group: 2
       quota_type: general
-      divisor: 100                          # 除数（可选）
 ```
 
-### quota_type — 额度类型
+## preprocess
 
-| 类型 | 显示格式 | 适用场景 |
-|------|----------|----------|
-| `general` | `75 / 100` | 通用计数 |
-| `session` | `3 / 5 sessions` | 会话数限制 |
-| `weekly` | `75 / 100` | 每周重置的额度 |
-| `credit` | `$0.50 / $2.00` | 金额/积分（配合 divisor 换算） |
+当前只支持：
 
----
+- `strip_ansi`
 
-## 环境变量展开（高级）
+适用于 CLI 输出带 ANSI 转义、进度条字符或终端噪音的场景。
 
-对于需要从环境变量读取值的高级场景，以下字段支持 `${ENV_VAR}` 语法：
+```yaml
+preprocess:
+  - strip_ansi
+```
 
-| 字段 | 说明 |
-|------|------|
-| `source.url` | HTTP 请求 URL |
-| `source.headers[].value` | HTTP Header 值 |
-| `metadata.dashboard_url` | 面板跳转链接 |
+## 环境变量展开
 
-> 大多数用户不需要使用环境变量。直接将值写在 YAML 配置中是更简单的方式。
+以下常见字段当前支持 `${ENV_VAR}` 语法：
 
----
+- `base_url`
+- 各类 URL 字段（如 `source.url`、`login_url`、`dashboard_url`）
+- `headers[].value`
+- `login.username`
+- `login.password`
+
+如果环境变量不存在，会展开为空字符串，因此更适合内部自用配置，而不是面向非技术用户分发的模板。
+
+## 当前会做的校验
+
+加载阶段当前会明确校验这些问题：
+
+- `id` 不能为空
+- `metadata.display_name` 不能为空
+- `source.command` / `source.url` 不能为空
+- `parser.quotas` 不能为空
+- 正则表达式和 capture group 必须合法
+- `divisor` 必须为正数
+
+有些配置问题不会在加载阶段 fail-fast，而会在实际 refresh 时暴露。这是当前实现边界，不是文档遗漏。
 
 ## 故障排查
 
-### Provider 没有出现
+### Provider 没出现
 
-1. 检查 YAML 文件是否在正确目录下：
-   - macOS: `~/Library/Application Support/BananaTray/providers/`
-   - Linux: `~/.config/bananatray/providers/`
-   - macOS 如历史上使用过旧目录 `~/Library/Application Support/bananatray/providers/`，重启应用后会自动迁移到规范目录
-2. 检查文件扩展名是否为 `.yaml` 或 `.yml`
-3. 检查 YAML 语法是否正确（可用 `yq` 或在线 YAML 校验工具）
-4. 查看应用日志，搜索 `providers::custom` 相关的 warning
+按顺序检查：
 
-### Provider 显示为 Disconnected
+1. YAML 是否位于正确目录
+2. 扩展名是否为 `.yaml` 或 `.yml`
+3. YAML 语法是否有效
+4. 日志里是否有 `providers::custom` 的 warning
 
-1. 确认 Cookie 是否已过期，如过期需重新从浏览器获取
-2. 用 curl 手动测试：
-   ```bash
-   curl -H "Cookie: session=your_session_token;cf_clearance=abc123" \
-     https://your-site.com/api/user/self
-   ```
+### Provider 显示为 Disconnected 或 Unavailable
 
-### 额度数值不正确
+优先检查：
 
-1. 检查 JSON 路径是否正确（比对 API 返回的实际 JSON 结构）
-2. 对于 NewAPI，确认 `divisor` 值与站点实际汇率匹配
+1. 认证信息是否过期
+2. `availability` 条件是否真的成立
+3. `source` 能否在命令行里独立跑通
+4. `parser` 的路径 / 正则是否和实际响应匹配
 
----
+### 数值不正确
 
-## 更多示例
+优先检查：
 
-参见项目 `docs/examples/` 目录：
-- [custom-provider-newapi.yaml](examples/custom-provider-newapi.yaml) — NewAPI 中转站（cookie 认证）
-- [custom-provider-http.yaml](examples/custom-provider-http.yaml) — HTTP POST 模式
-- [custom-provider-cli.yaml](examples/custom-provider-cli.yaml) — CLI 模式
+1. JSON 路径或正则是否对应到了正确字段
+2. `remaining` / `used + limit` 是否选对模式
+3. `divisor` 是否符合站点的真实单位换算
 
-内置 Provider 的 YAML 等价实现：
-- [opencode.yaml](examples/opencode.yaml) — OpenCode 占位 Provider（演示 placeholder source）
-- [kilo.yaml](examples/kilo.yaml) — Kilo 占位 Provider（演示 dir_contains 可用性检查）
-- [vertex-ai.yaml](examples/vertex-ai.yaml) — Vertex AI 占位 Provider（演示 file_json_match 可用性检查）
+## 推荐做法
+
+- 先从最接近的示例开始改，而不是从空白 YAML 开始写。
+- 先让 `source` 跑通，再写 `parser`。
+- 对 NewAPI / OneAPI 一类站点，优先使用完整 `cookie` 方式，而不是 `login`。
+- 只有当 UI 表单不满足需求时，才手写 NewAPI YAML。
