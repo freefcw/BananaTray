@@ -1,5 +1,8 @@
 # GPUI 宏编译器 Bug 问题记录
 
+> 这是历史事故记录，不是当前源码树的逐文件说明。
+> 文中出现的旧路径、旧测试数量和阶段性 workaround 仅用于追溯问题背景；当前权威测试契约以 `cargo test --lib` 和仓库里的现行脚本配置为准。
+
 ## 问题概述
 
 **现象**：运行 `cargo test` 或 `cargo check --all-targets` 时，Rust 编译器崩溃，抛出 `SIGBUS: access to undefined memory` 错误。

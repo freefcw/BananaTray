@@ -1,62 +1,56 @@
-# Docs Index
+# Docs
 
-This directory is split into two categories:
+`docs/` 只记录 BananaTray 的稳定边界、支持的工作流和仍然有参考价值的专题说明。
 
-- **Current docs** — describe the current architecture, supported workflows, and active implementation guidance
-- **Archive docs** — historical reviews, retrospectives, plans, and debugging notes kept only for traceability
+低层实现细节会持续移动，因此这里不再把文件树、函数调用链、测试数量这类信息当成长期契约。
+对于正在演进的实现，当前代码和测试才是最终事实源。
 
-## Suggested Reading Order
+## 文档约定
 
-For a new developer:
+- 权威文档只描述稳定职责、行为契约和对外工作流。
+- 文件级实现细节优先放在对应模块的 `README.md`，并以代码为准。
+- 历史复盘、事故记录、重构审查会保留，但默认**不**承诺和当前代码逐行同步。
 
-1. `architecture.md` — overall system boundaries, state flow, and runtime/UI split
-2. module `README.md` files under `src/` — module-level responsibilities and public structure
-3. `providers.md` — provider model and extension points
-4. `refresh-strategy.md` — refresh scheduling and event flow
-5. `logging.md` — runtime diagnostics and log configuration
+## 当前权威文档
 
-## By Task
+- `architecture.md`
+  - 系统边界、状态流、运行时分层、持久化与测试约束。
+- `providers.md`
+  - 内置 / 自定义 provider 模型、扩展边界、错误与设置能力约定。
+- `custom-provider.md`
+  - YAML 自定义 provider 的用户指南、Schema 摘要和排障建议。
+- `refresh-strategy.md`
+  - 刷新触发源、调度规则、并发执行和 reload 语义。
+- `logging.md`
+  - 日志级别、日志文件位置、调试相关入口。
 
-- Architecture changes:
-  Start with `architecture.md`, then check the relevant module `README.md` files under `src/`
-- Runtime or UI work:
-  Read `architecture.md`, `src/runtime/README.md`, and `src/ui/README.md`
-- Adding or changing a provider:
-  Read `providers.md`, `provider-blueprints.md`, and `antigravity-api.md` when working on Codeium-family providers
-- Custom provider support:
-  Read `custom-provider.md` and the YAML examples under `docs/examples/`
-- Refresh behavior or polling issues:
-  Read `refresh-strategy.md`
-- Logging or diagnostics:
-  Read `logging.md`
-- Historical debugging context:
-  Use `gpui-sigbus-bug.md`, `window-not-found-fix.md`, and `docs/archive/` only when current docs are insufficient
+## 参考文档
 
-## Current Docs
+这些文档仍然描述当前设计思路，但它们是专题参考，不是总体架构契约：
 
-- `architecture.md` — current system architecture and module boundaries
-- `providers.md` — provider model, built-in/custom provider behavior, and extension guide
-- `custom-provider.md` — current user guide for YAML custom providers
-- `logging.md` — logging usage and environment variables
-- `refresh-strategy.md` — refresh scheduling strategy
-- `provider-blueprints.md` — current provider design patterns
-- `antigravity-api.md` — current Codeium-family provider architecture notes
-- `gpui-sigbus-bug.md` — important GPUI test/build constraint background still relevant to current codebase
-- `window-not-found-fix.md` — historical bug record with follow-up notes; still useful for popup/settings lifecycle context
+- `provider-blueprints.md`
+  - 新增 / 重构 provider 时可复用的设计模式。
+- `antigravity-api.md`
+  - Antigravity / Windsurf 共享实现的专题说明。
 
-## Archive Docs
+## 历史文档
 
-Historical material has been moved under `docs/archive/`.
+历史材料统一放在 `archive/` 下；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
 
-These files may describe old paths, old module names, or intermediate refactor plans that no longer reflect the current codebase.
+- `archive/gpui-sigbus-bug.md`
+- `archive/window-not-found-fix.md`
+- `archive/provider/provider-refactor-retrospective.md`
+- `archive/`
 
-- `archive/code-review-solid-clean.md`
-- `archive/roadmap-directory-restructure.md`
-- `archive/custom-provider-plan.md`
-- `archive/lessons-gpui-height-calibration.md`
-- `archive/ui_layout_troubleshooting.md`
-- `archive/app/analytics.md`
-- `archive/provider/refactor.md`
-- `provider/provider-refactor-retrospective.md` remains in place because it still has reference value for current provider boundaries
+## 建议阅读顺序
 
-When in doubt, treat `architecture.md` and module `README.md` files as the source of truth.
+1. `architecture.md`
+2. `providers.md`
+3. 与当前任务直接相关的专题文档
+4. 需要时再查 `src/*/README.md` 和具体代码
+
+## 维护建议
+
+- 改架构边界时，先更新 `architecture.md`。
+- 改 provider 契约或扩展方式时，更新 `providers.md`；如果涉及 YAML，再同步 `custom-provider.md`。
+- 如果某段说明只能靠具体文件路径或行级细节才能成立，优先把它移出权威文档，改为专题说明或直接删掉。

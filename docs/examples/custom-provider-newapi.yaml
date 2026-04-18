@@ -15,7 +15,7 @@
 # 使用方法：
 # 1. 修改下方的 base_url 和 auth.value
 # 2. 将此文件复制到自定义 Provider 目录：
-#    macOS: ~/Library/Application Support/bananatray/providers/newapi.yaml
+#    macOS: ~/Library/Application Support/BananaTray/providers/newapi.yaml
 #    Linux: ~/.config/bananatray/providers/newapi.yaml
 # 3. 重启 BananaTray
 

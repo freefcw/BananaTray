@@ -1,5 +1,8 @@
 # Provider Refactor Retrospective
 
+> 这是重构复盘文档，保留的是当时的判断依据与边界思考。
+> 它对“为什么这么设计”仍有价值，但不应被当成当前 provider 目录或实现细节的逐项契约。
+
 这份文档记录本次 `src/providers` 重构最开始的核心审查结论，包括：
 
 - 最初发现的问题是什么
@@ -8,7 +11,7 @@
 - 最终采用了哪些优化方向
 - 后续继续演进时应坚持哪些边界
 
-这不是“新增 provider 怎么写”的操作手册。那部分请看 [Provider Blueprints](provider-blueprints.md)。
+这不是“新增 provider 怎么写”的操作手册。那部分请看 [Provider Blueprints](../../provider-blueprints.md)。
 
 ## 背景
 
@@ -348,8 +351,8 @@ provider 层既返回结构化错误，又常常顺手拼接用户提示。
 如果后面有人继续改 provider 层，建议按下面顺序阅读：
 
 1. 本文：理解这次重构为什么这么做
-2. [Provider Blueprints](provider-blueprints.md)：按蓝图选结构
-3. [docs/providers.md](providers.md)：看当前 provider 全表和接口入口
+2. [Provider Blueprints](../../provider-blueprints.md)：按蓝图选结构
+3. [docs/providers.md](../../providers.md)：看当前 provider 全表和接口入口
 4. `src/providers/README.md`：看源码侧边界说明
 
 ## 一句话结论

@@ -1,6 +1,6 @@
 # Banana Tray
 
-A cross-platform system tray application for monitoring AI coding assistant quota usage, built with Rust and GPUI.
+A macOS/Linux system tray application for monitoring AI coding assistant quota usage, built with Rust and GPUI.
 
 ## Features
 
@@ -11,7 +11,7 @@ A cross-platform system tray application for monitoring AI coding assistant quot
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
 - **Single instance** — second launch focuses the existing window via IPC
 - **Launch at login** — macOS (SMAppService) and Linux (XDG autostart)
-- **Global hotkey** — `Cmd+Shift+S` toggles the popover
+- **Global hotkey** — fixed `Cmd+Shift+S` shortcut toggles the popover
 
 ## Supported Providers
 
@@ -139,30 +139,21 @@ Runtime logs use `fern` with dual output (stdout + file):
 
 ## Architecture
 
-```
-src/
-  main.rs            — App binary entry point (requires `app` feature): Application::run(), CLI dispatch
-  lib.rs             — Crate root for reusable/testable logic; `runtime` / `tray` / `ui` compile behind `cfg(feature = "app")`
-  bootstrap.rs       — App initialization (UI setup, refresh, tray events)
-  ui/                — GPUI views, settings window, widgets
-  application/       — Action-Reducer-Effect pipeline (state, reducer, selectors)
-  models/            — Core data types (GPUI-free: ProviderKind, QuotaInfo, AppSettings, etc.)
-  providers/         — AiProvider trait + 14 implementations + ProviderManager + YAML custom providers
-  platform/          — Platform adaptation layer (assets, auto-launch, logging, notification, paths, single instance)
-  tray/              — TrayController, multi-display positioning, icon management
-  refresh/           — RefreshCoordinator (background polling thread)
-  runtime/           — Effect executor (GPUI bridge)
-  icons/             — SVG icon assets (provider + UI icons)
-  utils/             — Text/time helpers, log capture
-  settings_store.rs  — JSON settings persistence (atomic write)
-  i18n.rs            — Locale detection and i18n configuration
-  theme.rs           — GPUI color token system (depends on gpui: Hsla, Global, WindowAppearance)
-```
+High-level module boundaries:
+
+- `application/` — Action-Reducer-Effect pipeline and selectors
+- `models/` — core data types and persisted settings (GPUI-free)
+- `runtime/` — shared foreground state, effect execution, settings-window orchestration
+- `ui/` — GPUI views and widgets
+- `refresh/` — background scheduling and refresh execution
+- `providers/` — built-in/custom providers and `ProviderManager`
+- `platform/` / `tray/` — OS integration and tray lifecycle
 
 Key design decisions:
 
-1. **AppState decomposition** — `AppState` (`ui/bridge.rs`) wraps `AppSession` (`application/state.rs`), which holds `ProviderStore`, `NavigationState`, `SettingsUiState`, `DebugUiState` + `AppSettings`. Sub-states are GPUI-free for testability.
-2. **Action-Reducer-Effect** — Elm/Redux-style unidirectional data flow: `AppAction → reduce() → Vec<AppEffect> → runtime/`. Pure reducers and selectors are fully testable.
-3. **Provider extensibility** — `AiProvider` trait with `metadata() -> ProviderMetadata`. Adding a new provider requires only implementing the trait and registering via `register_providers!` macro.
-4. **GPUI isolation** — `runtime` / `tray` / `ui` compile only with `feature = "app"` in `lib.rs`. Pure logic lives in `application/`, `models/`, and `providers/`, and `--no-default-features` is kept only for local `lib` verification.
-5. **Refresh architecture** — `RefreshCoordinator` runs in a dedicated thread, receives `RefreshRequest` messages, applies cooldown/dedup, spawns concurrent refresh tasks, and sends `RefreshEvent` results back to the UI thread.
+1. **Action-Reducer-Effect** — UI and background events become `AppAction`, reducers emit `AppEffect`, and `runtime/` executes effects.
+2. **GPUI isolation** — core state and domain logic stay in GPUI-free modules; the app shell lives behind `feature = "app"`.
+3. **Provider extensibility** — providers expose identity, availability, refresh semantics, and optional settings capability through `AiProvider`.
+4. **Background refresh** — refresh runs off the UI thread and reports stable result semantics back to the foreground.
+
+For current architecture details, see [docs/architecture.md](docs/architecture.md) and the module `README.md` files under `src/`.

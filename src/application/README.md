@@ -6,7 +6,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `state.rs` — 纯逻辑应用状态
 
-从 `src/app_state.rs` 迁入。包含所有 GPUI-free 的状态定义和计算逻辑：
+包含所有 GPUI-free 的状态定义和计算逻辑：
 
 - **`AppSession`** — 顶层会话状态，组合各子状态
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` 等查询方法
@@ -19,7 +19,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`compute_popup_height()`** — 弹窗高度计算
 - **`compute_header_status()`** — 头部状态文本计算
 
-测试文件：`state_tests.rs`（854 行，覆盖全部子状态和计算逻辑）
+测试文件：`state_tests.rs`
 
 ### `action.rs` — 动作定义
 
@@ -33,9 +33,9 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`build_config_sync_request()`** — 构建配置同步请求
 - 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `process_refresh_outcome()` / `cleanup_dangling_refs()`
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `SaveNewApiProvider` effect；`EditNewApi` 的磁盘读取委托给 `LoadNewApiConfig` effect
-- **NewAPI 删除确认闭环**：`DeleteNewApi` 会先清空 `confirming_delete_newapi` 并立即发出 `Render`，然后再委托 `DeleteNewApiProvider` effect 执行磁盘删除，避免确认态悬空
+- **NewAPI 删除流**：`DeleteNewApi` 会先清空 `confirming_delete_newapi`，然后委托 `DeleteNewApiProvider` effect 执行磁盘删除
 
-测试文件：`reducer_tests.rs`（1100+ 行，覆盖所有 action 分支）
+测试文件：`reducer_tests.rs`
 
 ### `effect.rs` — 副作用声明
 

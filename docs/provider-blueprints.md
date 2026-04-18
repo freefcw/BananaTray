@@ -1,6 +1,9 @@
 # Provider Blueprints
 
-这份文档沉淀 BananaTray 中已经验证过的 Provider 设计蓝图，后续新增或重构 provider 时优先复用这里的结构，而不是重新发明抽象。
+> 这是一份模式参考文档，不是强制文件树规范。
+> 当前代码可以偏离这里的示例布局，只要仍然遵守 `docs/providers.md` 中的稳定边界即可。
+
+这份文档沉淀 BananaTray 中已经验证过的 provider 设计蓝图，后续新增或重构 provider 时优先复用这里的结构，而不是重新发明抽象。
 
 ## 核心原则
 
@@ -19,7 +22,7 @@
 - 有明确 HTTP 接口
 - 返回 JSON 或固定响应结构
 
-推荐目录：
+推荐目录（示意）：
 
 ```text
 providers/my_provider/
@@ -52,7 +55,7 @@ providers/my_provider/
 - 数据只能通过 CLI 读取
 - CLI 可用性检查、命令执行、退出码处理存在重复
 
-推荐结构：
+推荐结构（示意）：
 
 ```text
 providers/
@@ -88,7 +91,7 @@ providers/
 - 次选从本地数据库 / 缓存文件兜底
 - 同一个 provider 有多条 source path
 
-推荐目录：
+推荐目录（示意）：
 
 ```text
 providers/my_provider/
@@ -153,7 +156,7 @@ providers/my_provider/
 - 需要显式的优先级和回退顺序
 - 每条 source 已经有自己的稳定实现
 
-推荐目录：
+推荐目录（示意）：
 
 ```text
 providers/my_provider/

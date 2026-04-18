@@ -1,6 +1,8 @@
 # 示例：CLI 类型的自定义 Provider
 #
-# 将此文件放到 ~/.config/bananatray/providers/ 目录下即可生效。
+# 将此文件放到 BananaTray 自定义 Provider 目录即可生效：
+# - macOS: ~/Library/Application Support/BananaTray/providers/
+# - Linux: ~/.config/bananatray/providers/
 # 文件名任意，只要扩展名是 .yaml 或 .yml。
 
 id: "myai:cli"
