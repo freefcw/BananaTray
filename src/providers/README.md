@@ -54,7 +54,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 | `claude/` | Claude | `claude` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
 | `gemini/` | Gemini | `gemini` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
 | `copilot/` | Copilot | `copilot` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
-| `codex/` | Codex | `codex` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
+| `codex/` | Codex | `codex` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
 | `kimi/` | Kimi | `kimi` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
