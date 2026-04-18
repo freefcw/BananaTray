@@ -13,7 +13,7 @@
 | Claude | `claude` | HTTP API + CLI fallback | 多 source 编排 |
 | Gemini | `gemini` | HTTP API | |
 | Copilot | `copilot` | HTTP API | 支持 token 输入面板 |
-| Codex | `codex` | HTTP API | 读取 `~/.codex/auth.json`，解析 OAuth `id_token` 填充 email/plan；刷新时自动轮转 `id_token` 并注入 `ChatGPT-Account-Id` 以支持多账号 |
+| Codex | `codex` | HTTP API + CLI fallback | 读取 `~/.codex/auth.json`，解析 OAuth `id_token` 填充 email/plan；刷新时自动轮转 `id_token` 并注入 `ChatGPT-Account-Id` 以支持多账号；可通过 `~/.codex/config.toml` 的 `chatgpt_base_url` 切换自托管 ChatGPT 网关；OAuth 出现 timeout / 网络错误 / 5xx 时自动兑底到 `codex /status`（429 限流不 fallback，因 CLI 共用同一 token 会撞同一限流） |
 | Kimi | `kimi` | HTTP API | |
 | Amp | `amp` | CLI | |
 | Cursor | `cursor` | HTTP API + 本地数据 | |

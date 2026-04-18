@@ -133,7 +133,7 @@ impl InteractiveRunner {
         let start = Instant::now();
 
         // Find executable
-        let executable_path = self.find_executable(binary)?;
+        let executable_path = locate_executable(binary)?;
         log::info!(
             target: "interactive_runner",
             "[{}] Found executable at '{}' ({:.0}ms)",
@@ -192,38 +192,6 @@ impl InteractiveRunner {
         let output = text_utils::strip_ansi(&String::from_utf8_lossy(&buffer));
 
         Ok(InteractiveResult { output, exit_code })
-    }
-
-    /// Find the full path to a CLI tool
-    fn find_executable(&self, binary: &str) -> Result<String> {
-        // Check if it's already an absolute path and exists
-        if std::path::Path::new(binary).is_absolute()
-            && std::fs::metadata(binary)
-                .map(|m| m.is_file())
-                .unwrap_or(false)
-        {
-            return Ok(binary.to_string());
-        }
-
-        // Use 'which' to find the binary
-        if let Ok(path) = which::which(binary) {
-            return Ok(path.to_string_lossy().to_string());
-        }
-
-        // Fallback: check common paths
-        let common_paths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
-
-        for base in &common_paths {
-            let full_path = format!("{}/{}", base, binary);
-            if std::fs::metadata(&full_path)
-                .map(|m| m.is_file())
-                .unwrap_or(false)
-            {
-                return Ok(full_path);
-            }
-        }
-
-        Err(InteractiveError::BinaryNotFound(binary.to_string()).into())
     }
 
     /// Create a pseudo-terminal
@@ -460,6 +428,62 @@ impl InteractiveRunner {
     }
 }
 
+/// 解析 `binary` 的完整路径。
+///
+/// 查找顺序（与 `InteractiveRunner::run` 真正 spawn 前的逻辑保持一致）：
+/// 1. 若 `binary` 本身是绝对路径且指向真实文件，直接使用
+/// 2. 在当前进程 `PATH` 里 `which::which`
+/// 3. 兜底扫描 macOS/Linux 常见 Homebrew / 系统目录：
+///    `/opt/homebrew/bin`、`/usr/local/bin`、`/usr/bin`
+///
+/// **暴露为 crate-level 自由函数**：让 `status_probe::ensure_cli_present` 与
+/// `InteractiveRunner::run` 使用同一份查找规则。若只用 `which::which`，会在
+/// macOS GUI 启动（PATH 缺少 Homebrew 前缀）时得到 false-negative，
+/// 虽然 spawn 路径其实能找到可执行文件，却提前返回 `CliNotFound`。
+pub(crate) fn locate_executable(binary: &str) -> Result<String> {
+    // 1. 绝对路径直接使用
+    if std::path::Path::new(binary).is_absolute()
+        && std::fs::metadata(binary)
+            .map(|m| m.is_file())
+            .unwrap_or(false)
+    {
+        return Ok(binary.to_string());
+    }
+
+    // 2. PATH
+    if let Ok(path) = which::which(binary) {
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    // 3. 常见 fallback 目录
+    if let Some(path) = locate_in_dirs(binary, FALLBACK_DIRS) {
+        return Ok(path);
+    }
+
+    Err(InteractiveError::BinaryNotFound(binary.to_string()).into())
+}
+
+/// 兜底查找使用的系统目录。与真正 spawn 过程的 `ensure_common_paths` 保持
+/// 同源（`/opt/homebrew/bin` 前缀覆盖 macOS GUI PATH 缺失的常见情况）。
+const FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
+
+/// 纯 I/O 辅助：在给定目录列表中查找首个命中为文件的 `binary`，返回完整路径。
+///
+/// 暴露为 `pub(crate)` 主要用于单元测试可注入 tmp 目录；生产代码仅通过
+/// [`locate_executable`] 间接使用。
+pub(crate) fn locate_in_dirs(binary: &str, dirs: &[&str]) -> Option<String> {
+    for base in dirs {
+        let full_path = format!("{}/{}", base, binary);
+        if std::fs::metadata(&full_path)
+            .map(|m| m.is_file())
+            .unwrap_or(false)
+        {
+            return Some(full_path);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,5 +513,53 @@ mod tests {
 
         let err = InteractiveError::TimedOut;
         assert!(err.to_string().contains("timeout"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // locate_in_dirs：确保 fallback 目录扫描能在 tmp dir 中命中文件
+    // （覆盖 macOS GUI 启动下 PATH 无 Homebrew 前缀但二进制落在
+    // /opt/homebrew/bin 的真实场景）
+    // ─────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn locate_in_dirs_returns_match_from_injected_dir() {
+        use std::fs;
+
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let fake_binary = tmp.path().join("codex_test_fake");
+        fs::write(&fake_binary, b"#!/bin/sh\nexit 0\n").expect("write fake");
+
+        let dirs = [tmp.path().to_str().unwrap()];
+        let found = locate_in_dirs("codex_test_fake", &dirs);
+        assert_eq!(found.as_deref(), fake_binary.to_str());
+    }
+
+    #[test]
+    fn locate_in_dirs_returns_none_when_absent() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let dirs = [tmp.path().to_str().unwrap()];
+        assert!(locate_in_dirs("definitely_not_present_bananatray", &dirs).is_none());
+    }
+
+    #[test]
+    fn locate_in_dirs_picks_first_match() {
+        use std::fs;
+
+        let first = tempfile::tempdir().expect("tmp1");
+        let second = tempfile::tempdir().expect("tmp2");
+        let first_hit = first.path().join("dup_bin");
+        let second_hit = second.path().join("dup_bin");
+        fs::write(&first_hit, b"first").expect("write first");
+        fs::write(&second_hit, b"second").expect("write second");
+
+        let dirs = [
+            first.path().to_str().unwrap(),
+            second.path().to_str().unwrap(),
+        ];
+        // 第一个命中的目录优先——保证查找顺序确定，和真实 spawn 一致。
+        assert_eq!(
+            locate_in_dirs("dup_bin", &dirs).as_deref(),
+            first_hit.to_str()
+        );
     }
 }

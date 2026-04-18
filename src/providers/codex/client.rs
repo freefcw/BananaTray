@@ -1,8 +1,6 @@
 use crate::providers::common::http_client;
 use anyhow::Result;
 
-const USAGE_API_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
-
 /// 构造 usage API 请求头。
 ///
 /// 当 `account_id` 存在时注入 `ChatGPT-Account-Id` 请求头，
@@ -20,10 +18,16 @@ fn usage_api_headers(access_token: &str, account_id: Option<&str>) -> Vec<String
     headers
 }
 
-pub(super) fn call_usage_api(access_token: &str, account_id: Option<&str>) -> Result<String> {
+/// 发起一次 usage API 调用。`url` 由上层 [`super::config::resolve_usage_url`] 提供，
+/// 以支持自托管 / 代理 ChatGPT 网关。
+pub(super) fn call_usage_api(
+    url: &str,
+    access_token: &str,
+    account_id: Option<&str>,
+) -> Result<String> {
     let headers = usage_api_headers(access_token, account_id);
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
-    http_client::get_with_headers(USAGE_API_URL, &header_refs)
+    http_client::get_with_headers(url, &header_refs)
 }
 
 #[cfg(test)]
@@ -31,10 +35,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn usage_api_request_uses_expected_url_and_headers() {
+    fn usage_api_request_headers_baseline() {
         let headers = usage_api_headers("token-123", None);
-
-        assert_eq!(USAGE_API_URL, "https://chatgpt.com/backend-api/wham/usage");
         assert_eq!(headers.len(), 3);
         assert_eq!(headers[0], "Authorization: Bearer token-123");
         assert_eq!(headers[1], "Accept: application/json");
