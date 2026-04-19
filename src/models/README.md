@@ -39,7 +39,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
   - `last_failure` holds structured failure semantics, replacing the old cached `error_message`
   - locale switching should only re-render selector/UI text; it should not require provider refresh to clear cached strings
   - `ProviderStatus::new(provider_id, metadata)` — unified constructor for built-in and custom providers. Callers must keep `provider_id.kind()` and `metadata.kind` aligned; debug builds assert this invariant.
-- **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `account_tier`
+- **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `account_tier`, runtime `source_label`
 
 ### `settings/` — User Preferences (sub-module)
 

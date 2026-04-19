@@ -12,18 +12,25 @@ BananaTray 把 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in p
 - 各自拥有独立的 metadata、图标和可用性判断
 - 共享一套底层 Codeium-family 实现
 
-共享实现位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf.rs`。
+共享的本地 source primitive 位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf.rs`。
 
 ## Stable Design
 
-共享层只处理长期稳定的共性：
+共享层只处理长期稳定的本地共性：
 
 - 本地 language server 进程发现
 - 本地接口调用
 - 本地 cache fallback
 - JSON / protobuf 解析
 
-provider facade 只负责提供产品差异：
+Windsurf 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Windsurf facade 自己决定何时插入 seat API。
+
+provider facade 负责两类东西：
+
+- 产品身份与静态差异
+- source orchestration
+
+静态差异继续通过 spec 表达，包括：
 
 - provider kind 与展示元数据
 - `ide_name`
@@ -32,20 +39,26 @@ provider facade 只负责提供产品差异：
 - 进程识别 marker
 - provider-specific unavailable message
 
+source orchestration 目前明确分开：
+
+- Antigravity：`live -> cache`
+- Windsurf：`live -> seat -> cache`
+
 这意味着：
 
 - 不要把 Windsurf 折叠成 Antigravity 的别名。
-- 也不要把产品差异反向塞进共享流程逻辑里。
+- 也不要把 Windsurf 的云端 fallback 反向塞进共享流程逻辑里。
 
 ## Refresh Path
 
 当前 refresh 策略保持为：
 
-1. 优先尝试 live source
-2. live source 失败时回退本地 cache
-3. 两条路径都失败时返回结构化错误
+1. Antigravity：优先尝试 live source，失败时回退本地 cache
+2. Windsurf：优先尝试 live source，失败时先尝试 seat API，再回退本地 cache
+3. Windsurf 若 seat API 只返回 daily quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
+4. 所有来源都失败时返回结构化错误
 
-这里的关键不是“两个 provider 完全相同”，而是“它们共享同一个 fallback 形状”。
+这里的关键不是“两个 provider 完全相同”，而是“它们共享同一套本地 source primitive，但各自保留自己的 orchestration 边界”。
 
 ## Stable Difference Dimensions
 
@@ -82,6 +95,7 @@ cargo run -- debug-codeium-family windsurf
 - 本地服务的参数格式和 marker 可能随上游版本变化。
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
+- Windsurf seat API 依赖本地 auth status 中的 `apiKey`，请求体里的版本号使用本机安装版本的最佳努力探测；探测不到时不发送版本字段。
 - cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致。
 
 ## Maintenance Rule
@@ -92,4 +106,5 @@ cargo run -- debug-codeium-family windsurf
 
 - 修改 `codeium_family` 共享层边界
 - 修改 Antigravity / Windsurf 的差异建模方式
+- 修改 provider facade 的 source orchestration 顺序
 - 修改运行时校验命令或关键诊断入口

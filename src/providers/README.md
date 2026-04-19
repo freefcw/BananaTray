@@ -24,7 +24,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
-- **`codeium_family/`** — shared live/cache/parser/spec logic for Antigravity and Windsurf
+- **`codeium_family/`** — shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`register_providers!`** macro — declares provider modules and generates `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
@@ -58,8 +58,8 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 | `kimi/` | Kimi | `kimi` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
-| `antigravity/` | Antigravity | `antigravity` | Local language server API | Thin facade over shared `codeium_family/` module |
-| `windsurf.rs` | Windsurf | `windsurf` | Local language server API + local cache | Uses shared `codeium_family/` module |
+| `antigravity/` | Antigravity | `antigravity` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
+| `windsurf.rs` | Windsurf | `windsurf` | Local language server API + seat API + local cache | Provider facade owns `live -> seat -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
 | `minimax/` | MiniMax | `minimax` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro:cli` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo:ext` | — | Placeholder (returns `Unavailable`) |
@@ -89,10 +89,12 @@ Aggregation registry holding all provider implementations. Maintains exactly two
   - `check_availability()` accepts either API or CLI source
   - `ProbeMode::Auto` prefers API and falls back to CLI
   - concrete source logic stays in `api_probe.rs` / `cli_probe.rs`
-- `Antigravity` uses a dedicated source fallback blueprint:
-  - `live_source.rs` handles process discovery + local API transport
-  - `cache_source.rs` handles SQLite/local cache fallback
-  - `mod.rs` only orchestrates fallback order
+- Codeium-family providers keep orchestration in the provider facade instead of in the shared module:
+  - `codeium_family/live_source.rs` handles process discovery + local API transport
+  - `codeium_family/cache_source.rs` handles SQLite/local cache fallback
+  - `antigravity/mod.rs` owns `live -> cache`
+  - `windsurf.rs` owns `live -> seat -> cache`
+  - `windsurf/seat_source.rs` contains the Windsurf-only cloud fallback
 
 ## Adding a New Provider
 

@@ -52,7 +52,7 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     icon_asset: "src/icons/provider-windsurf.svg",
     dashboard_url: "https://windsurf.com/subscription/usage",
     account_hint: "Windsurf account",
-    source_label: "local api",
+    source_label: "local/cloud fallback",
     log_label: "Windsurf",
     ide_name: "windsurf",
     unavailable_message: "Windsurf live source and local cache are both unavailable",

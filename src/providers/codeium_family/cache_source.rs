@@ -1,5 +1,6 @@
 use super::parse_strategy::{CacheParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
+use super::LOCAL_CACHE_SOURCE_LABEL;
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
 use crate::providers::ProviderError;
 use anyhow::{Context, Result};
@@ -60,10 +61,13 @@ fn read_via_protobuf(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<Refr
     let user_status_data = decode_user_status_payload(&auth_status_json)?;
     let strategy = CacheParseStrategy;
     let (quotas, email, plan_name) = strategy.parse(&user_status_data)?;
-    Ok(RefreshData::with_account(quotas, email, plan_name))
+    Ok(RefreshData::with_account(quotas, email, plan_name)
+        .with_source_label(LOCAL_CACHE_SOURCE_LABEL))
 }
 
-fn cache_db_path(spec: &CodeiumFamilySpec) -> Result<PathBuf> {
+pub(in crate::providers::codeium_family) fn cache_db_path(
+    spec: &CodeiumFamilySpec,
+) -> Result<PathBuf> {
     let home = dirs::home_dir()
         .ok_or_else(|| ProviderError::unavailable("cannot determine home directory"))?;
     let db_path = home.join(spec.cache_db_relative_path);
@@ -85,7 +89,7 @@ fn cache_db_path(spec: &CodeiumFamilySpec) -> Result<PathBuf> {
     Ok(db_path)
 }
 
-pub(super) fn query_auth_status_json(
+pub(in crate::providers::codeium_family) fn query_auth_status_json(
     conn: &Connection,
     spec: &CodeiumFamilySpec,
 ) -> Result<String> {
@@ -149,10 +153,28 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
     let json_str = query_cached_plan_info(conn, spec)?;
     let plan_info = parse_cached_plan_info(&json_str)?;
 
+    debug!(
+        target: "providers",
+        "{} cachedPlanInfo parsed: plan_name={:?}, quota_usage={:?}",
+        spec.log_label,
+        plan_info.plan_name,
+        plan_info.quota_usage.is_some()
+    );
+
     let plan_name = plan_info.plan_name;
     let mut quotas = Vec::new();
 
-    if let Some(usage) = plan_info.quota_usage {
+    if let Some(usage) = &plan_info.quota_usage {
+        debug!(
+            target: "providers",
+            "{} quotaUsage: daily_remaining={:?}, weekly_remaining={:?}, daily_reset={:?}, weekly_reset={:?}",
+            spec.log_label,
+            usage.daily_remaining_percent,
+            usage.weekly_remaining_percent,
+            usage.daily_reset_at_unix,
+            usage.weekly_reset_at_unix
+        );
+
         if let Some(q) = build_quota_from_cached(
             "Daily Quota",
             usage.daily_remaining_percent,
@@ -167,6 +189,28 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
             usage.weekly_reset_at_unix,
         ) {
             quotas.push(q);
+        } else if let (None, Some(reset_ts)) =
+            (usage.weekly_remaining_percent, usage.weekly_reset_at_unix)
+        {
+            // 新版 Windsurf：weekly_remaining_percent 可能为 null（限额已满时）
+            // 此时从 reset 时间推断配额状态：只要 reset 时间未过期，视为已满（0% remaining）
+            let now_ts = chrono::Utc::now().timestamp();
+            if reset_ts > now_ts {
+                warn!(
+                    target: "providers",
+                    "{} weekly_remaining_percent is null but reset time is future; inferring 100% used (quota full)",
+                    spec.log_label
+                );
+                quotas.push(QuotaInfo::with_details(
+                    "Weekly Quota",
+                    100.0, // 已满：100% used
+                    100.0,
+                    QuotaType::ModelSpecific("Weekly Quota".to_string()),
+                    Some(QuotaDetailSpec::ResetAt {
+                        epoch_secs: reset_ts,
+                    }),
+                ));
+            }
         }
     }
 
@@ -177,7 +221,8 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
     // cachedPlanInfo 中没有 email，从 auth status 中单独提取
     let email = extract_email_from_auth_status(conn, spec);
 
-    Ok(RefreshData::with_account(quotas, email, plan_name))
+    Ok(RefreshData::with_account(quotas, email, plan_name)
+        .with_source_label(LOCAL_CACHE_SOURCE_LABEL))
 }
 
 /// 根据 cachedPlanInfo 的 remaining_percent 和 reset_at_unix 构建配额项。
@@ -703,5 +748,58 @@ mod tests {
         let err = query_cached_plan_info(&conn, &spec).unwrap_err();
         let provider_err = ProviderError::classify(&err);
         assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+    }
+
+    #[test]
+    fn test_read_via_cached_plan_info_weekly_quota_null_when_full() {
+        // 模拟新版 Windsurf 行为：周限额已满时 weeklyRemainingPercent 为 null
+        // 但 weeklyResetAtUnix 仍然存在
+        let future_daily = chrono::Utc::now().timestamp() + 3600;
+        let future_weekly = chrono::Utc::now().timestamp() + 86400 * 3; // 3天后重置
+
+        // JSON 中 weeklyRemainingPercent 为 null（限额已满时的实际情况）
+        let plan_json = r#"{"planName":"Pro","quotaUsage":{"dailyRemainingPercent":60,"weeklyRemainingPercent":null,"dailyResetAtUnix":"#.to_string()
+            + &future_daily.to_string()
+            + r#","weeklyResetAtUnix":"#
+            + &future_weekly.to_string()
+            + r#"}}"#;
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ["windsurf.settings.cachedPlanInfo", &plan_json],
+        )
+        .unwrap();
+
+        let spec = test_windsurf_spec();
+        let data = read_via_cached_plan_info(&conn, &spec).unwrap();
+
+        // 应该返回两个配额：日和周
+        assert_eq!(data.quotas.len(), 2);
+
+        // 日配额正常：40% used (100-60)
+        let daily = &data.quotas[0];
+        assert_eq!(
+            daily.label_spec,
+            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
+        );
+        assert!((daily.used - 40.0).abs() < 0.01);
+
+        // 周配额：weeklyRemainingPercent 为 null 时应推断为 100% used（已满）
+        let weekly = &data.quotas[1];
+        assert_eq!(
+            weekly.label_spec,
+            crate::models::QuotaLabelSpec::Raw("Weekly Quota".to_string())
+        );
+        assert!((weekly.used - 100.0).abs() < 0.01); // 已满
+        assert!(matches!(
+            weekly.detail_spec,
+            Some(QuotaDetailSpec::ResetAt { .. })
+        ));
     }
 }
