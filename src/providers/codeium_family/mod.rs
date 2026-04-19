@@ -4,16 +4,21 @@ mod parse_strategy;
 mod spec;
 
 use super::ProviderError;
-use crate::models::{ProviderDescriptor, ProviderMetadata, RefreshData};
+use crate::models::RefreshData;
+use crate::models::{ProviderDescriptor, ProviderMetadata};
 use anyhow::Result;
-use log::warn;
 use rusqlite::{Connection, OpenFlags};
 use std::borrow::Cow;
 use std::fmt::Write as _;
+use std::path::PathBuf;
 use std::process::Command;
 
 pub use live_source::matches_process_line;
+pub(crate) use live_source::ProcessInfo;
 pub use spec::{CodeiumFamilySpec, ANTIGRAVITY_SPEC, WINDSURF_SPEC};
+
+pub(crate) const LOCAL_API_SOURCE_LABEL: &str = "local api";
+pub(crate) const LOCAL_CACHE_SOURCE_LABEL: &str = "local cache";
 
 pub fn descriptor(spec: &CodeiumFamilySpec) -> ProviderDescriptor {
     ProviderDescriptor {
@@ -250,27 +255,27 @@ pub fn classify_unavailable(spec: &CodeiumFamilySpec) -> Result<()> {
     }
 }
 
-pub fn refresh_with_fallback(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
-    match live_source::fetch_refresh_data(spec) {
-        Ok(data) => Ok(data),
-        Err(live_err) => {
-            warn!(
-                target: "providers",
-                "{} live source failed: {}, falling back to local cache",
-                spec.log_label,
-                live_err
-            );
+pub fn refresh_live(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+    live_source::fetch_refresh_data(spec)
+}
 
-            match cache_source::read_refresh_data(spec) {
-                Ok(data) => Ok(data),
-                Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
-                    "live source failed: {}; cache fallback failed: {}",
-                    live_err, cache_err
-                ))
-                .into()),
-            }
-        }
-    }
+pub fn refresh_cache(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+    cache_source::read_refresh_data(spec)
+}
+
+pub(crate) fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
+    live_source::detect_process(spec)
+}
+
+pub(crate) fn cache_db_path(spec: &CodeiumFamilySpec) -> Result<PathBuf> {
+    cache_source::cache_db_path(spec)
+}
+
+pub(crate) fn query_auth_status_json(
+    conn: &Connection,
+    spec: &CodeiumFamilySpec,
+) -> Result<String> {
+    cache_source::query_auth_status_json(conn, spec)
 }
 
 #[cfg(test)]

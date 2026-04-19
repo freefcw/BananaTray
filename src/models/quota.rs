@@ -504,6 +504,8 @@ pub struct RefreshData {
     pub account_email: Option<String>,
     /// 账户套餐等级（可选）
     pub account_tier: Option<String>,
+    /// 本次刷新实际使用的数据源（可选，覆盖静态 metadata.source_label）
+    pub source_label: Option<String>,
 }
 
 impl RefreshData {
@@ -513,6 +515,7 @@ impl RefreshData {
             quotas,
             account_email: None,
             account_tier: None,
+            source_label: None,
         }
     }
 
@@ -526,7 +529,14 @@ impl RefreshData {
             quotas,
             account_email,
             account_tier,
+            source_label: None,
         }
+    }
+
+    /// 附加本次刷新实际使用的数据源标签。
+    pub fn with_source_label(mut self, source_label: impl Into<String>) -> Self {
+        self.source_label = Some(source_label.into());
+        self
     }
 }
 
@@ -594,6 +604,9 @@ pub struct ProviderStatus {
     pub account_email: Option<String>,
     /// 账号层级（如 "Pro", "Max", "Free", "Business"）
     pub account_tier: Option<String>,
+    /// 最近一次成功刷新实际使用的数据源；若为空，则回退到静态 metadata.source_label
+    #[serde(default)]
+    pub runtime_source_label: Option<String>,
     /// 上次刷新的结果状态（结构化，selector 层负责 i18n 格式化）
     #[serde(default)]
     pub update_status: Option<UpdateStatus>,
@@ -642,6 +655,7 @@ impl ProviderStatus {
             quotas: vec![],
             account_email: None,
             account_tier: None,
+            runtime_source_label: None,
             update_status: None,
             last_failure: None,
             error_kind: ErrorKind::default(),
@@ -658,6 +672,7 @@ impl ProviderStatus {
         self.quotas = data.quotas;
         self.account_email = data.account_email;
         self.account_tier = data.account_tier;
+        self.runtime_source_label = data.source_label;
         self.connection = ConnectionStatus::Connected;
         self.last_refreshed_instant = Some(Instant::now());
         self.update_status = None;
@@ -707,8 +722,13 @@ impl ProviderStatus {
         dashboard_url -> dashboard_url,
         brand_name -> brand_name,
         account_hint -> account_hint,
-        source_label -> source_label,
     );
+
+    pub fn source_label(&self) -> &str {
+        self.runtime_source_label
+            .as_deref()
+            .unwrap_or(&self.metadata.source_label)
+    }
 
     /// 获取最高用量的状态等级（用于总览显示）
     pub fn worst_status(&self) -> StatusLevel {
@@ -1072,5 +1092,16 @@ mod tests {
         // 有旧配额数据时应保持 Connected（展示陈旧数据）
         assert_eq!(p.connection, ConnectionStatus::Connected);
         assert_eq!(p.update_status, Some(UpdateStatus::Failed));
+    }
+
+    #[test]
+    fn provider_status_prefers_runtime_source_label_after_success() {
+        let mut p = make_provider(ConnectionStatus::Disconnected);
+        let data = RefreshData::quotas_only(vec![QuotaInfo::new("test", 1.0, 100.0)])
+            .with_source_label("seat api");
+
+        p.mark_refresh_succeeded(data);
+
+        assert_eq!(p.source_label(), "seat api");
     }
 }

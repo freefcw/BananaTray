@@ -1,8 +1,10 @@
 use super::codeium_family::{self, ANTIGRAVITY_SPEC};
 use super::AiProvider;
+use super::ProviderError;
 use crate::models::RefreshData;
 use anyhow::Result;
 use async_trait::async_trait;
+use log::warn;
 
 super::define_unit_provider!(AntigravityProvider);
 
@@ -17,15 +19,36 @@ impl AiProvider for AntigravityProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
-        codeium_family::refresh_with_fallback(&ANTIGRAVITY_SPEC)
+        refresh_antigravity()
+    }
+}
+
+fn refresh_antigravity() -> Result<RefreshData> {
+    match codeium_family::refresh_live(&ANTIGRAVITY_SPEC) {
+        Ok(data) => Ok(data),
+        Err(live_err) => {
+            warn!(
+                target: "providers",
+                "{} local API failed: {}, falling back to local cache",
+                ANTIGRAVITY_SPEC.log_label,
+                live_err
+            );
+
+            match codeium_family::refresh_cache(&ANTIGRAVITY_SPEC) {
+                Ok(data) => Ok(data),
+                Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
+                    "all sources failed: local API error: {}; cache error: {}",
+                    live_err, cache_err
+                ))
+                .into()),
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::ProviderError;
-
     #[test]
     fn test_classify_unavailable_maps_both_sources_missing() {
         let err = ProviderError::unavailable(ANTIGRAVITY_SPEC.unavailable_message);

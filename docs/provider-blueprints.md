@@ -102,28 +102,32 @@ providers/my_provider/
 ```
 
 当前参考：
-- `antigravity/`
+- `src/providers/antigravity/mod.rs`
+- `src/providers/codeium_family/`
 
-### Antigravity 的稳定分层
+### Codeium-family Provider 的稳定分层
 
-- `mod.rs`
+- provider facade（如 `antigravity/mod.rs`、`windsurf.rs`）
   - 只做 source orchestration
-  - `check_availability()` 判断 live source 或 cache source 任一可用即可
-  - `refresh()` 优先 live source，失败后回退 cache source
-- `live_source.rs`
+  - `check_availability()` 判断共享本地 source 是否至少有一条可用
+  - `refresh()` 决定 fallback 顺序
+- `codeium_family/live_source.rs`
   - 查进程
   - 解析 `--csrf_token`
   - 发现端口
   - 轮询候选 endpoint
   - 调用 API 并转成 `RefreshData`
-- `cache_source.rs`
+- `codeium_family/cache_source.rs`
   - 定位 `state.vscdb`
-  - 读取 `antigravityAuthStatus`
-  - 解出 `userStatusProtoBinaryBase64`
-  - 解析 protobuf
-- `parse_strategy.rs`
+  - 读取 auth status
+  - 解出 `userStatusProtoBinaryBase64` 或走 cachedPlanInfo fallback
+  - 解析本地缓存中的 quota 数据
+- `codeium_family/parse_strategy.rs`
   - 只处理“同一组领域数据的不同载荷格式”
   - 例如：API JSON / cache protobuf
+- provider-specific source（如 `windsurf/seat_source.rs`）
+  - 只处理某个 provider 独有的云端或旁路 source
+  - 不反向塞回共享模块
 
 ### 为什么不要把 `live_source` 和 `parse_strategy` 合并成统一 trait
 

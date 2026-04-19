@@ -1,5 +1,6 @@
 use super::parse_strategy::{ApiParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
+use super::LOCAL_API_SOURCE_LABEL;
 use crate::models::RefreshData;
 use crate::providers::ProviderError;
 use anyhow::{Context, Result};
@@ -17,6 +18,7 @@ static EXT_PORT_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"--extension_server_port\s+(\d+)").unwrap());
 static LISTEN_PORT_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":(\d+)\s+\(LISTEN\)").unwrap());
+static ARG_START_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s--[A-Za-z0-9]").unwrap());
 
 static INSECURE_AGENT: LazyLock<Agent> = LazyLock::new(|| {
     let tls = ureq::tls::TlsConfig::builder()
@@ -41,6 +43,7 @@ static PLAIN_AGENT: LazyLock<Agent> = LazyLock::new(|| {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessInfo {
     pub pid: String,
+    pub binary_path: Option<String>,
     /// 新版 Windsurf 不再通过进程参数传递 csrf_token，改用 stdin_initial_metadata
     pub csrf_token: Option<String>,
     pub extension_port: Option<u16>,
@@ -70,7 +73,8 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     )?;
     let strategy = ApiParseStrategy;
     let (quotas, email, plan_name) = strategy.parse(body.as_bytes())?;
-    Ok(RefreshData::with_account(quotas, email, plan_name))
+    Ok(RefreshData::with_account(quotas, email, plan_name)
+        .with_source_label(LOCAL_API_SOURCE_LABEL))
 }
 
 pub fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
@@ -130,11 +134,16 @@ pub fn resolve_port(process: &ProcessInfo, spec: &CodeiumFamilySpec) -> Result<u
 }
 
 pub(super) fn parse_process_line(line: &str) -> Result<ProcessInfo, ProviderError> {
-    let pid = line
-        .split_whitespace()
-        .next()
-        .ok_or_else(|| ProviderError::parse_failed("no PID in pgrep output"))?
-        .to_string();
+    let line = line.trim();
+    let Some(first_ws) = line.find(char::is_whitespace) else {
+        return Err(ProviderError::parse_failed(
+            "no command line in pgrep output",
+        ));
+    };
+
+    let pid = line[..first_ws].to_string();
+    let command_line = line[first_ws..].trim_start();
+    let binary_path = extract_binary_path(command_line);
 
     let csrf_token = CSRF_RE
         .captures(line)
@@ -155,9 +164,23 @@ pub(super) fn parse_process_line(line: &str) -> Result<ProcessInfo, ProviderErro
 
     Ok(ProcessInfo {
         pid,
+        binary_path,
         csrf_token,
         extension_port,
     })
+}
+
+fn extract_binary_path(command_line: &str) -> Option<String> {
+    let command_line = command_line.trim();
+    if command_line.is_empty() {
+        return None;
+    }
+
+    if let Some(arg_start) = ARG_START_RE.find(command_line) {
+        return Some(command_line[..arg_start.start()].trim_end().to_string());
+    }
+
+    Some(command_line.to_string())
 }
 
 pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> Result<u16> {
@@ -333,6 +356,10 @@ mod tests {
         let process = parse_process_line(line).unwrap();
 
         assert_eq!(process.pid, "12345");
+        assert_eq!(
+            process.binary_path,
+            Some("language_server_macos_arm".to_string())
+        );
         assert_eq!(process.csrf_token, Some("abc123".to_string()));
         assert_eq!(process.extension_port, Some(4242));
     }
@@ -344,7 +371,27 @@ mod tests {
         let process = parse_process_line(line).unwrap();
 
         assert_eq!(process.pid, "11162");
+        assert_eq!(
+            process.binary_path,
+            Some("/Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm".to_string())
+        );
         assert_eq!(process.csrf_token, None);
+        assert_eq!(process.extension_port, Some(59012));
+    }
+
+    #[test]
+    fn test_parse_process_line_with_space_in_app_bundle_path() {
+        let line = "22222 /Applications/Windsurf 2.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --extension_server_port 59012 --ide_name windsurf";
+        let process = parse_process_line(line).unwrap();
+
+        assert_eq!(process.pid, "22222");
+        assert_eq!(
+            process.binary_path,
+            Some(
+                "/Applications/Windsurf 2.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm"
+                    .to_string()
+            )
+        );
         assert_eq!(process.extension_port, Some(59012));
     }
 

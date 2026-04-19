@@ -19,8 +19,8 @@
 | Cursor | `cursor` | HTTP API + 本地数据 | |
 | MiniMax | `minimax` | HTTP API | |
 | Kiro | `kiro` | CLI | |
-| Antigravity | `antigravity` | 本地服务 + 本地缓存回退 | 见 `antigravity-api.md` |
-| Windsurf | `windsurf` | 本地服务 + 本地缓存回退 | 见 `antigravity-api.md` |
+| Antigravity | `antigravity` | 本地服务 + 本地缓存回退 | provider facade 自己编排 `live -> cache`，见 `antigravity-api.md` |
+| Windsurf | `windsurf` | 本地服务 + seat API + 本地缓存回退 | provider facade 自己编排 `live -> seat -> cache`；若 seat 只返回日配额，则再用本地缓存补周配额。见 `antigravity-api.md` |
 | Kilo | `kilo` | 占位 / 安装检测 | 不做真实配额拉取 |
 | OpenCode | `opencode` | 占位 / 安装检测 | 不做真实配额拉取 |
 | Vertex AI | `vertexai` | 占位 / 环境检测 | 不做真实配额拉取 |

@@ -1,10 +1,18 @@
+mod seat_source;
+
 use super::codeium_family::{self, WINDSURF_SPEC};
 use super::AiProvider;
+use super::ProviderError;
+use crate::models::QuotaLabelSpec;
 use crate::models::RefreshData;
 use anyhow::Result;
 use async_trait::async_trait;
+use log::{debug, warn};
 
 super::define_unit_provider!(WindsurfProvider);
+
+const SEAT_API_SOURCE_LABEL: &str = "seat api";
+const SEAT_AND_CACHE_SOURCE_LABEL: &str = "seat api + local cache";
 
 #[async_trait]
 impl AiProvider for WindsurfProvider {
@@ -17,14 +25,118 @@ impl AiProvider for WindsurfProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
-        codeium_family::refresh_with_fallback(&WINDSURF_SPEC)
+        refresh_windsurf()
+    }
+}
+
+fn refresh_windsurf() -> Result<RefreshData> {
+    match codeium_family::refresh_live(&WINDSURF_SPEC) {
+        Ok(data) => Ok(data),
+        Err(live_err) => {
+            warn!(
+                target: "providers",
+                "{} local API failed: {}, trying seat management API",
+                WINDSURF_SPEC.log_label,
+                live_err
+            );
+
+            match seat_source::fetch_refresh_data(&WINDSURF_SPEC) {
+                Ok(seat_data) => {
+                    if seat_data.quotas.len() == 1 {
+                        match codeium_family::refresh_cache(&WINDSURF_SPEC) {
+                            Ok(cache_data) => {
+                                return Ok(merge_seat_and_cache_quotas(&seat_data, &cache_data));
+                            }
+                            Err(cache_err) => {
+                                debug!(
+                                    target: "providers",
+                                    "{} cache fallback for weekly quota failed: {}, returning seat data only",
+                                    WINDSURF_SPEC.log_label,
+                                    cache_err
+                                );
+                            }
+                        }
+                    }
+                    Ok(seat_data)
+                }
+                Err(seat_err) => {
+                    warn!(
+                        target: "providers",
+                        "{} seat management API failed: {}, falling back to local cache",
+                        WINDSURF_SPEC.log_label,
+                        seat_err
+                    );
+
+                    match codeium_family::refresh_cache(&WINDSURF_SPEC) {
+                        Ok(data) => Ok(data),
+                        Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
+                            "all sources failed: local API error: {}; seat API error: {}; cache error: {}",
+                            live_err, seat_err, cache_err
+                        ))
+                        .into()),
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 合并 Seat API 和 Cache 数据：用 Seat 的实时日配额 + Cache 的周配额。
+fn merge_seat_and_cache_quotas(seat_data: &RefreshData, cache_data: &RefreshData) -> RefreshData {
+    let mut merged_quotas = seat_data.quotas.clone();
+    let mut cache_contributed = false;
+
+    for quota in &cache_data.quotas {
+        let label_text = match &quota.label_spec {
+            QuotaLabelSpec::Raw(s) => s.as_str(),
+            _ => "",
+        };
+        let is_weekly =
+            quota.stable_key.contains("weekly") || label_text.to_lowercase().contains("weekly");
+        if is_weekly
+            && !merged_quotas
+                .iter()
+                .any(|q| q.stable_key == quota.stable_key)
+        {
+            merged_quotas.push(quota.clone());
+            cache_contributed = true;
+        }
+    }
+
+    let account_email = seat_data
+        .account_email
+        .clone()
+        .or_else(|| cache_data.account_email.clone());
+    let account_tier = seat_data
+        .account_tier
+        .clone()
+        .or_else(|| cache_data.account_tier.clone());
+
+    if seat_data.account_email.is_none() && account_email.is_some() {
+        cache_contributed = true;
+    }
+    if seat_data.account_tier.is_none() && account_tier.is_some() {
+        cache_contributed = true;
+    }
+
+    let merged = RefreshData::with_account(merged_quotas, account_email, account_tier);
+
+    if cache_contributed {
+        merged.with_source_label(SEAT_AND_CACHE_SOURCE_LABEL)
+    } else {
+        merged.with_source_label(
+            seat_data
+                .source_label
+                .as_deref()
+                .unwrap_or(SEAT_API_SOURCE_LABEL),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::ProviderError;
+    use crate::models::{QuotaInfo, QuotaType};
 
     #[test]
     fn test_classify_unavailable_maps_both_sources_missing() {
@@ -42,5 +154,85 @@ mod tests {
     fn test_rejects_antigravity_process() {
         let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc --extension_server_port 57048 --app_data_dir antigravity";
         assert!(!codeium_family::matches_process_line(line, &WINDSURF_SPEC));
+    }
+
+    #[test]
+    fn test_merge_seat_and_cache_quotas_adds_weekly() {
+        let seat_data = RefreshData::with_account(
+            vec![QuotaInfo::with_details(
+                "Daily Quota",
+                50.0,
+                100.0,
+                QuotaType::ModelSpecific("Daily Quota".to_string()),
+                None,
+            )],
+            Some("test@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label(SEAT_API_SOURCE_LABEL);
+
+        let cache_data = RefreshData::with_account(
+            vec![
+                QuotaInfo::with_details(
+                    "Daily Quota",
+                    45.0,
+                    100.0,
+                    QuotaType::ModelSpecific("Daily Quota".to_string()),
+                    None,
+                ),
+                QuotaInfo::with_details(
+                    "Weekly Quota",
+                    80.0,
+                    100.0,
+                    QuotaType::ModelSpecific("Weekly Quota".to_string()),
+                    None,
+                ),
+            ],
+            Some("test@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local cache");
+
+        let merged = merge_seat_and_cache_quotas(&seat_data, &cache_data);
+
+        assert_eq!(merged.quotas.len(), 2);
+        assert_eq!(merged.account_email, Some("test@example.com".to_string()));
+        assert_eq!(merged.account_tier, Some("Pro".to_string()));
+        assert_eq!(
+            merged.source_label,
+            Some(SEAT_AND_CACHE_SOURCE_LABEL.to_string())
+        );
+    }
+
+    #[test]
+    fn test_merge_seat_and_cache_quotas_falls_back_to_cache_account_metadata() {
+        let seat_data = RefreshData::with_account(
+            vec![QuotaInfo::with_details(
+                "Daily Quota",
+                20.0,
+                100.0,
+                QuotaType::ModelSpecific("Daily Quota".to_string()),
+                None,
+            )],
+            None,
+            None,
+        )
+        .with_source_label(SEAT_API_SOURCE_LABEL);
+
+        let cache_data = RefreshData::with_account(
+            vec![],
+            Some("cached@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local cache");
+
+        let merged = merge_seat_and_cache_quotas(&seat_data, &cache_data);
+
+        assert_eq!(merged.account_email, Some("cached@example.com".to_string()));
+        assert_eq!(merged.account_tier, Some("Pro".to_string()));
+        assert_eq!(
+            merged.source_label,
+            Some(SEAT_AND_CACHE_SOURCE_LABEL.to_string())
+        );
     }
 }
