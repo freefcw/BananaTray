@@ -16,6 +16,7 @@ pub struct SystemSettings {
     pub start_at_login: bool,
     /// 自动刷新间隔（分钟），0 表示禁用自动刷新
     pub refresh_interval_mins: u64,
+    #[serde(default = "default_global_hotkey")]
     pub global_hotkey: String,
 }
 
@@ -25,7 +26,7 @@ impl Default for SystemSettings {
             auto_hide_window: true,
             start_at_login: false,
             refresh_interval_mins: Self::DEFAULT_REFRESH_INTERVAL_MINS,
-            global_hotkey: "Cmd+Shift+S".to_string(),
+            global_hotkey: default_global_hotkey(),
         }
     }
 }
@@ -33,6 +34,13 @@ impl Default for SystemSettings {
 impl SystemSettings {
     /// 默认刷新间隔（分钟）— 供 RefreshScheduler 等模块引用，保持单一来源。
     pub const DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5;
+    /// 默认全局热键，使用可回读的持久化格式保存。
+    #[cfg(target_os = "macos")]
+    pub const DEFAULT_GLOBAL_HOTKEY: &'static str = "cmd-shift-s";
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    pub const DEFAULT_GLOBAL_HOTKEY: &'static str = "super-shift-s";
+    #[cfg(target_os = "windows")]
+    pub const DEFAULT_GLOBAL_HOTKEY: &'static str = "win-shift-s";
 }
 
 /// 通知设置
@@ -314,6 +322,10 @@ fn default_true() -> bool {
 
 fn default_language() -> String {
     "system".to_string()
+}
+
+fn default_global_hotkey() -> String {
+    SystemSettings::DEFAULT_GLOBAL_HOTKEY.to_string()
 }
 
 // ============================================================================

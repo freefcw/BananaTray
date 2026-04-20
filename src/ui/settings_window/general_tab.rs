@@ -1,11 +1,17 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
-use crate::application::{AppAction, SettingChange};
+use crate::application::{AppAction, GlobalHotkeyError, SettingChange};
 use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{render_action_button, ButtonVariant};
-use gpui::{div, px, relative, rgb, Div, ParentElement, Styled};
+use crate::ui::widgets::{
+    render_action_button, render_hotkey_field, render_icon_row, ButtonVariant,
+};
+use adabraka_ui::components::hotkey_input::HotkeyValue;
+use gpui::{
+    div, px, relative, rgb, Context, Div, InteractiveElement, Keystroke, MouseButton,
+    ParentElement, Styled, Window,
+};
 use rust_i18n::t;
 
 // 设计稿颜色常量 — 各设置项的彩色图标背景
@@ -13,11 +19,18 @@ const ICON_BG_LOGIN: u32 = 0x3b30a6; // 紫蓝色 (Start at Login)
 const ICON_BG_REFRESH: u32 = 0xb55a10; // 琥珀橙色 (Refresh Rate)
 const ICON_BG_NOTIF: u32 = 0xa62828; // 深红色 (Quota Notifications)
 const ICON_BG_SOUND: u32 = 0x6b3fa0; // 紫色 (Notification Sound)
+const ICON_BG_HOTKEY: u32 = 0x165a93; // 深蓝色 (Global Hotkey)
 const ICON_FG: u32 = 0xffffff; // 图标前景色统一白色
 
 impl SettingsView {
     /// Render General settings tab — 匹配设计稿风格
-    pub(super) fn render_general_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
+    pub(super) fn render_general_tab(
+        &mut self,
+        settings: &AppSettings,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let state = self.state.clone();
 
         // ── SYSTEM section ───────────────────────────────────
@@ -43,23 +56,28 @@ impl SettingsView {
             .pb(px(16.0))
             // ═══════ SYSTEM ═══════
             .child(render_section_header(&t!("settings.section.system"), theme))
-            .child(render_dark_card(theme).child(Self::render_icon_switch_row(
-                "src/icons/switch.svg",
-                rgb(ICON_FG).into(),
-                rgb(ICON_BG_LOGIN).into(),
-                &t!("settings.start_at_login"),
-                &t!("settings.start_at_login.desc"),
-                login_checked,
-                theme,
-                move |_, window, cx| {
-                    runtime::dispatch_in_window(
-                        &login_state,
-                        AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
-                        window,
-                        cx,
-                    );
-                },
-            )))
+            .child(
+                render_dark_card(theme)
+                    .child(Self::render_icon_switch_row(
+                        "src/icons/switch.svg",
+                        rgb(ICON_FG).into(),
+                        rgb(ICON_BG_LOGIN).into(),
+                        &t!("settings.start_at_login"),
+                        &t!("settings.start_at_login.desc"),
+                        login_checked,
+                        theme,
+                        move |_, window, cx| {
+                            runtime::dispatch_in_window(
+                                &login_state,
+                                AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
+                                window,
+                                cx,
+                            );
+                        },
+                    ))
+                    .child(render_divider(theme))
+                    .child(self.render_global_hotkey_setting(settings, theme, window, cx)),
+            )
             // ═══════ AUTOMATION ═══════
             .child(render_section_header(
                 &t!("settings.section.automation"),
@@ -122,6 +140,171 @@ impl SettingsView {
             .child(self.render_quit_button(theme))
     }
 
+    fn render_global_hotkey_setting(
+        &mut self,
+        settings: &AppSettings,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let state = self.state.clone();
+        let view_entity = cx.entity().clone();
+        let input_entity = self.ensure_global_hotkey_input(&settings.system.global_hotkey, cx);
+        let (captured_hotkey, is_recording) = {
+            let input = input_entity.read(cx);
+            (input.hotkey().cloned(), input.is_recording())
+        };
+        let captured_persisted = captured_hotkey.as_ref().map(Self::persist_hotkey_candidate);
+        let is_dirty =
+            captured_persisted.as_deref() != Some(settings.system.global_hotkey.as_str());
+        let preview_error = if is_dirty {
+            captured_persisted
+                .as_deref()
+                .and_then(|hotkey| runtime::global_hotkey::parse_hotkey_string(hotkey).err())
+        } else {
+            None
+        };
+        let can_save = !is_recording && captured_hotkey.is_some() && preview_error.is_none();
+        let (runtime_error, runtime_error_candidate) = {
+            let state = self.state.borrow();
+            (
+                state.session.settings_ui.global_hotkey_error.clone(),
+                state
+                    .session
+                    .settings_ui
+                    .global_hotkey_error_candidate
+                    .clone(),
+            )
+        };
+        let hotkey_error = displayed_hotkey_error(
+            preview_error,
+            runtime_error.as_ref(),
+            runtime_error_candidate.as_deref(),
+            captured_persisted.as_deref(),
+            is_dirty,
+        );
+        let save_input = input_entity.clone();
+
+        let hotkey_input = render_hotkey_field(
+            &input_entity,
+            t!("settings.global_hotkey.placeholder").into(),
+            move |cx| {
+                view_entity.update(cx, |_, cx| cx.notify());
+            },
+            theme,
+            window,
+            cx,
+        );
+        let save_button = if can_save {
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(14.0))
+                .py(px(8.0))
+                .rounded(px(8.0))
+                .bg(theme.text.accent)
+                .text_size(px(12.5))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.element.active)
+                .cursor_pointer()
+                .hover(|style| style.opacity(0.9))
+                .child(t!("settings.global_hotkey.save").to_string())
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    let hotkey = save_input
+                        .read(cx)
+                        .hotkey()
+                        .cloned()
+                        .map(|hotkey| Self::persist_hotkey_candidate(&hotkey))
+                        .unwrap_or_default();
+                    runtime::dispatch_in_window(
+                        &state,
+                        AppAction::SaveGlobalHotkey(hotkey),
+                        window,
+                        cx,
+                    );
+                })
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(14.0))
+                .py(px(8.0))
+                .rounded(px(8.0))
+                .bg(theme.bg.card_inner)
+                .text_size(px(12.5))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text.muted)
+                .cursor_not_allowed()
+                .child(t!("settings.global_hotkey.save").to_string())
+        };
+
+        let mut content = div()
+            .flex_col()
+            .px(px(14.0))
+            .pb(px(12.0))
+            .child(render_icon_row(
+                "src/icons/settings.svg",
+                rgb(ICON_FG).into(),
+                rgb(ICON_BG_HOTKEY).into(),
+                &t!("settings.global_hotkey"),
+                &t!("settings.global_hotkey.desc"),
+                theme,
+                save_button,
+            ))
+            .child(hotkey_input)
+            .child(
+                div()
+                    .mt(px(8.0))
+                    .text_size(px(11.5))
+                    .text_color(theme.text.muted)
+                    .child(t!("settings.global_hotkey.hint").to_string()),
+            );
+
+        if let Some(error) = hotkey_error.as_ref() {
+            content = content.child(
+                div()
+                    .mt(px(8.0))
+                    .text_size(px(11.5))
+                    .line_height(relative(1.4))
+                    .text_color(theme.status.error)
+                    .child(Self::global_hotkey_error_text(error)),
+            );
+        }
+
+        content
+    }
+
+    fn global_hotkey_error_text(error: &GlobalHotkeyError) -> String {
+        match error {
+            GlobalHotkeyError::Empty => t!("settings.global_hotkey.error.empty").to_string(),
+            GlobalHotkeyError::InvalidFormat => {
+                t!("settings.global_hotkey.error.invalid").to_string()
+            }
+            GlobalHotkeyError::MissingModifier => {
+                t!("settings.global_hotkey.error.modifier_required").to_string()
+            }
+            GlobalHotkeyError::ModifierOnly => {
+                t!("settings.global_hotkey.error.key_required").to_string()
+            }
+            GlobalHotkeyError::Conflict(detail) => {
+                t!("settings.global_hotkey.error.conflict", detail = detail).to_string()
+            }
+            GlobalHotkeyError::RegistrationFailed(detail) => {
+                t!("settings.global_hotkey.error.register", detail = detail).to_string()
+            }
+        }
+    }
+
+    fn persist_hotkey_candidate(hotkey: &HotkeyValue) -> String {
+        runtime::global_hotkey::format_hotkey_for_settings(&Keystroke {
+            modifiers: hotkey.modifiers,
+            key: hotkey.key.clone(),
+            key_char: None,
+        })
+    }
+
     /// 退出按钮 — 使用 render_action_button (Danger 变体)，1/3 宽度右对齐
     fn render_quit_button(&self, theme: &Theme) -> Div {
         let state = self.state.clone();
@@ -139,5 +322,77 @@ impl SettingsView {
                     runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
                 },
             )))
+    }
+}
+
+fn displayed_hotkey_error(
+    preview_error: Option<GlobalHotkeyError>,
+    runtime_error: Option<&GlobalHotkeyError>,
+    runtime_error_candidate: Option<&str>,
+    current_candidate: Option<&str>,
+    is_dirty: bool,
+) -> Option<GlobalHotkeyError> {
+    if let Some(error) = preview_error {
+        return Some(error);
+    }
+
+    let runtime_error = runtime_error.cloned()?;
+    if !is_dirty {
+        return Some(runtime_error);
+    }
+
+    if runtime_error_candidate.is_some() && runtime_error_candidate == current_candidate {
+        return Some(runtime_error);
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dirty_input_still_shows_runtime_error_for_same_failed_candidate() {
+        let error = GlobalHotkeyError::Conflict("taken".to_string());
+
+        assert_eq!(
+            displayed_hotkey_error(
+                None,
+                Some(&error),
+                Some("cmd-shift-s"),
+                Some("cmd-shift-s"),
+                true
+            ),
+            Some(error)
+        );
+    }
+
+    #[test]
+    fn dirty_input_hides_runtime_error_after_user_changes_candidate() {
+        assert_eq!(
+            displayed_hotkey_error(
+                None,
+                Some(&GlobalHotkeyError::Conflict("taken".to_string())),
+                Some("cmd-shift-s"),
+                Some("cmd-shift-k"),
+                true
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn preview_error_takes_priority_over_runtime_error() {
+        assert_eq!(
+            displayed_hotkey_error(
+                Some(GlobalHotkeyError::MissingModifier),
+                Some(&GlobalHotkeyError::Conflict("taken".to_string())),
+                Some("cmd-shift-s"),
+                Some("s"),
+                true
+            ),
+            Some(GlobalHotkeyError::MissingModifier)
+        );
     }
 }

@@ -11,7 +11,8 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`AppSession`** — 顶层会话状态，组合各子状态
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` 等查询方法
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
-- **`SettingsUiState`** — 设置窗口的临时 UI 状态
+- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、Provider picker、NewAPI 表单态，以及全局热键错误及其对应候选值的回填）
+- **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
 - **`DebugUiState`** — Debug Tab 状态
 - **`SettingsTab`** — 设置窗口 Tab 枚举
 - **`HeaderStatusKind`** — 头部状态徽章类型（Synced/Syncing/Stale/Offline）
@@ -24,6 +25,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 ### `action.rs` — 动作定义
 
 - **`AppAction`** — 所有用户交互和系统事件的枚举（导航、设置变更、Provider 操作、调试等）
+  - `SaveGlobalHotkey(String)` 将 General Tab 捕获到的候选热键提交给 runtime 做预检、重绑和持久化
 - **`SettingChange`** — 设置变更子枚举
 - **`DebugNotificationKind`** — 调试通知类型
 
@@ -32,6 +34,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer，将 action 转换为状态变更 + side effects
 - **`build_config_sync_request()`** — 构建配置同步请求
 - 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `process_refresh_outcome()` / `cleanup_dangling_refs()`
+- **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `SaveNewApiProvider` effect；`EditNewApi` 的磁盘读取委托给 `LoadNewApiConfig` effect
 - **NewAPI 删除流**：`DeleteNewApi` 会先清空 `confirming_delete_newapi`，然后委托 `DeleteNewApiProvider` effect 执行磁盘删除
 
@@ -40,7 +43,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 ### `effect.rs` — 副作用声明
 
 - **`AppEffect`** — 两级副作用枚举（`Context(ContextEffect)` / `Common(CommonEffect)`）
-  - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / QuitApp）
+  - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / ApplyGlobalHotkey / QuitApp）
   - `CommonEffect` — GPUI-free 的 effect（PersistSettings / SendRefreshRequest / 通知 / SaveNewApiProvider / DeleteNewApiProvider / LoadNewApiConfig 等）
   - `From<ContextEffect>` / `From<CommonEffect>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）

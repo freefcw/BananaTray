@@ -84,6 +84,12 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
                 effects.push(ContextEffect::Render.into());
             }
         }
+        AppAction::SaveGlobalHotkey(hotkey) => {
+            session.settings_ui.global_hotkey_error = None;
+            session.settings_ui.global_hotkey_error_candidate = None;
+            effects.push(ContextEffect::ApplyGlobalHotkey(hotkey).into());
+            effects.push(ContextEffect::Render.into());
+        }
         AppAction::UpdateSetting(change) => {
             apply_setting_change(session, change, &mut effects);
         }
