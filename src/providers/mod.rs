@@ -70,7 +70,6 @@ pub(crate) use define_unit_provider;
 /// - selector/UI 再基于 `ProviderFailure` 和当前 locale 生成字符串
 /// - `raw_detail` 只承载技术细节或上游原文，不承载本地化外壳文案
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // 某些变体预留给未来使用
 pub enum ProviderError {
     // ── 面向用户的提示（国际化）──────────────────────────
     /// CLI 未安装或找不到
@@ -80,8 +79,10 @@ pub enum ProviderError {
     /// OAuth 会话已过期
     SessionExpired { advice: Option<FailureAdvice> },
     /// 需要信任文件夹（Claude CLI 特有）
+    #[allow(dead_code)] // 预留给 Claude CLI trust-flow 场景
     FolderTrustRequired,
     /// CLI 需要更新
+    #[allow(dead_code)] // 预留给 CLI 版本检测场景
     UpdateRequired { version: Option<String> },
     /// 配置缺失（环境变量、配置文件、Token 等）
     ConfigMissing { key: String },
