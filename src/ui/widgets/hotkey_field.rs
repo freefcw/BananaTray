@@ -1,8 +1,10 @@
-//! 热键录入输入框 — 使用 BananaTray Theme 样式，与 NewAPI 表单输入框视觉一致
+//! 热键录入输入框 — 使用 BananaTray Theme 样式
 //!
 //! 包裹 adabraka-ui 的 `HotkeyInputState` entity，提供 click-to-record / keydown 交互，
 //! 同时使用 `theme.bg.card` / `theme.border.strong` / `theme.text.accent` 等 Token
 //! 替代 adabraka-ui 内置主题，保证全局视觉一致性。
+//!
+//! 紧凑内联 chip 样式 — 用于设置行 trailing 控件位置，与 toggle / dropdown 行保持一致风格。
 
 use crate::theme::Theme;
 use adabraka_ui::components::hotkey_input::HotkeyInputState;
@@ -11,12 +13,14 @@ use gpui::{
     ParentElement, SharedString, Stateful, Styled, Window,
 };
 
-/// 渲染一个与 NewAPI 表单输入框视觉一致的热键录入框
+/// 紧凑内联热键录入控件 — 用于设置行 trailing 位置（类似 dropdown trigger 的 chip 风格）
+///
+/// 固定最小宽度，点击进入录制模式；与 `render_icon_row` 的 trailing 槽位配合使用。
 ///
 /// - `input_entity`: `HotkeyInputState` entity，管理录制生命周期
 /// - `placeholder`: 未录入时的占位文本
 /// - `on_capture`: 每次成功录入后的回调（用于通知父视图刷新）
-pub(crate) fn render_hotkey_field(
+pub(crate) fn render_hotkey_field_inline(
     input_entity: &Entity<HotkeyInputState>,
     placeholder: SharedString,
     on_capture: impl Fn(&mut gpui::App) + 'static,
@@ -39,7 +43,9 @@ pub(crate) fn render_hotkey_field(
         placeholder
     };
 
-    let text_color = if hotkey.is_some() && !is_recording {
+    let text_color = if is_recording {
+        theme.text.accent
+    } else if hotkey.is_some() {
         theme.text.primary
     } else {
         theme.text.muted
@@ -51,24 +57,33 @@ pub(crate) fn render_hotkey_field(
         theme.border.strong
     };
 
+    let bg = if is_recording {
+        theme.bg.subtle
+    } else {
+        theme.bg.base
+    };
+
     let state_for_click = input_entity.clone();
     let state_for_keydown = input_entity.clone();
 
     div()
-        .id(("hotkey-input", input_entity.entity_id()))
+        .id(("hotkey-inline", input_entity.entity_id()))
         .key_context("HotkeyInput")
         .track_focus(&tracked_focus)
-        .w_full()
         .flex()
+        .flex_shrink_0()
         .items_center()
+        .justify_center()
         .px(px(12.0))
-        .py(px(8.0))
-        .h(px(36.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
+        .py(px(6.0))
+        .h(px(32.0))
+        .min_w(px(80.0))
+        .rounded(px(6.0))
+        .bg(bg)
         .border_1()
         .border_color(border_color)
         .text_size(px(13.0))
+        .font_weight(gpui::FontWeight::MEDIUM)
         .text_color(text_color)
         .cursor_pointer()
         .on_mouse_down(MouseButton::Left, {
@@ -93,7 +108,7 @@ pub(crate) fn render_hotkey_field(
         })
         .child(
             div()
-                .flex_1()
+                .whitespace_nowrap()
                 .when(is_recording, |d| d.opacity(0.7))
                 .child(display_text),
         )

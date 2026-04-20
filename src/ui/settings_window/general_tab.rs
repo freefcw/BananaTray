@@ -5,12 +5,12 @@ use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
-    render_action_button, render_hotkey_field, render_icon_row, ButtonVariant,
+    render_action_button, render_hotkey_field_inline, render_icon_row, ButtonVariant,
 };
 use adabraka_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
-    div, px, relative, rgb, Context, Div, InteractiveElement, Keystroke, MouseButton,
-    ParentElement, Styled, Window,
+    div, prelude::FluentBuilder, px, relative, rgb, Context, Div, InteractiveElement, Keystroke,
+    MouseButton, ParentElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -165,6 +165,7 @@ impl SettingsView {
             None
         };
         let can_save = !is_recording && captured_hotkey.is_some() && preview_error.is_none();
+        let show_save = can_save && is_dirty;
         let (runtime_error, runtime_error_candidate) = {
             let state = self.state.borrow();
             (
@@ -185,7 +186,8 @@ impl SettingsView {
         );
         let save_input = input_entity.clone();
 
-        let hotkey_input = render_hotkey_field(
+        // ── 紧凑内联热键录入控件 ──
+        let hotkey_chip = render_hotkey_field_inline(
             &input_entity,
             t!("settings.global_hotkey.placeholder").into(),
             move |cx| {
@@ -195,55 +197,50 @@ impl SettingsView {
             window,
             cx,
         );
-        let save_button = if can_save {
-            div()
-                .flex()
-                .items_center()
-                .justify_center()
-                .px(px(14.0))
-                .py(px(8.0))
-                .rounded(px(8.0))
-                .bg(theme.text.accent)
-                .text_size(px(12.5))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(theme.element.active)
-                .cursor_pointer()
-                .hover(|style| style.opacity(0.9))
-                .child(t!("settings.global_hotkey.save").to_string())
-                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                    let hotkey = save_input
-                        .read(cx)
-                        .hotkey()
-                        .cloned()
-                        .map(|hotkey| Self::persist_hotkey_candidate(&hotkey))
-                        .unwrap_or_default();
-                    runtime::dispatch_in_window(
-                        &state,
-                        AppAction::SaveGlobalHotkey(hotkey),
-                        window,
-                        cx,
-                    );
-                })
-        } else {
-            div()
-                .flex()
-                .items_center()
-                .justify_center()
-                .px(px(14.0))
-                .py(px(8.0))
-                .rounded(px(8.0))
-                .bg(theme.bg.card_inner)
-                .text_size(px(12.5))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(theme.text.muted)
-                .cursor_not_allowed()
-                .child(t!("settings.global_hotkey.save").to_string())
-        };
 
-        let mut content = div()
+        // ── trailing 组合：hotkey chip + 按需出现的 save 按钮 ──
+        let trailing = div()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap(px(8.0))
+            .child(hotkey_chip)
+            .when(show_save, |el| {
+                el.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .px(px(10.0))
+                        .py(px(5.0))
+                        .rounded(px(6.0))
+                        .bg(theme.text.accent)
+                        .text_size(px(12.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.element.active)
+                        .cursor_pointer()
+                        .hover(|style| style.opacity(0.9))
+                        .child(t!("settings.global_hotkey.save").to_string())
+                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                            let hotkey = save_input
+                                .read(cx)
+                                .hotkey()
+                                .cloned()
+                                .map(|hotkey| Self::persist_hotkey_candidate(&hotkey))
+                                .unwrap_or_default();
+                            runtime::dispatch_in_window(
+                                &state,
+                                AppAction::SaveGlobalHotkey(hotkey),
+                                window,
+                                cx,
+                            );
+                        }),
+                )
+            });
+
+        // ── 整体布局：icon_row + 可选的 inline note ──
+        div()
             .flex_col()
-            .px(px(14.0))
-            .pb(px(12.0))
             .child(render_icon_row(
                 "src/icons/settings.svg",
                 rgb(ICON_FG).into(),
@@ -251,29 +248,30 @@ impl SettingsView {
                 &t!("settings.global_hotkey"),
                 &t!("settings.global_hotkey.desc"),
                 theme,
-                save_button,
+                trailing,
             ))
-            .child(hotkey_input)
-            .child(
-                div()
-                    .mt(px(8.0))
-                    .text_size(px(11.5))
-                    .text_color(theme.text.muted)
-                    .child(t!("settings.global_hotkey.hint").to_string()),
-            );
+            .when_some(hotkey_error.as_ref(), |el, error| {
+                el.child(Self::render_inline_note(
+                    &Self::global_hotkey_error_text(error),
+                    theme.status.error,
+                ))
+            })
+            .when(is_recording, |el| {
+                el.child(Self::render_inline_note(
+                    &t!("settings.global_hotkey.hint"),
+                    theme.text.muted,
+                ))
+            })
+    }
 
-        if let Some(error) = hotkey_error.as_ref() {
-            content = content.child(
-                div()
-                    .mt(px(8.0))
-                    .text_size(px(11.5))
-                    .line_height(relative(1.4))
-                    .text_color(theme.status.error)
-                    .child(Self::global_hotkey_error_text(error)),
-            );
-        }
-
-        content
+    /// 行下方的紧凑右对齐备注（错误/提示复用）
+    fn render_inline_note(text: &str, color: gpui::Hsla) -> Div {
+        div().px(px(14.0)).pb(px(8.0)).flex().justify_end().child(
+            div()
+                .text_size(px(11.0))
+                .text_color(color)
+                .child(text.to_string()),
+        )
     }
 
     fn global_hotkey_error_text(error: &GlobalHotkeyError) -> String {

@@ -36,7 +36,7 @@
 
 | 文件 | 组件 | 说明 |
 |------|------|------|
-| `hotkey_field.rs` | `render_hotkey_field()` | 热键录入输入框，包裹 adabraka-ui HotkeyInputState，使用 BananaTray Theme 样式 |
+| `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 adabraka-ui HotkeyInputState，用于设置行 trailing 位置 |
 | `input_actions.rs` | `register_input_actions()` | 注册 Ctrl+A/C/V/X 等输入快捷键的 GPUI action（配合 adabraka-ui InputState/TextareaState 使用） |
 
 ### 辅助
