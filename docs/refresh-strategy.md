@@ -48,6 +48,7 @@
 - provider 刷新运行在后台，不阻塞 GPUI 前台事件处理。
 - 多个 provider 可以并发刷新。
 - 后台会为单个 provider 刷新套一层协调器级 timeout guard，避免单个卡死任务把整轮结果拖住。
+- 这个 timeout guard 只负责“停止等待并清理 in-flight 状态”，不会强制取消底层已经跑出去的阻塞任务。
 
 ## Result Semantics
 

@@ -80,6 +80,22 @@ fn global_actions_is_refreshing_when_provider_refreshing() {
 }
 
 #[test]
+fn global_actions_hide_refresh_for_non_monitorable_provider() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+
+    let provider = make_provider(ProviderKind::Kilo, ConnectionStatus::Disconnected);
+    let session = make_session_with_provider(settings, provider);
+    let actions = tray_global_actions_view_state(&session);
+
+    assert!(!actions.show_refresh);
+    assert!(actions.refresh.target.is_none());
+}
+
+#[test]
 fn global_actions_refresh_id_none_on_settings_tab() {
     let _locale_guard = setup_locale();
     let settings = AppSettings::default();
@@ -206,6 +222,33 @@ fn detail_returns_disabled_when_provider_is_disabled() {
         matches!(view, ProviderDetailViewState::Disabled(ref d) if d.id == pid(ProviderKind::Gemini)),
         "expected Disabled variant"
     );
+}
+
+#[test]
+fn detail_non_monitorable_provider_has_no_retry_action() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+
+    let provider = make_provider(ProviderKind::Kilo, ConnectionStatus::Disconnected);
+    let session = make_session_with_provider(settings, provider);
+    let view = provider_detail_view_state(&session, &pid(ProviderKind::Kilo));
+
+    match view {
+        ProviderDetailViewState::Panel(panel) => match panel.body {
+            ProviderBodyViewState::Empty(empty) => {
+                assert_eq!(empty.title, "Monitoring unavailable");
+                assert!(empty.action.is_none());
+            }
+            other => panic!(
+                "expected Empty body, got {:?}",
+                std::mem::discriminant(&other)
+            ),
+        },
+        _ => panic!("expected Panel variant"),
+    }
 }
 
 #[test]
@@ -510,6 +553,27 @@ fn overview_shows_error_when_no_quotas() {
             assert_eq!(message, "auth expired");
         }
         other => panic!("expected Error, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_non_monitorable_provider_uses_informational_error_state() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = true;
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+
+    let provider = make_provider(ProviderKind::Kilo, ConnectionStatus::Disconnected);
+    let session = AppSession::new(settings, vec![provider]);
+    let overview = overview_view_state(&session);
+
+    match &overview.items[0].status {
+        OverviewItemStatus::Error { message } => {
+            assert!(message.contains("does not support usage monitoring"));
+        }
+        _ => panic!("expected Error status for non-monitorable provider"),
     }
 }
 

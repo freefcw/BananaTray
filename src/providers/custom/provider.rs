@@ -3,7 +3,9 @@ use async_trait::async_trait;
 use log::{debug, info, warn};
 use std::borrow::Cow;
 
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use crate::providers::common::cli;
 use crate::providers::common::http_client;
 use crate::providers::{AiProvider, ProviderError};
@@ -107,6 +109,13 @@ impl AiProvider for CustomProvider {
             crate::models::SettingsCapability::NewApiEditable
         } else {
             crate::models::SettingsCapability::None
+        }
+    }
+
+    fn provider_capability(&self) -> ProviderCapability {
+        match self.def.source {
+            SourceDef::Placeholder { .. } => ProviderCapability::Placeholder,
+            _ => ProviderCapability::Monitorable,
         }
     }
 }

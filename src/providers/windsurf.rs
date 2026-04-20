@@ -3,8 +3,7 @@ mod seat_source;
 use super::codeium_family::{self, WINDSURF_SPEC};
 use super::AiProvider;
 use super::ProviderError;
-use crate::models::QuotaLabelSpec;
-use crate::models::RefreshData;
+use crate::models::{QuotaType, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
 use log::{debug, warn};
@@ -87,12 +86,8 @@ fn merge_seat_and_cache_quotas(seat_data: &RefreshData, cache_data: &RefreshData
     let mut cache_contributed = false;
 
     for quota in &cache_data.quotas {
-        let label_text = match &quota.label_spec {
-            QuotaLabelSpec::Raw(s) => s.as_str(),
-            _ => "",
-        };
         let is_weekly =
-            quota.stable_key.contains("weekly") || label_text.to_lowercase().contains("weekly");
+            quota.quota_type == QuotaType::Weekly || quota.stable_key.contains("weekly");
         if is_weekly
             && !merged_quotas
                 .iter()

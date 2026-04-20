@@ -316,9 +316,14 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
         .map(|p| (p.provider_id.clone(), p.display_name().to_string()))
         .collect();
+    let selected_provider = session.debug_ui.selected_provider.clone().filter(|id| {
+        available_providers
+            .iter()
+            .any(|(available_id, _)| available_id == id)
+    });
 
     // 从 DebugContext 注入的日志条目转换为 UI ViewState
     let log_count = ctx.captured_logs.len();
@@ -342,7 +347,7 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
 
     DebugConsoleViewState {
         available_providers,
-        selected_provider: session.debug_ui.selected_provider.clone(),
+        selected_provider,
         refresh_active: session.debug_ui.refresh_active,
         log_entries,
         log_count,

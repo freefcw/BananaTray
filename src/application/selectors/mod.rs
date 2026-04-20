@@ -10,7 +10,8 @@ mod tray;
 
 use super::state::HeaderStatusKind;
 use crate::models::{
-    NewApiEditData, ProviderId, QuotaDisplayMode, QuotaInfo, SettingsCapability, StatusLevel,
+    NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
+    SettingsCapability, StatusLevel,
 };
 
 // ── Tray 弹出窗口 ──
@@ -207,6 +208,9 @@ pub struct SettingsProviderDetailViewState {
     pub display_name: String,
     pub subtitle: String,
     pub is_enabled: bool,
+    pub can_refresh: bool,
+    pub show_quota_visibility: bool,
+    pub provider_capability: ProviderCapability,
     pub info: SettingsProviderInfoViewState,
     pub usage: SettingsProviderUsageViewState,
     pub settings_capability: SettingsCapability,

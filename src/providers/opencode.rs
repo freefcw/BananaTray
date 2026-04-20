@@ -1,5 +1,7 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use crate::providers::common::cli;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -24,6 +26,10 @@ impl AiProvider for OpenCodeProvider {
                 source_label: "opencode api".into(),
             },
         }
+    }
+
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Placeholder
     }
 
     async fn check_availability(&self) -> Result<()> {

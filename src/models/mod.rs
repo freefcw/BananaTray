@@ -13,8 +13,8 @@ pub use layout::{
 };
 pub use newapi::{newapi_provider_id, NewApiConfig, NewApiEditData};
 pub use provider::{
-    NavTab, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, SettingsCapability,
-    TokenEditMode, TokenInputCapability, TokenInputState,
+    NavTab, ProviderCapability, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata,
+    SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
 };
 pub use quota::{
     ConnectionStatus, ErrorKind, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,

@@ -6,8 +6,9 @@
 
 use super::QuotaDisplayViewState;
 use crate::models::{
-    ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,
-    QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
+    ConnectionStatus, FailureAdvice, FailureReason, ProviderCapability, ProviderFailure,
+    ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType,
+    UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -78,6 +79,26 @@ pub fn format_failure_message(failure: &ProviderFailure) -> String {
     }
 }
 
+/// 为非可监控 provider 生成统一说明文案。
+pub fn format_non_monitoring_message(provider: &ProviderStatus) -> String {
+    if let Some(failure) = &provider.last_failure {
+        return format_failure_message(failure);
+    }
+
+    match (provider.provider_capability, provider.kind()) {
+        (ProviderCapability::Informational, ProviderKind::VertexAi) => {
+            t!("hint.vertex_shared_quota").to_string()
+        }
+        (ProviderCapability::Placeholder, ProviderKind::Kilo) => {
+            t!("hint.kilo_no_api", name = provider.display_name()).to_string()
+        }
+        (ProviderCapability::Informational | ProviderCapability::Placeholder, _) => {
+            t!("hint.no_monitoring", name = provider.display_name()).to_string()
+        }
+        (ProviderCapability::Monitorable, _) => t!("provider.unknown_error").to_string(),
+    }
+}
+
 fn format_failure_advice(advice: &FailureAdvice) -> String {
     match advice {
         FailureAdvice::LoginCli { cli } => t!("hint.login_cli", cli = cli).to_string(),
@@ -105,6 +126,7 @@ fn format_failure_advice(advice: &FailureAdvice) -> String {
 pub fn format_quota_label(quota: &QuotaInfo) -> String {
     match &quota.label_spec {
         QuotaLabelSpec::Raw(label) => label.clone(),
+        QuotaLabelSpec::Daily => t!("quota.label.daily").to_string(),
         QuotaLabelSpec::Session => t!("quota.label.session").to_string(),
         QuotaLabelSpec::Weekly => t!("quota.label.weekly").to_string(),
         QuotaLabelSpec::WeeklyModel { model } => {
@@ -113,6 +135,7 @@ pub fn format_quota_label(quota: &QuotaInfo) -> String {
         QuotaLabelSpec::WeeklyTier { tier } => {
             format!("{} ({})", t!("quota.label.weekly"), tier)
         }
+        QuotaLabelSpec::MonthlyCredits => t!("quota.label.monthly_credits").to_string(),
         QuotaLabelSpec::Credits => t!("quota.label.credits").to_string(),
         QuotaLabelSpec::BonusCredits => t!("quota.label.bonus_credits").to_string(),
         QuotaLabelSpec::ExtraUsage => t!("quota.label.extra_usage").to_string(),
@@ -339,6 +362,27 @@ mod tests {
             None,
         );
         assert_eq!(format_quota_label(&quota), "Weekly (Moderato)");
+    }
+
+    #[test]
+    fn format_quota_label_daily() {
+        let _locale_guard = setup_locale();
+        let quota =
+            QuotaInfo::with_details(QuotaLabelSpec::Daily, 25.0, 100.0, QuotaType::General, None);
+        assert_eq!(format_quota_label(&quota), "Daily");
+    }
+
+    #[test]
+    fn format_quota_label_monthly_credits() {
+        let _locale_guard = setup_locale();
+        let quota = QuotaInfo::with_details(
+            QuotaLabelSpec::MonthlyCredits,
+            5.0,
+            20.0,
+            QuotaType::Credit,
+            None,
+        );
+        assert_eq!(format_quota_label(&quota), "Monthly Credits");
     }
 
     #[test]

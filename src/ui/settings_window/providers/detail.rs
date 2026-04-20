@@ -3,7 +3,9 @@ use crate::application::{
     AppAction, QuotaVisibilityItem, SettingChange, SettingsProviderDetailViewState,
     SettingsProviderInfoViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-use crate::models::{ProviderId, ProviderKind, QuotaDisplayMode, SettingsCapability};
+use crate::models::{
+    ProviderCapability, ProviderId, ProviderKind, QuotaDisplayMode, SettingsCapability,
+};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -172,7 +174,7 @@ fn render_usage_section(
 }
 
 /// 无需配置的 provider 占位卡片：虚线边框 + 居中图标 + 淡色文字
-fn render_automanaged_placeholder() -> Div {
+fn render_info_placeholder_card(title: &str, description: &str) -> Div {
     let muted_color = hsla(0.0, 0.0, 0.45, 0.5); // 比 text_muted 更淡
     div()
         .mt(px(10.0))
@@ -212,14 +214,14 @@ fn render_automanaged_placeholder() -> Div {
                         .text_size(px(12.5))
                         .text_color(muted_color)
                         .text_align(TextAlign::Center)
-                        .child(t!("provider.settings.auto_title").to_string()),
+                        .child(title.to_string()),
                 )
                 .child(
                     div()
                         .text_size(px(12.0))
                         .text_color(muted_color)
                         .text_align(TextAlign::Center)
-                        .child(t!("provider.settings.auto_desc").to_string()),
+                        .child(description.to_string()),
                 ),
         )
 }
@@ -349,6 +351,7 @@ fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
     id: &ProviderId,
     is_enabled: bool,
+    can_refresh: bool,
     confirming_remove: bool,
     theme: &Theme,
 ) -> Div {
@@ -411,12 +414,11 @@ fn render_detail_action_buttons(
         )
     };
 
-    div()
+    let mut row = div()
         .flex()
         .items_center()
         .gap(px(8.0))
         .child(remove_button)
-        .child(render_refresh_button(state, id.clone(), theme))
         .child(
             crate::ui::widgets::render_toggle_switch(
                 is_enabled,
@@ -433,7 +435,13 @@ fn render_detail_action_buttons(
                     cx,
                 );
             }),
-        )
+        );
+
+    if can_refresh {
+        row = row.child(render_refresh_button(state, id.clone(), theme));
+    }
+
+    row
 }
 
 /// NewAPI 型 provider 的操作按钮行：编辑 + 删除（删除需二次确认）
@@ -645,7 +653,7 @@ impl SettingsView {
             .settings_ui
             .confirming_remove_provider;
 
-        let inner = div()
+        let mut inner = div()
             .flex_col()
             .px(px(24.0))
             .pt(px(20.0))
@@ -666,6 +674,7 @@ impl SettingsView {
                         self.state.clone(),
                         &detail.id,
                         detail.is_enabled,
+                        detail.can_refresh,
                         confirming_remove,
                         theme,
                     )),
@@ -677,21 +686,24 @@ impl SettingsView {
                 &detail.usage,
                 theme,
                 detail.quota_display_mode,
-            ))
-            // ── Quota visibility section ──
-            .child(render_quota_visibility_section(
+            ));
+
+        if detail.show_quota_visibility {
+            inner = inner.child(render_quota_visibility_section(
                 detail.id.kind(),
                 &detail.quota_visibility,
                 self.state.clone(),
                 theme,
-            ))
-            // ── Settings section ──
-            .child(self.render_settings_section(
-                detail.id.clone(),
-                detail.settings_capability.clone(),
-                theme,
-                cx,
             ));
+        }
+
+        inner = inner.child(self.render_settings_section(
+            detail.id.clone(),
+            detail.settings_capability.clone(),
+            detail.provider_capability,
+            theme,
+            cx,
+        ));
 
         div().flex_col().flex_1().h_full().overflow_hidden().child(
             div()
@@ -708,6 +720,7 @@ impl SettingsView {
         &mut self,
         provider_id: ProviderId,
         settings_capability: SettingsCapability,
+        provider_capability: ProviderCapability,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -749,7 +762,21 @@ impl SettingsView {
                 ));
             }
             SettingsCapability::None => {
-                section = section.child(render_automanaged_placeholder());
+                let (title, desc) = match provider_capability {
+                    ProviderCapability::Monitorable => (
+                        t!("provider.settings.auto_title").to_string(),
+                        t!("provider.settings.auto_desc").to_string(),
+                    ),
+                    ProviderCapability::Informational => (
+                        t!("provider.informational.title").to_string(),
+                        t!("provider.informational.desc").to_string(),
+                    ),
+                    ProviderCapability::Placeholder => (
+                        t!("provider.placeholder.title").to_string(),
+                        t!("provider.placeholder.desc").to_string(),
+                    ),
+                };
+                section = section.child(render_info_placeholder_card(&title, &desc));
             }
         }
 

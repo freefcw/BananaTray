@@ -1,7 +1,7 @@
 use super::{AiProvider, ProviderError};
 use crate::models::{
-    ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaType,
-    RefreshData,
+    ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
+    QuotaType, RefreshData,
 };
 use crate::providers::common::cli;
 use anyhow::Result;
@@ -28,6 +28,15 @@ static BALANCE_RE: LazyLock<Regex> =
 super::define_unit_provider!(AmpProvider);
 
 impl AmpProvider {
+    fn quota_label_spec(label: &str) -> QuotaLabelSpec {
+        match label.to_ascii_lowercase().as_str() {
+            "monthly credits" => QuotaLabelSpec::MonthlyCredits,
+            "credits" => QuotaLabelSpec::Credits,
+            "bonus credits" => QuotaLabelSpec::BonusCredits,
+            _ => QuotaLabelSpec::Raw(label.to_string()),
+        }
+    }
+
     fn run_usage() -> Result<String> {
         let output = cli::run_lenient_command("amp", &["usage", "--no-color"])?;
         Ok(output)
@@ -52,7 +61,7 @@ impl AmpProvider {
                 let total: f64 = caps.get(3).unwrap().as_str().parse().unwrap_or(0.0);
                 let used = total - remaining;
                 quotas.push(QuotaInfo::with_details(
-                    label,
+                    Self::quota_label_spec(label),
                     used.max(0.0),
                     total,
                     QuotaType::Credit,
@@ -71,7 +80,7 @@ impl AmpProvider {
                 // 使用 balance_only 模式：状态由余额绝对值决定（>=5 Green, >=1 Yellow, <1 Red），
                 // 而非百分比——避免 limit=0 时 percent_remaining=0% 误判为 Red。
                 quotas.push(QuotaInfo::balance_only(
-                    label,
+                    Self::quota_label_spec(label),
                     balance,
                     None,
                     QuotaType::Credit,
@@ -141,10 +150,7 @@ mod tests {
         assert_eq!(data.quotas.len(), 1);
 
         let q = &data.quotas[0];
-        assert_eq!(
-            q.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Monthly credits".to_string())
-        );
+        assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::MonthlyCredits);
         assert_eq!(q.used, 5.0);
         assert_eq!(q.limit, 20.0);
         assert_eq!(q.quota_type, QuotaType::Credit);
@@ -165,10 +171,7 @@ mod tests {
 
         assert_eq!(data.quotas.len(), 1);
         let q = &data.quotas[0];
-        assert_eq!(
-            q.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Credits".to_string())
-        );
+        assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::Credits);
         assert!(q.is_balance_only());
         assert!((q.remaining_balance.unwrap() - 50.0).abs() < f64::EPSILON);
         assert_eq!(q.quota_type, QuotaType::Credit);
@@ -218,12 +221,12 @@ mod tests {
         assert_eq!(data.quotas.len(), 2);
         assert_eq!(
             data.quotas[0].label_spec,
-            crate::models::QuotaLabelSpec::Raw("Monthly credits".to_string())
+            crate::models::QuotaLabelSpec::MonthlyCredits
         );
         assert!(!data.quotas[0].is_balance_only());
         assert_eq!(
             data.quotas[1].label_spec,
-            crate::models::QuotaLabelSpec::Raw("Bonus credits".to_string())
+            crate::models::QuotaLabelSpec::BonusCredits
         );
         assert!(data.quotas[1].is_balance_only());
         assert_eq!(

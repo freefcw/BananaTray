@@ -1,5 +1,7 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -51,6 +53,10 @@ impl AiProvider for KiloProvider {
                 source_label: "kilo api".into(),
             },
         }
+    }
+
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Placeholder
     }
 
     async fn check_availability(&self) -> Result<()> {

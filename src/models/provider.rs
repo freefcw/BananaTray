@@ -148,6 +148,27 @@ pub struct ProviderDescriptor {
     pub metadata: ProviderMetadata,
 }
 
+/// Provider 的能力层级。
+///
+/// 用于区分：
+/// - 可直接监控配额的 provider
+/// - 仅用于说明/引导的 informational entry
+/// - 可被发现但当前无法监控的 placeholder entry
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProviderCapability {
+    #[default]
+    Monitorable,
+    Informational,
+    Placeholder,
+}
+
+impl ProviderCapability {
+    /// 是否参与正常刷新链路（启动 / 周期 / 手动 / Debug）。
+    pub fn supports_refresh(self) -> bool {
+        matches!(self, Self::Monitorable)
+    }
+}
+
 // ============================================================================
 // Provider 设置 UI 能力声明（纯数据模型，不依赖 GPUI）
 // ============================================================================

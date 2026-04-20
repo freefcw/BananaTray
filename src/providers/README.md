@@ -11,10 +11,15 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `check_availability() -> Result<()>` — environment/config check with structured error
   - `refresh() -> Result<RefreshData>` — fetch latest quota data
   - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
+  - `provider_capability() -> ProviderCapability` — declare whether the provider is `Monitorable`, `Informational`, or `Placeholder`
 - **`SettingsCapability`** — provider-defined settings capability:
-  - `None` — auto-managed placeholder only
+  - `None` — no extra settings UI
   - `TokenInput(TokenInputCapability)` — generic token panel driven by static i18n keys + `credential_key`
   - `NewApiEditable` — NewAPI custom-provider editor actions
+- **`ProviderCapability`** — provider product capability tier:
+  - `Monitorable` — participates in normal refresh flows
+  - `Informational` — reference-only entry, no refresh/retry actions
+  - `Placeholder` — discoverable but not directly monitorable, no refresh/retry actions
 - **`TokenInputCapability`** — token settings contract:
   - static UI metadata (`title_i18n_key`, `description_i18n_key`, `placeholder_i18n_key`, `create_url`)
   - `credential_key` for persisted storage in `ProviderConfig::credentials`
@@ -37,6 +42,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `provider_for_id(id)` — unified lookup by `ProviderId`
 - `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
+- `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
 - `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
@@ -49,22 +55,22 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 
 ## Provider Implementations
 
-| File | Provider | ID | Data Source | Notes |
-|------|----------|-----|-----------|-------|
-| `claude/` | Claude | `claude` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
-| `gemini/` | Gemini | `gemini` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
-| `codex/` | Codex | `codex` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
-| `kimi/` | Kimi | `kimi` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
-| `amp.rs` | Amp | `amp:cli` | CLI output | Uses `common::cli` for availability and exit-code handling |
-| `cursor/` | Cursor | `cursor` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
-| `antigravity/` | Antigravity | `antigravity` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
-| `windsurf.rs` | Windsurf | `windsurf` | Local language server API + seat API + local cache | Provider facade owns `live -> seat -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
-| `minimax/` | MiniMax | `minimax` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
-| `kiro.rs` | Kiro | `kiro:cli` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
-| `kilo.rs` | Kilo | `kilo:ext` | — | Placeholder (returns `Unavailable`) |
-| `opencode.rs` | OpenCode | `opencode:cli` | — | Placeholder (returns `Unavailable`) |
-| `vertex_ai.rs` | Vertex AI | `vertexai` | — | Placeholder (redirects to Gemini) |
+| File | Provider | ID | Capability | Data Source | Notes |
+|------|----------|-----|------------|-------------|-------|
+| `claude/` | Claude | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
+| `gemini/` | Gemini | `gemini` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
+| `copilot/` | Copilot | `copilot` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
+| `codex/` | Codex | `codex` | `Monitorable` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
+| `kimi/` | Kimi | `kimi` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `amp.rs` | Amp | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
+| `cursor/` | Cursor | `cursor` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
+| `antigravity/` | Antigravity | `antigravity` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
+| `windsurf.rs` | Windsurf | `windsurf` | `Monitorable` | Local language server API + seat API + local cache | Provider facade owns `live -> seat -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
+| `minimax/` | MiniMax | `minimax` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `kiro.rs` | Kiro | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
+| `kilo.rs` | Kilo | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
+| `opencode.rs` | OpenCode | `opencode:cli` | `Placeholder` | CLI detection | Discoverable entry only; no normal refresh |
+| `vertex_ai.rs` | Vertex AI | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
 
 ## Design Notes
 
@@ -114,10 +120,11 @@ Aggregation registry holding all provider implementations. Maintains exactly two
        fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
    }
    ```
-3. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
-4. **Add icon**: `src/icons/provider-myprovider.svg`
-5. **Register**: add `my_provider => MyProvider` to `register_providers!` macro in `mod.rs`
-6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
+3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` and do not rely on repeated `Unavailable` refreshes as product semantics
+4. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
+5. **Add icon**: `src/icons/provider-myprovider.svg`
+6. **Register**: add `my_provider => MyProvider` to `register_providers!` macro in `mod.rs`
+7. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
 
 ## Constraints
 

@@ -4,10 +4,14 @@
 
 use super::super::state::{provider_panel_flags, AppSession};
 use super::format::{
-    format_failure_message, format_last_updated, format_quota_label, quota_display_view_state,
+    format_failure_message, format_last_updated, format_non_monitoring_message, format_quota_label,
+    quota_display_view_state,
 };
 use super::*;
-use crate::models::{AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderId, ProviderStatus};
+use crate::models::{
+    AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderCapability, ProviderId,
+    ProviderStatus,
+};
 use rust_i18n::t;
 
 pub fn header_view_state(session: &AppSession) -> HeaderViewState {
@@ -33,8 +37,17 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
 
 pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsViewState {
     let target = match &session.nav.active_tab {
-        NavTab::Provider(id) => Some(RefreshTarget::One(id.clone())),
-        NavTab::Overview => Some(RefreshTarget::All),
+        NavTab::Provider(id) => session
+            .provider_store
+            .find_by_id(id)
+            .filter(|provider| provider.supports_refresh())
+            .map(|_| RefreshTarget::One(id.clone())),
+        NavTab::Overview => session
+            .provider_store
+            .providers
+            .iter()
+            .any(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
+            .then_some(RefreshTarget::All),
         NavTab::Settings => None,
     };
 
@@ -60,7 +73,7 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
     };
 
     GlobalActionsViewState {
-        show_refresh: session.settings.display.show_refresh_button,
+        show_refresh: session.settings.display.show_refresh_button && target.is_some(),
         refresh: RefreshButtonViewState {
             target,
             is_refreshing,
@@ -178,6 +191,21 @@ fn provider_body_view_state(
 }
 
 fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewState {
+    if !provider.supports_refresh() {
+        let title = match provider.provider_capability {
+            ProviderCapability::Informational => t!("provider.informational.title").to_string(),
+            ProviderCapability::Placeholder => t!("provider.placeholder.title").to_string(),
+            ProviderCapability::Monitorable => unreachable!(),
+        };
+        return ProviderEmptyViewState {
+            id: provider.provider_id.clone(),
+            title,
+            message: format_non_monitoring_message(provider),
+            is_error: false,
+            action: None,
+        };
+    }
+
     let is_error = provider.connection == ConnectionStatus::Error;
     let is_config_error = matches!(
         provider.error_kind,
@@ -224,6 +252,10 @@ fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewStat
 }
 
 fn provider_empty_message(provider: &ProviderStatus) -> String {
+    if !provider.supports_refresh() {
+        return format_non_monitoring_message(provider);
+    }
+
     if let Some(failure) = &provider.last_failure {
         return format_failure_message(failure);
     }
@@ -256,6 +288,17 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
             let provider = session.provider_store.find_by_id(id)?;
             let icon = provider.icon_asset().to_string();
             let display_name = provider.display_name().to_string();
+
+            if !provider.supports_refresh() {
+                return Some(OverviewItemViewState {
+                    id: id.clone(),
+                    icon,
+                    display_name,
+                    status: OverviewItemStatus::Error {
+                        message: format_non_monitoring_message(provider),
+                    },
+                });
+            }
 
             let status = match provider.connection {
                 ConnectionStatus::Refreshing => OverviewItemStatus::Refreshing,

@@ -39,7 +39,13 @@ custom/
 | `cli`        | 执行 CLI 命令，获取 stdout/stderr |
 | `http_get`   | HTTP GET 请求 |
 | `http_post`  | HTTP POST 请求（JSON body） |
-| `placeholder`| 占位：不获取数据，仅检测安装状态 |
+| `placeholder`| 占位：不获取数据，仅检测安装状态；运行时 capability 为 `Placeholder` |
+
+`placeholder` source 的稳定语义：
+
+- 会显示在 provider 列表里，方便保留入口或安装检测。
+- 不参与正常刷新，也不会在 UI 中显示 retry / refresh 动作。
+- 可省略 `parser`；即使配置了也不会把它变成 monitorable provider。
 
 ## 支持的认证方式
 
