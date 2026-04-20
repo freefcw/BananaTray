@@ -923,7 +923,60 @@ fn current_provider_status_follows_last_provider_id() {
     assert_eq!(session.current_provider_status(), StatusLevel::Green);
 }
 
-// ── AppSession::new 自动注册 ──────────────────────────────
+// ── AppSession::new 初始化 ──────────────────────────────
+
+#[test]
+fn session_new_defaults_to_overview_when_enabled_provider_exists() {
+    let store = make_store(&[ProviderKind::Claude]);
+    let settings = make_settings(&[ProviderKind::Claude]);
+
+    let session = AppSession::new(settings, store.providers);
+
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
+    assert_eq!(session.nav.last_provider_id, pid(ProviderKind::Claude));
+}
+
+#[test]
+fn session_new_uses_first_enabled_provider_when_overview_hidden() {
+    let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
+    let mut settings = make_settings(&[ProviderKind::Gemini]);
+    settings.display.show_overview = false;
+
+    let session = AppSession::new(settings, store.providers);
+
+    assert_eq!(
+        session.nav.active_tab,
+        NavTab::Provider(pid(ProviderKind::Gemini))
+    );
+    assert_eq!(session.nav.last_provider_id, pid(ProviderKind::Gemini));
+}
+
+#[test]
+fn session_new_uses_settings_tab_when_overview_hidden_and_no_enabled_provider() {
+    let store = make_store(&[ProviderKind::Claude]);
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = false;
+
+    let session = AppSession::new(settings, store.providers);
+
+    assert_eq!(session.nav.active_tab, NavTab::Settings);
+    assert_eq!(session.nav.last_provider_id, pid(ProviderKind::Claude));
+}
+
+#[test]
+fn session_new_selects_first_sidebar_provider_for_settings() {
+    let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
+    let mut settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
+    settings.provider.sidebar_providers = vec!["gemini".into(), "claude".into()];
+    settings.provider.provider_order = vec!["gemini".into(), "claude".into()];
+
+    let session = AppSession::new(settings, store.providers);
+
+    assert_eq!(
+        session.settings_ui.selected_provider,
+        pid(ProviderKind::Gemini)
+    );
+}
 
 #[test]
 fn session_new_auto_registers_unregistered_custom_provider() {
@@ -970,4 +1023,31 @@ fn session_new_preserves_existing_custom_provider_state() {
 
     // 保持禁用状态（用户显式关闭的不覆盖）
     assert!(!session.settings.provider.is_enabled(&custom_id));
+}
+
+#[test]
+fn session_new_reuses_existing_sidebar_entry_for_custom_provider() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    let custom_id = ProviderId::Custom("my-relay:newapi".to_string());
+    let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    store
+        .providers
+        .push(ProviderStatus::new(custom_id.clone(), metadata));
+
+    let mut settings = make_settings(&[ProviderKind::Claude]);
+    settings.provider.sidebar_providers.push(custom_id.id_key());
+
+    let session = AppSession::new(settings, store.providers);
+
+    assert!(session.settings.provider.is_enabled(&custom_id));
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .sidebar_providers
+            .iter()
+            .filter(|key| **key == "my-relay:newapi")
+            .count(),
+        1
+    );
 }

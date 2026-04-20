@@ -631,27 +631,19 @@ fn apply_refresh_event(
                 effects.push(CommonEffect::PersistSettings.into());
             }
 
-            // 自动启用新增的自定义 Provider（热重载发现的新 YAML 文件）
-            let mut settings_changed = false;
-            for id in &affected {
-                if !session
-                    .settings
-                    .provider
-                    .enabled_providers
-                    .contains_key(&id.id_key())
-                {
-                    // 首次出现的自定义 Provider：自动启用并加入 sidebar
-                    session.settings.provider.set_enabled(id, true);
-                    session.settings.provider.add_to_sidebar(id);
-                    settings_changed = true;
-                    info!(
-                        target: "providers",
-                        "auto-enabled new custom provider: {}",
-                        id
-                    );
-                }
+            // 自动启用首次出现的自定义 Provider（热重载发现的新 YAML 文件）
+            let auto_registered = session
+                .settings
+                .provider
+                .register_discovered_custom_providers(&affected);
+            for id in &auto_registered {
+                info!(
+                    target: "providers",
+                    "auto-enabled new custom provider: {}",
+                    id
+                );
             }
-            if settings_changed {
+            if !auto_registered.is_empty() {
                 effects.push(CommonEffect::PersistSettings.into());
             }
 

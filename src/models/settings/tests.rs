@@ -28,6 +28,47 @@ fn provider_config_remove_enabled_record_clears_explicit_state() {
 }
 
 #[test]
+fn register_discovered_custom_providers_auto_enables_missing_customs() {
+    let mut config = ProviderConfig::default();
+    let fresh = ProviderId::Custom("fresh:api".to_string());
+
+    let registered = config.register_discovered_custom_providers(&[
+        ProviderId::BuiltIn(ProviderKind::Claude),
+        fresh.clone(),
+    ]);
+
+    assert_eq!(registered, vec![fresh.clone()]);
+    assert!(config.is_enabled(&fresh));
+    assert!(config.sidebar_providers.contains(&fresh.id_key()));
+}
+
+#[test]
+fn register_discovered_custom_providers_preserves_explicit_state_and_sidebar() {
+    let mut config = ProviderConfig {
+        sidebar_providers: vec!["fresh:api".into()],
+        ..Default::default()
+    };
+    let fresh = ProviderId::Custom("fresh:api".to_string());
+    let disabled = ProviderId::Custom("disabled:api".to_string());
+    config.set_enabled(&disabled, false);
+
+    let registered =
+        config.register_discovered_custom_providers(&[fresh.clone(), disabled.clone()]);
+
+    assert_eq!(registered, vec![fresh.clone()]);
+    assert!(config.is_enabled(&fresh));
+    assert!(!config.is_enabled(&disabled));
+    assert_eq!(
+        config
+            .sidebar_providers
+            .iter()
+            .filter(|key| **key == "fresh:api")
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn provider_config_ordered_providers_ignores_invalid() {
     let config = ProviderConfig {
         provider_order: vec![

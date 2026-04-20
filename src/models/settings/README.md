@@ -22,7 +22,7 @@ AppSettings
 - **`NotificationSettings`** — `session_quota_notifications` / `notification_sound`
 - **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / 各 UI 开关
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`
-  - `is_enabled()` / `set_enabled()` / `remove_enabled_record()` / `prune_stale_custom_ids()`
+  - `is_enabled()` / `set_enabled()` / `remove_enabled_record()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()`
 - **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
   - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量
 - 枚举：**`TrayIconStyle`**（Monochrome/Yellow/Colorful/Dynamic）、**`QuotaDisplayMode`**（Remaining/Used）、**`AppTheme`**（Light/Dark/System）
@@ -33,7 +33,7 @@ AppSettings
 |------|------|
 | `provider_config_ordering.rs` | Provider 排序逻辑：`ordered_provider_ids()` / `move_provider()` / `ensure_order_defaults()` |
 | `provider_config_quota.rs` | 配额可见性：`is_quota_visible()` / `set_quota_visible()` |
-| `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `add_to_sidebar()` / `remove_from_sidebar()` |
+| `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `register_discovered_custom_providers()` / `add_to_sidebar()` / `remove_from_sidebar()` |
 
 ### `tests.rs` — 单元测试
 
