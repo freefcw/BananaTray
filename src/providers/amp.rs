@@ -130,7 +130,12 @@ impl AiProvider for AmpProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
+        let start = std::time::Instant::now();
+        log::debug!(target: "providers", "amp: running `amp usage --no-color`");
+
         let output = Self::run_usage()?;
+        log::debug!(target: "providers", "amp: cli completed in {:.2}s, output:\n{}", start.elapsed().as_secs_f64(), output.trim());
+
         Self::parse_usage_output(&output)
     }
 }

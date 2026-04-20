@@ -36,23 +36,25 @@ impl KiroProvider {
     /// `kiro-cli` 会在不同版本里把正文写到 stdout 或 stderr，这里统一收敛。
     fn run_usage() -> Result<String> {
         let start = std::time::Instant::now();
-        log::info!(target: "providers::kiro", "Running kiro-cli chat --no-interactive /usage");
+        log::debug!(target: "providers", "kiro: running `kiro-cli chat --no-interactive /usage`");
 
         let output = cli::run_command(KIRO_CLI, &["chat", "--no-interactive", "/usage"])?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        log::info!(
-            target: "providers::kiro",
-            "kiro-cli completed in {:.2}s, exit_code={}, stdout_len={}, stderr_len={}, using={}",
-            start.elapsed().as_secs_f64(),
-            output.status,
-            stdout.len(),
-            stderr.len(),
-            if stdout.trim().is_empty() { "stderr" } else { "stdout" },
-        );
 
         let text = cli::stdout_or_stderr_text(&output);
+        let source = if String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            "stderr"
+        } else {
+            "stdout"
+        };
+        log::debug!(
+            target: "providers",
+            "kiro: cli completed in {:.2}s (exit={}, output_from={}), raw:\n{}",
+            start.elapsed().as_secs_f64(),
+            output.status,
+            source,
+            text.trim(),
+        );
+
         if text.trim().is_empty() {
             cli::ensure_success(&output)?;
         }
@@ -64,7 +66,7 @@ impl KiroProvider {
         let output = cli::run_command(KIRO_CLI, &["whoami"]).ok()?;
 
         if !output.status.success() {
-            log::warn!(target: "providers::kiro", "kiro-cli whoami failed: {:?}", output.status);
+            log::warn!(target: "providers", "kiro: `kiro-cli whoami` failed (exit={})", output.status);
             return None;
         }
 
@@ -175,21 +177,11 @@ impl AiProvider for KiroProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
-        let start = std::time::Instant::now();
         let stdout = Self::run_usage()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;
         let account_tier = Self::parse_account_tier(&stdout);
         let account_email = Self::read_account_email();
-
-        log::info!(
-            target: "providers::kiro",
-            "Parsed {} quota(s) in {:.2}s, tier={:?}, email={:?}",
-            quotas.len(),
-            start.elapsed().as_secs_f64(),
-            account_tier,
-            account_email,
-        );
 
         if quotas.is_empty() {
             return Err(ProviderError::parse_failed(&format!(

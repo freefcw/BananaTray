@@ -533,12 +533,6 @@ fn process_refresh_outcome(
 
     match result {
         RefreshResult::Success { data } => {
-            info!(
-                target: "providers",
-                "provider {} refresh succeeded: {} quotas",
-                outcome_id,
-                data.quotas.len()
-            );
             let provider_name = session
                 .provider_store
                 .find_by_id(outcome_id)
