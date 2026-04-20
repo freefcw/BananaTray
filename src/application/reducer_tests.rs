@@ -972,6 +972,43 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
 }
 
 #[test]
+fn providers_reloaded_reuses_existing_sidebar_entry_for_new_custom_provider() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .sidebar_providers
+        .push("fresh:api".to_string());
+
+    let mut statuses = session.provider_store.providers.to_vec();
+    statuses.push(make_custom_provider_status("fresh:api"));
+
+    let mut effects = vec![];
+    apply_refresh_event(
+        &mut session,
+        RefreshEvent::ProvidersReloaded { statuses },
+        &mut effects,
+    );
+
+    let fresh_id = ProviderId::Custom("fresh:api".to_string());
+    assert!(session.settings.provider.is_enabled(&fresh_id));
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .sidebar_providers
+            .iter()
+            .filter(|key| **key == "fresh:api")
+            .count(),
+        1
+    );
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::PersistSettings)
+    )));
+}
+
+#[test]
 fn submit_newapi_without_optional_fields_uses_defaults() {
     let mut session = make_session();
 

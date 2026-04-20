@@ -133,65 +133,21 @@ pub struct AppSession {
 
 impl AppSession {
     pub fn new(mut settings: AppSettings, providers: Vec<ProviderStatus>) -> Self {
+        let provider_store = ProviderStore { providers };
+        let custom_ids = provider_store.custom_provider_ids();
+
         // 自动注册已存在但未在 settings 中登记的自定义 Provider
         // （处理 YAML 文件存在但 settings.json 缺少对应条目的情况）
-        let custom_ids: Vec<_> = providers
-            .iter()
-            .filter(|p| p.provider_id.is_custom())
-            .map(|p| p.provider_id.clone())
-            .collect();
-        for id in &custom_ids {
-            if !settings
-                .provider
-                .enabled_providers
-                .contains_key(&id.id_key())
-            {
-                settings.provider.set_enabled(id, true);
-                settings.provider.add_to_sidebar(id);
-            }
-        }
-
-        let first_enabled = providers
-            .iter()
-            .find(|p| settings.provider.is_enabled(&p.provider_id))
-            .map(|p| p.provider_id.clone());
-
-        let active_tab = if settings.display.show_overview {
-            NavTab::Overview
-        } else {
-            first_enabled
-                .clone()
-                .map(NavTab::Provider)
-                .unwrap_or(NavTab::Settings)
-        };
-
-        // 设置页默认选中 sidebar 列表中的第一个 provider（而非硬编码 Claude）
-        let sidebar_ids = settings.provider.sidebar_provider_ids(&custom_ids);
-        let default_settings_provider = sidebar_ids
-            .first()
-            .cloned()
-            .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude));
+        settings
+            .provider
+            .register_discovered_custom_providers(&custom_ids);
+        let nav = build_initial_navigation_state(&provider_store, &settings);
+        let settings_ui = build_initial_settings_ui_state(&settings, &custom_ids);
 
         Self {
-            provider_store: ProviderStore { providers },
-            nav: NavigationState {
-                active_tab,
-                last_provider_id: first_enabled
-                    .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude)),
-                generation: 0,
-                prev_active_tab: None,
-            },
-            settings_ui: SettingsUiState {
-                active_tab: SettingsTab::General,
-                selected_provider: default_settings_provider,
-                cadence_dropdown_open: false,
-                token_editing_provider: None,
-                adding_newapi: false,
-                editing_newapi: None,
-                adding_provider: false,
-                confirming_remove_provider: false,
-                confirming_delete_newapi: false,
-            },
+            provider_store,
+            nav,
+            settings_ui,
             debug_ui: DebugUiState::default(),
             settings,
             alert_tracker: QuotaAlertTracker::new(),
@@ -249,6 +205,71 @@ impl AppSession {
             .map(|p| p.worst_status())
             .unwrap_or(StatusLevel::Green)
     }
+}
+
+fn build_initial_navigation_state(
+    store: &ProviderStore,
+    settings: &AppSettings,
+) -> NavigationState {
+    let first_enabled = first_enabled_provider_id(store, settings);
+    let last_provider_id = first_enabled
+        .clone()
+        .unwrap_or_else(default_builtin_provider_id);
+    let active_tab = initial_active_tab(settings, first_enabled);
+
+    NavigationState {
+        active_tab,
+        last_provider_id,
+        generation: 0,
+        prev_active_tab: None,
+    }
+}
+
+fn build_initial_settings_ui_state(
+    settings: &AppSettings,
+    custom_ids: &[ProviderId],
+) -> SettingsUiState {
+    // 设置页默认选中 sidebar 列表中的第一个 provider（而非硬编码 Claude）
+    let selected_provider = settings
+        .provider
+        .sidebar_provider_ids(custom_ids)
+        .into_iter()
+        .next()
+        .unwrap_or_else(default_builtin_provider_id);
+
+    SettingsUiState {
+        active_tab: SettingsTab::General,
+        selected_provider,
+        cadence_dropdown_open: false,
+        token_editing_provider: None,
+        adding_newapi: false,
+        editing_newapi: None,
+        adding_provider: false,
+        confirming_remove_provider: false,
+        confirming_delete_newapi: false,
+    }
+}
+
+fn first_enabled_provider_id(store: &ProviderStore, settings: &AppSettings) -> Option<ProviderId> {
+    store
+        .providers
+        .iter()
+        .find(|p| settings.provider.is_enabled(&p.provider_id))
+        .map(|p| p.provider_id.clone())
+}
+
+fn initial_active_tab(settings: &AppSettings, first_enabled: Option<ProviderId>) -> NavTab {
+    if settings.display.show_overview {
+        NavTab::Overview
+    } else {
+        first_enabled
+            .map(NavTab::Provider)
+            .unwrap_or(NavTab::Settings)
+    }
+}
+
+fn default_builtin_provider_id() -> ProviderId {
+    ProviderId::BuiltIn(ProviderKind::Claude)
 }
 
 /// Tray 弹出窗口的导航状态
