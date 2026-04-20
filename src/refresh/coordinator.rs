@@ -63,7 +63,20 @@ impl RefreshCoordinator {
     ) -> RefreshOutcome {
         match result {
             Ok(data) => {
-                log::info!(target: "refresh", "provider {} refreshed: {} quotas", id, data.quotas.len());
+                for q in &data.quotas {
+                    log::info!(
+                        target: "refresh",
+                        "{}: {:?} — used={:.2} / limit={:.2}, detail={:?}, status={:?}",
+                        id, q.label_spec, q.used, q.limit, q.detail_spec, q.status_level(),
+                    );
+                }
+                log::debug!(
+                    target: "refresh",
+                    "{}: account={:?}, tier={:?}",
+                    id,
+                    data.account_email,
+                    data.account_tier,
+                );
                 RefreshOutcome {
                     id,
                     result: RefreshResult::Success { data },

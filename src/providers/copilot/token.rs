@@ -68,11 +68,9 @@ const CACHE_DURATION: Duration = Duration::from_secs(5);
 /// 3. ~/.config/github-copilot/ JSON 文件（隐式·VSCode 扩展自动检测）
 /// 4. macOS Keychain copilot-cli（隐式·CLI 自动检测）
 pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
-    debug!(target: "providers", "resolve_token: memory_token={:?}", memory_token.map(|t| if t.len() > 8 { &t[..8] } else { t }));
-
     // ① 用户手动配置的 token（最高优先级）
     if let Some(t) = memory_token.filter(|s| !s.is_empty()) {
-        debug!(target: "providers", "resolve_token: → ConfigFile (from memory, len={})", t.len());
+        debug!(target: "providers", "copilot: token resolved via ConfigFile (user settings)");
         return CopilotTokenStatus {
             token: Some(t.to_string()),
             source: CopilotTokenSource::ConfigFile,
@@ -81,7 +79,7 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
 
     // ② 环境变量（显式设置，优先于隐式自动检测）
     if let Some(t) = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()) {
-        debug!(target: "providers", "resolve_token: → EnvVar (len={})", t.len());
+        debug!(target: "providers", "copilot: token resolved via GITHUB_TOKEN env var");
         return CopilotTokenStatus {
             token: Some(t),
             source: CopilotTokenSource::EnvVar,
@@ -99,13 +97,17 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
         cache.cached_oauth_token = read_copilot_oauth_token();
         cache.cached_cli_token = read_copilot_cli_keychain_token();
         cache.last_resolve = Some(now);
-        debug!(target: "providers", "resolve_token: cache refreshed (oauth={}, cli={})",
-            cache.cached_oauth_token.is_some(), cache.cached_cli_token.is_some());
+        debug!(
+            target: "providers",
+            "copilot: token cache refreshed — oauth_file={}, keychain_cli={}",
+            if cache.cached_oauth_token.is_some() { "found" } else { "not_found" },
+            if cache.cached_cli_token.is_some() { "found" } else { "not_found" },
+        );
     }
 
     // ③ VSCode Copilot 扩展 OAuth token
     if let Some(t) = cache.cached_oauth_token.clone() {
-        debug!(target: "providers", "resolve_token: → CopilotOAuth (cached, len={})", t.len());
+        debug!(target: "providers", "copilot: token resolved via Copilot OAuth (hosts.json/apps.json)");
         return CopilotTokenStatus {
             token: Some(t),
             source: CopilotTokenSource::CopilotOAuth,
@@ -114,14 +116,14 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
 
     // ④ copilot-cli Keychain token
     if let Some(t) = cache.cached_cli_token.clone() {
-        debug!(target: "providers", "resolve_token: → CopilotCli (cached, len={})", t.len());
+        debug!(target: "providers", "copilot: token resolved via Copilot CLI (macOS Keychain)");
         return CopilotTokenStatus {
             token: Some(t),
             source: CopilotTokenSource::CopilotCli,
         };
     }
 
-    debug!(target: "providers", "resolve_token: → None (no token found)");
+    debug!(target: "providers", "copilot: no token found (checked: settings, env, oauth file, keychain)");
     CopilotTokenStatus {
         token: None,
         source: CopilotTokenSource::None,
@@ -182,7 +184,7 @@ fn read_copilot_cli_keychain_token() -> Option<String> {
         .ok()?;
 
     if !output.status.success() {
-        debug!(target: "providers", "read_copilot_cli_keychain_token: security command failed (status={})", output.status);
+        debug!(target: "providers", "copilot: macOS Keychain lookup failed (no copilot-cli entry)");
         return None;
     }
 
@@ -192,7 +194,7 @@ fn read_copilot_cli_keychain_token() -> Option<String> {
     if token.is_empty() {
         None
     } else {
-        debug!(target: "providers", "read_copilot_cli_keychain_token: found token (len={})", token.len());
+        debug!(target: "providers", "copilot: macOS Keychain token found");
         Some(token.to_string())
     }
 }

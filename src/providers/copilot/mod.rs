@@ -113,12 +113,14 @@ impl AiProvider for CopilotProvider {
     }
 
     async fn refresh(&self) -> Result<RefreshData> {
+        let start = std::time::Instant::now();
         let token_status = resolve_token(None);
 
         let token = token_status.token.context(
             "GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.",
         )?;
 
+        debug!(target: "providers", "copilot: fetching quota from api.github.com/copilot_internal/user");
         let body = match fetch_user_info(&token) {
             Ok(body) => body,
             Err(e) => {
@@ -155,6 +157,7 @@ impl AiProvider for CopilotProvider {
                 return Err(e);
             }
         };
+        debug!(target: "providers", "copilot: api response received in {:.2}s", start.elapsed().as_secs_f64());
 
         // /user API 获取账户标识（best-effort，失败不影响配额数据）
         let account_name = fetch_github_user(&token)
