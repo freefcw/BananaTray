@@ -1,7 +1,7 @@
 use super::parse_strategy::{CacheParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
 use super::LOCAL_CACHE_SOURCE_LABEL;
-use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
 use crate::providers::ProviderError;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -149,6 +149,35 @@ struct QuotaUsageInfo {
     weekly_reset_at_unix: Option<i64>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum CachedQuotaKind {
+    Daily,
+    Weekly,
+}
+
+impl CachedQuotaKind {
+    fn stable_key(self) -> &'static str {
+        match self {
+            Self::Daily => "daily-quota",
+            Self::Weekly => "weekly-quota",
+        }
+    }
+
+    fn quota_type(self) -> QuotaType {
+        match self {
+            Self::Daily => QuotaType::General,
+            Self::Weekly => QuotaType::Weekly,
+        }
+    }
+
+    fn label_spec(self) -> QuotaLabelSpec {
+        match self {
+            Self::Daily => QuotaLabelSpec::Daily,
+            Self::Weekly => QuotaLabelSpec::Weekly,
+        }
+    }
+}
+
 fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     let json_str = query_cached_plan_info(conn, spec)?;
     let plan_info = parse_cached_plan_info(&json_str)?;
@@ -176,7 +205,7 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
         );
 
         if let Some(q) = build_quota_from_cached(
-            "Daily Quota",
+            CachedQuotaKind::Daily,
             usage.daily_remaining_percent,
             usage.daily_reset_at_unix,
         ) {
@@ -184,7 +213,7 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
         }
 
         if let Some(q) = build_quota_from_cached(
-            "Weekly Quota",
+            CachedQuotaKind::Weekly,
             usage.weekly_remaining_percent,
             usage.weekly_reset_at_unix,
         ) {
@@ -201,11 +230,12 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
                     "{} weekly_remaining_percent is null but reset time is future; inferring 100% used (quota full)",
                     spec.log_label
                 );
-                quotas.push(QuotaInfo::with_details(
-                    "Weekly Quota",
+                quotas.push(QuotaInfo::with_key(
+                    CachedQuotaKind::Weekly.stable_key(),
+                    CachedQuotaKind::Weekly.label_spec(),
                     100.0, // 已满：100% used
                     100.0,
-                    QuotaType::ModelSpecific("Weekly Quota".to_string()),
+                    CachedQuotaKind::Weekly.quota_type(),
                     Some(QuotaDetailSpec::ResetAt {
                         epoch_secs: reset_ts,
                     }),
@@ -230,7 +260,7 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
 /// 关键逻辑：如果 reset 时间已过期，说明配额已被重置，
 /// 缓存中的 remaining_percent 是旧数据，应视为 100% remaining。
 fn build_quota_from_cached(
-    label: &str,
+    kind: CachedQuotaKind,
     remaining_percent: Option<f64>,
     reset_at_unix: Option<i64>,
 ) -> Option<QuotaInfo> {
@@ -250,11 +280,12 @@ fn build_quota_from_cached(
         reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
     };
 
-    Some(QuotaInfo::with_details(
-        label,
+    Some(QuotaInfo::with_key(
+        kind.stable_key(),
+        kind.label_spec(),
         used,
         100.0,
-        QuotaType::ModelSpecific(label.to_string()),
+        kind.quota_type(),
         reset_detail,
     ))
 }
@@ -509,12 +540,12 @@ mod tests {
         assert_eq!(data.quotas.len(), 2);
         assert_eq!(
             data.quotas[0].label_spec,
-            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
+            crate::models::QuotaLabelSpec::Daily
         );
         assert!((data.quotas[0].used - 59.0).abs() < 0.01); // 100 - 41 = 59
         assert_eq!(
             data.quotas[1].label_spec,
-            crate::models::QuotaLabelSpec::Raw("Weekly Quota".to_string())
+            crate::models::QuotaLabelSpec::Weekly
         );
         assert!((data.quotas[1].used - 30.0).abs() < 0.01); // 100 - 70 = 30
     }
@@ -522,11 +553,10 @@ mod tests {
     #[test]
     fn test_build_quota_from_cached_fresh() {
         let future_ts = chrono::Utc::now().timestamp() + 3600;
-        let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(future_ts)).unwrap();
-        assert_eq!(
-            q.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
-        );
+        let q =
+            build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(future_ts)).unwrap();
+        assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::Daily);
+        assert_eq!(q.stable_key, "daily-quota");
         assert!((q.used - 59.0).abs() < 0.01);
         assert!(matches!(
             q.detail_spec,
@@ -538,11 +568,8 @@ mod tests {
     fn test_build_quota_from_cached_stale_resets_to_full() {
         // reset 时间已过期 → 配额已重置，应视为 0% used
         let past_ts = chrono::Utc::now().timestamp() - 3600;
-        let q = build_quota_from_cached("Daily Quota", Some(41.0), Some(past_ts)).unwrap();
-        assert_eq!(
-            q.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
-        );
+        let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(past_ts)).unwrap();
+        assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::Daily);
         assert!((q.used - 0.0).abs() < 0.01); // 过期后重置为 0% used
         assert!(q.detail_spec.is_none()); // 不展示过期的倒计时
     }
@@ -550,14 +577,14 @@ mod tests {
     #[test]
     fn test_build_quota_from_cached_no_reset_time() {
         // 没有 reset 时间 → 按原始数据展示
-        let q = build_quota_from_cached("Weekly Quota", Some(70.0), None).unwrap();
+        let q = build_quota_from_cached(CachedQuotaKind::Weekly, Some(70.0), None).unwrap();
         assert!((q.used - 30.0).abs() < 0.01);
     }
 
     #[test]
     fn test_build_quota_from_cached_no_percent() {
         // 没有百分比数据 → 返回 None
-        let q = build_quota_from_cached("Daily Quota", None, Some(9999999999));
+        let q = build_quota_from_cached(CachedQuotaKind::Daily, None, Some(9999999999));
         assert!(q.is_none());
     }
 
@@ -784,18 +811,12 @@ mod tests {
 
         // 日配额正常：40% used (100-60)
         let daily = &data.quotas[0];
-        assert_eq!(
-            daily.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Daily Quota".to_string())
-        );
+        assert_eq!(daily.label_spec, crate::models::QuotaLabelSpec::Daily);
         assert!((daily.used - 40.0).abs() < 0.01);
 
         // 周配额：weeklyRemainingPercent 为 null 时应推断为 100% used（已满）
         let weekly = &data.quotas[1];
-        assert_eq!(
-            weekly.label_spec,
-            crate::models::QuotaLabelSpec::Raw("Weekly Quota".to_string())
-        );
+        assert_eq!(weekly.label_spec, crate::models::QuotaLabelSpec::Weekly);
         assert!((weekly.used - 100.0).abs() < 0.01); // 已满
         assert!(matches!(
             weekly.detail_spec,

@@ -87,7 +87,7 @@
 
 封装设置窗口的异步调度、窗口复用、多显示器选择与前台激活逻辑：
 
-- **`schedule_open_settings_window()`** — 延迟到下一帧打开设置窗口，避免 effect handler 中立即建窗导致 `RefCell` 重入
+- **`schedule_open_settings_window()`** — 通过 `10ms` 延迟调度设置窗口打开，避免 tray/popup 关闭与立即建窗落在同一轮前台处理里引发窗口时序问题
 - 内部维护 `SETTINGS_WINDOW` 句柄，优先复用现有窗口
 - 跨显示器时自动关闭旧窗口并在目标显示器重建
 - 通过 GPUI `tray_icon_anchor()` 获取托盘图标所在显示器

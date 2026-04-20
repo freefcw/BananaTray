@@ -5,8 +5,8 @@ pub mod error_presenter;
 pub mod manager;
 
 use crate::models::{
-    AppSettings, ErrorKind, FailureAdvice, FailureReason, ProviderDescriptor, ProviderFailure,
-    RefreshData, SettingsCapability, TokenEditMode, TokenInputState,
+    AppSettings, ErrorKind, FailureAdvice, FailureReason, ProviderCapability, ProviderDescriptor,
+    ProviderFailure, RefreshData, SettingsCapability, TokenEditMode, TokenInputState,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -436,6 +436,14 @@ pub trait AiProvider: Send + Sync {
     /// Token 输入面板，无需在 selector 或 UI 层硬编码。
     fn settings_capability(&self) -> SettingsCapability {
         SettingsCapability::None
+    }
+
+    /// 声明 provider 的能力层级。
+    ///
+    /// `Monitorable` 参与正常刷新链路；
+    /// `Informational` / `Placeholder` 只作为说明入口展示，不参与常规刷新。
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Monitorable
     }
 
     /// 解析 TokenInput 面板的运行时展示状态。

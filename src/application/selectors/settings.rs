@@ -4,10 +4,13 @@
 
 use super::super::state::AppSession;
 use super::format::{
-    format_failure_message, format_last_updated, format_quota_label, quota_display_view_state,
+    format_failure_message, format_last_updated, format_non_monitoring_message, format_quota_label,
+    quota_display_view_state,
 };
 use super::*;
-use crate::models::{ConnectionStatus, ProviderId, ProviderKind, ProviderStatus};
+use crate::models::{
+    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus,
+};
 use rust_i18n::t;
 
 pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvidersTabViewState {
@@ -123,6 +126,11 @@ fn settings_provider_detail_view_state(
         display_name,
         subtitle,
         is_enabled,
+        can_refresh: provider.is_some_and(ProviderStatus::supports_refresh),
+        show_quota_visibility: provider.is_some_and(ProviderStatus::supports_refresh),
+        provider_capability: provider
+            .map(|p| p.provider_capability)
+            .unwrap_or(ProviderCapability::Monitorable),
         info: settings_provider_info_view_state(provider, is_enabled),
         usage: settings_provider_usage_view_state(provider, is_enabled),
         settings_capability: provider
@@ -142,29 +150,49 @@ fn settings_provider_info_view_state(
     } else {
         t!("provider.state.disabled").to_string()
     };
-    let source_text = t!("provider.source.auto").to_string();
+    let source_text = provider
+        .filter(|provider| !provider.supports_refresh())
+        .map(|_| t!("provider.source.reference").to_string())
+        .unwrap_or_else(|| t!("provider.source.auto").to_string());
     let updated_text = provider
-        .map(format_last_updated)
-        .unwrap_or_else(|| t!("provider.not_fetched").to_string());
+        .filter(|provider| !provider.supports_refresh())
+        .map(|_| t!("provider.not_applicable").to_string())
+        .unwrap_or_else(|| {
+            provider
+                .map(format_last_updated)
+                .unwrap_or_else(|| t!("provider.not_fetched").to_string())
+        });
 
     let (status_text, status_kind) = provider
-        .map(|provider| match provider.connection {
-            ConnectionStatus::Connected => (
-                t!("provider.status.operational").to_string(),
-                SettingsProviderStatusKind::Success,
-            ),
-            ConnectionStatus::Disconnected => (
-                t!("provider.status.not_detected").to_string(),
-                SettingsProviderStatusKind::Neutral,
-            ),
-            ConnectionStatus::Refreshing => (
-                t!("provider.status.refreshing").to_string(),
-                SettingsProviderStatusKind::Neutral,
-            ),
-            ConnectionStatus::Error => (
-                t!("provider.status.error").to_string(),
-                SettingsProviderStatusKind::Error,
-            ),
+        .map(|provider| {
+            if !provider.supports_refresh() {
+                let label = match provider.provider_capability {
+                    ProviderCapability::Informational => t!("provider.status.reference_only"),
+                    ProviderCapability::Placeholder => t!("provider.status.not_monitorable"),
+                    ProviderCapability::Monitorable => unreachable!(),
+                }
+                .to_string();
+                return (label, SettingsProviderStatusKind::Neutral);
+            }
+
+            match provider.connection {
+                ConnectionStatus::Connected => (
+                    t!("provider.status.operational").to_string(),
+                    SettingsProviderStatusKind::Success,
+                ),
+                ConnectionStatus::Disconnected => (
+                    t!("provider.status.not_detected").to_string(),
+                    SettingsProviderStatusKind::Neutral,
+                ),
+                ConnectionStatus::Refreshing => (
+                    t!("provider.status.refreshing").to_string(),
+                    SettingsProviderStatusKind::Neutral,
+                ),
+                ConnectionStatus::Error => (
+                    t!("provider.status.error").to_string(),
+                    SettingsProviderStatusKind::Error,
+                ),
+            }
         })
         .unwrap_or_else(|| {
             (
@@ -198,6 +226,12 @@ fn settings_provider_usage_view_state(
         };
     };
 
+    if !provider.supports_refresh() {
+        return SettingsProviderUsageViewState::Empty {
+            message: format_non_monitoring_message(provider),
+        };
+    }
+
     if !provider.quotas.is_empty() {
         return SettingsProviderUsageViewState::Quotas {
             quotas: provider
@@ -225,6 +259,14 @@ fn settings_provider_usage_view_state(
 }
 
 fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
+    if !provider.supports_refresh() {
+        return match provider.provider_capability {
+            ProviderCapability::Informational => t!("provider.detail.reference_only").to_string(),
+            ProviderCapability::Placeholder => t!("provider.detail.not_monitorable").to_string(),
+            ProviderCapability::Monitorable => unreachable!(),
+        };
+    }
+
     let source = provider.source_label();
     match provider.connection {
         ConnectionStatus::Error => t!("provider.detail.last_failed", source = source).to_string(),

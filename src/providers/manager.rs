@@ -169,6 +169,7 @@ impl ProviderManager {
                     ProviderStatus::new(ProviderId::BuiltIn(*kind), self.metadata_for(*kind));
                 if let Some(provider) = self.provider_for_kind(*kind) {
                     status.settings_capability = provider.settings_capability();
+                    status.provider_capability = provider.provider_capability();
                 }
                 status
             })
@@ -180,6 +181,7 @@ impl ProviderManager {
             let provider_id = ProviderId::Custom(id.clone());
             let mut status = ProviderStatus::new(provider_id, descriptor.metadata);
             status.settings_capability = provider.settings_capability();
+            status.provider_capability = provider.provider_capability();
             statuses.push(status);
         }
 

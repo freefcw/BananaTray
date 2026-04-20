@@ -13,13 +13,14 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderMetadata`** — display-oriented metadata: `display_name`, `brand_name`, `icon_asset`, `dashboard_url`, `account_hint`, `source_label`. Providers expose it via `ProviderDescriptor`.
 - **`ProviderId`** — unified provider identifier: `BuiltIn(ProviderKind)` for built-in providers, `Custom(String)` for YAML-declared custom providers. Key methods: `id_key()`, `from_id_key()`, `kind()`, `is_custom()`.
 - **`ProviderDescriptor`** — combines a stable provider id with `ProviderMetadata` for registration and UI lookup.
-- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, auto-managed), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
+- **`ProviderCapability`** — provider product capability tier: `Monitorable`, `Informational`, `Placeholder`. Refresh scheduling and empty-state UI semantics are keyed off this enum.
+- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 
 ### `quota.rs` — Usage Data
 
 - **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit`, `General`
-- **`QuotaLabelSpec`** — quota title semantic payload. Providers store stable meaning (`Session`, `WeeklyModel { .. }`, `Credits`, `Raw(String)` etc.); selector/UI turns it into locale-specific text.
+- **`QuotaLabelSpec`** — quota title semantic payload. Providers store stable meaning (`Daily`, `Session`, `WeeklyModel { .. }`, `MonthlyCredits`, `Credits`, `Raw(String)` etc.); selector/UI turns it into locale-specific text.
 - **`QuotaDetailSpec`** — quota detail semantic payload for the 4th line (`Unlimited`, `RequestCount`, `CreditRemaining`, `ResetAt`, `ResetDate`, `ExpiresInDays`, `Raw(String)`).
 - **`StatusLevel`** — traffic-light severity: `Green`, `Yellow`, `Red` (implements `Ord`)
 - **`QuotaInfo`** — single quota entry with numeric state plus display semantics:
@@ -38,6 +39,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderStatus`** — full runtime state for one provider: metadata + connection status + quotas + account info + `last_failure` + timestamps
   - `last_failure` holds structured failure semantics, replacing the old cached `error_message`
   - locale switching should only re-render selector/UI text; it should not require provider refresh to clear cached strings
+  - runtime-only `provider_capability` mirrors the registered `AiProvider::provider_capability()` so selectors can hide refresh/retry affordances for non-monitorable entries
   - `ProviderStatus::new(provider_id, metadata)` — unified constructor for built-in and custom providers. Callers must keep `provider_id.kind()` and `metadata.kind` aligned; debug builds assert this invariant.
 - **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `account_tier`, runtime `source_label`
 

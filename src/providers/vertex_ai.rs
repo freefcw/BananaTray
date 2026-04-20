@@ -1,5 +1,7 @@
 use super::{AiProvider, ProviderError};
-use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
+use crate::models::{
+    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -53,6 +55,10 @@ impl AiProvider for VertexAiProvider {
                 source_label: "vertex ai api".into(),
             },
         }
+    }
+
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Informational
     }
 
     async fn check_availability(&self) -> Result<()> {

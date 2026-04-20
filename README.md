@@ -5,7 +5,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover, right-click opens settings
-- **15 AI provider integrations** — real-time quota monitoring via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
+- **15 AI provider entries** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
@@ -15,22 +15,23 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 
 ## Supported Providers
 
-| Provider | Data Source | Status |
-|----------|-----------|--------|
-| **Claude** | HTTP API (`api.anthropic.com`) + CLI fallback | Implemented |
-| **Gemini** | HTTP API (`googleapis.com`) | Implemented |
-| **Copilot** | HTTP API (`api.github.com`) | Implemented |
-| **Codex** | HTTP API (`chatgpt.com`) | Implemented |
-| **Kimi** | HTTP API (`kimi.com`) | Implemented |
-| **Amp** | CLI (`amp usage`) | Implemented |
-| **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Implemented |
-| **Antigravity** | Local language server API + local cache | Implemented |
-| **Windsurf** | Local language server API + local cache | Implemented |
-| **MiniMax** | HTTP API (`api.minimax.io`) | Implemented |
-| **Kiro** | CLI (`kiro-cli` interactive PTY) | Implemented |
-| **Kilo** | — | Placeholder (no public API) |
-| **OpenCode** | — | Placeholder (no public API) |
-| **Vertex AI** | — | Placeholder (redirects to Gemini) |
+| Provider | Data Source | Capability | Notes |
+|----------|-------------|------------|-------|
+| **Claude** | HTTP API (`api.anthropic.com`) + CLI fallback | Monitorable | Full quota refresh |
+| **Gemini** | HTTP API (`googleapis.com`) | Monitorable | Full quota refresh |
+| **Copilot** | HTTP API (`api.github.com`) | Monitorable | Full quota refresh |
+| **Codex** | HTTP API (`chatgpt.com`) | Monitorable | Full quota refresh |
+| **Kimi** | HTTP API (`kimi.com`) | Monitorable | Full quota refresh |
+| **Amp** | CLI (`amp usage`) | Monitorable | Full quota refresh |
+| **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Monitorable | Full quota refresh |
+| **Antigravity** | Local language server API + local cache | Monitorable | Full quota refresh |
+| **Windsurf** | Local language server API + local cache | Monitorable | Full quota refresh |
+| **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
+| **Kiro** | CLI (`kiro-cli` interactive PTY) | Monitorable | Full quota refresh |
+| **Kilo** | Extension detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
+| **OpenCode** | CLI detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
+| **Vertex AI** | Gemini CLI config detection | Informational | Reference-only entry for Gemini Vertex AI auth mode |
+| **Custom YAML** | HTTP / CLI / placeholder | Monitorable or Placeholder | `source: placeholder` stays reference-only |
 
 ## Tech Stack
 
@@ -153,7 +154,7 @@ Key design decisions:
 
 1. **Action-Reducer-Effect** — UI and background events become `AppAction`, reducers emit `AppEffect`, and `runtime/` executes effects.
 2. **GPUI isolation** — core state and domain logic stay in GPUI-free modules; the app shell lives behind `feature = "app"`.
-3. **Provider extensibility** — providers expose identity, availability, refresh semantics, and optional settings capability through `AiProvider`.
+3. **Provider extensibility** — providers expose identity, capability tier, availability, refresh semantics, and optional settings capability through `AiProvider`.
 4. **Background refresh** — refresh runs off the UI thread and reports stable result semantics back to the foreground.
 
 For current architecture details, see [docs/architecture.md](docs/architecture.md) and the module `README.md` files under `src/`.

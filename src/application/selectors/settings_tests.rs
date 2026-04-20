@@ -125,6 +125,29 @@ fn settings_provider_detail_reports_error_usage() {
     ));
 }
 
+#[test]
+fn settings_provider_detail_marks_non_monitorable_provider() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+
+    let provider = make_provider(ProviderKind::Kilo, ConnectionStatus::Disconnected);
+    let session = make_session(settings, pid(ProviderKind::Kilo), vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert!(!view_state.detail.can_refresh);
+    assert!(!view_state.detail.show_quota_visibility);
+    assert_eq!(view_state.detail.info.source_text, "Reference");
+    assert_eq!(view_state.detail.info.updated_text, "Not applicable");
+    assert_eq!(view_state.detail.info.status_text, "Not monitorable");
+    assert!(matches!(
+        view_state.detail.usage,
+        SettingsProviderUsageViewState::Empty { .. }
+    ));
+}
+
 // ── quota_visibility 构建 ────────────────────────────
 
 #[test]

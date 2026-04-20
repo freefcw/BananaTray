@@ -140,7 +140,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::DebugRefreshProvider => {
             if let Some(ref id) = session.debug_ui.selected_provider {
-                if !session.debug_ui.refresh_active {
+                let supports_refresh = provider_supports_refresh(session, id);
+                if !session.debug_ui.refresh_active && supports_refresh {
                     session.debug_ui.refresh_active = true;
                     session.provider_store.mark_refreshing_by_id(id);
                     effects.push(CommonEffect::StartDebugRefresh(id.clone()).into());
@@ -415,9 +416,13 @@ fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<AppEffect>)
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
         .map(|p| p.provider_id.clone())
         .collect();
+
+    if enabled_ids.is_empty() {
+        return;
+    }
 
     for id in &enabled_ids {
         session.provider_store.mark_refreshing_by_id(id);
@@ -442,6 +447,15 @@ fn request_provider_refresh(
         debug!(
             target: "refresh",
             "ignoring refresh request for disabled provider {}",
+            id
+        );
+        return;
+    }
+
+    if !provider_supports_refresh(session, &id) {
+        debug!(
+            target: "refresh",
+            "ignoring refresh request for non-monitorable provider {}",
             id
         );
         return;
@@ -476,7 +490,11 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
     effects.push(CommonEffect::PersistSettings.into());
     effects.push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
     if new_val {
-        request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
+        if provider_supports_refresh(session, &id) {
+            request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
+        } else {
+            effects.push(ContextEffect::Render.into());
+        }
     } else {
         // Provider 被禁用后需重新计算动态图标
         if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic
@@ -488,6 +506,13 @@ fn toggle_provider(session: &mut AppSession, id: ProviderId, effects: &mut Vec<A
         }
         effects.push(ContextEffect::Render.into());
     }
+}
+
+fn provider_supports_refresh(session: &AppSession, id: &ProviderId) -> bool {
+    session
+        .provider_store
+        .find_by_id(id)
+        .is_some_and(|provider| provider.supports_refresh())
 }
 
 fn process_refresh_outcome(
@@ -639,7 +664,12 @@ fn apply_refresh_event(
 
             // 对新增/更新的自定义 Provider 立即触发刷新
             for id in &affected {
-                if session.settings.provider.is_enabled(id) {
+                if session.settings.provider.is_enabled(id)
+                    && session
+                        .provider_store
+                        .find_by_id(id)
+                        .is_some_and(|provider| provider.supports_refresh())
+                {
                     session.provider_store.mark_refreshing_by_id(id);
                     effects.push(
                         CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
@@ -661,7 +691,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
         .provider_store
         .providers
         .iter()
-        .filter(|p| session.settings.provider.is_enabled(&p.provider_id))
+        .filter(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
         .map(|p| p.provider_id.clone())
         .collect();
 

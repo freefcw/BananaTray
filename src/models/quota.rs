@@ -1,4 +1,6 @@
-use super::provider::{ProviderId, ProviderKind, ProviderMetadata, SettingsCapability};
+use super::provider::{
+    ProviderCapability, ProviderId, ProviderKind, ProviderMetadata, SettingsCapability,
+};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -54,6 +56,7 @@ impl QuotaType {
 pub enum QuotaLabelSpec {
     /// 上游或用户自定义原文，保持原样展示
     Raw(String),
+    Daily,
     Session,
     Weekly,
     WeeklyModel {
@@ -63,6 +66,7 @@ pub enum QuotaLabelSpec {
     WeeklyTier {
         tier: String,
     },
+    MonthlyCredits,
     Credits,
     BonusCredits,
     ExtraUsage,
@@ -84,9 +88,11 @@ impl QuotaLabelSpec {
     pub fn stable_key(&self, quota_type: &QuotaType) -> String {
         match self {
             Self::Raw(label) => slugify_key(label),
+            Self::Daily => "daily".into(),
             Self::Session => "session".into(),
             Self::Weekly | Self::WeeklyTier { .. } => "weekly".into(),
             Self::WeeklyModel { model } => format!("model:{model}"),
+            Self::MonthlyCredits => "monthly-credits".into(),
             Self::Credits => {
                 if *quota_type == QuotaType::Credit {
                     "credit".into()
@@ -622,6 +628,9 @@ pub struct ProviderStatus {
     /// 设置 UI 能力声明（运行时由 ProviderManager 填充，不序列化）
     #[serde(skip)]
     pub settings_capability: SettingsCapability,
+    /// Provider 能力层级（运行时由 ProviderManager 填充，不序列化）
+    #[serde(skip)]
+    pub provider_capability: ProviderCapability,
 }
 
 /// serde 默认值：反序列化旧数据时，provider_id 用 Claude 作占位
@@ -661,6 +670,7 @@ impl ProviderStatus {
             error_kind: ErrorKind::default(),
             last_refreshed_instant: None,
             settings_capability: SettingsCapability::default(),
+            provider_capability: ProviderCapability::default(),
         }
     }
 
@@ -700,6 +710,10 @@ impl ProviderStatus {
             self.settings_capability = other.settings_capability.clone();
             changed = true;
         }
+        if self.provider_capability != other.provider_capability {
+            self.provider_capability = other.provider_capability;
+            changed = true;
+        }
         changed
     }
 
@@ -728,6 +742,10 @@ impl ProviderStatus {
         self.runtime_source_label
             .as_deref()
             .unwrap_or(&self.metadata.source_label)
+    }
+
+    pub fn supports_refresh(&self) -> bool {
+        self.provider_capability.supports_refresh()
     }
 
     /// 获取最高用量的状态等级（用于总览显示）

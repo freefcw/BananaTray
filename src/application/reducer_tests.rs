@@ -348,6 +348,47 @@ fn debug_refresh_with_selection_produces_effect() {
 }
 
 #[test]
+fn debug_refresh_non_monitorable_provider_is_noop() {
+    let mut session = make_session();
+    reduce(
+        &mut session,
+        AppAction::SelectDebugProvider(pid(ProviderKind::Kilo)),
+    );
+
+    let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
+
+    assert!(!session.debug_ui.refresh_active);
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
+    )));
+}
+
+#[test]
+fn toggle_non_monitorable_provider_on_renders_without_refresh_request() {
+    let mut session = make_session();
+    let id = pid(ProviderKind::Kilo);
+
+    let effects = reduce(&mut session, AppAction::ToggleProvider(id.clone()));
+
+    assert!(session.settings.provider.is_enabled(&id));
+    assert_eq!(session.nav.active_tab, NavTab::Provider(id));
+    assert!(has_render(&effects));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::UpdateConfig { .. }
+        ))
+    )));
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::RefreshOne { .. }
+        ))
+    )));
+}
+
+#[test]
 fn debug_refresh_while_active_is_noop() {
     let mut session = make_session();
     reduce(
@@ -1286,14 +1327,32 @@ fn refresh_all_with_no_enabled_providers_is_safe() {
 
     let effects = reduce(&mut session, AppAction::RefreshAll);
 
-    // 仍然应产出 RefreshAll 请求（coordinator 会处理空列表）
-    assert!(has_effect(&effects, |e| matches!(
+    assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::SendRefreshRequest(
             RefreshRequest::RefreshAll { .. }
         ))
     )));
-    assert!(has_render(&effects));
+    assert!(!has_render(&effects));
+}
+
+#[test]
+fn refresh_all_skips_non_monitorable_providers() {
+    let mut session = make_session();
+    let kilo_id = pid(ProviderKind::Kilo);
+    session.settings.provider.set_enabled(&kilo_id, true);
+
+    let effects = reduce(&mut session, AppAction::RefreshAll);
+
+    let kilo = session.provider_store.find_by_id(&kilo_id).unwrap();
+    assert_ne!(kilo.connection, ConnectionStatus::Refreshing);
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::SendRefreshRequest(
+            RefreshRequest::RefreshAll { .. }
+        ))
+    )));
+    assert!(!has_render(&effects));
 }
 
 // ── RefreshEvent::Finished + debug restore ──────────

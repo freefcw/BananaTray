@@ -275,6 +275,43 @@ fn environment_refresh_interval() {
     assert_eq!(env.refresh_interval, "5 min");
 }
 
+// ── DebugConsoleViewState 测试 ─────────────────────
+
+#[test]
+fn debug_console_only_lists_enabled_monitorable_providers() {
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+    let session = make_session(settings);
+
+    let console = build_console_view_state(&session, &test_context());
+
+    assert_eq!(console.available_providers.len(), 1);
+    assert_eq!(
+        console.available_providers[0].0,
+        ProviderId::BuiltIn(ProviderKind::Claude)
+    );
+}
+
+#[test]
+fn debug_console_hides_stale_non_monitorable_selection() {
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Kilo, true);
+    let mut session = make_session(settings);
+    session.debug_ui.selected_provider = Some(ProviderId::BuiltIn(ProviderKind::Kilo));
+
+    let console = build_console_view_state(&session, &test_context());
+
+    assert!(console.available_providers.is_empty());
+    assert!(console.selected_provider.is_none());
+}
+
 // ── build_debug_info_text 测试 ──────────────────────
 
 #[test]

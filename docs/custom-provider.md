@@ -150,6 +150,12 @@ source:
   reason: "仅做安装检测，不支持真实额度拉取"
 ```
 
+说明：
+
+- `placeholder` source 会把该自定义 provider 标记为 `Placeholder` capability。
+- 这类 provider 会显示在 UI 中，但不会参与启动 / 周期 / 手动 / Debug 刷新。
+- `parser` 可以省略；即使配置了也不会改变它是非监控入口这一事实。
+
 ## auth
 
 HTTP source 当前支持：

@@ -3,7 +3,7 @@
 //! 统一 ProviderStatus / ProviderMetadata 的构造逻辑，
 //! 消除 quota.rs / application/state.rs / provider_logic.rs / selectors.rs 中的重复定义。
 
-use super::provider::{ProviderId, ProviderKind, ProviderMetadata};
+use super::provider::{ProviderCapability, ProviderId, ProviderKind, ProviderMetadata};
 use super::quota::{ConnectionStatus, ProviderStatus};
 
 /// 创建测试用的 ProviderMetadata
@@ -30,6 +30,11 @@ pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> P
     if kind == ProviderKind::Copilot {
         status.settings_capability = crate::providers::copilot::copilot_settings_capability();
     }
+    status.provider_capability = match kind {
+        ProviderKind::VertexAi => ProviderCapability::Informational,
+        ProviderKind::Kilo | ProviderKind::OpenCode => ProviderCapability::Placeholder,
+        _ => ProviderCapability::Monitorable,
+    };
     status
 }
 
