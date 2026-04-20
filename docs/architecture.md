@@ -19,7 +19,8 @@
   - Provider、Quota、Settings 等核心数据模型。
   - 必须保持 GPUI-free。
 - `runtime/`
-  - 共享前台状态、dispatcher、effect 执行、设置写入、设置窗口打开编排。
+  - 共享前台状态、dispatcher、effect 执行、设置写入、设置窗口打开编排，以及全局热键解析、预检、注册/重绑。
+  - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
 - `ui/`
   - GPUI 视图、窗口内容、控件和 view-local 状态。
 - `refresh/`
@@ -65,12 +66,12 @@
 2. `runtime::dispatch_*()` 调用 reducer
 3. reducer 返回 `Vec<AppEffect>`
 4. runtime 执行 effect
-5. 必要时请求 UI 重绘、打开窗口、发送 refresh 请求或写入设置
+5. 必要时请求 UI 重绘、打开窗口、发送 refresh 请求、预检并重绑全局热键，或写入设置
 
 `AppEffect` 维持两类边界：
 
 - `ContextEffect`
-  - 需要 GPUI 前台上下文才能执行，例如重绘、开窗、应用 tray icon。
+  - 需要 GPUI 前台上下文才能执行，例如重绘、开窗、应用 tray icon、重绑全局热键。
 - `CommonEffect`
   - 不依赖具体 GPUI 上下文，例如持久化设置、发送 refresh 请求、普通 I/O。
 
@@ -85,7 +86,7 @@
   - 与 refresh / settings persistence 的对接
 - `ui/` 负责：
   - popup 和 settings window 的具体视图类型
-  - 渲染逻辑与 view-local state
+  - 渲染逻辑与 view-local state（例如设置页里的热键捕获控件）
   - 把少量必要 hook 注册给 `runtime/`
 
 这意味着：

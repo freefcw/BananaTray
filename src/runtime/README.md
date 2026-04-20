@@ -9,6 +9,7 @@
 - 执行 `AppEffect`，把声明式 effect 转成真实副作用
 - 管理设置窗口打开/复用调度
 - 串行化设置持久化写入
+- 解析、注册并热更新全局热键
 - 通过 `ui_hooks` 与具体 UI 视图交互
 
 ## Boundaries
@@ -23,7 +24,7 @@
 
 | 子枚举 | 职责 | 新增时改动 |
 |--------|------|-----------|
-| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, QuitApp） | effect.rs 定义 + `run_context_effect`（必要时补 adapter override） |
+| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | effect.rs 定义 + `run_context_effect`（必要时补 adapter override） |
 | `CommonEffect` | GPUI-free（PersistSettings, SendRefreshRequest, 通知, 文件操作等） | effect.rs 定义 + `run_common_effect` 实现 |
 
 三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `run_common_effect` 处理；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
@@ -32,9 +33,9 @@
 
 为了实现 `ContextEffect` 执行逻辑的收敛，定义了 `ContextCapabilities` trait 及其三个 Adapter 实现：
 
-- **`ContextCapabilities`** — 抽象能力（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, QuitApp）。不支持的能力默认提供 `warn!` 告警实现。
+- **`ContextCapabilities`** — 抽象能力（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp）。不支持的能力默认提供 `warn!` 告警实现。
 - **`ViewCaps`** — `Context<V>` 的适配器，显式实现 `render`；其余能力走 trait 默认实现（`open_url` 可直接复用默认平台调用，其它能力记录告警）。
-- **`WindowCaps`** — `Window + App` 的适配器，覆盖窗口场景需要的完整能力，`render` 实现为 `window.refresh()`。
+- **`WindowCaps`** — `Window + App` 的适配器，覆盖窗口场景需要的完整能力，`render` 实现为 `window.refresh()`，也负责设置窗口里热键保存后的即时重绑。
 - **`AppCaps`** — `App` 的适配器，支持大部分能力，Render 实现为通过 `ui_hooks` 请求当前 popup view 刷新。
 
 在这种模式下，新增一个 `ContextEffect` 变体只需在 `run_context_effect()` 的单一 `match` 中增加分支；如果不同入口存在行为差异，再在 trait 默认实现或 adapter override 中补齐。
@@ -101,6 +102,16 @@
 - **`schedule(settings)`** — 异步 debounce 写入，500ms 窗口内合并多次调用，只写最后一份
 - **`flush(settings)`** — 同步写入，立即落盘并返回结果，会打断未落盘的 debounce 窗口
 - 所有写入（schedule 和 flush）通过同一个后台线程串行化，避免乱序覆盖
+
+### `global_hotkey.rs` — 全局热键解析与重绑
+
+封装 `system.global_hotkey` 的字符串解析、格式归一化、冲突预检、运行时重新注册和失败回滚：
+
+- **`parse_hotkey_string()` / `format_hotkey_for_settings()`** — 兼容旧版展示格式输入（如 `Cmd+S`），但持久化统一写成可回读格式（如 `cmd-s`），避免单字符 key round-trip 时被误加 `Shift`
+- **`register_hotkey_string()`** — 正式替换前先用 probe id 做一次预检；若 probe 失败则返回冲突错误且保持当前热键不动，若正式替换失败则尽力恢复旧热键
+- **`rebind_global_hotkey()`** — settings save 路径的入口：成功时更新 `AppSettings` 并同步写盘，失败时把错误回填到 `SettingsUiState.global_hotkey_error`
+- 启动阶段也复用同一套规则；若磁盘配置无效，`bootstrap` 会先把配置修正为默认热键再尝试注册，因此即便默认热键本身也注册失败，磁盘里也不会继续残留不可解析的坏值；若配置合法但注册失败，则保留用户原值并回填错误
+- macOS 底层注册现改为系统级 `RegisterEventHotKey`，并使用 exclusive 选项注册，避免继续依赖 `NSEvent` monitor 的监听式实现；Windows / X11 仍沿用各自平台 API
 
 ### `newapi_io.rs` — NewAPI YAML 文件 I/O
 

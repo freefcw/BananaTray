@@ -1,4 +1,5 @@
 use super::*;
+use crate::application::GlobalHotkeyError;
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, RefreshData,
@@ -92,6 +93,27 @@ fn update_refresh_cadence_applies_setting_and_closes_dropdown() {
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::SendRefreshRequest(_))
+    )));
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn save_global_hotkey_emits_runtime_effect_and_clears_error() {
+    let mut session = make_session();
+    session.settings_ui.global_hotkey_error = Some(GlobalHotkeyError::InvalidFormat);
+    session.settings_ui.global_hotkey_error_candidate = Some("cmd-shift-j".to_string());
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SaveGlobalHotkey("Cmd+Shift+K".to_string()),
+    );
+
+    assert!(session.settings_ui.global_hotkey_error.is_none());
+    assert!(session.settings_ui.global_hotkey_error_candidate.is_none());
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::ApplyGlobalHotkey(hotkey))
+            if hotkey == "Cmd+Shift+K"
     )));
     assert!(has_render(&effects));
 }

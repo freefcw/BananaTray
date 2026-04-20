@@ -10,6 +10,7 @@ use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
+use adabraka_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
@@ -150,6 +151,10 @@ pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     /// 当前交互设置面板的 Token 输入框（通用，不绑定特定 provider）
     pub(crate) token_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
+    /// General Tab 全局热键捕获输入框
+    pub(crate) global_hotkey_input: Option<Entity<HotkeyInputState>>,
+    /// 上次同步进捕获控件的已保存热键值，用来避免覆盖用户尚未保存的录制结果
+    pub(crate) global_hotkey_synced_value: Option<String>,
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<Subscription>,
     /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
@@ -163,9 +168,37 @@ impl SettingsView {
         Self {
             state,
             token_input: None,
+            global_hotkey_input: None,
+            global_hotkey_synced_value: None,
             _appearance_sub: None,
             newapi_inputs: None,
         }
+    }
+
+    pub(super) fn ensure_global_hotkey_input(
+        &mut self,
+        saved_hotkey: &str,
+        cx: &mut Context<Self>,
+    ) -> Entity<HotkeyInputState> {
+        if self.global_hotkey_input.is_none() {
+            let initial_hotkey = hotkey_value_from_saved_hotkey(saved_hotkey);
+            self.global_hotkey_input = Some(cx.new(|cx| match initial_hotkey {
+                Some(hotkey) => HotkeyInputState::with_hotkey(cx, hotkey),
+                None => HotkeyInputState::new(cx),
+            }));
+            self.global_hotkey_synced_value = Some(saved_hotkey.to_string());
+        }
+
+        let input = self.global_hotkey_input.as_ref().unwrap().clone();
+        if self.global_hotkey_synced_value.as_deref() != Some(saved_hotkey) {
+            let synced_hotkey = hotkey_value_from_saved_hotkey(saved_hotkey);
+            input.update(cx, |input, cx| {
+                input.set_hotkey(synced_hotkey.clone(), cx);
+            });
+            self.global_hotkey_synced_value = Some(saved_hotkey.to_string());
+        }
+
+        input
     }
 
     /// 根据用户主题设置 + 窗口外观解析设置窗口主题
@@ -383,7 +416,7 @@ impl Render for SettingsView {
                 .h(content_h)
                 .overflow_y_scroll()
                 .child(match active_tab {
-                    SettingsTab::General => self.render_general_tab(&settings, &theme),
+                    SettingsTab::General => self.render_general_tab(&settings, &theme, window, cx),
                     SettingsTab::Display => self.render_display_tab(&settings, &theme),
                     SettingsTab::About => self.render_about_tab(&theme),
                     SettingsTab::Debug => self.render_debug_tab(&theme),
@@ -429,4 +462,10 @@ impl Render for SettingsView {
             // 内容区
             .child(content)
     }
+}
+
+fn hotkey_value_from_saved_hotkey(saved_hotkey: &str) -> Option<HotkeyValue> {
+    runtime::global_hotkey::parse_hotkey_string(saved_hotkey)
+        .ok()
+        .map(|keystroke| HotkeyValue::new(keystroke.key, keystroke.modifiers))
 }

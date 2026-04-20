@@ -29,6 +29,7 @@ pub enum ContextEffect {
     OpenSettingsWindow,
     OpenUrl(String),
     ApplyTrayIcon(TrayIconRequest),
+    ApplyGlobalHotkey(String),
     QuitApp,
 }
 

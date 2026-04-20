@@ -145,6 +145,26 @@ fn app_settings_new_format_round_trip() {
     assert_eq!(restored.system.refresh_interval_mins, 5);
 }
 
+#[test]
+fn system_settings_missing_global_hotkey_uses_default() {
+    let json = serde_json::json!({
+        "system": {
+            "auto_hide_window": true,
+            "start_at_login": false,
+            "refresh_interval_mins": 5
+        },
+        "notification": NotificationSettings::default(),
+        "display": DisplaySettings::default(),
+        "provider": ProviderConfig::default(),
+    });
+
+    let restored: AppSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        restored.system.global_hotkey,
+        SystemSettings::DEFAULT_GLOBAL_HOTKEY
+    );
+}
+
 // ── hidden_quotas ────────────────────────────────────
 
 #[test]

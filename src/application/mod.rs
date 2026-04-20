@@ -22,4 +22,4 @@ pub use selectors::{
     RefreshTarget, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-pub use state::{AppSession, HeaderStatusKind, SettingsTab};
+pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsTab};

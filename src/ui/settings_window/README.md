@@ -16,7 +16,7 @@
 
 | 文件 | Tab | 内容 |
 |------|-----|------|
-| `general_tab.rs` | General | 系统行为与通知设置：自启动、刷新间隔、配额通知、提示音 |
+| `general_tab.rs` | General | 系统行为与通知设置：自启动、全局热键、刷新间隔、配额通知、提示音 |
 | `display_tab.rs` | Display | 外观设置：主题、语言、托盘图标样式、配额显示模式、UI 开关 |
 | `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者、问题上报（GitHub Issue） |
 | `debug_tab.rs` | Debug | 调试控制台：日志捕获、单 Provider 刷新、通知测试、系统诊断文本 |
@@ -53,4 +53,7 @@ SettingsView::render()
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - 设置窗口的异步调度与多显示器复用逻辑已迁至 `runtime/settings_window_opener.rs`
+- General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
+- 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
+- macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
 - `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）

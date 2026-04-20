@@ -247,6 +247,8 @@ fn build_initial_settings_ui_state(
         adding_provider: false,
         confirming_remove_provider: false,
         confirming_delete_newapi: false,
+        global_hotkey_error: None,
+        global_hotkey_error_candidate: None,
     }
 }
 
@@ -323,6 +325,27 @@ pub enum SettingsTab {
     Debug,
 }
 
+/// 全局热键保存失败原因。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GlobalHotkeyError {
+    Empty,
+    InvalidFormat,
+    MissingModifier,
+    ModifierOnly,
+    Conflict(String),
+    RegistrationFailed(String),
+}
+
+impl GlobalHotkeyError {
+    /// 仅当配置本身不可用时返回 true；这类错误允许启动阶段回退到默认热键并修正磁盘。
+    pub fn is_invalid_configuration(&self) -> bool {
+        matches!(
+            self,
+            Self::Empty | Self::InvalidFormat | Self::MissingModifier | Self::ModifierOnly
+        )
+    }
+}
+
 /// 设置窗口的临时 UI 状态
 pub struct SettingsUiState {
     pub active_tab: SettingsTab,
@@ -340,6 +363,10 @@ pub struct SettingsUiState {
     pub confirming_remove_provider: bool,
     /// 正在确认删除的 NewAPI Provider（二次确认状态）
     pub confirming_delete_newapi: bool,
+    /// General Tab 全局热键设置的最近一次错误
+    pub global_hotkey_error: Option<GlobalHotkeyError>,
+    /// 与 `global_hotkey_error` 对应的候选热键（持久化格式）
+    pub global_hotkey_error_candidate: Option<String>,
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

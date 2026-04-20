@@ -242,9 +242,13 @@ fn settings_ui_default_values() {
         adding_provider: false,
         confirming_remove_provider: false,
         confirming_delete_newapi: false,
+        global_hotkey_error: None,
+        global_hotkey_error_candidate: None,
     };
     assert_eq!(ui.active_tab, SettingsTab::General);
     assert!(!ui.cadence_dropdown_open);
+    assert!(ui.global_hotkey_error.is_none());
+    assert!(ui.global_hotkey_error_candidate.is_none());
 }
 
 #[test]
@@ -976,6 +980,8 @@ fn session_new_selects_first_sidebar_provider_for_settings() {
         session.settings_ui.selected_provider,
         pid(ProviderKind::Gemini)
     );
+    assert!(session.settings_ui.global_hotkey_error.is_none());
+    assert!(session.settings_ui.global_hotkey_error_candidate.is_none());
 }
 
 #[test]

@@ -8,6 +8,7 @@ use gpui::{App, Context, Window};
 use log::{info, warn};
 
 mod app_state;
+pub(crate) mod global_hotkey;
 mod newapi_io;
 mod settings_window_opener;
 mod settings_writer;
@@ -16,6 +17,7 @@ pub mod ui_hooks;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use self::global_hotkey::rebind_global_hotkey;
 pub use app_state::AppState;
 pub use settings_window_opener::schedule_open_settings_window;
 pub(crate) use settings_writer::SettingsWriter;
@@ -120,6 +122,10 @@ trait ContextCapabilities {
         warn!(target: "runtime", "apply_tray_icon not available in this context");
     }
 
+    fn apply_global_hotkey(&mut self, _state: &Rc<RefCell<AppState>>, _hotkey: &str) {
+        warn!(target: "runtime", "apply_global_hotkey not available in this context");
+    }
+
     fn quit(&mut self) {
         warn!(target: "runtime", "quit not available in this context");
     }
@@ -160,6 +166,10 @@ impl ContextCapabilities for WindowCaps<'_> {
         crate::tray::apply_tray_icon(self.cx, request);
     }
 
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
+        rebind_global_hotkey(state, hotkey, self.cx);
+    }
+
     fn quit(&mut self) {
         self.cx.quit();
     }
@@ -184,6 +194,10 @@ impl ContextCapabilities for AppCaps<'_> {
         crate::tray::apply_tray_icon(self.cx, request);
     }
 
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
+        rebind_global_hotkey(state, hotkey, self.cx);
+    }
+
     fn quit(&mut self) {
         self.cx.quit();
     }
@@ -201,6 +215,7 @@ fn run_context_effect(
         ContextEffect::OpenSettingsWindow => caps.open_settings_window(state),
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
         ContextEffect::ApplyTrayIcon(request) => caps.apply_tray_icon(request),
+        ContextEffect::ApplyGlobalHotkey(hotkey) => caps.apply_global_hotkey(state, &hotkey),
         ContextEffect::QuitApp => caps.quit(),
     }
 }

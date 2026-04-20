@@ -21,6 +21,7 @@ pub enum AppAction {
         id: ProviderId,
         target_index: usize,
     },
+    SaveGlobalHotkey(String),
     UpdateSetting(SettingChange),
     RefreshProvider {
         id: ProviderId,
