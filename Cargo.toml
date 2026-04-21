@@ -31,7 +31,7 @@ unexpected_cfgs = "allow"
 # 与 adabraka-ui 内部的 git 依赖保持同一 source identifier，避免 Cargo
 # 将同一 commit 的 adabraka-gpui 解析成两份 crate，导致 GPUI 类型不兼容。
 gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui" }
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "6ed3f1" }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "b951694", default-features = false }
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
 
@@ -49,16 +49,12 @@ smol = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22.1"
 ureq = "3"
-portable-pty = "0.8"
-which = "6"
+portable-pty = "0.9"
+which = "8"
 rust-i18n = "3"
 sys-locale = "0.3"
 rusqlite = { version = "0.32", features = ["bundled"] }
 prost = "0.13"
-# 静态编译 OpenSSL，避免运行时依赖 Homebrew 的 libssl 动态库。
-# 分发时必须保留：用户机器上不一定有 OpenSSL，且 adhoc 签名 + hardened runtime
-# 会因 Team ID 不匹配拒绝加载 Homebrew 的 dylib。
-openssl-sys = { version = "0.9", features = ["vendored"] }
 
 # -- macOS native deps --
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -79,6 +75,12 @@ block2 = "0.6"
 # osascript fallback), so notify-rust is unnecessary. See src/notification.rs.
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify-rust = "4"
+
+[profile.release]
+strip = true          # 移除符号表，减小二进制体积
+lto = true            # 全量 LTO，跨 crate 死代码消除
+codegen-units = 1     # 单 codegen unit，配合 LTO 最大化优化
+panic = "abort"       # 去掉 unwind 表，减小体积并改善优化
 
 [dev-dependencies]
 tempfile = "3"
