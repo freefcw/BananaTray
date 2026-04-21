@@ -37,7 +37,7 @@ cargo clippy               # lint
 cargo fmt                  # format
 ```
 
-> **`cargo test --lib` is the standard test command.** 默认支持的应用构建路径始终带 `app` feature。`--no-default-features` 只保留给 `lib` 层局部验证，不是受支持的 app 构建契约。All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented.
+> **`cargo test --lib` is the standard test command.** 默认支持的应用构建路径始终带 `app` feature。该 feature 现在同时隔离托盘壳的运行时依赖（GPUI / adabraka-ui / 单实例 / 通知 / 自启动等）；`--no-default-features` 只保留给 `lib` 层局部验证，不是受支持的 app 构建契约。All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented.
 
 > **History:** Before commit `2e36981` (2026-04-13), `use gpui::*` in files with `#[test]` caused rustc SIGBUS (stack overflow via syn recursive parsing). The glob import ban fully resolved this.
 
@@ -46,7 +46,7 @@ cargo fmt                  # format
 ```
 src/
   main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup (`main.rs` requires `app` feature)
-  lib.rs                 — Crate root; `runtime` / `tray` / `ui` compiled behind `cfg(feature = "app")`
+  lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
   models/                — Core data types and settings domain models (GPUI-free)
                            settings/            — User preferences with nested sub-structures
@@ -55,20 +55,20 @@ src/
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
   tray/                  — Tray controller, icon management, multi-display positioning
-  platform/              — OS integration (assets, auto-launch, notifications, paths, system)
+  platform/              — OS integration; `paths` / `system` / log readers stay lib-safe, `assets` / `single_instance` / `notification` / `auto_launch` are app-only
   icons/                 — SVG assets
   utils/                 — Shared text/time/log helpers
   i18n.rs                — Locale detection and i18n configuration
   settings_store.rs      — Settings JSON persistence
-  theme.rs               — GPUI theme tokens and window-appearance integration
-  theme_tests.rs         — Theme parsing unit tests
+  theme.rs               — GPUI theme tokens and window-appearance integration (`app` feature only)
+  theme_tests.rs         — Theme parsing unit tests (`app` feature only)
 ```
 
 This map is intentionally high-level. File-level structure and public APIs live in each module's `README.md` and in `docs/architecture.md`.
 
 ## Key Constraints
 
-1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The app shell is behind `cfg(feature = "app")`; `--no-default-features` only exists for `lib`-layer checks/tests.
+1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The app shell and its runtime-only dependencies are behind `cfg(feature = "app")`; `--no-default-features` only exists for `lib`-layer checks/tests.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
 

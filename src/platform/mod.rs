@@ -22,17 +22,20 @@ pub const APP_ID_LOWER: &str = "bananatray";
 pub const APP_BUNDLE_ID: &str = "com.bananatray.app";
 
 // --- GPUI 依赖模块 ---
-// assets 使用 GPUI AssetSource trait，single_instance 仅在运行时使用
-// 关闭 `app` feature 时这些模块不编译
+// assets 使用 GPUI AssetSource trait；single_instance / auto_launch /
+// notification 只在桌面 app 运行时使用。关闭 `app` feature 时这些模块不编译，
+// 这样 lib-only 校验不会引入托盘壳和平台通知依赖。
 #[cfg(feature = "app")]
 pub(crate) mod assets;
+#[cfg(feature = "app")]
+pub mod auto_launch;
+#[cfg(feature = "app")]
+pub mod notification;
 #[cfg(feature = "app")]
 pub(crate) mod single_instance;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
-pub mod auto_launch;
 pub(crate) mod logging;
-pub mod notification;
 pub mod paths;
 pub mod system;

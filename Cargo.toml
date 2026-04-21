@@ -17,10 +17,22 @@ path = "src/main.rs"
 required-features = ["app"]
 
 [features]
-# `app` gates the GPUI tray application shell.
+# `app` gates the GPUI tray application shell and its runtime-only dependencies.
 # `--no-default-features` is kept only for lib-layer local verification.
 default = ["app"]
-app = []
+app = [
+    "dep:gpui",
+    "dep:adabraka-ui",
+    "dep:interprocess",
+    "dep:fern",
+    "dep:smappservice-rs",
+    "dep:objc2",
+    "dep:objc2-foundation",
+    "dep:objc2-app-kit",
+    "dep:objc2-user-notifications",
+    "dep:block2",
+    "dep:notify-rust",
+]
 
 [lints.rust]
 # The `objc` crate's macros check for `feature = "cargo-clippy"` which triggers
@@ -31,16 +43,16 @@ unexpected_cfgs = "allow"
 # 与 adabraka-ui 内部的 git 依赖保持同一 source identifier，避免 Cargo
 # 将同一 commit 的 adabraka-gpui 解析成两份 crate，导致 GPUI 类型不兼容。
 # 禁用不必要的图像格式 features 以减小体积：BananaTray 只使用 SVG 图标
-gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit"] }
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "3877e8a", default-features = false }
+gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit"], optional = true }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "3877e8a", default-features = false, optional = true }
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
 
 anyhow = "1.0"
 async-trait = "0.1"
 dirs = "5"
-interprocess = { version = "2", default-features = false }
-fern = "0.7"
+interprocess = { version = "2", default-features = false, optional = true }
+fern = { version = "0.7", optional = true }
 log = "0.4"
 regex = { version = "1", default-features = false, features = ["std", "perf"] }
 serde = { version = "1", features = ["derive"] }
@@ -59,12 +71,12 @@ prost = "0.13"
 
 # -- macOS native deps --
 [target.'cfg(target_os = "macos")'.dependencies]
-smappservice-rs = "0.1"
-objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSArray"] }
-objc2-app-kit = { version = "0.3", features = ["NSImage", "NSApplication", "NSButton", "NSView", "NSWindow", "NSControl", "NSStatusBar", "NSRunningApplication", "NSResponder"] }
-objc2-user-notifications = "0.3"
-block2 = "0.6"
+smappservice-rs = { version = "0.1", optional = true }
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSArray"], optional = true }
+objc2-app-kit = { version = "0.3", features = ["NSImage", "NSApplication", "NSButton", "NSView", "NSWindow", "NSControl", "NSStatusBar", "NSRunningApplication", "NSResponder"], optional = true }
+objc2-user-notifications = { version = "0.3", optional = true }
+block2 = { version = "0.6", optional = true }
 
 # -- non-macOS notification deps --
 # notify-rust MUST be macOS-excluded. Its transitive dependency mac-notification-sys
@@ -75,7 +87,7 @@ block2 = "0.6"
 # On macOS we use our own native implementation (UNUserNotificationCenter +
 # osascript fallback), so notify-rust is unnecessary. See src/notification.rs.
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-notify-rust = "4"
+notify-rust = { version = "4", optional = true }
 
 [profile.release]
 opt-level = "z"       # 优先优化体积
