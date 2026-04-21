@@ -13,8 +13,9 @@ pub mod platform;
 pub mod providers;
 pub mod refresh;
 pub mod settings_store;
+#[cfg(feature = "app")]
 pub mod theme;
-#[cfg(test)]
+#[cfg(all(test, feature = "app"))]
 mod theme_tests;
 pub mod utils;
 

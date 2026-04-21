@@ -122,12 +122,13 @@ fn resolve_log_level() -> LevelFilter {
     }
 }
 
-/// 读取日志文件末尾的 N 行。
-///
-/// 目前仅服务于单元测试，因此只在 `cfg(test)` 下编译，避免对生产代码引入
-/// 额外的 dead_code suppress。
-#[cfg(test)]
-fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
+/// 扫描文件，用 ring buffer 保留最后 `max_lines` 条满足 `filter` 的行。
+/// 文件不存在或读取失败时返回空字符串。
+fn read_last_filtered_lines(
+    path: &std::path::Path,
+    max_lines: usize,
+    mut filter: impl FnMut(&str) -> bool,
+) -> String {
     let file = match fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return String::new(),
@@ -142,6 +143,9 @@ fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
             Ok(l) => l,
             Err(_) => continue,
         };
+        if !filter(&line) {
+            continue;
+        }
         if ring.len() >= max_lines {
             ring.pop_front();
         }
@@ -151,37 +155,17 @@ fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
     ring.into_iter().collect::<Vec<_>>().join("\n")
 }
 
+/// 读取日志文件末尾的 N 行。
+#[cfg(test)]
+fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
+    read_last_filtered_lines(path, max_lines, |_| true)
+}
+
 /// 读取日志文件中最后 N 条 WARN/ERROR 级别日志行
-///
-/// 使用 ring buffer 扫描整个文件，只保留 `[WARN]` 或 `[ERROR]` 的行，
-/// 返回最后 `max_lines` 条。文件不存在或读取失败时返回空字符串。
 pub fn read_last_errors(path: &std::path::Path, max_lines: usize) -> String {
-    let file = match fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return String::new(),
-    };
-
-    let reader = BufReader::new(file);
-    let mut ring: std::collections::VecDeque<String> =
-        std::collections::VecDeque::with_capacity(max_lines);
-
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
-        if !line.contains("[WARN]") && !line.contains("[ERROR]") {
-            continue;
-        }
-
-        if ring.len() >= max_lines {
-            ring.pop_front();
-        }
-        ring.push_back(line);
-    }
-
-    ring.into_iter().collect::<Vec<_>>().join("\n")
+    read_last_filtered_lines(path, max_lines, |line| {
+        line.contains("[WARN]") || line.contains("[ERROR]")
+    })
 }
 
 #[cfg(feature = "app")]
@@ -214,11 +198,13 @@ fn install_panic_hook() {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "app")]
     #[test]
     fn platform_log_base_dir_returns_some() {
         assert!(platform_log_base_dir().is_some());
     }
 
+    #[cfg(feature = "app")]
     #[cfg(target_os = "macos")]
     #[test]
     fn platform_log_base_dir_macos_uses_library_logs() {
@@ -229,6 +215,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "app")]
     #[test]
     fn resolve_log_path_env_override() {
         let dir = std::env::temp_dir().join("bananatray_log_test");
