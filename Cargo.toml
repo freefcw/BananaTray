@@ -30,25 +30,26 @@ unexpected_cfgs = "allow"
 [dependencies]
 # 与 adabraka-ui 内部的 git 依赖保持同一 source identifier，避免 Cargo
 # 将同一 commit 的 adabraka-gpui 解析成两份 crate，导致 GPUI 类型不兼容。
-gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui" }
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "b951694", default-features = false }
+# 禁用不必要的图像格式 features 以减小体积：BananaTray 只使用 SVG 图标
+gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit"] }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "3877e8a", default-features = false }
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
 
 anyhow = "1.0"
 async-trait = "0.1"
 dirs = "5"
-interprocess = "2"
+interprocess = { version = "2", default-features = false }
 fern = "0.7"
 log = "0.4"
-regex = "1"
+regex = { version = "1", default-features = false, features = ["std", "perf"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", default-features = false, features = ["std"] }
 serde_yml = "0.0.12"
 smol = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-base64 = "0.22.1"
-ureq = "3"
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+ureq = { version = "3", default-features = false, features = ["charset", "_tls", "rustls"] }
 portable-pty = "0.9"
 which = "8"
 rust-i18n = "3"
@@ -77,8 +78,9 @@ block2 = "0.6"
 notify-rust = "4"
 
 [profile.release]
+opt-level = "z"       # 优先优化体积
 strip = true          # 移除符号表，减小二进制体积
-lto = true            # 全量 LTO，跨 crate 死代码消除
+lto = "fat"           # 全量 LTO，跨 crate 死代码消除
 codegen-units = 1     # 单 codegen unit，配合 LTO 最大化优化
 panic = "abort"       # 去掉 unwind 表，减小体积并改善优化
 
