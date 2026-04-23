@@ -4,7 +4,7 @@ use crate::platform::system::open_url;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
 use gpui::{
-    div, hsla, px, relative, svg, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
+    div, hsla, img, px, relative, svg, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
     ParentElement, Styled, TextAlign,
 };
 use rust_i18n::t;
@@ -122,12 +122,7 @@ impl SettingsView {
                     .border_1()
                     .border_color(border_color)
                     .bg(theme.bg.card)
-                    .child(
-                        svg()
-                            .path("src/icons/tray_icon.svg")
-                            .size(px(48.0))
-                            .text_color(theme.text.accent),
-                    ),
+                    .child(img("src/icons/app_logo.png").w(px(56.0)).h(px(56.0))),
             )
             // 版本徽章
             .child(
