@@ -2,8 +2,8 @@ use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
 use gpui::{
-    div, px, size, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, size, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use std::cell::RefCell;
@@ -11,7 +11,6 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::runtime::AppState;
-use crate::ui::widgets;
 
 use crate::models::PopupLayout;
 
@@ -119,11 +118,7 @@ impl AppView {
                             .bg(theme.bg.subtle)
                             .border_1()
                             .border_color(theme.border.subtle)
-                            .child(widgets::render_svg_icon(
-                                "src/icons/tray_icon.svg",
-                                px(20.0),
-                                theme.text.accent,
-                            )),
+                            .child(img("src/icons/app_logo.png").w(px(24.0)).h(px(24.0))),
                     )
                     // 应用名称
                     .child(
