@@ -322,6 +322,28 @@ mod tests {
         assert_eq!(json_f64(&json, "b.c"), None);
     }
 
+    #[test]
+    fn test_json_string_simple() {
+        let json: serde_json::Value = serde_json::from_str(r#"{"data": "token-abc-123"}"#).unwrap();
+        assert_eq!(
+            json_string(&json, "data"),
+            Some("token-abc-123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_json_string_nested() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"result": {"token": "xyz"}}"#).unwrap();
+        assert_eq!(json_string(&json, "result.token"), Some("xyz".to_string()));
+    }
+
+    #[test]
+    fn test_json_string_missing_path() {
+        let json: serde_json::Value = serde_json::from_str(r#"{"other": "value"}"#).unwrap();
+        assert_eq!(json_string(&json, "data"), None);
+    }
+
     // ── extract_json ────────────────────────────
 
     #[test]

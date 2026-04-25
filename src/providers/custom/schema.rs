@@ -633,6 +633,52 @@ parser:
         }
     }
 
+    #[test]
+    fn test_deserialize_login_auth() {
+        let yaml = r#"
+id: "newapi:api"
+metadata:
+  display_name: "NewAPI"
+  brand_name: "NewAPI"
+availability:
+  type: always
+source:
+  type: http_get
+  url: "https://site.com/api/user/self"
+  auth:
+    type: login
+    login_url: "https://site.com/api/user/login"
+    username: "admin"
+    password: "123456"
+parser:
+  format: json
+  quotas:
+    - label: "Balance"
+      used: "data.used_quota"
+      limit: "data.quota"
+      divisor: 500000
+"#;
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+        if let SourceDef::HttpGet { auth, .. } = &def.source {
+            match auth.as_ref().unwrap() {
+                AuthDef::Login {
+                    login_url,
+                    username,
+                    password,
+                    token_path,
+                } => {
+                    assert_eq!(login_url, "https://site.com/api/user/login");
+                    assert_eq!(username, "admin");
+                    assert_eq!(password, "123456");
+                    assert_eq!(token_path, "data");
+                }
+                _ => panic!("Expected Login auth"),
+            }
+        } else {
+            panic!("Expected HttpGet source");
+        }
+    }
+
     // ── Phase 3: new schema types ────────────────
 
     #[test]
