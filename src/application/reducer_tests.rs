@@ -1,6 +1,7 @@
 use crate::application::{
-    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, GlobalHotkeyError,
-    SettingChange, SettingsTab, TrayIconRequest,
+    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, DebugEffect,
+    GlobalHotkeyError, NewApiEffect, NotificationEffect, RefreshEffect, SettingChange,
+    SettingsEffect, SettingsTab, TrayIconRequest,
 };
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
@@ -90,11 +91,11 @@ fn update_refresh_cadence_applies_setting_and_closes_dropdown() {
     assert!(!session.settings_ui.cadence_dropdown_open);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(_))
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(_)))
     )));
     assert!(has_render(&effects));
 }
@@ -135,15 +136,15 @@ fn toggle_start_at_login_produces_sync_and_notification() {
     assert!(session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SyncAutoLaunch(true))
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::SyncAutoLaunch(true)))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Plain { .. }))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -160,7 +161,7 @@ fn toggle_start_at_login_round_trip() {
     assert!(session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SyncAutoLaunch(true))
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::SyncAutoLaunch(true)))
     )));
 
     // disable
@@ -171,7 +172,9 @@ fn toggle_start_at_login_round_trip() {
     assert!(!session.settings.system.start_at_login);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SyncAutoLaunch(false))
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::SyncAutoLaunch(
+            false
+        )))
     )));
 }
 
@@ -190,7 +193,7 @@ fn toggle_show_account_info_flips_setting() {
     assert!(!session.settings.display.show_account_info);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -350,7 +353,7 @@ fn debug_refresh_without_selection_is_noop() {
     assert!(!session.debug_ui.refresh_active);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::StartRefresh(_)))
     )));
 }
 
@@ -367,7 +370,7 @@ fn debug_refresh_with_selection_produces_effect() {
     assert!(session.debug_ui.refresh_active);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::StartRefresh(_)))
     )));
 }
 
@@ -384,7 +387,7 @@ fn debug_refresh_non_monitorable_provider_is_noop() {
     assert!(!session.debug_ui.refresh_active);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::StartRefresh(_)))
     )));
 }
 
@@ -400,15 +403,15 @@ fn toggle_non_monitorable_provider_on_renders_without_refresh_request() {
     assert!(has_render(&effects));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::UpdateConfig { .. }
-        ))
+        )))
     )));
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::RefreshOne { .. }
-        ))
+        )))
     )));
 }
 
@@ -425,7 +428,7 @@ fn debug_refresh_while_active_is_noop() {
     let effects = reduce(&mut session, AppAction::DebugRefreshProvider);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::StartDebugRefresh(_))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::StartRefresh(_)))
     )));
 }
 
@@ -458,7 +461,7 @@ fn set_tray_icon_style_updates_setting_and_produces_effects() {
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -804,9 +807,9 @@ fn submit_newapi_produces_save_and_notification_effects() {
     // 状态：表单已关闭
     assert!(!session.settings_ui.adding_newapi);
 
-    // Effect: SaveNewApiProvider（检查 config 包含关键字段 + 新增模式）
+    // Effect: NewApiEffect::SaveProvider（检查 config 包含关键字段 + 新增模式）
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, is_editing, .. })
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, is_editing, .. }))
             if config.display_name == "Test Site"
             && config.base_url == "https://api.example.com"
             && config.cookie == "session=tok_123"
@@ -816,10 +819,10 @@ fn submit_newapi_produces_save_and_notification_effects() {
         )
     }));
 
-    // PersistSettings 和 SendPlainNotification 已移至 runtime 成功路径
+    // SettingsEffect::PersistSettings 和 NotificationEffect::Plain 已移至 runtime 成功路径
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 
     assert!(has_render(&effects));
@@ -858,7 +861,7 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
     // PersistSettings 已移至 runtime 成功路径，reducer 不再发射
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }
 
@@ -981,15 +984,15 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
     // 产出 PersistSettings
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     // 触发立即刷新
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        })) if *id == fresh_id
+        }))) if *id == fresh_id
     )));
 }
 
@@ -1024,7 +1027,7 @@ fn providers_reloaded_reuses_existing_sidebar_entry_for_new_custom_provider() {
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }
 
@@ -1044,7 +1047,7 @@ fn submit_newapi_without_optional_fields_uses_defaults() {
     );
 
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, is_editing, .. })
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, is_editing, .. }))
             if config.base_url == "https://minimal.io"
             && config.divisor.is_none()
             && !is_editing
@@ -1147,7 +1150,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
 
     // Effect: 使用原始文件名 + 编辑模式标志
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::SaveNewApiProvider { config, original_filename, is_editing })
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, is_editing }))
             if *original_filename == Some("original-file.yaml".to_string())
             && config.display_name == "Updated Name"
             && config.cookie == "new_cookie"
@@ -1155,10 +1158,10 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
         )
     }));
 
-    // PersistSettings 和通知已移至 runtime 成功路径
+    // SettingsEffect::PersistSettings 和通知已移至 runtime 成功路径
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendPlainNotification { .. })
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Plain { .. }))
     )));
 }
 
@@ -1229,7 +1232,7 @@ fn set_quota_display_mode_updates_setting_and_produces_effects() {
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1285,7 +1288,7 @@ fn toggle_quota_visibility_updates_setting_and_produces_effects() {
         .is_quota_visible(ProviderKind::Claude, "session"));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1328,7 +1331,7 @@ fn clear_debug_logs_produces_effect() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::ClearDebugLogs)
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::ClearLogs))
     )));
     assert!(has_render(&effects));
 }
@@ -1370,9 +1373,9 @@ fn refresh_all_marks_enabled_providers_refreshing() {
     // 应产出 RefreshAll 请求
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::RefreshAll { .. }
-        ))
+        )))
     )));
     assert!(has_render(&effects));
 }
@@ -1386,9 +1389,9 @@ fn refresh_all_with_no_enabled_providers_is_safe() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::RefreshAll { .. }
-        ))
+        )))
     )));
     assert!(!has_render(&effects));
 }
@@ -1405,9 +1408,9 @@ fn refresh_all_skips_non_monitorable_providers() {
     assert_ne!(kilo.connection, ConnectionStatus::Refreshing);
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::RefreshAll { .. }
-        ))
+        )))
     )));
     assert!(!has_render(&effects));
 }
@@ -1443,7 +1446,9 @@ fn finished_event_restores_debug_state() {
     assert!(session.debug_ui.prev_log_level.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::RestoreLogLevel(log::LevelFilter::Info))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::RestoreLogLevel(
+            log::LevelFilter::Info
+        )))
     )));
 }
 
@@ -1468,7 +1473,7 @@ fn finished_event_for_other_provider_does_not_restore() {
     assert!(session.debug_ui.prev_log_level.is_some());
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::RestoreLogLevel(_))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::RestoreLogLevel(_)))
     )));
 }
 
@@ -1500,7 +1505,9 @@ fn finished_restore_survives_unknown_provider() {
     assert!(!session.debug_ui.refresh_active);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::RestoreLogLevel(log::LevelFilter::Warn))
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::RestoreLogLevel(
+            log::LevelFilter::Warn
+        )))
     )));
 }
 
@@ -1524,9 +1531,9 @@ fn providers_reloaded_sends_update_config() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
             RefreshRequest::UpdateConfig { .. }
-        ))
+        )))
     )));
     assert!(has_render(&effects));
 }
@@ -1547,10 +1554,10 @@ fn providers_reloaded_refreshes_enabled_new_custom() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        })) if *id == ProviderId::Custom("new:api".to_string())
+        }))) if *id == ProviderId::Custom("new:api".to_string())
     )));
 }
 
@@ -1572,10 +1579,10 @@ fn providers_reloaded_does_not_refresh_disabled_custom() {
 
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(RefreshRequest::RefreshOne {
             ref id,
             ..
-        })) if *id == ProviderId::Custom("disabled:api".to_string())
+        }))) if *id == ProviderId::Custom("disabled:api".to_string())
     )));
 }
 
@@ -1651,7 +1658,7 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }
 
@@ -1672,7 +1679,7 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteNewApiProvider { provider_id })
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id }))
             if *provider_id == id
     )));
     assert!(!session.settings_ui.confirming_delete_newapi);
@@ -1694,7 +1701,7 @@ fn delete_newapi_emits_effect_for_any_provider_id() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteNewApiProvider { provider_id })
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id }))
             if *provider_id == id
     )));
 }
@@ -1708,7 +1715,7 @@ fn delete_newapi_emits_effect_for_builtin_provider() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::DeleteNewApiProvider { .. })
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { .. }))
     )));
 }
 
@@ -1729,7 +1736,7 @@ fn move_provider_to_index_persists_and_renders() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1803,7 +1810,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     assert!(!session.settings_ui.adding_provider);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1839,7 +1846,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .is_enabled(&pid(ProviderKind::Claude)));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1864,7 +1871,7 @@ fn remove_last_sidebar_provider_enters_add_mode() {
     assert!(session.settings_ui.adding_provider);
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -1884,7 +1891,7 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
     // 无持久化
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     // 仍有 render（Render effect 在 if 外无条件 push）
     assert!(has_render(&effects));
@@ -2045,7 +2052,7 @@ fn save_provider_token_stores_credential_and_persists() {
     // 产出 PersistSettings
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     assert!(has_render(&effects));
 }
@@ -2075,7 +2082,7 @@ fn save_provider_token_empty_does_not_persist() {
     // 不应产出 PersistSettings
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }
 
@@ -2096,7 +2103,7 @@ fn save_provider_token_without_capability_does_not_persist() {
     // 不应产出 PersistSettings（capability 不匹配）
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
     // 编辑状态仍关闭
     assert!(session.settings_ui.token_editing_provider.is_none());
@@ -2133,6 +2140,6 @@ fn save_provider_token_supports_arbitrary_credential_key() {
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::PersistSettings)
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }

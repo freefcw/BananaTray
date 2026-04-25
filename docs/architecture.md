@@ -21,6 +21,7 @@
   - 必须保持 GPUI-free。
 - `runtime/`
   - 共享前台状态、dispatcher、effect 执行、设置写入、设置窗口打开编排，以及全局热键解析、预检、注册/重绑。
+  - `runtime/effects/` 按领域执行 GPUI-free 的 `CommonEffect`，避免把持久化、通知、refresh、Debug、NewAPI I/O 全部集中在 `runtime/mod.rs`。
   - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
 - `ui/`
   - GPUI 视图、窗口内容、控件和 view-local 状态。
@@ -79,6 +80,7 @@
   - 需要 GPUI 前台上下文才能执行，例如重绘、开窗、应用 tray icon、重绑全局热键。
 - `CommonEffect`
   - 不依赖具体 GPUI 上下文，例如持久化设置、发送 refresh 请求、普通 I/O。
+  - 顶层按领域路由到 `SettingsEffect`、`NotificationEffect`、`RefreshEffect`、`DebugEffect`、`NewApiEffect`，由 `runtime/effects/` 下对应模块执行。
 
 ## Runtime / UI Ownership
 

@@ -1,6 +1,8 @@
 use log::info;
 
-use crate::application::{AppEffect, CommonEffect, ContextEffect, TrayIconRequest};
+use crate::application::{
+    AppEffect, ContextEffect, RefreshEffect, SettingsEffect, TrayIconRequest,
+};
 use crate::models::{NavTab, ProviderId, SettingsCapability, TrayIconStyle};
 use crate::refresh::RefreshReason;
 
@@ -59,7 +61,7 @@ pub(super) fn save_provider_token(
                 .provider
                 .credentials
                 .set_credential(key, token);
-            effects.push(CommonEffect::PersistSettings.into());
+            effects.push(SettingsEffect::PersistSettings.into());
         }
     }
     session.settings_ui.token_editing_provider = None;
@@ -78,7 +80,7 @@ pub(super) fn move_provider_to_index(
         .provider
         .move_provider_to_index(&id, target_index, &custom_ids);
     if moved {
-        effects.push(CommonEffect::PersistSettings.into());
+        effects.push(SettingsEffect::PersistSettings.into());
         effects.push(ContextEffect::Render.into());
     }
 }
@@ -107,8 +109,8 @@ pub(super) fn toggle_provider(
             .fallback_on_disable(&id, providers, &session.settings);
     }
 
-    effects.push(CommonEffect::PersistSettings.into());
-    effects.push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
+    effects.push(SettingsEffect::PersistSettings.into());
+    effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
     if new_val {
         if provider_supports_refresh(session, &id) {
             request_provider_refresh(session, id, RefreshReason::ProviderToggled, effects);
@@ -154,7 +156,7 @@ pub(super) fn add_provider_to_sidebar(
     effects: &mut Vec<AppEffect>,
 ) {
     if session.settings.provider.add_to_sidebar(&id) {
-        effects.push(CommonEffect::PersistSettings.into());
+        effects.push(SettingsEffect::PersistSettings.into());
     }
     session.settings_ui.adding_provider = false;
     session.settings_ui.selected_provider = id;
@@ -183,8 +185,8 @@ pub(super) fn remove_provider_from_sidebar(
         } else {
             session.settings_ui.adding_provider = true;
         }
-        effects.push(CommonEffect::PersistSettings.into());
-        effects.push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
+        effects.push(SettingsEffect::PersistSettings.into());
+        effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
     }
     effects.push(ContextEffect::Render.into());
 }

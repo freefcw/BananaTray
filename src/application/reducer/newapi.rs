@@ -1,4 +1,4 @@
-use crate::application::{AppEffect, CommonEffect, ContextEffect};
+use crate::application::{AppEffect, ContextEffect, NewApiEffect};
 use crate::models::{NewApiConfig, ProviderId};
 
 use super::super::state::AppSession;
@@ -55,14 +55,14 @@ pub(super) fn submit_newapi(
     session.settings_ui.selected_provider = new_id;
 
     effects.push(
-        CommonEffect::SaveNewApiProvider {
+        NewApiEffect::SaveProvider {
             config,
             original_filename,
             is_editing,
         }
         .into(),
     );
-    // PersistSettings 和 SendPlainNotification 由 effect handler
+    // SettingsEffect::PersistSettings 和 NotificationEffect::Plain 由 effect handler
     // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
     session.settings_ui.adding_newapi = false;
     session.settings_ui.editing_newapi = None;
@@ -71,7 +71,7 @@ pub(super) fn submit_newapi(
 
 pub(super) fn edit_newapi(provider_id: ProviderId, effects: &mut Vec<AppEffect>) {
     // 磁盘 I/O 委托给 runtime effect handler，保持 reducer 纯函数
-    effects.push(CommonEffect::LoadNewApiConfig { provider_id }.into());
+    effects.push(NewApiEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
 }
 
@@ -83,7 +83,7 @@ pub(super) fn delete_newapi(
     session.settings_ui.confirming_delete_newapi = false;
     // 先刷新 UI 关闭确认态，避免等待文件删除 / 热重载结果才消失。
     effects.push(ContextEffect::Render.into());
-    effects.push(CommonEffect::DeleteNewApiProvider { provider_id }.into());
+    effects.push(NewApiEffect::DeleteProvider { provider_id }.into());
 }
 
 pub(super) fn confirm_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {

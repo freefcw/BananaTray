@@ -12,7 +12,7 @@ pub fn load() -> Result<AppSettings> {
 ///
 /// 返回 `true` 表示成功，`false` 表示失败（已记录日志）。
 /// 大多数调用点可忽略返回值（fire-and-forget），仅在需要区分
-/// 成功/失败并给用户不同反馈时才检查（如 SaveNewApiProvider）。
+/// 成功/失败并给用户不同反馈时才检查（如 NewApiEffect::SaveProvider）。
 pub fn persist(settings: &AppSettings) -> bool {
     match save(settings) {
         Ok(_) => true,
