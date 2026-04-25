@@ -1,4 +1,7 @@
-use crate::application::{AppEffect, CommonEffect, ContextEffect, SettingChange, TrayIconRequest};
+use crate::application::{
+    AppEffect, ContextEffect, NotificationEffect, RefreshEffect, SettingChange, SettingsEffect,
+    TrayIconRequest,
+};
 use crate::models::{NavTab, ProviderId, TrayIconStyle};
 
 use super::super::state::{AppSession, SettingsTab};
@@ -48,7 +51,7 @@ pub(super) fn apply_setting_change(
         SettingChange::ToggleStartAtLogin => {
             let new_val = !session.settings.system.start_at_login;
             session.settings.system.start_at_login = new_val;
-            effects.push(CommonEffect::SyncAutoLaunch(new_val).into());
+            effects.push(SettingsEffect::SyncAutoLaunch(new_val).into());
             // 自启动状态变更通知（与 SyncAutoLaunch 解耦，各自单一职责）
             let (title, body) = if new_val {
                 (
@@ -61,7 +64,7 @@ pub(super) fn apply_setting_change(
                     rust_i18n::t!("notification.auto_launch.disabled.body").to_string(),
                 )
             };
-            effects.push(CommonEffect::SendPlainNotification { title, body }.into());
+            effects.push(NotificationEffect::Plain { title, body }.into());
         }
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =
@@ -105,13 +108,12 @@ pub(super) fn apply_setting_change(
         }
         SettingChange::Language(language) => {
             session.settings.display.language = language.clone();
-            effects.push(CommonEffect::ApplyLocale(language).into());
+            effects.push(SettingsEffect::ApplyLocale(language).into());
         }
         SettingChange::RefreshCadence(mins) => {
             session.settings.system.refresh_interval_mins = mins.unwrap_or(0);
             session.settings_ui.cadence_dropdown_open = false;
-            effects
-                .push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
+            effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
         }
         SettingChange::SetTrayIconStyle(style) => {
             session.settings.display.tray_icon_style = style;
@@ -130,7 +132,7 @@ pub(super) fn apply_setting_change(
         }
     }
 
-    effects.push(CommonEffect::PersistSettings.into());
+    effects.push(SettingsEffect::PersistSettings.into());
     effects.push(ContextEffect::Render.into());
 }
 

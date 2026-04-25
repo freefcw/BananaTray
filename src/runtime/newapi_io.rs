@@ -1,7 +1,7 @@
 //! NewAPI Provider YAML 文件的磁盘 I/O 操作。
 //!
 //! 封装 YAML 生成、目录创建、文件写入 / 删除等 I/O 步骤，
-//! 供 `run_common_effect` 中的 NewAPI effect handlers 调用。
+//! 供 `runtime/effects/newapi.rs` 中的 NewAPI effect handlers 调用。
 
 use crate::models::{NewApiConfig, ProviderId};
 use crate::providers::custom::generator;
@@ -46,13 +46,14 @@ pub fn delete_newapi_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
         ProviderId::Custom(custom_id) => custom_id,
         _ => {
             return Err(format!(
-                "DeleteNewApiProvider: not a custom provider id: {provider_id}"
+                "NewApiEffect::DeleteProvider: not a custom provider id: {provider_id}"
             ))
         }
     };
 
-    let filename = generator::filename_for_id(custom_id)
-        .ok_or_else(|| format!("DeleteNewApiProvider: not a newapi provider id: {custom_id}"))?;
+    let filename = generator::filename_for_id(custom_id).ok_or_else(|| {
+        format!("NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}")
+    })?;
     let path = crate::platform::paths::custom_provider_path(&filename);
 
     delete_yaml_file(&path)

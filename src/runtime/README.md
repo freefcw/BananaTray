@@ -24,10 +24,20 @@
 
 | 子枚举 | 职责 | 新增时改动 |
 |--------|------|-----------|
-| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | effect.rs 定义 + `run_context_effect`（必要时补 adapter override） |
-| `CommonEffect` | GPUI-free（PersistSettings, SendRefreshRequest, 通知, 文件操作等） | effect.rs 定义 + `run_common_effect` 实现 |
+| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | `effect.rs` 定义 + `run_context_effect`（必要时补 adapter override） |
+| `CommonEffect` | GPUI-free 顶层领域路由（Settings / Notification / Refresh / Debug / NewApi） | 对应领域子枚举 + `runtime/effects/` 下同名执行器 |
 
-三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `run_common_effect` 处理；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
+三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `effects::run_common_effect` 做领域分派；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
+
+`CommonEffect` 的具体变体按领域放在子枚举里：
+
+| 子枚举 | 职责 |
+|--------|------|
+| `SettingsEffect` | 设置持久化、自启动同步、语言应用、日志级别应用 |
+| `NotificationEffect` | quota 通知、普通文本通知、Debug 测试通知 |
+| `RefreshEffect` | refresh 请求发送 |
+| `DebugEffect` | Debug 页日志目录 / 剪贴板动作、日志捕获、Debug 刷新 |
+| `NewApiEffect` | NewAPI 保存 / 删除 / 加载编排 |
 
 ### ContextCapabilities 模式
 
@@ -52,7 +62,7 @@
 1. 借用 `AppState`，调用 `reduce(&mut session, action)` 得到 `Vec<AppEffect>`
 2. 释放借用
 3. 将相应上下文包装进 Adapter
-4. 逐个执行 effects (通过 `run_context_effect` 或 `run_common_effect`)
+4. 逐个执行 effects (通过 `run_context_effect` 或 `effects::run_common_effect`)
 
 ### 重入保护
 
@@ -103,6 +113,19 @@
 - **`flush(settings)`** — 同步写入，立即落盘并返回结果，会打断未落盘的 debounce 窗口
 - 所有写入（schedule 和 flush）通过同一个后台线程串行化，避免乱序覆盖
 
+### `effects/` — CommonEffect 领域执行器
+
+封装所有不依赖 GPUI 上下文的 effect handler，避免 `runtime/mod.rs` 成为副作用中心化增长点：
+
+- `mod.rs` — `CommonEffect` 顶层穷尽分派
+- `settings.rs` — `SettingsEffect`
+- `notification.rs` — `NotificationEffect`
+- `refresh.rs` — `RefreshEffect`，并提供共享的 refresh 请求发送 helper
+- `debug.rs` — `DebugEffect`
+- `newapi.rs` — `NewApiEffect`
+
+各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 的 YAML 底层读写仍在 `newapi_io.rs`，纯状态回滚仍在 `application/newapi_ops.rs`。
+
 ### `global_hotkey.rs` — 全局热键解析与重绑
 
 封装 `system.global_hotkey` 的字符串解析、格式归一化、冲突预检、运行时重新注册和失败回滚：
@@ -115,7 +138,7 @@
 
 ### `newapi_io.rs` — NewAPI YAML 文件 I/O
 
-封装 `SaveNewApiProvider` 的磁盘写入操作：
+封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 需要的磁盘文件操作：
 
 - **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
 - **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 推导文件路径 + 删除 YAML 文件
@@ -135,6 +158,6 @@ AppAction
   -> dispatch_*()
   -> application::reduce(&mut AppState.session, action)
   -> Vec<AppEffect>
-  -> run_context_effect / run_common_effect
+  -> run_context_effect / effects::run_common_effect
   -> GPUI / tray / refresh / settings_store / providers side effects
 ```

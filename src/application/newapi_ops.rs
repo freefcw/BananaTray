@@ -1,6 +1,6 @@
 //! NewAPI Provider 保存操作的纯函数辅助模块。
 //!
-//! 从 `runtime/mod.rs` 的 `SaveNewApiProvider` handler 中提取的状态操作逻辑，
+//! 从 `runtime/effects/newapi.rs` 的 `NewApiEffect::SaveProvider` handler 中提取的状态操作逻辑，
 //! 包括保存失败时的回滚和通知 i18n key 选择。
 //!
 //! 本模块为纯函数，不包含 I/O 或 GPUI 依赖，可通过 `cargo test --lib` 测试。

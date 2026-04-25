@@ -8,7 +8,10 @@ mod selectors;
 pub(crate) mod state;
 
 pub use action::{AppAction, DebugNotificationKind, SettingChange};
-pub use effect::{AppEffect, CommonEffect, ContextEffect, TrayIconRequest};
+pub use effect::{
+    AppEffect, CommonEffect, ContextEffect, DebugEffect, NewApiEffect, NotificationEffect,
+    RefreshEffect, SettingsEffect, TrayIconRequest,
+};
 pub use quota_alert::QuotaAlert;
 pub use reducer::{build_config_sync_request, reduce};
 pub use selectors::{

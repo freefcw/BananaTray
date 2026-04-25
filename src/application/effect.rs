@@ -33,64 +33,86 @@ pub enum ContextEffect {
     QuitApp,
 }
 
-/// 不依赖 GPUI 上下文的 effect，由 `run_common_effect` 统一执行。
+/// 不依赖 GPUI 上下文的 effect。
 ///
-/// 新增变体只需改 2 处：此枚举定义 + `run_common_effect` 实现。
+/// 顶层只负责按领域分派；具体副作用参数放在对应子枚举里，runtime/effects
+/// 下的同名执行器负责真实 I/O 或平台调用。
 #[derive(Debug)]
 pub enum CommonEffect {
+    Settings(SettingsEffect),
+    Notification(NotificationEffect),
+    Refresh(RefreshEffect),
+    Debug(DebugEffect),
+    NewApi(NewApiEffect),
+}
+
+#[derive(Debug)]
+pub enum SettingsEffect {
     PersistSettings,
-    SendRefreshRequest(RefreshRequest),
     SyncAutoLaunch(bool),
+    ApplyLocale(String),
+    UpdateLogLevel(String),
+}
+
+#[derive(Debug)]
+pub enum NotificationEffect {
     /// 发送简单文本通知（无 QuotaAlert 包装）
-    SendPlainNotification {
+    Plain {
         title: String,
         body: String,
     },
-    ApplyLocale(String),
-    UpdateLogLevel(String),
-    SendQuotaNotification {
+    Quota {
         alert: QuotaAlert,
         with_sound: bool,
     },
-    SendDebugNotification {
+    Debug {
         kind: DebugNotificationKind,
         with_sound: bool,
     },
+}
+
+#[derive(Debug)]
+pub enum RefreshEffect {
+    SendRequest(RefreshRequest),
+}
+
+#[derive(Debug)]
+pub enum DebugEffect {
     OpenLogDirectory,
     CopyToClipboard(String),
     /// 启用日志捕获 → 提升日志级别 → 发送 RefreshOne
-    StartDebugRefresh(ProviderId),
+    StartRefresh(ProviderId),
     /// 恢复调试刷新前的日志级别
     RestoreLogLevel(log::LevelFilter),
     /// 清空调试日志缓冲区
-    ClearDebugLogs,
+    ClearLogs,
+}
+
+#[derive(Debug)]
+pub enum NewApiEffect {
     /// 保存 NewAPI Provider：runtime 负责 YAML 生成 + 文件写入 + 持久化 + 通知 + 热重载
     ///
-    /// 只有写入成功时才执行 PersistSettings 和 SendPlainNotification，
+    /// 只有写入成功时才执行 SettingsEffect::PersistSettings 和 NotificationEffect::Plain，
     /// 确保失败时不会产生幽灵 Provider 或虚假成功通知。
-    SaveNewApiProvider {
+    SaveProvider {
         config: NewApiConfig,
         original_filename: Option<String>,
         /// 编辑模式标志：失败时不回滚预注册（旧文件仍有效）
         is_editing: bool,
     },
     /// 删除 NewAPI Provider：runtime 负责文件名推导 + 文件删除 + 热重载
-    DeleteNewApiProvider {
-        provider_id: ProviderId,
-    },
+    DeleteProvider { provider_id: ProviderId },
     /// 从磁盘加载 NewAPI 配置（填充编辑表单），由 runtime 执行 I/O
-    LoadNewApiConfig {
-        provider_id: ProviderId,
-    },
+    LoadConfig { provider_id: ProviderId },
 }
 
 /// Reducer 产出的副作用（两级路由）。
 ///
 /// Runtime 层根据外层 variant 先分流：
 /// - `Context` → `run_context_effect` + capability adapter
-/// - `Common` → `run_common_effect`
+/// - `Common` → `effects::run_common_effect`
 ///
-/// 新增 `CommonEffect` 只需改 2 处：枚举定义 + `run_common_effect`
+/// 新增领域 effect 需改对应子枚举 + runtime/effects 下的对应执行器
 /// 新增 `ContextEffect` 只需改 2 处：枚举定义 + `run_context_effect`
 #[derive(Debug)]
 pub enum AppEffect {
@@ -99,7 +121,7 @@ pub enum AppEffect {
 }
 
 // ── From impls ───────────────────────────────────────
-// reducer 使用 `ContextEffect::Render.into()` / `CommonEffect::PersistSettings.into()`
+// reducer 使用 `ContextEffect::Render.into()` / `SettingsEffect::PersistSettings.into()`
 // 保持构造简洁，避免为每个 effect 再维护一层样板构造方法。
 
 impl From<ContextEffect> for AppEffect {
@@ -111,6 +133,66 @@ impl From<ContextEffect> for AppEffect {
 impl From<CommonEffect> for AppEffect {
     fn from(e: CommonEffect) -> Self {
         Self::Common(e)
+    }
+}
+
+impl From<SettingsEffect> for CommonEffect {
+    fn from(e: SettingsEffect) -> Self {
+        Self::Settings(e)
+    }
+}
+
+impl From<SettingsEffect> for AppEffect {
+    fn from(e: SettingsEffect) -> Self {
+        CommonEffect::from(e).into()
+    }
+}
+
+impl From<NotificationEffect> for CommonEffect {
+    fn from(e: NotificationEffect) -> Self {
+        Self::Notification(e)
+    }
+}
+
+impl From<NotificationEffect> for AppEffect {
+    fn from(e: NotificationEffect) -> Self {
+        CommonEffect::from(e).into()
+    }
+}
+
+impl From<RefreshEffect> for CommonEffect {
+    fn from(e: RefreshEffect) -> Self {
+        Self::Refresh(e)
+    }
+}
+
+impl From<RefreshEffect> for AppEffect {
+    fn from(e: RefreshEffect) -> Self {
+        CommonEffect::from(e).into()
+    }
+}
+
+impl From<DebugEffect> for CommonEffect {
+    fn from(e: DebugEffect) -> Self {
+        Self::Debug(e)
+    }
+}
+
+impl From<DebugEffect> for AppEffect {
+    fn from(e: DebugEffect) -> Self {
+        CommonEffect::from(e).into()
+    }
+}
+
+impl From<NewApiEffect> for CommonEffect {
+    fn from(e: NewApiEffect) -> Self {
+        Self::NewApi(e)
+    }
+}
+
+impl From<NewApiEffect> for AppEffect {
+    fn from(e: NewApiEffect) -> Self {
+        CommonEffect::from(e).into()
     }
 }
 
@@ -132,7 +214,7 @@ mod tests {
 
     #[test]
     fn common_effect_into_wraps_common_variant() {
-        let effect: AppEffect = CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+        let effect: AppEffect = RefreshEffect::SendRequest(RefreshRequest::RefreshOne {
             id: ProviderId::BuiltIn(ProviderKind::Claude),
             reason: RefreshReason::Manual,
         })
@@ -140,12 +222,12 @@ mod tests {
 
         assert!(matches!(
             effect,
-            AppEffect::Common(CommonEffect::SendRefreshRequest(
+            AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
                 RefreshRequest::RefreshOne {
                     id: ProviderId::BuiltIn(ProviderKind::Claude),
                     reason: RefreshReason::Manual,
                 }
-            ))
+            )))
         ));
     }
 

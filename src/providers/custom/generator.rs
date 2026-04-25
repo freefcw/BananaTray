@@ -110,7 +110,7 @@ parser:
 /// 遍历 providers 目录，找到 id 匹配的 YAML 文件并解析为 NewApiEditData。
 /// 仅支持 NewAPI 型（HttpGet + Cookie auth）Provider。
 ///
-/// **注意**：此函数包含磁盘 I/O，由 runtime effect handler（`LoadNewApiConfig`）调用。
+/// **注意**：此函数包含磁盘 I/O，由 `NewApiEffect::LoadConfig` handler 调用。
 pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
     use super::schema::CustomProviderDef;
 

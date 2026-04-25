@@ -1,13 +1,9 @@
-use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, ContextEffect, DebugNotificationKind, QuotaAlert,
-};
-use crate::models::ConnectionStatus;
-use crate::platform::notification::send_system_notification;
-use crate::refresh::RefreshRequest;
+use crate::application::{reduce, AppAction, AppEffect, ContextEffect};
 use gpui::{App, Context, Window};
-use log::{info, warn};
+use log::warn;
 
 mod app_state;
+mod effects;
 pub(crate) mod global_hotkey;
 mod newapi_io;
 mod settings_window_opener;
@@ -97,10 +93,11 @@ fn dispatch_effects(
 // ============================================================================
 // Effect 执行：两级路由 + Capability 适配
 //
-// - CommonEffect  → run_common_effect（单一 match，类型安全）
+// - CommonEffect  → effects::run_common_effect（按领域子模块执行）
 // - ContextEffect → run_context_effect（单一 match） + ContextCapabilities trait
 //
-// 新增任意 Effect 只需改 2 处：枚举定义 + 对应的 run_*_effect match。
+// 新增 ContextEffect：改枚举定义 + run_context_effect。
+// 新增 CommonEffect 领域变体：改对应子枚举 + runtime/effects 下同名执行器。
 // ============================================================================
 
 /// GPUI 上下文能力抽象。
@@ -229,7 +226,7 @@ fn run_effect_in_context<V: 'static>(
 ) {
     match effect {
         AppEffect::Context(ctx) => run_context_effect(state, ctx, &mut ViewCaps(cx)),
-        AppEffect::Common(common) => run_common_effect(state, common),
+        AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }
 
@@ -243,7 +240,7 @@ fn run_effect_in_window(
         AppEffect::Context(ctx) => {
             run_context_effect(state, ctx, &mut WindowCaps { window, cx });
         }
-        AppEffect::Common(common) => run_common_effect(state, common),
+        AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }
 
@@ -252,144 +249,7 @@ fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut 
         AppEffect::Context(ctx) => {
             run_context_effect(state, ctx, &mut AppCaps { cx });
         }
-        AppEffect::Common(common) => run_common_effect(state, common),
-    }
-}
-
-// ============================================================================
-// Common Effect 执行：不依赖 GPUI 上下文（类型安全，无 catch-all 分支）
-// ============================================================================
-
-fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
-    match effect {
-        CommonEffect::PersistSettings => {
-            let s = state.borrow();
-            s.settings_writer.schedule(s.session.settings.clone());
-        }
-        CommonEffect::SendRefreshRequest(request) => {
-            let _ = send_refresh_request(state, request);
-        }
-        CommonEffect::SyncAutoLaunch(enabled) => {
-            sync_auto_launch(enabled);
-        }
-        CommonEffect::ApplyLocale(language) => {
-            crate::i18n::apply_locale(&language);
-        }
-        CommonEffect::UpdateLogLevel(level) => {
-            update_log_level(&level);
-        }
-        CommonEffect::SendQuotaNotification { alert, with_sound } => {
-            send_system_notification(&alert, with_sound);
-        }
-        CommonEffect::SendPlainNotification { title, body } => {
-            crate::platform::notification::send_plain_notification(&title, &body);
-        }
-        CommonEffect::SendDebugNotification { kind, with_sound } => {
-            send_system_notification(&build_debug_alert(kind), with_sound);
-        }
-        CommonEffect::OpenLogDirectory => {
-            let log_path = state.borrow().log_path.clone();
-            if let Some(path) = log_path {
-                crate::platform::system::open_path_in_finder(&path);
-            } else {
-                warn!(target: "runtime", "OpenLogDirectory: log_path not available");
-            }
-        }
-        CommonEffect::CopyToClipboard(text) => {
-            crate::platform::system::copy_to_clipboard(&text);
-        }
-        CommonEffect::StartDebugRefresh(kind) => {
-            use crate::utils::log_capture::LogCapture;
-            info!(target: "runtime", "starting debug refresh for {:?}", kind);
-            // 1. 保存当前日志级别到 state（供 RestoreLogLevel 使用）
-            state.borrow_mut().session.debug_ui.prev_log_level = Some(log::max_level());
-            // 2. 清空并启用日志捕获
-            LogCapture::global().clear();
-            LogCapture::global().enable();
-            // 3. 临时提升日志级别到 Debug
-            log::set_max_level(log::LevelFilter::Debug);
-            // 4. 发送手动刷新请求（跳过 cooldown）
-            let request = crate::refresh::RefreshRequest::RefreshOne {
-                id: kind,
-                reason: crate::refresh::RefreshReason::Manual,
-            };
-            let _ = send_refresh_request(state, request);
-        }
-        CommonEffect::RestoreLogLevel(level) => {
-            use crate::utils::log_capture::LogCapture;
-            info!(target: "runtime", "debug refresh complete, restoring log level to {:?}", level);
-            // 停用日志捕获，恢复日志级别
-            LogCapture::global().disable();
-            log::set_max_level(level);
-        }
-        CommonEffect::ClearDebugLogs => {
-            crate::utils::log_capture::LogCapture::global().clear();
-        }
-        CommonEffect::SaveNewApiProvider {
-            config,
-            original_filename,
-            is_editing,
-        } => {
-            use crate::application::newapi_ops;
-            use crate::providers::custom::generator;
-
-            let filename =
-                original_filename.unwrap_or_else(|| generator::generate_filename(&config));
-
-            match newapi_io::save_newapi_yaml(&config, &filename) {
-                Ok(path) => {
-                    info!(target: "runtime", "saved custom provider YAML to {}", path.display());
-                    let s = state.borrow();
-                    let settings_saved = s.settings_writer.flush(s.session.settings.clone());
-                    drop(s);
-                    let (title_key, body_key) =
-                        newapi_ops::newapi_save_notification_keys(is_editing, settings_saved);
-                    let title = rust_i18n::t!(title_key).to_string();
-                    let body = rust_i18n::t!(body_key).to_string();
-                    crate::platform::notification::send_plain_notification(&title, &body);
-                    let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
-                }
-                Err(e) => {
-                    warn!(target: "runtime", "failed to save newapi: {}", e);
-                    let mut s = state.borrow_mut();
-                    if is_editing {
-                        newapi_ops::rollback_newapi_edit(&mut s.session, &config, &filename);
-                    } else {
-                        newapi_ops::rollback_newapi_create(&mut s.session, &config);
-                    }
-                }
-            }
-        }
-        CommonEffect::DeleteNewApiProvider { provider_id } => {
-            match newapi_io::delete_newapi_yaml(&provider_id) {
-                Ok(path) => {
-                    info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
-                    let _ = send_refresh_request(state, RefreshRequest::ReloadProviders);
-                }
-                Err(err) => {
-                    warn!(target: "runtime", "{err}");
-                    let title = rust_i18n::t!("newapi.delete_failed_title").to_string();
-                    let body = rust_i18n::t!("newapi.delete_failed_body").to_string();
-                    crate::platform::notification::send_plain_notification(&title, &body);
-                }
-            }
-        }
-        CommonEffect::LoadNewApiConfig { provider_id } => {
-            use crate::providers::custom::generator;
-            if let crate::models::ProviderId::Custom(ref custom_id) = provider_id {
-                if let Some(edit_data) = generator::read_newapi_config(custom_id) {
-                    let mut s = state.borrow_mut();
-                    s.session.settings_ui.adding_newapi = true;
-                    s.session.settings_ui.editing_newapi = Some(edit_data);
-                } else {
-                    warn!(
-                        target: "settings",
-                        "LoadNewApiConfig: failed to read config for {}",
-                        custom_id
-                    );
-                }
-            }
-        }
+        AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }
 
@@ -399,65 +259,6 @@ fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEffect) {
 
 fn notify_view_entity(state: &Rc<RefCell<AppState>>, cx: &mut App) {
     ui_hooks::notify_view(state, cx);
-}
-
-fn send_refresh_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) -> bool {
-    let failed_id = match &request {
-        RefreshRequest::RefreshOne { id, .. } => Some(id.clone()),
-        _ => None,
-    };
-    let send_result = state.borrow().send_refresh(request);
-    if let Err(err) = send_result {
-        warn!(target: "refresh", "failed to send refresh request: {}", err);
-        if let Some(ref id) = failed_id {
-            if let Some(provider) = state.borrow_mut().session.provider_store.find_by_id_mut(id) {
-                provider.connection = ConnectionStatus::Disconnected;
-            }
-        }
-        false
-    } else {
-        true
-    }
-}
-
-fn sync_auto_launch(enabled: bool) {
-    std::thread::spawn(move || {
-        crate::platform::auto_launch::sync(enabled);
-    });
-}
-
-fn update_log_level(level: &str) {
-    if let Some(filter) = parse_log_level(level) {
-        log::set_max_level(filter);
-        info!(target: "settings", "log level changed to: {}", level);
-    }
-}
-
-fn parse_log_level(value: &str) -> Option<log::LevelFilter> {
-    match value.to_lowercase().as_str() {
-        "error" => Some(log::LevelFilter::Error),
-        "warn" => Some(log::LevelFilter::Warn),
-        "info" => Some(log::LevelFilter::Info),
-        "debug" => Some(log::LevelFilter::Debug),
-        "trace" => Some(log::LevelFilter::Trace),
-        _ => None,
-    }
-}
-
-fn build_debug_alert(kind: DebugNotificationKind) -> QuotaAlert {
-    match kind {
-        DebugNotificationKind::Low => QuotaAlert::LowQuota {
-            provider_name: "TestProvider".to_string(),
-            remaining_pct: 8.0,
-        },
-        DebugNotificationKind::Exhausted => QuotaAlert::Exhausted {
-            provider_name: "TestProvider".to_string(),
-        },
-        DebugNotificationKind::Recovered => QuotaAlert::Recovered {
-            provider_name: "TestProvider".to_string(),
-            remaining_pct: 50.0,
-        },
-    }
 }
 
 #[cfg(test)]

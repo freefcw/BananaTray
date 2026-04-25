@@ -52,6 +52,7 @@ src/
                            settings/            — User preferences with nested sub-structures
   ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
   runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配
+                           effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
   tray/                  — Tray controller, icon management, multi-display positioning

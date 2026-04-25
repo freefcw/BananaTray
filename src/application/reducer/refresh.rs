@@ -1,6 +1,8 @@
 use log::{debug, info};
 
-use crate::application::{AppEffect, CommonEffect, ContextEffect};
+use crate::application::{
+    AppEffect, ContextEffect, DebugEffect, NotificationEffect, RefreshEffect, SettingsEffect,
+};
 use crate::models::{NavTab, ProviderId, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 
@@ -27,7 +29,7 @@ pub(super) fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<
     }
 
     effects.push(
-        CommonEffect::SendRefreshRequest(RefreshRequest::RefreshAll {
+        RefreshEffect::SendRequest(RefreshRequest::RefreshAll {
             reason: RefreshReason::Manual,
         })
         .into(),
@@ -60,8 +62,7 @@ pub(super) fn request_provider_refresh(
     }
 
     session.provider_store.mark_refreshing_by_id(&id);
-    effects
-        .push(CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne { id, reason }).into());
+    effects.push(RefreshEffect::SendRequest(RefreshRequest::RefreshOne { id, reason }).into());
     effects.push(ContextEffect::Render.into());
 }
 
@@ -89,7 +90,7 @@ fn process_refresh_outcome(
             {
                 if session.settings.notification.session_quota_notifications {
                     effects.push(
-                        CommonEffect::SendQuotaNotification {
+                        NotificationEffect::Quota {
                             alert,
                             with_sound: session.settings.notification.notification_sound,
                         }
@@ -155,7 +156,7 @@ pub(super) fn apply_refresh_event(
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
                 if let Some(prev_level) = session.debug_ui.prev_log_level.take() {
-                    effects.push(CommonEffect::RestoreLogLevel(prev_level).into());
+                    effects.push(DebugEffect::RestoreLogLevel(prev_level).into());
                 }
                 effects.push(ContextEffect::Render.into());
             }
@@ -172,7 +173,7 @@ pub(super) fn apply_refresh_event(
                 .provider
                 .prune_stale_custom_ids(&custom_ids)
             {
-                effects.push(CommonEffect::PersistSettings.into());
+                effects.push(SettingsEffect::PersistSettings.into());
             }
 
             // 自动启用首次出现的自定义 Provider（热重载发现的新 YAML 文件）
@@ -188,15 +189,14 @@ pub(super) fn apply_refresh_event(
                 );
             }
             if !auto_registered.is_empty() {
-                effects.push(CommonEffect::PersistSettings.into());
+                effects.push(SettingsEffect::PersistSettings.into());
             }
 
             // 清理可能指向已删除 provider 的导航/设置引用
             cleanup_dangling_refs(session);
 
             // 同步 coordinator 的 enabled 列表
-            effects
-                .push(CommonEffect::SendRefreshRequest(build_config_sync_request(session)).into());
+            effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
 
             // 对新增/更新的自定义 Provider 立即触发刷新
             for id in &affected {
@@ -208,7 +208,7 @@ pub(super) fn apply_refresh_event(
                 {
                     session.provider_store.mark_refreshing_by_id(id);
                     effects.push(
-                        CommonEffect::SendRefreshRequest(RefreshRequest::RefreshOne {
+                        RefreshEffect::SendRequest(RefreshRequest::RefreshOne {
                             id: id.clone(),
                             reason: RefreshReason::ProviderToggled,
                         })

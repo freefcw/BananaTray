@@ -1,11 +1,14 @@
-use crate::application::{AppEffect, CommonEffect, ContextEffect, DebugNotificationKind};
+use crate::application::{
+    AppEffect, ContextEffect, DebugEffect, DebugNotificationKind, NotificationEffect,
+    SettingsEffect,
+};
 use crate::models::ProviderId;
 
 use super::super::state::AppSession;
 use super::shared::provider_supports_refresh;
 
 pub(super) fn update_log_level(level: String, effects: &mut Vec<AppEffect>) {
-    effects.push(CommonEffect::UpdateLogLevel(level).into());
+    effects.push(SettingsEffect::UpdateLogLevel(level).into());
     effects.push(ContextEffect::Render.into());
 }
 
@@ -15,7 +18,7 @@ pub(super) fn send_debug_notification(
     effects: &mut Vec<AppEffect>,
 ) {
     effects.push(
-        CommonEffect::SendDebugNotification {
+        NotificationEffect::Debug {
             kind,
             with_sound: session.settings.notification.notification_sound,
         }
@@ -24,11 +27,11 @@ pub(super) fn send_debug_notification(
 }
 
 pub(super) fn open_log_directory(effects: &mut Vec<AppEffect>) {
-    effects.push(CommonEffect::OpenLogDirectory.into());
+    effects.push(DebugEffect::OpenLogDirectory.into());
 }
 
 pub(super) fn copy_to_clipboard(text: String, effects: &mut Vec<AppEffect>) {
-    effects.push(CommonEffect::CopyToClipboard(text).into());
+    effects.push(DebugEffect::CopyToClipboard(text).into());
 }
 
 pub(super) fn select_debug_provider(
@@ -49,12 +52,12 @@ pub(super) fn debug_refresh_provider(session: &mut AppSession, effects: &mut Vec
     if !session.debug_ui.refresh_active && supports_refresh {
         session.debug_ui.refresh_active = true;
         session.provider_store.mark_refreshing_by_id(&id);
-        effects.push(CommonEffect::StartDebugRefresh(id).into());
+        effects.push(DebugEffect::StartRefresh(id).into());
         effects.push(ContextEffect::Render.into());
     }
 }
 
 pub(super) fn clear_debug_logs(effects: &mut Vec<AppEffect>) {
-    effects.push(CommonEffect::ClearDebugLogs.into());
+    effects.push(DebugEffect::ClearLogs.into());
     effects.push(ContextEffect::Render.into());
 }
