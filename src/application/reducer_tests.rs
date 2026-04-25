@@ -1,11 +1,13 @@
-use super::*;
-use crate::application::GlobalHotkeyError;
+use crate::application::{
+    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, GlobalHotkeyError,
+    SettingChange, SettingsTab, TrayIconRequest,
+};
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, ProviderId, ProviderKind, RefreshData,
     SettingsCapability, TokenInputCapability,
 };
-use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
+use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshRequest, RefreshResult};
 
 fn pid(kind: ProviderKind) -> ProviderId {
     ProviderId::BuiltIn(kind)
@@ -962,11 +964,9 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
     let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("fresh:api"));
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     let fresh_id = ProviderId::Custom("fresh:api".to_string());
@@ -1005,11 +1005,9 @@ fn providers_reloaded_reuses_existing_sidebar_entry_for_new_custom_provider() {
     let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("fresh:api"));
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     let fresh_id = ProviderId::Custom("fresh:api".to_string());
@@ -1436,8 +1434,10 @@ fn finished_event_restores_debug_state() {
             error_kind: crate::models::ErrorKind::NetworkError,
         },
     };
-    let mut effects = vec![];
-    apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(outcome)),
+    );
 
     assert!(!session.debug_ui.refresh_active);
     assert!(session.debug_ui.prev_log_level.is_none());
@@ -1459,8 +1459,10 @@ fn finished_event_for_other_provider_does_not_restore() {
         id: pid(ProviderKind::Gemini),
         result: RefreshResult::SkippedCooldown,
     };
-    let mut effects = vec![];
-    apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(outcome)),
+    );
 
     assert!(session.debug_ui.refresh_active);
     assert!(session.debug_ui.prev_log_level.is_some());
@@ -1490,8 +1492,10 @@ fn finished_restore_survives_unknown_provider() {
             error_kind: crate::models::ErrorKind::Unknown,
         },
     };
-    let mut effects = vec![];
-    apply_refresh_event(&mut session, RefreshEvent::Finished(outcome), &mut effects);
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(outcome)),
+    );
 
     assert!(!session.debug_ui.refresh_active);
     assert!(has_effect(&effects, |e| matches!(
@@ -1513,11 +1517,9 @@ fn providers_reloaded_sends_update_config() {
     let mut session = make_session();
     let statuses = session.provider_store.providers.to_vec();
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     assert!(has_effect(&effects, |e| matches!(
@@ -1538,11 +1540,9 @@ fn providers_reloaded_refreshes_enabled_new_custom() {
     let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("new:api"));
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     assert!(has_effect(&effects, |e| matches!(
@@ -1565,11 +1565,9 @@ fn providers_reloaded_does_not_refresh_disabled_custom() {
     let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("disabled:api"));
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     assert!(!has_effect(&effects, |e| matches!(
@@ -1596,11 +1594,9 @@ fn providers_reloaded_clears_debug_selection_for_deleted_custom() {
         .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
         .collect();
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     assert!(session.debug_ui.selected_provider.is_none());
@@ -1622,11 +1618,9 @@ fn providers_reloaded_repoints_active_tab_when_deleted() {
         .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
         .collect();
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     match &session.nav.active_tab {
@@ -1650,11 +1644,9 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
         .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
         .collect();
 
-    let mut effects = vec![];
-    apply_refresh_event(
+    let effects = reduce(
         &mut session,
-        RefreshEvent::ProvidersReloaded { statuses },
-        &mut effects,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
     assert!(has_effect(&effects, |e| matches!(
