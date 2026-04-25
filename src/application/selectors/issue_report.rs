@@ -3,7 +3,7 @@
 //! 收集环境信息 + Provider 状态，生成 Markdown 格式的 Issue 报告，
 //! 并构造 GitHub Issue URL（title + body 预填）。
 //!
-//! 设计：所有 I/O 在 `IssueReportContext` 构造时完成（UI 层），
+//! 设计：所有 I/O 由 runtime/ui infrastructure 收集进 `IssueReportContext`，
 //! selector 本身是纯函数，可单元测试。
 
 use super::super::state::AppSession;
@@ -13,7 +13,7 @@ use crate::utils::text_utils::url_encode;
 const ISSUE_URL_BASE: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues/new");
 
 // ============================================================================
-// 运行时上下文（UI 层构造，包含所有副作用数据）
+// 运行时上下文（在调用 selector 之前由 runtime/ui infrastructure 构造）
 // ============================================================================
 
 /// Issue Report 所需的运行时信息
@@ -26,26 +26,6 @@ pub struct IssueReportContext {
     pub log_level: String,
     /// 最近 30 分钟的 WARN/ERROR 日志
     pub recent_errors: String,
-}
-
-impl IssueReportContext {
-    /// 从运行时环境收集（含 I/O 副作用），在 UI 层的点击回调中调用
-    pub fn collect(log_path: Option<&std::path::Path>) -> Self {
-        let recent_errors = log_path
-            .map(|p| crate::platform::logging::read_last_errors(p, 10))
-            .unwrap_or_default();
-
-        Self {
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
-            git_hash: option_env!("BANANATRAY_GIT_HASH")
-                .unwrap_or("unknown")
-                .to_string(),
-            os_info: crate::platform::system::os_info(),
-            locale: rust_i18n::locale().to_string(),
-            log_level: log::max_level().to_string().to_lowercase(),
-            recent_errors,
-        }
-    }
 }
 
 // ============================================================================
