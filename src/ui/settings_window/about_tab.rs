@@ -1,6 +1,7 @@
 use super::SettingsView;
-use crate::application::{build_issue_report, build_issue_url, IssueReportContext};
+use crate::application::{build_issue_report, build_issue_url};
 use crate::platform::system::open_url;
+use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
 use gpui::{
@@ -232,12 +233,13 @@ impl SettingsView {
                 true,
                 theme,
                 move |_, _, _| {
-                    let borrowed = state.borrow();
-                    let log_path = borrowed.log_path.as_deref();
-                    let ctx = IssueReportContext::collect(log_path);
-                    let report = build_issue_report(&borrowed.session, &ctx);
+                    let log_path = state.borrow().log_path.clone();
+                    let ctx = runtime::collect_issue_report_context(log_path.as_deref());
+                    let report = {
+                        let borrowed = state.borrow();
+                        build_issue_report(&borrowed.session, &ctx)
+                    };
                     let url = build_issue_url(&report);
-                    drop(borrowed);
                     open_url(&url);
                 },
             )))

@@ -10,6 +10,7 @@
 - 管理设置窗口打开/复用调度
 - 串行化设置持久化写入
 - 解析、注册并热更新全局热键
+- 收集 Debug / Issue Report 需要的诊断上下文
 - 通过 `ui_hooks` 与具体 UI 视图交互
 
 ## Boundaries
@@ -112,6 +113,10 @@
 - **`schedule(settings)`** — 异步 debounce 写入，500ms 窗口内合并多次调用，只写最后一份
 - **`flush(settings)`** — 同步写入，立即落盘并返回结果，会打断未落盘的 debounce 窗口
 - 所有写入（schedule 和 flush）通过同一个后台线程串行化，避免乱序覆盖
+
+### `diagnostics_context.rs` — 诊断上下文收集
+
+封装 Debug Tab 和 Issue Report 所需的运行时数据读取，包括日志文件元数据、日志捕获缓冲区、系统信息、locale、当前日志级别和构建信息。`application/selectors` 只接收已收集好的 `DebugContext` / `IssueReportContext` 并保持纯函数边界。
 
 ### `effects/` — CommonEffect 领域执行器
 

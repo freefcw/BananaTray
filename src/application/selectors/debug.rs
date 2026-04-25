@@ -2,7 +2,7 @@
 //!
 //! 将 AppSession + DebugContext 转换为 Debug Tab 所需的 ViewState。
 //! selector 是纯函数：`(AppSession, DebugContext) → DebugTabViewState`
-//! 所有 I/O 和环境变量读取都在 DebugContext 构造时完成。
+//! 所有 I/O 和环境变量读取都由 runtime 层收集后通过 DebugContext 注入。
 
 use super::super::state::AppSession;
 use super::format::{format_failure_message, format_last_updated};
@@ -11,11 +11,11 @@ use crate::utils::log_capture::LogEntry;
 use std::path::PathBuf;
 
 // ============================================================================
-// 运行时上下文（在调用 selector 之前构造，收集所有副作用数据）
+// 运行时上下文（在调用 selector 之前由 runtime/ui infrastructure 构造）
 // ============================================================================
 
-/// 收集 Debug Tab 所需的运行时信息（I/O、环境变量等）。
-/// Selector 不再直接读取这些副作用来源，而是从此结构中获取。
+/// Debug Tab 所需的运行时信息。
+/// Selector 不直接读取副作用来源，而是从此结构中获取已收集的数据。
 #[derive(Debug, Clone)]
 pub struct DebugContext {
     /// 当前日志级别 (RUST_LOG)
@@ -34,31 +34,6 @@ pub struct DebugContext {
     pub app_version: String,
     /// 调试控制台捕获的日志条目（从 LogCapture 读取）
     pub captured_logs: Vec<LogEntry>,
-}
-
-impl DebugContext {
-    /// 从系统收集运行时信息（含 I/O 副作用）
-    pub fn collect(log_path: Option<PathBuf>) -> Self {
-        use crate::utils::log_capture::LogCapture;
-
-        let log_file_size = log_path
-            .as_ref()
-            .and_then(|p| std::fs::metadata(p).ok())
-            .map(|m| m.len());
-
-        Self {
-            // 读取实际生效的日志级别（log::max_level 是 source of truth），
-            // 而非 RUST_LOG 环境变量（仅为启动时初始配置，运行时不会同步更新）。
-            log_level: log::max_level().to_string().to_lowercase(),
-            log_path,
-            log_file_size,
-            os_info: crate::platform::system::os_info(),
-            locale: rust_i18n::locale().to_string(),
-            settings_path: crate::settings_store::config_path().display().to_string(),
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
-            captured_logs: LogCapture::global().entries(),
-        }
-    }
 }
 
 // ============================================================================

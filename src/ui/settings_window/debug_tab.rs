@@ -1,7 +1,7 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
 use crate::application::{
-    build_debug_info_text, debug_tab_view_state, AppAction, DebugContext, DebugNotificationKind,
+    build_debug_info_text, debug_tab_view_state, AppAction, DebugNotificationKind,
     DebugTabViewState, LogLevelColor,
 };
 use crate::runtime;
@@ -35,10 +35,11 @@ const LOG_LEVELS: &[(&str, &str)] = &[
 impl SettingsView {
     /// Render Debug settings tab — 开发者诊断中心
     pub(super) fn render_debug_tab(&self, theme: &Theme) -> Div {
-        // 在 UI 层收集运行时上下文（含 I/O），然后传给纯函数 selector
+        // 先短暂读取日志路径，再由 runtime 收集副作用上下文，避免持有 AppState 借用执行 I/O。
+        let log_path = self.state.borrow().log_path.clone();
+        let ctx = runtime::collect_debug_context(log_path);
         let debug_state = {
             let state = self.state.borrow();
-            let ctx = DebugContext::collect(state.log_path.clone());
             debug_tab_view_state(&state.session, &ctx)
         };
 

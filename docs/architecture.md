@@ -91,6 +91,7 @@
   - effect 执行
   - 设置窗口打开 / 复用编排
   - 与 refresh / settings persistence 的对接
+  - 为 Debug / Issue Report 收集平台信息、日志等诊断上下文
 - `ui/` 负责：
   - popup 和 settings window 的具体视图类型
   - 渲染逻辑与 view-local state（例如设置页里的热键捕获控件）
