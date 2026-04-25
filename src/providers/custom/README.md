@@ -21,16 +21,23 @@ custom/
   mod.rs          — 模块入口，re-export
   schema.rs       — YAML 反序列化结构体
   extractor.rs    — 响应解析（JSON 路径提取 / 正则匹配）
-  provider.rs     — CustomProvider（impl AiProvider）
+  provider.rs     — CustomProvider 门面（impl AiProvider，只编排 descriptor / availability / fetch / parse）
+  descriptor.rs   — ProviderDescriptor 与默认首字母 icon 生成
+  availability.rs — availability 规则解释执行（CLI / env / file / JSON / dir）
+  auth.rs         — auth/header 解析、环境变量凭证、file token、login token
+  fetch.rs        — source 解释执行（CLI / HTTP GET / HTTP POST / placeholder）与 preprocess
+  url.rs          — base_url 拼接、${ENV_VAR} 展开、~ 路径展开
+  log_utils.rs    — 日志截断与认证 header 脱敏
+  json_file.rs    — 本地 JSON 文件读取公共基础设施
   loader.rs       — 文件扫描 + 加载 + 校验
   generator.rs    — NewAPI 中转站 YAML 生成 + ID 预计算 + 配置回读
 ```
 
 ## 设计原则
 
-- **SRP**: 每个模块职责单一（schema 定义 / 获取 / 解析 / Provider 实现 / 文件加载）
+- **SRP**: 每个模块职责单一（schema 定义 / 可用性检查 / 认证 / 获取 / 解析 / Provider 门面 / 文件加载）
 - **OCP**: 新增自定义 Provider 只需添加 YAML 文件，不修改任何 Rust 代码
-- **DIP**: CustomProvider 依赖 fetcher/extractor 的函数接口，不依赖具体实现细节
+- **DIP**: CustomProvider 依赖 descriptor / availability / fetch / extractor 的函数接口，不依赖具体实现细节
 
 ## 支持的数据获取方式
 
