@@ -29,11 +29,16 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`SettingChange`** — 设置变更子枚举
 - **`DebugNotificationKind`** — 调试通知类型
 
-### `reducer.rs` — 纯函数状态变换
+### `reducer.rs` / `reducer/` — 纯函数状态变换
 
 - **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer，将 action 转换为状态变更 + side effects
-- **`build_config_sync_request()`** — 构建配置同步请求
-- 内部函数：`apply_setting_change()` / `toggle_provider()` / `apply_refresh_event()` / `process_refresh_outcome()` / `cleanup_dangling_refs()`
+- **顶层 `reducer.rs` 只做 action 分发**，具体状态变换按领域拆到子 reducer：
+  - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性
+  - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
+  - `reducer/refresh.rs` — 手动刷新、刷新事件、Provider 热重载，以及热重载后的悬空引用清理
+  - `reducer/newapi.rs` — NewAPI 新增 / 编辑 / 删除表单流与对应 effect 发射
+  - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
+  - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `SaveNewApiProvider` effect；`EditNewApi` 的磁盘读取委托给 `LoadNewApiConfig` effect
 - **NewAPI 删除流**：`DeleteNewApi` 会先清空 `confirming_delete_newapi`，然后委托 `DeleteNewApiProvider` effect 执行磁盘删除
