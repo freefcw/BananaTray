@@ -117,5 +117,5 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
 }
 
 #[cfg(test)]
-#[path = "reducer_tests.rs"]
+#[path = "reducer_tests/mod.rs"]
 mod tests;
