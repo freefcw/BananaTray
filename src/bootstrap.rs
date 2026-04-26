@@ -11,6 +11,13 @@ use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrayCommand {
+    ToggleProvider,
+    ShowSettings,
+    Quit,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StartupHotkeyRegistration {
     Registered {
@@ -53,10 +60,25 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     };
     crate::tray::apply_tray_icon(cx, icon_request);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
-    cx.set_tray_panel_mode(true);
 
     // 通知授权（仅在 App Bundle 模式下请求）
     crate::platform::notification::request_notification_authorization();
+}
+
+fn command_for_tray_icon_event(event: TrayIconEvent) -> Option<TrayCommand> {
+    match event {
+        TrayIconEvent::LeftClick => Some(TrayCommand::ToggleProvider),
+        TrayIconEvent::RightClick => Some(TrayCommand::ShowSettings),
+        _ => None,
+    }
+}
+
+fn run_tray_command(command: TrayCommand, controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
+    match command {
+        TrayCommand::ToggleProvider => controller.borrow_mut().toggle_provider(cx),
+        TrayCommand::ShowSettings => controller.borrow_mut().show_settings(cx),
+        TrayCommand::Quit => cx.quit(),
+    }
 }
 
 /// 创建 ProviderManager + RefreshCoordinator，启动后台刷新线程。
@@ -116,17 +138,67 @@ pub(crate) fn trigger_initial_refresh(state: &Rc<RefCell<AppState>>) {
     }
 }
 
-/// 注册托盘图标事件（左键/右键）
+/// 注册托盘图标事件（左键/右键）和 Linux 菜单
 pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
     let ctrl = controller.clone();
     cx.on_tray_icon_event(move |event, cx| {
         info!(target: "tray", "received tray event: {:?}", event);
-        match event {
-            TrayIconEvent::LeftClick => ctrl.borrow_mut().toggle_provider(cx),
-            TrayIconEvent::RightClick => ctrl.borrow_mut().show_settings(cx),
-            _ => {}
+        if let Some(command) = command_for_tray_icon_event(event) {
+            run_tray_command(command, &ctrl, cx);
         }
     });
+
+    // Linux: 注册右键菜单和菜单动作回调
+    // GNOME AppIndicator 扩展行为：单击 → 菜单，双击 → Activate（打开窗口）
+    #[cfg(target_os = "linux")]
+    {
+        install_linux_tray_menu(cx);
+        let ctrl = controller.clone();
+        cx.on_tray_menu_action(move |id, cx| {
+            info!(target: "tray", "received tray menu action: {}", id);
+            if let Some(command) = command_for_tray_menu_action(&id) {
+                run_tray_command(command, &ctrl, cx);
+            }
+        });
+    }
+}
+
+#[cfg(target_os = "linux")]
+const TRAY_ACTION_OPEN: &str = "tray.open";
+#[cfg(target_os = "linux")]
+const TRAY_ACTION_SETTINGS: &str = "tray.settings";
+#[cfg(target_os = "linux")]
+const TRAY_ACTION_QUIT: &str = "tray.quit";
+
+#[cfg(target_os = "linux")]
+fn install_linux_tray_menu(cx: &mut App) {
+    use gpui::TrayMenuItem;
+
+    cx.set_tray_menu(vec![
+        TrayMenuItem::Action {
+            label: t!("tray.menu.open").into(),
+            id: TRAY_ACTION_OPEN.into(),
+        },
+        TrayMenuItem::Action {
+            label: t!("tray.menu.settings").into(),
+            id: TRAY_ACTION_SETTINGS.into(),
+        },
+        TrayMenuItem::Separator,
+        TrayMenuItem::Action {
+            label: t!("tray.menu.quit").into(),
+            id: TRAY_ACTION_QUIT.into(),
+        },
+    ]);
+}
+
+#[cfg(target_os = "linux")]
+fn command_for_tray_menu_action(id: &str) -> Option<TrayCommand> {
+    match id {
+        TRAY_ACTION_OPEN => Some(TrayCommand::ToggleProvider),
+        TRAY_ACTION_SETTINGS => Some(TrayCommand::ShowSettings),
+        TRAY_ACTION_QUIT => Some(TrayCommand::Quit),
+        _ => None,
+    }
 }
 
 /// 注册全局热键（从 settings 读取，可在运行时重新绑定）

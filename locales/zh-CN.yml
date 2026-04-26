@@ -2,6 +2,9 @@ _version: 1
 
 # ── 托盘 ──────────────────────────────────────────────────
 tray.tooltip: "BananaTray - AI 配额监控"
+tray.menu.open: "打开 BananaTray"
+tray.menu.settings: "设置"
+tray.menu.quit: "退出"
 
 # ── 头部状态 ──────────────────────────────────────────────
 header.synced: "已同步"

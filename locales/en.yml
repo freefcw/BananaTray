@@ -2,6 +2,9 @@ _version: 1
 
 # ── Tray ──────────────────────────────────────────────────
 tray.tooltip: "BananaTray - AI Quota Monitor"
+tray.menu.open: "Open BananaTray"
+tray.menu.settings: "Settings"
+tray.menu.quit: "Quit"
 
 # ── Header status ─────────────────────────────────────────
 header.synced: "Synced"
