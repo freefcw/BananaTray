@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use log::{debug, info, warn};
 
 use crate::models::{ProviderCapability, ProviderDescriptor, RefreshData};
-use crate::providers::{AiProvider, ProviderError};
+use crate::providers::{AiProvider, ProviderError, ProviderResult};
 
 use super::extractor::{self, CompiledPatterns};
 use super::schema::{CustomProviderDef, SourceDef};
@@ -32,11 +32,11 @@ impl AiProvider for CustomProvider {
         super::descriptor::descriptor(&self.def)
     }
 
-    async fn check_availability(&self) -> Result<()> {
-        super::availability::check(&self.def.availability)
+    async fn check_availability(&self) -> ProviderResult<()> {
+        Ok(super::availability::check(&self.def.availability)?)
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let id = &self.def.id;
         info!(target: "providers::custom", "[{}] refresh started", id);
 
@@ -62,7 +62,7 @@ impl AiProvider for CustomProvider {
                 id, e, super::log_utils::truncate_for_log(&raw, 300)
             ),
         }
-        result
+        Ok(result?)
     }
 
     fn settings_capability(&self) -> crate::models::SettingsCapability {

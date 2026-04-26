@@ -2,9 +2,8 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
-use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
@@ -31,17 +30,17 @@ impl AiProvider for KimiProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if get_token().is_some() {
             Ok(())
         } else if kimi_cli_exists() {
-            Err(ProviderError::config_missing("KIMI_AUTH_TOKEN").into())
+            Err(ProviderError::config_missing("KIMI_AUTH_TOKEN"))
         } else {
-            Err(ProviderError::cli_not_found("kimi").into())
+            Err(ProviderError::cli_not_found("kimi"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let token = get_token().ok_or_else(|| ProviderError::config_missing("KIMI_AUTH_TOKEN"))?;
         let body = fetch_usage(&token)?;
         Ok(RefreshData::quotas_only(parse_usage_response(&body)?))

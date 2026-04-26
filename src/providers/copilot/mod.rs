@@ -2,13 +2,13 @@ mod client;
 mod parser;
 mod token;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     AppSettings, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
     SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
 };
 use crate::providers::common::http_client::HttpError;
-use anyhow::{Context, Result};
+use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use std::borrow::Cow;
@@ -96,7 +96,7 @@ impl AiProvider for CopilotProvider {
         Some(copilot_token_input_state(settings, config.credential_key))
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         let token_status = resolve_token(None);
         let available = token_status.token.is_some();
         debug!(
@@ -108,11 +108,11 @@ impl AiProvider for CopilotProvider {
         if available {
             Ok(())
         } else {
-            Err(ProviderError::config_missing("github_token / GITHUB_TOKEN").into())
+            Err(ProviderError::config_missing("github_token / GITHUB_TOKEN"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let start = std::time::Instant::now();
         let token_status = resolve_token(None);
 
@@ -132,15 +132,14 @@ impl AiProvider for CopilotProvider {
                                 crate::models::FailureAdvice::LoginApp {
                                     app: "GitHub".to_string(),
                                 },
-                            ))
-                            .into());
+                            )));
                         }
                         HttpError::HttpStatus { code: 403, .. } => {
                             return Err(ProviderError::auth_required(Some(
                                 crate::models::FailureAdvice::ApiError {
                                     message: "GitHub token lacks required Copilot permissions; use a Classic PAT with 'copilot' scope.".to_string(),
                                 },
-                            )).into());
+                            )));
                         }
                         HttpError::HttpStatus { code: 404, .. } => {
                             return Err(ProviderError::fetch_failed_with_advice(
@@ -148,13 +147,12 @@ impl AiProvider for CopilotProvider {
                                     message: "GitHub Copilot is not enabled for this account."
                                         .to_string(),
                                 },
-                            )
-                            .into());
+                            ));
                         }
                         _ => {}
                     }
                 }
-                return Err(e);
+                return Err(e.into());
             }
         };
         debug!(target: "providers", "copilot: api response received in {:.2}s", start.elapsed().as_secs_f64());
@@ -164,7 +162,7 @@ impl AiProvider for CopilotProvider {
             .ok()
             .and_then(|user_body| parse_github_user(&user_body));
 
-        parse_user_info_response(&body, account_name)
+        Ok(parse_user_info_response(&body, account_name)?)
     }
 }
 

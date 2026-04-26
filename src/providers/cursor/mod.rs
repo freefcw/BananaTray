@@ -2,9 +2,9 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
-use anyhow::{Context, Result};
+use anyhow::Context;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
@@ -31,18 +31,17 @@ impl AiProvider for CursorProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if db_path().exists() {
             Ok(())
         } else {
             Err(ProviderError::config_missing(
                 "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
-            )
-            .into())
+            ))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let access_token = read_access_token().context("Failed to read Cursor access token")?;
         let user_id = extract_user_id_from_jwt(&access_token)
             .context("Failed to extract user ID from Cursor JWT")?;

@@ -1,8 +1,8 @@
 mod seat_source;
 
 use super::codeium_family::{self, WINDSURF_SPEC};
-use super::AiProvider;
 use super::ProviderError;
+use super::{AiProvider, ProviderResult};
 use crate::models::{QuotaType, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -19,12 +19,12 @@ impl AiProvider for WindsurfProvider {
         codeium_family::descriptor(&WINDSURF_SPEC)
     }
 
-    async fn check_availability(&self) -> Result<()> {
-        codeium_family::classify_unavailable(&WINDSURF_SPEC)
+    async fn check_availability(&self) -> ProviderResult<()> {
+        Ok(codeium_family::classify_unavailable(&WINDSURF_SPEC)?)
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
-        refresh_windsurf()
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
+        Ok(refresh_windsurf()?)
     }
 }
 

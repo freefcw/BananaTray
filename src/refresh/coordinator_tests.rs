@@ -4,8 +4,7 @@ use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData,
 };
 use crate::providers::error_presenter::ProviderErrorPresenter;
-use crate::providers::{AiProvider, ProviderManager, ProviderManagerHandle};
-use anyhow::Result;
+use crate::providers::{AiProvider, ProviderManager, ProviderManagerHandle, ProviderResult};
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -116,7 +115,7 @@ impl AiProvider for DelayedProvider {
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         std::thread::sleep(self.delay);
         Ok(RefreshData::quotas_only(Vec::new()))
     }
@@ -241,7 +240,7 @@ impl AiProvider for PanicProvider {
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         panic!("simulated provider panic");
     }
 }

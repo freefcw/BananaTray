@@ -2,9 +2,8 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
-use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
@@ -33,15 +32,15 @@ impl AiProvider for MiniMaxProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if get_api_key().is_some() {
             Ok(())
         } else {
-            Err(ProviderError::config_missing("MINIMAX_API_KEY").into())
+            Err(ProviderError::config_missing("MINIMAX_API_KEY"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let api_key =
             get_api_key().ok_or_else(|| ProviderError::config_missing("MINIMAX_API_KEY"))?;
         let body = fetch_remains(api_url(), &api_key)?;

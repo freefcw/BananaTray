@@ -8,8 +8,8 @@ Provider abstraction layer and all 14 AI provider implementations.
 
 - **`AiProvider`** trait (async_trait) — core interface every provider must implement:
   - `descriptor() -> ProviderDescriptor` — provider ID + `ProviderMetadata`
-  - `check_availability() -> Result<()>` — environment/config check with structured error
-  - `refresh() -> Result<RefreshData>` — fetch latest quota data
+  - `check_availability() -> ProviderResult<()>` — environment/config check with structured error
+  - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data
   - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
   - `provider_capability() -> ProviderCapability` — declare whether the provider is `Monitorable`, `Informational`, or `Placeholder`
 - **`SettingsCapability`** — provider-defined settings capability:
@@ -27,6 +27,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
+- **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
 - **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
@@ -86,6 +87,9 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 - 语言切换不应触发 provider refresh；selector 基于最新 locale 即时重算展示字符串。
 - When a provider already knows the user-facing remediation, return a structured `ProviderError`
   directly and keep technical diagnostics in logs instead of `anyhow::Context`.
+- `AiProvider` implementations return `ProviderResult<T>`. Internal helpers may still use
+  `anyhow::Result` for technical context, and `?` classifies those errors through
+  `ProviderError::from(anyhow::Error)`.
 - Shared HTTP transport failures should surface as `common::http_client::HttpError`; provider code
   upgrades them to `ProviderError` only when it knows a clearer remediation.
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
@@ -110,7 +114,7 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 1. **Add `ProviderKind` variant** in `src/models/provider.rs` (`define_provider_kind!` macro + `id_key()` + `from_id_key()`)
 2. **Create provider file or directory**:
    ```rust
-   use super::{define_unit_provider, AiProvider};
+   use super::{define_unit_provider, AiProvider, ProviderResult};
    use crate::models::*;
 
    define_unit_provider!(MyProvider);
@@ -118,8 +122,8 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
    #[async_trait::async_trait]
    impl AiProvider for MyProvider {
        fn descriptor(&self) -> ProviderDescriptor { /* ... */ }
-       async fn check_availability(&self) -> anyhow::Result<()> { Ok(()) }
-       async fn refresh(&self) -> anyhow::Result<RefreshData> { /* ... */ }
+       async fn check_availability(&self) -> ProviderResult<()> { Ok(()) }
+       async fn refresh(&self) -> ProviderResult<RefreshData> { /* ... */ }
        fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
    }
    ```

@@ -1,9 +1,8 @@
-use super::AiProvider;
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     AppSettings, ProviderId, ProviderKind, ProviderMetadata, ProviderStatus, TokenInputCapability,
     TokenInputState,
 };
-use anyhow::Result;
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -213,18 +212,20 @@ impl ProviderManager {
     }
 
     /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
-    pub async fn refresh_by_id(&self, id: &ProviderId) -> Result<crate::models::RefreshData> {
+    pub async fn refresh_by_id(
+        &self,
+        id: &ProviderId,
+    ) -> ProviderResult<crate::models::RefreshData> {
         debug!(target: "providers", "manager: refreshing provider {}", id);
         match self.provider_for_id(id) {
             Some(p) => {
                 let display_label = Self::display_label_for(id, p);
                 Self::execute_refresh(p, &display_label).await
             }
-            None => Err(super::ProviderError::unavailable(&format!(
+            None => Err(ProviderError::unavailable(&format!(
                 "No provider registered for {}",
                 id
-            ))
-            .into()),
+            ))),
         }
     }
 
@@ -239,16 +240,15 @@ impl ProviderManager {
     async fn execute_refresh(
         provider: &dyn AiProvider,
         display_label: &str,
-    ) -> Result<crate::models::RefreshData> {
+    ) -> ProviderResult<crate::models::RefreshData> {
         if let Err(err) = provider.check_availability().await {
-            let classified = super::ProviderError::classify(&err);
             warn!(
                 target: "providers",
                 "provider {} is unavailable: {}",
                 display_label,
-                classified
+                err
             );
-            return Err(classified.into());
+            return Err(err);
         }
         provider.refresh().await
     }
@@ -260,7 +260,6 @@ mod tests {
     use crate::models::{
         AppSettings, SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
     };
-    use anyhow::Result;
     use async_trait::async_trait;
     use std::borrow::Cow;
 
@@ -298,7 +297,7 @@ mod tests {
             })
         }
 
-        async fn refresh(&self) -> Result<crate::models::RefreshData> {
+        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
             Ok(crate::models::RefreshData::quotas_only(Vec::new()))
         }
     }
@@ -320,7 +319,7 @@ mod tests {
             })
         }
 
-        async fn refresh(&self) -> Result<crate::models::RefreshData> {
+        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
             Ok(crate::models::RefreshData::quotas_only(Vec::new()))
         }
     }

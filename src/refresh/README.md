@@ -29,6 +29,7 @@
 - 通过 `smol::unblock` 并发执行多个 Provider 刷新
 - 对每个 Provider 刷新施加协调器级 timeout guard，避免单个卡死任务阻塞整轮结果回收
 - timeout guard 只负责停止等待和释放 in-flight 状态，不会强制取消底层已经开始的阻塞任务
+- 接收 `ProviderManager` 已分类好的 `ProviderResult<RefreshData>`，不再在 refresh 边界处理裸 `anyhow::Result`
 - 将结果封装为 `RefreshEvent` 发回 UI 线程
 - 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）并原子替换共享快照，保证前后台看到的是同一个 registry
 
