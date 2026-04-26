@@ -8,7 +8,9 @@ use log::LevelFilter;
 use std::backtrace::Backtrace;
 #[cfg(feature = "app")]
 use std::env;
+#[cfg(any(feature = "app", test))]
 use std::fs;
+#[cfg(any(feature = "app", test))]
 use std::io::{BufRead, BufReader};
 #[cfg(feature = "app")]
 use std::path::PathBuf;
@@ -124,6 +126,7 @@ fn resolve_log_level() -> LevelFilter {
 
 /// 扫描文件，用 ring buffer 保留最后 `max_lines` 条满足 `filter` 的行。
 /// 文件不存在或读取失败时返回空字符串。
+#[cfg(any(feature = "app", test))]
 fn read_last_filtered_lines(
     path: &std::path::Path,
     max_lines: usize,
@@ -162,6 +165,7 @@ fn read_log_tail(path: &std::path::Path, max_lines: usize) -> String {
 }
 
 /// 读取日志文件中最后 N 条 WARN/ERROR 级别日志行
+#[cfg(any(feature = "app", test))]
 pub fn read_last_errors(path: &std::path::Path, max_lines: usize) -> String {
     read_last_filtered_lines(path, max_lines, |line| {
         line.contains("[WARN]") || line.contains("[ERROR]")

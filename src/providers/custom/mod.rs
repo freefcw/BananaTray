@@ -3,6 +3,7 @@ mod availability;
 mod descriptor;
 pub(crate) mod extractor;
 mod fetch;
+#[cfg(any(feature = "app", test))]
 pub(crate) mod generator;
 mod json_file;
 pub(crate) mod loader;

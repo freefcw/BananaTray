@@ -111,6 +111,7 @@ parser:
 /// 仅支持 NewAPI 型（HttpGet + Cookie auth）Provider。
 ///
 /// **注意**：此函数包含磁盘 I/O，由 `NewApiEffect::LoadConfig` handler 调用。
+#[cfg(feature = "app")]
 pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
     use super::schema::CustomProviderDef;
 
