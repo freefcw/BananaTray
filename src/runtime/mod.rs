@@ -1,6 +1,5 @@
 use crate::application::{reduce, AppAction, AppEffect, ContextEffect};
 use gpui::{App, Context, Window};
-use log::warn;
 
 mod app_state;
 mod diagnostics_context;
@@ -96,38 +95,28 @@ fn dispatch_effects(
 // Effect 执行：两级路由 + Capability 适配
 //
 // - CommonEffect  → effects::run_common_effect（按领域子模块执行）
-// - ContextEffect → run_context_effect（单一 match） + ContextCapabilities trait
+// - ContextEffect → run_full_context_effect / run_view_context_effect + capability traits
 //
-// 新增 ContextEffect：改枚举定义 + run_context_effect。
+// 新增 ContextEffect：改枚举定义 + 对应上下文 effect runner。
 // 新增 CommonEffect 领域变体：改对应子枚举 + runtime/effects 下同名执行器。
 // ============================================================================
 
 /// GPUI 上下文能力抽象。
 ///
 /// 不同 GPUI 入口（Context<V> / Window+App / App）通过 adapter 实现此 trait，
-/// 将"当前环境能做什么"与"要做什么"解耦。`run_context_effect` 只关心后者。
+/// 将"当前环境能做什么"与"要做什么"解耦。effect runner 只关心后者。
 trait ContextCapabilities {
     fn render(&mut self, state: &Rc<RefCell<AppState>>);
-
-    fn open_settings_window(&mut self, _state: &Rc<RefCell<AppState>>) {
-        warn!(target: "runtime", "open_settings_window not available in this context");
-    }
-
     fn open_url(&mut self, url: &str) {
         crate::platform::system::open_url(url);
     }
+}
 
-    fn apply_tray_icon(&mut self, _request: crate::application::TrayIconRequest) {
-        warn!(target: "runtime", "apply_tray_icon not available in this context");
-    }
-
-    fn apply_global_hotkey(&mut self, _state: &Rc<RefCell<AppState>>, _hotkey: &str) {
-        warn!(target: "runtime", "apply_global_hotkey not available in this context");
-    }
-
-    fn quit(&mut self) {
-        warn!(target: "runtime", "quit not available in this context");
-    }
+trait FullContextCapabilities: ContextCapabilities {
+    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>);
+    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest);
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str);
+    fn quit(&mut self);
 }
 
 // ── Adapter: Context<V>（仅支持 Render）─────────────
@@ -138,8 +127,8 @@ impl<V: 'static> ContextCapabilities for ViewCaps<'_, '_, V> {
     fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
         self.0.notify();
     }
-    // open_settings_window / apply_tray_icon / quit 使用 trait 默认 warn 实现
-    // open_url 使用 trait 默认实现（platform::system::open_url）
+    // open_url 使用 trait 默认实现（platform::system::open_url）。
+    // 其它强上下文能力必须走 WindowCaps / AppCaps，避免在 View context 中静默丢 effect。
 }
 
 // ── Adapter: Window + App（全能力）──────────────────
@@ -153,7 +142,9 @@ impl ContextCapabilities for WindowCaps<'_> {
     fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
         self.window.refresh();
     }
+}
 
+impl FullContextCapabilities for WindowCaps<'_> {
     fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
         let display_id = self.window.display(self.cx).map(|display| display.id());
         ui_hooks::clear_popup_view(state);
@@ -184,7 +175,9 @@ impl ContextCapabilities for AppCaps<'_> {
     fn render(&mut self, state: &Rc<RefCell<AppState>>) {
         notify_view_entity(state, self.cx);
     }
+}
 
+impl FullContextCapabilities for AppCaps<'_> {
     fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
         schedule_open_settings_window(state.clone(), None, self.cx);
     }
@@ -204,10 +197,10 @@ impl ContextCapabilities for AppCaps<'_> {
 
 // ── ContextEffect 统一分派（单一 match）─────────────
 
-fn run_context_effect(
+fn run_full_context_effect(
     state: &Rc<RefCell<AppState>>,
     effect: ContextEffect,
-    caps: &mut dyn ContextCapabilities,
+    caps: &mut dyn FullContextCapabilities,
 ) {
     match effect {
         ContextEffect::Render => caps.render(state),
@@ -219,6 +212,21 @@ fn run_context_effect(
     }
 }
 
+fn run_view_context_effect(
+    state: &Rc<RefCell<AppState>>,
+    effect: ContextEffect,
+    caps: &mut dyn ContextCapabilities,
+) {
+    match effect {
+        ContextEffect::Render => caps.render(state),
+        ContextEffect::OpenUrl(url) => caps.open_url(&url),
+        other => panic!(
+            "BUG: ContextEffect::{other:?} requires App or Window context; \
+             dispatch this action with dispatch_in_app or dispatch_in_window"
+        ),
+    }
+}
+
 // ── Effect 入口（Context / Common 两级路由）─────────
 
 fn run_effect_in_context<V: 'static>(
@@ -227,7 +235,7 @@ fn run_effect_in_context<V: 'static>(
     cx: &mut Context<V>,
 ) {
     match effect {
-        AppEffect::Context(ctx) => run_context_effect(state, ctx, &mut ViewCaps(cx)),
+        AppEffect::Context(ctx) => run_view_context_effect(state, ctx, &mut ViewCaps(cx)),
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }
@@ -240,7 +248,7 @@ fn run_effect_in_window(
 ) {
     match effect {
         AppEffect::Context(ctx) => {
-            run_context_effect(state, ctx, &mut WindowCaps { window, cx });
+            run_full_context_effect(state, ctx, &mut WindowCaps { window, cx });
         }
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
@@ -249,7 +257,7 @@ fn run_effect_in_window(
 fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut App) {
     match effect {
         AppEffect::Context(ctx) => {
-            run_context_effect(state, ctx, &mut AppCaps { cx });
+            run_full_context_effect(state, ctx, &mut AppCaps { cx });
         }
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }

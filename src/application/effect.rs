@@ -21,8 +21,9 @@ pub enum TrayIconRequest {
 
 /// 需要 GPUI 上下文才能执行的 effect。
 ///
-/// Runtime 通过 `run_context_effect` 统一 match 这些变体，再由 capability adapter
-/// 根据当前 GPUI 入口（`Context<V>` / `Window + App` / `App`）执行或降级。
+/// Runtime 通过 context effect runner match 这些变体，再由 capability adapter
+/// 根据当前 GPUI 入口（`Context<V>` / `Window + App` / `App`）执行。
+/// `Context<V>` 只允许 View-safe effect；强上下文 effect 必须走 `Window + App` 或 `App`。
 #[derive(Debug)]
 pub enum ContextEffect {
     Render,
@@ -109,11 +110,11 @@ pub enum NewApiEffect {
 /// Reducer 产出的副作用（两级路由）。
 ///
 /// Runtime 层根据外层 variant 先分流：
-/// - `Context` → `run_context_effect` + capability adapter
+/// - `Context` → view-safe context effect runner + capability adapter
 /// - `Common` → `effects::run_common_effect`
 ///
 /// 新增领域 effect 需改对应子枚举 + runtime/effects 下的对应执行器
-/// 新增 `ContextEffect` 只需改 2 处：枚举定义 + `run_context_effect`
+/// 新增 `ContextEffect` 需同步判断 View-safe / Full context runner 的能力边界
 #[derive(Debug)]
 pub enum AppEffect {
     Context(ContextEffect),
