@@ -17,7 +17,9 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 
-### `quota.rs` — Usage Data
+### `quota/` — Usage Data
+
+Refactored into a sub-directory with its own [README](quota/README.md). External imports remain stable through `crate::models::{QuotaInfo, ProviderStatus, ...}` re-exports.
 
 - **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit`, `General`
 - **`QuotaLabelSpec`** — quota title semantic payload. Providers store stable meaning (`Daily`, `Session`, `WeeklyModel { .. }`, `MonthlyCredits`, `Credits`, `Raw(String)` etc.); selector/UI turns it into locale-specific text.
