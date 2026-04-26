@@ -25,6 +25,30 @@ pub(crate) struct TrayController {
     pub(crate) state: Rc<RefCell<AppState>>,
 }
 
+/// 跟踪 popup 的激活状态，避免 Linux 上“尚未真正拿到焦点就被 auto-hide 关闭”。
+#[derive(Debug, Default, Clone, Copy)]
+struct PopupActivationTracker {
+    initialized: bool,
+    has_been_active: bool,
+}
+
+impl PopupActivationTracker {
+    fn on_activation_event(&mut self, is_active: bool, should_auto_hide: bool) -> bool {
+        if !self.initialized {
+            self.initialized = true;
+            self.has_been_active = is_active;
+            return false;
+        }
+
+        if is_active {
+            self.has_been_active = true;
+            return false;
+        }
+
+        should_auto_hide && self.has_been_active
+    }
+}
+
 /// lib target 不直接调用这些方法，但 bin 启动路径与托盘事件会完整覆盖。
 #[allow(dead_code)]
 impl TrayController {
@@ -155,6 +179,21 @@ impl TrayController {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    fn ensure_popup_visible(handle: WindowHandle<crate::ui::AppView>, cx: &mut App) {
+        info!(
+            target: "tray",
+            "ensuring linux tray popup is shown and activation is requested"
+        );
+        let _ = handle.update(cx, |_, window, _| {
+            window.show_window();
+            window.activate_window();
+        });
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn ensure_popup_visible(_handle: WindowHandle<crate::ui::AppView>, _cx: &mut App) {}
+
     /// 计算弹窗的首选位置和目标显示器。
     ///
     /// 使用 GPUI 的 `TrayAnchored` 定位，自动处理多显示器坐标转换。
@@ -232,6 +271,7 @@ impl TrayController {
             );
             self.window.set(Some(handle));
             self.attach_observers(handle, cx);
+            Self::ensure_popup_visible(handle, cx);
         } else if let Err(err) = result {
             error!(target: "tray", "failed to open tray popup: {err:?}");
         }
@@ -241,22 +281,22 @@ impl TrayController {
     fn attach_observers(&self, handle: WindowHandle<crate::ui::AppView>, cx: &mut App) {
         let auto_hide_state = self.state.clone();
         let window_slot = self.window.clone();
-        let activation_initialized = Rc::new(Cell::new(false));
+        let activation_tracker = Rc::new(RefCell::new(PopupActivationTracker::default()));
         let _ = handle.update(cx, |view, window, cx| {
             // 监听窗口失焦，自动关闭
-            let activation_initialized = activation_initialized.clone();
+            let activation_tracker = activation_tracker.clone();
             let window_slot = window_slot.clone();
             let sub = cx.observe_window_activation(window, move |_view, window, cx| {
-                if !activation_initialized.replace(true) {
-                    return;
-                }
                 let should_auto_hide = auto_hide_state
                     .borrow()
                     .session
                     .settings
                     .system
                     .auto_hide_window;
-                if should_auto_hide && !window.is_window_active() {
+                let should_close = activation_tracker
+                    .borrow_mut()
+                    .on_activation_event(window.is_window_active(), should_auto_hide);
+                if should_close {
                     if !Self::take_window_if_matches(window_slot.as_ref(), handle) {
                         return;
                     }
@@ -278,5 +318,43 @@ impl TrayController {
             });
             view._appearance_sub = Some(appearance_sub);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PopupActivationTracker;
+
+    #[test]
+    fn auto_hide_requires_popup_to_have_been_active_first() {
+        let mut tracker = PopupActivationTracker::default();
+
+        assert!(!tracker.on_activation_event(false, true));
+        assert!(!tracker.on_activation_event(false, true));
+    }
+
+    #[test]
+    fn auto_hide_closes_after_popup_loses_focus_post_activation() {
+        let mut tracker = PopupActivationTracker::default();
+
+        assert!(!tracker.on_activation_event(true, true));
+        assert!(tracker.on_activation_event(false, true));
+    }
+
+    #[test]
+    fn auto_hide_closes_after_late_activation_then_blur() {
+        let mut tracker = PopupActivationTracker::default();
+
+        assert!(!tracker.on_activation_event(false, true));
+        assert!(!tracker.on_activation_event(true, true));
+        assert!(tracker.on_activation_event(false, true));
+    }
+
+    #[test]
+    fn auto_hide_respects_setting_after_activation() {
+        let mut tracker = PopupActivationTracker::default();
+
+        assert!(!tracker.on_activation_event(true, false));
+        assert!(!tracker.on_activation_event(false, false));
     }
 }

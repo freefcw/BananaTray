@@ -4,7 +4,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 
 ## Features
 
-- **System tray integration** — left-click opens a compact quota popover, right-click opens settings
+- **System tray integration** — left-click opens a compact quota popover; Linux also exposes a right-click Open/Settings/Quit menu fallback
 - **15 AI provider entries** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
