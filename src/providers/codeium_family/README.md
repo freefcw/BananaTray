@@ -10,7 +10,8 @@ Codeium 系 Provider 的共享底层实现。
 codeium_family/
 ├── spec.rs           — Provider 规格定义（静态常量）
 ├── mod.rs            — 共享入口：descriptor() / classify_unavailable() / refresh_live() / refresh_cache()
-├── cache_source.rs   — 本地 SQLite 缓存读取
+├── cache_source.rs   — 本地 cache source 入口与 protobuf / cachedPlanInfo 回退编排
+├── cache_source/     — cache DB 查询、auth status 解码、cachedPlanInfo 解析与 quota 构造
 ├── live_source.rs    — 本地 language_server 进程发现 + API 调用
 └── parse_strategy.rs — 同一领域数据的多种载荷解析（protobuf / JSON）
 ```
@@ -89,7 +90,7 @@ Windsurf
 ## 测试
 
 - `mod.rs`：共享 helper / diagnostics 工具测试
-- `cache_source.rs`：cache key / JSON fallback / quota 推断测试
+- `cache_source_tests.rs`：cache key / JSON fallback / quota 推断测试
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试
 
