@@ -8,7 +8,6 @@ use crate::models::{
 };
 use crate::providers::common::http_client::HttpError;
 use crate::utils::time_utils;
-use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
@@ -22,7 +21,7 @@ impl GeminiProvider {
     fn fetch_quota_from_current_creds(
         &self,
         fallback_email: Option<String>,
-    ) -> Result<RefreshData> {
+    ) -> ProviderResult<RefreshData> {
         let creds = load_credentials()?;
         let email = extract_email_from_id_token(&creds).or(fallback_email);
         let token = creds
@@ -31,7 +30,7 @@ impl GeminiProvider {
             .ok_or_else(|| {
                 ProviderError::session_expired(Some(FailureAdvice::TokenStillInvalid))
             })?;
-        let quotas = fetch_quota_via_api(&token)?;
+        let quotas = fetch_quota_via_api(&token).map_err(|err| ProviderError::classify(&err))?;
         Ok(RefreshData::with_account(quotas, email, None))
     }
 }
@@ -91,7 +90,7 @@ impl AiProvider for GeminiProvider {
                     cli: "gemini".to_string(),
                 }))
             })?;
-            return Ok(self.fetch_quota_from_current_creds(account_email)?);
+            return self.fetch_quota_from_current_creds(account_email);
         }
 
         match fetch_quota_via_api(&access_token) {
@@ -104,7 +103,7 @@ impl AiProvider for GeminiProvider {
                 if is_auth_error {
                     log::info!(target: "providers", "Gemini API returned auth error, attempting CLI refresh");
                     if refresh_token_via_cli().is_ok() {
-                        return Ok(self.fetch_quota_from_current_creds(account_email)?);
+                        return self.fetch_quota_from_current_creds(account_email);
                     }
                 }
                 Err(e.into())
@@ -207,9 +206,8 @@ mod tests {
         use super::auth::check_auth_type_from_content;
         let json = r#"{"security":{"auth":{"selectedType":"api-key"}}}"#;
         let err = check_auth_type_from_content(json).unwrap_err();
-        let classified = crate::providers::ProviderError::classify(&err);
         assert!(matches!(
-            classified,
+            err,
             crate::providers::ProviderError::ConfigMissing { .. }
         ));
     }
@@ -219,9 +217,8 @@ mod tests {
         use super::auth::check_auth_type_from_content;
         let json = r#"{"security":{"auth":{"selectedType":"vertex-ai"}}}"#;
         let err = check_auth_type_from_content(json).unwrap_err();
-        let classified = crate::providers::ProviderError::classify(&err);
         assert!(matches!(
-            classified,
+            err,
             crate::providers::ProviderError::ConfigMissing { .. }
         ));
     }

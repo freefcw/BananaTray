@@ -5,9 +5,8 @@
 use super::probe::UsageProbe;
 use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::runner::{InteractiveOptions, InteractiveRunner};
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::text_utils;
-use anyhow::Result;
 use log::debug;
 use regex::Regex;
 use std::collections::HashMap;
@@ -56,7 +55,7 @@ impl ClaudeCliProbe {
     }
 
     /// 解析 `claude /usage` 输出
-    fn parse_usage_output(raw: &str) -> Result<Vec<QuotaInfo>> {
+    fn parse_usage_output(raw: &str) -> ProviderResult<Vec<QuotaInfo>> {
         let clean = text_utils::strip_ansi(raw);
 
         // 按空行分割段落
@@ -184,7 +183,7 @@ impl ClaudeCliProbe {
 }
 
 impl UsageProbe for ClaudeCliProbe {
-    fn probe(&self) -> Result<Vec<QuotaInfo>> {
+    fn probe(&self) -> ProviderResult<Vec<QuotaInfo>> {
         let runner = InteractiveRunner::new();
         let options = InteractiveOptions {
             timeout: Duration::from_secs(25),
@@ -197,7 +196,9 @@ impl UsageProbe for ClaudeCliProbe {
             ..Default::default()
         };
 
-        let result = runner.run("claude", "/usage", options)?;
+        let result = runner
+            .run("claude", "/usage", options)
+            .map_err(|err| ProviderError::classify(&err))?;
 
         debug!(target: "providers", "claude command completed, output length: {} bytes", result.output.len());
 
@@ -205,13 +206,14 @@ impl UsageProbe for ClaudeCliProbe {
         let output_lower = result.output.to_lowercase();
 
         if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-            return Err(ProviderError::auth_required(Some(FailureAdvice::LoginCli {
-                cli: "claude".to_string(),
-            }))
-            .into());
+            return Err(ProviderError::auth_required(Some(
+                FailureAdvice::LoginCli {
+                    cli: "claude".to_string(),
+                },
+            )));
         }
         if output_lower.contains("update") && output_lower.contains("required") {
-            return Err(ProviderError::update_required(None).into());
+            return Err(ProviderError::update_required(None));
         }
 
         // 解析配额
@@ -220,27 +222,27 @@ impl UsageProbe for ClaudeCliProbe {
         if quotas.is_empty() {
             // 检查特定问题
             if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-                return Err(ProviderError::auth_required(Some(FailureAdvice::LoginCli {
-                    cli: "claude".to_string(),
-                }))
-                .into());
+                return Err(ProviderError::auth_required(Some(
+                    FailureAdvice::LoginCli {
+                        cli: "claude".to_string(),
+                    },
+                )));
             }
             if output_lower.contains("update") && output_lower.contains("required") {
-                return Err(ProviderError::update_required(None).into());
+                return Err(ProviderError::update_required(None));
             }
             // 检查信任提示是否阻塞
             if output_lower.contains("trust the files") && !output_lower.contains("current session")
             {
-                return Err(
-                    ProviderError::unavailable_with_advice(FailureAdvice::TrustFolder {
+                return Err(ProviderError::unavailable_with_advice(
+                    FailureAdvice::TrustFolder {
                         cli: "claude".to_string(),
-                    })
-                    .into(),
-                );
+                    },
+                ));
             }
-            return Err(
-                ProviderError::parse_failed_with_advice(FailureAdvice::CannotParseQuota).into(),
-            );
+            return Err(ProviderError::parse_failed_with_advice(
+                FailureAdvice::CannotParseQuota,
+            ));
         }
 
         Ok(quotas)

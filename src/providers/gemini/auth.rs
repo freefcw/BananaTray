@@ -1,5 +1,4 @@
-use crate::providers::ProviderError;
-use anyhow::{Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
@@ -40,7 +39,7 @@ fn settings_path() -> PathBuf {
         .join(".gemini/settings.json")
 }
 
-pub(super) fn load_credentials() -> Result<OAuthCredentials> {
+pub(super) fn load_credentials() -> ProviderResult<OAuthCredentials> {
     let path = credentials_path();
     let content = std::fs::read_to_string(&path)
         .map_err(|_| ProviderError::config_missing("~/.gemini/oauth_creds.json"))?;
@@ -49,7 +48,7 @@ pub(super) fn load_credentials() -> Result<OAuthCredentials> {
     Ok(creds)
 }
 
-pub(super) fn check_auth_type() -> Result<()> {
+pub(super) fn check_auth_type() -> ProviderResult<()> {
     let path = settings_path();
     if let Ok(content) = std::fs::read_to_string(&path) {
         check_auth_type_from_content(&content)
@@ -58,34 +57,34 @@ pub(super) fn check_auth_type() -> Result<()> {
     }
 }
 
-pub(super) fn check_auth_type_from_content(content: &str) -> Result<()> {
+pub(super) fn check_auth_type_from_content(content: &str) -> ProviderResult<()> {
     let settings: GeminiSettings =
         serde_json::from_str(content).map_err(|_| ProviderError::parse_failed("settings.json"))?;
     match settings.security.auth.selected_type.as_str() {
         "oauth-personal" | "unknown" => Ok(()),
         "api-key" => Err(ProviderError::config_missing(
             "Gemini API key is not supported, please use Google account (OAuth) login",
-        )
-        .into()),
+        )),
         "vertex-ai" => Err(ProviderError::config_missing(
             "Gemini Vertex AI is not supported, please use Google account (OAuth) login",
-        )
-        .into()),
+        )),
         _ => Ok(()),
     }
 }
 
-pub(super) fn refresh_token_via_cli() -> Result<()> {
+pub(super) fn refresh_token_via_cli() -> ProviderResult<()> {
     let output = Command::new("gemini").args(["--version"]).output();
 
     if output.is_err() {
-        return Err(ProviderError::cli_not_found("gemini").into());
+        return Err(ProviderError::cli_not_found("gemini"));
     }
 
     let output = Command::new("sh")
         .args(["-c", "echo '/quit' | gemini 2>/dev/null || true"])
         .output()
-        .context("Failed to run gemini CLI for token refresh")?;
+        .map_err(|err| {
+            ProviderError::fetch_failed(&format!("run gemini CLI for token refresh: {err}"))
+        })?;
 
     if !output.status.success() {
         log::warn!(target: "providers", "gemini CLI token refresh exited with: {:?}", output.status);

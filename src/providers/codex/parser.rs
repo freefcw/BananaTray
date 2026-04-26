@@ -1,6 +1,5 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
-use crate::providers::ProviderError;
-use anyhow::Result;
+use crate::providers::{ProviderError, ProviderResult};
 
 /// 解析 Codex usage API 响应的结构化结果。
 ///
@@ -71,7 +70,7 @@ fn build_window_quota(window: &serde_json::Value, default_role: WindowRole) -> Q
 ///
 /// 注意：401/403 认证错误已在 http_client 层通过 `HttpError::HttpStatus` 结构化返回，
 /// 不再需要在此处做字符串匹配。
-pub(super) fn parse_usage_response(raw: &str) -> Result<ParsedUsage> {
+pub(super) fn parse_usage_response(raw: &str) -> ProviderResult<ParsedUsage> {
     let (headers, body) = split_headers_and_body(raw);
 
     if let Some(quotas) = parse_header_response(headers) {
@@ -160,9 +159,9 @@ fn parse_header_response(headers: &str) -> Option<Vec<QuotaInfo>> {
 
 /// 解析 JSON body：按 `limit_window_seconds` 正确区分 session / weekly，兼容免费套餐
 /// 把 weekly 窗口放在 `primary_window` 字段的情况；从同响应提取 credits 余额与 plan_type。
-fn parse_json_response(body: &str) -> Result<ParsedUsage> {
+fn parse_json_response(body: &str) -> ProviderResult<ParsedUsage> {
     if body.is_empty() {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     let json: serde_json::Value = serde_json::from_str(body)
@@ -197,7 +196,7 @@ fn parse_json_response(body: &str) -> Result<ParsedUsage> {
     }
 
     if quotas.is_empty() {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     let plan_type = json
@@ -452,8 +451,7 @@ mod tests {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n";
         let err = parse_usage_response(raw).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::NoData));
+        assert!(matches!(err, ProviderError::NoData));
     }
 
     #[test]
@@ -461,8 +459,7 @@ mod tests {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let raw = "HTTP/1.1 200 OK\r\n\r\nnot json at all";
         let err = parse_usage_response(raw).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
@@ -471,8 +468,7 @@ mod tests {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let raw = "{}";
         let err = parse_usage_response(raw).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::NoData));
+        assert!(matches!(err, ProviderError::NoData));
     }
 
     #[test]

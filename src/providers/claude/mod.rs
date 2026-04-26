@@ -20,7 +20,6 @@ use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
-use anyhow::Result;
 
 /// Claude Provider
 ///
@@ -74,52 +73,50 @@ impl ClaudeProvider {
             .map(|s| s.to_string())
     }
 
-    fn both_unavailable_error() -> anyhow::Error {
+    fn both_unavailable_error() -> ProviderError {
         ProviderError::unavailable_with_advice(FailureAdvice::BothUnavailable {
             name: "Claude".to_string(),
         })
-        .into()
     }
 
-    fn ensure_cli_available(&self) -> Result<()> {
+    fn ensure_cli_available(&self) -> ProviderResult<()> {
         if self.cli_probe.is_available() {
             Ok(())
         } else {
-            Err(ProviderError::cli_not_found("claude").into())
+            Err(ProviderError::cli_not_found("claude"))
         }
     }
 
-    fn ensure_api_available(&self) -> Result<()> {
+    fn ensure_api_available(&self) -> ProviderResult<()> {
         if self.api_probe.is_available() {
             Ok(())
         } else {
-            Err(
-                ProviderError::auth_required(Some(FailureAdvice::NoOauthCreds {
+            Err(ProviderError::auth_required(Some(
+                FailureAdvice::NoOauthCreds {
                     cli: "claude".to_string(),
-                }))
-                .into(),
-            )
+                },
+            )))
         }
     }
 
-    fn refresh_from_probe(probe: &dyn UsageProbe) -> Result<RefreshData> {
+    fn refresh_from_probe(probe: &dyn UsageProbe) -> ProviderResult<RefreshData> {
         let quotas = probe.probe()?;
         Ok(RefreshData::quotas_only(quotas))
     }
 
-    fn refresh_via_cli(&self) -> Result<RefreshData> {
+    fn refresh_via_cli(&self) -> ProviderResult<RefreshData> {
         debug!("Claude: using CLI source");
         self.ensure_cli_available()?;
         Self::refresh_from_probe(self.cli_probe.as_ref())
     }
 
-    fn refresh_via_api(&self) -> Result<RefreshData> {
+    fn refresh_via_api(&self) -> ProviderResult<RefreshData> {
         debug!("Claude: using API source");
         self.ensure_api_available()?;
         Self::refresh_from_probe(self.api_probe.as_ref())
     }
 
-    fn refresh_auto(&self) -> Result<RefreshData> {
+    fn refresh_auto(&self) -> ProviderResult<RefreshData> {
         if self.api_probe.is_available() {
             debug!("Claude: Auto mode, trying API source first");
             match Self::refresh_from_probe(self.api_probe.as_ref()) {
@@ -167,7 +164,7 @@ impl AiProvider for ClaudeProvider {
         if self.cli_probe.is_available() || self.api_probe.is_available() {
             Ok(())
         } else {
-            Err(Self::both_unavailable_error().into())
+            Err(Self::both_unavailable_error())
         }
     }
 
@@ -175,13 +172,13 @@ impl AiProvider for ClaudeProvider {
         match self.probe_mode {
             ProbeMode::Cli => {
                 debug!("Claude: forcing CLI mode");
-                Ok(self.refresh_via_cli()?)
+                self.refresh_via_cli()
             }
             ProbeMode::Api => {
                 debug!("Claude: forcing API mode");
-                Ok(self.refresh_via_api()?)
+                self.refresh_via_api()
             }
-            ProbeMode::Auto => Ok(self.refresh_auto()?),
+            ProbeMode::Auto => self.refresh_auto(),
         }
     }
 }
@@ -202,10 +199,10 @@ mod tests {
     }
 
     impl UsageProbe for StubProbe {
-        fn probe(&self) -> Result<Vec<QuotaInfo>> {
+        fn probe(&self) -> ProviderResult<Vec<QuotaInfo>> {
             match &self.outcome {
                 StubOutcome::Success { label } => Ok(vec![QuotaInfo::new(*label, 10.0, 100.0)]),
-                StubOutcome::Error(err) => Err(err.clone().into()),
+                StubOutcome::Error(err) => Err(err.clone()),
             }
         }
 
@@ -284,8 +281,7 @@ mod tests {
         );
 
         let err = provider.refresh_auto().unwrap_err();
-        let classified = ProviderError::classify(&err);
-        assert!(matches!(classified, ProviderError::SessionExpired { .. }));
+        assert!(matches!(err, ProviderError::SessionExpired { .. }));
     }
 
     #[test]
@@ -338,7 +334,6 @@ mod tests {
         );
 
         let err = provider.refresh_via_api().unwrap_err();
-        let classified = ProviderError::classify(&err);
-        assert!(matches!(classified, ProviderError::AuthRequired { .. }));
+        assert!(matches!(err, ProviderError::AuthRequired { .. }));
     }
 }

@@ -87,14 +87,17 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 - 语言切换不应触发 provider refresh；selector 基于最新 locale 即时重算展示字符串。
 - When a provider already knows the user-facing remediation, return a structured `ProviderError`
   directly and keep technical diagnostics in logs instead of `anyhow::Context`.
-- `AiProvider` implementations return `ProviderResult<T>`. Internal helpers may still use
-  `anyhow::Result` for technical context, and `?` classifies those errors through
-  `ProviderError::from(anyhow::Error)`.
+- `AiProvider` implementations return `ProviderResult<T>`. Provider-owned source/parser
+  boundaries should also prefer `ProviderResult<T>` once they encode domain semantics
+  (for example Claude `UsageProbe` and Codeium-family `ParseStrategy`).
+- Low-level transport clients may still use `anyhow::Result` when callers need to inspect
+  raw technical errors such as `HttpError`; classify them before returning from provider
+  facade/source boundaries.
 - Shared HTTP transport failures should surface as `common::http_client::HttpError`; provider code
   upgrades them to `ProviderError` only when it knows a clearer remediation.
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
 - Only introduce extra traits when there are real multiple implementations (for example Claude probe strategies).
-- `Claude::UsageProbe` and `Antigravity::ParseStrategy` are intentionally separate:
+- `Claude::UsageProbe` and Codeium-family `ParseStrategy` are intentionally separate:
   - `UsageProbe` selects a data source (`CLI` vs `API`)
   - `ParseStrategy` decodes different payload formats from the same domain data
   - Share the fallback pattern conceptually, not via a forced common trait

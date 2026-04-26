@@ -15,9 +15,8 @@
 
 use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::runner::{locate_executable, InteractiveOptions, InteractiveRunner};
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::text_utils;
-use anyhow::Result;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -46,7 +45,7 @@ static PERCENT_LEFT_RE: LazyLock<Regex> =
 /// PTY spawn 流程。使用与真正 spawn 相同的解析函数（`locate_executable`），
 /// 以免 macOS GUI 启动（PATH 不含 Homebrew 前缀）下 `which` 失败却其实 runner
 /// 能在 `/opt/homebrew/bin` 等兜底目录里找到 codex，造成伪 CliNotFound。
-pub(super) fn fetch_via_cli() -> Result<ParsedUsage> {
+pub(super) fn fetch_via_cli() -> ProviderResult<ParsedUsage> {
     ensure_cli_present(CODEX_BINARY)?;
 
     let runner = InteractiveRunner::new();
@@ -71,16 +70,18 @@ pub(super) fn fetch_via_cli() -> Result<ParsedUsage> {
         init_delay: STATUS_INIT_DELAY,
         ..InteractiveOptions::default()
     };
-    let result = runner.run(CODEX_BINARY, STATUS_INPUT, options)?;
+    let result = runner
+        .run(CODEX_BINARY, STATUS_INPUT, options)
+        .map_err(|err| ProviderError::classify(&err))?;
     parse(&result.output)
 }
 
 /// 快速检查给定 binary 是否可被定位。使用与 `InteractiveRunner::run` 相同的
 /// [`locate_executable`] 规则（PATH + Homebrew/usr 兜底），确保短路判定与真实
 /// spawn 能力一致。
-fn ensure_cli_present(binary: &str) -> Result<()> {
+fn ensure_cli_present(binary: &str) -> ProviderResult<()> {
     if locate_executable(binary).is_err() {
-        return Err(ProviderError::cli_not_found(binary).into());
+        return Err(ProviderError::cli_not_found(binary));
     }
     Ok(())
 }
@@ -111,11 +112,11 @@ fn default_auto_responses() -> HashMap<String, String> {
 ///
 /// 本函数对调用者公开以便单测直接传入原始文本：即使 runner 出口已 strip 一次
 /// ANSI，这里还是再 strip 一次。`strip_ansi` 是幂等的，运行时不会被调两次以上。
-pub(super) fn parse(raw: &str) -> Result<ParsedUsage> {
+pub(super) fn parse(raw: &str) -> ProviderResult<ParsedUsage> {
     let clean = text_utils::strip_ansi(raw);
 
     if clean.to_lowercase().contains("data not available yet") {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     let credits_balance = extract_credits(&clean);
@@ -148,7 +149,7 @@ pub(super) fn parse(raw: &str) -> Result<ParsedUsage> {
     }
 
     if quotas.is_empty() {
-        return Err(ProviderError::parse_failed("codex /status output").into());
+        return Err(ProviderError::parse_failed("codex /status output"));
     }
 
     Ok(ParsedUsage {
@@ -309,24 +310,21 @@ Weekly limit: [##] 25% left
         let _g = crate::i18n::test_locale_guard("en");
         let sample = "Model: gpt\nData not available yet, please try again later.";
         let err = parse(sample).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::NoData));
+        assert!(matches!(err, ProviderError::NoData));
     }
 
     #[test]
     fn parse_garbage_returns_parse_failed() {
         let _g = crate::i18n::test_locale_guard("en");
         let err = parse("totally unrelated terminal noise").unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
     fn parse_empty_input_returns_parse_failed() {
         let _g = crate::i18n::test_locale_guard("en");
         let err = parse("").unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
@@ -426,8 +424,7 @@ Weekly limit: [#######] 70% left
         // 不存在的二进制名：加上随机后缀避免偶发。
         let bogus = "bananatray_definitely_not_a_binary_xyz_91237";
         let err = ensure_cli_present(bogus).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        match provider_err {
+        match err {
             ProviderError::CliNotFound { cli_name } => assert_eq!(cli_name, bogus),
             other => panic!("expected CliNotFound, got {other:?}"),
         }

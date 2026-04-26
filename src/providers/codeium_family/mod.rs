@@ -3,7 +3,7 @@ mod live_source;
 mod parse_strategy;
 mod spec;
 
-use super::ProviderError;
+use super::{ProviderError, ProviderResult};
 use crate::models::RefreshData;
 use crate::models::{ProviderDescriptor, ProviderMetadata};
 use anyhow::Result;
@@ -254,34 +254,34 @@ fn mask_secret(secret: &str) -> String {
     format!("{}…{}", head, tail)
 }
 
-pub(crate) fn classify_unavailable(spec: &CodeiumFamilySpec) -> Result<()> {
+pub(crate) fn classify_unavailable(spec: &CodeiumFamilySpec) -> ProviderResult<()> {
     if live_source::is_available(spec) || cache_source::is_available(spec) {
         Ok(())
     } else {
-        Err(ProviderError::unavailable(spec.unavailable_message).into())
+        Err(ProviderError::unavailable(spec.unavailable_message))
     }
 }
 
-pub(crate) fn refresh_live(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub(crate) fn refresh_live(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData> {
     live_source::fetch_refresh_data(spec)
 }
 
-pub(crate) fn refresh_cache(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub(crate) fn refresh_cache(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData> {
     cache_source::read_refresh_data(spec)
 }
 
-pub(crate) fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
+pub(crate) fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
     live_source::detect_process(spec)
 }
 
-pub(crate) fn cache_db_path(spec: &CodeiumFamilySpec) -> Result<PathBuf> {
+pub(crate) fn cache_db_path(spec: &CodeiumFamilySpec) -> ProviderResult<PathBuf> {
     cache_source::cache_db_path(spec)
 }
 
 pub(crate) fn query_auth_status_json(
     conn: &Connection,
     spec: &CodeiumFamilySpec,
-) -> Result<String> {
+) -> ProviderResult<String> {
     cache_source::query_auth_status_json(conn, spec)
 }
 

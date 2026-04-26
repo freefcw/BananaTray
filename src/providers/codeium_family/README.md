@@ -27,6 +27,8 @@ Windsurf 专属的云端 seat management API 实现不在这里，而在 `src/pr
 - 本地 cache source 刷新
 - 本地进程 / cache DB / auth status 的共享 helper
 - diagnostics/debug CLI 需要的本地探测能力
+- provider refresh/source/parser 边界返回 `ProviderResult<T>`，把本地缺失、解析失败、
+  无数据等情况收敛成 `ProviderError`
 
 这里**不负责**：
 

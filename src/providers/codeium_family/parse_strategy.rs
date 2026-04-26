@@ -1,6 +1,6 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType};
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils::parse_iso8601_to_epoch;
-use anyhow::Result;
 use prost::Message;
 
 /// 解析策略：针对不同载荷格式提取同一组领域数据。
@@ -10,19 +10,26 @@ use prost::Message;
 pub trait ParseStrategy {
     /// Parse user status from raw data
     /// Returns (quotas, email, plan_name)
-    fn parse(&self, data: &[u8]) -> Result<(Vec<QuotaInfo>, Option<String>, Option<String>)>;
+    fn parse(
+        &self,
+        data: &[u8],
+    ) -> ProviderResult<(Vec<QuotaInfo>, Option<String>, Option<String>)>;
 }
 
 /// Parse strategy for Codeium-family API JSON response
 pub struct ApiParseStrategy;
 
 impl ParseStrategy for ApiParseStrategy {
-    fn parse(&self, data: &[u8]) -> Result<(Vec<QuotaInfo>, Option<String>, Option<String>)> {
-        let json: serde_json::Value = serde_json::from_slice(data)?;
+    fn parse(
+        &self,
+        data: &[u8],
+    ) -> ProviderResult<(Vec<QuotaInfo>, Option<String>, Option<String>)> {
+        let json: serde_json::Value = serde_json::from_slice(data)
+            .map_err(|_| ProviderError::parse_failed("Codeium-family API response"))?;
 
         let user_status = json
             .get("userStatus")
-            .ok_or_else(|| anyhow::anyhow!("missing 'userStatus' field"))?;
+            .ok_or_else(|| ProviderError::parse_failed("missing 'userStatus' field"))?;
 
         let email = user_status
             .get("email")
@@ -82,7 +89,7 @@ impl ParseStrategy for ApiParseStrategy {
         quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
         if quotas.is_empty() {
-            anyhow::bail!("no model quotas found in API response");
+            return Err(ProviderError::no_data());
         }
 
         Ok((quotas, email, plan_name))
@@ -93,8 +100,12 @@ impl ParseStrategy for ApiParseStrategy {
 pub struct CacheParseStrategy;
 
 impl ParseStrategy for CacheParseStrategy {
-    fn parse(&self, data: &[u8]) -> Result<(Vec<QuotaInfo>, Option<String>, Option<String>)> {
-        let user_status = ProtoUserStatus::decode(data)?;
+    fn parse(
+        &self,
+        data: &[u8],
+    ) -> ProviderResult<(Vec<QuotaInfo>, Option<String>, Option<String>)> {
+        let user_status = ProtoUserStatus::decode(data)
+            .map_err(|_| ProviderError::parse_failed("Codeium-family cache protobuf"))?;
 
         let email = if user_status.email.is_empty() {
             None
@@ -139,7 +150,7 @@ impl ParseStrategy for CacheParseStrategy {
         quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
         if quotas.is_empty() {
-            anyhow::bail!("no model quotas found in cache");
+            return Err(ProviderError::no_data());
         }
 
         Ok((quotas, email, plan_name))

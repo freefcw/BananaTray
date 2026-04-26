@@ -2,8 +2,7 @@ use super::parse_strategy::{CacheParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
 use super::LOCAL_CACHE_SOURCE_LABEL;
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
-use crate::providers::ProviderError;
-use anyhow::{Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use log::{debug, warn};
 use rusqlite::{Connection, OpenFlags};
@@ -14,15 +13,16 @@ pub fn is_available(spec: &CodeiumFamilySpec) -> bool {
     cache_db_path(spec).is_ok()
 }
 
-pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData> {
     let db_path = cache_db_path(spec)?;
-    let conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .with_context(|| {
-            format!(
-                "cannot open {} cache DB: {}",
+    let conn =
+        Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|err| {
+            ProviderError::unavailable(&format!(
+                "cannot open {} cache DB: {} ({})",
                 spec.log_label,
-                db_path.display()
-            )
+                db_path.display(),
+                err
+            ))
         })?;
 
     // 策略 1: 传统 protobuf 解析
@@ -56,7 +56,7 @@ pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     Err(proto_err)
 }
 
-fn read_via_protobuf(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+fn read_via_protobuf(conn: &Connection, spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData> {
     let auth_status_json = query_auth_status_json(conn, spec)?;
     let user_status_data = decode_user_status_payload(&auth_status_json)?;
     let strategy = CacheParseStrategy;
@@ -67,7 +67,7 @@ fn read_via_protobuf(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<Refr
 
 pub(in crate::providers::codeium_family) fn cache_db_path(
     spec: &CodeiumFamilySpec,
-) -> Result<PathBuf> {
+) -> ProviderResult<PathBuf> {
     let home = dirs::home_dir()
         .ok_or_else(|| ProviderError::unavailable("cannot determine home directory"))?;
     let db_path = home.join(spec.cache_db_relative_path);
@@ -76,8 +76,7 @@ pub(in crate::providers::codeium_family) fn cache_db_path(
         return Err(ProviderError::unavailable(&format!(
             "{} local cache database not found",
             spec.log_label
-        ))
-        .into());
+        )));
     }
 
     debug!(
@@ -92,7 +91,7 @@ pub(in crate::providers::codeium_family) fn cache_db_path(
 pub(in crate::providers::codeium_family) fn query_auth_status_json(
     conn: &Connection,
     spec: &CodeiumFamilySpec,
-) -> Result<String> {
+) -> ProviderResult<String> {
     for key in spec.auth_status_key_candidates {
         match conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |row| {
             row.get(0)
@@ -100,9 +99,10 @@ pub(in crate::providers::codeium_family) fn query_auth_status_json(
             Ok(value) => return Ok(value),
             Err(rusqlite::Error::QueryReturnedNoRows) => continue,
             Err(e) => {
-                return Err(
-                    ProviderError::parse_failed(&format!("cannot query {}: {}", key, e)).into(),
-                )
+                return Err(ProviderError::parse_failed(&format!(
+                    "cannot query {}: {}",
+                    key, e
+                )))
             }
         }
     }
@@ -110,11 +110,10 @@ pub(in crate::providers::codeium_family) fn query_auth_status_json(
     Err(ProviderError::parse_failed(&format!(
         "cannot find auth status key in local cache: {}",
         spec.auth_status_key_candidates.join(", ")
-    ))
-    .into())
+    )))
 }
 
-fn decode_user_status_payload(auth_status_json: &str) -> Result<Vec<u8>> {
+fn decode_user_status_payload(auth_status_json: &str) -> ProviderResult<Vec<u8>> {
     let auth_status: serde_json::Value = serde_json::from_str(auth_status_json)
         .map_err(|e| ProviderError::parse_failed(&format!("invalid auth status JSON: {}", e)))?;
 
@@ -123,9 +122,9 @@ fn decode_user_status_payload(auth_status_json: &str) -> Result<Vec<u8>> {
         .and_then(|value| value.as_str())
         .ok_or_else(|| ProviderError::parse_failed("missing userStatusProtoBinaryBase64 field"))?;
 
-    STANDARD.decode(user_status_b64).map_err(|e| {
-        ProviderError::parse_failed(&format!("invalid user status base64: {}", e)).into()
-    })
+    STANDARD
+        .decode(user_status_b64)
+        .map_err(|e| ProviderError::parse_failed(&format!("invalid user status base64: {}", e)))
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +177,10 @@ impl CachedQuotaKind {
     }
 }
 
-fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+fn read_via_cached_plan_info(
+    conn: &Connection,
+    spec: &CodeiumFamilySpec,
+) -> ProviderResult<RefreshData> {
     let json_str = query_cached_plan_info(conn, spec)?;
     let plan_info = parse_cached_plan_info(&json_str)?;
 
@@ -245,7 +247,7 @@ fn read_via_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Res
     }
 
     if quotas.is_empty() {
-        anyhow::bail!("no quota data found in cachedPlanInfo");
+        return Err(ProviderError::no_data());
     }
 
     // cachedPlanInfo 中没有 email，从 auth status 中单独提取
@@ -388,7 +390,7 @@ fn extract_string_field_permissive(data: &[u8], field_number: u32) -> Option<Str
     None
 }
 
-fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result<String> {
+fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> ProviderResult<String> {
     for key in spec.cached_plan_info_key_candidates {
         match conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |row| {
             row.get(0)
@@ -404,9 +406,10 @@ fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => continue,
             Err(e) => {
-                return Err(
-                    ProviderError::parse_failed(&format!("cannot query {}: {}", key, e)).into(),
-                )
+                return Err(ProviderError::parse_failed(&format!(
+                    "cannot query {}: {}",
+                    key, e
+                )))
             }
         }
     }
@@ -414,14 +417,12 @@ fn query_cached_plan_info(conn: &Connection, spec: &CodeiumFamilySpec) -> Result
     Err(ProviderError::parse_failed(&format!(
         "cannot find cachedPlanInfo key in local cache: {}",
         spec.cached_plan_info_key_candidates.join(", ")
-    ))
-    .into())
+    )))
 }
 
-fn parse_cached_plan_info(json_str: &str) -> Result<CachedPlanInfo> {
-    serde_json::from_str(json_str).map_err(|e| {
-        ProviderError::parse_failed(&format!("invalid cachedPlanInfo JSON: {}", e)).into()
-    })
+fn parse_cached_plan_info(json_str: &str) -> ProviderResult<CachedPlanInfo> {
+    serde_json::from_str(json_str)
+        .map_err(|e| ProviderError::parse_failed(&format!("invalid cachedPlanInfo JSON: {}", e)))
 }
 
 #[cfg(test)]
@@ -461,8 +462,7 @@ mod tests {
     #[test]
     fn test_decode_user_status_payload_missing_field() {
         let err = decode_user_status_payload(r#"{"other":"value"}"#).unwrap_err();
-        let provider_err = ProviderError::classify(&err);
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
@@ -773,8 +773,7 @@ mod tests {
 
         let spec = test_windsurf_spec();
         let err = query_cached_plan_info(&conn, &spec).unwrap_err();
-        let provider_err = ProviderError::classify(&err);
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
