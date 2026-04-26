@@ -29,7 +29,7 @@ fn is_auth_api_error(err: &anyhow::Error) -> bool {
 
 fn auth_refresh_failed_error(
     usage_error: &anyhow::Error,
-    refresh_error: &anyhow::Error,
+    refresh_error: &ProviderError,
 ) -> ProviderError {
     log::warn!(
         target: "providers",
@@ -97,7 +97,10 @@ impl AiProvider for CodexProvider {
 ///
 /// OAuth 失败且判定为可恢复时才调用 [`status_probe::fetch_via_cli`]；
 /// CLI 也失败时优先返回原始 OAuth 错误（诊断价值更高）。
-fn obtain_parsed_usage(credentials: &mut CodexCredentials, usage_url: &str) -> Result<ParsedUsage> {
+fn obtain_parsed_usage(
+    credentials: &mut CodexCredentials,
+    usage_url: &str,
+) -> ProviderResult<ParsedUsage> {
     match fetch_usage(credentials, usage_url) {
         Ok(raw) => parse_usage_response(&raw),
         Err(oauth_err) if should_fallback_to_cli(&oauth_err) => {
@@ -112,11 +115,11 @@ fn obtain_parsed_usage(credentials: &mut CodexCredentials, usage_url: &str) -> R
                         target: "providers",
                         "Codex CLI fallback also failed: {cli_err}"
                     );
-                    Err(oauth_err)
+                    Err(ProviderError::classify(&oauth_err))
                 }
             }
         }
-        Err(e) => Err(e),
+        Err(e) => Err(ProviderError::classify(&e)),
     }
 }
 
@@ -213,7 +216,7 @@ mod tests {
             body: "Unauthorized".into(),
         }
         .into();
-        let refresh_error = anyhow::anyhow!("refresh token rejected");
+        let refresh_error = ProviderError::fetch_failed("refresh token rejected");
 
         let provider_error = auth_refresh_failed_error(&usage_error, &refresh_error);
 

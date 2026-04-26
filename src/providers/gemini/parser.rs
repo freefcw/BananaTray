@@ -1,8 +1,7 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType};
 use crate::providers::common::jwt;
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils;
-use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use super::auth::OAuthCredentials;
@@ -27,9 +26,9 @@ struct IdTokenClaims {
     email: Option<String>,
 }
 
-pub(super) fn parse_quota_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
+pub(super) fn parse_quota_response(response_str: &str) -> ProviderResult<Vec<QuotaInfo>> {
     let response: QuotaResponse = serde_json::from_str(response_str)
-        .with_context(|| format!("Failed to parse API response: {}", response_str))?;
+        .map_err(|_| ProviderError::parse_failed("Gemini quota API response"))?;
 
     let mut label_quotas: std::collections::HashMap<String, (f64, Option<String>)> =
         std::collections::HashMap::new();
@@ -70,7 +69,7 @@ pub(super) fn parse_quota_response(response_str: &str) -> Result<Vec<QuotaInfo>>
     quotas.sort_by(|a, b| a.stable_key.cmp(&b.stable_key));
 
     if quotas.is_empty() {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     Ok(quotas)

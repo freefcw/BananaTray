@@ -18,7 +18,7 @@ pub(super) fn fetch_quota_via_api(access_token: &str) -> Result<Vec<QuotaInfo>> 
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
 
     let response_str = http_client::post_json(QUOTA_API_URL, &header_refs, QUOTA_API_BODY)?;
-    parse_quota_response(&response_str)
+    parse_quota_response(&response_str).map_err(Into::into)
 }
 
 #[cfg(test)]

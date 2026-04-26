@@ -7,9 +7,8 @@ use super::credentials::{refresh_oauth_token, save_credentials_atomic, ClaudeOAu
 use super::probe::UsageProbe;
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::common::http_client;
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils;
-use anyhow::{Context, Result};
 use log::debug;
 use serde::Deserialize;
 
@@ -20,7 +19,7 @@ impl ClaudeApiProbe {
     /// 加载凭证并获取有效的访问令牌
     ///
     /// 如果 Token 需要刷新，会自动刷新并原子写回凭证文件
-    fn get_valid_token(creds: &mut ClaudeOAuthCredentials) -> Result<String> {
+    fn get_valid_token(creds: &mut ClaudeOAuthCredentials) -> ProviderResult<String> {
         if !creds.needs_refresh() {
             return Ok(creds.access_token.clone());
         }
@@ -28,7 +27,7 @@ impl ClaudeApiProbe {
         let rt = creds
             .refresh_token
             .as_deref()
-            .context("missing refresh token, cannot refresh")?;
+            .ok_or_else(|| ProviderError::session_expired(None))?;
 
         debug!("Claude API: token needs refresh, refreshing...");
         let response = refresh_oauth_token(rt)?;
@@ -42,7 +41,7 @@ impl ClaudeApiProbe {
     ///
     /// 4xx/5xx → `HttpError::HttpStatus`（由 http_client 层自动返回），
     /// 上层通过 `ProviderError::classify` 自动分类为 AuthRequired / FetchFailed 等。
-    fn fetch_usage(access_token: &str) -> Result<UsageResponse> {
+    fn fetch_usage(access_token: &str) -> ProviderResult<UsageResponse> {
         const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 
         let auth_header = format!("Authorization: Bearer {}", access_token);
@@ -55,10 +54,11 @@ impl ClaudeApiProbe {
                 "Content-Type: application/json",
                 "anthropic-beta: oauth-2025-04-20",
             ],
-        )?;
+        )
+        .map_err(|err| ProviderError::classify(&err))?;
 
-        let usage: UsageResponse =
-            serde_json::from_str(&body).with_context(|| "cannot parse Usage API response")?;
+        let usage: UsageResponse = serde_json::from_str(&body)
+            .map_err(|_| ProviderError::parse_failed("Claude Usage API response"))?;
 
         Ok(usage)
     }
@@ -142,14 +142,14 @@ impl ClaudeApiProbe {
 }
 
 impl UsageProbe for ClaudeApiProbe {
-    fn probe(&self) -> Result<Vec<QuotaInfo>> {
+    fn probe(&self) -> ProviderResult<Vec<QuotaInfo>> {
         let mut creds = ClaudeOAuthCredentials::load()?;
         let access_token = Self::get_valid_token(&mut creds)?;
         let usage = Self::fetch_usage(&access_token)?;
         let quotas = Self::parse_usage(usage);
 
         if quotas.is_empty() {
-            return Err(ProviderError::no_data().into());
+            return Err(ProviderError::no_data());
         }
 
         Ok(quotas)

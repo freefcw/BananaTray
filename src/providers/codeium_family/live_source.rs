@@ -2,8 +2,7 @@ use super::parse_strategy::{ApiParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
 use super::LOCAL_API_SOURCE_LABEL;
 use crate::models::RefreshData;
-use crate::providers::ProviderError;
-use anyhow::{Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use log::{debug, info, warn};
 use regex::Regex;
 use std::process::Command;
@@ -53,7 +52,7 @@ pub fn is_available(spec: &CodeiumFamilySpec) -> bool {
     detect_process(spec).is_ok()
 }
 
-pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData> {
     let process = detect_process(spec)?;
     let port = resolve_port(&process, spec)?;
 
@@ -77,7 +76,7 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
         .with_source_label(LOCAL_API_SOURCE_LABEL))
 }
 
-pub fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
+pub fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
     let output = Command::new("/usr/bin/pgrep")
         .args(["-lf", "language_server_macos"])
         .output()
@@ -89,8 +88,7 @@ pub fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
         return Err(ProviderError::unavailable(&format!(
             "{} language server not running",
             spec.log_label
-        ))
-        .into());
+        )));
     }
 
     stdout
@@ -100,7 +98,6 @@ pub fn detect_process(spec: &CodeiumFamilySpec) -> Result<ProcessInfo> {
             ProviderError::unavailable(&format!("{} language server not running", spec.log_label))
         })
         .and_then(parse_process_line)
-        .map_err(Into::into)
 }
 
 pub fn matches_process_line(line: &str, spec: &CodeiumFamilySpec) -> bool {
@@ -115,7 +112,7 @@ pub fn matches_process_line(line: &str, spec: &CodeiumFamilySpec) -> bool {
         .any(|marker| lower.contains(marker))
 }
 
-pub fn resolve_port(process: &ProcessInfo, spec: &CodeiumFamilySpec) -> Result<u16> {
+pub fn resolve_port(process: &ProcessInfo, spec: &CodeiumFamilySpec) -> ProviderResult<u16> {
     match discover_port(&process.pid, spec) {
         Ok(port) => Ok(port),
         Err(err) => {
@@ -127,7 +124,6 @@ pub fn resolve_port(process: &ProcessInfo, spec: &CodeiumFamilySpec) -> Result<u
             );
             process.extension_port.ok_or_else(|| {
                 ProviderError::unavailable(&format!("cannot determine {} API port", spec.log_label))
-                    .into()
             })
         }
     }
@@ -183,7 +179,7 @@ fn extract_binary_path(command_line: &str) -> Option<String> {
     Some(command_line.to_string())
 }
 
-pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> Result<u16> {
+pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> ProviderResult<u16> {
     let output = Command::new("/usr/sbin/lsof")
         .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", pid])
         .output()
@@ -195,7 +191,6 @@ pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> Result<u16> 
             "no TCP LISTEN port found via lsof for {}",
             spec.log_label
         ))
-        .into()
     })
 }
 
@@ -214,7 +209,7 @@ fn fetch_user_status(
     csrf_token: Option<&str>,
     extension_port: Option<u16>,
     spec: &CodeiumFamilySpec,
-) -> Result<String> {
+) -> ProviderResult<String> {
     let body = format!(r#"{{"metadata":{{"ideName":"{}"}}}}"#, spec.ide_name);
 
     for endpoint in build_endpoint_candidates(port, extension_port) {
@@ -241,8 +236,7 @@ fn fetch_user_status(
     Err(ProviderError::fetch_failed(&format!(
         "{} API request failed on all candidate endpoints",
         spec.log_label
-    ))
-    .into())
+    )))
 }
 
 fn post_api(
@@ -251,7 +245,7 @@ fn post_api(
     body: &str,
     allow_insecure_tls: bool,
     spec: &CodeiumFamilySpec,
-) -> Result<String> {
+) -> ProviderResult<String> {
     debug!(target: "providers", "{} POST {}", spec.log_label, url);
 
     let agent = if allow_insecure_tls {
@@ -271,20 +265,23 @@ fn post_api(
 
     let response = request
         .send(body.as_bytes())
-        .with_context(|| format!("POST {} failed", url))?;
+        .map_err(|err| ProviderError::fetch_failed(&format!("POST {url} failed: {err}")))?;
 
     let status = response.status().as_u16();
     debug!(target: "providers", "{} POST {} -> {}", spec.log_label, url, status);
 
     if status >= 400 {
-        anyhow::bail!("{} API returned status {}", spec.log_label, status);
+        return Err(ProviderError::fetch_failed(&format!(
+            "{} API returned status {}",
+            spec.log_label, status
+        )));
     }
 
-    response.into_body().read_to_string().with_context(|| {
-        format!(
-            "Failed to read {} API response from {}",
-            spec.log_label, url
-        )
+    response.into_body().read_to_string().map_err(|err| {
+        ProviderError::fetch_failed(&format!(
+            "Failed to read {} API response from {}: {}",
+            spec.log_label, url, err
+        ))
     })
 }
 

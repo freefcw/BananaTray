@@ -2,7 +2,7 @@
 //!
 //! 从 ~/.claude/.credentials.json 加载凭证，支持 Token 刷新检查。
 
-use anyhow::{Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -19,27 +19,27 @@ pub struct ClaudeOAuthCredentials {
 
 impl ClaudeOAuthCredentials {
     /// 从 ~/.claude/.credentials.json 加载凭证
-    pub fn load() -> Result<Self> {
+    pub fn load() -> ProviderResult<Self> {
         let path = Self::credentials_path();
 
         let content = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read credentials file: {:?}", path))?;
+            .map_err(|_| ProviderError::config_missing("~/.claude/.credentials.json"))?;
 
-        let json: serde_json::Value =
-            serde_json::from_str(&content).with_context(|| "failed to parse credentials JSON")?;
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
 
         let oauth = json
             .get("claudeAiOauth")
-            .with_context(|| "missing 'claudeAiOauth' field in credentials")?;
+            .ok_or_else(|| ProviderError::config_missing("claudeAiOauth"))?;
 
         let raw_access_token = oauth
             .get("accessToken")
             .and_then(|v| v.as_str())
-            .with_context(|| "missing accessToken")?;
+            .ok_or_else(|| ProviderError::config_missing("accessToken"))?;
 
         let access_token = raw_access_token.trim().to_string();
         if access_token.is_empty() {
-            anyhow::bail!("accessToken is empty");
+            return Err(ProviderError::config_missing("accessToken"));
         }
 
         Ok(ClaudeOAuthCredentials {
@@ -110,7 +110,7 @@ pub struct TokenRefreshResponse {
 }
 
 /// 刷新 Token
-pub fn refresh_oauth_token(refresh_token: &str) -> Result<TokenRefreshResponse> {
+pub fn refresh_oauth_token(refresh_token: &str) -> ProviderResult<TokenRefreshResponse> {
     const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
     const SCOPES: &str = "user:profile user:inference user:sessions:claude_code";
     const REFRESH_URL: &str = "https://platform.claude.com/v1/oauth/token";
@@ -126,23 +126,24 @@ pub fn refresh_oauth_token(refresh_token: &str) -> Result<TokenRefreshResponse> 
         REFRESH_URL,
         &["Content-Type: application/json"],
         &body.to_string(),
-    )?;
+    )
+    .map_err(|err| ProviderError::classify(&err))?;
 
     let refresh_response: TokenRefreshResponse = serde_json::from_str(&response)
-        .with_context(|| "failed to parse token refresh response")?;
+        .map_err(|_| ProviderError::parse_failed("Claude token refresh response"))?;
 
     Ok(refresh_response)
 }
 
 /// 原子保存凭证到文件（先写临时文件再 rename，不会破坏原文件）
-pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
+pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> ProviderResult<()> {
     let path = ClaudeOAuthCredentials::credentials_path();
 
     // 读取现有文件，解析失败则报错（不覆盖损坏文件）
     let existing = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read credentials file: {:?}", path))?;
+        .map_err(|_| ProviderError::config_missing("~/.claude/.credentials.json"))?;
     let mut json: serde_json::Value = serde_json::from_str(&existing)
-        .with_context(|| "credentials JSON corrupted, refusing to overwrite")?;
+        .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
 
     json["claudeAiOauth"] = serde_json::json!({
         "accessToken": creds.access_token,
@@ -151,12 +152,14 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
         "subscriptionType": creds.subscription_type,
     });
 
-    let serialized = serde_json::to_string_pretty(&json)?;
+    let serialized = serde_json::to_string_pretty(&json)
+        .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
 
     // 原子写入：先写临时文件再 rename
     let tmp_path = path.with_extension("json.tmp");
-    std::fs::write(&tmp_path, &serialized)
-        .with_context(|| format!("failed to write temp credentials file: {:?}", tmp_path))?;
+    std::fs::write(&tmp_path, &serialized).map_err(|err| {
+        ProviderError::fetch_failed(&format!("write temp credentials file: {err}"))
+    })?;
 
     // 在 Unix 上设置权限 0600
     #[cfg(unix)]
@@ -167,7 +170,7 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> Result<()> {
     }
 
     std::fs::rename(&tmp_path, &path)
-        .with_context(|| format!("failed to atomically replace credentials file: {:?}", path))?;
+        .map_err(|err| ProviderError::fetch_failed(&format!("replace credentials file: {err}")))?;
 
     debug!("Claude: credentials file updated");
     Ok(())

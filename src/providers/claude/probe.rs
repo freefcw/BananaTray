@@ -3,7 +3,7 @@
 //! 定义了获取配额的统一接口和选择模式。
 
 use crate::models::QuotaInfo;
-use anyhow::Result;
+use crate::providers::ProviderResult;
 
 /// 获取方式选择模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -24,7 +24,7 @@ pub enum ProbeMode {
 /// 因此它不应与 Antigravity 的 `ParseStrategy` 合并成同一个通用 trait。
 pub trait UsageProbe: Send + Sync {
     /// 执行配额获取
-    fn probe(&self) -> Result<Vec<QuotaInfo>>;
+    fn probe(&self) -> ProviderResult<Vec<QuotaInfo>>;
 
     /// 检查该获取方式是否可用
     fn is_available(&self) -> bool;

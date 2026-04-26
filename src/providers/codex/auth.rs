@@ -1,7 +1,6 @@
 use crate::providers::common::http_client;
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils;
-use anyhow::{Context, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use std::path::{Path, PathBuf};
@@ -36,12 +35,12 @@ pub(super) fn auth_path() -> PathBuf {
         .join("auth.json")
 }
 
-pub(super) fn load_credentials() -> Result<CodexCredentials> {
+pub(super) fn load_credentials() -> ProviderResult<CodexCredentials> {
     load_credentials_from_path(&auth_path())
 }
 
 /// 从指定路径加载 credentials（抽出以便单测注入 tempfile）。
-fn load_credentials_from_path(path: &Path) -> Result<CodexCredentials> {
+fn load_credentials_from_path(path: &Path) -> ProviderResult<CodexCredentials> {
     let content = std::fs::read_to_string(path)
         .map_err(|_| ProviderError::config_missing("~/.codex/auth.json"))?;
     let json: serde_json::Value =
@@ -153,21 +152,22 @@ fn token_needs_refresh(last_refresh: &Option<String>) -> bool {
     time_utils::is_older_than(ts, TOKEN_MAX_AGE_SECS)
 }
 
-pub(super) fn refresh_access_token(refresh_token: &str) -> Result<String> {
+pub(super) fn refresh_access_token(refresh_token: &str) -> ProviderResult<String> {
     let body = format!(
         "grant_type=refresh_token&refresh_token={}&client_id=app_EMoamEEZ73f0CkXaXp7hrann",
         refresh_token
     );
 
-    let response_str = http_client::post_form("https://auth.openai.com/oauth/token", &[], &body)?;
+    let response_str = http_client::post_form("https://auth.openai.com/oauth/token", &[], &body)
+        .map_err(|err| ProviderError::classify(&err))?;
 
-    let resp: serde_json::Value =
-        serde_json::from_str(&response_str).context("Failed to parse token refresh response")?;
+    let resp: serde_json::Value = serde_json::from_str(&response_str)
+        .map_err(|_| ProviderError::parse_failed("token refresh response"))?;
 
     let new_access = resp
         .get("access_token")
         .and_then(|v| v.as_str())
-        .context("No access_token in refresh response")?
+        .ok_or_else(|| ProviderError::parse_failed("missing access_token in refresh response"))?
         .to_string();
 
     let new_refresh = resp
@@ -200,7 +200,7 @@ fn save_refreshed_tokens(
     new_refresh_token: Option<&str>,
     new_id_token: Option<&str>,
     old_refresh_token: &str,
-) -> Result<()> {
+) -> ProviderResult<()> {
     let content = std::fs::read_to_string(path).unwrap_or_default();
     let mut json: serde_json::Value =
         serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
@@ -227,8 +227,10 @@ fn save_refreshed_tokens(
     let now_str = time_utils::epoch_to_iso8601(time_utils::now_epoch_secs() as u64);
     json["last_refresh"] = serde_json::json!(now_str);
 
-    let serialized = serde_json::to_string_pretty(&json)?;
-    std::fs::write(path, serialized).context("Failed to write updated auth.json")?;
+    let serialized = serde_json::to_string_pretty(&json)
+        .map_err(|_| ProviderError::parse_failed("updated auth.json"))?;
+    std::fs::write(path, serialized)
+        .map_err(|err| ProviderError::fetch_failed(&format!("write auth.json: {err}")))?;
 
     Ok(())
 }
@@ -488,8 +490,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("nope.json");
         let err = load_credentials_from_path(&missing).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ConfigMissing { .. }));
+        assert!(matches!(err, ProviderError::ConfigMissing { .. }));
     }
 
     #[test]
@@ -498,16 +499,14 @@ mod tests {
         let path = dir.path().join("auth.json");
         std::fs::write(&path, "not json").unwrap();
         let err = load_credentials_from_path(&path).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ParseFailed { .. }));
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
     }
 
     #[test]
     fn test_load_credentials_missing_tokens_object() {
         let (_dir, path) = write_auth_json(serde_json::json!({ "account_id": "x" }));
         let err = load_credentials_from_path(&path).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ConfigMissing { .. }));
+        assert!(matches!(err, ProviderError::ConfigMissing { .. }));
     }
 
     #[test]
@@ -516,8 +515,7 @@ mod tests {
             "tokens": { "refresh_token": "rt" }
         }));
         let err = load_credentials_from_path(&path).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ConfigMissing { .. }));
+        assert!(matches!(err, ProviderError::ConfigMissing { .. }));
     }
 
     #[test]
@@ -526,8 +524,7 @@ mod tests {
             "tokens": { "access_token": "at" }
         }));
         let err = load_credentials_from_path(&path).unwrap_err();
-        let provider_err = err.downcast_ref::<ProviderError>().expect("ProviderError");
-        assert!(matches!(provider_err, ProviderError::ConfigMissing { .. }));
+        assert!(matches!(err, ProviderError::ConfigMissing { .. }));
     }
 
     // ========================================================================
