@@ -28,7 +28,7 @@ pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> P
     status.connection = connection;
     // 与 CopilotProvider::settings_capability() 保持一致
     if kind == ProviderKind::Copilot {
-        status.settings_capability = crate::providers::copilot::copilot_settings_capability();
+        status.settings_capability = crate::providers::copilot_settings_capability();
     }
     status.provider_capability = match kind {
         ProviderKind::VertexAi => ProviderCapability::Informational,

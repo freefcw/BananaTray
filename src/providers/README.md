@@ -28,10 +28,10 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
-- **`common/`** — cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
-- **`codeium_family/`** — shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
+- **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
+- **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
-- **`register_providers!`** macro — declares provider modules and generates `register_all()` function
+- **`register_providers!`** macro — declares private built-in provider modules and generates crate-internal `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
 
 ### `manager.rs` — ProviderManager
@@ -45,6 +45,9 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
 - `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
+
+ProviderManager / ProviderManagerHandle form the provider facade used by the rest of the app.
+Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and error presentation helpers are crate-internal implementation details; do not treat their module paths as external API.
 
 ### `custom/` — YAML-backed Providers
 
