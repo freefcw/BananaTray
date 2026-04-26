@@ -25,7 +25,7 @@
 
 | 子枚举 | 职责 | 新增时改动 |
 |--------|------|-----------|
-| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | `effect.rs` 定义 + `run_context_effect`（必要时补 adapter override） |
+| `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | `effect.rs` 定义 + `run_view_context_effect` / `run_full_context_effect`（必要时补 capability trait） |
 | `CommonEffect` | GPUI-free 顶层领域路由（Settings / Notification / Refresh / Debug / NewApi） | 对应领域子枚举 + `runtime/effects/` 下同名执行器 |
 
 三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `effects::run_common_effect` 做领域分派；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
@@ -42,14 +42,15 @@
 
 ### ContextCapabilities 模式
 
-为了实现 `ContextEffect` 执行逻辑的收敛，定义了 `ContextCapabilities` trait 及其三个 Adapter 实现：
+为了实现 `ContextEffect` 执行逻辑的收敛，同时避免错误 GPUI 上下文静默丢副作用，运行时把能力拆成 View-safe 与 Full context 两层：
 
-- **`ContextCapabilities`** — 抽象能力（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp）。不支持的能力默认提供 `warn!` 告警实现。
-- **`ViewCaps`** — `Context<V>` 的适配器，显式实现 `render`；其余能力走 trait 默认实现（`open_url` 可直接复用默认平台调用，其它能力记录告警）。
+- **`ContextCapabilities`** — View-safe 能力（Render, OpenUrl），可用于 `Context<V>` / `Window + App` / `App`。
+- **`FullContextCapabilities`** — 强上下文能力（OpenSettingsWindow, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp），只有 `Window + App` 与 `App` adapter 可实现。
+- **`ViewCaps`** — `Context<V>` 的适配器，只执行 Render / OpenUrl；如果收到 OpenSettingsWindow / ApplyTrayIcon / ApplyGlobalHotkey / QuitApp，会立即 panic，暴露错误 dispatch 入口。
 - **`WindowCaps`** — `Window + App` 的适配器，覆盖窗口场景需要的完整能力，`render` 实现为 `window.refresh()`，也负责设置窗口里热键保存后的即时重绑。
 - **`AppCaps`** — `App` 的适配器，支持大部分能力，Render 实现为通过 `ui_hooks` 请求当前 popup view 刷新。
 
-在这种模式下，新增一个 `ContextEffect` 变体只需在 `run_context_effect()` 的单一 `match` 中增加分支；如果不同入口存在行为差异，再在 trait 默认实现或 adapter override 中补齐。
+在这种模式下，新增一个 `ContextEffect` 变体需要先判断它是否 View-safe：View-safe effect 同步补 `run_view_context_effect()`；强上下文 effect 补 `FullContextCapabilities` 与 `run_full_context_effect()`。禁止用默认 `warn!` 降级吞掉不支持的强副作用。
 
 ### Dispatch 入口
 
@@ -63,7 +64,7 @@
 1. 借用 `AppState`，调用 `reduce(&mut session, action)` 得到 `Vec<AppEffect>`
 2. 释放借用
 3. 将相应上下文包装进 Adapter
-4. 逐个执行 effects (通过 `run_context_effect` 或 `effects::run_common_effect`)
+4. 逐个执行 effects (通过 context effect runner 或 `effects::run_common_effect`)
 
 ### 重入保护
 
