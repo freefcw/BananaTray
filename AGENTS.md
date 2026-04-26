@@ -45,6 +45,7 @@ cargo fmt                  # format
 
 ```
 src/
+  builtin_provider_manifest.rs — 内置 Provider 单一编译期清单，生成 ProviderKind 与 register_all
   main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup (`main.rs` requires `app` feature)
   lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作

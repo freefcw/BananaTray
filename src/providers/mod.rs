@@ -475,7 +475,7 @@ pub trait AiProvider: Send + Sync {
 }
 
 macro_rules! register_providers {
-    ($($mod_name:ident => $struct_name:ident),* $(,)?) => {
+    ($($variant:ident => $id:literal => $mod_name:ident::$struct_name:ident),* $(,)?) => {
         $(mod $mod_name;)*
 
         /// 注册所有可用的 Provider 实现
@@ -487,22 +487,7 @@ macro_rules! register_providers {
     };
 }
 
-register_providers!(
-    amp => AmpProvider,
-    antigravity => AntigravityProvider,
-    claude => ClaudeProvider,
-    codex => CodexProvider,
-    copilot => CopilotProvider,
-    cursor => CursorProvider,
-    gemini => GeminiProvider,
-    kilo => KiloProvider,
-    kimi => KimiProvider,
-    kiro => KiroProvider,
-    minimax => MiniMaxProvider,
-    opencode => OpenCodeProvider,
-    vertex_ai => VertexAiProvider,
-    windsurf => WindsurfProvider,
-);
+crate::builtin_provider_manifest::builtin_provider_manifest!(register_providers);
 
 #[cfg(test)]
 mod tests {

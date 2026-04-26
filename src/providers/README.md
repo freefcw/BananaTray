@@ -32,7 +32,8 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
-- **`register_providers!`** macro — declares private built-in provider modules and generates crate-internal `register_all()` function
+- **`src/builtin_provider_manifest.rs`** — single compile-time manifest for built-in providers; feeds both `ProviderKind` generation and built-in registration
+- **`register_providers!`** macro — consumes the manifest to declare private built-in provider modules and generate crate-internal `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
 
 ### `manager.rs` — ProviderManager
@@ -114,8 +115,8 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 
 ## Adding a New Provider
 
-1. **Add `ProviderKind` variant** in `src/models/provider.rs` (`define_provider_kind!` macro + `id_key()` + `from_id_key()`)
-2. **Create provider file or directory**:
+1. **Add manifest entry** in `src/builtin_provider_manifest.rs`: `MyProviderKind => "myprovider" => my_provider::MyProvider`
+2. **Create provider file or directory** matching the manifest module path:
    ```rust
    use super::{define_unit_provider, AiProvider, ProviderResult};
    use crate::models::*;
@@ -133,8 +134,7 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` and do not rely on repeated `Unavailable` refreshes as product semantics
 4. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
 5. **Add icon**: `src/icons/provider-myprovider.svg`
-6. **Register**: add `my_provider => MyProvider` to `register_providers!` macro in `mod.rs`
-7. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches missing registrations
+6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches manifest/implementation mismatches
 
 ## Constraints
 

@@ -72,10 +72,10 @@ impl std::fmt::Display for ProviderId {
 // ============================================================================
 
 macro_rules! define_provider_kind {
-    ($($variant:ident => $id:literal),* $(,)?) => {
+    ($($variant:ident => $id:literal => $module:ident::$provider:ident),* $(,)?) => {
         /// 支持的 AI Provider 枚举
         ///
-        /// 内置 Provider 通过宏定义，`Custom` 用于 YAML 声明的自定义 Provider。
+        /// 内置 Provider 由 crate 级 manifest 生成，`Custom` 用于 YAML 声明的自定义 Provider。
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
         pub enum ProviderKind {
             $($variant,)*
@@ -108,23 +108,7 @@ macro_rules! define_provider_kind {
     };
 }
 
-// 新增 Provider 只需在此添加一行：Variant => "id_key"
-define_provider_kind!(
-    Claude => "claude",
-    Gemini => "gemini",
-    Copilot => "copilot",
-    Codex => "codex",
-    Kimi => "kimi",
-    Amp => "amp",
-    Cursor => "cursor",
-    OpenCode => "opencode",
-    MiniMax => "minimax",
-    VertexAi => "vertexai",
-    Kilo => "kilo",
-    Kiro => "kiro",
-    Antigravity => "antigravity",
-    Windsurf => "windsurf",
-);
+crate::builtin_provider_manifest::builtin_provider_manifest!(define_provider_kind);
 
 /// Provider 元数据
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -275,6 +259,19 @@ mod tests {
         assert_eq!(ProviderKind::Gemini.id_key(), "gemini");
         assert_eq!(ProviderKind::VertexAi.id_key(), "vertexai");
         assert_eq!(ProviderKind::Windsurf.id_key(), "windsurf");
+    }
+
+    #[test]
+    fn test_id_keys_are_unique_and_round_trip() {
+        let mut seen = std::collections::HashSet::new();
+        for &kind in ProviderKind::all() {
+            let id_key = kind.id_key();
+            assert!(
+                seen.insert(id_key),
+                "Duplicate ProviderKind id_key: {id_key}"
+            );
+            assert_eq!(ProviderKind::from_id_key(id_key), Some(kind));
+        }
     }
 
     #[test]

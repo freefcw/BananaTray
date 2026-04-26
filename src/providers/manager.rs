@@ -331,7 +331,7 @@ mod tests {
             assert!(
                 manager.providers_by_kind.contains_key(kind),
                 "ProviderKind::{:?} is defined in models but NOT registered in ProviderManager.
-                 Please add it to register_providers! macro in src/providers/mod.rs",
+                 Please check src/builtin_provider_manifest.rs and the matching provider module",
                 kind
             );
         }
