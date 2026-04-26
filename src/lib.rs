@@ -7,6 +7,7 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod application;
+mod builtin_provider_manifest;
 pub mod i18n;
 pub mod models;
 pub mod platform;
