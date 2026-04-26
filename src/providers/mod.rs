@@ -1,8 +1,8 @@
-pub mod codeium_family;
-pub mod common;
-pub mod custom;
-pub mod error_presenter;
-pub mod manager;
+pub(crate) mod codeium_family;
+pub(crate) mod common;
+pub(crate) mod custom;
+pub(crate) mod error_presenter;
+pub(crate) mod manager;
 
 use crate::models::{
     AppSettings, ErrorKind, FailureAdvice, FailureReason, ProviderCapability, ProviderDescriptor,
@@ -12,6 +12,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
+#[cfg(test)]
+pub(crate) use copilot::copilot_settings_capability;
 pub use manager::{ProviderManager, ProviderManagerHandle};
 
 pub(crate) fn default_token_input_state(
@@ -463,10 +465,10 @@ pub trait AiProvider: Send + Sync {
 
 macro_rules! register_providers {
     ($($mod_name:ident => $struct_name:ident),* $(,)?) => {
-        $(pub mod $mod_name;)*
+        $(mod $mod_name;)*
 
         /// 注册所有可用的 Provider 实现
-        pub fn register_all(manager: &mut ProviderManager) {
+        pub(crate) fn register_all(manager: &mut ProviderManager) {
             $(
                 manager.register(Arc::new($mod_name::$struct_name::new()));
             )*

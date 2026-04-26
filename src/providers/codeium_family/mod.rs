@@ -13,14 +13,14 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub use live_source::matches_process_line;
+pub(crate) use live_source::matches_process_line;
 pub(crate) use live_source::ProcessInfo;
-pub use spec::{CodeiumFamilySpec, ANTIGRAVITY_SPEC, WINDSURF_SPEC};
+pub(crate) use spec::{CodeiumFamilySpec, ANTIGRAVITY_SPEC, WINDSURF_SPEC};
 
 pub(crate) const LOCAL_API_SOURCE_LABEL: &str = "local api";
 pub(crate) const LOCAL_CACHE_SOURCE_LABEL: &str = "local cache";
 
-pub fn descriptor(spec: &CodeiumFamilySpec) -> ProviderDescriptor {
+pub(crate) fn descriptor(spec: &CodeiumFamilySpec) -> ProviderDescriptor {
     ProviderDescriptor {
         id: Cow::Borrowed(spec.provider_id),
         metadata: ProviderMetadata {
@@ -35,7 +35,8 @@ pub fn descriptor(spec: &CodeiumFamilySpec) -> ProviderDescriptor {
     }
 }
 
-pub fn debug_report(selector: Option<&str>) -> Result<String> {
+#[allow(dead_code)] // lib 目标不调用；bin 的 debug-codeium-family 子命令会使用
+pub(crate) fn debug_report(selector: Option<&str>) -> Result<String> {
     let specs: Vec<CodeiumFamilySpec> = match selector {
         None | Some("all") => vec![ANTIGRAVITY_SPEC, WINDSURF_SPEC],
         Some("antigravity") => vec![ANTIGRAVITY_SPEC],
@@ -61,6 +62,7 @@ pub fn debug_report(selector: Option<&str>) -> Result<String> {
     Ok(report)
 }
 
+#[allow(dead_code)]
 fn render_spec_debug(spec: CodeiumFamilySpec) -> Result<String> {
     let mut out = String::new();
 
@@ -86,6 +88,7 @@ fn render_spec_debug(spec: CodeiumFamilySpec) -> Result<String> {
     Ok(out)
 }
 
+#[allow(dead_code)]
 fn append_cache_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result<()> {
     writeln!(out, "### Cache DB")?;
 
@@ -136,6 +139,7 @@ fn append_cache_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result
     Ok(())
 }
 
+#[allow(dead_code)]
 fn append_process_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result<()> {
     writeln!(out, "### Local language server")?;
 
@@ -213,6 +217,7 @@ fn append_process_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Resu
     Ok(())
 }
 
+#[allow(dead_code)]
 fn list_interesting_cache_keys(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         "SELECT key FROM ItemTable \
@@ -231,12 +236,14 @@ fn list_interesting_cache_keys(conn: &Connection) -> Result<Vec<String>> {
     Ok(keys)
 }
 
+#[allow(dead_code)]
 fn cache_key_exists(conn: &Connection, key: &str) -> Result<bool> {
     let mut stmt = conn.prepare("SELECT EXISTS(SELECT 1 FROM ItemTable WHERE key = ?1)")?;
     let exists: i64 = stmt.query_row([key], |row| row.get(0))?;
     Ok(exists != 0)
 }
 
+#[allow(dead_code)]
 fn mask_secret(secret: &str) -> String {
     if secret.len() <= 8 {
         return "***".to_string();
@@ -247,7 +254,7 @@ fn mask_secret(secret: &str) -> String {
     format!("{}…{}", head, tail)
 }
 
-pub fn classify_unavailable(spec: &CodeiumFamilySpec) -> Result<()> {
+pub(crate) fn classify_unavailable(spec: &CodeiumFamilySpec) -> Result<()> {
     if live_source::is_available(spec) || cache_source::is_available(spec) {
         Ok(())
     } else {
@@ -255,11 +262,11 @@ pub fn classify_unavailable(spec: &CodeiumFamilySpec) -> Result<()> {
     }
 }
 
-pub fn refresh_live(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub(crate) fn refresh_live(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     live_source::fetch_refresh_data(spec)
 }
 
-pub fn refresh_cache(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
+pub(crate) fn refresh_cache(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     cache_source::read_refresh_data(spec)
 }
 

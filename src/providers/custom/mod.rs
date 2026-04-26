@@ -1,14 +1,14 @@
 mod auth;
 mod availability;
 mod descriptor;
-pub mod extractor;
+pub(crate) mod extractor;
 mod fetch;
-pub mod generator;
+pub(crate) mod generator;
 mod json_file;
-pub mod loader;
+pub(crate) mod loader;
 mod log_utils;
-pub mod provider;
-pub mod schema;
+pub(crate) mod provider;
+pub(crate) mod schema;
 mod url;
 
 pub use loader::load_custom_providers;
