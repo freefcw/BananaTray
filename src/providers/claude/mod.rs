@@ -16,7 +16,7 @@ use log::debug;
 
 use std::borrow::Cow;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -163,25 +163,25 @@ impl AiProvider for ClaudeProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if self.cli_probe.is_available() || self.api_probe.is_available() {
             Ok(())
         } else {
-            Err(Self::both_unavailable_error())
+            Err(Self::both_unavailable_error().into())
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         match self.probe_mode {
             ProbeMode::Cli => {
                 debug!("Claude: forcing CLI mode");
-                self.refresh_via_cli()
+                Ok(self.refresh_via_cli()?)
             }
             ProbeMode::Api => {
                 debug!("Claude: forcing API mode");
-                self.refresh_via_api()
+                Ok(self.refresh_via_api()?)
             }
-            ProbeMode::Auto => self.refresh_auto(),
+            ProbeMode::Auto => Ok(self.refresh_auto()?),
         }
     }
 }
@@ -320,8 +320,7 @@ mod tests {
         );
 
         let err = smol::block_on(provider.check_availability()).unwrap_err();
-        let classified = ProviderError::classify(&err);
-        assert!(matches!(classified, ProviderError::Unavailable { .. }));
+        assert!(matches!(err, ProviderError::Unavailable { .. }));
     }
 
     #[test]

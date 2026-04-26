@@ -8,7 +8,6 @@ use crate::models::{
     AppSettings, ErrorKind, FailureAdvice, FailureReason, ProviderCapability, ProviderDescriptor,
     ProviderFailure, RefreshData, SettingsCapability, TokenEditMode, TokenInputState,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -113,6 +112,12 @@ pub enum ProviderError {
     },
 }
 
+/// Provider facade 对外返回的结构化结果类型。
+///
+/// 内部 helper 仍可使用 `anyhow::Result` 承载技术上下文，但跨过 provider facade
+/// 进入 refresh/runtime 边界时必须收敛为 `ProviderError`。
+pub type ProviderResult<T> = std::result::Result<T, ProviderError>;
+
 impl std::fmt::Display for ProviderError {
     /// 英文技术描述，面向日志和开发者调试
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -188,6 +193,12 @@ impl std::fmt::Display for ProviderError {
 }
 
 impl std::error::Error for ProviderError {}
+
+impl From<anyhow::Error> for ProviderError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::classify(&err)
+    }
+}
 
 impl ProviderError {
     /// 从 anyhow::Error 提取错误类型。
@@ -426,12 +437,12 @@ pub trait AiProvider: Send + Sync {
     fn descriptor(&self) -> ProviderDescriptor;
 
     /// 检查当前环境是否满足刷新条件。
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         Ok(())
     }
 
     /// 核心方法：拉取最新的配额/用量情况
-    async fn refresh(&self) -> Result<RefreshData>;
+    async fn refresh(&self) -> ProviderResult<RefreshData>;
 
     /// 声明该 Provider 的设置 UI 能力（默认无交互设置）
     ///

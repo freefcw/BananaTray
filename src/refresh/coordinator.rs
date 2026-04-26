@@ -14,7 +14,7 @@ use smol::channel::{Receiver, Sender};
 
 use crate::models::ProviderId;
 use crate::providers::error_presenter::ProviderErrorPresenter;
-use crate::providers::{ProviderManager, ProviderManagerHandle};
+use crate::providers::{ProviderError, ProviderManager, ProviderManagerHandle, ProviderResult};
 
 use super::scheduler::RefreshScheduler;
 use super::types::*;
@@ -56,10 +56,10 @@ impl RefreshCoordinator {
     // 结果转换
     // ========================================================================
 
-    /// Convert a provider refresh `Result` into a `RefreshOutcome` (pure, no side-effects).
+    /// Convert a structured provider refresh result into a `RefreshOutcome` (pure, no side-effects).
     fn build_outcome(
         id: ProviderId,
-        result: anyhow::Result<crate::models::RefreshData>,
+        result: ProviderResult<crate::models::RefreshData>,
     ) -> RefreshOutcome {
         match result {
             Ok(data) => {
@@ -82,31 +82,28 @@ impl RefreshCoordinator {
                     result: RefreshResult::Success { data },
                 }
             }
-            Err(err) => {
-                let classified = crate::providers::ProviderError::classify(&err);
-                match &classified {
-                    crate::providers::ProviderError::Unavailable { .. } => {
-                        log::info!(target: "refresh", "provider {} unavailable: {}", id, classified);
-                        RefreshOutcome {
-                            id,
-                            result: RefreshResult::Unavailable {
-                                failure: ProviderErrorPresenter::to_failure(&classified),
-                            },
-                        }
-                    }
-                    _ => {
-                        log::warn!(target: "refresh", "provider {} failed: {}", id, classified);
-                        let error_kind = ProviderErrorPresenter::to_error_kind(&classified);
-                        RefreshOutcome {
-                            id,
-                            result: RefreshResult::Failed {
-                                failure: ProviderErrorPresenter::to_failure(&classified),
-                                error_kind,
-                            },
-                        }
+            Err(error) => match &error {
+                ProviderError::Unavailable { .. } => {
+                    log::info!(target: "refresh", "provider {} unavailable: {}", id, error);
+                    RefreshOutcome {
+                        id,
+                        result: RefreshResult::Unavailable {
+                            failure: ProviderErrorPresenter::to_failure(&error),
+                        },
                     }
                 }
-            }
+                _ => {
+                    log::warn!(target: "refresh", "provider {} failed: {}", id, error);
+                    let error_kind = ProviderErrorPresenter::to_error_kind(&error);
+                    RefreshOutcome {
+                        id,
+                        result: RefreshResult::Failed {
+                            failure: ProviderErrorPresenter::to_failure(&error),
+                            error_kind,
+                        },
+                    }
+                }
+            },
         }
     }
 
@@ -154,7 +151,7 @@ impl RefreshCoordinator {
             }))
             .unwrap_or_else(|_| {
                 log::error!(target: "refresh", "provider {} panicked during refresh", id);
-                Err(anyhow::anyhow!("provider panicked"))
+                Err(ProviderError::fetch_failed("provider panicked"))
             });
             RefreshCoordinator::build_outcome(id, result)
         })
@@ -182,10 +179,7 @@ impl RefreshCoordinator {
                 timeout,
                 reason
             );
-            Self::build_outcome(
-                timeout_id,
-                Err(crate::providers::ProviderError::Timeout.into()),
-            )
+            Self::build_outcome(timeout_id, Err(ProviderError::Timeout))
         })
         .await
     }

@@ -4,7 +4,7 @@ mod config;
 mod parser;
 mod status_probe;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -61,15 +61,15 @@ impl AiProvider for CodexProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if auth_path().exists() {
             Ok(())
         } else {
-            Err(ProviderError::config_missing("~/.codex/auth.json").into())
+            Err(ProviderError::config_missing("~/.codex/auth.json"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let mut credentials = load_credentials()?;
         // Proactive refresh：成功会原地 reload credentials，使后续 resolve_account
         // 与被动 refresh 路径都拿到新 id_token / refresh_token。

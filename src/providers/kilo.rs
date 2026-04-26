@@ -1,8 +1,7 @@
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -59,19 +58,18 @@ impl AiProvider for KiloProvider {
         ProviderCapability::Placeholder
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if Self::has_kilo_extension() {
             Ok(())
         } else {
-            Err(ProviderError::unavailable("Kilo extension not detected").into())
+            Err(ProviderError::unavailable("Kilo extension not detected"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         Err(ProviderError::unavailable(
             "Kilo Code does not support usage monitoring, it runs as a VS Code extension with no public API",
-        )
-        .into())
+        ))
     }
 }
 

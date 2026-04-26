@@ -2,7 +2,7 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -53,15 +53,15 @@ impl AiProvider for GeminiProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if credentials_path().exists() {
             Ok(())
         } else {
-            Err(ProviderError::config_missing("~/.gemini/oauth_creds.json").into())
+            Err(ProviderError::config_missing("~/.gemini/oauth_creds.json"))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         check_auth_type()?;
 
         let creds = load_credentials()?;
@@ -91,7 +91,7 @@ impl AiProvider for GeminiProvider {
                     cli: "gemini".to_string(),
                 }))
             })?;
-            return self.fetch_quota_from_current_creds(account_email);
+            return Ok(self.fetch_quota_from_current_creds(account_email)?);
         }
 
         match fetch_quota_via_api(&access_token) {
@@ -104,10 +104,10 @@ impl AiProvider for GeminiProvider {
                 if is_auth_error {
                     log::info!(target: "providers", "Gemini API returned auth error, attempting CLI refresh");
                     if refresh_token_via_cli().is_ok() {
-                        return self.fetch_quota_from_current_creds(account_email);
+                        return Ok(self.fetch_quota_from_current_creds(account_email)?);
                     }
                 }
-                Err(e)
+                Err(e.into())
             }
         }
     }

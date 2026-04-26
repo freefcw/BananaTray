@@ -1,4 +1,4 @@
-use super::{AiProvider, ProviderError};
+use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
     QuotaType, RefreshData,
@@ -168,15 +168,15 @@ impl AiProvider for KiroProvider {
         }
     }
 
-    async fn check_availability(&self) -> Result<()> {
+    async fn check_availability(&self) -> ProviderResult<()> {
         if cli::command_exists(KIRO_CLI) {
             Ok(())
         } else {
-            Err(ProviderError::cli_not_found(KIRO_CLI).into())
+            Err(ProviderError::cli_not_found(KIRO_CLI))
         }
     }
 
-    async fn refresh(&self) -> Result<RefreshData> {
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
         let stdout = Self::run_usage()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;
@@ -187,8 +187,7 @@ impl AiProvider for KiroProvider {
             return Err(ProviderError::parse_failed(&format!(
                 "cannot parse kiro-cli output:\n{}",
                 stdout.trim()
-            ))
-            .into());
+            )));
         }
 
         Ok(RefreshData::with_account(
