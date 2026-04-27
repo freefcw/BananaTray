@@ -16,6 +16,7 @@ pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
     RefreshRequest::UpdateConfig {
         interval_mins: session.settings.system.refresh_interval_mins,
         enabled,
+        provider_credentials: session.settings.provider.credentials.clone(),
     }
 }
 

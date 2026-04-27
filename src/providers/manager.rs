@@ -1,7 +1,7 @@
 use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
-    AppSettings, ProviderId, ProviderKind, ProviderMetadata, ProviderStatus, TokenInputCapability,
-    TokenInputState,
+    AppSettings, ProviderId, ProviderKind, ProviderMetadata, ProviderSettings, ProviderStatus,
+    TokenInputCapability, TokenInputState,
 };
 use log::{debug, info, warn};
 use std::collections::HashMap;
@@ -211,6 +211,16 @@ impl ProviderManager {
             })
     }
 
+    /// 将 app-managed provider credentials 同步到需要运行时快照的 provider。
+    pub fn sync_provider_credentials(&self, credentials: &ProviderSettings) {
+        for provider in self.providers_by_kind.values() {
+            provider.sync_provider_credentials(credentials);
+        }
+        for provider in self.custom_providers_by_id.values() {
+            provider.sync_provider_credentials(credentials);
+        }
+    }
+
     /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
     pub async fn refresh_by_id(
         &self,
@@ -258,10 +268,12 @@ impl ProviderManager {
 mod tests {
     use super::*;
     use crate::models::{
-        AppSettings, SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
+        AppSettings, ProviderSettings, SettingsCapability, TokenEditMode, TokenInputCapability,
+        TokenInputState,
     };
     use async_trait::async_trait;
     use std::borrow::Cow;
+    use std::sync::Mutex;
 
     struct TestProvider {
         descriptor: crate::models::ProviderDescriptor,
@@ -269,6 +281,11 @@ mod tests {
 
     struct DefaultTokenProvider {
         descriptor: crate::models::ProviderDescriptor,
+    }
+
+    struct CredentialCaptureProvider {
+        descriptor: crate::models::ProviderDescriptor,
+        synced_token: Mutex<Option<String>>,
     }
 
     #[async_trait]
@@ -317,6 +334,30 @@ mod tests {
                 description_i18n_key: "copilot.requires_auth",
                 create_url: "https://example.com/token",
             })
+        }
+
+        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
+            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
+        }
+    }
+
+    #[async_trait]
+    impl AiProvider for CredentialCaptureProvider {
+        fn descriptor(&self) -> crate::models::ProviderDescriptor {
+            self.descriptor.clone()
+        }
+
+        fn sync_provider_credentials(&self, credentials: &ProviderSettings) {
+            *self.synced_token.lock().unwrap() =
+                credentials.get_credential("test_token").map(str::to_string);
+        }
+
+        async fn check_availability(&self) -> ProviderResult<()> {
+            if self.synced_token.lock().unwrap().is_some() {
+                Ok(())
+            } else {
+                Err(ProviderError::config_missing("test_token"))
+            }
         }
 
         async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
@@ -488,6 +529,34 @@ mod tests {
         assert_eq!(state.edit_mode, TokenEditMode::EditStored);
         assert_eq!(state.source_i18n_key, None);
         assert_eq!(state.masked.as_deref(), Some("abcd•••wxyz"));
+    }
+
+    #[test]
+    fn test_sync_provider_credentials_updates_registered_providers() {
+        let mut manager = ProviderManager::empty();
+        manager.register(Arc::new(CredentialCaptureProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed("amp"),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Amp,
+                    display_name: "Amp".to_string(),
+                    brand_name: "Amp".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+            synced_token: Mutex::new(None),
+        }));
+
+        let mut credentials = ProviderSettings::default();
+        credentials.set_credential("test_token", "configured-token".to_string());
+
+        manager.sync_provider_credentials(&credentials);
+        let result = smol::block_on(manager.refresh_by_id(&ProviderId::BuiltIn(ProviderKind::Amp)));
+
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -11,9 +11,8 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::register_input_actions;
 use gpui::{
-    div, hsla, px, relative, App, AppContext, Context, Div, ElementId, Entity, FocusHandle,
-    FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled,
-    Window,
+    div, hsla, px, relative, App, Context, Div, ElementId, Entity, FocusHandle, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -39,6 +38,7 @@ impl RenderOnce for TokenInputBox {
             .id(ElementId::Name(
                 format!("token_input_box_{}", self.provider_id.id_key()).into(),
             ))
+            .key_context("Input")
             .track_focus(&self.focus_handle)
             .w_full()
             .flex()
@@ -87,6 +87,7 @@ pub(crate) fn render_token_input_panel(
     cx: &mut Context<SettingsView>,
 ) -> Div {
     let TokenInputCapability {
+        credential_key,
         placeholder_i18n_key,
         help_tip_i18n_key,
         title_i18n_key,
@@ -178,14 +179,25 @@ pub(crate) fn render_token_input_panel(
         .is_some_and(|id| id == provider_id);
 
     if is_editing {
-        // 编辑模式：创建输入框
-        view.token_input = Some(cx.new(|cx| {
-            let mut state = adabraka_ui::components::input_state::InputState::new(cx);
-            state.placeholder = t!(placeholder_i18n_key).to_string().into();
-            state
-        }));
-
-        let input_entity = view.token_input.as_ref().unwrap().clone();
+        // 编辑模式：复用输入状态，避免父视图重渲染时清空用户正在输入的 token。
+        let initial_value = if display_info.edit_mode == TokenEditMode::EditStored {
+            view.state
+                .borrow()
+                .session
+                .settings
+                .provider
+                .credentials
+                .get_credential(credential_key)
+                .map(str::to_string)
+        } else {
+            None
+        };
+        let input_entity = view.ensure_token_input(
+            provider_id,
+            t!(placeholder_i18n_key).as_ref(),
+            initial_value,
+            cx,
+        );
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
         card = card.child(TokenInputBox {
@@ -195,6 +207,7 @@ pub(crate) fn render_token_input_panel(
             focus_handle,
         });
     } else if has_token {
+        view.clear_token_input();
         // Token 已配置状态
         card = card.child(
             div()
@@ -224,6 +237,7 @@ pub(crate) fn render_token_input_panel(
                 ),
         );
     } else {
+        view.clear_token_input();
         // Token 未配置提示
         card = card.child(
             div().h(px(40.0)).flex().items_center().child(
@@ -302,7 +316,7 @@ fn render_token_action_buttons(
         t!("settings.token.create").to_string()
     };
 
-    let input_entity_opt = view.token_input.clone();
+    let input_entity_opt = view.token_input.as_ref().map(|draft| draft.input.clone());
     let state_left = view.state.clone();
     let left_provider_id = provider_id.clone();
 

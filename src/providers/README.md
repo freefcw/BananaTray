@@ -12,6 +12,7 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data
   - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
   - `provider_capability() -> ProviderCapability` — declare whether the provider is `Monitorable`, `Informational`, or `Placeholder`
+  - `sync_provider_credentials(credentials)` — optional runtime sync hook for BananaTray-managed provider credentials
 - **`SettingsCapability`** — provider-defined settings capability:
   - `None` — no extra settings UI
   - `TokenInput(TokenInputCapability)` — generic token panel driven by static i18n keys + `credential_key`
@@ -26,6 +27,7 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `credential_key` for persisted storage in `ProviderConfig::credentials`
   - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
+- **`sync_provider_credentials()`** — optional `AiProvider` hook used by the background refresh runtime. `RefreshRequest::UpdateConfig` carries the latest `ProviderConfig::credentials`; `RefreshCoordinator` syncs them into `ProviderManager` before refresh and after provider reload. TokenInput providers whose refresh path uses app-managed overrides must store a thread-safe snapshot here.
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
@@ -47,6 +49,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
 - `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
+- `sync_provider_credentials(credentials)` — fans out app-managed credentials to registered providers that need runtime credential snapshots
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
 ProviderManager / ProviderManagerHandle form the provider facade used by the rest of the app.
@@ -65,7 +68,7 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 |------|----------|-----|------------|-------------|-------|
 | `claude/` | Claude | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
 | `gemini/` | Gemini | `gemini` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)` and provides a custom multi-source token resolver |
+| `copilot/` | Copilot | `copilot` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, and syncs `github_token` into a runtime snapshot for refresh |
 | `codex/` | Codex | `codex` | `Monitorable` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
 | `kimi/` | Kimi | `kimi` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |

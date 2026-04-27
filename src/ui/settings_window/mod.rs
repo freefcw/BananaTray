@@ -6,6 +6,7 @@ mod general_tab;
 mod providers;
 use crate::application::AppAction;
 use crate::application::SettingsTab;
+use crate::models::ProviderId;
 use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
@@ -147,10 +148,16 @@ impl NewApiFormInputs {
     }
 }
 
+/// Token 输入框的 view-local 草稿状态。
+pub(crate) struct TokenInputDraft {
+    pub provider_id: ProviderId,
+    pub input: Entity<InputState>,
+}
+
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     /// 当前交互设置面板的 Token 输入框（通用，不绑定特定 provider）
-    pub(crate) token_input: Option<Entity<adabraka_ui::components::input_state::InputState>>,
+    pub(crate) token_input: Option<TokenInputDraft>,
     /// General Tab 全局热键捕获输入框
     pub(crate) global_hotkey_input: Option<Entity<HotkeyInputState>>,
     /// 上次同步进捕获控件的已保存热键值，用来避免覆盖用户尚未保存的录制结果
@@ -199,6 +206,39 @@ impl SettingsView {
         }
 
         input
+    }
+
+    pub(in crate::ui::settings_window) fn ensure_token_input(
+        &mut self,
+        provider_id: &ProviderId,
+        placeholder: &str,
+        initial_value: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        if let Some(draft) = &self.token_input {
+            if &draft.provider_id == provider_id {
+                return draft.input.clone();
+            }
+        }
+
+        let placeholder = placeholder.to_string();
+        let initial_value = initial_value.unwrap_or_default();
+        let input = cx.new(|cx| {
+            let mut state = InputState::new(cx);
+            state.placeholder = placeholder.into();
+            state.content = initial_value.into();
+            state.trim_on_blur = false;
+            state
+        });
+        self.token_input = Some(TokenInputDraft {
+            provider_id: provider_id.clone(),
+            input: input.clone(),
+        });
+        input
+    }
+
+    pub(in crate::ui::settings_window) fn clear_token_input(&mut self) {
+        self.token_input = None;
     }
 
     /// 根据用户主题设置 + 窗口外观解析设置窗口主题

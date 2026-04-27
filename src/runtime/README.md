@@ -84,7 +84,7 @@
 
 `AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用与设置窗口构造入口通过 `ui_hooks` 注册到 `runtime`，避免把 UI 句柄直接存进 `AppState`。
 
-`ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。
+`ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。设置页保存的 app-managed provider credentials 会随 `RefreshRequest::UpdateConfig` 发给后台协调器，再由 `ProviderManager::sync_provider_credentials()` 注入需要运行时凭证快照的 provider。
 
 ### `ui_hooks.rs` — UI 注册边界
 
