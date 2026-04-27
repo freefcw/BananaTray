@@ -15,6 +15,7 @@ use std::rc::Rc;
 enum TrayCommand {
     ToggleProvider,
     ShowSettings,
+    #[cfg(target_os = "linux")]
     Quit,
 }
 
@@ -60,6 +61,12 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     };
     crate::tray::apply_tray_icon(cx, icon_request);
     cx.set_tray_tooltip(&t!("tray.tooltip"));
+    #[cfg(target_os = "macos")]
+    {
+        // macOS status item defaults to NSMenu mode; panel mode is required for
+        // clicks to reach `on_tray_icon_event` and toggle the GPUI popup.
+        cx.set_tray_panel_mode(true);
+    }
 
     // 通知授权（仅在 App Bundle 模式下请求）
     crate::platform::notification::request_notification_authorization();
@@ -77,6 +84,7 @@ fn run_tray_command(command: TrayCommand, controller: &Rc<RefCell<TrayController
     match command {
         TrayCommand::ToggleProvider => controller.borrow_mut().toggle_provider(cx),
         TrayCommand::ShowSettings => controller.borrow_mut().show_settings(cx),
+        #[cfg(target_os = "linux")]
         TrayCommand::Quit => cx.quit(),
     }
 }
