@@ -13,6 +13,11 @@
 - 处理托盘点击事件和全局快捷键
 - 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠幂等守卫清理当前窗口，避免 stale handle 和误关新窗口
 
+**托盘交互入口**：
+
+- macOS 启动时必须通过 GPUI `set_tray_panel_mode(true)` 切到 panel callback 模式，否则 status item 会走 NSMenu 模式，点击不会稳定进入 `on_tray_icon_event`，也就不会打开弹窗
+- Linux 仍保留 tray menu fallback（Open / Settings / Quit），用于覆盖不同 tray host 对点击事件转发不一致的情况
+
 **多显示器定位**（`preferred_window_bounds`）：
 
 - 通过 GPUI `cx.tray_icon_anchor()` 获取被点击托盘图标所在的 `DisplayId` 与菜单栏局部 bounds
