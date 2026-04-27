@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use smol::channel::{Receiver, Sender};
 
-use crate::models::ProviderId;
+use crate::models::{ProviderId, ProviderSettings};
 use crate::providers::error_presenter::ProviderErrorPresenter;
 use crate::providers::{ProviderError, ProviderManager, ProviderManagerHandle, ProviderResult};
 
@@ -25,6 +25,7 @@ pub struct RefreshCoordinator {
     request_rx: Receiver<RefreshRequest>,
     event_tx: Sender<RefreshEvent>,
     scheduler: RefreshScheduler,
+    provider_credentials: ProviderSettings,
 }
 
 impl RefreshCoordinator {
@@ -44,6 +45,7 @@ impl RefreshCoordinator {
             request_rx,
             event_tx,
             scheduler: RefreshScheduler::new(),
+            provider_credentials: ProviderSettings::default(),
         }
     }
 
@@ -288,12 +290,18 @@ impl RefreshCoordinator {
                     RefreshRequest::UpdateConfig {
                         interval_mins,
                         enabled,
+                        provider_credentials,
                     } => {
+                        self.provider_credentials = provider_credentials;
+                        self.manager
+                            .snapshot()
+                            .sync_provider_credentials(&self.provider_credentials);
                         self.scheduler.update_config(interval_mins, enabled);
                     }
                     RefreshRequest::ReloadProviders => {
                         log::info!(target: "refresh", "reloading custom providers");
                         let new_manager = Arc::new(crate::providers::ProviderManager::new());
+                        new_manager.sync_provider_credentials(&self.provider_credentials);
                         let statuses = new_manager.initial_statuses();
 
                         // 清理已不存在的 provider 的残留状态

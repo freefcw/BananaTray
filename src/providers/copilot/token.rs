@@ -49,8 +49,7 @@ struct TokenCache {
 
 /// 进程级 token 缓存。
 ///
-/// 使用 `static Mutex` 而非实例字段是因为 `define_unit_provider!` 生成零字段结构体，
-/// 且 OAuth token 在进程生命周期内本身就是全局状态（所有刷新周期共享同一份凭据）。
+/// OAuth / CLI token 来源来自进程外共享配置，缓存也按进程共享。
 /// 测试中可能存在并发竞争，但因为 `resolve_token` 的缓存不变量仅是"最近 5 秒内读取过"，
 /// 竞争不会导致错误行为。
 static TOKEN_CACHE: Mutex<TokenCache> = Mutex::new(TokenCache {

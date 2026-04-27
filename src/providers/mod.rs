@@ -472,6 +472,12 @@ pub trait AiProvider: Send + Sync {
             _ => None,
         }
     }
+
+    /// 同步 BananaTray 自己持久化的 provider credentials 到 provider 运行时。
+    ///
+    /// Provider 默认不需要此钩子；使用 `TokenInput` 且刷新路径依赖本地 override 的
+    /// provider 可在内部保存线程安全快照，供后台刷新线程读取。
+    fn sync_provider_credentials(&self, _credentials: &crate::models::ProviderSettings) {}
 }
 
 macro_rules! register_providers {

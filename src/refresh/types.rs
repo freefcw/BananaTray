@@ -1,4 +1,6 @@
-use crate::models::{ErrorKind, ProviderFailure, ProviderId, ProviderStatus, RefreshData};
+use crate::models::{
+    ErrorKind, ProviderFailure, ProviderId, ProviderSettings, ProviderStatus, RefreshData,
+};
 
 /// 刷新触发原因
 #[derive(Debug, Clone, Copy)]
@@ -22,6 +24,7 @@ pub enum RefreshRequest {
     UpdateConfig {
         interval_mins: u64,
         enabled: Vec<ProviderId>,
+        provider_credentials: ProviderSettings,
     },
     /// 热重载自定义 Provider（重建 ProviderManager 快照）
     ReloadProviders,

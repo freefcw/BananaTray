@@ -62,6 +62,7 @@ pub(super) fn save_provider_token(
                 .credentials
                 .set_credential(key, token);
             effects.push(SettingsEffect::PersistSettings.into());
+            effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
         }
     }
     session.settings_ui.token_editing_provider = None;

@@ -1,6 +1,9 @@
 use super::common::{has_effect, has_render, make_custom_token_provider, make_session, pid};
-use crate::application::{reduce, AppAction, AppEffect, CommonEffect, SettingsEffect};
+use crate::application::{
+    reduce, AppAction, AppEffect, CommonEffect, RefreshEffect, SettingsEffect,
+};
 use crate::models::{ProviderId, ProviderKind};
+use crate::refresh::RefreshRequest;
 
 // ── MoveProviderToIndex（拖拽排序）──────────────────
 
@@ -302,6 +305,15 @@ fn save_provider_token_stores_credential_and_persists() {
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::UpdateConfig {
+                provider_credentials,
+                ..
+            }
+        ))) if provider_credentials.get_credential("github_token") == Some("ghp_test123")
     )));
     assert!(has_render(&effects));
 }
