@@ -270,6 +270,7 @@ settings.token.cancel: "取消"
 # ── Copilot 设置 UI ──────────────────────────────────────
 copilot.github_login: "GitHub 登录"
 copilot.requires_auth: "需要通过 GitHub Token 认证。"
+copilot.token_placeholder: "粘贴 GitHub token"
 copilot.source.config_file: "配置文件"
 copilot.source.env_var: "环境变量 GITHUB_TOKEN"
 copilot.source.copilot_oauth: "Copilot 扩展自动检测"

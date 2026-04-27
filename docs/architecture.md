@@ -10,6 +10,7 @@
 - `bananatray` 二进制目标通过 Cargo `required-features = ["app"]` 显式要求该 feature。
 - `app` 不只控制模块导出，也隔离托盘壳的运行时依赖（GPUI / adabraka-ui / 单实例 / 通知 / 自启动等）。
 - `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖。
+- i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。
 
 ## Stable Module Boundaries
 

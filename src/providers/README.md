@@ -22,6 +22,7 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `Placeholder` — discoverable but not directly monitorable, no refresh/retry actions
 - **`TokenInputCapability`** — token settings contract:
   - static UI metadata (`title_i18n_key`, `description_i18n_key`, `placeholder_i18n_key`, `create_url`)
+  - every `*_i18n_key` and token source key must exist in all files under `locales/`; `src/i18n.rs` tests enforce this for literal and provider-declared keys
   - `credential_key` for persisted storage in `ProviderConfig::credentials`
   - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient

@@ -85,6 +85,14 @@ pub(crate) fn test_locale_guard(locale: &str) -> TestLocaleGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
+    use serde_yml::Value;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    const EN_LOCALE: &str = include_str!("../locales/en.yml");
+    const ZH_CN_LOCALE: &str = include_str!("../locales/zh-CN.yml");
 
     // ── normalize_locale ─────────────────────────────────────
 
@@ -199,43 +207,118 @@ mod tests {
         }
     }
 
-    // ── i18n key coverage ────────────────────────────────────
+    // ── i18n resource coverage ───────────────────────────────
+
+    fn locale_keys(contents: &str) -> BTreeSet<String> {
+        let map: BTreeMap<String, Value> =
+            serde_yml::from_str(contents).expect("locale file should be valid YAML");
+        map.into_keys().filter(|key| key != "_version").collect()
+    }
+
+    fn locale_sets() -> [(&'static str, BTreeSet<String>); 2] {
+        [
+            ("en", locale_keys(EN_LOCALE)),
+            ("zh-CN", locale_keys(ZH_CN_LOCALE)),
+        ]
+    }
+
+    fn collect_rs_files(dir: &Path, files: &mut Vec<PathBuf>) {
+        let entries = fs::read_dir(dir)
+            .unwrap_or_else(|err| panic!("failed to read {}: {}", dir.display(), err));
+
+        for entry in entries {
+            let path = entry.expect("failed to read src entry").path();
+            if path.is_dir() {
+                collect_rs_files(&path, files);
+            } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    fn code_referenced_i18n_keys() -> BTreeSet<String> {
+        let t_literal_re = Regex::new(r#"(?:rust_i18n::)?\bt!\(\s*"([A-Za-z0-9_.-]+)""#).unwrap();
+        let dynamic_key_field_re = Regex::new(
+            r#"(?:placeholder_i18n_key|help_tip_i18n_key|title_i18n_key|description_i18n_key|source_i18n_key):\s*(?:Some\()?\"([A-Za-z0-9_.-]+)\""#,
+        )
+        .unwrap();
+
+        let mut files = Vec::new();
+        collect_rs_files(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut files,
+        );
+
+        let mut keys = BTreeSet::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|err| panic!("failed to read {}: {}", path.display(), err));
+
+            for captures in t_literal_re.captures_iter(&contents) {
+                keys.insert(captures[1].to_string());
+            }
+            for captures in dynamic_key_field_re.captures_iter(&contents) {
+                keys.insert(captures[1].to_string());
+            }
+        }
+
+        for &(_, display_name_key) in SUPPORTED_LANGUAGES {
+            keys.insert(display_name_key.to_string());
+        }
+
+        for key in [
+            "newapi.save_success_title",
+            "newapi.save_success_body",
+            "newapi.save_partial_title",
+            "newapi.save_partial_body",
+            "newapi.edit_success_title",
+            "newapi.edit_success_body",
+        ] {
+            keys.insert(key.to_string());
+        }
+
+        keys
+    }
 
     #[test]
-    fn all_hint_keys_exist_in_locales() {
-        let _locale_guard = test_locale_guard("en");
-        // 代码中使用的所有 hint key（仅包含面向用户的提示）
-        let required_keys = [
-            "hint.set_env_var",
-            "hint.login_cli",
-            "hint.relogin_cli",
-            "hint.refresh_cli",
-            "hint.login_app",
-            "hint.cli_exit_failed",
-            "hint.api_http_error",
-            "hint.api_error",
-            "hint.no_oauth_creds",
-            "hint.both_unavailable",
-            "hint.trust_folder",
-            "hint.cannot_parse_quota",
-            "hint.token_still_invalid",
-        ];
+    fn locale_files_have_same_keys() {
+        let [(_, en_keys), (_, zh_cn_keys)] = locale_sets();
+        assert_eq!(en_keys, zh_cn_keys);
+    }
 
-        // 测试每个 locale
-        for locale in ["en", "zh-CN"] {
-            rust_i18n::set_locale(locale);
+    #[test]
+    fn all_code_referenced_keys_exist_in_locales() {
+        let _locale_guard = test_locale_guard("en");
+
+        let required_keys = code_referenced_i18n_keys();
+        for (locale, keys) in locale_sets() {
             for key in &required_keys {
-                let result = rust_i18n::t!(*key);
-                // 如果 key 不存在，rust_i18n 会返回 key 本身
-                assert_ne!(
-                    result, *key,
+                assert!(
+                    keys.contains(key),
                     "Missing i18n key '{}' in locale '{}'",
+                    key,
+                    locale
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_locale_keys_resolve_at_runtime() {
+        let _locale_guard = test_locale_guard("en");
+
+        for (locale, keys) in locale_sets() {
+            rust_i18n::set_locale(locale);
+            for key in keys {
+                let result = rust_i18n::t!(key.as_str());
+                assert_ne!(
+                    result, key,
+                    "i18n key '{}' is present in locale file but missing from rust-i18n runtime for '{}'",
                     key, locale
                 );
             }
         }
 
-        // 恢复到 en
         rust_i18n::set_locale("en");
     }
 }
