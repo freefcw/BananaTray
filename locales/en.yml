@@ -270,6 +270,7 @@ settings.token.cancel: "Cancel"
 # ── Copilot settings UI ──────────────────────────────────
 copilot.github_login: "GitHub Login"
 copilot.requires_auth: "Requires authentication via GitHub Token."
+copilot.token_placeholder: "Paste GitHub token"
 copilot.source.config_file: "Config file"
 copilot.source.env_var: "GITHUB_TOKEN env var"
 copilot.source.copilot_oauth: "Copilot extension auto-detected"

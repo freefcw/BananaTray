@@ -14,4 +14,24 @@ fn main() {
     // 仅在 HEAD 变化时重新运行（避免每次编译都执行 git）
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/heads/");
+    emit_locale_rerun_directives();
+}
+
+fn emit_locale_rerun_directives() {
+    println!("cargo:rerun-if-changed=locales");
+
+    let Ok(entries) = std::fs::read_dir("locales") else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_locale_file = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| matches!(ext, "yml" | "yaml"));
+        if is_locale_file {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
 }
