@@ -196,6 +196,7 @@ pub fn quota_display_view_state(quota: &QuotaInfo) -> QuotaDisplayViewState {
 ///
 /// - 余额模式: "Used: $X.XX" 或 空
 /// - Credit 类型: "$X.XX / $Y.YY"
+/// - Points 类型: "X.XX / Y.YY"
 /// - 其他类型: "X used / Y total" 或 "X% used"
 pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
     if quota.remaining_balance.is_some() {
@@ -215,6 +216,12 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
                 "quota.credit_detail",
                 used = format!("{:.2}", quota.used),
                 limit = format!("{:.2}", quota.limit)
+            )
+            .to_string(),
+            QuotaType::Points => t!(
+                "quota.count_detail",
+                used = format!("{:.2}", quota.used),
+                total = format!("{:.2}", quota.limit)
             )
             .to_string(),
             _ => {

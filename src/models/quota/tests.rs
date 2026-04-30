@@ -15,7 +15,34 @@ fn quota_type_stable_key_is_language_independent() {
         "model:Opus"
     );
     assert_eq!(QuotaType::Credit.stable_key(), "credit");
+    assert_eq!(QuotaType::Points.stable_key(), "points");
     assert_eq!(QuotaType::General.stable_key(), "general");
+}
+
+// 兼容性：Kiro 历史上 Regular Credits 用 (Credits + General)，stable_key = "general"。
+// 后续修正为 (Credits + Points)，必须保留 "general" 以避免老用户的 hidden_quotas 失效。
+#[test]
+fn label_credits_with_points_keeps_legacy_stable_key() {
+    use super::label::QuotaLabelSpec;
+    assert_eq!(
+        QuotaLabelSpec::Credits.stable_key(&QuotaType::Points),
+        "general"
+    );
+    assert_eq!(
+        QuotaLabelSpec::Credits.stable_key(&QuotaType::Credit),
+        "credit"
+    );
+}
+
+#[test]
+fn format_remaining_signed_handles_positive_negative_and_prefix() {
+    let q = QuotaInfo::with_details("c", 12.0, 50.0, QuotaType::Points, None);
+    assert_eq!(q.format_remaining_signed(""), "38.00");
+    assert_eq!(q.format_remaining_signed("$"), "$38.00");
+
+    let over = QuotaInfo::with_details("c", 60.0, 50.0, QuotaType::Credit, None);
+    assert_eq!(over.format_remaining_signed("$"), "-$10.00");
+    assert_eq!(over.format_remaining_signed(""), "-10.00");
 }
 
 // ========================================================================

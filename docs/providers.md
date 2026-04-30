@@ -18,7 +18,7 @@
 | Amp | `amp` | CLI | `Monitorable` | |
 | Cursor | `cursor` | HTTP API + 本地数据 | `Monitorable` | |
 | MiniMax | `minimax` | HTTP API | `Monitorable` | |
-| Kiro | `kiro` | CLI | `Monitorable` | |
+| Kiro | `kiro` | CLI | `Monitorable` | Credits / Bonus Credits 显示为积分（`X.XX / Y.YY`），不带 `$` 前缀；底层 `QuotaType::Points` |
 | Antigravity | `antigravity` | 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `live -> cache`，见 `antigravity-api.md` |
 | Windsurf | `windsurf` | 本地服务 + seat API + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `live -> seat -> cache`；若 seat 只返回日配额，则再用本地缓存补周配额。见 `antigravity-api.md` |
 | Kilo | `kilo` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |

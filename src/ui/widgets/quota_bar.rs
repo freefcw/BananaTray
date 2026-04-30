@@ -65,16 +65,13 @@ pub(crate) fn render_quota_bar(
         // 传统模式
         let remaining_pct = q.percent_remaining();
         match (&q.quota_type, display_mode) {
-            (QuotaType::Credit, QuotaDisplayMode::Remaining) => {
-                let remaining = q.limit - q.used;
-                if remaining >= 0.0 {
-                    format!("${:.2}", remaining)
-                } else {
-                    format!("-${:.2}", -remaining)
-                }
-            }
+            (QuotaType::Credit, QuotaDisplayMode::Remaining) => q.format_remaining_signed("$"),
             (QuotaType::Credit, QuotaDisplayMode::Used) => {
                 format!("${:.2}", q.used)
+            }
+            (QuotaType::Points, QuotaDisplayMode::Remaining) => q.format_remaining_signed(""),
+            (QuotaType::Points, QuotaDisplayMode::Used) => {
+                format!("{:.2}", q.used)
             }
             (_, QuotaDisplayMode::Remaining) => {
                 let pct = remaining_pct.max(0.0);
@@ -97,8 +94,8 @@ pub(crate) fn render_quota_bar(
         }
     };
 
-    // 余额模式无 % 单位；传统模式 Credit 也无 % 单位
-    let has_unit = !is_balance && !matches!(q.quota_type, QuotaType::Credit);
+    // 余额模式无 % 单位；传统模式 Credit 和 Points 也无 % 单位
+    let has_unit = !is_balance && !matches!(q.quota_type, QuotaType::Credit | QuotaType::Points);
 
     let hover_bg = theme.bg.card_inner_hovered;
 

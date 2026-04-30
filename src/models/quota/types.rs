@@ -9,8 +9,15 @@ pub enum QuotaType {
     Weekly,
     /// 按模型的周配额（如 Opus / Sonnet）
     ModelSpecific(String),
-    /// 基于金额的信用额度
+    /// 基于金额的信用额度（显示带 `$` 前缀）
     Credit,
+    /// 基于积分的配额（非货币）。
+    ///
+    /// 与 `Credit` 区别：显示为绝对数值（如 `12.39 / 50.00`），不带货币符号。
+    /// 与 `General` 区别：不会被 `is_percentage_mode()` 误判为百分比。
+    /// 注意：状态颜色阈值（Green / Yellow / Red）仍按 `percent_remaining()` 计算，
+    /// 只有显示文本走专属分支。
+    Points,
     /// 通用/不确定类型
     General,
 }
@@ -24,6 +31,7 @@ impl QuotaType {
             QuotaType::Weekly => "weekly".into(),
             QuotaType::ModelSpecific(model) => format!("model:{model}"),
             QuotaType::Credit => "credit".into(),
+            QuotaType::Points => "points".into(),
             QuotaType::General => "general".into(),
         }
     }

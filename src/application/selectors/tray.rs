@@ -373,16 +373,13 @@ fn compact_quota_display_text(
     }
 
     match (&quota.quota_type, display_mode) {
-        (QuotaType::Credit, QuotaDisplayMode::Remaining) => {
-            let remaining = quota.limit - quota.used;
-            if remaining >= 0.0 {
-                format!("${:.2}", remaining)
-            } else {
-                format!("-${:.2}", -remaining)
-            }
-        }
+        (QuotaType::Credit, QuotaDisplayMode::Remaining) => quota.format_remaining_signed("$"),
         (QuotaType::Credit, QuotaDisplayMode::Used) => {
             format!("${:.2}", quota.used)
+        }
+        (QuotaType::Points, QuotaDisplayMode::Remaining) => quota.format_remaining_signed(""),
+        (QuotaType::Points, QuotaDisplayMode::Used) => {
+            format!("{:.2}", quota.used)
         }
         (_, QuotaDisplayMode::Remaining) => {
             format!("{:.0}%", quota.percent_remaining().max(0.0))

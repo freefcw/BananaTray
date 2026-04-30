@@ -47,10 +47,13 @@ impl QuotaLabelSpec {
             Self::WeeklyModel { model } => format!("model:{model}"),
             Self::MonthlyCredits => "monthly-credits".into(),
             Self::Credits => {
-                if *quota_type == QuotaType::Credit {
-                    "credit".into()
-                } else {
-                    quota_type.stable_key()
+                match quota_type {
+                    QuotaType::Credit => "credit".into(),
+                    // 历史兼容：Kiro Regular Credits 早期为 `General` 类型，
+                    // stable_key 为 `"general"`；后续改为 `Points` 以修正显示。
+                    // 这里保留 `"general"` 以兼容老版本设置中的 hidden_quotas。
+                    QuotaType::Points => "general".into(),
+                    _ => quota_type.stable_key(),
                 }
             }
             Self::BonusCredits => "bonus-credits".into(),
