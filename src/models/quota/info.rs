@@ -133,6 +133,20 @@ impl QuotaInfo {
         self.remaining_balance.is_some()
     }
 
+    /// 将剩余量（`limit - used`）格式化为带符号的两位小数字符串，可选前缀。
+    ///
+    /// 用于 `Credit` / `Points` 类型在 `Remaining` 模式下的统一显示：
+    /// - 正数：`{prefix}{X.XX}`
+    /// - 负数（超额）：`-{prefix}{X.XX}`
+    pub fn format_remaining_signed(&self, prefix: &str) -> String {
+        let remaining = self.limit - self.used;
+        if remaining >= 0.0 {
+            format!("{prefix}{:.2}", remaining)
+        } else {
+            format!("-{prefix}{:.2}", -remaining)
+        }
+    }
+
     /// 使用百分比 (可负数，当超出配额时)
     pub fn percentage(&self) -> f64 {
         if self.limit <= 0.0 {
@@ -151,7 +165,11 @@ impl QuotaInfo {
         (self.limit - self.used) / self.limit * 100.0
     }
 
-    /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）
+    /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）。
+    ///
+    /// 注意：调用方在使用此判定前应先排除 `QuotaType::Credit` / `QuotaType::Points`，
+    /// 这两类有专属显示分支（货币 / 积分绝对值），不应当作百分比展示——即使它们的
+    /// `limit` 恰好等于 100。
     #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
         (self.limit - 100.0).abs() < 1e-9

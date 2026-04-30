@@ -1,3 +1,11 @@
+//! Kiro provider —— 通过 `kiro-cli` 读取用量。
+//!
+//! 显示语义：Regular Credits 与 Bonus Credits 都使用 `QuotaType::Points`，
+//! 在 UI 上显示为积分（`12.39 / 50.00`），**不带** `$` 前缀；早期版本曾误用
+//! `Credit`（带 `$`）和 `General`（被当作百分比）。
+//! Regular Credits 的 `stable_key` 保持为 `"general"` 以兼容老版本设置中的
+//! `hidden_quotas`（详见 `models/quota/label.rs`）。
+
 use super::{AiProvider, ProviderError, ProviderResult};
 use crate::models::{
     ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
@@ -114,7 +122,7 @@ impl KiroProvider {
                     QuotaLabelSpec::BonusCredits,
                     used,
                     total,
-                    QuotaType::Credit,
+                    QuotaType::Points,
                     Some(QuotaDetailSpec::ExpiresInDays { days }),
                 ));
             }
@@ -130,7 +138,7 @@ impl KiroProvider {
                     QuotaLabelSpec::Credits,
                     used,
                     total,
-                    QuotaType::General,
+                    QuotaType::Points,
                     reset_text,
                 ));
             }
@@ -232,7 +240,7 @@ Overages: Disabled
         assert_eq!(credits.label_spec, QuotaLabelSpec::Credits);
         assert!((credits.used - 12.39).abs() < 0.01);
         assert!((credits.limit - 50.0).abs() < 0.01);
-        assert_eq!(credits.quota_type, QuotaType::General);
+        assert_eq!(credits.quota_type, QuotaType::Points);
         assert_eq!(
             credits.detail_spec,
             Some(QuotaDetailSpec::ResetDate {
@@ -279,7 +287,7 @@ Overages: Disabled
         assert_eq!(bonus.label_spec, QuotaLabelSpec::BonusCredits);
         assert!((bonus.used - 122.54).abs() < 0.01);
         assert!((bonus.limit - 500.0).abs() < 0.01);
-        assert_eq!(bonus.quota_type, QuotaType::Credit);
+        assert_eq!(bonus.quota_type, QuotaType::Points);
         assert_eq!(
             bonus.detail_spec,
             Some(QuotaDetailSpec::ExpiresInDays { days: 29 })
@@ -289,7 +297,10 @@ Overages: Disabled
         assert_eq!(regular.label_spec, QuotaLabelSpec::Credits);
         assert!((regular.used - 0.0).abs() < 0.01);
         assert!((regular.limit - 50.0).abs() < 0.01);
-        assert_eq!(regular.quota_type, QuotaType::General);
+        assert_eq!(regular.quota_type, QuotaType::Points);
+        // 兼容性回归：Regular Credits 的 stable_key 必须保留为 "general"
+        // （早期 QuotaType::General 时代的值），避免老用户 hidden_quotas 失效。
+        assert_eq!(regular.stable_key, "general");
         assert_eq!(
             regular.detail_spec,
             Some(QuotaDetailSpec::ResetDate {

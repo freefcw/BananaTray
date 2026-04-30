@@ -21,7 +21,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 
 Refactored into a sub-directory with its own [README](quota/README.md). External imports remain stable through `crate::models::{QuotaInfo, ProviderStatus, ...}` re-exports.
 
-- **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit`, `General`
+- **`QuotaType`** — discriminant for quota categories: `Session`, `Weekly`, `ModelSpecific(String)`, `Credit` (currency, `$` prefix), `Points` (non-currency credits, e.g. Kiro), `General` (fallback)
 - **`QuotaLabelSpec`** — quota title semantic payload. Providers store stable meaning (`Daily`, `Session`, `WeeklyModel { .. }`, `MonthlyCredits`, `Credits`, `Raw(String)` etc.); selector/UI turns it into locale-specific text.
 - **`QuotaDetailSpec`** — quota detail semantic payload for the 4th line (`Unlimited`, `RequestCount`, `CreditRemaining`, `ResetAt`, `ResetDate`, `ExpiresInDays`, `Raw(String)`).
 - **`StatusLevel`** — traffic-light severity: `Green`, `Yellow`, `Red` (implements `Ord`)
