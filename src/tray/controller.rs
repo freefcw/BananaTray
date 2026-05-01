@@ -8,7 +8,7 @@ use crate::models::NavTab;
 use crate::runtime::schedule_open_settings_window;
 use crate::runtime::AppState;
 use gpui::{
-    px, size, App, AppContext, Bounds, DisplayId, Pixels, Size, WindowBounds, WindowHandle,
+    px, size, App, AppContext, Bounds, DisplayId, Pixels, Point, Size, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, WindowPosition,
 };
 use log::{debug, error, info};
@@ -23,6 +23,8 @@ use std::rc::Rc;
 pub(crate) struct TrayController {
     window: Rc<Cell<Option<WindowHandle<crate::ui::AppView>>>>,
     pub(crate) state: Rc<RefCell<AppState>>,
+    /// 最近一次 tray 点击的屏幕坐标（Linux 用于构造 TrayAnchor）
+    last_click_position: Cell<Option<Point<Pixels>>>,
 }
 
 /// 跟踪 popup 的激活状态，避免 Linux 上“尚未真正拿到焦点就被 auto-hide 关闭”。
@@ -65,6 +67,7 @@ impl TrayController {
         Self {
             window: Rc::new(Cell::new(None)),
             state,
+            last_click_position: Cell::new(None),
         }
     }
 
@@ -110,6 +113,11 @@ impl TrayController {
         } else {
             false
         }
+    }
+
+    /// 记录最近一次 tray 点击的屏幕坐标（由 on_tray_icon_click_event 提供）
+    pub(crate) fn set_click_position(&self, position: Option<Point<Pixels>>) {
+        self.last_click_position.set(position);
     }
 
     pub(crate) fn toggle_provider(&mut self, cx: &mut App) {
@@ -196,11 +204,16 @@ impl TrayController {
 
     /// 计算弹窗的首选位置和目标显示器。
     ///
-    /// 使用 GPUI 的 `TrayAnchored` 定位，自动处理多显示器坐标转换。
+    /// 优先级：
+    /// 1. macOS: `tray_icon_anchor()`（系统原生锚点）
+    /// 2. Linux: `tray_anchor_for_position()`（从 SNI 点击坐标构造锚点）
+    /// 3. fallback: TopRight（Linux）/ Center（macOS）
     fn preferred_window_bounds(
+        &self,
         cx: &App,
         window_size: Size<Pixels>,
     ) -> (Bounds<Pixels>, Option<DisplayId>) {
+        // 优先使用系统原生锚点（macOS 始终可用）
         if let Some(anchor) = cx
             .tray_icon_anchor()
             .filter(|a| a.bounds.size.width > px(0.0) && a.bounds.size.height > px(0.0))
@@ -221,7 +234,29 @@ impl TrayController {
             );
         }
 
-        debug!(target: "tray", "tray anchor unavailable or invalid, using fallback position");
+        // Linux: 用 SNI 点击坐标构造近似锚点
+        if let Some(anchor) = self
+            .last_click_position
+            .get()
+            .and_then(|pos| cx.tray_anchor_for_position(pos))
+        {
+            debug!(
+                target: "tray",
+                "tray_anchor_for_position: display={:?} bounds=({:.1},{:.1} {:.1}x{:.1})",
+                anchor.display_id,
+                anchor.bounds.origin.x, anchor.bounds.origin.y,
+                anchor.bounds.size.width, anchor.bounds.size.height,
+            );
+
+            let display_id = anchor.display_id;
+            let position = WindowPosition::TrayAnchored(anchor);
+            return (
+                cx.compute_window_bounds(window_size, &position),
+                Some(display_id),
+            );
+        }
+
+        debug!(target: "tray", "tray anchor unavailable and no click position, using fallback");
         let position = if cfg!(target_os = "linux") {
             WindowPosition::TopRight { margin: px(16.0) }
         } else {
@@ -235,7 +270,7 @@ impl TrayController {
         let dynamic_height = self.state.borrow().session.popup_height();
         info!(target: "tray", "opening window with dynamic height: {}px", dynamic_height);
         let window_size = size(px(crate::models::PopupLayout::WIDTH), px(dynamic_height));
-        let (bounds, display_id) = Self::preferred_window_bounds(cx, window_size);
+        let (bounds, display_id) = self.preferred_window_bounds(cx, window_size);
         let kind = Self::preferred_window_kind();
 
         info!(

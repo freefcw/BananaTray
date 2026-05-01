@@ -15,16 +15,21 @@
 
 **托盘交互入口**：
 
-- macOS 启动时必须通过 GPUI `set_tray_panel_mode(true)` 切到 panel callback 模式，否则 status item 会走 NSMenu 模式，点击不会稳定进入 `on_tray_icon_event`，也就不会打开弹窗
+- 使用 `on_tray_icon_click_event` 注册点击回调（替代 `on_tray_icon_event`），获取 `TrayIconClickEvent`（含 kind + 可选 position）
+- macOS 启动时必须通过 GPUI `set_tray_panel_mode(true)` 切到 panel callback 模式，否则 status item 会走 NSMenu 模式，点击不会稳定进入回调，也就不会打开弹窗
 - Linux 仍保留 tray menu fallback（Open / Settings / Quit），用于覆盖不同 tray host 对点击事件转发不一致的情况
 
 **多显示器定位**（`preferred_window_bounds`）：
 
-- 通过 GPUI `cx.tray_icon_anchor()` 获取被点击托盘图标所在的 `DisplayId` 与菜单栏局部 bounds
-- 用 `WindowPosition::TrayAnchored(anchor)` + `cx.compute_window_bounds()` 计算弹窗在该显示器上的局部坐标
-- 返回的 `DisplayId` 连同 bounds 一起透传给 `WindowOptions.display_id`，确保 GPUI 在目标显示器创建窗口
-- anchor 不可用时回退：Linux `TopRight`，其他平台 `Center`
-- 关闭 popup 切换到设置窗口时，`close_popup` 会记录当前 `window.display(cx)`，`show_settings` 透传给 `schedule_open_settings_window`，保证设置窗口开在同一显示器
+三级定位降级：
+
+1. **`tray_icon_anchor()`**（macOS 原生）— 获取 status item 的精确 bounds 和 `DisplayId`
+2. **`tray_anchor_for_position()`**（Linux SNI 坐标）— 从 `ksni` 的 `activate(x, y)` 点击坐标构造近似锚点，匹配点击位置所在的显示器
+3. **fallback** — Linux `TopRight`（margin 16px），macOS `Center`
+
+所有路径均使用 `WindowPosition::TrayAnchored(anchor)` + `cx.compute_window_bounds()` 计算弹窗坐标，`DisplayId` 透传给 `WindowOptions.display_id` 确保窗口创建在目标显示器。
+
+关闭 popup 切换到设置窗口时，`close_popup` 会记录当前 `window.display(cx)`，`show_settings` 透传给 `schedule_open_settings_window`，保证设置窗口开在同一显示器
 
 ### `icon.rs` — 托盘图标管理
 
