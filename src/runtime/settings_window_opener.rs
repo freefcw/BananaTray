@@ -95,16 +95,19 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
 
     let settings_state = state.clone();
     let window_size = size(px(600.0), px(640.0));
-    // 计算显示器居中位置，避免多屏场景下 Bounds::centered() 全局坐标偏移
+    // 计算显示器居中位置，使用完整 display bounds（含 origin 偏移），
+    // 避免 Wayland 多屏场景下 origin 非零导致窗口偏移
     let display_bounds = target_display_id
         .and_then(|id| cx.find_display(id))
         .or_else(|| cx.primary_display())
-        .map(|d| d.bounds().size)
-        .unwrap_or(window_size);
-    let origin = point(
-        (display_bounds.width - window_size.width) / 2.0,
-        (display_bounds.height - window_size.height) / 2.0,
-    );
+        .map(|d| d.bounds());
+    let origin = match display_bounds {
+        Some(db) => point(
+            db.origin.x + (db.size.width - window_size.width) / 2.0,
+            db.origin.y + (db.size.height - window_size.height) / 2.0,
+        ),
+        None => point(px(0.0), px(0.0)),
+    };
     let window_bounds = WindowBounds::Windowed(Bounds {
         origin,
         size: window_size,
