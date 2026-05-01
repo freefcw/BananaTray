@@ -129,7 +129,7 @@ pub fn format_file_size(bytes: u64) -> String {
 /// 检测系统是否处于深色模式
 ///
 /// macOS: 读取 `defaults read -g AppleInterfaceStyle`
-/// Linux/其他: 默认浅色模式
+/// Linux: 优先读取 GNOME `color-scheme`，fallback 到 GTK 主题名
 pub fn detect_system_dark_mode() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -143,10 +143,51 @@ pub fn detect_system_dark_mode() -> bool {
             })
             .unwrap_or(false)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        detect_linux_dark_mode()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         false
     }
+}
+
+/// Linux 深色模式检测
+///
+/// 1. `org.gnome.desktop.interface color-scheme` → GNOME 42+ 标准
+/// 2. `org.gnome.desktop.interface gtk-theme` → 主题名含 "dark" 的 fallback
+#[cfg(target_os = "linux")]
+fn detect_linux_dark_mode() -> bool {
+    // 方法 1: GNOME color-scheme（'prefer-dark' = 深色）
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .output()
+    {
+        let value = String::from_utf8_lossy(&output.stdout);
+        if value.contains("prefer-dark") {
+            return true;
+        }
+        // 如果返回了有效值（如 'default'），说明 gsettings 可用但不是深色
+        if value.contains("default") || value.contains("prefer-light") {
+            return false;
+        }
+    }
+
+    // 方法 2: GTK 主题名是否包含 "dark"
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
+        .output()
+    {
+        let theme = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .to_lowercase();
+        if theme.contains("dark") {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
