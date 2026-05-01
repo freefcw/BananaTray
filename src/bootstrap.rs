@@ -5,7 +5,7 @@ use crate::models::{AppSettings, SystemSettings};
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::runtime::AppState;
 use crate::tray::TrayController;
-use gpui::{App, TrayIconEvent};
+use gpui::{App, TrayIconClickEvent};
 use log::{info, warn};
 use rust_i18n::t;
 use std::cell::RefCell;
@@ -72,8 +72,9 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     crate::platform::notification::request_notification_authorization();
 }
 
-fn command_for_tray_icon_event(event: TrayIconEvent) -> Option<TrayCommand> {
-    match event {
+fn command_for_tray_icon_event(event: &TrayIconClickEvent) -> Option<TrayCommand> {
+    use gpui::TrayIconEvent;
+    match &event.kind {
         TrayIconEvent::LeftClick => Some(TrayCommand::ToggleProvider),
         TrayIconEvent::RightClick => Some(TrayCommand::ShowSettings),
         _ => None,
@@ -149,9 +150,11 @@ pub(crate) fn trigger_initial_refresh(state: &Rc<RefCell<AppState>>) {
 /// 注册托盘图标事件（左键/右键）和 Linux 菜单
 pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
     let ctrl = controller.clone();
-    cx.on_tray_icon_event(move |event, cx| {
-        info!(target: "tray", "received tray event: {:?}", event);
-        if let Some(command) = command_for_tray_icon_event(event) {
+    cx.on_tray_icon_click_event(move |event, cx| {
+        info!(target: "tray", "received tray click event: {:?} position={:?}", event.kind, event.position);
+        // 将点击坐标传递给 controller，用于 Linux 上构造 TrayAnchor
+        ctrl.borrow().set_click_position(event.position);
+        if let Some(command) = command_for_tray_icon_event(&event) {
             run_tray_command(command, &ctrl, cx);
         }
     });
