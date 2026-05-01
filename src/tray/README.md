@@ -54,3 +54,19 @@
 - 本模块在 `cfg(feature = "app")` 下编译，依赖 GPUI
 - `TrayController` 包裹在 `Rc<RefCell<...>>` 中（GPUI 单线程模型）
 - 弹窗尺寸由 `models::PopupLayout` 常量控制
+
+## 已知限制
+
+### Wayland 弹窗定位（上游 GPUI 限制）
+
+GPUI 在 Wayland 上所有窗口均为 `xdg_toplevel`，**Wayland 协议不允许客户端指定 `xdg_toplevel` 的位置**——compositor 完全掌控窗口放置。因此 `preferred_window_bounds` 计算出的坐标虽然正确，但会被 GNOME Mutter 等 compositor 忽略（通常居中放置）。
+
+要实现 Wayland 上的精确 popup 定位，需要上游 GPUI 支持以下 Wayland 协议之一：
+
+- **`wlr-layer-shell`** — 可指定屏幕位置和层级，适合面板/overlay 类应用（非标准协议，KDE/wlroots 支持，GNOME 需扩展）
+- **`ext-layer-shell`** — 标准化中的 layer shell，GNOME 已有初步支持
+- **`xdg-popup`** — 标准协议，可相对于父 surface 定位（但 tray icon 没有可用的父 surface）
+
+### GNOME AppIndicator 点击事件
+
+GNOME Shell 的 AppIndicator 扩展拦截左键点击并显示菜单（而非调用 SNI `activate()`），导致 `on_tray_icon_click_event` 不触发。Popup 通过菜单 "Open" 打开时走 `on_tray_menu_action` 路径，无点击坐标可用。此情况下 `tray_anchor_for_position` 自然跳过，走 fallback 路径。

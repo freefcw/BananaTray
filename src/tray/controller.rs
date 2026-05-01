@@ -257,13 +257,31 @@ impl TrayController {
         }
 
         debug!(target: "tray", "tray anchor unavailable and no click position, using fallback");
-        let position = if cfg!(target_os = "linux") {
-            WindowPosition::TopRight { margin: px(16.0) }
-        } else {
-            WindowPosition::Center
-        };
 
-        (cx.compute_window_bounds(window_size, &position), None)
+        if cfg!(target_os = "linux") {
+            // Wayland 的 primary_display() 返回 None，compute_window_bounds 的
+            // TopRight 路径会退化到 (0,0)。直接取第一个显示器手动计算。
+            if let Some(display) = cx.displays().into_iter().next() {
+                let db = display.bounds();
+                let margin = px(16.0);
+                let origin = gpui::point(
+                    db.origin.x + db.size.width - window_size.width - margin,
+                    db.origin.y + margin,
+                );
+                let bounds = Bounds::new(origin, window_size);
+                debug!(
+                    target: "tray",
+                    "fallback TopRight on display {:?}: origin=({:.1},{:.1})",
+                    display.id(), bounds.origin.x, bounds.origin.y,
+                );
+                return (bounds, Some(display.id()));
+            }
+            // 连 displays() 都为空（不太可能），最终 fallback
+            (Bounds::new(gpui::point(px(0.0), px(0.0)), window_size), None)
+        } else {
+            let position = WindowPosition::Center;
+            (cx.compute_window_bounds(window_size, &position), None)
+        }
     }
 
     fn open(&mut self, cx: &mut App) {
