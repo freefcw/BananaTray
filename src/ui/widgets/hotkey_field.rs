@@ -36,7 +36,9 @@ pub(crate) fn render_hotkey_field_inline(
     let tracked_focus = focus_handle.clone().tab_index(0).tab_stop(true);
 
     let display_text: SharedString = if is_recording {
-        rust_i18n::t!("settings.global_hotkey.recording").into()
+        rust_i18n::t!("settings.global_hotkey.recording")
+            .to_string()
+            .into()
     } else if let Some(ref hk) = hotkey {
         hk.format_display().into()
     } else {
