@@ -2,8 +2,8 @@ use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
 use gpui::{
-    div, img, px, size, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use std::cell::RefCell;
@@ -77,7 +77,7 @@ impl AppView {
     // 头部区域：应用名 + 连接状态徽章
     // ========================================================================
 
-    pub(crate) fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn render_header(&self, cx: &mut Context<Self>) -> Div {
         let theme = cx.global::<Theme>();
         let header = {
             let state = self.state.borrow();
@@ -91,7 +91,7 @@ impl AppView {
             HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
         };
 
-        div()
+        let mut header_div = div()
             .w_full()
             .flex()
             .items_center()
@@ -159,7 +159,19 @@ impl AppView {
                             .text_color(theme.text.secondary)
                             .child(header.status_text),
                     ),
-            )
+            );
+
+        // Linux 无标题栏，在头部区域启用窗口拖拽
+        #[cfg(target_os = "linux")]
+        {
+            header_div = header_div
+                .cursor(gpui::CursorStyle::OpenHand)
+                .on_mouse_down(MouseButton::Left, |_, window, _| {
+                    window.start_window_move();
+                });
+        }
+
+        header_div
     }
 }
 
