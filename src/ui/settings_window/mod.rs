@@ -255,7 +255,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_header(&self, theme: &Theme) -> Div {
-        div()
+        let mut header = div()
             .w_full()
             .flex()
             .items_center()
@@ -312,7 +312,20 @@ impl SettingsView {
                     .on_mouse_down(MouseButton::Left, |_, window, _| {
                         window.remove_window();
                     }),
-            )
+            );
+
+        // Linux 无标题栏，在头部区域启用窗口拖拽
+        #[cfg(target_os = "linux")]
+        {
+            header = header.cursor(gpui::CursorStyle::OpenHand).on_mouse_down(
+                MouseButton::Left,
+                |_, window, _| {
+                    window.start_window_move();
+                },
+            );
+        }
+
+        header
     }
 
     // ========================================================================
