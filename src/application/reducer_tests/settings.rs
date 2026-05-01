@@ -233,22 +233,22 @@ fn set_tray_icon_style_updates_setting_and_produces_effects() {
     let mut session = make_session();
     assert_eq!(
         session.settings.display.tray_icon_style,
-        TrayIconStyle::Monochrome
+        TrayIconStyle::default()
     );
 
     let effects = reduce(
         &mut session,
-        AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Yellow)),
+        AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(TrayIconStyle::Colorful)),
     );
 
     assert_eq!(
         session.settings.display.tray_icon_style,
-        TrayIconStyle::Yellow
+        TrayIconStyle::Colorful
     );
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Context(ContextEffect::ApplyTrayIcon(TrayIconRequest::Static(
-            TrayIconStyle::Yellow
+            TrayIconStyle::Colorful
         )))
     )));
     assert!(has_effect(&effects, |e| matches!(

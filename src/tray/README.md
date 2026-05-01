@@ -32,15 +32,17 @@
 - 支持 `TrayIconStyle`：Monochrome / Colorful / Dynamic
 - Dynamic 模式根据当前 Provider 的 `StatusLevel` 切换图标颜色（Green/Yellow/Red）
 - macOS 使用 GPUI 原生 `set_tray_icon_rendering_mode` API 控制图标渲染模式（Adaptive / Original），确保亮/暗模式下正确显示
+- **Linux 平台差异**：默认图标样式为 Yellow（而非 Monochrome），因为 Linux 没有 template rendering，黑色单色图标在 GNOME Shell 深色面板上不可见。Monochrome 模式使用白色变体（`tray_icon_light.png`）确保可见性
 
 ## 图标资产
 
 | 文件 | 用途 |
 |------|------|
-| `tray_icon.png` | Monochrome 模式图标 |
+| `tray_icon.png` | Monochrome 模式图标（macOS，黑色） |
+| `tray_icon_light.png` | Monochrome 模式图标（Linux，白色） |
 | `tray_icon_colorful.png` | Colorful 模式图标 |
-| `tray_icon_yellow.png` | Dynamic 模式 - Yellow 状态 |
-| `tray_icon_red.png` | Dynamic 模式 - Red 状态 |
+| `tray_icon_yellow.png` | Yellow / Dynamic Yellow 状态 |
+| `tray_icon_red.png` | Dynamic Red 状态 |
 
 ## 约束
 

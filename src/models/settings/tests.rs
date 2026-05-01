@@ -117,8 +117,13 @@ fn provider_config_move_to_index_normalizes_order() {
 // ── TrayIconStyle ────────────────────────────────────
 
 #[test]
-fn tray_icon_style_default_is_monochrome() {
-    assert_eq!(TrayIconStyle::default(), TrayIconStyle::Monochrome);
+fn tray_icon_style_default_is_platform_aware() {
+    let expected = if cfg!(target_os = "linux") {
+        TrayIconStyle::Yellow
+    } else {
+        TrayIconStyle::Monochrome
+    };
+    assert_eq!(TrayIconStyle::default(), expected);
 }
 
 #[test]
@@ -141,7 +146,7 @@ fn app_settings_new_format_round_trip() {
     let settings = AppSettings::default();
     let json = serde_json::to_value(&settings).unwrap();
     let restored: AppSettings = serde_json::from_value(json).unwrap();
-    assert_eq!(restored.display.tray_icon_style, TrayIconStyle::Monochrome);
+    assert_eq!(restored.display.tray_icon_style, TrayIconStyle::default());
     assert_eq!(restored.system.refresh_interval_mins, 5);
 }
 

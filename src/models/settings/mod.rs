@@ -219,10 +219,9 @@ mod provider_config_sidebar;
 /// 使图标显示原始颜色。
 ///
 /// 在 Windows / Linux 上没有 template 概念，PNG 颜色直接生效。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TrayIconStyle {
     /// 单色 — macOS template 模式，跟随系统深色/浅色自动适配
-    #[default]
     Monochrome,
     /// 黄色香蕉
     Yellow,
@@ -231,6 +230,24 @@ pub enum TrayIconStyle {
     /// 动态模式 — 根据所有已启用 Provider 的额度综合状态自动切换颜色
     /// Green 状态使用 Monochrome，Yellow/Red 状态使用对应彩色图标
     Dynamic,
+}
+
+// Linux 没有 template rendering，黑色 Monochrome 在深色面板上不可见，
+// 默认使用 Yellow 确保首次启动图标可见。
+// 两个 #[cfg] 分支各自返回不同变体，derive 无法表达这种平台差异。
+#[cfg(target_os = "linux")]
+#[allow(clippy::derivable_impls)]
+impl Default for TrayIconStyle {
+    fn default() -> Self {
+        Self::Yellow
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+impl Default for TrayIconStyle {
+    fn default() -> Self {
+        Self::Monochrome
+    }
 }
 
 /// 额度显示模式

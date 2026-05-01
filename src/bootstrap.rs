@@ -184,16 +184,16 @@ fn install_linux_tray_menu(cx: &mut App) {
 
     cx.set_tray_menu(vec![
         TrayMenuItem::Action {
-            label: t!("tray.menu.open").into(),
+            label: t!("tray.menu.open").to_string().into(),
             id: TRAY_ACTION_OPEN.into(),
         },
         TrayMenuItem::Action {
-            label: t!("tray.menu.settings").into(),
+            label: t!("tray.menu.settings").to_string().into(),
             id: TRAY_ACTION_SETTINGS.into(),
         },
         TrayMenuItem::Separator,
         TrayMenuItem::Action {
-            label: t!("tray.menu.quit").into(),
+            label: t!("tray.menu.quit").to_string().into(),
             id: TRAY_ACTION_QUIT.into(),
         },
     ]);

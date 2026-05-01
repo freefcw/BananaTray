@@ -9,20 +9,37 @@ use crate::models::{StatusLevel, TrayIconStyle};
 use gpui::{App, TrayIconRenderingMode};
 use log::info;
 
+/// 单色图标的 PNG 数据（平台相关）。
+///
+/// Linux 没有 template rendering，深色面板上黑色图标不可见，使用白色变体。
+/// 使用 `#[cfg]` 而非 `cfg!()` 确保只有目标平台的图标被嵌入二进制。
+#[cfg(target_os = "linux")]
+fn monochrome_png() -> &'static [u8] {
+    include_bytes!("tray_icon_light.png")
+}
+
+/// 单色图标的 PNG 数据（平台相关）。
+///
+/// macOS / Windows 有 template rendering，使用黑色原版。
+#[cfg(not(target_os = "linux"))]
+fn monochrome_png() -> &'static [u8] {
+    include_bytes!("tray_icon.png")
+}
+
 /// Return the embedded PNG data for the given icon request.
 ///
 /// This is a pure function, suitable for unit testing without a GUI context.
 pub fn icon_png_data(request: TrayIconRequest) -> &'static [u8] {
     match request {
-        TrayIconRequest::Static(TrayIconStyle::Monochrome) => include_bytes!("tray_icon.png"),
+        TrayIconRequest::Static(TrayIconStyle::Monochrome) => monochrome_png(),
         TrayIconRequest::Static(TrayIconStyle::Yellow) => include_bytes!("tray_icon_yellow.png"),
         TrayIconRequest::Static(TrayIconStyle::Colorful) => {
             include_bytes!("tray_icon_colorful.png")
         }
         // Dynamic 选项直接传入时回退 Monochrome（正常流程不会到这，reducer 会 resolve）
-        TrayIconRequest::Static(TrayIconStyle::Dynamic) => include_bytes!("tray_icon.png"),
+        TrayIconRequest::Static(TrayIconStyle::Dynamic) => monochrome_png(),
         // Dynamic 模式：Green 状态用 Monochrome，减少视觉干扰
-        TrayIconRequest::DynamicStatus(StatusLevel::Green) => include_bytes!("tray_icon.png"),
+        TrayIconRequest::DynamicStatus(StatusLevel::Green) => monochrome_png(),
         TrayIconRequest::DynamicStatus(StatusLevel::Yellow) => {
             include_bytes!("tray_icon_yellow.png")
         }

@@ -189,7 +189,7 @@ impl SettingsView {
         // ── 紧凑内联热键录入控件 ──
         let hotkey_chip = render_hotkey_field_inline(
             &input_entity,
-            t!("settings.global_hotkey.placeholder").into(),
+            t!("settings.global_hotkey.placeholder").to_string().into(),
             move |cx| {
                 view_entity.update(cx, |_, cx| cx.notify());
             },
