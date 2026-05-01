@@ -2,8 +2,8 @@ use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
 use gpui::{
-    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use std::cell::RefCell;
@@ -91,7 +91,12 @@ impl AppView {
             HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
         };
 
-        let mut header_div = div()
+        // 注意：Linux tray popup 不启用窗口拖拽。
+        // start_window_move() 在 Wayland 上会导致窗口失焦，
+        // 与 auto-hide（失焦关闭）行为冲突。
+        // 需要拖拽的窗口（如 settings window）有独立的标题栏拖拽逻辑。
+
+        div()
             .w_full()
             .flex()
             .items_center()
@@ -159,19 +164,7 @@ impl AppView {
                             .text_color(theme.text.secondary)
                             .child(header.status_text),
                     ),
-            );
-
-        // Linux 无标题栏，在头部区域启用窗口拖拽
-        #[cfg(target_os = "linux")]
-        {
-            header_div = header_div
-                .cursor(gpui::CursorStyle::OpenHand)
-                .on_mouse_down(MouseButton::Left, |_, window, _| {
-                    window.start_window_move();
-                });
-        }
-
-        header_div
+            )
     }
 }
 

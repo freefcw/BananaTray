@@ -27,23 +27,52 @@ pub(crate) struct TrayController {
     last_click_position: Cell<Option<Point<Pixels>>>,
 }
 
-/// 跟踪 popup 的激活状态，避免 Linux 上“尚未真正拿到焦点就被 auto-hide 关闭”。
-#[derive(Debug, Default, Clone, Copy)]
+/// 跟踪 popup 的激活状态，避免 Linux/Wayland 上焦点抖动导致弹窗被误关。
+///
+/// Wayland compositor 在浮动窗口打开时会产生快速的 focus→unfocus 抖动，
+/// tracker 通过 grace period 忽略窗口创建后短时间内的 deactivation 事件。
+#[derive(Debug, Clone)]
 struct PopupActivationTracker {
-    initialized: bool,
+    /// 窗口创建时间，用于计算 grace period
+    created_at: std::time::Instant,
+    /// 收到的 activation 事件计数（用于区分初始闪烁和真实交互）
+    event_count: u32,
+    /// 窗口是否曾经处于激活状态
     has_been_active: bool,
+}
+
+/// 窗口创建后的保护期：在此期间内忽略 deactivation 事件。
+/// Wayland 上焦点抖动通常在 200ms 内完成，600ms 留足余量。
+const GRACE_PERIOD: std::time::Duration = std::time::Duration::from_millis(600);
+
+impl Default for PopupActivationTracker {
+    fn default() -> Self {
+        Self {
+            created_at: std::time::Instant::now(),
+            event_count: 0,
+            has_been_active: false,
+        }
+    }
 }
 
 impl PopupActivationTracker {
     fn on_activation_event(&mut self, is_active: bool, should_auto_hide: bool) -> bool {
-        if !self.initialized {
-            self.initialized = true;
-            self.has_been_active = is_active;
-            return false;
-        }
+        self.event_count += 1;
 
         if is_active {
             self.has_been_active = true;
+            return false;
+        }
+
+        // 保护期内忽略 deactivation——Wayland compositor 在窗口创建阶段
+        // 可能发出快速 focus→unfocus 抖动，不应解释为用户离开窗口。
+        if self.created_at.elapsed() < GRACE_PERIOD {
+            debug!(
+                target: "tray",
+                "ignoring deactivation during grace period (event #{}, elapsed={:?})",
+                self.event_count,
+                self.created_at.elapsed(),
+            );
             return false;
         }
 
@@ -277,7 +306,10 @@ impl TrayController {
                 return (bounds, Some(display.id()));
             }
             // 连 displays() 都为空（不太可能），最终 fallback
-            (Bounds::new(gpui::point(px(0.0), px(0.0)), window_size), None)
+            (
+                Bounds::new(gpui::point(px(0.0), px(0.0)), window_size),
+                None,
+            )
         } else {
             let position = WindowPosition::Center;
             (cx.compute_window_bounds(window_size, &position), None)
@@ -376,11 +408,30 @@ impl TrayController {
 
 #[cfg(test)]
 mod tests {
-    use super::PopupActivationTracker;
+    use super::{PopupActivationTracker, GRACE_PERIOD};
+    use std::time::Instant;
+
+    /// 创建一个已过保护期的 tracker，用于测试 auto-hide 逻辑
+    fn tracker_past_grace() -> PopupActivationTracker {
+        PopupActivationTracker {
+            created_at: Instant::now() - GRACE_PERIOD - std::time::Duration::from_millis(100),
+            event_count: 0,
+            has_been_active: false,
+        }
+    }
+
+    #[test]
+    fn grace_period_blocks_immediate_deactivation() {
+        // 模拟 Wayland 焦点抖动：窗口刚创建就收到 active→inactive
+        let mut tracker = PopupActivationTracker::default();
+
+        assert!(!tracker.on_activation_event(true, true)); // 获得焦点
+        assert!(!tracker.on_activation_event(false, true)); // 立即失焦——在保护期内，不关闭
+    }
 
     #[test]
     fn auto_hide_requires_popup_to_have_been_active_first() {
-        let mut tracker = PopupActivationTracker::default();
+        let mut tracker = tracker_past_grace();
 
         assert!(!tracker.on_activation_event(false, true));
         assert!(!tracker.on_activation_event(false, true));
@@ -388,7 +439,7 @@ mod tests {
 
     #[test]
     fn auto_hide_closes_after_popup_loses_focus_post_activation() {
-        let mut tracker = PopupActivationTracker::default();
+        let mut tracker = tracker_past_grace();
 
         assert!(!tracker.on_activation_event(true, true));
         assert!(tracker.on_activation_event(false, true));
@@ -396,7 +447,7 @@ mod tests {
 
     #[test]
     fn auto_hide_closes_after_late_activation_then_blur() {
-        let mut tracker = PopupActivationTracker::default();
+        let mut tracker = tracker_past_grace();
 
         assert!(!tracker.on_activation_event(false, true));
         assert!(!tracker.on_activation_event(true, true));
@@ -405,7 +456,7 @@ mod tests {
 
     #[test]
     fn auto_hide_respects_setting_after_activation() {
-        let mut tracker = PopupActivationTracker::default();
+        let mut tracker = tracker_past_grace();
 
         assert!(!tracker.on_activation_event(true, false));
         assert!(!tracker.on_activation_event(false, false));
