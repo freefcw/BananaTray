@@ -131,7 +131,29 @@ fn merge_seat_and_cache_quotas(seat_data: &RefreshData, cache_data: &RefreshData
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{QuotaInfo, QuotaType};
+    use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
+
+    fn daily_quota(used: f64) -> QuotaInfo {
+        QuotaInfo::with_key(
+            "daily-quota",
+            QuotaLabelSpec::Daily,
+            used,
+            100.0,
+            QuotaType::General,
+            None,
+        )
+    }
+
+    fn weekly_quota(used: f64) -> QuotaInfo {
+        QuotaInfo::with_key(
+            "weekly-quota",
+            QuotaLabelSpec::Weekly,
+            used,
+            100.0,
+            QuotaType::Weekly,
+            None,
+        )
+    }
 
     #[test]
     fn test_classify_unavailable_maps_both_sources_missing() {
@@ -154,35 +176,14 @@ mod tests {
     #[test]
     fn test_merge_seat_and_cache_quotas_adds_weekly() {
         let seat_data = RefreshData::with_account(
-            vec![QuotaInfo::with_details(
-                "Daily Quota",
-                50.0,
-                100.0,
-                QuotaType::ModelSpecific("Daily Quota".to_string()),
-                None,
-            )],
+            vec![daily_quota(50.0)],
             Some("test@example.com".to_string()),
             Some("Pro".to_string()),
         )
         .with_source_label(SEAT_API_SOURCE_LABEL);
 
         let cache_data = RefreshData::with_account(
-            vec![
-                QuotaInfo::with_details(
-                    "Daily Quota",
-                    45.0,
-                    100.0,
-                    QuotaType::ModelSpecific("Daily Quota".to_string()),
-                    None,
-                ),
-                QuotaInfo::with_details(
-                    "Weekly Quota",
-                    80.0,
-                    100.0,
-                    QuotaType::ModelSpecific("Weekly Quota".to_string()),
-                    None,
-                ),
-            ],
+            vec![daily_quota(45.0), weekly_quota(80.0)],
             Some("test@example.com".to_string()),
             Some("Pro".to_string()),
         )
@@ -191,6 +192,16 @@ mod tests {
         let merged = merge_seat_and_cache_quotas(&seat_data, &cache_data);
 
         assert_eq!(merged.quotas.len(), 2);
+        // 主路径：cache 周配额走 quota_type == Weekly 判定，被合并到结果
+        assert!(merged
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "weekly-quota" && q.quota_type == QuotaType::Weekly));
+        // seat daily 保留，未被 cache daily 覆盖
+        assert!(merged
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "daily-quota" && (q.used - 50.0).abs() < 0.01));
         assert_eq!(merged.account_email, Some("test@example.com".to_string()));
         assert_eq!(merged.account_tier, Some("Pro".to_string()));
         assert_eq!(
@@ -201,18 +212,8 @@ mod tests {
 
     #[test]
     fn test_merge_seat_and_cache_quotas_falls_back_to_cache_account_metadata() {
-        let seat_data = RefreshData::with_account(
-            vec![QuotaInfo::with_details(
-                "Daily Quota",
-                20.0,
-                100.0,
-                QuotaType::ModelSpecific("Daily Quota".to_string()),
-                None,
-            )],
-            None,
-            None,
-        )
-        .with_source_label(SEAT_API_SOURCE_LABEL);
+        let seat_data = RefreshData::with_account(vec![daily_quota(20.0)], None, None)
+            .with_source_label(SEAT_API_SOURCE_LABEL);
 
         let cache_data = RefreshData::with_account(
             vec![],

@@ -50,8 +50,8 @@ Antigravity
 Windsurf
   refresh()
     ├─→ codeium_family::refresh_live()
-    ├─→ windsurf::seat_source::fetch_refresh_data()
-    └─→ codeium_family::refresh_cache()
+    ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly
+    └─→ codeium_family::refresh_cache()              # fallback / missing weekly补齐
 ```
 
 这样拆的原因是：

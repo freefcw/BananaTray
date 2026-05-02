@@ -55,7 +55,7 @@ source orchestration 目前明确分开：
 
 1. Antigravity：优先尝试 live source，失败时回退本地 cache
 2. Windsurf：优先尝试 live source，失败时先尝试 seat API，再回退本地 cache
-3. Windsurf 若 seat API 只返回 daily quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
+3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
 4. 所有来源都失败时返回结构化错误
 
 这里的关键不是“两个 provider 完全相同”，而是“它们共享同一套本地 source primitive，但各自保留自己的 orchestration 边界”。
@@ -96,7 +96,7 @@ cargo run -- debug-codeium-family windsurf
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
 - Windsurf seat API 依赖本地 auth status 中的 `apiKey`，请求体里的版本号使用本机安装版本的最佳努力探测；探测不到时不发送版本字段。
-- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；Windsurf 周配额应优先采用 seat API 的实时 `weeklyQuotaRemainingPercent`。
 
 ## Maintenance Rule
 
