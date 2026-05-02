@@ -1,5 +1,5 @@
 use super::SEAT_API_SOURCE_LABEL;
-use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
+use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
 use crate::providers::codeium_family::{self, CodeiumFamilySpec};
 use crate::providers::ProviderError;
 use anyhow::{Context, Result};
@@ -26,7 +26,11 @@ struct SeatPlanStatus {
     #[serde(default)]
     daily_quota_remaining_percent: Option<i64>,
     #[serde(default)]
+    weekly_quota_remaining_percent: Option<i64>,
+    #[serde(default)]
     daily_quota_reset_at_unix: Option<String>,
+    #[serde(default)]
+    weekly_quota_reset_at_unix: Option<String>,
     #[serde(default)]
     plan_info: Option<SeatPlanInfo>,
 }
@@ -76,6 +80,10 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     let seat_response: SeatResponse = serde_json::from_str(&response_text)
         .with_context(|| "Failed to parse seat API response")?;
 
+    parse_seat_response(seat_response)
+}
+
+fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
     let user_status = seat_response
         .user_status
         .ok_or_else(|| anyhow::anyhow!("no user_status in seat API response"))?;
@@ -90,18 +98,22 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     let mut quotas = Vec::new();
 
     if let Some(daily_pct) = plan_status.daily_quota_remaining_percent {
-        let used_percent = 100.0 - daily_pct as f64;
-        let reset_detail = plan_status
-            .daily_quota_reset_at_unix
-            .and_then(|s| s.parse::<i64>().ok())
-            .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
+        quotas.push(build_seat_quota(
+            "daily-quota",
+            QuotaLabelSpec::Daily,
+            QuotaType::General,
+            daily_pct,
+            plan_status.daily_quota_reset_at_unix,
+        ));
+    }
 
-        quotas.push(QuotaInfo::with_details(
-            "Daily Quota",
-            used_percent,
-            100.0,
-            QuotaType::ModelSpecific("Daily Quota".to_string()),
-            reset_detail,
+    if let Some(weekly_pct) = plan_status.weekly_quota_remaining_percent {
+        quotas.push(build_seat_quota(
+            "weekly-quota",
+            QuotaLabelSpec::Weekly,
+            QuotaType::Weekly,
+            weekly_pct,
+            plan_status.weekly_quota_reset_at_unix,
         ));
     }
 
@@ -112,6 +124,27 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     Ok(
         RefreshData::with_account(quotas, email, plan_name)
             .with_source_label(SEAT_API_SOURCE_LABEL),
+    )
+}
+
+fn build_seat_quota(
+    stable_key: &'static str,
+    label: QuotaLabelSpec,
+    quota_type: QuotaType,
+    remaining_percent: i64,
+    reset_at_unix: Option<String>,
+) -> QuotaInfo {
+    let reset_detail = reset_at_unix
+        .and_then(|s| s.parse::<i64>().ok())
+        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
+
+    QuotaInfo::with_key(
+        stable_key,
+        label,
+        100.0 - remaining_percent as f64,
+        100.0,
+        quota_type,
+        reset_detail,
     )
 }
 
@@ -228,6 +261,7 @@ mod tests {
             "userStatus": {
                 "planStatus": {
                     "dailyQuotaRemainingPercent": 39,
+                    "weeklyQuotaRemainingPercent": 45,
                     "dailyQuotaResetAtUnix": "1776585600",
                     "weeklyQuotaResetAtUnix": "1776585600",
                     "planInfo": {
@@ -246,14 +280,69 @@ mod tests {
 
         let plan_status = user_status.plan_status.unwrap();
         assert_eq!(plan_status.daily_quota_remaining_percent, Some(39));
+        assert_eq!(plan_status.weekly_quota_remaining_percent, Some(45));
         assert_eq!(
             plan_status.daily_quota_reset_at_unix,
+            Some("1776585600".to_string())
+        );
+        assert_eq!(
+            plan_status.weekly_quota_reset_at_unix,
             Some("1776585600".to_string())
         );
         assert_eq!(
             plan_status.plan_info.unwrap().plan_name,
             Some("Pro".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_seat_response_builds_daily_and_weekly_quotas() {
+        let json = r#"{
+            "userStatus": {
+                "planStatus": {
+                    "dailyQuotaRemainingPercent": 100,
+                    "weeklyQuotaRemainingPercent": 45,
+                    "dailyQuotaResetAtUnix": "1777449600",
+                    "weeklyQuotaResetAtUnix": "1777795200",
+                    "planInfo": {
+                        "planName": "Pro"
+                    }
+                },
+                "email": "test@example.com"
+            }
+        }"#;
+
+        let response: SeatResponse = serde_json::from_str(json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+
+        assert_eq!(data.quotas.len(), 2);
+        assert_eq!(data.account_email, Some("test@example.com".to_string()));
+        assert_eq!(data.account_tier, Some("Pro".to_string()));
+        assert_eq!(data.source_label, Some(SEAT_API_SOURCE_LABEL.to_string()));
+
+        let daily = &data.quotas[0];
+        assert_eq!(daily.stable_key, "daily-quota");
+        assert_eq!(daily.label_spec, QuotaLabelSpec::Daily);
+        assert_eq!(daily.quota_type, QuotaType::General);
+        assert!((daily.used - 0.0).abs() < 0.01);
+        assert!(matches!(
+            daily.detail_spec,
+            Some(QuotaDetailSpec::ResetAt {
+                epoch_secs: 1777449600
+            })
+        ));
+
+        let weekly = &data.quotas[1];
+        assert_eq!(weekly.stable_key, "weekly-quota");
+        assert_eq!(weekly.label_spec, QuotaLabelSpec::Weekly);
+        assert_eq!(weekly.quota_type, QuotaType::Weekly);
+        assert!((weekly.used - 55.0).abs() < 0.01);
+        assert!(matches!(
+            weekly.detail_spec,
+            Some(QuotaDetailSpec::ResetAt {
+                epoch_secs: 1777795200
+            })
+        ));
     }
 
     #[test]

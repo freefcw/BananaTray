@@ -255,7 +255,7 @@ impl SettingsView {
     // ========================================================================
 
     fn render_header(&self, theme: &Theme) -> Div {
-        let mut header = div()
+        let header = div()
             .w_full()
             .flex()
             .items_center()

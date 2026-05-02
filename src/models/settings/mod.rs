@@ -244,6 +244,7 @@ impl Default for TrayIconStyle {
 }
 
 #[cfg(not(target_os = "linux"))]
+#[allow(clippy::derivable_impls)]
 impl Default for TrayIconStyle {
     fn default() -> Self {
         Self::Monochrome
