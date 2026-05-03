@@ -13,7 +13,7 @@ pub struct CodeiumFamilySpec {
     pub log_label: &'static str,
     pub ide_name: &'static str,
     pub unavailable_message: &'static str,
-    pub cache_db_relative_path: &'static str,
+    pub cache_db_config_relative_path: &'static str,
     pub auth_status_key_candidates: &'static [&'static str],
     pub process_markers: &'static [&'static str],
     /// 当 protobuf 解码失败时，尝试从这些 key 读取 JSON 格式的 cachedPlanInfo
@@ -32,8 +32,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     log_label: "Antigravity",
     ide_name: "antigravity",
     unavailable_message: "Antigravity live source and local cache are both unavailable",
-    cache_db_relative_path:
-        "Library/Application Support/Antigravity/User/globalStorage/state.vscdb",
+    cache_db_config_relative_path: "Antigravity/User/globalStorage/state.vscdb",
     auth_status_key_candidates: &["antigravityAuthStatus"],
     process_markers: &[
         "--app_data_dir antigravity",
@@ -56,7 +55,7 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     log_label: "Windsurf",
     ide_name: "windsurf",
     unavailable_message: "Windsurf live source and local cache are both unavailable",
-    cache_db_relative_path: "Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
+    cache_db_config_relative_path: "Windsurf/User/globalStorage/state.vscdb",
     auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
     process_markers: &[
         "--ide_name windsurf",

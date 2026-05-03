@@ -29,48 +29,60 @@ impl AiProvider for WindsurfProvider {
 }
 
 fn refresh_windsurf() -> Result<RefreshData> {
-    match codeium_family::refresh_live(&WINDSURF_SPEC) {
-        Ok(data) => Ok(data),
-        Err(live_err) => {
+    refresh_windsurf_with_sources(
+        || seat_source::fetch_refresh_data(&WINDSURF_SPEC),
+        || Ok(codeium_family::refresh_live(&WINDSURF_SPEC)?),
+        || Ok(codeium_family::refresh_cache(&WINDSURF_SPEC)?),
+    )
+}
+
+fn refresh_windsurf_with_sources(
+    fetch_seat: impl FnOnce() -> Result<RefreshData>,
+    fetch_live: impl FnOnce() -> Result<RefreshData>,
+    fetch_cache: impl Fn() -> Result<RefreshData>,
+) -> Result<RefreshData> {
+    match fetch_seat() {
+        Ok(seat_data) => {
+            if seat_data.quotas.len() == 1 {
+                match fetch_cache() {
+                    Ok(cache_data) => {
+                        return Ok(merge_seat_and_cache_quotas(&seat_data, &cache_data));
+                    }
+                    Err(cache_err) => {
+                        debug!(
+                            target: "providers",
+                            "{} cache fallback for weekly quota failed: {}, returning seat data only",
+                            WINDSURF_SPEC.log_label,
+                            cache_err
+                        );
+                    }
+                }
+            }
+            Ok(seat_data)
+        }
+        Err(seat_err) => {
             warn!(
                 target: "providers",
-                "{} local API failed: {}, trying seat management API",
+                "{} seat management API failed: {}, trying local API",
                 WINDSURF_SPEC.log_label,
-                live_err
+                seat_err
             );
 
-            match seat_source::fetch_refresh_data(&WINDSURF_SPEC) {
-                Ok(seat_data) => {
-                    if seat_data.quotas.len() == 1 {
-                        match codeium_family::refresh_cache(&WINDSURF_SPEC) {
-                            Ok(cache_data) => {
-                                return Ok(merge_seat_and_cache_quotas(&seat_data, &cache_data));
-                            }
-                            Err(cache_err) => {
-                                debug!(
-                                    target: "providers",
-                                    "{} cache fallback for weekly quota failed: {}, returning seat data only",
-                                    WINDSURF_SPEC.log_label,
-                                    cache_err
-                                );
-                            }
-                        }
-                    }
-                    Ok(seat_data)
-                }
-                Err(seat_err) => {
+            match fetch_live() {
+                Ok(data) => Ok(data),
+                Err(live_err) => {
                     warn!(
                         target: "providers",
-                        "{} seat management API failed: {}, falling back to local cache",
+                        "{} local API failed: {}, falling back to local cache",
                         WINDSURF_SPEC.log_label,
-                        seat_err
+                        live_err
                     );
 
-                    match codeium_family::refresh_cache(&WINDSURF_SPEC) {
+                    match fetch_cache() {
                         Ok(data) => Ok(data),
                         Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
-                            "all sources failed: local API error: {}; seat API error: {}; cache error: {}",
-                            live_err, seat_err, cache_err
+                            "all sources failed: seat API error: {}; local API error: {}; cache error: {}",
+                            seat_err, live_err, cache_err
                         ))
                         .into()),
                     }
@@ -168,9 +180,73 @@ mod tests {
     }
 
     #[test]
+    fn test_matches_windsurf_linux_process() {
+        let line = "3483 /usr/share/windsurf/resources/app/extensions/windsurf/bin/language_server_linux_x64 --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+        assert!(codeium_family::matches_process_line(line, &WINDSURF_SPEC));
+    }
+
+    #[test]
     fn test_rejects_antigravity_process() {
         let line = "53319 /Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --csrf_token abc --extension_server_port 57048 --app_data_dir antigravity";
         assert!(!codeium_family::matches_process_line(line, &WINDSURF_SPEC));
+    }
+
+    #[test]
+    fn test_refresh_prefers_seat_api_over_stale_live_data() {
+        let seat_data = RefreshData::with_account(
+            vec![daily_quota(35.0), weekly_quota(17.0)],
+            Some("seat@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label(SEAT_API_SOURCE_LABEL);
+
+        let live_data = RefreshData::with_account(
+            vec![daily_quota(12.0), weekly_quota(6.0)],
+            Some("live@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local api");
+
+        let data = refresh_windsurf_with_sources(
+            || Ok(seat_data.clone()),
+            || Ok(live_data.clone()),
+            || Ok(RefreshData::with_account(vec![], None, None)),
+        )
+        .unwrap();
+
+        assert_eq!(data.source_label, Some(SEAT_API_SOURCE_LABEL.to_string()));
+        assert!(data
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "daily-quota" && (q.used - 35.0).abs() < 0.01));
+        assert!(data
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "weekly-quota" && (q.used - 17.0).abs() < 0.01));
+        assert_eq!(data.account_email, Some("seat@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_refresh_falls_back_to_live_when_seat_api_fails() {
+        let live_data = RefreshData::with_account(
+            vec![daily_quota(12.0), weekly_quota(6.0)],
+            Some("live@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local api");
+
+        let data = refresh_windsurf_with_sources(
+            || Err(anyhow::anyhow!("seat unavailable")),
+            || Ok(live_data.clone()),
+            || Ok(RefreshData::with_account(vec![], None, None)),
+        )
+        .unwrap();
+
+        assert_eq!(data.source_label, Some("local api".to_string()));
+        assert!(data
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "daily-quota" && (q.used - 12.0).abs() < 0.01));
     }
 
     #[test]

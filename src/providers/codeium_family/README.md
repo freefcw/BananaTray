@@ -49,15 +49,15 @@ Antigravity
 
 Windsurf
   refresh()
-    ├─→ codeium_family::refresh_live()
     ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly
+    ├─→ codeium_family::refresh_live()
     └─→ codeium_family::refresh_cache()              # fallback / missing weekly补齐
 ```
 
 这样拆的原因是：
 
 - Antigravity 和 Windsurf 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
-- Windsurf 的 seat API 是产品特有逻辑，不应反向污染共享层
+- Windsurf 的 seat API 是产品特有实时数据源，不应反向污染共享层
 - 共享层保留为“本地 source primitive”，未来更容易继续复用或替换
 
 ## Runtime Source Labels
@@ -79,10 +79,20 @@ Windsurf
 - `display_name`
 - `dashboard_url`
 - `ide_name`
-- `cache_db_relative_path`
+- `cache_db_config_relative_path`
 - `auth_status_key_candidates`
 - `process_markers`
 - `cached_plan_info_key_candidates`
+
+`cache_db_config_relative_path` 是相对系统配置目录的路径：macOS 会解析到
+`~/Library/Application Support/<provider>/...`，Linux 会解析到
+`$XDG_CONFIG_HOME/<provider>/...`（通常是 `~/.config/<provider>/...`）。
+diagnostics 会列出实际尝试的候选路径。
+
+language server 进程发现同时支持 macOS 的 `language_server_macos*`
+和 Linux 的 `language_server_linux_*`。端口探测使用可用的 `lsof`
+候选路径，避免不同发行版把 `lsof` 放在 `/usr/bin` 或 `/usr/sbin`
+时漏检。
 
 如果未来出现新的稳定产品差异，优先考虑继续加到 spec。
 只有当差异本质上属于 provider 自己的 orchestration 或云端 source 时，才应放回 facade。

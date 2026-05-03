@@ -14,7 +14,7 @@ use auth_status::decode_user_status_payload;
 use cached_plan::read_via_cached_plan_info;
 
 pub(in crate::providers::codeium_family) use sqlite_store::{
-    cache_db_path, query_auth_status_json,
+    cache_db_path, cache_db_path_candidates, query_auth_status_json,
 };
 
 pub fn is_available(spec: &CodeiumFamilySpec) -> bool {

@@ -4,27 +4,73 @@ use log::debug;
 use rusqlite::Connection;
 use std::path::PathBuf;
 
+pub(in crate::providers::codeium_family) fn cache_db_path_candidates(
+    spec: &CodeiumFamilySpec,
+) -> Vec<PathBuf> {
+    // Windsurf / Antigravity 都是 VS Code 系 Electron 应用：
+    // macOS 使用 ~/Library/Application Support，Linux 使用 XDG config。
+    let config_relative = PathBuf::from(spec.cache_db_config_relative_path);
+    let mut candidates = Vec::new();
+
+    if cfg!(target_os = "macos") {
+        if let Some(home) = dirs::home_dir() {
+            push_unique(
+                &mut candidates,
+                home.join("Library")
+                    .join("Application Support")
+                    .join(&config_relative),
+            );
+        }
+    } else if let Some(config_dir) = dirs::config_dir() {
+        push_unique(&mut candidates, config_dir.join(&config_relative));
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        push_unique(
+            &mut candidates,
+            home.join("Library")
+                .join("Application Support")
+                .join(&config_relative),
+        );
+        push_unique(&mut candidates, home.join(".config").join(&config_relative));
+    }
+
+    candidates
+}
+
+fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
+    if !paths.contains(&path) {
+        paths.push(path);
+    }
+}
+
 pub(in crate::providers::codeium_family) fn cache_db_path(
     spec: &CodeiumFamilySpec,
 ) -> ProviderResult<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| ProviderError::unavailable("cannot determine home directory"))?;
-    let db_path = home.join(spec.cache_db_relative_path);
+    let candidates = cache_db_path_candidates(spec);
 
-    if !db_path.exists() {
-        return Err(ProviderError::unavailable(&format!(
-            "{} local cache database not found",
-            spec.log_label
-        )));
+    if candidates.is_empty() {
+        return Err(ProviderError::unavailable(
+            "cannot determine config directory",
+        ));
     }
 
-    debug!(
-        target: "providers",
-        "{} local cache DB: {}",
-        spec.log_label,
-        db_path.display()
-    );
-    Ok(db_path)
+    for db_path in candidates {
+        if db_path.exists() {
+            debug!(
+                target: "providers",
+                "{} local cache DB: {}",
+                spec.log_label,
+                db_path.display()
+            );
+            return Ok(db_path);
+        }
+    }
+
+    Err(ProviderError::unavailable(&format!(
+        "{} local cache database not found",
+        spec.log_label
+    )))
 }
 
 pub(in crate::providers::codeium_family) fn query_auth_status_json(

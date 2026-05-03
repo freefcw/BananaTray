@@ -92,20 +92,27 @@ fn render_spec_debug(spec: CodeiumFamilySpec) -> Result<String> {
 fn append_cache_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result<()> {
     writeln!(out, "### Cache DB")?;
 
-    let Some(home) = dirs::home_dir() else {
-        writeln!(out, "- home directory: unavailable")?;
-        return Ok(());
-    };
-
-    let db_path = home.join(spec.cache_db_relative_path);
-    writeln!(out, "- path: `{}`", db_path.display())?;
-    writeln!(out, "- exists: {}", db_path.exists())?;
-
-    if !db_path.exists() {
+    let candidates = cache_source::cache_db_path_candidates(&spec);
+    if candidates.is_empty() {
+        writeln!(out, "- path candidates: none")?;
         return Ok(());
     }
 
-    match Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    writeln!(out, "- path candidates:")?;
+    for candidate in &candidates {
+        writeln!(
+            out,
+            "  - `{}` (exists: {})",
+            candidate.display(),
+            candidate.exists()
+        )?;
+    }
+
+    let Some(db_path) = candidates.iter().find(|path| path.exists()) else {
+        return Ok(());
+    };
+
+    match Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
         Ok(conn) => {
             let interesting_keys = list_interesting_cache_keys(&conn)?;
             if interesting_keys.is_empty() {
@@ -144,7 +151,7 @@ fn append_process_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Resu
     writeln!(out, "### Local language server")?;
 
     let pgrep_output = match Command::new("/usr/bin/pgrep")
-        .args(["-lf", "language_server_macos"])
+        .args(["-lf", live_source::PROCESS_QUERY])
         .output()
     {
         Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),

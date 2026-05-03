@@ -212,6 +212,7 @@ fn detect_windsurf_app_version(spec: &CodeiumFamilySpec) -> Option<String> {
                 .into_iter()
                 .find_map(|path| read_cf_bundle_short_version(&path))
         })
+        .or_else(read_linux_windsurf_version)
 }
 
 fn info_plist_from_binary_path(binary_path: &str) -> Option<PathBuf> {
@@ -249,6 +250,20 @@ fn read_cf_bundle_short_version(plist_path: &Path) -> Option<String> {
     } else {
         Some(version)
     }
+}
+
+fn read_linux_windsurf_version() -> Option<String> {
+    let output = Command::new("windsurf").arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8(output.stdout)
+        .ok()?
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(ToString::to_string)
 }
 
 #[cfg(test)]
@@ -343,6 +358,41 @@ mod tests {
                 epoch_secs: 1777795200
             })
         ));
+    }
+
+    #[test]
+    fn test_parse_seat_response_uses_remaining_percent_for_current_windsurf_values() {
+        let json = r#"{
+            "userStatus": {
+                "planStatus": {
+                    "dailyQuotaRemainingPercent": 65,
+                    "weeklyQuotaRemainingPercent": 83,
+                    "dailyQuotaResetAtUnix": "1777881600",
+                    "weeklyQuotaResetAtUnix": "1778400000",
+                    "planInfo": {
+                        "planName": "Pro"
+                    }
+                },
+                "email": "test@example.com"
+            }
+        }"#;
+
+        let response: SeatResponse = serde_json::from_str(json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+
+        let daily = data
+            .quotas
+            .iter()
+            .find(|quota| quota.stable_key == "daily-quota")
+            .unwrap();
+        assert!((daily.used - 35.0).abs() < 0.01);
+
+        let weekly = data
+            .quotas
+            .iter()
+            .find(|quota| quota.stable_key == "weekly-quota")
+            .unwrap();
+        assert!((weekly.used - 17.0).abs() < 0.01);
     }
 
     #[test]

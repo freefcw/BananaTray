@@ -74,6 +74,15 @@ mod tests {
     }
 
     #[test]
+    fn test_matches_antigravity_linux_process_with_path() {
+        let line = "53319 /usr/share/antigravity/resources/app/extensions/antigravity/bin/language_server_linux_x64 --enable_lsp";
+        assert!(codeium_family::matches_process_line(
+            line,
+            &ANTIGRAVITY_SPEC
+        ));
+    }
+
+    #[test]
     fn test_is_antigravity_process_rejects_windsurf() {
         let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
         assert!(!codeium_family::matches_process_line(

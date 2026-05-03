@@ -9,7 +9,15 @@ use std::process::Command;
 use std::sync::LazyLock;
 use ureq::Agent;
 
-const PROCESS_NAMES: &[&str] = &["language_server_macos_arm", "language_server_macos"];
+pub(super) const PROCESS_QUERY: &str = "language_server_";
+
+const PROCESS_NAMES: &[&str] = &[
+    "language_server_macos_arm",
+    "language_server_macos",
+    "language_server_linux_x64",
+    "language_server_linux_arm64",
+];
+const LSOF_CANDIDATES: &[&str] = &["/usr/sbin/lsof", "/usr/bin/lsof", "lsof"];
 const API_PATH: &str = "exa.language_server_pb.LanguageServerService/GetUserStatus";
 
 static CSRF_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--csrf_token\s+(\S+)").unwrap());
@@ -78,7 +86,7 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshDat
 
 pub fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
     let output = Command::new("/usr/bin/pgrep")
-        .args(["-lf", "language_server_macos"])
+        .args(["-lf", PROCESS_QUERY])
         .output()
         .map_err(|_| ProviderError::unavailable("pgrep not available"))?;
 
@@ -180,18 +188,33 @@ fn extract_binary_path(command_line: &str) -> Option<String> {
 }
 
 pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> ProviderResult<u16> {
-    let output = Command::new("/usr/sbin/lsof")
-        .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", pid])
-        .output()
-        .map_err(|_| ProviderError::unavailable("lsof not available"))?;
+    let mut last_error = None;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_listen_port(&stdout).ok_or_else(|| {
-        ProviderError::parse_failed(&format!(
-            "no TCP LISTEN port found via lsof for {}",
-            spec.log_label
-        ))
-    })
+    for command in LSOF_CANDIDATES {
+        let output = match Command::new(command)
+            .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", pid])
+            .output()
+        {
+            Ok(output) => output,
+            Err(err) => {
+                last_error = Some(err);
+                continue;
+            }
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return parse_listen_port(&stdout).ok_or_else(|| {
+            ProviderError::parse_failed(&format!(
+                "no TCP LISTEN port found via lsof for {}",
+                spec.log_label
+            ))
+        });
+    }
+
+    let message = last_error
+        .map(|err| format!("lsof not available: {err}"))
+        .unwrap_or_else(|| "lsof not available".to_string());
+    Err(ProviderError::unavailable(&message))
 }
 
 fn parse_listen_port(output: &str) -> Option<u16> {
@@ -333,8 +356,7 @@ mod tests {
             log_label: "Antigravity",
             ide_name: "antigravity",
             unavailable_message: "Antigravity live source and local cache are both unavailable",
-            cache_db_relative_path:
-                "Library/Application Support/Antigravity/User/globalStorage/state.vscdb",
+            cache_db_config_relative_path: "Antigravity/User/globalStorage/state.vscdb",
             auth_status_key_candidates: &["antigravityAuthStatus"],
             process_markers: &[
                 "--app_data_dir antigravity",
@@ -402,6 +424,12 @@ mod tests {
     fn test_matches_process_line_rejects_non_language_server() {
         let line = "99999 /usr/bin/some_other_process --app_data_dir antigravity";
         assert!(!matches_process_line(line, &antigravity_spec()));
+    }
+
+    #[test]
+    fn test_matches_process_line_accepts_linux_language_server() {
+        let line = "12345 /usr/share/antigravity/resources/app/extensions/antigravity/bin/language_server_linux_x64 --enable_lsp --app_data_dir antigravity";
+        assert!(matches_process_line(line, &antigravity_spec()));
     }
 
     #[test]
