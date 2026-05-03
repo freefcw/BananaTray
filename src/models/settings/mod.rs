@@ -91,6 +91,8 @@ pub struct DisplaySettings {
     /// 是否在托盘弹窗显示 Overview 总览面板
     #[serde(default = "default_true")]
     pub show_overview: bool,
+    #[serde(default, skip_serializing_if = "TrayPopupSettings::is_default")]
+    pub tray_popup: TrayPopupSettings,
 }
 
 impl Default for DisplaySettings {
@@ -105,8 +107,27 @@ impl Default for DisplaySettings {
             show_debug_tab: false,
             show_account_info: true,
             show_overview: true,
+            tray_popup: TrayPopupSettings::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct TrayPopupSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linux_last_position: Option<SavedWindowPosition>,
+}
+
+impl TrayPopupSettings {
+    fn is_default(&self) -> bool {
+        self.linux_last_position.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct SavedWindowPosition {
+    pub x: f32,
+    pub y: f32,
 }
 
 /// Provider 管理配置

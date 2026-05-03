@@ -170,6 +170,41 @@ fn system_settings_missing_global_hotkey_uses_default() {
     );
 }
 
+#[test]
+fn display_settings_missing_tray_popup_uses_default() {
+    let json = serde_json::json!({
+        "theme": AppTheme::Dark,
+        "language": "system",
+        "tray_icon_style": TrayIconStyle::default(),
+        "quota_display_mode": QuotaDisplayMode::default(),
+        "show_dashboard_button": true,
+        "show_refresh_button": true,
+        "show_debug_tab": false,
+        "show_account_info": true,
+        "show_overview": true
+    });
+
+    let restored: DisplaySettings = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.tray_popup, TrayPopupSettings::default());
+}
+
+#[test]
+fn tray_popup_linux_position_round_trip() {
+    let settings = DisplaySettings {
+        tray_popup: TrayPopupSettings {
+            linux_last_position: Some(SavedWindowPosition { x: 42.0, y: 84.0 }),
+        },
+        ..Default::default()
+    };
+
+    let json = serde_json::to_value(&settings).unwrap();
+    let restored: DisplaySettings = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        restored.tray_popup.linux_last_position,
+        Some(SavedWindowPosition { x: 42.0, y: 84.0 })
+    );
+}
+
 // ── hidden_quotas ────────────────────────────────────
 
 #[test]
