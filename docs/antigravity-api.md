@@ -34,7 +34,7 @@ provider facade 负责两类东西：
 
 - provider kind 与展示元数据
 - `ide_name`
-- cache DB 相对路径
+- cache DB 相对系统配置目录路径
 - auth status key 候选
 - 进程识别 marker
 - provider-specific unavailable message
@@ -42,7 +42,7 @@ provider facade 负责两类东西：
 source orchestration 目前明确分开：
 
 - Antigravity：`live -> cache`
-- Windsurf：`live -> seat -> cache`
+- Windsurf：`seat -> live -> cache`
 
 这意味着：
 
@@ -54,7 +54,7 @@ source orchestration 目前明确分开：
 当前 refresh 策略保持为：
 
 1. Antigravity：优先尝试 live source，失败时回退本地 cache
-2. Windsurf：优先尝试 live source，失败时先尝试 seat API，再回退本地 cache
+2. Windsurf：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
 3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
 4. 所有来源都失败时返回结构化错误
 
@@ -65,10 +65,16 @@ source orchestration 目前明确分开：
 当前真正稳定、值得文档化的差异维度只有这些：
 
 - provider 身份与展示名
-- 本地 cache DB 路径
+- 本地 cache DB 配置目录相对路径
 - auth status key 候选
 - 进程参数 / 路径 marker
 - dashboard URL
+
+本地 cache DB 路径会按平台解析：macOS 使用
+`~/Library/Application Support/<provider>/...`，Linux 使用
+`$XDG_CONFIG_HOME/<provider>/...`（通常是 `~/.config/<provider>/...`）。
+language server 进程发现同样同时覆盖 macOS 的 `language_server_macos*`
+和 Linux 的 `language_server_linux_*`。
 
 如果未来还有差异，应优先继续加到 spec，而不是复制整套 provider 实现。
 
@@ -84,7 +90,7 @@ cargo run -- debug-codeium-family windsurf
 
 这个命令适合检查：
 
-- cache DB 是否存在
+- cache DB 候选路径是否存在
 - 关键 key 是否存在
 - 进程 marker 是否仍能识别
 - 端口 / csrf token 是否还能提取

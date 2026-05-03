@@ -4,7 +4,7 @@ use super::auth_status::{
 use super::cached_plan::{
     build_quota_from_cached, parse_cached_plan_info, read_via_cached_plan_info, CachedQuotaKind,
 };
-use super::sqlite_store::query_cached_plan_info;
+use super::sqlite_store::{cache_db_path_candidates, query_cached_plan_info};
 use super::*;
 use crate::models::QuotaDetailSpec;
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -22,12 +22,22 @@ fn test_windsurf_spec() -> CodeiumFamilySpec {
         log_label: "Windsurf",
         ide_name: "windsurf",
         unavailable_message: "Windsurf live source and local cache are both unavailable",
-        cache_db_relative_path:
-            "Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
+        cache_db_config_relative_path: "Windsurf/User/globalStorage/state.vscdb",
         auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
         process_markers: &["--ide_name windsurf", "/windsurf/", "/windsurf.app/"],
         cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
     }
+}
+
+#[test]
+fn test_cache_db_candidates_include_platform_config_path() {
+    let spec = test_windsurf_spec();
+    let candidates = cache_db_path_candidates(&spec);
+
+    let expected_suffix = std::path::Path::new("Windsurf/User/globalStorage/state.vscdb");
+    assert!(candidates
+        .iter()
+        .any(|path| path.ends_with(expected_suffix)));
 }
 
 #[test]
