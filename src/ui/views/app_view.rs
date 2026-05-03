@@ -2,8 +2,8 @@ use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
 use gpui::{
-    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use std::cell::RefCell;
@@ -17,6 +17,9 @@ use crate::models::PopupLayout;
 thread_local! {
     static APP_VIEW_ENTITY: RefCell<Option<gpui::WeakEntity<AppView>>> = const { RefCell::new(None) };
 }
+
+#[cfg(target_os = "linux")]
+const LINUX_POPUP_DRAG_SUPPRESSION: std::time::Duration = std::time::Duration::from_millis(2_000);
 
 pub(crate) fn register_current_view(entity: gpui::WeakEntity<AppView>) {
     APP_VIEW_ENTITY.with(|slot| *slot.borrow_mut() = Some(entity));
@@ -44,6 +47,8 @@ pub struct AppView {
     pub(crate) _activation_sub: Option<gpui::Subscription>,
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<gpui::Subscription>,
+    #[cfg(target_os = "linux")]
+    pub(crate) _bounds_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
     /// Overview 面板中展开了配额详情的 Provider 集合（UI-only 状态）
     pub(crate) overview_expanded: HashSet<ProviderId>,
@@ -68,6 +73,8 @@ impl AppView {
             state,
             _activation_sub: None,
             _appearance_sub: None,
+            #[cfg(target_os = "linux")]
+            _bounds_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
             overview_expanded: HashSet::new(),
         }
@@ -91,12 +98,7 @@ impl AppView {
             HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
         };
 
-        // 注意：Linux tray popup 不启用窗口拖拽。
-        // start_window_move() 在 Wayland 上会导致窗口失焦，
-        // 与 auto-hide（失焦关闭）行为冲突。
-        // 需要拖拽的窗口（如 settings window）有独立的标题栏拖拽逻辑。
-
-        div()
+        let header = div()
             .w_full()
             .flex()
             .items_center()
@@ -164,7 +166,23 @@ impl AppView {
                             .text_color(theme.text.secondary)
                             .child(header.status_text),
                     ),
+            );
+
+        #[cfg(target_os = "linux")]
+        let header = {
+            let state = self.state.clone();
+            header.cursor(gpui::CursorStyle::OpenHand).on_mouse_down(
+                MouseButton::Left,
+                move |_, window, _| {
+                    state
+                        .borrow_mut()
+                        .begin_linux_popup_drag(LINUX_POPUP_DRAG_SUPPRESSION);
+                    window.start_window_move();
+                },
             )
+        };
+
+        header
     }
 }
 
@@ -172,9 +190,16 @@ impl Render for AppView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.borrow();
         let active_tab = state.session.nav.active_tab.clone();
+        #[cfg(target_os = "linux")]
+        let popup_visible = state.session.popup_visible;
         // 在每次渲染时动态调整窗口高度
         let desired_height = state.session.popup_height();
         drop(state);
+
+        #[cfg(target_os = "linux")]
+        if !popup_visible {
+            return div().size_full();
+        }
 
         // 仅对 Windowed 类型窗口执行 resize（避免影响全屏/最大化窗口）
         let bounds = window.window_bounds();

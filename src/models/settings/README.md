@@ -21,11 +21,12 @@ AppSettings
   - 关联常量 `DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5`，供 `RefreshScheduler` 等模块引用，保持默认值单一来源
   - 关联常量 `DEFAULT_GLOBAL_HOTKEY`，作为首次启动和无效配置回退时的默认全局热键；值使用 GPUI 可回读的持久化格式
 - **`NotificationSettings`** — `session_quota_notifications` / `notification_sound`
-- **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / 各 UI 开关
+- **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`
   - `is_enabled()` / `set_enabled()` / `remove_enabled_record()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()`
 - **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
   - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量
+- **`TrayPopupSettings`** — 托盘弹窗的持久化 UI 状态；当前包含 Linux 下用户拖动后的上次窗口位置
 - 枚举：**`TrayIconStyle`**（Monochrome/Yellow/Colorful/Dynamic）、**`QuotaDisplayMode`**（Remaining/Used）、**`AppTheme`**（Light/Dark/System）
 
 ### 领域方法文件（ProviderConfig 的扩展 impl）

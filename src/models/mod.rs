@@ -22,5 +22,5 @@ pub use quota::{
 };
 pub use settings::{
     AppSettings, AppTheme, DisplaySettings, NotificationSettings, ProviderConfig, ProviderSettings,
-    QuotaDisplayMode, SystemSettings, TrayIconStyle,
+    QuotaDisplayMode, SavedWindowPosition, SystemSettings, TrayIconStyle, TrayPopupSettings,
 };

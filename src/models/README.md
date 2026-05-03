@@ -52,6 +52,7 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - **`AppSettings`** — top-level persisted configuration composed of `SystemSettings`, `NotificationSettings`, `DisplaySettings`, `ProviderConfig`
 - **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, and app-managed credentials
 - **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), stored under `ProviderConfig::credentials` for provider-scoped persisted tokens owned by BananaTray
+- **`TrayPopupSettings`** / **`SavedWindowPosition`** — persisted tray popup UI state, currently used for Linux drag-position restore
 - **`TrayIconStyle`** / **`QuotaDisplayMode`** / **`AppTheme`** — display enums
 - `provider_config_ordering.rs` / `provider_config_quota.rs` / `provider_config_sidebar.rs` — domain method extensions
 

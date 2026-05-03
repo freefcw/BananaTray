@@ -21,6 +21,10 @@ pub struct AppState {
     pub(crate) settings_writer: SettingsWriter,
     /// 日志文件路径（Debug Tab 展示用）
     pub log_path: Option<PathBuf>,
+    #[cfg(target_os = "linux")]
+    linux_popup_auto_hide_suppressed_until: Option<std::time::Instant>,
+    #[cfg(target_os = "linux")]
+    linux_popup_position_save_requested: bool,
 }
 
 impl AppState {
@@ -45,6 +49,10 @@ impl AppState {
             refresh_tx,
             settings_writer: SettingsWriter::spawn(),
             log_path,
+            #[cfg(target_os = "linux")]
+            linux_popup_auto_hide_suppressed_until: None,
+            #[cfg(target_os = "linux")]
+            linux_popup_position_save_requested: false,
         }
     }
 
@@ -54,5 +62,29 @@ impl AppState {
         request: RefreshRequest,
     ) -> Result<(), smol::channel::TrySendError<RefreshRequest>> {
         self.refresh_tx.try_send(request)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn begin_linux_popup_drag(&mut self, duration: std::time::Duration) {
+        self.suppress_linux_popup_auto_hide_for(duration);
+        self.linux_popup_position_save_requested = true;
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn suppress_linux_popup_auto_hide_for(&mut self, duration: std::time::Duration) {
+        self.linux_popup_auto_hide_suppressed_until = Some(std::time::Instant::now() + duration);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn linux_popup_auto_hide_suppression_remaining(
+        &self,
+    ) -> Option<std::time::Duration> {
+        self.linux_popup_auto_hide_suppressed_until
+            .and_then(|until| until.checked_duration_since(std::time::Instant::now()))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn should_save_linux_popup_position(&self) -> bool {
+        self.linux_popup_position_save_requested
     }
 }
