@@ -8,31 +8,42 @@ pub(crate) fn render_toggle_switch(
     knob_size: Pixels,
     theme: &Theme,
 ) -> Div {
-    let travel = width - knob_size - px(4.0);
-    div()
+    let track_bg = if enabled {
+        theme.element.selected
+    } else {
+        theme.bg.subtle
+    };
+    let track_border = if enabled {
+        theme.element.selected
+    } else {
+        theme.border.strong
+    };
+
+    let mut track = div()
+        .flex_none()
         .w(width)
         .h(height)
         .flex()
         .items_center()
-        .rounded_full()
         .px(px(2.0))
-        .bg(if enabled {
-            theme.element.selected
-        } else {
-            theme.bg.subtle
-        })
+        .rounded_full()
+        .overflow_hidden()
+        .bg(track_bg)
         .border_1()
-        .border_color(if enabled {
-            theme.element.selected
-        } else {
-            theme.border.strong
-        })
-        .child(
-            div()
-                .w(knob_size)
-                .h(knob_size)
-                .rounded_full()
-                .bg(theme.element.active)
-                .ml(if enabled { travel } else { px(0.0) }),
-        )
+        .border_color(track_border);
+
+    track = if enabled {
+        track.justify_end()
+    } else {
+        track.justify_start()
+    };
+
+    track.child(
+        div()
+            .flex_none()
+            .w(knob_size)
+            .h(knob_size)
+            .rounded_full()
+            .bg(theme.element.active),
+    )
 }
