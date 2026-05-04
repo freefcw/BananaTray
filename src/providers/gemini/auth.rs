@@ -29,20 +29,25 @@ struct GeminiAuth {
 
 pub(super) fn credentials_path() -> PathBuf {
     dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("~"))
+        .unwrap_or_else(|| PathBuf::from("."))
         .join(".gemini/oauth_creds.json")
+}
+
+/// 用户可见的凭证路径描述（用于错误提示）。
+pub(super) fn credentials_path_display() -> &'static str {
+    "~/.gemini/oauth_creds.json"
 }
 
 fn settings_path() -> PathBuf {
     dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("~"))
+        .unwrap_or_else(|| PathBuf::from("."))
         .join(".gemini/settings.json")
 }
 
 pub(super) fn load_credentials() -> ProviderResult<OAuthCredentials> {
     let path = credentials_path();
     let content = std::fs::read_to_string(&path)
-        .map_err(|_| ProviderError::config_missing("~/.gemini/oauth_creds.json"))?;
+        .map_err(|_| ProviderError::config_missing(credentials_path_display()))?;
     let creds: OAuthCredentials = serde_json::from_str(&content)
         .map_err(|_| ProviderError::parse_failed("oauth_creds.json"))?;
     Ok(creds)
@@ -107,4 +112,67 @@ pub(super) fn refresh_token_via_cli() -> ProviderResult<()> {
 
     log::warn!(target: "providers", "Gemini CLI token refresh: credential file not updated after 1s poll");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_credentials_path_ends_with_gemini_suffix() {
+        let path = credentials_path();
+        assert!(
+            path.ends_with(".gemini/oauth_creds.json"),
+            "credentials_path should end with .gemini/oauth_creds.json, got: {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn test_settings_path_ends_with_gemini_suffix() {
+        let path = settings_path();
+        assert!(
+            path.ends_with(".gemini/settings.json"),
+            "settings_path should end with .gemini/settings.json, got: {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn test_credentials_path_display_non_empty() {
+        assert!(
+            !credentials_path_display().is_empty(),
+            "credentials_path_display should not be empty"
+        );
+    }
+
+    #[test]
+    fn test_credentials_path_display_contains_gemini() {
+        assert!(
+            credentials_path_display().contains(".gemini/oauth_creds.json"),
+            "credentials_path_display should contain .gemini suffix, got: {}",
+            credentials_path_display()
+        );
+    }
+
+    #[test]
+    fn test_check_auth_type_from_content_oauth_personal() {
+        assert!(check_auth_type_from_content(
+            r#"{"security":{"auth":{"selectedType":"oauth-personal"}}}"#
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_check_auth_type_from_content_api_key_rejected() {
+        let result =
+            check_auth_type_from_content(r#"{"security":{"auth":{"selectedType":"api-key"}}}"#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_check_auth_type_from_content_invalid_json() {
+        let result = check_auth_type_from_content("not json");
+        assert!(result.is_err());
+    }
 }

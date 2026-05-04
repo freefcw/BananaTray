@@ -8,7 +8,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
-use auth::{db_path, extract_user_id_from_jwt, read_access_token};
+use auth::{db_path_candidates, db_path_display, extract_user_id_from_jwt, read_access_token};
 use client::fetch_usage_summary;
 use parser::parse_usage_response;
 
@@ -32,12 +32,11 @@ impl AiProvider for CursorProvider {
     }
 
     async fn check_availability(&self) -> ProviderResult<()> {
-        if db_path().exists() {
+        let candidates = db_path_candidates();
+        if candidates.iter().any(|p| p.exists()) {
             Ok(())
         } else {
-            Err(ProviderError::config_missing(
-                "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
-            ))
+            Err(ProviderError::config_missing(db_path_display()))
         }
     }
 

@@ -150,10 +150,7 @@ fn append_cache_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result
 fn append_process_diagnostics(out: &mut String, spec: CodeiumFamilySpec) -> Result<()> {
     writeln!(out, "### Local language server")?;
 
-    let pgrep_output = match Command::new("/usr/bin/pgrep")
-        .args(["-lf", live_source::PROCESS_QUERY])
-        .output()
-    {
+    let pgrep_output = match run_pgrep() {
         Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
         Err(err) => {
             writeln!(out, "- pgrep failed: {}", err)?;
@@ -305,4 +302,25 @@ mod tests {
     fn test_mask_secret_long() {
         assert_eq!(mask_secret("abcdefgh12345678"), "abcd…5678");
     }
+}
+
+/// 使用候选路径列表执行 pgrep，避免 GUI 环境下 PATH 缺失导致找不到 pgrep。
+#[allow(dead_code)]
+fn run_pgrep() -> Result<std::process::Output> {
+    const PGREP_CANDIDATES: &[&str] = &["/usr/bin/pgrep", "/bin/pgrep", "pgrep"];
+
+    let mut last_error = None;
+    for pgrep in PGREP_CANDIDATES {
+        match Command::new(pgrep)
+            .args(["-lf", live_source::PROCESS_QUERY])
+            .output()
+        {
+            Ok(output) => return Ok(output),
+            Err(err) => last_error = Some(err),
+        }
+    }
+
+    Err(last_error
+        .map(|e| anyhow::anyhow!("pgrep not available: {e}"))
+        .unwrap_or_else(|| anyhow::anyhow!("pgrep not available")))
 }

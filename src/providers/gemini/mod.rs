@@ -11,7 +11,10 @@ use crate::utils::time_utils;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
-use auth::{check_auth_type, credentials_path, load_credentials, refresh_token_via_cli};
+use auth::{
+    check_auth_type, credentials_path, credentials_path_display, load_credentials,
+    refresh_token_via_cli,
+};
 use client::fetch_quota_via_api;
 use parser::extract_email_from_id_token;
 
@@ -56,7 +59,7 @@ impl AiProvider for GeminiProvider {
         if credentials_path().exists() {
             Ok(())
         } else {
-            Err(ProviderError::config_missing("~/.gemini/oauth_creds.json"))
+            Err(ProviderError::config_missing(credentials_path_display()))
         }
     }
 
