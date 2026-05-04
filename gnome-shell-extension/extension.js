@@ -130,15 +130,22 @@ function createStatusBadge(text, level, extraClass = '') {
 function createQuotaBar(quota) {
     const ratio = quotaRatio(quota);
     const level = normalizeStatusLevel(quota.status_level);
-    const fillWidth = Math.round(96 * ratio);
     const bar = new St.Widget({
         style_class: 'bananatray-quota-bar',
         x_expand: true,
+        layout_manager: new Clutter.BinLayout(),
     });
     const fill = new St.Widget({
         style_class: `bananatray-quota-bar-fill bananatray-quota-bar-fill-${level}`,
-        style: `width: ${fillWidth}px;`,
+        x_align: Clutter.ActorAlign.FILL,
+        y_align: Clutter.ActorAlign.FILL,
+        x_expand: true,
+        y_expand: true,
     });
+
+    // 按实际轨道宽度缩放，避免父布局拉伸后满额仍只填充固定像素。
+    fill.set_pivot_point(0, 0.5);
+    fill.set_scale(ratio, 1);
 
     bar.add_child(fill);
     return bar;
@@ -385,7 +392,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     _buildUI() {
-        this.menu.box.style_class = 'bananatray-menu-box';
+        this.menu.box.add_style_class_name('bananatray-menu-box');
 
         const headerBox = new St.BoxLayout({
             style_class: 'bananatray-header',
@@ -461,14 +468,14 @@ class BananaTrayIndicator extends PanelMenu.Button {
             style_class: 'bananatray-footer',
             x_expand: true,
         });
-        const openFullViewButton = new St.Button({
-            style_class: 'bananatray-open-full-view',
-            label: 'Open Full View',
+        const openSettingsButton = new St.Button({
+            style_class: 'bananatray-open-settings',
+            label: 'Open Settings',
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
         });
-        openFullViewButton.connect('clicked', () => this._client.openSettings());
-        footer.add_child(openFullViewButton);
+        openSettingsButton.connect('clicked', () => this._client.openSettings());
+        footer.add_child(openSettingsButton);
         this.menu.box.add_child(footer);
 
         this._scrollView.hide();

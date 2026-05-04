@@ -63,14 +63,12 @@ fn icon_rendering_mode(request: TrayIconRequest) -> TrayIconRenderingMode {
 ///
 /// 使用 GPUI 原生 API：先设置渲染模式，再设置图标数据（确保一次到位）。
 pub fn apply_tray_icon(cx: &mut App, request: TrayIconRequest) {
-    #[cfg(target_os = "linux")]
-    if crate::platform::gnome_detect::should_use_gnome_extension() {
+    if !crate::tray::should_use_gpui_tray() {
         info!(
             target: "tray",
             "GNOME extension mode detected, skipping GPUI tray icon update: {:?}",
             request
         );
-        cx.set_tray_icon(None);
         return;
     }
 

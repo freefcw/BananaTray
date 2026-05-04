@@ -22,7 +22,7 @@
 - 顶部显示 daemon 同步状态和刷新按钮。
 - Summary 区域显示 Provider 总数、Connected 数量和 Attention 数量。
 - Provider 行显示连接状态、账号信息、套餐信息、所有可见 quota、状态徽标和进度条。
-- `Open Full View` 会通过 D-Bus 调用 BananaTray daemon，在主应用中打开完整窗口。
+- `Open Settings` 会通过 D-Bus 调用 BananaTray daemon，在主应用中打开设置窗口。
 
 刷新按钮调用 daemon 的 `RefreshAll`。按钮会立即返回当前缓存快照，真实刷新完成后 daemon 会通过
 `RefreshComplete` 信号推送新快照，扩展收到后自动更新。
@@ -52,16 +52,23 @@ gdbus call --session \
 ### 用户安装目录（推荐，无需 root）
 
 ```bash
-# 复制扩展文件到用户扩展目录
-mkdir -p ~/.local/share/gnome-shell/extensions/bananatray@bananatray.github.io
-cp -a gnome-shell-extension/. ~/.local/share/gnome-shell/extensions/bananatray@bananatray.github.io/
+# 递归复制扩展文件、启用扩展，并输出当前 Shell 状态
+bash scripts/install-gnome-extension.sh
 
 # 重新加载 GNOME Shell
 # Wayland: 注销并重新登录
 # X11: Alt+F2 → 输入 'r' → 回车
+```
 
-# 启用扩展
-gnome-extensions enable bananatray@bananatray.github.io
+脚本会安装到
+`~/.local/share/gnome-shell/extensions/bananatray@bananatray.github.io/`，并检查
+`quotaClient.js` 与 `icons/bananatray-symbolic.svg` 等必需文件是否已经复制。手工安装时必须递归复制整个
+`gnome-shell-extension/` 目录，不能只复制顶层 `extension.js`、`metadata.json` 和 `stylesheet.css`。
+
+只查看当前安装和 Shell 状态：
+
+```bash
+bash scripts/install-gnome-extension.sh --status
 ```
 
 ### 系统安装目录
@@ -155,7 +162,7 @@ BananaTrayExtension (入口)
        │    ├─ ScrollView → ProviderList → BananaTrayProviderRow × N
        │    │    └─ BananaTrayQuotaRow × N
        │    ├─ Loading placeholder (等待 daemon)
-       │    └─ Footer (Open Full View 按钮)
+       │    └─ Footer (Open Settings 按钮)
        └─ QuotaClient (异步 D-Bus + schema guard)
 ```
 
@@ -285,7 +292,11 @@ gdbus introspect --session --dest com.bananatray.Daemon \
 
 | 问题 | 原因 | 解决方案 |
 |------|------|---------|
-| 面板无 BananaTray 图标 | 扩展未启用、未重载，或 `State` 不是 `ACTIVE` | `gnome-extensions info bananatray@bananatray.github.io` 检查状态；若是 `OUT OF DATE`，更新 `metadata.json` 后重新安装并重载 Shell |
+| 面板无 BananaTray 图标 | 扩展未启用、未重载，或 `State` 不是 `ACTIVE` | `bash scripts/install-gnome-extension.sh --status` 检查安装文件和 Shell 状态；若是 `OUT OF DATE`，更新 `metadata.json` 后重新安装并重载 Shell |
+| 面板同时出现 BananaTray 图标和三个点 | daemon 版本仍在 Extension 模式下注册了传统 KSNI/AppIndicator 空入口 | 更新并重启 BananaTray daemon；确认日志包含 `skipping GPUI tray bootstrap`，且 `RegisteredStatusNotifierItems` 不再出现 BananaTray 进程对应项 |
+| 弹窗背景透明、文字难以辨认 | 扩展覆盖了 GNOME Shell 默认 popup menu 样式类，导致主题背景未生效 | 菜单容器只能追加 `bananatray-menu-box`，不能替换默认样式类；重新安装扩展并重载 Shell |
+| `State: ERROR` 且错误含 `add_actor is not a function` | GNOME 50 仍在加载旧版扩展，旧版 `St.ScrollView.add_actor()` API 已失效 | 运行 `bash scripts/install-gnome-extension.sh` 递归安装新版文件；若安装文件已无 `add_actor` 但 Shell 仍报旧错，Wayland 注销重登，X11 用 Alt+F2 → `r` 重启 Shell |
+| `State: ERROR` 且提示找不到 `quotaClient.js` 或图标 | 安装时漏复制子文件或 `icons/` 子目录 | 运行 `bash scripts/install-gnome-extension.sh`，或手工递归复制整个 `gnome-shell-extension/` 目录 |
 | "Waiting for BananaTray daemon…" | daemon 未运行或 D-Bus 服务未注册 | 确认 `bananatray` 进程正在运行；`gdbus introspect` 检查 bus |
 | "Failed to fetch quota data" | D-Bus 调用失败 | 检查 journalctl 日志；确认 daemon 版本匹配 |
 | 刷新后数据不更新 | `RefreshComplete` 信号未收到 | 检查 daemon 是否正确发射信号；查看 journalctl |
