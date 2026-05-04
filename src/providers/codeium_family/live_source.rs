@@ -17,6 +17,7 @@ const PROCESS_NAMES: &[&str] = &[
     "language_server_linux_x64",
     "language_server_linux_arm64",
 ];
+const PGREP_CANDIDATES: &[&str] = &["/usr/bin/pgrep", "/bin/pgrep", "pgrep"];
 const LSOF_CANDIDATES: &[&str] = &["/usr/sbin/lsof", "/usr/bin/lsof", "lsof"];
 const API_PATH: &str = "exa.language_server_pb.LanguageServerService/GetUserStatus";
 
@@ -85,27 +86,42 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshDat
 }
 
 pub fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
-    let output = Command::new("/usr/bin/pgrep")
-        .args(["-lf", PROCESS_QUERY])
-        .output()
-        .map_err(|_| ProviderError::unavailable("pgrep not available"))?;
+    let mut last_error = None;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    for pgrep in PGREP_CANDIDATES {
+        let output = match Command::new(pgrep).args(["-lf", PROCESS_QUERY]).output() {
+            Ok(output) => output,
+            Err(err) => {
+                last_error = Some(err);
+                continue;
+            }
+        };
 
-    if stdout.trim().is_empty() {
-        return Err(ProviderError::unavailable(&format!(
-            "{} language server not running",
-            spec.log_label
-        )));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        if stdout.trim().is_empty() {
+            return Err(ProviderError::unavailable(&format!(
+                "{} language server not running",
+                spec.log_label
+            )));
+        }
+
+        return stdout
+            .lines()
+            .find(|line| matches_process_line(line, spec))
+            .ok_or_else(|| {
+                ProviderError::unavailable(&format!(
+                    "{} language server not running",
+                    spec.log_label
+                ))
+            })
+            .and_then(parse_process_line);
     }
 
-    stdout
-        .lines()
-        .find(|line| matches_process_line(line, spec))
-        .ok_or_else(|| {
-            ProviderError::unavailable(&format!("{} language server not running", spec.log_label))
-        })
-        .and_then(parse_process_line)
+    let message = last_error
+        .map(|err| format!("pgrep not available: {err}"))
+        .unwrap_or_else(|| "pgrep not available".to_string());
+    Err(ProviderError::unavailable(&message))
 }
 
 pub fn matches_process_line(line: &str, spec: &CodeiumFamilySpec) -> bool {

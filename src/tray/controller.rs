@@ -3,7 +3,7 @@
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
 
 use crate::application::AppAction;
-use crate::models::{AppSettings, NavTab, SavedWindowPosition};
+use crate::models::{AppSettings, NavTab};
 use crate::runtime::schedule_open_settings_window;
 use crate::runtime::AppState;
 use gpui::{
@@ -620,7 +620,7 @@ impl TrayController {
         );
 
         let state = self.state.clone();
-        let mut options = WindowOptions {
+        let options = WindowOptions {
             titlebar: None,
             kind,
             focus: true,

@@ -1,4 +1,5 @@
 use log::debug;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -64,7 +65,7 @@ const CACHE_DURATION: Duration = Duration::from_secs(5);
 ///
 /// 1. memory_token — 用户在设置界面手动配置（显式·应用内）
 /// 2. GITHUB_TOKEN 环境变量（显式·系统级）
-/// 3. ~/.config/github-copilot/ JSON 文件（隐式·VSCode 扩展自动检测）
+/// 3. github-copilot/ JSON 文件（隐式·VSCode 扩展自动检测）
 /// 4. macOS Keychain copilot-cli（隐式·CLI 自动检测）
 pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
     // ① 用户手动配置的 token（最高优先级）
@@ -131,21 +132,51 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
 
 /// 从 VSCode Copilot 扩展的配置文件中读取 OAuth token。
 ///
-/// 扫描 `~/.config/github-copilot/hosts.json` 和 `apps.json`，
+/// 扫描 `github-copilot/hosts.json` 和 `apps.json`，
 /// 查找包含 `github.com` 的条目中的 `oauth_token` 字段。
+///
+/// 路径解析：
+/// - macOS 主候选: `~/Library/Application Support/github-copilot/`
+/// - Linux 主候选: `~/.config/github-copilot/`
+/// - 通用 fallback: `~/.config/github-copilot/`（Copilot CLI 遵循 XDG 约定）
 fn read_copilot_oauth_token() -> Option<String> {
-    let home = dirs::home_dir()?;
-    let copilot_dir = home.join(".config").join("github-copilot");
+    let copilot_dirs = copilot_config_candidates();
 
-    for filename in &["hosts.json", "apps.json"] {
-        let path = copilot_dir.join(filename);
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Some(token) = extract_oauth_token_from_json(&content) {
-                return Some(token);
+    for copilot_dir in &copilot_dirs {
+        for filename in &["hosts.json", "apps.json"] {
+            let path = copilot_dir.join(filename);
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Some(token) = extract_oauth_token_from_json(&content) {
+                    return Some(token);
+                }
             }
         }
     }
     None
+}
+
+/// 返回 Copilot 配置目录的候选路径列表。
+///
+/// Copilot CLI（Node.js 工具）在所有平台上都使用 XDG 约定（`~/.config/github-copilot`），
+/// 但 VSCode 扩展在 macOS 上可能将数据存储在 `~/Library/Application Support/` 下。
+/// 同时扫描两个位置以确保覆盖。
+fn copilot_config_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    // 主候选：dirs::config_dir() 解析的平台标准路径
+    if let Some(config_dir) = dirs::config_dir() {
+        candidates.push(config_dir.join("github-copilot"));
+    }
+
+    // Fallback：Copilot CLI 遵循 XDG 约定，在 macOS 上也可能使用 ~/.config
+    if let Some(home) = dirs::home_dir() {
+        let xdg_path = home.join(".config").join("github-copilot");
+        if !candidates.contains(&xdg_path) {
+            candidates.push(xdg_path);
+        }
+    }
+
+    candidates
 }
 
 /// 从 Copilot 扩展的 JSON 内容中提取 oauth_token。
@@ -350,5 +381,63 @@ mod tests {
             extract_oauth_token_from_json(json).as_deref(),
             Some("correct")
         );
+    }
+
+    // ── copilot_config_candidates 测试 ──
+
+    #[test]
+    fn test_copilot_config_candidates_non_empty() {
+        let candidates = copilot_config_candidates();
+        assert!(
+            !candidates.is_empty(),
+            "should have at least one candidate path"
+        );
+    }
+
+    #[test]
+    fn test_copilot_config_candidates_end_with_copilot() {
+        let candidates = copilot_config_candidates();
+        assert!(
+            candidates.iter().all(|p| p.ends_with("github-copilot")),
+            "all candidates should end with 'github-copilot', got: {:?}",
+            candidates
+        );
+    }
+
+    #[test]
+    fn test_copilot_config_candidates_primary_is_dirs_config() {
+        let candidates = copilot_config_candidates();
+        let expected_primary = dirs::config_dir().map(|d| d.join("github-copilot"));
+        assert_eq!(
+            candidates.first().map(|p| p.clone()),
+            expected_primary,
+            "primary candidate should be dirs::config_dir()/github-copilot"
+        );
+    }
+
+    #[test]
+    fn test_copilot_config_candidates_includes_xdg_fallback() {
+        let candidates = copilot_config_candidates();
+        let xdg_fallback = dirs::home_dir().map(|h| h.join(".config").join("github-copilot"));
+        if let Some(expected) = xdg_fallback {
+            assert!(
+                candidates.contains(&expected),
+                "candidates should include ~/.config/github-copilot as XDG fallback, got: {:?}",
+                candidates
+            );
+        }
+    }
+
+    #[test]
+    fn test_copilot_config_candidates_no_duplicates() {
+        let candidates = copilot_config_candidates();
+        let mut seen = std::collections::HashSet::new();
+        for c in &candidates {
+            assert!(
+                seen.insert(c.clone()),
+                "duplicate path found: {}",
+                c.display()
+            );
+        }
     }
 }

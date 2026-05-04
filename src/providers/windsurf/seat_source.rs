@@ -201,7 +201,12 @@ fn detect_windsurf_app_version(spec: &CodeiumFamilySpec) -> Option<String> {
     if spec.kind != crate::models::ProviderKind::Windsurf {
         return None;
     }
+    detect_windsurf_app_version_platform(spec)
+}
 
+#[cfg(target_os = "macos")]
+fn detect_windsurf_app_version_platform(spec: &CodeiumFamilySpec) -> Option<String> {
+    // 优先从 Info.plist 读取版本（最可靠）
     codeium_family::detect_process(spec)
         .ok()
         .and_then(|process| process.binary_path)
@@ -212,9 +217,16 @@ fn detect_windsurf_app_version(spec: &CodeiumFamilySpec) -> Option<String> {
                 .into_iter()
                 .find_map(|path| read_cf_bundle_short_version(&path))
         })
-        .or_else(read_linux_windsurf_version)
+        // Fallback：app bundle 路径异常或 CLI 安装时，尝试 windsurf --version
+        .or_else(read_windsurf_cli_version)
 }
 
+#[cfg(not(target_os = "macos"))]
+fn detect_windsurf_app_version_platform(_spec: &CodeiumFamilySpec) -> Option<String> {
+    read_windsurf_cli_version()
+}
+
+#[cfg(target_os = "macos")]
 fn info_plist_from_binary_path(binary_path: &str) -> Option<PathBuf> {
     Path::new(binary_path)
         .ancestors()
@@ -222,6 +234,7 @@ fn info_plist_from_binary_path(binary_path: &str) -> Option<PathBuf> {
         .map(|app_bundle| app_bundle.join("Contents/Info.plist"))
 }
 
+#[cfg(target_os = "macos")]
 fn info_plist_candidates() -> Vec<PathBuf> {
     let mut candidates = vec![PathBuf::from(
         "/Applications/Windsurf.app/Contents/Info.plist",
@@ -232,6 +245,7 @@ fn info_plist_candidates() -> Vec<PathBuf> {
     candidates
 }
 
+#[cfg(target_os = "macos")]
 fn read_cf_bundle_short_version(plist_path: &Path) -> Option<String> {
     let output = Command::new("/usr/bin/defaults")
         .arg("read")
@@ -252,7 +266,11 @@ fn read_cf_bundle_short_version(plist_path: &Path) -> Option<String> {
     }
 }
 
-fn read_linux_windsurf_version() -> Option<String> {
+/// 通过 `windsurf --version` CLI 读取版本号，作为所有平台的最终 fallback。
+///
+/// macOS 上 Info.plist 不可用时（app bundle 路径异常、CLI 安装等），
+/// 以及 Linux 上，都可用此方法获取版本。
+fn read_windsurf_cli_version() -> Option<String> {
     let output = Command::new("windsurf").arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
@@ -454,6 +472,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_info_plist_from_binary_path() {
         let path = info_plist_from_binary_path(
             "/Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm",
