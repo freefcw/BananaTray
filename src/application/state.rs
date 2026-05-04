@@ -433,11 +433,9 @@ pub fn compute_popup_height(
         _ => nav.last_provider_id.clone(),
     };
     let provider = store.find_by_id(&id);
-    let kind = id.kind();
-
     let quota_count = provider
         .map(|p| {
-            let visible = settings.provider.visible_quota_count(kind, &p.quotas);
+            let visible = settings.provider.visible_quota_count(&id, &p.quotas);
             if visible == 0 && !p.quotas.is_empty() {
                 1 // 全部隐藏时显示空状态，至少预留 1 个卡片高度
             } else {

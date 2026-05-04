@@ -171,7 +171,7 @@ fn provider_body_view_state(
         _ => {
             let visible: Vec<_> = settings
                 .provider
-                .visible_quotas(provider.provider_id.kind(), &provider.quotas)
+                .visible_quotas(&provider.provider_id, &provider.quotas)
                 .into_iter()
                 .cloned()
                 .collect();
@@ -314,7 +314,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                     let visible = session
                         .settings
                         .provider
-                        .visible_quotas(provider.kind(), &provider.quotas);
+                        .visible_quotas(&provider.provider_id, &provider.quotas);
                     if visible.is_empty() {
                         OverviewItemStatus::Disconnected
                     } else {

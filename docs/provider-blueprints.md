@@ -13,7 +13,7 @@
   - `descriptor()`
   - `check_availability()`
   - `refresh()`
-- 用户提示文案统一交给 `ProviderErrorPresenter`，不要在 provider 内做 UI 拼接。
+- 用户提示文案统一交给 selector/UI；provider 只返回 `ProviderError`、`QuotaLabelSpec`、`QuotaDetailSpec` 等稳定语义，不在 provider 内做 UI 拼接。
 
 ## 蓝图 A：标准 HTTP Provider
 

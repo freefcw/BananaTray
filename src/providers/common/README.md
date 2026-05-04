@@ -8,13 +8,19 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 
 解决 macOS GUI 应用 `PATH` 受限的问题，为 CLI 类 Provider（Claude, Codex, Amp, Kiro 等）提供统一的命令执行层：
 
-- **`enriched_path()`** — 补充 Homebrew / npm / bun / cargo 等常见安装路径到 PATH
 - **`command_exists(binary)`** — 检查 CLI 是否可用
 - **`run_command(binary, args)`** — 执行命令，`NotFound` 错误统一映射为 `ProviderError::CliNotFound`
 - **`run_checked_command()`** — 严格模式，非零退出码即报错
 - **`run_lenient_command()`** — 宽容模式，有输出就返回 Ok（适用于 amp/kiro-cli 偶发非零退出码）
 - **`stdout_or_stderr_text()`** — 某些 CLI 把业务输出写到 stderr 的兜底方案
 - 非交互式 CLI 统一带超时，超时映射为 `ProviderError::Timeout`
+
+### `path_resolver.rs` — CLI 路径解析
+
+`cli.rs` 和 `runner.rs` 共享同一套路径规则，避免 GUI 环境下不同执行路径对 CLI 是否存在给出不同结论：
+
+- **`enriched_path()` / `enrich_path(path)`** — 补充 `~/.local/bin`、`~/.bun/bin`、`~/.cargo/bin`、`~/.npm-global/bin`、`~/.amp/bin`、Homebrew 和系统路径
+- **`locate_executable(binary)`** — 先查绝对路径和当前 `PATH`，再按共享候选目录兜底定位可执行文件
 
 ### `http_client.rs` — HTTP 客户端（ureq）
 
@@ -46,7 +52,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 
 ```
 providers/claude/         → cli.rs + runner.rs
-providers/codex/          → cli.rs + http_client.rs
+providers/codex/          → runner.rs + http_client.rs
 providers/amp.rs          → cli.rs
 providers/kiro.rs         → cli.rs
 providers/copilot/        → http_client.rs + jwt.rs
@@ -57,3 +63,5 @@ providers/minimax/        → http_client.rs
 providers/codeium_family/ → http_client.rs
 providers/custom/         → http_client.rs
 ```
+
+`path_resolver.rs` 是 `cli.rs` / `runner.rs` 的内部依赖，不由 provider facade 直接拼路径规则。

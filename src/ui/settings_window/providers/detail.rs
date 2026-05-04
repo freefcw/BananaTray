@@ -3,9 +3,7 @@ use crate::application::{
     AppAction, QuotaVisibilityItem, SettingChange, SettingsProviderDetailViewState,
     SettingsProviderInfoViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-use crate::models::{
-    ProviderCapability, ProviderId, ProviderKind, QuotaDisplayMode, SettingsCapability,
-};
+use crate::models::{ProviderCapability, ProviderId, QuotaDisplayMode, SettingsCapability};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
@@ -529,7 +527,7 @@ fn render_newapi_action_row(
 
 /// 单行：（可选图标 +）配额标签 + 小号 toggle switch
 fn render_quota_visibility_row(
-    kind: ProviderKind,
+    provider_id: ProviderId,
     item: &QuotaVisibilityItem,
     state: Rc<RefCell<AppState>>,
     theme: &Theme,
@@ -577,7 +575,7 @@ fn render_quota_visibility_row(
             runtime::dispatch_in_window(
                 &state,
                 AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
-                    kind,
+                    provider_id: provider_id.clone(),
                     quota_key: quota_key.clone(),
                 }),
                 window,
@@ -588,7 +586,7 @@ fn render_quota_visibility_row(
 
 /// Quota visibility section：托盘弹窗中显示哪些模型
 fn render_quota_visibility_section(
-    kind: ProviderKind,
+    provider_id: ProviderId,
     items: &[QuotaVisibilityItem],
     state: Rc<RefCell<AppState>>,
     theme: &Theme,
@@ -622,7 +620,7 @@ fn render_quota_visibility_section(
 
         for (i, item) in items.iter().enumerate() {
             list = list.child(render_quota_visibility_row(
-                kind,
+                provider_id.clone(),
                 item,
                 state.clone(),
                 theme,
@@ -690,7 +688,7 @@ impl SettingsView {
 
         if detail.show_quota_visibility {
             inner = inner.child(render_quota_visibility_section(
-                detail.id.kind(),
+                detail.id.clone(),
                 &detail.quota_visibility,
                 self.state.clone(),
                 theme,

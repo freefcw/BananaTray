@@ -1,7 +1,6 @@
 pub(crate) mod codeium_family;
 pub(crate) mod common;
 pub(crate) mod custom;
-pub(crate) mod error_presenter;
 pub(crate) mod manager;
 
 use crate::models::{

@@ -266,12 +266,16 @@ pub use dbus_dto::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaS
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
 };
+#[cfg(any(target_os = "linux", test))]
 pub(crate) use format::format_quota_label;
 pub use format::quota_usage_detail_text;
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;
-pub(crate) use tray::{compact_quota_bar_ratio, compact_quota_display_text};
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use tray::compact_quota_bar_ratio;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use tray::compact_quota_display_text;
 pub use tray::{
     header_view_state, overview_view_state, provider_detail_view_state,
     tray_global_actions_view_state,

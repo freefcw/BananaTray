@@ -1,9 +1,11 @@
 use crate::application::{header_view_state, HeaderStatusKind};
 use crate::models::{NavTab, ProviderId};
 use crate::theme::Theme;
+#[cfg(target_os = "linux")]
+use gpui::MouseButton;
 use gpui::{
-    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use std::cell::RefCell;

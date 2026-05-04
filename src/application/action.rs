@@ -1,5 +1,5 @@
 use super::state::SettingsTab;
-use crate::models::{AppTheme, NavTab, ProviderId, ProviderKind, QuotaDisplayMode, TrayIconStyle};
+use crate::models::{AppTheme, NavTab, ProviderId, QuotaDisplayMode, TrayIconStyle};
 use crate::refresh::{RefreshEvent, RefreshReason};
 
 #[derive(Debug)]
@@ -104,7 +104,7 @@ pub enum SettingChange {
     SetTrayIconStyle(TrayIconStyle),
     SetQuotaDisplayMode(QuotaDisplayMode),
     ToggleQuotaVisibility {
-        kind: ProviderKind,
+        provider_id: ProviderId,
         quota_key: String,
     },
 }
