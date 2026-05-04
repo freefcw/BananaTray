@@ -33,7 +33,7 @@ use log::{info, warn};
 
 use crate::runtime::AppState;
 
-use iface::{BananaTrayIface, DBusActionRequest};
+use iface::{BananaTrayIface, BananaTrayIfaceSignals, DBusActionRequest};
 
 // ============================================================================
 // 服务 Handle（主线程持有）
@@ -114,6 +114,7 @@ fn spawn_action_bridge(
     action_rx: smol::channel::Receiver<DBusActionRequest>,
     async_cx: gpui::AsyncApp,
 ) {
+    let ui_cx = async_cx.clone();
     async_cx
         .foreground_executor()
         .spawn(async move {
@@ -121,7 +122,7 @@ fn spawn_action_bridge(
                 match action {
                     DBusActionRequest::OpenSettings => {
                         info!(target: "dbus", "scheduling OpenSettings on GPUI main thread");
-                        let _ = async_cx.update(|cx| {
+                        let _ = ui_cx.update(|cx| {
                             crate::runtime::dispatch_in_app(
                                 &state,
                                 crate::application::AppAction::OpenSettings { provider: None },
@@ -131,7 +132,7 @@ fn spawn_action_bridge(
                     }
                     DBusActionRequest::RefreshAll => {
                         info!(target: "dbus", "scheduling RefreshAll on GPUI main thread");
-                        let _ = async_cx.update(|cx| {
+                        let _ = ui_cx.update(|cx| {
                             crate::runtime::dispatch_in_app(
                                 &state,
                                 crate::application::AppAction::RefreshAll,
@@ -155,7 +156,7 @@ fn run_dbus_server(
         let iface = BananaTrayIface::new(snapshot_cache, action_tx);
 
         // 连接 Session Bus
-        let conn = zbus::ConnectionBuilder::session()?
+        let conn = zbus::connection::Builder::session()?
             .name("com.bananatray.Daemon")?
             .serve_at("/com/bananatray/Daemon", iface)?
             .build()

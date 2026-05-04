@@ -629,12 +629,10 @@ impl TrayController {
             show: true,
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id,
+            #[cfg(target_os = "linux")]
+            window_background: gpui::WindowBackgroundAppearance::Transparent,
             ..Default::default()
         };
-        #[cfg(target_os = "linux")]
-        {
-            options.window_background = gpui::WindowBackgroundAppearance::Transparent;
-        }
 
         let result = cx.open_window(options, |_window, cx| {
             cx.new(|cx| crate::ui::AppView::new(state, cx))
