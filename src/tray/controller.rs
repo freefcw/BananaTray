@@ -622,7 +622,7 @@ impl TrayController {
         );
 
         let state = self.state.clone();
-        let mut options = WindowOptions {
+        let options = WindowOptions {
             titlebar: None,
             kind,
             focus: true,

@@ -262,10 +262,7 @@ pub enum SettingsProviderUsageViewState {
 // ============================================================================
 
 #[cfg(any(target_os = "linux", test))]
-pub use dbus_dto::{
-    format_connection_status, format_provider_id, format_status_level, DBusHeaderInfo,
-    DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot,
-};
+pub use dbus_dto::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
 };
@@ -274,7 +271,7 @@ pub use format::quota_usage_detail_text;
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;
-pub(crate) use tray::compact_quota_display_text;
+pub(crate) use tray::{compact_quota_bar_ratio, compact_quota_display_text};
 pub use tray::{
     header_view_state, overview_view_state, provider_detail_view_state,
     tray_global_actions_view_state,

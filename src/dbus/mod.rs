@@ -19,9 +19,14 @@
 //! **关键设计**：`BananaTrayIface` 持有 `Arc<Mutex<String>>` 快照缓存，
 //! 不持有 `AppState`。这满足了 zbus `Interface: Send + Sync` 的约束。
 
+// `dbus` 同时被 lib target 编译，但实际启动入口在 bin target。
+// 对 lib target 来说这些类型会表现为未使用；保留编译覆盖即可。
+#![allow(dead_code)]
+
 mod iface;
 mod serde_types;
 
+#[allow(unused_imports)]
 pub use serde_types::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
 
 use std::cell::RefCell;

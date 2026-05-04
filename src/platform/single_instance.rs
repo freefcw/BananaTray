@@ -38,9 +38,33 @@ pub enum InstanceRole {
 
 #[cfg(not(target_os = "macos"))]
 fn socket_name() -> Name<'static> {
-    APP_ID_LOWER
+    let name = single_instance_name();
+    name.leak()
         .to_ns_name::<GenericNamespaced>()
         .expect("invalid socket name")
+}
+
+#[cfg(not(target_os = "macos"))]
+fn single_instance_name() -> String {
+    match std::env::var("BANANATRAY_SINGLE_INSTANCE_SUFFIX") {
+        Ok(suffix) if is_valid_instance_suffix(&suffix) => format!("{APP_ID_LOWER}-{suffix}"),
+        Ok(suffix) => {
+            warn!(
+                target: "single_instance",
+                "ignoring invalid BANANATRAY_SINGLE_INSTANCE_SUFFIX={suffix:?}"
+            );
+            APP_ID_LOWER.to_string()
+        }
+        Err(_) => APP_ID_LOWER.to_string(),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_valid_instance_suffix(suffix: &str) -> bool {
+    !suffix.is_empty()
+        && suffix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 #[cfg(target_os = "macos")]
@@ -203,8 +227,25 @@ fn cleanup_stale_socket() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(target_os = "macos"))]
+    use super::*;
     #[cfg(target_os = "macos")]
     use super::*;
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn instance_suffix_validation_accepts_safe_ascii() {
+        assert!(is_valid_instance_suffix("gnome-dev"));
+        assert!(is_valid_instance_suffix("dev_123"));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn instance_suffix_validation_rejects_empty_or_path_like_values() {
+        assert!(!is_valid_instance_suffix(""));
+        assert!(!is_valid_instance_suffix("../real"));
+        assert!(!is_valid_instance_suffix("with space"));
+    }
 
     #[cfg(target_os = "macos")]
     #[test]

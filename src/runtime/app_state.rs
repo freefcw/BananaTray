@@ -27,6 +27,7 @@ pub struct AppState {
     linux_popup_position_save_requested: bool,
     /// D-Bus 服务句柄（Linux: 供事件泵发射信号给 GNOME Shell Extension）
     #[cfg(target_os = "linux")]
+    #[allow(dead_code)]
     pub(crate) dbus_handle: Option<crate::dbus::DBusServiceHandle>,
 }
 

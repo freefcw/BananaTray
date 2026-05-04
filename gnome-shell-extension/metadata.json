@@ -2,6 +2,6 @@
   "uuid": "bananatray@bananatray.github.io",
   "name": "BananaTray",
   "description": "AI coding assistant quota monitor",
-  "shell-version": ["45", "46", "47", "48"],
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
   "version-name": "1.0.0"
 }

@@ -141,6 +141,12 @@ pub(crate) fn start_event_pump(
 /// 向 GNOME Shell Extension 发射 D-Bus 信号
 #[cfg(target_os = "linux")]
 fn emit_dbus_signals(state: &Rc<RefCell<AppState>>) {
+    emit_current_dbus_snapshot(state);
+}
+
+/// 向 GNOME Shell Extension 发射当前状态快照。
+#[cfg(target_os = "linux")]
+pub(crate) fn emit_current_dbus_snapshot(state: &Rc<RefCell<AppState>>) {
     use crate::application::DBusQuotaSnapshot;
 
     let state_ref = state.borrow();

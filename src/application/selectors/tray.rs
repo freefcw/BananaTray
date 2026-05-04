@@ -391,7 +391,7 @@ pub(crate) fn compact_quota_display_text(
 ///
 /// Remaining 模式：进度条表示剩余比例（满→空）
 /// Used 模式：进度条表示已用比例（空→满），与文本语义一致
-fn compact_quota_bar_ratio(
+pub(crate) fn compact_quota_bar_ratio(
     quota: &crate::models::QuotaInfo,
     level: crate::models::StatusLevel,
     display_mode: crate::models::QuotaDisplayMode,

@@ -30,6 +30,9 @@ jobs:
       - name: Forbid GPUI glob imports
         run: ./scripts/check-gpui-imports.sh
 
+      - name: Check GNOME Shell Extension
+        run: ./scripts/check-gnome-extension.sh
+
       - name: Run clippy
         run: cargo clippy --lib -- -D warnings
 
@@ -75,6 +78,9 @@ jobs:
 
       - name: Forbid GPUI glob imports
         run: ./scripts/check-gpui-imports.sh
+
+      - name: Check GNOME Shell Extension
+        run: ./scripts/check-gnome-extension.sh
 
       - name: Run clippy
         run: cargo clippy --lib -- -D warnings
