@@ -51,21 +51,27 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
     cx.set_keep_alive_without_windows(true);
 
-    // 系统托盘
-    let icon_request = match settings.display.tray_icon_style {
-        crate::models::TrayIconStyle::Dynamic => {
-            // 启动时数据尚未加载，默认 Green（= Monochrome），首次刷新后会自动更新
-            crate::application::TrayIconRequest::DynamicStatus(crate::models::StatusLevel::Green)
+    if crate::tray::should_use_gpui_tray() {
+        // 系统托盘
+        let icon_request = match settings.display.tray_icon_style {
+            crate::models::TrayIconStyle::Dynamic => {
+                // 启动时数据尚未加载，默认 Green（= Monochrome），首次刷新后会自动更新
+                crate::application::TrayIconRequest::DynamicStatus(
+                    crate::models::StatusLevel::Green,
+                )
+            }
+            style => crate::application::TrayIconRequest::Static(style),
+        };
+        crate::tray::apply_tray_icon(cx, icon_request);
+        cx.set_tray_tooltip(&t!("tray.tooltip"));
+        #[cfg(target_os = "macos")]
+        {
+            // macOS status item defaults to NSMenu mode; panel mode is required for
+            // clicks to reach `on_tray_icon_event` and toggle the GPUI popup.
+            cx.set_tray_panel_mode(true);
         }
-        style => crate::application::TrayIconRequest::Static(style),
-    };
-    crate::tray::apply_tray_icon(cx, icon_request);
-    cx.set_tray_tooltip(&t!("tray.tooltip"));
-    #[cfg(target_os = "macos")]
-    {
-        // macOS status item defaults to NSMenu mode; panel mode is required for
-        // clicks to reach `on_tray_icon_event` and toggle the GPUI popup.
-        cx.set_tray_panel_mode(true);
+    } else {
+        info!(target: "tray", "GNOME extension mode detected, skipping GPUI tray bootstrap");
     }
 
     // 通知授权（仅在 App Bundle 模式下请求）
@@ -180,6 +186,12 @@ pub(crate) fn trigger_initial_refresh(state: &Rc<RefCell<AppState>>) {
 
 /// 注册托盘图标事件（左键/右键）和 Linux 菜单
 pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
+    #[cfg(target_os = "linux")]
+    if !crate::tray::should_use_gpui_tray() {
+        info!(target: "tray", "GNOME extension mode detected, skipping GPUI tray event setup");
+        return;
+    }
+
     let ctrl = controller.clone();
     cx.on_tray_icon_click_event(move |event, cx| {
         info!(target: "tray", "received tray click event: {:?} position={:?}", event.kind, event.position);
@@ -195,18 +207,14 @@ pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx:
     // GNOME Shell Extension 模式下跳过菜单安装，由扩展处理交互
     #[cfg(target_os = "linux")]
     {
-        if crate::platform::gnome_detect::should_use_gnome_extension() {
-            info!(target: "tray", "GNOME extension mode detected, skipping ksni menu setup");
-        } else {
-            install_linux_tray_menu(cx);
-            let ctrl = controller.clone();
-            cx.on_tray_menu_action(move |id, cx| {
-                info!(target: "tray", "received tray menu action: {}", id);
-                if let Some(command) = command_for_tray_menu_action(&id) {
-                    run_tray_command(command, &ctrl, cx);
-                }
-            });
-        }
+        install_linux_tray_menu(cx);
+        let ctrl = controller.clone();
+        cx.on_tray_menu_action(move |id, cx| {
+            info!(target: "tray", "received tray menu action: {}", id);
+            if let Some(command) = command_for_tray_menu_action(&id) {
+                run_tray_command(command, &ctrl, cx);
+            }
+        });
     }
 }
 

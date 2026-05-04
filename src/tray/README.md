@@ -19,7 +19,7 @@
 - 使用 `on_tray_icon_click_event` 注册点击回调（替代 `on_tray_icon_event`），获取 `TrayIconClickEvent`（含 kind + 可选 position）
 - macOS 启动时必须通过 GPUI `set_tray_panel_mode(true)` 切到 panel callback 模式，否则 status item 会走 NSMenu 模式，点击不会稳定进入回调，也就不会打开弹窗
 - Linux 仍保留 tray menu fallback（Open / Settings / Quit），用于覆盖不同 tray host 对点击事件转发不一致的情况
-- GNOME Shell Extension 已启用且处于 `State: ACTIVE` 时，Rust 侧不再安装 KSNI 菜单，托盘图标更新会清空 GPUI tray icon，由 Extension 独占面板入口，避免重复图标；扩展 `OUT OF DATE` 或加载失败时继续保留传统托盘 fallback
+- GNOME Shell Extension 已启用且处于 `State: ACTIVE` 时，Rust 侧完全跳过 GPUI/KSNI 托盘 bootstrap、点击回调和菜单安装，由 Extension 独占面板入口；扩展 `OUT OF DATE` 或加载失败时继续保留传统托盘 fallback
 - Nested GNOME 调试的 `--app-daemon` 模式会设置 `BANANATRAY_FORCE_GNOME_EXTENSION=1`，即使 nested Shell 尚未完成 `gnome-extensions info` 注册，调试用 app 也会跳过 KSNI fallback，避免主会话里出现第二个传统托盘图标
 - Linux popup 头部区域支持 `start_window_move()` 拖动；拖动开始后会短暂抑制 auto-hide，抑制期内收到的失焦事件会在保护期结束后复查，避免拖动中误关，也避免唯一一次失焦事件被吞掉后窗口常驻
 
@@ -42,7 +42,7 @@
 - 支持 `TrayIconStyle`：Monochrome / Colorful / Dynamic
 - Dynamic 模式根据当前 Provider 的 `StatusLevel` 切换图标颜色（Green/Yellow/Red）
 - macOS 使用 GPUI 原生 `set_tray_icon_rendering_mode` API 控制图标渲染模式（Adaptive / Original），确保亮/暗模式下正确显示
-- GNOME Shell Extension 模式下 `apply_tray_icon` 是 no-op，并会清空 GPUI tray icon；面板图标、状态点和总览摘要由 Extension 根据 D-Bus 快照独立渲染
+- GNOME Shell Extension 模式下 `apply_tray_icon` 是真正的 no-op，不会调用 GPUI tray API；面板图标、状态点和总览摘要由 Extension 根据 D-Bus 快照独立渲染
 - **Linux 平台差异**：默认图标样式为 Yellow（而非 Monochrome），因为 Linux 没有 template rendering，黑色单色图标在 GNOME Shell 深色面板上不可见。Monochrome 模式使用白色变体（`tray_icon_light.png`）确保可见性
 
 ## 图标资产

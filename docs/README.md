@@ -23,6 +23,8 @@
   - 刷新触发源、调度规则、并发执行和 reload 语义。
 - `logging.md`
   - 日志级别、日志文件位置、调试相关入口。
+- `gnome-shell-extension-development.md`
+  - GNOME Shell Extension 的开发、nested Shell 调试、mock/真实 daemon、D-Bus 排查和验证清单。
 
 ## Linux 专属模块文档
 
@@ -31,7 +33,7 @@
 - `src/dbus/README.md`
   - D-Bus 服务架构、线程模型、接口契约（方法/信号/属性）、JSON 快照格式。
 - `gnome-shell-extension/README.md`
-  - GNOME Shell Extension 安装、D-Bus 通信流程、组件架构、排障指南。
+  - GNOME Shell Extension 安装、使用说明、D-Bus 通信流程、组件架构、排障指南。
 
 ## 参考文档
 

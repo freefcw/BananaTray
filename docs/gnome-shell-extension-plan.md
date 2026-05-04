@@ -56,7 +56,7 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 | 直接传 `ProviderSnapshot` 并派生 `zbus::Type` | 当前传输 JSON `DBusQuotaSnapshot`，GJS 端解析简单，`gdbus` 调试直观 | 已替代 |
 | `GetSnapshot` / `Refresh` / `OpenSettings` / `Updated` | 当前为 `GetAllQuotas` / `RefreshAll` / `OpenSettings` / `RefreshComplete` | 已实现但命名不同 |
 | 新增 `linux-dbus` feature | 未新增独立 feature；`zbus` 只在非 macOS target dependency 中声明，模块由 Linux + `app` 使用 | 已用现有 feature 策略覆盖 |
-| GNOME 上跳过传统托盘绘制 | 当前 GNOME Extension 已启用且 `State: ACTIVE` 时跳过 KSNI 菜单，并在托盘图标更新时清空 GPUI tray icon，避免重复图标；`OUT OF DATE` / 加载失败时保留传统托盘 fallback | 已实现 |
+| GNOME 上跳过传统托盘绘制 | 当前 GNOME Extension 已启用且 `State: ACTIVE` 时完全跳过 GPUI/KSNI 托盘 bootstrap、点击回调和菜单安装，避免空 StatusNotifierItem 占位；`OUT OF DATE` / 加载失败时保留传统托盘 fallback | 已实现 |
 | Extension 使用 `PanelMenu.Button` | `gnome-shell-extension/extension.js` 已实现 `BananaTrayIndicator` | 已实现 |
 | Extension 监听 daemon 上线/下线 | 使用 `Gio.bus_watch_name()` 监听 `com.bananatray.Daemon` | 已实现 |
 | 初始快照读取 | 使用异步 proxy 构造后调用 `GetAllQuotasAsync()` | 已实现 |
@@ -75,7 +75,7 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 - GJS 端 D-Bus proxy 构造改为异步，避免 GNOME Shell 主线程在 daemon 响应慢或异常时被同步调用阻塞。
 - `GetAllQuotas` / `RefreshAll` / `OpenSettings` 改为 `Async` 方法调用，并在 daemon 消失或扩展销毁后丢弃过期回调结果。
 - Extension 销毁或 daemon 下线时显式 `disconnectSignal()`，避免重复连接和泄漏。
-- Linux GNOME Extension 模式下，Rust 侧托盘图标更新变成 no-op 并清空 GPUI tray icon，避免 GNOME 面板同时显示 Extension 图标和 AppIndicator 图标。
+- Linux GNOME Extension 模式下，Rust 侧不再调用 GPUI tray API，避免 GNOME 面板同时显示 Extension 图标和空 AppIndicator 占位。
 - D-Bus JSON 快照补充 `schema_version`，Extension 在渲染前拒绝不支持版本或缺少必填字段的数据。
 - Rust 端 Extension 模式检测改为要求 `gnome-extensions info` 同时满足 `Enabled: Yes` 和 `State: ACTIVE`；扩展 `OUT OF DATE` 或加载失败时继续保留 KSNI/AppIndicator fallback，避免面板入口完全消失。
 - 扩展元数据声明兼容 GNOME Shell 45-50。
