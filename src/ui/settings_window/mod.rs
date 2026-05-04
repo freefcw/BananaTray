@@ -316,14 +316,12 @@ impl SettingsView {
 
         // Linux 无标题栏，在头部区域启用窗口拖拽
         #[cfg(target_os = "linux")]
-        {
-            header = header.cursor(gpui::CursorStyle::OpenHand).on_mouse_down(
-                MouseButton::Left,
-                |_, window, _| {
-                    window.start_window_move();
-                },
-            );
-        }
+        let header = header.cursor(gpui::CursorStyle::OpenHand).on_mouse_down(
+            MouseButton::Left,
+            |_, window, _| {
+                window.start_window_move();
+            },
+        );
 
         header
     }
