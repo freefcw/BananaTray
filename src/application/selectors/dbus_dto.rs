@@ -15,9 +15,16 @@ use crate::models::{ConnectionStatus, ProviderId, ProviderStatus, QuotaInfo, Sta
 // 顶层快照
 // ============================================================================
 
+/// 当前 D-Bus JSON 快照协议版本。
+///
+/// 兼容规则：同版本内允许新增可选字段；删除/改名/改类型必须提升版本。
+pub const DBUS_QUOTA_SCHEMA_VERSION: u32 = 1;
+
 /// D-Bus 传输的配额快照
 #[derive(Debug, Clone, Serialize)]
 pub struct DBusQuotaSnapshot {
+    /// JSON 协议版本，供 Extension 在运行时校验兼容性
+    pub schema_version: u32,
     pub providers: Vec<DBusProviderEntry>,
     pub header: DBusHeaderInfo,
 }
@@ -73,6 +80,8 @@ pub struct DBusQuotaEntry {
     pub status_level: String,
     /// 预计算的显示文本（如 "55%"、"$15.00"）
     pub display_text: String,
+    /// Overview 进度条比例 [0.0, 1.0]，语义与当前 quota_display_mode 对齐
+    pub bar_ratio: f32,
     /// 配额类型稳定键（如 "session"、"weekly"、"credit"）
     pub quota_type_key: String,
 }
@@ -92,6 +101,7 @@ impl DBusQuotaSnapshot {
 
         let (status_kind, _) = session.header_status_text();
         DBusQuotaSnapshot {
+            schema_version: DBUS_QUOTA_SCHEMA_VERSION,
             providers,
             header: DBusHeaderInfo {
                 status_text: dbus_header_status_text(session),
@@ -137,6 +147,7 @@ impl DBusQuotaEntry {
             limit: quota.limit,
             status_level: format_status_level(sl),
             display_text: super::compact_quota_display_text(quota, display_mode),
+            bar_ratio: super::compact_quota_bar_ratio(quota, sl, display_mode),
             quota_type_key: quota.quota_type.stable_key(),
         }
     }
@@ -261,12 +272,14 @@ mod tests {
         // 45% used = 55% remaining > 50% => Green
         assert_eq!(entry.status_level, "Green");
         assert_eq!(entry.quota_type_key, "session");
+        assert!((entry.bar_ratio - 0.45).abs() < f32::EPSILON);
 
         // JSON 序列化验证
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"used\":45.0"));
         assert!(json.contains("\"limit\":100.0"));
         assert!(json.contains("\"status_level\":\"Green\""));
+        assert!(json.contains("\"bar_ratio\":0.45"));
     }
 
     #[test]
@@ -284,6 +297,7 @@ mod tests {
         assert_eq!(entry.quota_type_key, "weekly");
         // Remaining mode: "15%"
         assert_eq!(entry.display_text, "15%");
+        assert!((entry.bar_ratio - 0.15).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -318,11 +332,13 @@ mod tests {
         let snapshot = DBusQuotaSnapshot::from_session(&session);
 
         // 至少有 1 个 provider
+        assert_eq!(snapshot.schema_version, DBUS_QUOTA_SCHEMA_VERSION);
         assert!(!snapshot.providers.is_empty());
 
         // JSON 序列化 → 反序列化不丢失
         let json = serde_json::to_string(&snapshot).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["schema_version"].as_u64(), Some(1));
         assert!(parsed.get("providers").is_some());
         assert!(parsed.get("header").is_some());
         assert!(parsed["providers"].as_array().unwrap().len() >= 1);

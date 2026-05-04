@@ -85,6 +85,8 @@ fn main() {
                 let dbus_handle =
                     dbus::start_dbus_service(controller.borrow().state.clone(), cx.to_async());
                 controller.borrow_mut().state.borrow_mut().dbus_handle = dbus_handle;
+
+                bootstrap::emit_current_dbus_snapshot(&controller.borrow().state);
             }
 
             // 5. 初始刷新

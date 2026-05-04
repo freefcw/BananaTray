@@ -41,6 +41,8 @@
   - 新增 / 重构 provider 时可复用的设计模式。
 - `antigravity-api.md`
   - Antigravity / Windsurf 共享实现的专题说明。
+- `gnome-shell-extension-plan.md`
+  - GNOME 下绕开 layer-shell 的 Shell Extension + DBus 方案与当前实现对照。
 
 ## 历史文档
 

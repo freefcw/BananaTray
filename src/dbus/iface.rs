@@ -7,6 +7,9 @@
 //! 这使得 `BananaTrayIface` 满足 `Send + Sync`（zbus `Interface` trait 要求），
 //! 同时避免将 `Rc<RefCell<AppState>>` move 到 D-Bus 线程。
 
+// `dbus` 模块在 lib target 中只参与编译检查，实际由 bin 启动路径注册。
+#![allow(dead_code)]
+
 use std::sync::{Arc, Mutex};
 
 use zbus::object_server::SignalEmitter;

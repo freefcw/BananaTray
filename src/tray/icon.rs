@@ -63,6 +63,17 @@ fn icon_rendering_mode(request: TrayIconRequest) -> TrayIconRenderingMode {
 ///
 /// 使用 GPUI 原生 API：先设置渲染模式，再设置图标数据（确保一次到位）。
 pub fn apply_tray_icon(cx: &mut App, request: TrayIconRequest) {
+    #[cfg(target_os = "linux")]
+    if crate::platform::gnome_detect::should_use_gnome_extension() {
+        info!(
+            target: "tray",
+            "GNOME extension mode detected, skipping GPUI tray icon update: {:?}",
+            request
+        );
+        cx.set_tray_icon(None);
+        return;
+    }
+
     let png_data = icon_png_data(request);
     let rendering_mode = icon_rendering_mode(request);
 
@@ -185,5 +196,13 @@ mod tests {
             icon_rendering_mode(TrayIconRequest::DynamicStatus(StatusLevel::Red)),
             TrayIconRenderingMode::Original
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gnome_extension_mode_is_detectable_for_tests() {
+        std::env::set_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED", "1");
+        assert!(crate::platform::gnome_detect::should_use_gnome_extension());
+        std::env::remove_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED");
     }
 }

@@ -42,7 +42,8 @@
 - `platform/`
   - `paths` / `system` / 日志读取器等 lib-safe 平台能力。
   - `assets` / `single_instance` / `notification` / `auto_launch` 属于 app-only 平台适配层，只在 `app` feature 下编译。
-  - `gnome_detect.rs` — GNOME 桌面 + BananaTray 扩展检测（Linux only，需扩展已安装**且已启用**）。
+  - `gnome_detect.rs` — GNOME 桌面 + BananaTray 扩展检测（Linux only，需扩展已启用且 `gnome-extensions info` 显示 `State: ACTIVE`）。
+  - GNOME nested 调试脚本会设置 `BANANATRAY_FORCE_GNOME_EXTENSION=1` 和 `BANANATRAY_SINGLE_INSTANCE_SUFFIX=gnome-dev`，让同一 nested D-Bus session 中的真实 app 只服务扩展、且不与主会话实例冲突；这两个环境变量仅用于开发调试。
 - `tray/`
   - 托盘控制、弹窗生命周期、图标与定位。
 
