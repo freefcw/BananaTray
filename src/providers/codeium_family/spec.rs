@@ -18,6 +18,9 @@ pub struct CodeiumFamilySpec {
     pub process_markers: &'static [&'static str],
     /// 当 protobuf 解码失败时，尝试从这些 key 读取 JSON 格式的 cachedPlanInfo
     pub cached_plan_info_key_candidates: &'static [&'static str],
+    /// 缓存 SQLite 文件 mtime 超过该秒数即视为陈旧不可信，read_refresh_data 直接返回 unavailable。
+    /// 0 表示不做 mtime 校验（兼容测试用）。
+    pub cache_max_age_secs: u64,
 }
 
 pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
@@ -41,6 +44,8 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
         "/antigravity.app/",
     ],
     cached_plan_info_key_candidates: &[],
+    // 3 小时：language server 长期未运行 → 缓存 quota 快照不再可信
+    cache_max_age_secs: 3 * 60 * 60,
 };
 
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
@@ -64,4 +69,6 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
         "/windsurf.app/",
     ],
     cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
+    // 3 小时：与 Antigravity 一致；Windsurf 仍有 seat_source 云端兜底
+    cache_max_age_secs: 3 * 60 * 60,
 };

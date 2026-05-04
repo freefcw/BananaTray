@@ -6,6 +6,7 @@ use super::cached_plan::{
 };
 use super::sqlite_store::{cache_db_path_candidates, query_cached_plan_info};
 use super::*;
+use super::{ensure_cache_fresh, select_fresh_cache_db_path};
 use crate::models::QuotaDetailSpec;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::Connection;
@@ -26,6 +27,7 @@ fn test_windsurf_spec() -> CodeiumFamilySpec {
         auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
         process_markers: &["--ide_name windsurf", "/windsurf/", "/windsurf.app/"],
         cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
+        cache_max_age_secs: 0,
     }
 }
 
@@ -410,4 +412,215 @@ fn test_read_via_cached_plan_info_weekly_quota_null_when_full() {
         weekly.detail_spec,
         Some(QuotaDetailSpec::ResetAt { .. })
     ));
+}
+
+fn spec_with_max_age(secs: u64) -> CodeiumFamilySpec {
+    let mut spec = test_windsurf_spec();
+    spec.cache_max_age_secs = secs;
+    spec
+}
+
+#[test]
+fn test_ensure_cache_fresh_skips_when_threshold_zero() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.vscdb");
+    std::fs::write(&path, b"").unwrap();
+    // 即使文件不存在 mtime，也不该返回错误（threshold=0 直接 ok）
+    assert!(ensure_cache_fresh(&path, &spec_with_max_age(0)).is_ok());
+}
+
+#[test]
+fn test_ensure_cache_fresh_accepts_recent_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.vscdb");
+    std::fs::write(&path, b"").unwrap();
+    // 刚写入的文件 mtime ≈ now，3 小时阈值内应通过
+    assert!(ensure_cache_fresh(&path, &spec_with_max_age(3 * 3600)).is_ok());
+}
+
+#[test]
+fn test_ensure_cache_fresh_rejects_stale_file() {
+    use std::time::{Duration, SystemTime};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.vscdb");
+    let file = std::fs::File::create(&path).unwrap();
+
+    // 把 mtime 倒回 4 小时前（std::fs 自 1.75 起支持 set_modified）
+    let four_hours_ago = SystemTime::now() - Duration::from_secs(4 * 3600);
+    file.set_modified(four_hours_ago).unwrap();
+    drop(file);
+
+    let err = ensure_cache_fresh(&path, &spec_with_max_age(3 * 3600)).unwrap_err();
+    assert!(matches!(err, ProviderError::Unavailable { .. }));
+}
+
+#[test]
+fn test_ensure_cache_fresh_missing_file_returns_unavailable() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("does-not-exist.vscdb");
+    let err = ensure_cache_fresh(&missing, &spec_with_max_age(3 * 3600)).unwrap_err();
+    assert!(matches!(err, ProviderError::Unavailable { .. }));
+}
+
+#[test]
+fn test_ensure_cache_fresh_wal_overrides_stale_main_db() {
+    use std::time::{Duration, SystemTime};
+    // 模拟 SQLite WAL 模式的真实场景：
+    // 主 DB 文件 mtime 很老（上次 checkpoint 距今很久），但 -wal sidecar 是新的，
+    // 应判 fresh，否则会把"还在活跃写入"的 cache 误报为 stale。
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.vscdb");
+    let wal = dir.path().join("state.vscdb-wal");
+
+    let main_file = std::fs::File::create(&db).unwrap();
+    main_file
+        .set_modified(SystemTime::now() - Duration::from_secs(10 * 3600))
+        .unwrap();
+    drop(main_file);
+
+    // WAL 刚刚被写入 → 当前活跃
+    std::fs::File::create(&wal).unwrap();
+
+    assert!(
+        ensure_cache_fresh(&db, &spec_with_max_age(3 * 3600)).is_ok(),
+        "WAL sidecar 是最新的，应视为 cache 仍新鲜"
+    );
+}
+
+#[test]
+fn test_ensure_cache_fresh_journal_overrides_stale_main_db() {
+    use std::time::{Duration, SystemTime};
+    // 同上，但走非 WAL 模式（rollback journal）路径
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.vscdb");
+    let journal = dir.path().join("state.vscdb-journal");
+
+    let main_file = std::fs::File::create(&db).unwrap();
+    main_file
+        .set_modified(SystemTime::now() - Duration::from_secs(10 * 3600))
+        .unwrap();
+    drop(main_file);
+
+    std::fs::File::create(&journal).unwrap();
+
+    assert!(ensure_cache_fresh(&db, &spec_with_max_age(3 * 3600)).is_ok());
+}
+
+#[test]
+fn test_ensure_cache_fresh_all_sidecars_stale_returns_unavailable() {
+    use std::time::{Duration, SystemTime};
+    // 主 DB 与 WAL 都老 → 真 stale，应拒绝
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.vscdb");
+    let wal = dir.path().join("state.vscdb-wal");
+    let four_hours_ago = SystemTime::now() - Duration::from_secs(4 * 3600);
+
+    for path in [&db, &wal] {
+        let f = std::fs::File::create(path).unwrap();
+        f.set_modified(four_hours_ago).unwrap();
+    }
+
+    let err = ensure_cache_fresh(&db, &spec_with_max_age(3 * 3600)).unwrap_err();
+    let ProviderError::Unavailable { raw_detail, .. } = err else {
+        panic!("expected Unavailable");
+    };
+    let detail = raw_detail.expect("stale error should carry raw_detail");
+    // 错误信息应同时包含 stale 关键字、路径与行动建议
+    assert!(detail.contains("stale"), "detail: {detail}");
+    assert!(
+        detail.contains("Open"),
+        "detail should suggest action: {detail}"
+    );
+    assert!(
+        detail.contains("state.vscdb"),
+        "detail should include cache path: {detail}"
+    );
+}
+
+#[test]
+fn test_select_fresh_cache_db_path_skips_stale_candidate() {
+    use std::time::{Duration, SystemTime};
+    let dir = tempfile::tempdir().unwrap();
+    let stale = dir.path().join("old").join("state.vscdb");
+    let fresh = dir.path().join("new").join("state.vscdb");
+    std::fs::create_dir_all(stale.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(fresh.parent().unwrap()).unwrap();
+
+    let stale_file = std::fs::File::create(&stale).unwrap();
+    stale_file
+        .set_modified(SystemTime::now() - Duration::from_secs(4 * 3600))
+        .unwrap();
+    drop(stale_file);
+    std::fs::File::create(&fresh).unwrap();
+
+    let selected =
+        select_fresh_cache_db_path(&spec_with_max_age(3 * 3600), vec![stale, fresh.clone()])
+            .unwrap();
+
+    assert_eq!(selected, fresh);
+}
+
+#[test]
+fn test_select_fresh_cache_db_path_returns_stale_error_when_all_existing_candidates_stale() {
+    use std::time::{Duration, SystemTime};
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing").join("state.vscdb");
+    let stale = dir.path().join("old").join("state.vscdb");
+    std::fs::create_dir_all(stale.parent().unwrap()).unwrap();
+
+    let stale_file = std::fs::File::create(&stale).unwrap();
+    stale_file
+        .set_modified(SystemTime::now() - Duration::from_secs(4 * 3600))
+        .unwrap();
+    drop(stale_file);
+
+    let err =
+        select_fresh_cache_db_path(&spec_with_max_age(3 * 3600), vec![missing, stale]).unwrap_err();
+    let ProviderError::Unavailable { raw_detail, .. } = err else {
+        panic!("expected Unavailable");
+    };
+    assert!(
+        raw_detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("stale")),
+        "expected stale detail, got {raw_detail:?}"
+    );
+}
+
+#[test]
+fn test_ensure_cache_fresh_age_at_threshold_is_accepted() {
+    use std::time::{Duration, SystemTime};
+    // 边界：age == threshold 应通过（实现是 `>` 而非 `>=`）
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.vscdb");
+    let f = std::fs::File::create(&db).unwrap();
+    // 留 2 秒裕量避免到达断言时已超过阈值
+    f.set_modified(SystemTime::now() - Duration::from_secs(3 * 3600 - 2))
+        .unwrap();
+    drop(f);
+
+    assert!(ensure_cache_fresh(&db, &spec_with_max_age(3 * 3600)).is_ok());
+}
+
+#[test]
+fn test_read_refresh_data_short_circuits_on_stale_cache() {
+    use std::time::{Duration, SystemTime};
+    // end-to-end：cache 文件 stale 时，read_refresh_data 应在 SQLite 打开前
+    // 直接返回 Unavailable，而不是继续解析。
+    //
+    // 我们没法直接驱动 read_refresh_data 走真实 cache_db_path（依赖 dirs），
+    // 所以验证更下沉的行为：ensure_cache_fresh 在打开 connection 前就拒绝。
+    // 这保证了 stale short-circuit 的语义。
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.vscdb");
+    let f = std::fs::File::create(&db).unwrap();
+    f.set_modified(SystemTime::now() - Duration::from_secs(24 * 3600))
+        .unwrap();
+    drop(f);
+
+    let spec = spec_with_max_age(3 * 3600);
+    // 即使 SQLite 文件根本不是合法 DB，也不应触发"打开失败"——
+    // freshness 闸应在更前面拦下。
+    let err = ensure_cache_fresh(&db, &spec).unwrap_err();
+    assert!(matches!(err, ProviderError::Unavailable { .. }));
 }

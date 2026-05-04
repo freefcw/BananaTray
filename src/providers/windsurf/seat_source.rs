@@ -6,8 +6,10 @@ use anyhow::{Context, Result};
 use log::{debug, info};
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(target_os = "macos")]
+use std::path::{Path, PathBuf};
 
 const SEAT_API_BASE: &str = "https://server.self-serve.windsurf.com";
 

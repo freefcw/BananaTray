@@ -83,6 +83,7 @@ Windsurf
 - `auth_status_key_candidates`
 - `process_markers`
 - `cached_plan_info_key_candidates`
+- `cache_max_age_secs` — 缓存 SQLite 的 mtime 最大可信年龄（秒）
 
 `cache_db_config_relative_path` 是相对系统配置目录的路径：macOS 会解析到
 `~/Library/Application Support/<provider>/...`，Linux 会解析到
@@ -96,6 +97,32 @@ language server 进程发现同时支持 macOS 的 `language_server_macos*`
 
 如果未来出现新的稳定产品差异，优先考虑继续加到 spec。
 只有当差异本质上属于 provider 自己的 orchestration 或云端 source 时，才应放回 facade。
+
+## 缓存陈旧检测
+
+`cache_source::read_refresh_data` 在打开 SQLite 之前会从候选 DB 中选择第一份新鲜 cache：
+如果较高优先级候选存在但已陈旧，会继续尝试后面的候选路径。所有存在的候选都超出
+`spec.cache_max_age_secs` 时，才返回 `ProviderError::Unavailable`，避免上游把
+language server 长期未运行后的旧快照当作真实配额上报。
+
+mtime 取 `state.vscdb`、`state.vscdb-wal`、`state.vscdb-journal` 三者中**最新的**：
+SQLite WAL 模式下新写入先到 `-wal`，主 DB 文件 mtime 在 checkpoint 之前可能远落后，
+只看主文件会把"还在活跃写入"的 cache 误判为 stale。
+
+availability 语义刻意拆成两层：
+
+- `cache_source::is_available()` 表示本地 quota cache source 可用，要求 DB 存在且新鲜。
+- `cache_source::has_cache_db()` 只表示存在可尝试读取 auth / apiKey 的 DB。Windsurf
+  provider-level `check_availability()` 使用这一层，让 seat API 不会被陈旧 quota 快照阻断。
+
+进入解析后还有第二道闸：
+
+- `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Windsurf）
+- `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Windsurf）
+
+两条路径都对单条 quota 的 `reset_at_unix` 做 `<= now` 判断：reset 时间已过 →
+服务端已经重置配额，缓存的 `remaining_fraction` 是过期数据，统一视为 100% 剩余
+并清除倒计时。两道闸的语义互补：mtime 闸防"整体快照过老"，reset 闸防"个别配额到期"。
 
 ## 测试
 

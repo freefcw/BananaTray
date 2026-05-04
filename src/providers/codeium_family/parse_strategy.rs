@@ -124,17 +124,26 @@ impl ParseStrategy for CacheParseStrategy {
         let mut quotas = Vec::new();
 
         if let Some(model_configs) = user_status.model_configs {
+            let now_ts = chrono::Utc::now().timestamp();
             for model_config in model_configs.configs {
                 let label = model_config.label.clone();
 
                 if let Some(quota_info) = model_config.quota_info {
                     let remaining_fraction = quota_info.remaining_fraction.unwrap_or(0.0);
-                    let used_percent = (1.0 - remaining_fraction) * 100.0;
-
-                    let reset_detail = quota_info
+                    let reset_at = quota_info
                         .reset_time_wrapper
-                        .and_then(|wrapper| wrapper.reset_time)
-                        .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
+                        .and_then(|wrapper| wrapper.reset_time);
+
+                    // reset 时间已过 → 服务端已重置配额，缓存中的 remaining_fraction
+                    // 是过期数据；视为 100% 剩余，且不再显示倒计时（与 cached_plan 路径一致）。
+                    let is_stale = reset_at.is_some_and(|ts| ts <= now_ts);
+                    let effective_remaining = if is_stale { 1.0 } else { remaining_fraction };
+                    let used_percent = (1.0 - effective_remaining) * 100.0;
+                    let reset_detail = if is_stale {
+                        None
+                    } else {
+                        reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
+                    };
 
                     quotas.push(QuotaInfo::with_details(
                         label.clone(),
@@ -242,5 +251,56 @@ mod tests {
         assert_eq!(plan, Some("Pro".to_string()));
         assert_eq!(quotas.len(), 1);
         assert!((quotas[0].used - 25.0).abs() < 0.01);
+    }
+
+    fn build_proto_payload(remaining: f32, reset_time: i64) -> Vec<u8> {
+        let user_status = ProtoUserStatus {
+            version: 1,
+            display_name: "alice".into(),
+            email: "alice@example.com".into(),
+            model_configs: Some(ProtoModelConfigs {
+                configs: vec![ProtoModelConfig {
+                    label: "model-x".into(),
+                    quota_info: Some(ProtoQuotaInfo {
+                        remaining_fraction: Some(remaining),
+                        reset_time_wrapper: Some(ProtoResetTime {
+                            reset_time: Some(reset_time),
+                        }),
+                    }),
+                }],
+            }),
+            tier: Some(ProtoTierInfo {
+                id: "pro".into(),
+                name: "Pro".into(),
+            }),
+        };
+        user_status.encode_to_vec()
+    }
+
+    #[test]
+    fn test_cache_parse_strategy_fresh_reset_keeps_remaining() {
+        // reset 在未来 → 使用缓存中的 remaining_fraction
+        let future = chrono::Utc::now().timestamp() + 3600;
+        let bytes = build_proto_payload(0.4, future);
+
+        let (quotas, _, _) = CacheParseStrategy.parse(&bytes).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert!((quotas[0].used - 60.0).abs() < 0.01); // 1 - 0.4 = 60% used
+        assert!(matches!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetAt { .. })
+        ));
+    }
+
+    #[test]
+    fn test_cache_parse_strategy_stale_reset_treated_as_full() {
+        // reset 时间已过 → 服务端已重置，缓存的 0.4 是陈旧数据，应视为 100% 剩余
+        let past = chrono::Utc::now().timestamp() - 3600;
+        let bytes = build_proto_payload(0.4, past);
+
+        let (quotas, _, _) = CacheParseStrategy.parse(&bytes).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert!(quotas[0].used.abs() < 0.01); // 0% used = 100% remaining
+        assert!(quotas[0].detail_spec.is_none()); // 不再展示已过期的倒计时
     }
 }
