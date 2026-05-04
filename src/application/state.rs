@@ -76,6 +76,23 @@ impl ProviderStore {
             .collect()
     }
 
+    /// 按设置顺序迭代所有已启用的 Provider
+    ///
+    /// 集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，
+    /// 供 `overview_view_state`、`DBusQuotaSnapshot::from_session` 等多处复用。
+    pub fn enabled_providers<'a>(
+        &'a self,
+        settings: &'a super::super::models::AppSettings,
+    ) -> impl Iterator<Item = &'a ProviderStatus> {
+        let custom_ids = self.custom_provider_ids();
+        // 将 ordered_ids 收集到 Vec，避免 lifetime 问题
+        let ordered: Vec<_> = settings.provider.ordered_provider_ids(&custom_ids);
+        ordered
+            .into_iter()
+            .filter(move |id| settings.provider.is_enabled(id))
+            .filter_map(move |id| self.find_by_id(&id))
+    }
+
     /// 根据新的状态列表同步自定义 Provider（热重载用）
     ///
     /// - 保留所有内置 Provider 状态不变

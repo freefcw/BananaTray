@@ -36,6 +36,8 @@ pub(crate) mod single_instance;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
+#[cfg(target_os = "linux")]
+pub(crate) mod gnome_detect;
 pub(crate) mod logging;
 pub mod paths;
 pub mod system;

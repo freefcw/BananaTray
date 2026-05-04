@@ -277,27 +277,24 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
 // ── Overview 总览 ───────────────────────────────────────────
 
 pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
-    let custom_ids = session.provider_store.custom_provider_ids();
-    let ordered_ids = session.settings.provider.ordered_provider_ids(&custom_ids);
     let display_mode = session.settings.display.quota_display_mode;
 
-    let items: Vec<OverviewItemViewState> = ordered_ids
-        .iter()
-        .filter(|id| session.settings.provider.is_enabled(id))
-        .filter_map(|id| {
-            let provider = session.provider_store.find_by_id(id)?;
+    let items: Vec<OverviewItemViewState> = session
+        .provider_store
+        .enabled_providers(&session.settings)
+        .map(|provider| {
             let icon = provider.icon_asset().to_string();
             let display_name = provider.display_name().to_string();
 
             if !provider.supports_refresh() {
-                return Some(OverviewItemViewState {
-                    id: id.clone(),
+                return OverviewItemViewState {
+                    id: provider.provider_id.clone(),
                     icon,
                     display_name,
                     status: OverviewItemStatus::Error {
                         message: format_non_monitoring_message(provider),
                     },
-                });
+                };
             }
 
             let status = match provider.connection {
@@ -344,12 +341,12 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 }
             };
 
-            Some(OverviewItemViewState {
-                id: id.clone(),
+            OverviewItemViewState {
+                id: provider.provider_id.clone(),
                 icon,
                 display_name,
                 status,
-            })
+            }
         })
         .collect();
 
@@ -357,7 +354,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
 }
 
 /// Overview 紧凑显示文本：根据 display_mode 选择 Remaining/Used 模式
-fn compact_quota_display_text(
+pub(crate) fn compact_quota_display_text(
     quota: &crate::models::QuotaInfo,
     display_mode: crate::models::QuotaDisplayMode,
 ) -> String {

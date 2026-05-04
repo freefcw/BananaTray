@@ -9,7 +9,8 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 包含所有 GPUI-free 的状态定义和计算逻辑：
 
 - **`AppSession`** — 顶层会话状态，组合各子状态
-- **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` 等查询方法
+- **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
+  - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`DBusQuotaSnapshot::from_session` 等多处复用
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
 - **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、Provider picker、NewAPI 表单态，以及全局热键错误及其对应候选值的回填）
 - **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
@@ -76,9 +77,10 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | ViewModel 类型定义（含 `OverviewQuotaItem`）+ 公共 re-export |
+| `mod.rs` | ViewModel 类型定义（含 `OverviewQuotaItem`）+ 公共 re-export（含 D-Bus DTO） |
 | `tray.rs` | 弹窗面板 ViewModel（header / provider detail / nav / global actions） |
 | `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers） |
+| `dbus_dto.rs` | D-Bus JSON DTO（`DBusQuotaSnapshot` 等）+ 格式化函数，跨平台可测试 |
 | `debug.rs` | Debug Tab ViewModel（系统信息、日志捕获、调试刷新） |
 | `format.rs` | 共享格式化函数（时间、百分比、quota 文本） |
 | `*_tests.rs` | 各 selector 的单元测试 |

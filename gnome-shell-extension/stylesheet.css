@@ -1,0 +1,89 @@
+/* BananaTray GNOME Shell Extension — Popup Styles */
+
+/* ── Provider Row ── */
+.bananatray-provider-row {
+    padding: 6px 12px;
+    spacing: 8px;
+}
+
+.bananatray-provider-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.bananatray-provider-name {
+    font-weight: bold;
+    font-size: 11pt;
+}
+
+.bananatray-quota-text {
+    font-size: 10pt;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Status Dots ── */
+.bananatray-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.bananatray-status-green {
+    background-color: #4caf50;
+}
+
+.bananatray-status-yellow {
+    background-color: #ff9800;
+}
+
+.bananatray-status-red {
+    background-color: #f44336;
+}
+
+/* ── Header ── */
+.bananatray-header {
+    padding: 8px 12px;
+    font-weight: bold;
+    font-size: 11pt;
+}
+
+.bananatray-header-status {
+    font-size: 9pt;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Refresh Button ── */
+.bananatray-refresh-button {
+    padding: 4px 8px;
+    font-size: 9pt;
+}
+
+/* ── Footer ── */
+.bananatray-footer {
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bananatray-open-full-view {
+    font-size: 10pt;
+    padding: 6px 12px;
+}
+
+/* ── Scrollable Area ── */
+.bananatray-scrollview {
+    max-height: 350px;
+}
+
+/* ── Loading / Error States ── */
+.bananatray-loading {
+    padding: 16px 12px;
+    font-size: 10pt;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+}
+
+.bananatray-error {
+    padding: 16px 12px;
+    font-size: 10pt;
+    color: #f44336;
+    text-align: center;
+}

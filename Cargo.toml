@@ -88,6 +88,7 @@ block2 = { version = "0.6", optional = true }
 # osascript fallback), so notify-rust is unnecessary. See src/notification.rs.
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify-rust = { version = "4", optional = true }
+zbus = { version = "5", default-features = false, features = ["async-io"] }
 
 [profile.release]
 opt-level = "z"       # 优先优化体积

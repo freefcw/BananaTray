@@ -5,6 +5,8 @@ rust_i18n::i18n!("locales", fallback = "en");
 mod application;
 mod bootstrap;
 mod builtin_provider_manifest;
+#[cfg(target_os = "linux")]
+mod dbus;
 mod i18n;
 pub mod models;
 mod platform;
@@ -76,6 +78,14 @@ fn main() {
 
             // 4. 事件泵
             bootstrap::start_event_pump(&controller.borrow().state, event_rx, cx);
+
+            // 4.5 Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
+            #[cfg(target_os = "linux")]
+            {
+                let dbus_handle =
+                    dbus::start_dbus_service(controller.borrow().state.clone(), cx.to_async());
+                controller.borrow_mut().state.borrow_mut().dbus_handle = dbus_handle;
+            }
 
             // 5. 初始刷新
             bootstrap::trigger_initial_refresh(&controller.borrow().state);

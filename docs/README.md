@@ -24,6 +24,15 @@
 - `logging.md`
   - 日志级别、日志文件位置、调试相关入口。
 
+## Linux 专属模块文档
+
+这些模块仅在 Linux + `app` feature 下编译，详细接口和架构见对应 `README.md`：
+
+- `src/dbus/README.md`
+  - D-Bus 服务架构、线程模型、接口契约（方法/信号/属性）、JSON 快照格式。
+- `gnome-shell-extension/README.md`
+  - GNOME Shell Extension 安装、D-Bus 通信流程、组件架构、排障指南。
+
 ## 参考文档
 
 这些文档仍然描述当前设计思路，但它们是专题参考，不是总体架构契约：
