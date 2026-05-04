@@ -25,4 +25,11 @@ pub use selectors::{
     RefreshTarget, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
+pub(crate) use selectors::{compact_quota_display_text, format_quota_label};
+#[cfg(any(target_os = "linux", test))]
+pub use selectors::{
+    format_connection_status, format_provider_id, format_status_level, DBusHeaderInfo,
+    DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot,
+};
 pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsTab};

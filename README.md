@@ -4,7 +4,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 
 ## Features
 
-- **System tray integration** — left-click opens a compact quota popover; Linux also exposes a right-click Open/Settings/Quit menu fallback
+- **System tray integration** — left-click opens a compact quota popover; Linux offers dual-mode: native GNOME Shell Extension popup (GNOME + extension installed) or ksni SNI fallback with right-click menu
 - **15 AI provider entries** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
@@ -45,6 +45,8 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 - **Notifications**: UNUserNotificationCenter (macOS) / notify-rust (Linux)
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG desktop files (Linux)
+- **D-Bus**: zbus v5 (async-io, smol-compatible) for GNOME Shell Extension IPC (Linux only)
+- **GNOME Shell Extension**: GJS (GNOME JavaScript) — native top bar popup with D-Bus proxy
 
 ## Getting Started
 
@@ -148,7 +150,9 @@ High-level module boundaries:
 - `ui/` — GPUI views and widgets
 - `refresh/` — background scheduling and refresh execution
 - `providers/` — built-in/custom providers and `ProviderManager`
+- `dbus/` — D-Bus service for GNOME Shell Extension (Linux only); zbus interface + signal bridge
 - `platform/` / `tray/` — OS integration and tray lifecycle
+- `gnome-shell-extension/` (project root) — GNOME Shell Extension (GJS): PanelMenu.Button + D-Bus proxy + quota popup
 
 Key design decisions:
 

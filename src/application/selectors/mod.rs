@@ -1,3 +1,5 @@
+#[cfg(any(target_os = "linux", test))]
+mod dbus_dto;
 mod debug;
 mod format;
 mod issue_report;
@@ -259,13 +261,20 @@ pub enum SettingsProviderUsageViewState {
 // Re-exports：保持 `use crate::application::selectors::xxx` 路径不变
 // ============================================================================
 
+#[cfg(any(target_os = "linux", test))]
+pub use dbus_dto::{
+    format_connection_status, format_provider_id, format_status_level, DBusHeaderInfo,
+    DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot,
+};
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
 };
+pub(crate) use format::format_quota_label;
 pub use format::quota_usage_detail_text;
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;
+pub(crate) use tray::compact_quota_display_text;
 pub use tray::{
     header_view_state, overview_view_state, provider_detail_view_state,
     tray_global_actions_view_state,

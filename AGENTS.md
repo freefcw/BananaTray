@@ -56,14 +56,17 @@ src/
                            effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
+  dbus/                  — D-Bus service for GNOME Shell Extension (Linux only, `app` feature); zbus iface + signal bridge
   tray/                  — Tray controller, icon management, multi-display positioning
   platform/              — OS integration; `paths` / `system` / log readers stay lib-safe, `assets` / `single_instance` / `notification` / `auto_launch` are app-only
+                           gnome_detect.rs      — GNOME desktop + extension detection (Linux only)
   icons/                 — SVG assets
   utils/                 — Shared text/time/log helpers
   i18n.rs                — Locale detection and i18n configuration
   settings_store.rs      — Settings JSON persistence
   theme.rs               — GPUI theme tokens and window-appearance integration (`app` feature only)
   theme_tests.rs         — Theme parsing unit tests (`app` feature only)
+gnome-shell-extension/   — GNOME Shell Extension (GJS); PanelMenu.Button + D-Bus proxy + quota popup
 ```
 
 This map is intentionally high-level. File-level structure and public APIs live in each module's `README.md` and in `docs/architecture.md`.
@@ -79,7 +82,7 @@ This map is intentionally high-level. File-level structure and public APIs live 
 - `cargo fmt` + `cargo clippy`
 - Comments in Chinese for domain-specific logic
 - Providers return `ProviderError` variants (not raw strings)
-- Log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`
+- Log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`
 
 ## Reference Docs
 

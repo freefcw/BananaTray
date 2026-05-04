@@ -33,9 +33,16 @@
   - 后台刷新调度与并发执行。
 - `providers/`
   - 内置 / 自定义 provider 实现、共享基础设施、ProviderManager。
+- `dbus/`
+  - D-Bus 服务，供 GNOME Shell Extension 查询配额数据。仅 Linux + `app` feature 下编译。
+  - 对外接口：`DBusServiceHandle`（更新缓存 + 发射信号）+ DTO 类型（re-export 自 `application::selectors::dbus_dto`）。
+  - 线程模型：2 线程（D-Bus 线程运行 zbus ObjectServer，GPUI 主线程通过 foreground executor 消费 action）。
+  - `BananaTrayIface` 不持有 `AppState`（zbus `Interface` 要求 `Send + Sync`，`Rc<RefCell<_>>` 不满足），改用 `Arc<Mutex<String>>` 快照缓存 + channel 通信。
+  - DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨平台可测试），`dbus/serde_types.rs` 仅做 re-export。
 - `platform/`
   - `paths` / `system` / 日志读取器等 lib-safe 平台能力。
   - `assets` / `single_instance` / `notification` / `auto_launch` 属于 app-only 平台适配层，只在 `app` feature 下编译。
+  - `gnome_detect.rs` — GNOME 桌面 + BananaTray 扩展检测（Linux only，需扩展已安装**且已启用**）。
 - `tray/`
   - 托盘控制、弹窗生命周期、图标与定位。
 
@@ -51,6 +58,7 @@
   - refresh 请求通道
   - settings writer
   - 当前日志文件路径
+  - `DBusServiceHandle`（Linux only，用于向 GNOME Shell Extension 发射 D-Bus 信号）
 - `AppSession` 持有：
   - `ProviderStore`
   - `NavigationState`

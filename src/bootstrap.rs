@@ -128,10 +128,35 @@ pub(crate) fn start_event_pump(
                         AppAction::RefreshEventReceived(event),
                         cx,
                     );
+
+                    // Linux: D-Bus 信号发射（reducer 已更新 AppState）
+                    #[cfg(target_os = "linux")]
+                    emit_dbus_signals(&state);
                 });
             }
         })
         .detach();
+}
+
+/// 向 GNOME Shell Extension 发射 D-Bus 信号
+#[cfg(target_os = "linux")]
+fn emit_dbus_signals(state: &Rc<RefCell<AppState>>) {
+    use crate::application::DBusQuotaSnapshot;
+
+    let state_ref = state.borrow();
+    if let Some(handle) = &state_ref.dbus_handle {
+        let snapshot = DBusQuotaSnapshot::from_session(&state_ref.session);
+        match serde_json::to_string(&snapshot) {
+            Ok(json) => {
+                if let Err(e) = handle.emit_refresh_complete(json) {
+                    warn!(target: "dbus", "failed to emit RefreshComplete: {e}");
+                }
+            }
+            Err(e) => {
+                warn!(target: "dbus", "failed to serialize D-Bus snapshot: {e}");
+            }
+        }
+    }
 }
 
 /// 发送初始配置同步 + 启动首次刷新
@@ -161,16 +186,21 @@ pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx:
 
     // Linux: 注册右键菜单和菜单动作回调
     // GNOME AppIndicator 扩展行为：单击 → 菜单，双击 → Activate（打开窗口）
+    // GNOME Shell Extension 模式下跳过菜单安装，由扩展处理交互
     #[cfg(target_os = "linux")]
     {
-        install_linux_tray_menu(cx);
-        let ctrl = controller.clone();
-        cx.on_tray_menu_action(move |id, cx| {
-            info!(target: "tray", "received tray menu action: {}", id);
-            if let Some(command) = command_for_tray_menu_action(&id) {
-                run_tray_command(command, &ctrl, cx);
-            }
-        });
+        if crate::platform::gnome_detect::should_use_gnome_extension() {
+            info!(target: "tray", "GNOME extension mode detected, skipping ksni menu setup");
+        } else {
+            install_linux_tray_menu(cx);
+            let ctrl = controller.clone();
+            cx.on_tray_menu_action(move |id, cx| {
+                info!(target: "tray", "received tray menu action: {}", id);
+                if let Some(command) = command_for_tray_menu_action(&id) {
+                    run_tray_command(command, &ctrl, cx);
+                }
+            });
+        }
     }
 }
 
