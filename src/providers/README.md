@@ -31,7 +31,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderDescriptor`** — static description for registration and UI metadata
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
-- **`ProviderErrorPresenter`** — maps `ProviderError` to `ProviderFailure` + `ErrorKind`; final locale-specific message generation belongs to selector/UI
+- **`ProviderError::to_failure()` / `error_kind()`** — maps provider errors to stable `ProviderFailure` and `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
@@ -53,7 +53,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
 ProviderManager / ProviderManagerHandle form the provider facade used by the rest of the app.
-Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and error presentation helpers are crate-internal implementation details; do not treat their module paths as external API.
+Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` are crate-internal implementation details; do not treat their module paths as external API.
 
 ### `custom/` — YAML-backed Providers
 
@@ -88,7 +88,7 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
   - quota 标题用 `QuotaLabelSpec`
   - quota 第四行详情用 `QuotaDetailSpec`
   - 错误用 `ProviderError` / `ProviderFailure`
-- `src/providers/error_presenter.rs` 负责把 `ProviderError` 降为可持久化的失败语义；`application/selectors/format.rs` 负责最终 i18n 文案。
+- `ProviderError::to_failure()` 负责把 provider 错误降为可持久化的失败语义；`ProviderError::error_kind()` 给刷新状态分类；`application/selectors/format.rs` 负责最终 i18n 文案。
 - 语言切换不应触发 provider refresh；selector 基于最新 locale 即时重算展示字符串。
 - When a provider already knows the user-facing remediation, return a structured `ProviderError`
   directly and keep technical diagnostics in logs instead of `anyhow::Context`.
@@ -144,6 +144,7 @@ Concrete built-in provider modules, `common/`, `custom/`, `codeium_family/`, and
 
 - Providers run on background threads (via `smol::unblock`). They must be `Send + Sync`.
 - HTTP requests should use `crate::providers::common::http_client` (shared ureq agent).
+- Non-interactive CLI providers should use `crate::providers::common::cli`; it shares command lookup and PATH enrichment with the PTY runner through `common::path_resolver`.
 - CLI-based providers should use `crate::providers::common::runner::InteractiveRunner` for PTY-based execution when interactive behavior is required.
 - Return `ProviderError` variants (not raw strings) for structured classification.
 - Do not hide user remediation inside `anyhow::Context`; reserve context for technical details

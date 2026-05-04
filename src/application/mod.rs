@@ -25,8 +25,6 @@ pub use selectors::{
     RefreshTarget, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-#[cfg_attr(any(target_os = "linux", not(feature = "app")), allow(unused_imports))]
-pub(crate) use selectors::{compact_quota_display_text, format_quota_label};
 #[cfg(any(target_os = "linux", test))]
 pub use selectors::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
 pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsTab};

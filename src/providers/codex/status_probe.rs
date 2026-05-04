@@ -14,7 +14,10 @@
 //! CLI fallback 退而其次只给百分比，是合理降级。
 
 use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
-use crate::providers::common::runner::{locate_executable, InteractiveOptions, InteractiveRunner};
+use crate::providers::common::{
+    path_resolver,
+    runner::{InteractiveOptions, InteractiveRunner},
+};
 use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::text_utils;
 use regex::Regex;
@@ -77,10 +80,10 @@ pub(super) fn fetch_via_cli() -> ProviderResult<ParsedUsage> {
 }
 
 /// 快速检查给定 binary 是否可被定位。使用与 `InteractiveRunner::run` 相同的
-/// [`locate_executable`] 规则（PATH + Homebrew/usr 兜底），确保短路判定与真实
-/// spawn 能力一致。
+/// `path_resolver::locate_executable` 规则（PATH + 常见用户/Homebrew/usr 兜底），
+/// 确保短路判定与真实 spawn 能力一致。
 fn ensure_cli_present(binary: &str) -> ProviderResult<()> {
-    if locate_executable(binary).is_err() {
+    if path_resolver::locate_executable(binary).is_none() {
         return Err(ProviderError::cli_not_found(binary));
     }
     Ok(())

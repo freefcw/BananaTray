@@ -116,7 +116,7 @@ impl DBusProviderEntry {
         let visible_quotas = session
             .settings
             .provider
-            .visible_quotas(provider.kind(), &provider.quotas);
+            .visible_quotas(&provider.provider_id, &provider.quotas);
 
         let quotas: Vec<DBusQuotaEntry> = visible_quotas
             .iter()

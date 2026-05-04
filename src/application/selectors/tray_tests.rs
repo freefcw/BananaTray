@@ -377,7 +377,7 @@ fn body_returns_empty_when_all_quotas_hidden() {
     // 隐藏 general 类型的配额
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Gemini, "requests".to_string());
+        .toggle_quota_visibility(&pid(ProviderKind::Gemini), "requests".to_string());
 
     let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
     provider.quotas = vec![QuotaInfo::new("requests", 50.0, 100.0)]; // QuotaType::General

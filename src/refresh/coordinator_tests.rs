@@ -3,8 +3,9 @@ use crate::models::ErrorKind;
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData,
 };
-use crate::providers::error_presenter::ProviderErrorPresenter;
-use crate::providers::{AiProvider, ProviderManager, ProviderManagerHandle, ProviderResult};
+use crate::providers::{
+    AiProvider, ProviderError, ProviderManager, ProviderManagerHandle, ProviderResult,
+};
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -16,72 +17,51 @@ use std::time::Duration;
 
 #[test]
 fn test_classify_error_kind_config_missing() {
-    let error = crate::providers::ProviderError::ConfigMissing {
+    let error = ProviderError::ConfigMissing {
         key: "github_token".to_string(),
     };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::ConfigMissing
-    );
+    assert_eq!(error.error_kind(), ErrorKind::ConfigMissing);
 }
 
 #[test]
 fn test_classify_error_kind_auth_required() {
-    let error = crate::providers::ProviderError::AuthRequired { advice: None };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::AuthRequired
-    );
+    let error = ProviderError::AuthRequired { advice: None };
+    assert_eq!(error.error_kind(), ErrorKind::AuthRequired);
 }
 
 #[test]
 fn test_classify_error_kind_session_expired() {
-    let error = crate::providers::ProviderError::SessionExpired {
+    let error = ProviderError::SessionExpired {
         advice: Some(FailureAdvice::ReloginCli {
             cli: "test-cli".to_string(),
         }),
     };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::AuthRequired
-    );
+    assert_eq!(error.error_kind(), ErrorKind::AuthRequired);
 }
 
 #[test]
 fn test_classify_error_kind_network_error() {
-    let error = crate::providers::ProviderError::Timeout;
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::NetworkError
-    );
+    let error = ProviderError::Timeout;
+    assert_eq!(error.error_kind(), ErrorKind::NetworkError);
 
-    let error = crate::providers::ProviderError::NetworkFailed {
+    let error = ProviderError::NetworkFailed {
         reason: "timeout".to_string(),
     };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::NetworkError
-    );
+    assert_eq!(error.error_kind(), ErrorKind::NetworkError);
 }
 
 #[test]
 fn test_classify_error_kind_unknown() {
-    let error = crate::providers::ProviderError::CliNotFound {
+    let error = ProviderError::CliNotFound {
         cli_name: "claude".to_string(),
     };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::Unknown
-    );
+    assert_eq!(error.error_kind(), ErrorKind::Unknown);
 
-    let error = crate::providers::ProviderError::ParseFailed {
+    let error = ProviderError::ParseFailed {
         advice: None,
         raw_detail: Some("invalid json".to_string()),
     };
-    assert_eq!(
-        ProviderErrorPresenter::to_error_kind(&error),
-        ErrorKind::Unknown
-    );
+    assert_eq!(error.error_kind(), ErrorKind::Unknown);
 }
 
 struct DelayedProvider {

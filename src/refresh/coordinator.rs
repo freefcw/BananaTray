@@ -13,7 +13,6 @@ use std::time::Duration;
 use smol::channel::{Receiver, Sender};
 
 use crate::models::{ProviderId, ProviderSettings};
-use crate::providers::error_presenter::ProviderErrorPresenter;
 use crate::providers::{ProviderError, ProviderManager, ProviderManagerHandle, ProviderResult};
 
 use super::scheduler::RefreshScheduler;
@@ -90,17 +89,17 @@ impl RefreshCoordinator {
                     RefreshOutcome {
                         id,
                         result: RefreshResult::Unavailable {
-                            failure: ProviderErrorPresenter::to_failure(&error),
+                            failure: error.to_failure(),
                         },
                     }
                 }
                 _ => {
                     log::warn!(target: "refresh", "provider {} failed: {}", id, error);
-                    let error_kind = ProviderErrorPresenter::to_error_kind(&error);
+                    let error_kind = error.error_kind();
                     RefreshOutcome {
                         id,
                         result: RefreshResult::Failed {
-                            failure: ProviderErrorPresenter::to_failure(&error),
+                            failure: error.to_failure(),
                             error_kind,
                         },
                     }

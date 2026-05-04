@@ -820,7 +820,7 @@ fn popup_height_all_quotas_hidden_shows_one_card() {
     let mut settings = AppSettings::default();
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+        .toggle_quota_visibility(&pid(ProviderKind::Claude), "session".to_string());
 
     let h = compute_popup_height(&nav, &store, &settings);
     // 全部隐藏时至少预留 1 个卡片高度，dashboard 仍可见

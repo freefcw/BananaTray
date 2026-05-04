@@ -438,15 +438,16 @@ fn set_quota_display_mode_round_trip() {
 #[test]
 fn toggle_quota_visibility_updates_setting_and_produces_effects() {
     let mut session = make_session();
+    let provider_id = pid(ProviderKind::Claude);
     assert!(session
         .settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "session"));
+        .is_quota_visible(&provider_id, "session"));
 
     let effects = reduce(
         &mut session,
         AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
-            kind: ProviderKind::Claude,
+            provider_id: provider_id.clone(),
             quota_key: "session".to_string(),
         }),
     );
@@ -454,7 +455,7 @@ fn toggle_quota_visibility_updates_setting_and_produces_effects() {
     assert!(!session
         .settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "session"));
+        .is_quota_visible(&provider_id, "session"));
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -465,28 +466,29 @@ fn toggle_quota_visibility_updates_setting_and_produces_effects() {
 #[test]
 fn toggle_quota_visibility_round_trip() {
     let mut session = make_session();
+    let provider_id = pid(ProviderKind::Claude);
 
     reduce(
         &mut session,
         AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
-            kind: ProviderKind::Claude,
+            provider_id: provider_id.clone(),
             quota_key: "weekly".to_string(),
         }),
     );
     assert!(!session
         .settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "weekly"));
+        .is_quota_visible(&provider_id, "weekly"));
 
     reduce(
         &mut session,
         AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
-            kind: ProviderKind::Claude,
+            provider_id,
             quota_key: "weekly".to_string(),
         }),
     );
     assert!(session
         .settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "weekly"));
+        .is_quota_visible(&pid(ProviderKind::Claude), "weekly"));
 }

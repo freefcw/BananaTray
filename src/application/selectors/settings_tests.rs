@@ -162,7 +162,7 @@ fn settings_detail_builds_quota_visibility_from_stable_key() {
     // 隐藏 session 类型配额
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+        .toggle_quota_visibility(&pid(ProviderKind::Claude), "session".to_string());
 
     let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
     provider.quotas = vec![

@@ -110,10 +110,7 @@ fn settings_provider_detail_view_state(
                     QuotaVisibilityItem {
                         label: format_quota_label(q),
                         quota_key: quota_key.clone(),
-                        visible: session
-                            .settings
-                            .provider
-                            .is_quota_visible(id.kind(), &quota_key),
+                        visible: session.settings.provider.is_quota_visible(id, &quota_key),
                     }
                 })
                 .collect()

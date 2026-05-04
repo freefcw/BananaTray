@@ -1,5 +1,9 @@
 use super::*;
 
+fn builtin(kind: ProviderKind) -> ProviderId {
+    ProviderId::BuiltIn(kind)
+}
+
 // ── ProviderConfig 核心逻辑测试 ──────────────────────
 
 #[test]
@@ -89,15 +93,15 @@ fn provider_config_ordered_providers_ignores_invalid() {
 #[test]
 fn provider_config_quota_visibility() {
     let mut config = ProviderConfig::default();
-    assert!(config.is_quota_visible(ProviderKind::Claude, "session"));
+    assert!(config.is_quota_visible(&builtin(ProviderKind::Claude), "session"));
 
-    config.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
-    assert!(!config.is_quota_visible(ProviderKind::Claude, "session"));
+    config.toggle_quota_visibility(&builtin(ProviderKind::Claude), "session".to_string());
+    assert!(!config.is_quota_visible(&builtin(ProviderKind::Claude), "session"));
     // 其他 provider 不受影响
-    assert!(config.is_quota_visible(ProviderKind::Gemini, "session"));
+    assert!(config.is_quota_visible(&builtin(ProviderKind::Gemini), "session"));
 
-    config.toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
-    assert!(config.is_quota_visible(ProviderKind::Claude, "session"));
+    config.toggle_quota_visibility(&builtin(ProviderKind::Claude), "session".to_string());
+    assert!(config.is_quota_visible(&builtin(ProviderKind::Claude), "session"));
 }
 
 #[test]
@@ -212,10 +216,10 @@ fn hidden_quotas_default_all_visible() {
     let settings = AppSettings::default();
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "session"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "session"));
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "model:Opus"));
 }
 
 #[test]
@@ -223,24 +227,24 @@ fn toggle_quota_visibility_hides_then_shows() {
     let mut settings = AppSettings::default();
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "model:Opus"));
 
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+        .toggle_quota_visibility(&builtin(ProviderKind::Claude), "model:Opus".to_string());
     assert!(!settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "model:Opus"));
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "model:Sonnet"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "model:Sonnet"));
 
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Claude, "model:Opus".to_string());
+        .toggle_quota_visibility(&builtin(ProviderKind::Claude), "model:Opus".to_string());
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "model:Opus"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "model:Opus"));
 }
 
 #[test]
@@ -248,14 +252,28 @@ fn hidden_quotas_isolated_per_provider() {
     let mut settings = AppSettings::default();
     settings
         .provider
-        .toggle_quota_visibility(ProviderKind::Claude, "session".to_string());
+        .toggle_quota_visibility(&builtin(ProviderKind::Claude), "session".to_string());
 
     assert!(!settings
         .provider
-        .is_quota_visible(ProviderKind::Claude, "session"));
+        .is_quota_visible(&builtin(ProviderKind::Claude), "session"));
     assert!(settings
         .provider
-        .is_quota_visible(ProviderKind::Gemini, "session"));
+        .is_quota_visible(&builtin(ProviderKind::Gemini), "session"));
+}
+
+#[test]
+fn hidden_quotas_isolated_between_custom_providers() {
+    let mut settings = AppSettings::default();
+    let first = ProviderId::Custom("first:newapi".to_string());
+    let second = ProviderId::Custom("second:newapi".to_string());
+
+    settings
+        .provider
+        .toggle_quota_visibility(&first, "session".to_string());
+
+    assert!(!settings.provider.is_quota_visible(&first, "session"));
+    assert!(settings.provider.is_quota_visible(&second, "session"));
 }
 
 // ── ordered_provider_ids ──────────────────────────────

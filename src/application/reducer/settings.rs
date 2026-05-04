@@ -124,11 +124,14 @@ pub(super) fn apply_setting_change(
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.display.quota_display_mode = mode;
         }
-        SettingChange::ToggleQuotaVisibility { kind, quota_key } => {
+        SettingChange::ToggleQuotaVisibility {
+            provider_id,
+            quota_key,
+        } => {
             session
                 .settings
                 .provider
-                .toggle_quota_visibility(kind, quota_key);
+                .toggle_quota_visibility(&provider_id, quota_key);
         }
     }
 
