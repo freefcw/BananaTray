@@ -54,6 +54,30 @@ const GRACE_PERIOD: Duration = Duration::from_millis(600);
 #[cfg(target_os = "linux")]
 const LINUX_AUTO_HIDE_RECHECK_PADDING: Duration = Duration::from_millis(50);
 
+struct PopupPlacement {
+    bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
+    #[cfg(target_os = "linux")]
+    layer_shell: Option<gpui::LayerShellOptions>,
+}
+
+impl PopupPlacement {
+    fn new(bounds: Bounds<Pixels>, display_id: Option<DisplayId>) -> Self {
+        Self {
+            bounds,
+            display_id,
+            #[cfg(target_os = "linux")]
+            layer_shell: None,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn with_layer_shell(mut self, layer_shell: gpui::LayerShellOptions) -> Self {
+        self.layer_shell = Some(layer_shell);
+        self
+    }
+}
+
 impl Default for PopupActivationTracker {
     fn default() -> Self {
         Self {
@@ -318,11 +342,7 @@ impl TrayController {
     fn ensure_popup_visible(_handle: WindowHandle<crate::ui::AppView>, _cx: &mut App) {}
 
     #[cfg(target_os = "linux")]
-    fn saved_popup_bounds(
-        &self,
-        cx: &App,
-        window_size: Size<Pixels>,
-    ) -> Option<(Bounds<Pixels>, Option<DisplayId>)> {
+    fn saved_popup_bounds(&self, cx: &App, window_size: Size<Pixels>) -> Option<PopupPlacement> {
         let saved = self
             .state
             .borrow()
@@ -353,7 +373,8 @@ impl TrayController {
             bounds.origin.x,
             bounds.origin.y,
         );
-        Some((bounds, Some(display.id())))
+        let layer_shell = gpui::LayerShellOptions::from_window_bounds(display.bounds(), bounds);
+        Some(PopupPlacement::new(bounds, Some(display.id())).with_layer_shell(layer_shell))
     }
 
     #[cfg(target_os = "linux")]
@@ -516,20 +537,11 @@ impl TrayController {
     /// 计算弹窗的首选位置和目标显示器。
     ///
     /// 优先级：
-    /// 1. Linux: 用户拖动后的上次位置
-    /// 2. macOS: `tray_icon_anchor()`（系统原生锚点）
-    /// 3. Linux: `tray_anchor_for_position()`（从 SNI 点击坐标构造锚点）
+    /// 1. `tray_icon_anchor()`（macOS 原生锚点；Linux 若上游提供也可复用）
+    /// 2. Linux: `tray_anchor_for_position()`（从 SNI 点击坐标构造锚点）
+    /// 3. Linux: 用户拖动后的上次位置
     /// 4. fallback: TopRight（Linux）/ Center（macOS）
-    fn preferred_window_bounds(
-        &self,
-        cx: &App,
-        window_size: Size<Pixels>,
-    ) -> (Bounds<Pixels>, Option<DisplayId>) {
-        #[cfg(target_os = "linux")]
-        if let Some(saved) = self.saved_popup_bounds(cx, window_size) {
-            return saved;
-        }
-
+    fn preferred_window_bounds(&self, cx: &App, window_size: Size<Pixels>) -> PopupPlacement {
         // 优先使用系统原生锚点（macOS 始终可用）
         if let Some(anchor) = cx
             .tray_icon_anchor()
@@ -544,11 +556,24 @@ impl TrayController {
             );
 
             let display_id = anchor.display_id;
-            let position = WindowPosition::TrayAnchored(anchor);
-            return (
-                cx.compute_window_bounds(window_size, &position),
-                Some(display_id),
-            );
+            let position = WindowPosition::TrayAnchored(anchor.clone());
+            let bounds = cx.compute_window_bounds(window_size, &position);
+            let placement = PopupPlacement::new(bounds, Some(display_id));
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(display) = cx
+                    .displays()
+                    .into_iter()
+                    .find(|display| display.id() == display_id)
+                {
+                    return placement.with_layer_shell(gpui::LayerShellOptions::tray_panel(
+                        display.bounds(),
+                        &anchor,
+                        window_size,
+                    ));
+                }
+            }
+            return placement;
         }
 
         // Linux: 用 SNI 点击坐标构造近似锚点
@@ -566,11 +591,29 @@ impl TrayController {
             );
 
             let display_id = anchor.display_id;
-            let position = WindowPosition::TrayAnchored(anchor);
-            return (
-                cx.compute_window_bounds(window_size, &position),
-                Some(display_id),
-            );
+            let position = WindowPosition::TrayAnchored(anchor.clone());
+            let bounds = cx.compute_window_bounds(window_size, &position);
+            let placement = PopupPlacement::new(bounds, Some(display_id));
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(display) = cx
+                    .displays()
+                    .into_iter()
+                    .find(|display| display.id() == display_id)
+                {
+                    return placement.with_layer_shell(gpui::LayerShellOptions::tray_panel(
+                        display.bounds(),
+                        &anchor,
+                        window_size,
+                    ));
+                }
+            }
+            return placement;
+        }
+
+        #[cfg(target_os = "linux")]
+        if let Some(saved) = self.saved_popup_bounds(cx, window_size) {
+            return saved;
         }
 
         debug!(target: "tray", "tray anchor unavailable and no click position, using fallback");
@@ -591,16 +634,24 @@ impl TrayController {
                     "fallback TopRight on display {:?}: origin=({:.1},{:.1})",
                     display.id(), bounds.origin.x, bounds.origin.y,
                 );
-                return (bounds, Some(display.id()));
+                #[cfg(target_os = "linux")]
+                {
+                    let layer_shell =
+                        gpui::LayerShellOptions::from_window_bounds(display.bounds(), bounds);
+                    return PopupPlacement::new(bounds, Some(display.id()))
+                        .with_layer_shell(layer_shell);
+                }
+                #[cfg(not(target_os = "linux"))]
+                return PopupPlacement::new(bounds, Some(display.id()));
             }
             // 连 displays() 都为空（不太可能），最终 fallback
-            (
+            PopupPlacement::new(
                 Bounds::new(gpui::point(px(0.0), px(0.0)), window_size),
                 None,
             )
         } else {
             let position = WindowPosition::Center;
-            (cx.compute_window_bounds(window_size, &position), None)
+            PopupPlacement::new(cx.compute_window_bounds(window_size, &position), None)
         }
     }
 
@@ -608,15 +659,15 @@ impl TrayController {
         let dynamic_height = self.state.borrow().session.popup_height();
         info!(target: "tray", "opening window with dynamic height: {}px", dynamic_height);
         let window_size = size(px(crate::models::PopupLayout::WIDTH), px(dynamic_height));
-        let (bounds, display_id) = self.preferred_window_bounds(cx, window_size);
+        let placement = self.preferred_window_bounds(cx, window_size);
         let kind = Self::preferred_window_kind();
 
         info!(
             target: "tray",
             "popup bounds: origin=({:.1},{:.1}) size=({:.0}x{:.0}), display={:?}",
-            bounds.origin.x, bounds.origin.y,
-            bounds.size.width, bounds.size.height,
-            display_id,
+            placement.bounds.origin.x, placement.bounds.origin.y,
+            placement.bounds.size.width, placement.bounds.size.height,
+            placement.display_id,
         );
 
         let state = self.state.clone();
@@ -625,13 +676,14 @@ impl TrayController {
             kind,
             focus: true,
             show: true,
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            display_id,
+            window_bounds: Some(WindowBounds::Windowed(placement.bounds)),
+            display_id: placement.display_id,
             ..Default::default()
         };
         #[cfg(target_os = "linux")]
         {
             options.window_background = gpui::WindowBackgroundAppearance::Transparent;
+            options.layer_shell = placement.layer_shell;
         }
 
         let result = cx.open_window(options, |_window, cx| {
