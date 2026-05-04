@@ -58,6 +58,28 @@ source orchestration 目前明确分开：
 3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
 4. 所有来源都失败时返回结构化错误
 
+本地 cache 回退之前会做两道陈旧检查：
+
+- **mtime 闸**：`cache_source::read_refresh_data` 会遍历 cache DB 候选路径，选择第一份
+  新鲜 cache。单个 DB 的新鲜度取 `state.vscdb`、`state.vscdb-wal`、
+  `state.vscdb-journal` 三者中**最新的 mtime**作为 cache 实际活跃时间，超过
+  `spec.cache_max_age_secs`（Antigravity / Windsurf 当前都是 3 小时）即视为该候选
+  整体快照不可信，并继续尝试后续候选；所有存在的候选都陈旧时才返回 `Unavailable`。
+  之所以要看 sidecar：VS Code/Electron 系 SQLite 走 WAL 模式，新写入先到 `-wal`，
+  主 DB 文件 mtime 在 checkpoint 之前可能远落后；只看主文件会把"还在活跃写入"的
+  cache 误判为 stale。
+- **reset 闸**：单条 quota 的 `reset_at_unix` 已过 → 服务端已经重置，缓存的
+  `remaining_fraction` 是过期数据，统一视为 100% 剩余并清除倒计时。
+
+`cache_source::is_available()` 与 `read_refresh_data()` 共用同一道 mtime 闸，避免本地
+quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Windsurf 的
+provider-level `check_availability()` 还会单独接受"存在 cache DB"这个更弱条件，因为
+seat API 只需要从 DB 中读取 apiKey，不应该被陈旧 quota 快照阻断。
+
+因此用户可见行为是：缓存"还新但部分配额到期"→ 自动归零；缓存"整体太老"→
+直接 unavailable，由上层显示为无数据，而不是误报。Stale 错误信息会带上具体路径、
+age、阈值与"打开 IDE 一次以刷新本地缓存"的行动建议。
+
 这里的关键不是“两个 provider 完全相同”，而是“它们共享同一套本地 source primitive，但各自保留自己的 orchestration 边界”。
 
 ## Stable Difference Dimensions
@@ -69,6 +91,7 @@ source orchestration 目前明确分开：
 - auth status key 候选
 - 进程参数 / 路径 marker
 - dashboard URL
+- 本地 cache 最大可信年龄（`cache_max_age_secs`）
 
 本地 cache DB 路径会按平台解析：macOS 使用
 `~/Library/Application Support/<provider>/...`，Linux 使用

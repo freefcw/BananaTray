@@ -20,6 +20,9 @@ impl AiProvider for WindsurfProvider {
     }
 
     async fn check_availability(&self) -> ProviderResult<()> {
+        if codeium_family::has_cache_db(&WINDSURF_SPEC) {
+            return Ok(());
+        }
         Ok(codeium_family::classify_unavailable(&WINDSURF_SPEC)?)
     }
 

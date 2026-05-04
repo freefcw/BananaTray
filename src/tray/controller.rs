@@ -3,6 +3,8 @@
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
 
 use crate::application::AppAction;
+#[cfg(target_os = "linux")]
+use crate::models::SavedWindowPosition;
 use crate::models::{AppSettings, NavTab};
 use crate::runtime::schedule_open_settings_window;
 use crate::runtime::AppState;
@@ -620,7 +622,7 @@ impl TrayController {
         );
 
         let state = self.state.clone();
-        let options = WindowOptions {
+        let mut options = WindowOptions {
             titlebar: None,
             kind,
             focus: true,

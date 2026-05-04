@@ -381,6 +381,7 @@ mod tests {
                 "/antigravity.app/",
             ],
             cached_plan_info_key_candidates: &[],
+            cache_max_age_secs: 0,
         }
     }
 

@@ -143,6 +143,7 @@ mod tests {
             auth_status_key_candidates: &["windsurfAuthStatus"],
             process_markers: &[],
             cached_plan_info_key_candidates: &[],
+            cache_max_age_secs: 0,
         }
     }
 
