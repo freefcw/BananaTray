@@ -35,7 +35,7 @@
 ## 3. 破局之道与最终解决方案
 
 ### 步骤1：锁死物理布局的“换行膨胀”变量
-为了让 `CARD_HEIGHT` 的函数完全严格线性单调，不允许渲染层私自增加行高，我们在 `src/app/widgets/quota_bar.rs` 给有可能爆长的第一行 Label 和各项数值强制添加了：
+为了让 `CARD_HEIGHT` 的函数完全严格线性单调，不允许渲染层私自增加行高，我们在当前 `src/ui/widgets/quota_bar.rs` 给有可能爆长的第一行 Label 和各项数值强制添加了：
 ```rust
 div()
     .flex_shrink_1()

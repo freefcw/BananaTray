@@ -49,9 +49,12 @@ src/
   main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup (`main.rs` requires `app` feature)
   lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
+                           selectors/           — GPUI-free ViewModel / D-Bus DTO / issue-report selectors
+                           reducer/             — reducer domain slices; top-level reducer.rs only dispatches actions
   models/                — Core data types and settings domain models (GPUI-free)
                            settings/            — User preferences with nested sub-structures
   ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
+                           settings_window/providers/ — Settings Providers tab sidebar/detail/picker/NewAPI/token panels
   runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配
                            effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
@@ -76,13 +79,15 @@ This map is intentionally high-level. File-level structure and public APIs live 
 1. **GPUI isolation** — GPUI proc macros crash `cargo test`. Pure logic lives in GPUI-free modules (`application/state.rs`, `models/`). The app shell and its runtime-only dependencies are behind `cfg(feature = "app")`; `--no-default-features` only exists for `lib`-layer checks/tests.
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
+4. **Provider identity boundary** — built-in provider settings/state keys come from `ProviderKind::id_key()` via `ProviderId::BuiltIn` (e.g. `codex`, `windsurf`). `ProviderDescriptor.id` is a registration/dedup/source descriptor and may include suffixes such as `codex:api`; do not persist built-in settings under descriptor IDs. Custom providers persist their YAML `id` through `ProviderId::Custom`.
 
 ## Code Conventions
 
 - `cargo fmt` + `cargo clippy`
 - Comments in Chinese for domain-specific logic
 - Providers return `ProviderError` variants (not raw strings)
-- Log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`
+- Primary log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`; focused helper targets such as `"http"` / `"notification"` / `"single_instance"` may appear for subsystem diagnostics.
+- When a setting affects background refresh credentials, synchronize through `RefreshRequest::UpdateConfig` and `AiProvider::sync_provider_credentials()`; foreground settings UI state is not the refresh runtime state.
 
 ## Reference Docs
 
