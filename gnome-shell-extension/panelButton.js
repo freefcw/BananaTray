@@ -7,6 +7,7 @@ import St from 'gi://St';
 
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
+import {_} from './i18n.js';
 import {QuotaClient} from './quotaClient.js';
 import {normalizeStatusLevel, summarizeProviders} from './quotaPresentation.js';
 import {BananaTrayProviderRow, createLabel, createStatusDot} from './quotaWidgets.js';
@@ -36,8 +37,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this.add_child(this._panelBox);
 
         this._client = new QuotaClient({
-            onReady: () => this._showLoading('Loading quota data'),
-            onVanished: () => this._showLoading('BananaTray daemon not running', 'red', 'Offline'),
+            onReady: () => this._showLoading(_('Loading quota data')),
+            onVanished: () => this._showLoading(_('BananaTray daemon not running'), 'red', _('Offline')),
             onSnapshot: snapshot => this._updateAllRows(snapshot),
             onError: (logMessage, uiMessage) => this._handleClientError(logMessage, uiMessage),
         });
@@ -76,7 +77,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
             x_expand: true,
         }, false);
         this._statusLabel = createLabel({
-            text: 'Waiting for daemon',
+            text: _('Waiting for daemon'),
             style_class: 'bananatray-header-status',
             x_expand: true,
         });
@@ -93,8 +94,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
             }),
         });
         this._refreshButton.connect('clicked', () => {
-            this._setPanelState('yellow', 'Refreshing');
-            this._statusLabel.text = 'Refreshing';
+            this._setPanelState('yellow', _('Refreshing'));
+            this._statusLabel.text = _('Refreshing');
             this._client.refreshAll();
         });
         headerBox.add_child(this._refreshButton);
@@ -122,7 +123,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this.menu.box.add_child(this._scrollView);
 
         this._messageLabel = createLabel({
-            text: 'Waiting for BananaTray daemon',
+            text: _('Waiting for BananaTray daemon'),
             style_class: 'bananatray-loading',
             x_expand: true,
         });
@@ -134,7 +135,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         });
         const openSettingsButton = new St.Button({
             style_class: 'bananatray-open-settings',
-            label: 'Open Settings',
+            label: _('Open Settings'),
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
         });
@@ -170,7 +171,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
             this._providerList.add_child(new BananaTrayProviderRow(provider));
 
         if (providers.length === 0) {
-            this._showMessage('No enabled providers', 'bananatray-loading');
+            this._showMessage(_('No enabled providers'), 'bananatray-loading');
             return;
         }
 
@@ -181,9 +182,9 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
     _rebuildSummary(summary) {
         this._summaryBox.destroy_all_children();
-        this._summaryBox.add_child(this._createSummaryCell('Providers', String(summary.total)));
-        this._summaryBox.add_child(this._createSummaryCell('Connected', String(summary.connected)));
-        this._summaryBox.add_child(this._createSummaryCell('Attention', String(summary.attention), summary.attention > 0));
+        this._summaryBox.add_child(this._createSummaryCell(_('Providers'), String(summary.total)));
+        this._summaryBox.add_child(this._createSummaryCell(_('Connected'), String(summary.connected)));
+        this._summaryBox.add_child(this._createSummaryCell(_('Attention'), String(summary.attention), summary.attention > 0));
     }
 
     _createSummaryCell(label, value, attention = false) {
@@ -211,16 +212,16 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._panelSummaryLabel.text = text || 'BT';
     }
 
-    _showLoading(text, level = 'yellow', panelText = 'Waiting') {
-        this._statusLabel.text = text || 'Loading';
+    _showLoading(text, level = 'yellow', panelText = _('Waiting')) {
+        this._statusLabel.text = text || _('Loading');
         this._setPanelState(level, panelText);
-        this._showMessage(text || 'Loading', 'bananatray-loading');
+        this._showMessage(text || _('Loading'), 'bananatray-loading');
     }
 
     _showError(text) {
-        this._statusLabel.text = text || 'Error';
-        this._setPanelState('red', 'Error');
-        this._showMessage(text || 'Error', 'bananatray-error');
+        this._statusLabel.text = text || _('Error');
+        this._setPanelState('red', _('Error'));
+        this._showMessage(text || _('Error'), 'bananatray-error');
     }
 
     _showMessage(text, styleClass) {
