@@ -18,20 +18,20 @@ pub(super) struct ParsedUsage {
 /// 10080 分钟 = weekly。免费套餐只有 weekly 窗口，API 可能把它返回在 `primary_window`
 /// 字段内，此时必须按 `window_minutes` 分类，而不是盲目按字段位置。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowRole {
+pub(super) enum WindowRole {
     Session,
     Weekly,
 }
 
 impl WindowRole {
-    fn label_spec(self) -> QuotaLabelSpec {
+    pub(super) fn label_spec(self) -> QuotaLabelSpec {
         match self {
             WindowRole::Session => QuotaLabelSpec::Session,
             WindowRole::Weekly => QuotaLabelSpec::Weekly,
         }
     }
 
-    fn quota_type(self) -> QuotaType {
+    pub(super) fn quota_type(self) -> QuotaType {
         match self {
             WindowRole::Session => QuotaType::Session,
             WindowRole::Weekly => QuotaType::Weekly,
@@ -39,13 +39,21 @@ impl WindowRole {
     }
 }
 
-/// 根据 `limit_window_seconds` 判断窗口角色；若缺失或异常则回退到给定的默认角色。
-fn resolve_role(limit_window_seconds: Option<i64>, default_role: WindowRole) -> WindowRole {
-    match limit_window_seconds.map(|s| s / 60) {
+/// 根据窗口分钟数判断窗口角色；若缺失或异常则回退到给定的默认角色。
+pub(super) fn resolve_role_from_minutes(
+    window_minutes: Option<i64>,
+    default_role: WindowRole,
+) -> WindowRole {
+    match window_minutes {
         Some(300) => WindowRole::Session,
         Some(10080) => WindowRole::Weekly,
         _ => default_role,
     }
+}
+
+/// 根据 `limit_window_seconds` 判断窗口角色；若缺失或异常则回退到给定的默认角色。
+fn resolve_role(limit_window_seconds: Option<i64>, default_role: WindowRole) -> WindowRole {
+    resolve_role_from_minutes(limit_window_seconds.map(|s| s / 60), default_role)
 }
 
 fn build_window_quota(window: &serde_json::Value, default_role: WindowRole) -> QuotaInfo {

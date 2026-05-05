@@ -2,6 +2,7 @@ mod auth;
 mod client;
 mod config;
 mod parser;
+mod rpc_probe;
 mod status_probe;
 
 use super::{AiProvider, ProviderError, ProviderResult};
@@ -95,8 +96,10 @@ impl AiProvider for CodexProvider {
 
 /// OAuth 调用 + CLI 兑底的统一获取入口。
 ///
-/// OAuth 失败且判定为可恢复时才调用 [`status_probe::fetch_via_cli`]；
-/// CLI 也失败时优先返回原始 OAuth 错误（诊断价值更高）。
+/// OAuth 失败且判定为可恢复时才进入 CLI 兑底。CLI 兑底优先使用
+/// `codex app-server` JSON-RPC，因为它返回结构化 rate limit 数据，不依赖 TUI
+/// 文案、ANSI 或终端布局；只有 RPC 不可用/失败时才退回 PTY `/status` 文本解析。
+/// 两层 CLI 都失败时优先返回原始 OAuth 错误（诊断价值更高）。
 fn obtain_parsed_usage(
     credentials: &mut CodexCredentials,
     usage_url: &str,
@@ -106,20 +109,39 @@ fn obtain_parsed_usage(
         Err(oauth_err) if should_fallback_to_cli(&oauth_err) => {
             log::info!(
                 target: "providers",
-                "Codex OAuth path failed ({oauth_err}); falling back to `codex /status`"
+                "Codex OAuth path failed ({oauth_err}); falling back to `codex app-server` RPC"
             );
-            match status_probe::fetch_via_cli() {
+            match fetch_via_cli_fallbacks() {
                 Ok(parsed) => Ok(parsed),
                 Err(cli_err) => {
                     log::warn!(
                         target: "providers",
-                        "Codex CLI fallback also failed: {cli_err}"
+                        "Codex CLI fallbacks also failed: {cli_err}"
                     );
                     Err(ProviderError::classify(&oauth_err))
                 }
             }
         }
         Err(e) => Err(ProviderError::classify(&e)),
+    }
+}
+
+fn fetch_via_cli_fallbacks() -> ProviderResult<ParsedUsage> {
+    match rpc_probe::fetch_via_rpc() {
+        Ok(parsed) => Ok(parsed),
+        Err(rpc_err) => {
+            log::warn!(
+                target: "providers",
+                "Codex app-server RPC fallback failed: {rpc_err}; trying PTY `/status`"
+            );
+            status_probe::fetch_via_cli().map_err(|pty_err| {
+                log::warn!(
+                    target: "providers",
+                    "Codex PTY `/status` fallback failed after RPC error ({rpc_err}): {pty_err}"
+                );
+                pty_err
+            })
+        }
     }
 }
 
