@@ -7,7 +7,10 @@ EXT_DIR="gnome-shell-extension"
 required_files=(
   "metadata.json"
   "extension.js"
+  "panelButton.js"
   "quotaClient.js"
+  "quotaPresentation.js"
+  "quotaWidgets.js"
   "stylesheet.css"
   "icons/bananatray-symbolic.svg"
 )
@@ -26,21 +29,29 @@ else
   trap 'rm -rf "$tmp_dir"' EXIT
 
   cp "$EXT_DIR/extension.js" "$tmp_dir/extension.mjs"
+  cp "$EXT_DIR/panelButton.js" "$tmp_dir/panelButton.js"
   cp "$EXT_DIR/quotaClient.js" "$tmp_dir/quotaClient.js"
+  cp "$EXT_DIR/quotaPresentation.js" "$tmp_dir/quotaPresentation.js"
+  cp "$EXT_DIR/quotaWidgets.js" "$tmp_dir/quotaWidgets.js"
   cp scripts/gnome-extension-mock-daemon.js "$tmp_dir/gnome-extension-mock-daemon.mjs"
 
   node --check "$tmp_dir/extension.mjs"
+  node --check "$tmp_dir/panelButton.js"
   node --check "$tmp_dir/quotaClient.js"
+  node --check "$tmp_dir/quotaPresentation.js"
+  node --check "$tmp_dir/quotaWidgets.js"
   node --check "$tmp_dir/gnome-extension-mock-daemon.mjs"
 fi
 
 if command -v rg >/dev/null 2>&1; then
   sync_matches=$(rg -n 'RemoteSync|GetAllQuotasSync|RefreshAllSync|OpenSettingsSync' "$EXT_DIR" scripts/gnome-extension-mock-daemon.js || true)
-  import_matches=$(rg -n "from './quotaClient\\.js';" "$EXT_DIR/extension.js" || true)
+  entry_import_matches=$(rg -n "from './panelButton\\.js';" "$EXT_DIR/extension.js" || true)
+  client_import_matches=$(rg -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
   schema_matches=$(rg -n 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
 else
   sync_matches=$(grep -RInE 'RemoteSync|GetAllQuotasSync|RefreshAllSync|OpenSettingsSync' "$EXT_DIR" scripts/gnome-extension-mock-daemon.js || true)
-  import_matches=$(grep -n "from './quotaClient\\.js';" "$EXT_DIR/extension.js" || true)
+  entry_import_matches=$(grep -n "from './panelButton\\.js';" "$EXT_DIR/extension.js" || true)
+  client_import_matches=$(grep -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
   schema_matches=$(grep -RIn 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
 fi
 
@@ -51,8 +62,13 @@ if [[ -n "$sync_matches" ]]; then
   exit 1
 fi
 
-if [[ -z "$import_matches" ]]; then
-  echo "error: extension.js must import ./quotaClient.js" >&2
+if [[ -z "$entry_import_matches" ]]; then
+  echo "error: extension.js must import ./panelButton.js" >&2
+  exit 1
+fi
+
+if [[ -z "$client_import_matches" ]]; then
+  echo "error: panelButton.js must import ./quotaClient.js" >&2
   exit 1
 fi
 

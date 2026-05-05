@@ -21,7 +21,10 @@ STATUS_ONLY=false
 required_files=(
     "metadata.json"
     "extension.js"
+    "panelButton.js"
     "quotaClient.js"
+    "quotaPresentation.js"
+    "quotaWidgets.js"
     "stylesheet.css"
     "icons/bananatray-symbolic.svg"
 )

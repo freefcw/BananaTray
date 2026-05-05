@@ -57,14 +57,14 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 | `GetSnapshot` / `Refresh` / `OpenSettings` / `Updated` | 当前为 `GetAllQuotas` / `RefreshAll` / `OpenSettings` / `RefreshComplete` | 已实现但命名不同 |
 | 新增 `linux-dbus` feature | 未新增独立 feature；`zbus` 只在非 macOS target dependency 中声明，模块由 Linux + `app` 使用 | 已用现有 feature 策略覆盖 |
 | GNOME 上跳过传统托盘绘制 | 当前 GNOME Extension 已启用且 `State: ACTIVE` 时完全跳过 GPUI/KSNI 托盘 bootstrap、点击回调和菜单安装，避免空 StatusNotifierItem 占位；`OUT OF DATE` / 加载失败时保留传统托盘 fallback | 已实现 |
-| Extension 使用 `PanelMenu.Button` | `gnome-shell-extension/extension.js` 已实现 `BananaTrayIndicator` | 已实现 |
+| Extension 使用 `PanelMenu.Button` | `gnome-shell-extension/panelButton.js` 已实现 `BananaTrayIndicator`，`extension.js` 只保留生命周期入口 | 已实现 |
 | Extension 监听 daemon 上线/下线 | 使用 `Gio.bus_watch_name()` 监听 `com.bananatray.Daemon` | 已实现 |
 | 初始快照读取 | 使用异步 proxy 构造后调用 `GetAllQuotasAsync()` | 已实现 |
 | 手动刷新 | 刷新按钮调用 `RefreshAllAsync()`，返回当前缓存并等待后续 `RefreshComplete` 推送 | 已实现 |
 | 打开设置窗口 | Footer 按钮调用 `OpenSettingsAsync()`，Rust 侧转发到 GPUI 主线程 | 已实现 |
 | 实时刷新 | Extension 连接 `RefreshComplete` 信号并重建 Provider 行 | 已实现 |
-| Popup 内用量条形图 | 当前是状态点 + Provider 名称 + 主配额文本，尚未画条形图 | 待增强 |
-| 拆分 `panelButton.js` / `quotaClient.js` | D-Bus/protocol 已拆到 `quotaClient.js`；UI row/panel 仍在 `extension.js` | 部分实现 |
+| Popup 内用量条形图 | 当前已显示每个 quota 的文本和进度条，后续可增强交互和细节表达 | 已实现，仍可增强 |
+| 拆分 `panelButton.js` / `quotaClient.js` | 已拆为 `extension.js` 生命周期入口、`panelButton.js` 面板控制器、`quotaClient.js` 协议层、`quotaPresentation.js` 展示纯函数和 `quotaWidgets.js` 行组件 | 已实现 |
 | systemd user service + D-Bus activation | 当前应用运行时主动 request name，Extension 只 watch name；未提供 DBus activation 文件 | 待增强 |
 | 打包发布到 e.g.o / zip | 当前有 `metadata.json` 和 README 安装说明，未提供打包脚本和 e.g.o 发布清单 | 待增强 |
 | Extension 端 i18n | 当前 Extension 文案仍是英文硬编码 | 待增强 |
@@ -79,11 +79,11 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 - D-Bus JSON 快照补充 `schema_version`，Extension 在渲染前拒绝不支持版本或缺少必填字段的数据。
 - Rust 端 Extension 模式检测改为要求 `gnome-extensions info` 同时满足 `Enabled: Yes` 和 `State: ACTIVE`；扩展 `OUT OF DATE` 或加载失败时继续保留 KSNI/AppIndicator fallback，避免面板入口完全消失。
 - 扩展元数据声明兼容 GNOME Shell 45-50。
+- Extension GJS 已拆出生命周期入口、PanelMenu 控制器、D-Bus client、展示纯函数和行组件；安装脚本与静态检查同步校验新增模块，避免手工安装漏复制。
 
 ## 5. 仍需完善的问题
 
-- **UI 表达仍偏 MVP**：当前只显示主配额文本，未实现计划中的条形图或多配额展开。
-- **Extension UI 组件仍集中在 `extension.js`**：D-Bus client 已拆出，但随着图表、i18n、错误态继续增长，应继续拆出 row/panel 组件。
+- **UI 表达仍可增强**：当前已显示多 quota 文本和进度条，但还没有展开交互、趋势图或更细的错误恢复提示。
 - **启动激活未完成**：还没有 systemd user service / D-Bus activation 文件，daemon 不运行时扩展只能显示等待状态。
 - **GJS 缺少 GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
 - **发布流程未闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
@@ -91,11 +91,10 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 
 ## 6. 推荐后续顺序
 
-1. 拆出 row/panel 组件，让 `extension.js` 只保留生命周期装配。
-2. 在 PopupMenu 中增加配额条形图，同时保留当前文本作为可读 fallback。
-3. 增加 systemd user service / D-Bus activation 示例，解决 daemon 未运行时的启动体验。
-4. 为 Extension 增加 i18n 和打包脚本，再评估 e.g.o 发布。
-5. 评估 nested GNOME Shell 自动化测试，覆盖 Extension 加载和 mock daemon 数据刷新。
+1. 增加 systemd user service / D-Bus activation 示例，解决 daemon 未运行时的启动体验。
+2. 为 Extension 增加 i18n 和打包脚本，再评估 e.g.o 发布。
+3. 评估 nested GNOME Shell 自动化测试，覆盖 Extension 加载和 mock daemon 数据刷新。
+4. 增强 PopupMenu 的交互表达，例如展开、趋势和更具体的错误恢复提示。
 
 ## 7. 关联文档
 

@@ -2,8 +2,8 @@
 #
 # Run BananaTray's GNOME Shell Extension in a nested Wayland GNOME Shell.
 #
-# This avoids logging out of the real desktop while iterating on extension.js,
-# stylesheet.css, and D-Bus UI behavior.
+# This avoids logging out of the real desktop while iterating on extension
+# modules, stylesheet.css, and D-Bus UI behavior.
 
 set -euo pipefail
 
