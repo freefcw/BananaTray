@@ -1,5 +1,7 @@
 // 展示层纯函数：归一化 D-Bus 快照字段并生成面板/列表摘要。
 
+import {_, ngettext} from './i18n.js';
+
 const STATUS_ORDER = {
     green: 0,
     yellow: 1,
@@ -40,16 +42,28 @@ export function providerVisualLevel(provider) {
 export function statusBadgeLabel(level) {
     switch (level) {
     case 'red':
-        return 'OUT';
+        // Translators: quota status badge shown when quota is exhausted.
+        return _('OUT');
     case 'yellow':
-        return 'LOW';
+        // Translators: quota status badge shown when quota is low but not exhausted.
+        return _('LOW');
     default:
-        return 'OK';
+        // Translators: quota status badge shown when quota usage is healthy.
+        return _('OK');
     }
 }
 
 export function connectionLabel(connection) {
-    return CONNECTION_LABELS[normalizeConnection(connection)];
+    switch (normalizeConnection(connection)) {
+    case 'connected':
+        return _('Connected');
+    case 'refreshing':
+        return _('Refreshing');
+    case 'error':
+        return _('Error');
+    default:
+        return _('Disconnected');
+    }
 }
 
 export function quotaRatio(quota) {
@@ -92,8 +106,8 @@ export function summarizeProviders(providers) {
         disconnected: 0,
         attention: 0,
         worstLevel: 'green',
-        panelText: 'No providers',
-        headerText: 'No enabled providers',
+        panelText: _('No providers'),
+        headerText: _('No enabled providers'),
     };
 
     let worstProvider = null;
@@ -125,23 +139,49 @@ export function summarizeProviders(providers) {
     if (summary.total === 0)
         return summary;
 
-    summary.headerText = `${summary.total} providers · ${summary.connected} connected`;
+    const headerParts = [
+        formatProviderCount(summary.total),
+        formatConnectedCount(summary.connected),
+    ];
     if (summary.refreshing > 0)
-        summary.headerText += ` · ${summary.refreshing} refreshing`;
+        headerParts.push(formatRefreshingCount(summary.refreshing));
     if (summary.error > 0)
-        summary.headerText += ` · ${summary.error} error`;
+        headerParts.push(formatErrorCount(summary.error));
     if (summary.disconnected > 0)
-        summary.headerText += ` · ${summary.disconnected} offline`;
+        headerParts.push(formatOfflineCount(summary.disconnected));
+    summary.headerText = headerParts.join(' · ');
 
     if (summary.worstLevel === 'green') {
-        summary.panelText = `${summary.connected}/${summary.total} OK`;
+        summary.panelText = _('%(connected)d/%(total)d OK')
+            .replace('%(connected)d', summary.connected)
+            .replace('%(total)d', summary.total);
     } else if (worstProvider) {
         const primaryQuota = sortedQuotas(worstProvider)[0];
-        const name = worstProvider.display_name || worstProvider.id || 'Provider';
+        const name = worstProvider.display_name || worstProvider.id || _('Provider');
         summary.panelText = primaryQuota
             ? `${name} ${primaryQuota.display_text}`
             : `${name} ${connectionLabel(worstProvider.connection)}`;
     }
 
     return summary;
+}
+
+function formatProviderCount(count) {
+    return ngettext('%d provider', '%d providers', count).replace('%d', count);
+}
+
+function formatConnectedCount(count) {
+    return ngettext('%d connected', '%d connected', count).replace('%d', count);
+}
+
+function formatRefreshingCount(count) {
+    return ngettext('%d refreshing', '%d refreshing', count).replace('%d', count);
+}
+
+function formatErrorCount(count) {
+    return ngettext('%d error', '%d errors', count).replace('%d', count);
+}
+
+function formatOfflineCount(count) {
+    return ngettext('%d offline', '%d offline', count).replace('%d', count);
 }

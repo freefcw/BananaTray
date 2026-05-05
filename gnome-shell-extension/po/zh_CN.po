@@ -1,0 +1,124 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: BananaTray GNOME Shell Extension 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/bananatray/bananatray/issues\n"
+"POT-Creation-Date: 2026-05-05 00:00+0000\n"
+"PO-Revision-Date: 2026-05-05 00:00+0000\n"
+"Last-Translator: BananaTray contributors\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "AI coding assistant quota monitor"
+msgstr "AI 编码助手配额监控器"
+
+msgid "Attention"
+msgstr "需关注"
+
+msgid "BananaTray daemon not running"
+msgstr "BananaTray 后台服务未运行"
+
+msgid "Cached data"
+msgstr "缓存数据"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Disconnected"
+msgstr "已断开"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "Failed to connect to BananaTray daemon"
+msgstr "无法连接 BananaTray 后台服务"
+
+msgid "Failed to fetch quota data"
+msgstr "无法获取配额数据"
+
+msgid "Invalid quota data from BananaTray daemon"
+msgstr "BananaTray 后台服务返回了无效配额数据"
+
+# Translators: quota status badge shown when quota is low but not exhausted.
+msgid "LOW"
+msgstr "低"
+
+msgid "Loading"
+msgstr "加载中"
+
+msgid "Loading quota data"
+msgstr "正在加载配额数据"
+
+msgid "No enabled providers"
+msgstr "没有启用的 Provider"
+
+msgid "No providers"
+msgstr "没有 Provider"
+
+msgid "No quota data available"
+msgstr "暂无配额数据"
+
+# Translators: quota status badge shown when quota usage is healthy.
+msgid "OK"
+msgstr "正常"
+
+# Translators: quota status badge shown when quota is exhausted.
+msgid "OUT"
+msgstr "耗尽"
+
+msgid "Offline"
+msgstr "离线"
+
+msgid "Open Settings"
+msgstr "打开设置"
+
+msgid "Provider"
+msgstr "Provider"
+
+# Translators: summary metric label for the total number of providers.
+msgid "Providers"
+msgstr "Provider 数"
+
+msgid "Quota"
+msgstr "配额"
+
+msgid "Refreshing"
+msgstr "刷新中"
+
+msgid "Refreshing quota data"
+msgstr "正在刷新配额数据"
+
+msgid "Waiting"
+msgstr "等待中"
+
+msgid "Waiting for BananaTray daemon"
+msgstr "正在等待 BananaTray 后台服务"
+
+msgid "Waiting for daemon"
+msgstr "正在等待后台服务"
+
+msgid "%(connected)d/%(total)d OK"
+msgstr "%(connected)d/%(total)d 正常"
+
+msgid "%d connected"
+msgid_plural "%d connected"
+msgstr[0] "%d 个已连接"
+
+msgid "%d error"
+msgid_plural "%d errors"
+msgstr[0] "%d 个错误"
+
+msgid "%d offline"
+msgid_plural "%d offline"
+msgstr[0] "%d 个离线"
+
+msgid "%d provider"
+msgid_plural "%d providers"
+msgstr[0] "%d 个 Provider"
+
+msgid "%d refreshing"
+msgid_plural "%d refreshing"
+msgstr[0] "%d 个刷新中"

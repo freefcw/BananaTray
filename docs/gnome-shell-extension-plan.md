@@ -67,7 +67,7 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 | 拆分 `panelButton.js` / `quotaClient.js` | 已拆为 `extension.js` 生命周期入口、`panelButton.js` 面板控制器、`quotaClient.js` 协议层、`quotaPresentation.js` 展示纯函数和 `quotaWidgets.js` 行组件 | 已实现 |
 | systemd user service + D-Bus activation | 当前应用运行时主动 request name，Extension 只 watch name；未提供 DBus activation 文件 | 待增强 |
 | 打包发布到 e.g.o / zip | 当前有 `metadata.json` 和 README 安装说明，未提供打包脚本和 e.g.o 发布清单 | 待增强 |
-| Extension 端 i18n | 当前 Extension 文案仍是英文硬编码 | 待增强 |
+| Extension 端 i18n | `metadata.json` 声明 `gettext-domain: "bananatray"`，UI 文案通过 `i18n.js` 的 `_()` 翻译，已提供 `po/zh_CN.po` 和运行时 `locale/zh_CN/LC_MESSAGES/bananatray.mo` | 已实现 |
 | 图标资源复用 | 当前面板入口使用状态点，不加载 `src/icons/` SVG | 待增强 |
 
 ## 4. 本次审计后的修正
@@ -80,6 +80,7 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 - Rust 端 Extension 模式检测改为要求 `gnome-extensions info` 同时满足 `Enabled: Yes` 和 `State: ACTIVE`；扩展 `OUT OF DATE` 或加载失败时继续保留 KSNI/AppIndicator fallback，避免面板入口完全消失。
 - 扩展元数据声明兼容 GNOME Shell 45-50。
 - Extension GJS 已拆出生命周期入口、PanelMenu 控制器、D-Bus client、展示纯函数和行组件；安装脚本与静态检查同步校验新增模块，避免手工安装漏复制。
+- Extension UI 文案已接入独立 gettext domain，并把简体中文 `.po/.mo` 纳入安装文件与静态检查。
 
 ## 5. 仍需完善的问题
 
@@ -87,14 +88,14 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 - **启动激活未完成**：还没有 systemd user service / D-Bus activation 文件，daemon 不运行时扩展只能显示等待状态。
 - **GJS 缺少 GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
 - **发布流程未闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
-- **i18n 未覆盖 Extension**：GNOME Shell UI 文案仍未接入独立 gettext domain。
+- **i18n 语言覆盖仍少**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
 
 ## 6. 推荐后续顺序
 
 1. 增加 systemd user service / D-Bus activation 示例，解决 daemon 未运行时的启动体验。
-2. 为 Extension 增加 i18n 和打包脚本，再评估 e.g.o 发布。
+2. 增加 Extension zip 打包脚本和 e.g.o 发布材料。
 3. 评估 nested GNOME Shell 自动化测试，覆盖 Extension 加载和 mock daemon 数据刷新。
-4. 增强 PopupMenu 的交互表达，例如展开、趋势和更具体的错误恢复提示。
+4. 补充更多 locale，并增强 PopupMenu 的交互表达，例如展开、趋势和更具体的错误恢复提示。
 
 ## 7. 关联文档
 

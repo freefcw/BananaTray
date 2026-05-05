@@ -5,6 +5,7 @@ import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
+import {_} from './i18n.js';
 import {
     connectionLabel,
     normalizeConnection,
@@ -82,7 +83,7 @@ class BananaTrayQuotaRow extends St.BoxLayout {
         });
 
         topLine.add_child(createLabel({
-            text: quota.label || quota.quota_type_key || 'Quota',
+            text: quota.label || quota.quota_type_key || _('Quota'),
             style_class: 'bananatray-quota-label',
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
@@ -160,7 +161,7 @@ class BananaTrayProviderRow extends St.BoxLayout {
     _providerMeta(provider, connection) {
         const parts = [];
         if (connection === 'error' && provider.quotas?.length > 0)
-            parts.push('Cached data');
+            parts.push(_('Cached data'));
         if (provider.account_email)
             parts.push(provider.account_email);
         if (provider.account_tier)
@@ -173,7 +174,7 @@ class BananaTrayProviderRow extends St.BoxLayout {
         const quotas = sortedQuotas(provider);
         if (quotas.length === 0) {
             this.add_child(createLabel({
-                text: connection === 'refreshing' ? 'Refreshing quota data' : 'No quota data available',
+                text: connection === 'refreshing' ? _('Refreshing quota data') : _('No quota data available'),
                 style_class: 'bananatray-provider-empty',
                 x_expand: true,
             }));

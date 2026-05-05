@@ -1,5 +1,7 @@
 import Gio from 'gi://Gio';
 
+import {_} from './i18n.js';
+
 export const DBUS_ID = 'com.bananatray.Daemon';
 export const DBUS_PATH = '/com/bananatray/Daemon';
 export const SUPPORTED_SCHEMA_VERSION = 1;
@@ -128,7 +130,7 @@ export class QuotaClient {
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
                 return;
-            this._emitError(`GetAllQuotas failed: ${e.message}`, 'Failed to fetch quota data');
+            this._emitError(`GetAllQuotas failed: ${e.message}`, _('Failed to fetch quota data'));
         }
     }
 
@@ -187,12 +189,12 @@ export class QuotaClient {
                         return;
 
                     if (error !== null) {
-                        this._emitError(`failed to create D-Bus proxy: ${error.message}`, 'Failed to connect to BananaTray daemon');
+                        this._emitError(`failed to create D-Bus proxy: ${error.message}`, _('Failed to connect to BananaTray daemon'));
                         return;
                     }
 
                     if (proxy === null) {
-                        this._emitError('D-Bus proxy initialization returned null', 'Failed to connect to BananaTray daemon');
+                        this._emitError('D-Bus proxy initialization returned null', _('Failed to connect to BananaTray daemon'));
                         return;
                     }
 
@@ -204,7 +206,7 @@ export class QuotaClient {
                 Gio.DBusProxyFlags.NONE,
             );
         } catch (e) {
-            this._emitError(`failed to create D-Bus proxy: ${e.message}`, 'Failed to connect to BananaTray daemon');
+            this._emitError(`failed to create D-Bus proxy: ${e.message}`, _('Failed to connect to BananaTray daemon'));
         }
     }
 
@@ -228,7 +230,7 @@ export class QuotaClient {
         try {
             this._emitSnapshot(parseSnapshot(jsonData));
         } catch (e) {
-            this._emitError(`RefreshComplete parse error: ${e.message}`, 'Invalid quota data from BananaTray daemon');
+            this._emitError(`RefreshComplete parse error: ${e.message}`, _('Invalid quota data from BananaTray daemon'));
         }
     }
 
