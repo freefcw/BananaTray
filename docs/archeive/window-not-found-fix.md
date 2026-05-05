@@ -38,8 +38,8 @@
 
 | 文件 | 行号 | 上下文 |
 |------|------|--------|
-| `src/app.rs` | 1682 | `update_window_id()` — 通过 WindowId 更新窗口时窗口不存在 |
-| `src/app.rs` | 2495 | `read_window()` — 读取窗口时窗口不存在 |
+| `adabraka-gpui` crate 的 `app.rs` | 1682 | `update_window_id()` — 通过 WindowId 更新窗口时窗口不存在 |
+| `adabraka-gpui` crate 的 `app.rs` | 2495 | `read_window()` — 读取窗口时窗口不存在 |
 | `src/window.rs` | 4793 | 窗口相关操作 |
 
 核心是 `update_window_id` 方法：
@@ -120,8 +120,8 @@ T+1.2s+ 每个后续刷新事件重复触发 → 连续错误
 | `TrayController::toggle_provider` | main.rs | 左键点击 tray icon 切换 |
 | `TrayController::show_settings` | main.rs | 右键点击 tray icon |
 | auto-hide observer | main.rs | 窗口失焦自动关闭 |
-| settings icon button | app/mod.rs | popup 内点击设置图标 |
-| "Open Settings" button | provider_panel.rs | provider 面板内打开设置 |
+| settings icon button | 当前 `src/ui/widgets/global_actions.rs` | popup 内点击设置图标 |
+| "Open Settings" button | 当前 `src/ui/views/provider_panel.rs` | provider 面板内打开设置 |
 
 5 条路径，修复前**无一清理 `view_entity`**。
 
@@ -206,8 +206,8 @@ Layer 3: AppView::Drop        — 兜底安全网（任何未覆盖的路径）
 | 文件 | 变更内容 |
 |------|----------|
 | `src/main.rs` | 新增 `close_popup()` 方法；重构 `toggle_provider`/`show_settings` 使用它；auto-hide 回调增加清理 |
-| `src/app/mod.rs` | settings icon button 回调增加清理；新增 `AppView::Drop` 实现 |
-| `src/app/provider_panel.rs` | "Open Settings" button 回调增加清理 |
+| `src/ui/views/app_view.rs` / `src/ui/widgets/global_actions.rs` | settings icon button 回调清理；`AppView::Drop` 安全网 |
+| `src/ui/views/provider_panel.rs` | "Open Settings" button 回调清理 |
 
 ## 5. 测试验证
 
@@ -302,7 +302,7 @@ fern::Dispatch::new()
 ```
 00:00:39.316 [INFO] settings     existing settings window found, attempting to activate it
 00:00:39.316 [INFO] settings     existing handle is stale, clearing
-00:00:39.320 [ERROR] bananatray::panic panic at src/app/settings_window/window_mgr.rs:163:
+00:00:39.320 [ERROR] bananatray::panic panic at src/runtime/settings_window_opener.rs:163:
     RefCell already borrowed
 ```
 
@@ -360,7 +360,7 @@ let activated_existing = if let Some(handle) = existing_handle {
 | 文件 | 变更内容 |
 |------|----------|
 | `src/logging.rs` | 新增 `.filter()` 过滤空 target 的 ERROR 日志 |
-| `src/app/settings_window/window_mgr.rs` | 修复 `SETTINGS_WINDOW` RefCell 双重借用 |
+| `src/runtime/settings_window_opener.rs` | 修复 `SETTINGS_WINDOW` RefCell 双重借用 |
 
 ---
 

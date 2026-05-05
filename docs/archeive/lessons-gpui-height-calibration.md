@@ -160,6 +160,7 @@ pub const DASHBOARD_ROW_HEIGHT: f32 = 44.0;  // 代码中显式定义
 ## 5. 相关文件
 
 - `src/models/layout.rs` — 布局常量定义和高度计算函数
-- `src/app/mod.rs` — `compute_popup_height()` 调用点
-- `src/app/widgets/quota_bar.rs` — quota 卡片渲染（含 whitespace_nowrap 修复）
-- `docs/ui_layout_troubleshooting.md` — 原始排查过程记录
+- `src/application/state.rs` — `compute_popup_height()` 纯逻辑入口
+- `src/ui/views/app_view.rs` — popup render 中读取 `AppSession::popup_height()` 并调整窗口高度
+- `src/ui/widgets/quota_bar.rs` — quota 卡片渲染（含 whitespace_nowrap 修复）
+- `docs/archeive/ui_layout_troubleshooting.md` — 原始排查过程记录

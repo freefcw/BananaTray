@@ -60,13 +60,16 @@ Debug Tab 当前提供这些与日志相关的能力：
 
 ## Common Targets
 
-代码中约定的常见 target 包括：
+代码中最常用于排查主流程的 target 包括：
 
 - `app`
 - `tray`
 - `refresh`
 - `providers`
 - `settings`
+- `dbus`
+
+另外还有一些聚焦子系统的辅助 target，例如 `http`、`notification`、`single_instance`、`auto_launch`、`interactive_runner`、`providers::custom`。这些用于更细的局部诊断，不代表稳定的顶层模块边界。
 
 排查问题时，优先按 target 过滤日志，而不是只看 message 文本。
 

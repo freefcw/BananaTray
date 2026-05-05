@@ -28,13 +28,13 @@ Provider abstraction layer and all 14 AI provider implementations.
   - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
 - **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
 - **`sync_provider_credentials()`** — optional `AiProvider` hook used by the background refresh runtime. `RefreshRequest::UpdateConfig` carries the latest `ProviderConfig::credentials`; `RefreshCoordinator` syncs them into `ProviderManager` before refresh and after provider reload. TokenInput providers whose refresh path uses app-managed overrides must store a thread-safe snapshot here.
-- **`ProviderDescriptor`** — static description for registration and UI metadata
+- **`ProviderDescriptor`** — static description for registration and UI metadata. For built-in providers, `descriptor().id` is a registration/dedup/source descriptor and may include suffixes such as `codex:api`; settings/state routing uses `ProviderId::BuiltIn(kind)` and `ProviderKind::id_key()` instead. For custom providers, the YAML `id` is persisted as `ProviderId::Custom`.
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
 - **`ProviderError::to_failure()` / `error_kind()`** — maps provider errors to stable `ProviderFailure` and `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
-- **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
+- **`docs/archeive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`src/builtin_provider_manifest.rs`** — single compile-time manifest for built-in providers; feeds both `ProviderKind` generation and built-in registration
 - **`register_providers!`** macro — consumes the manifest to declare private built-in provider modules and generate crate-internal `register_all()` function
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
@@ -64,22 +64,22 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 
 ## Provider Implementations
 
-| File | Provider | ID | Capability | Data Source | Notes |
-|------|----------|-----|------------|-------------|-------|
-| `claude/` | Claude | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
-| `gemini/` | Gemini | `gemini` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, and syncs `github_token` into a runtime snapshot for refresh |
-| `codex/` | Codex | `codex` | `Monitorable` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
-| `kimi/` | Kimi | `kimi` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
-| `amp.rs` | Amp | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
-| `cursor/` | Cursor | `cursor` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
-| `antigravity/` | Antigravity | `antigravity` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
-| `windsurf.rs` | Windsurf | `windsurf` | `Monitorable` | Seat API + local language server API + local cache | Provider facade owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
-| `minimax/` | MiniMax | `minimax` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
-| `kiro.rs` | Kiro | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
-| `kilo.rs` | Kilo | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
-| `opencode.rs` | OpenCode | `opencode:cli` | `Placeholder` | CLI detection | Discoverable entry only; no normal refresh |
-| `vertex_ai.rs` | Vertex AI | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
+| File | Provider | Settings key | Descriptor ID | Capability | Data Source | Notes |
+|------|----------|--------------|---------------|------------|-------------|-------|
+| `claude/` | Claude | `claude` | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources |
+| `gemini/` | Gemini | `gemini` | `gemini:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
+| `copilot/` | Copilot | `copilot` | `copilot:api` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, and syncs `github_token` into a runtime snapshot for refresh |
+| `codex/` | Codex | `codex` | `codex:api` | `Monitorable` | ChatGPT API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; `refresh()` reloads credentials after each token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` always reflect the latest state |
+| `kimi/` | Kimi | `kimi` | `kimi:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
+| `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
+| `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
+| `windsurf.rs` | Windsurf | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
+| `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
+| `kiro.rs` | Kiro | `kiro` | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
+| `kilo.rs` | Kilo | `kilo` | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
+| `opencode.rs` | OpenCode | `opencode` | `opencode:cli` | `Placeholder` | CLI detection | Discoverable entry only; no normal refresh |
+| `vertex_ai.rs` | Vertex AI | `vertexai` | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
 
 ## Design Notes
 
@@ -150,3 +150,4 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 - Do not hide user remediation inside `anyhow::Context`; reserve context for technical details
   that stay in logs/debugging paths.
 - The `descriptor().metadata.kind` must match the `ProviderKind` variant — `ProviderManager::register()` asserts this.
+- Do not persist built-in settings under `descriptor().id`; use `ProviderId::BuiltIn(kind).id_key()` / `ProviderKind::id_key()` for settings, ordering, sidebar, refresh requests, and hidden quota state.

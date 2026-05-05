@@ -10,7 +10,7 @@
 **触发条件**：
 - 使用 `adabraka-gpui` 0.5.1 版本
 - 编译包含 `#[cfg(test)]` 模块的代码
-- 特别是 `src/app/mod.rs` 中包含 GPUI 宏（如 `impl Render`）的文件
+- 特别是当前 `src/ui/views/app_view.rs` 这类包含 GPUI 宏（如 `impl Render`）的文件
 
 **错误堆栈特征**：
 ```
@@ -32,7 +32,7 @@ libadabraka_gpui_macros ... syn4stmt7parsing34 ... parse_within
 ### 触发代码模式
 
 ```rust
-// src/app/mod.rs
+// 当前对应位置：src/ui/views/app_view.rs
 #[cfg(test)]  // <-- 这个测试模块触发问题
 mod tests {
     use super::*;  // 导入包含 GPUI Render 实现的模块
@@ -101,14 +101,14 @@ path = "src/main.rs"
 
 use bananatray::models::{...};
 
-// 测试代码（从 src/app/mod.rs 迁移）
+// 测试代码（当时从 UI render 文件迁移；当前纯逻辑测试位于 src/application/state_tests.rs）
 #[test]
 fn store_find_existing() { ... }
 ```
 
 #### 4. 清理原文件中的测试
 
-删除 `src/app/mod.rs` 中的 `#[cfg(test)]` 模块。
+删除 UI render 文件中的 `#[cfg(test)]` 模块；当前对应纯逻辑测试位于 `src/application/state_tests.rs`。
 
 #### 5. 更新 pre-commit 配置
 
@@ -193,7 +193,7 @@ cargo test --all-targets  # 测试是否修复
 
 ~~当 bug 修复后，可以：~~
 1. ~~删除 `tests/state_tests.rs`~~ → **已完成 (2026-04-13)**
-2. ~~将测试代码迁回 `src/app/mod.rs`~~ → 已迁入 `src/application/state_tests.rs`
+2. ~~将测试代码迁回 UI render 文件~~ → 已迁入 `src/application/state_tests.rs`
 3. ~~恢复 pre-commit 配置为 `--all-targets`~~ → pre-commit 已更新为 `cargo test --lib`
 
 ### 避免回归

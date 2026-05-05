@@ -5,13 +5,13 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover; Linux offers dual-mode: native GNOME Shell Extension popup (GNOME + extension installed) or ksni SNI fallback with right-click menu
-- **15 AI provider entries** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files (14 built-in + YAML custom providers)
+- **14 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
 - **Single instance** — second launch focuses the existing window via IPC
 - **Launch at login** — macOS (SMAppService) and Linux (XDG autostart)
-- **Global hotkey** — fixed `Cmd+Shift+S` shortcut toggles the popover
+- **Global hotkey** — configurable shortcut toggles the popover; defaults to `cmd-shift-s` on macOS and `super-shift-s` on Linux
 
 ## Supported Providers
 
@@ -25,7 +25,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Amp** | CLI (`amp usage`) | Monitorable | Full quota refresh |
 | **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Monitorable | Full quota refresh |
 | **Antigravity** | Local language server API + local cache | Monitorable | Full quota refresh |
-| **Windsurf** | Local language server API + local cache | Monitorable | Full quota refresh |
+| **Windsurf** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
 | **Kiro** | CLI (`kiro-cli` interactive PTY) | Monitorable | Full quota refresh |
 | **Kilo** | Extension detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |

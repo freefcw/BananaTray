@@ -48,12 +48,12 @@
 
 ## 历史文档
 
-历史材料统一放在 `archive/` 下；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
+历史材料目前统一放在 legacy 目录 `archeive/` 下（保留历史拼写）；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
 
-- `archive/gpui-sigbus-bug.md`
-- `archive/window-not-found-fix.md`
-- `archive/provider/provider-refactor-retrospective.md`
-- `archive/`
+- `archeive/gpui-sigbus-bug.md`
+- `archeive/window-not-found-fix.md`
+- `archeive/provider/provider-refactor-retrospective.md`
+- `archeive/`
 
 ## 建议阅读顺序
 

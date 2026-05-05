@@ -1,25 +1,24 @@
 > Historical document. This file is kept for traceability and may not reflect the current architecture, paths, or module boundaries.
 现状判断
 
-  src/app 的代码有很明显的共性：
+  当前 UI / application / runtime 分层（历史版本写作时为旧 `app` 模块）的代码有很明显的共性：
 
-  - 以 GPUI DSL 方式组织界面，模块按“页面/区域/组件”拆分，结构是清晰的，比如 src/app/app_view.rs:20、src/app/settings_window/mod.rs、src/app/widgets/mod.rs。
-  - 已经有“纯逻辑抽离”的意识，provider_logic.rs 和根层 app_state.rs 不依赖 GPUI，这是当前最接近 CLEAN 的部分：src/app/provider_logic.rs、src/app_state.rs:1。
-  - 状态驱动是统一的，AppState 作为共享中心，UI 通过 Rc<RefCell<AppState>> 读取/修改状态，然后 window.refresh() 或 cx.notify() 触发刷新：src/app/app_state.rs:25。
+  - 以 GPUI DSL 方式组织界面，模块按“页面/区域/组件”拆分，结构是清晰的，比如当前 `src/ui/views/app_view.rs`、`src/ui/settings_window/mod.rs`、`src/ui/widgets/mod.rs`。
+  - 已经有“纯逻辑抽离”的意识，`src/application/state.rs` 和 `src/models/` 不依赖 GPUI，这是当前最接近 CLEAN 的部分。
+  - 状态驱动是统一的，当前 `runtime::AppState` 作为共享中心，UI 通过 `Rc<RefCell<AppState>>` 读取/修改状态，然后 `ContextEffect::Render` 或 view notify 触发刷新。
 
-  src/app 的特性也很明确：
+  当前 UI / application / runtime 分层的特性也很明确：
 
   - 托盘弹窗和设置窗口共享同一份业务状态，但有各自的临时 UI 状态。
   - provider 是核心业务轴，导航、详情、设置都围绕 ProviderKind 展开。
-  - 后台刷新是事件驱动的，RefreshCoordinator -> AppState.apply_refresh_event() 这条链路已经成型：src/app/app_state.rs:113、src/main.rs:285。
+  - 后台刷新是事件驱动的，`RefreshCoordinator -> AppAction::ApplyRefreshResult -> application/reducer` 这条链路已经成型，入口集中在 `src/application/reducer/refresh.rs` 和 `src/runtime/effects/refresh.rs`。
 
   当前不符合 SOLID/CLEAN 的点
 
-  - AppState 职责过重，既是状态容器，又做用例编排、配置同步、通知触发，甚至持有 WeakEntity<AppView>，把应用层和 UI 层绑死了：src/app/app_state.rs:25。
-  - View 直接执行业务动作和系统调用。比如刷新、打开设置、退出、打开 dashboard，都写在渲染文件里：src/app/app_view.rs:140、src/app/provider_panel.rs:163。
-  - 设置页存在大量“改 state -> persist -> refresh”的重复闭包，说明缺少统一的用例层：src/app/settings_window/general_tab.rs:55、src/app/settings_window/display_tab.rs:82、src/app/
-    settings_window/providers/sidebar.rs:31。
-  - provider 特定设置目前靠 match kind 扩展，provider 越多越容易违反 OCP：src/app/settings_window/providers/detail.rs:340。
+  - 历史问题是 AppState 职责过重；当前已拆成 `src/application/state.rs` 的纯会话状态、`src/application/reducer/` 的状态转移、`src/runtime/` 的副作用执行。
+  - 历史问题是 View 直接执行业务动作和系统调用；当前重点入口已迁到 `AppAction` / `AppEffect` / `ContextEffect`，对应代码见 `src/application/action.rs`、`src/application/effect.rs`、`src/runtime/mod.rs`。
+  - 历史问题是设置页大量“改 state -> persist -> refresh”的重复闭包；当前这类同步通过 reducer helper 和 `RefreshRequest::UpdateConfig` 收口，设置页文件位于 `src/ui/settings_window/`。
+  - provider 特定设置仍需要关注扩展边界，当前 UI detail 入口在 `src/ui/settings_window/providers/detail.rs`。
   - main.rs 里的 TrayController 也在直接改 state.nav，说明 UI 入口和业务状态没有通过统一接口交互：src/main.rs:128。
 
   建议的 CLEAN 分层
@@ -42,7 +41,7 @@
     - controllers: GpuiActionDispatcher
 
   frameworks
-    - gpui views: src/app/**
+    - gpui views: `src/ui/**`
     - infra adapters: settings_store / notify_rust / auto_launch / refresh channel
 
   依赖方向只允许向内：
@@ -150,15 +149,15 @@
   结合你当前代码的落地顺序
 
   1. 先把 AppState 拆成 AppSession 和 AppService
-      - 把 src/app/app_state.rs:93、src/app/app_state.rs:113、src/app/app_state.rs:155、src/app/app_state.rs:170 迁到 use case/service。
+      - 把历史 AppState 行为迁到当前 `src/application/reducer/` 和 `src/runtime/`。
   2. 再把 View 中的事件闭包收敛成 dispatch(AppIntent)
-      - 重点是 src/app/app_view.rs:200、src/app/provider_panel.rs:117、src/app/settings_window/general_tab.rs:55。
+      - 重点是当前 `src/ui/views/app_view.rs`、`src/ui/views/provider_panel.rs`、`src/ui/settings_window/general_tab.rs`。
   3. 然后引入 Presenter/ViewModel
       - 先做 provider detail 和 settings item，这两块重复最多。
   4. 最后把 provider-specific settings 改成注册式策略
-      - 替换 src/app/settings_window/providers/detail.rs:340 的 match.
+      - 替换当前 `src/ui/settings_window/providers/detail.rs` 中 provider-specific 分支。
 
-  结论很直接：你现在的 src/app 已经有“纯逻辑抽离”的基础，但还停留在“共享状态 + UI 直接操作”的架构阶段。最值得做的不是继续拆更多 render_* 函数，而是引入 Intent -> UseCase -> Presenter ->
+  结论很直接：当前代码已经有“纯逻辑抽离”的基础；历史版本还停留在“共享状态 + UI 直接操作”的架构阶段。最值得做的不是继续拆更多 render_* 函数，而是引入 Intent -> UseCase -> Presenter ->
   ViewModel 这条主线，让 GPUI 只做显示层。
 
   如果你要，我下一步可以直接按这个方案给你落一个最小可运行重构版本，先从 ToggleProvider 和 ChangeSetting 两条链路开始。
@@ -175,8 +174,8 @@
 
   这个项目的真实问题，不是“缺少 Repository/Port 模式”，而是：
 
-  - UI 直接改共享状态，导致交互逻辑散落在 src/app/app_view.rs、src/app/provider_panel.rs、src/app/settings_window/general_tab.rs、src/app/settings_window/display_tab.rs。
-  - AppState 同时承担“状态”“用例”“副作用编排”“UI 句柄”几个角色：src/app/app_state.rs:25。
+  - 历史版本中 UI 直接改共享状态，交互逻辑散落在各 View 闭包；当前对应 UI 文件位于 `src/ui/views/` 和 `src/ui/settings_window/`。
+  - 当前应继续保持 `runtime::AppState` 只做组合容器，状态转移放在 `src/application/reducer/`，副作用放在 `src/runtime/`。
   - 同一种交互模式反复出现：borrow_mut -> 改 settings -> persist -> refresh/notify。
 
   所以最优方案应该优先解决这三件事，而不是先把所有系统调用都抽成复杂的 port。
@@ -185,7 +184,8 @@
 
   采用一个更轻量的结构：
 
-  src/app/
+  当前对应结构：
+  src/ui/
     state.rs          // 只放 UI 会话状态与业务快照
     actions.rs        // 所有用户动作/事件
     controller.rs     // 处理 action，改 state，触发副作用
@@ -208,7 +208,7 @@
   2. 更低风险
      不需要一开始就改动 settings_store、refresh、notification 的整个依赖模型。
   3. 更符合现状
-     你已经有可测试的纯逻辑层：src/app/provider_logic.rs、src/app_state.rs。继续往“单向动作流”推进，比硬上完整分层更自然。
+     你已经有可测试的纯逻辑层：`src/application/state.rs`、`src/application/reducer/`、`src/models/`。继续往“单向动作流”推进，比硬上完整分层更自然。
 
   更清晰的设计法
 
@@ -275,17 +275,17 @@
 
   现在这些地方最适合先改：
 
-  - src/app/app_view.rs:200
+  - 当前 `src/ui/views/app_view.rs`
     刷新按钮现在直接 request_provider_refresh，应改为 dispatch(AppAction::RefreshProvider(...))
-  - src/app/app_view.rs:223
+  - 当前 `src/ui/views/app_view.rs`
     打开设置窗口不该由 view 直接关窗和调度
-  - src/app/provider_panel.rs:117
+  - 当前 `src/ui/views/provider_panel.rs`
     “未启用 -> 打开设置” 属于 action，不该在视图里做流程控制
-  - src/app/settings_window/general_tab.rs:55
+  - 当前 `src/ui/settings_window/general_tab.rs`
     这里是最典型的“业务 + 副作用 + UI”混写
-  - src/app/settings_window/display_tab.rs:82
+  - 当前 `src/ui/settings_window/display_tab.rs`
     这类 toggle 逻辑都应合并进 controller
-  - [src/app/settings_window/providers/sidebar.rs#L31](/Users/hejun/work是，前一个方案还不够清晰，也不够“贴着这个项目落地”。
+  - 当前 `src/ui/settings_window/providers/sidebar.rs`
 
   更好的方法不是继续往“经典企业版 CLEAN 架构”上堆 Repository / UseCase / Presenter / Port，而是采用更适合你这个桌面托盘应用的方案：
 
@@ -293,10 +293,9 @@
 
   这比我上次给的方案更好，原因有三点：
 
-  - 你的问题本质不是“缺仓储接口”，而是“状态变更散落在 View 闭包里”。典型位置在 src/app/app_view.rs:200、src/app/settings_window/general_tab.rs:55、src/app/settings_window/
-    display_tab.rs:82、src/app/settings_window/providers/detail.rs:77。
+  - 你的问题本质不是“缺仓储接口”，而是“状态变更散落在 View 闭包里”。当前对应入口在 `src/ui/views/app_view.rs`、`src/ui/settings_window/general_tab.rs`、`src/ui/settings_window/display_tab.rs`、`src/ui/settings_window/providers/detail.rs`。
   - 这个项目是单机、单进程、单 UI 树，完整 ports-and-adapters 会有点重。
-  - 你已经有纯逻辑基础 [src/app_state.rs](/Users/hejun/work/my/BananaTray/src/app_state.rs) 和 [src/app/provider_logic.rs](/Users/hejun/work/my/BananaTray/src/app/provider_logic.rs)，最自
+  - 你已经有纯逻辑基础 `src/application/state.rs`、`src/application/reducer/` 和 `src/models/`，最自
     然的演进方向是 Action -> Reducer -> Effect，不是直接跳到一整套 DDD/CLEAN 术语体系。
 
   ———
@@ -429,8 +428,8 @@
 
   这里最关键的是：
 
-  - [src/app/app_state.rs](/Users/hejun/work/my/BananaTray/src/app/app_state.rs) 里的行为逻辑应逐步迁到 application/reducer.rs
-  - [src/app/app_view.rs](/Users/hejun/work/my/BananaTray/src/app/app_view.rs)、src/app/provider_panel.rs、src/app/settings_window/general_tab.rs 里的闭包不再直接改状态
+  - `src/application/state.rs` 保持纯状态/selector helper，行为逻辑应继续放在 `src/application/reducer/`
+  - `src/ui/views/app_view.rs`、`src/ui/views/provider_panel.rs`、`src/ui/settings_window/general_tab.rs` 里的闭包不应直接改业务状态
   - [src/main.rs#L32](/Users/hejun/work/my/BananaTray/src/main.rs#L32) 的 TrayController 更适合变成外层 runtime 的一部分
 
   ———
@@ -440,7 +439,7 @@
   1. 先引入 AppAction 和 dispatch()
       - 不改 UI 布局，只替换闭包里的直接状态修改。
   2. 再把 AppState 里的方法迁成 reduce()
-      - 包括 src/app/app_state.rs:93、src/app/app_state.rs:113、src/app/app_state.rs:155、src/app/app_state.rs:170。
+      - 包括历史 AppState 中的状态转移和副作用编排；当前对应代码应在 `src/application/reducer/` 与 `src/runtime/` 中维护。
   3. 再把副作用抽成 AppEffect
       - persist_settings
       - send_refresh
@@ -456,6 +455,6 @@
 
   上次方案“方向对，但偏重”；更好的方法是：
 
-  不要先做重型 CLEAN 架构，而是先把 src/app 重构成 Action + Reducer + Effect + View 的单向数据流。
+  不要先做重型 CLEAN 架构，而是维持当前 `application` + `runtime` + `ui` 的 Action + Reducer + Effect + View 单向数据流。
 
   这套方法更清晰、更贴近现有代码，也更容易渐进式落地。

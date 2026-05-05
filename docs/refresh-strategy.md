@@ -69,14 +69,18 @@
 
 - 刷新间隔变化
 - 已启用 provider 列表变化
+- BananaTray 托管的 provider credentials 变化
 
 后台在收到新的配置后更新：
 
 - `interval_mins`
 - enabled provider 列表
 - 周期 deadline
+- `ProviderSettings` credentials 快照，并调用 `ProviderManager::sync_provider_credentials()`
 
 这保证了前后台对“谁应该刷新、多久刷新一次”保持一致。
+
+需要 app-managed token override 的 provider（例如 Copilot）必须实现 `AiProvider::sync_provider_credentials()`，在后台 provider 实例中保存线程安全快照。设置页展示 token 状态和后台 refresh 读取 token 不是同一条调用栈；只改 UI 状态不会自动改变后台刷新凭证。
 
 ## Custom Provider Reload
 
