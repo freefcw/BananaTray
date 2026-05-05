@@ -1,0 +1,71 @@
+name: App CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libvulkan-dev \
+            libwayland-dev \
+            libxcb1-dev \
+            libxcb-xinput-dev \
+            libxcb-randr0-dev \
+            libxcb-shape0-dev \
+            libxcb-screensaver0-dev \
+            libxcb-sync-dev \
+            libxcb-xkb-dev
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run full app clippy
+        run: cargo clippy --lib -- -D warnings
+
+      - name: Run app tests
+        run: cargo test --lib
+
+      - name: Check Linux app compiles
+        run: cargo check --bin bananatray
+
+  macos-app:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check macOS app compiles
+        run: cargo check --bin bananatray
