@@ -331,7 +331,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                                 }
                             })
                             .collect();
-                        quota_items.sort_by(|a, b| b.status_level.cmp(&a.status_level));
+                        quota_items.sort_by_key(|item| std::cmp::Reverse(item.status_level));
                         let worst = quota_items[0].status_level;
                         OverviewItemStatus::Quota {
                             status_level: worst,

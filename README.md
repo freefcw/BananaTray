@@ -63,8 +63,11 @@ cargo test --lib
 # Optional local verification of the GPUI-free lib surface only
 cargo test --lib --no-default-features
 
-# Lint
-cargo clippy
+# Fast lint for the GPUI-free lib surface, matching the PR CI gate
+cargo clippy --lib --no-default-features -- -D warnings
+
+# Full app lint, matching the App CI manual/scheduled gate
+cargo clippy --lib -- -D warnings
 
 # Format
 cargo fmt
@@ -75,6 +78,7 @@ Feature contract:
 - Default build enables `app` and is the supported application path for `cargo run` / `cargo build`.
 - `--no-default-features` is **not** a supported app build mode. It is kept only for GPUI-free `lib` checks/tests.
 - The `bananatray` binary target explicitly requires the `app` feature.
+- CI uses fast lib clippy and GPUI-free tests for PRs and branch pushes; App CI runs full app clippy, standard app-feature tests, and app compile checks by manual dispatch and nightly schedule.
 
 ## macOS Bundle & DMG
 
