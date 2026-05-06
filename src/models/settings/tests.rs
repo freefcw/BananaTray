@@ -1,3 +1,5 @@
+// 测试仍覆盖已废弃的 set_provider_enabled API，确保其行为正确
+#![allow(deprecated)]
 use super::*;
 
 fn builtin(kind: ProviderKind) -> ProviderId {

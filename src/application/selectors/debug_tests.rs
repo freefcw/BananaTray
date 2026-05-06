@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use super::*;
 use crate::application::AppSession;
 use crate::models::test_helpers::make_test_provider;
