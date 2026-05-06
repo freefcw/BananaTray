@@ -1,11 +1,23 @@
 //! 托盘功能聚合模块
 //!
 //! 包含系统托盘的所有相关功能：
+//! - `activation` — popup 失焦/auto-hide 状态机
+//! - `command` — 托盘入口命令策略
 //! - `controller` — 弹窗窗口生命周期管理（TrayController）
 //! - `icon` — 托盘图标样式管理（使用 GPUI 原生 set_tray_icon_rendering_mode API）
+//! - `lifecycle` — 关闭清理与窗口 slot 幂等 helper
+//! - `positioning` — 弹窗定位策略
+//! - `linux_popup` — Linux 特有的隐藏复用、拖动位置保存和 auto-hide 复查
 
+mod activation;
+mod command;
 pub(crate) mod controller;
 pub(crate) mod icon;
+mod lifecycle;
+#[cfg(target_os = "linux")]
+mod linux_popup;
+mod observers;
+mod positioning;
 
 #[allow(unused_imports)]
 pub(crate) use controller::TrayController;

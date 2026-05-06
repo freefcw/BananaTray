@@ -77,20 +77,20 @@ fn main() {
             )));
 
             // 4. 事件泵
-            bootstrap::start_event_pump(&controller.borrow().state, event_rx, cx);
+            let state = controller.borrow().state();
+            bootstrap::start_event_pump(&state, event_rx, cx);
 
             // 4.5 Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
             #[cfg(target_os = "linux")]
             {
-                let dbus_handle =
-                    dbus::start_dbus_service(controller.borrow().state.clone(), cx.to_async());
-                controller.borrow_mut().state.borrow_mut().dbus_handle = dbus_handle;
+                let dbus_handle = dbus::start_dbus_service(state.clone(), cx.to_async());
+                state.borrow_mut().dbus_handle = dbus_handle;
 
-                bootstrap::emit_current_dbus_snapshot(&controller.borrow().state);
+                bootstrap::emit_current_dbus_snapshot(&state);
             }
 
             // 5. 初始刷新
-            bootstrap::trigger_initial_refresh(&controller.borrow().state);
+            bootstrap::trigger_initial_refresh(&state);
 
             // 6. 注册事件处理器
             bootstrap::register_tray_events(&controller, cx);
