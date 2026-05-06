@@ -44,7 +44,7 @@ unexpected_cfgs = "allow"
 # 将同一 commit 的 adabraka-gpui 解析成两份 crate，导致 GPUI 类型不兼容。
 # 禁用不必要的图像格式 features 以减小体积：仅保留 SVG + PNG（app logo）
 gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit", "image-format-png"], optional = true }
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "aff91a6", default-features = false, optional = true }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "3d8171b", default-features = false, optional = true }
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
 
