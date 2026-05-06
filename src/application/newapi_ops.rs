@@ -6,7 +6,7 @@
 //! 本模块为纯函数，不包含 I/O 或 GPUI 依赖，可通过 `cargo test --lib` 测试。
 
 use super::state::AppSession;
-use crate::models::{NewApiConfig, NewApiEditData, ProviderId, ProviderKind};
+use crate::models::{NewApiConfig, NewApiEditData, ProviderId};
 
 /// 编辑模式下的回滚：恢复表单编辑状态，让用户可以重试。
 ///
@@ -43,12 +43,7 @@ pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
     session.settings_ui.editing_newapi = None;
 
     // 恢复 selected_provider 到 sidebar 第一项
-    let custom_ids = session.provider_store.custom_provider_ids();
-    let sidebar_ids = session.settings.provider.sidebar_provider_ids(&custom_ids);
-    session.settings_ui.selected_provider = sidebar_ids
-        .first()
-        .cloned()
-        .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude));
+    session.settings_ui.selected_provider = session.first_sidebar_provider();
 }
 
 /// 根据保存结果选择通知的 i18n key 对。
@@ -73,7 +68,7 @@ pub fn newapi_save_notification_keys(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::AppSettings;
+    use crate::models::{AppSettings, ProviderKind};
 
     fn make_session() -> AppSession {
         AppSession::new(AppSettings::default(), vec![])

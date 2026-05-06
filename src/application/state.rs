@@ -93,6 +93,21 @@ impl ProviderStore {
             .filter_map(move |id| self.find_by_id(&id))
     }
 
+    /// 获取所有已启用且支持刷新的 Provider ID 列表。
+    ///
+    /// 统一了 `build_config_sync_request` / `refresh_all_providers` 等多处重复的
+    /// `filter(enabled && supports_refresh).map(id)` 模式。
+    pub fn refreshable_provider_ids(
+        &self,
+        settings: &super::super::models::AppSettings,
+    ) -> Vec<ProviderId> {
+        self.providers
+            .iter()
+            .filter(|p| settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
+            .map(|p| p.provider_id.clone())
+            .collect()
+    }
+
     /// 根据新的状态列表同步自定义 Provider（热重载用）
     ///
     /// - 保留所有内置 Provider 状态不变
@@ -185,6 +200,18 @@ impl AppSession {
             .providers
             .iter()
             .any(|p| self.settings.provider.is_enabled(&p.provider_id))
+    }
+
+    /// Settings sidebar 中第一个可用 provider（用于 fallback 选中）。
+    ///
+    /// 消除了多处重复的 sidebar_provider_ids → first → unwrap_or(Claude) 模式。
+    pub fn first_sidebar_provider(&self) -> ProviderId {
+        let custom_ids = self.provider_store.custom_provider_ids();
+        let sidebar_ids = self.settings.provider.sidebar_provider_ids(&custom_ids);
+        sidebar_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(default_builtin_provider_id)
     }
 
     pub fn default_provider_tab(&mut self) -> Option<NavTab> {
@@ -287,8 +314,11 @@ fn initial_active_tab(settings: &AppSettings, first_enabled: Option<ProviderId>)
     }
 }
 
+/// Manifest 中第一个内置 provider 的 ID，用作各种 fallback。
+///
+/// 使用 manifest 顺序而非硬编码 Claude，使得 manifest 首项变更时自动适配。
 fn default_builtin_provider_id() -> ProviderId {
-    ProviderId::BuiltIn(ProviderKind::Claude)
+    ProviderId::BuiltIn(ProviderKind::first())
 }
 
 /// Tray 弹出窗口的导航状态

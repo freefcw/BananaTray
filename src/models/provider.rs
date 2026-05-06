@@ -89,6 +89,11 @@ macro_rules! define_provider_kind {
                 &[$(Self::$variant),*]
             }
 
+            /// Manifest 中第一个内置 Provider，用作各种 fallback。
+            pub fn first() -> ProviderKind {
+                Self::all()[0]
+            }
+
             /// 配置文件中使用的小写标识符
             pub fn id_key(self) -> &'static str {
                 match self {
@@ -111,6 +116,15 @@ macro_rules! define_provider_kind {
 crate::builtin_provider_manifest::builtin_provider_manifest!(define_provider_kind);
 
 /// Provider 元数据
+///
+/// 字段语义约束：
+/// - `display_name`: 产品名称，用于 UI 标签和排序（如 "Kiro", "Amp", "Copilot"）
+/// - `brand_name`: 母品牌/公司名称，用于品牌归属展示（如 "AWS", "GitHub"）；
+///   若产品即品牌则与 `display_name` 相同（如 "Amp"）
+/// - `source_label`: 数据来源标识，用于 Debug/Settings 中展示数据获取方式（如 "kiro api"）
+/// - `icon_asset`: SVG 图标的相对路径
+/// - `dashboard_url`: 官方用量仪表盘 URL
+/// - `account_hint`: 账户类型提示文本（如 "GitHub account"）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProviderMetadata {
     pub kind: ProviderKind,

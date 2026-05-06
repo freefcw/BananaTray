@@ -5,13 +5,9 @@ use crate::refresh::RefreshRequest;
 use super::super::state::AppSession;
 
 pub fn build_config_sync_request(session: &AppSession) -> RefreshRequest {
-    let enabled: Vec<ProviderId> = session
+    let enabled = session
         .provider_store
-        .providers
-        .iter()
-        .filter(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
-        .map(|p| p.provider_id.clone())
-        .collect();
+        .refreshable_provider_ids(&session.settings);
 
     RefreshRequest::UpdateConfig {
         interval_mins: session.settings.system.refresh_interval_mins,
