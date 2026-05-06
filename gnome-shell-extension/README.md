@@ -148,6 +148,8 @@ gnome-extensions info bananatray@bananatray.github.io
 
 `DBusQuotaSnapshot` 顶层必须包含 `schema_version`。当前 Extension 只接受
 `schema_version: 1`，并在渲染前校验最小必填字段；字段缺失、类型不匹配或版本不支持时会显示错误态并写入 GNOME Shell 日志。
+`connection`、`worst_status` 和 quota `status_level` 的未知枚举值会写入日志，状态等级未知时按 Yellow 渲染，
+用于暴露同版本内的 daemon / Extension 协议漂移。
 
 同一版本内允许 daemon 新增字段，Extension 会忽略未知字段。删除字段、改名、改类型或改变枚举字符串语义时必须提升 `schema_version`，并同步更新 Extension 校验逻辑。
 

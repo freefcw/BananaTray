@@ -17,6 +17,8 @@ import {
     statusBadgeLabel,
 } from './quotaPresentation.js';
 
+const MIN_VISIBLE_QUOTA_RATIO = 0.001;
+
 export function createLabel(params, ellipsize = true) {
     const label = new St.Label(params);
     if (ellipsize && label.clutter_text) {
@@ -61,7 +63,10 @@ function createQuotaBar(quota) {
 
     // 按实际轨道宽度缩放，避免父布局拉伸后满额仍只填充固定像素。
     fill.set_pivot_point(0, 0.5);
-    fill.set_scale(ratio, 1);
+    if (ratio <= MIN_VISIBLE_QUOTA_RATIO)
+        fill.hide();
+    else
+        fill.set_scale(ratio, 1);
 
     bar.add_child(fill);
     return bar;

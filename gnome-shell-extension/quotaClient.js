@@ -14,6 +14,8 @@ const START_SERVICE_TIMEOUT_MS = 5000;
 const START_SERVICE_RETRY_MS = 10000;
 const START_SERVICE_FAILURE_RETRY_MS = START_SERVICE_RETRY_MS / 2;
 const START_SERVICE_REPLY = new GLib.VariantType('(u)');
+const STATUS_LEVEL_VALUES = new Set(['green', 'yellow', 'red']);
+const CONNECTION_VALUES = new Set(['connected', 'refreshing', 'error', 'disconnected']);
 
 const DBUS_INTERFACE_XML = `
 <node>
@@ -46,7 +48,13 @@ function isNumber(value) {
     return typeof value === 'number' && Number.isFinite(value);
 }
 
-function validateQuota(quota, providerId, index) {
+function validateEnumField(value, allowedValues, path, warn) {
+    const normalized = value.toLowerCase();
+    if (!allowedValues.has(normalized))
+        warn?.(`warning: unknown D-Bus enum ${path}: ${value}`);
+}
+
+function validateQuota(quota, providerId, index, warn) {
     if (!isPlainObject(quota))
         throw new Error(`provider ${providerId} quota #${index} is not an object`);
 
@@ -54,6 +62,7 @@ function validateQuota(quota, providerId, index) {
         if (!isString(quota[field]))
             throw new Error(`provider ${providerId} quota #${index} missing string ${field}`);
     }
+    validateEnumField(quota.status_level, STATUS_LEVEL_VALUES, `providers[${providerId}].quotas[${index}].status_level`, warn);
 
     for (const field of ['used', 'limit']) {
         if (!isNumber(quota[field]))
@@ -61,7 +70,7 @@ function validateQuota(quota, providerId, index) {
     }
 }
 
-function validateProvider(provider, index) {
+function validateProvider(provider, index, warn) {
     if (!isPlainObject(provider))
         throw new Error(`provider #${index} is not an object`);
 
@@ -69,6 +78,8 @@ function validateProvider(provider, index) {
         if (!isString(provider[field]))
             throw new Error(`provider #${index} missing string ${field}`);
     }
+    validateEnumField(provider.connection, CONNECTION_VALUES, `providers[${provider.id}].connection`, warn);
+    validateEnumField(provider.worst_status, STATUS_LEVEL_VALUES, `providers[${provider.id}].worst_status`, warn);
 
     if (provider.account_email !== null && provider.account_email !== undefined && !isString(provider.account_email))
         throw new Error(`provider ${provider.id} account_email must be string or null`);
@@ -77,10 +88,10 @@ function validateProvider(provider, index) {
     if (!Array.isArray(provider.quotas))
         throw new Error(`provider ${provider.id} quotas must be an array`);
 
-    provider.quotas.forEach((quota, quotaIndex) => validateQuota(quota, provider.id, quotaIndex));
+    provider.quotas.forEach((quota, quotaIndex) => validateQuota(quota, provider.id, quotaIndex, warn));
 }
 
-function validateSnapshot(data) {
+function validateSnapshot(data, warn) {
     if (!isPlainObject(data))
         throw new Error('snapshot is not an object');
     if (data.schema_version !== SUPPORTED_SCHEMA_VERSION)
@@ -94,12 +105,12 @@ function validateSnapshot(data) {
     if (!Array.isArray(data.providers))
         throw new Error('snapshot providers must be an array');
 
-    data.providers.forEach((provider, providerIndex) => validateProvider(provider, providerIndex));
+    data.providers.forEach((provider, providerIndex) => validateProvider(provider, providerIndex, warn));
     return data;
 }
 
-function parseSnapshot(jsonData) {
-    return validateSnapshot(JSON.parse(jsonData));
+function parseSnapshot(jsonData, warn) {
+    return validateSnapshot(JSON.parse(jsonData), warn);
 }
 
 function monotonicNowMs() {
@@ -107,11 +118,12 @@ function monotonicNowMs() {
 }
 
 export class QuotaClient {
-    constructor({onReady, onVanished, onSnapshot, onError}) {
+    constructor({onReady, onVanished, onSnapshot, onError, onLog}) {
         this._onReady = onReady;
         this._onVanished = onVanished;
         this._onSnapshot = onSnapshot;
         this._onError = onError;
+        this._onLog = onLog;
 
         this._proxy = null;
         this._proxySignalId = 0;
@@ -147,7 +159,7 @@ export class QuotaClient {
             const [jsonData] = await proxy.GetAllQuotasAsync();
             if (!this._isCurrentProxy(proxy, generation))
                 return;
-            this._emitSnapshot(parseSnapshot(jsonData));
+            this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
                 return;
@@ -167,11 +179,11 @@ export class QuotaClient {
             const [jsonData] = await proxy.RefreshAllAsync();
             if (!this._isCurrentProxy(proxy, generation))
                 return;
-            this._emitSnapshot(parseSnapshot(jsonData));
+            this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
                 return;
-            this._emitError(`RefreshAll failed: ${e.message}`);
+            this._emitError(`RefreshAll failed: ${e.message}`, _('Failed to refresh quota data'));
         }
     }
 
@@ -321,7 +333,7 @@ export class QuotaClient {
 
     _onRefreshComplete(jsonData) {
         try {
-            this._emitSnapshot(parseSnapshot(jsonData));
+            this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
         } catch (e) {
             this._emitError(`RefreshComplete parse error: ${e.message}`, _('Invalid quota data from BananaTray daemon'));
         }
@@ -348,6 +360,6 @@ export class QuotaClient {
     }
 
     _emitLog(message) {
-        this._onError?.(message, null);
+        this._onLog?.(message);
     }
 }

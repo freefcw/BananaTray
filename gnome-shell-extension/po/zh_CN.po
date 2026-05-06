@@ -39,6 +39,9 @@ msgstr "无法连接 BananaTray 后台服务"
 msgid "Failed to fetch quota data"
 msgstr "无法获取配额数据"
 
+msgid "Failed to refresh quota data"
+msgstr "无法刷新配额数据"
+
 msgid "Invalid quota data from BananaTray daemon"
 msgstr "BananaTray 后台服务返回了无效配额数据"
 
