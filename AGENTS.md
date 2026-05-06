@@ -60,7 +60,7 @@ src/
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
   dbus/                  — D-Bus service for GNOME Shell Extension (Linux only, `app` feature); zbus iface + signal bridge
-  tray/                  — Tray controller, icon management, multi-display positioning
+  tray/                  — Tray popup lifecycle controller, command policy, observers, positioning, Linux popup behavior, icon management
   platform/              — OS integration; `paths` / `system` / log readers stay lib-safe, `assets` / `single_instance` / `notification` / `auto_launch` are app-only
                            gnome_detect.rs      — GNOME desktop + extension detection (Linux only)
   icons/                 — SVG assets

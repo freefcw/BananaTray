@@ -258,7 +258,7 @@ fn command_for_tray_menu_action(id: &str) -> Option<TrayCommand> {
 
 /// 注册全局热键（从 settings 读取，可在运行时重新绑定）
 pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
-    let state = controller.borrow().state.clone();
+    let state = controller.borrow().state();
     let configured_hotkey = state.borrow().session.settings.system.global_hotkey.clone();
 
     match classify_startup_hotkey_registration(

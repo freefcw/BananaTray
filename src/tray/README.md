@@ -9,10 +9,42 @@
 弹窗窗口的生命周期管理：
 
 - **`TrayController`** — 持有 `AppState`（`Rc<RefCell<...>>`）、refresh channel、log path
-- 管理弹窗的创建、显示/隐藏、定位
-- 处理托盘点击事件和全局快捷键
-- 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠幂等守卫清理当前窗口，避免 stale handle 和误关新窗口
+- 管理弹窗的创建、显示/隐藏、复用和 stale handle 清理
+- 处理托盘点击事件和全局快捷键触发后的窗口调度
+- 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠 `lifecycle.rs` 的幂等守卫清理当前窗口，避免 stale handle 和误关新窗口
+
+### `command.rs` — 托盘入口命令策略
+
+- 将 “点击托盘后应该展示 Overview、Provider 还是打开 Settings” 从窗口生命周期里拆出
+- `show_overview = true` 时优先展示 Overview；关闭 Overview 时回落到 `AppSession::default_provider_tab()`；无可用 Provider 时打开 Settings
+
+### `positioning.rs` — 弹窗定位策略
+
+- 计算弹窗的首选 `Bounds` 和目标 `DisplayId`
+- 聚合 GPUI 的 `tray_icon_anchor()`、`tray_anchor_for_position()`、`compute_window_bounds()` 和 display fallback
+- 通过 `PopupPositionContext` trait 隔离 GPUI 查询接口，避免定位函数签名随平台参数继续分叉
+- Linux 下验证并读取 `settings.display.tray_popup.linux_last_position`；保存位置的 settings 写入由 `linux_popup.rs` 负责
+
+### `observers.rs` — 弹窗窗口观察者
+
+- 注册 activation observer：根据 `activation.rs` 的状态机执行失焦 auto-hide
+- 注册 appearance observer：系统深浅色变化时同步 tray popup 主题
+- Linux 下额外注册 bounds observer，把拖动后的窗口位置交给 `linux_popup.rs` 持久化
+
+### `activation.rs` — Popup activation 状态机
+
+- `PopupActivationTracker` 处理 Wayland 窗口创建阶段的 focus/unfocus 抖动
+- 只有 popup 至少成功激活过一次，且已过保护期，失焦 auto-hide 才允许关闭
+
+### `linux_popup.rs` — Linux popup 行为
+
 - Linux 下 auto-hide / toggle 复用同一窗口；当用户已经拖动过或已有保存位置时，隐藏会优先切到透明渲染并启用鼠标穿透，避免 Wayland `hide_window()`/`show_window()` 重新映射后回到屏幕中央
+- 负责 Linux popup 显式 `show_window()`/`activate_window()`、拖动位置持久化、auto-hide 延迟复查
+
+### `lifecycle.rs` — 生命周期 helper
+
+- `finalize_popup_close()` 统一关闭后的 UI hook 清理和 `PopupVisibilityChanged(false)` 派发
+- `take_window_if_matches()` 只在当前 slot 仍指向同一个窗口时清空，避免异步 auto-hide 误关新 popup
 
 **托盘交互入口**：
 
