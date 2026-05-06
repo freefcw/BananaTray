@@ -229,6 +229,9 @@ impl ProviderManager {
         debug!(target: "providers", "manager: refreshing provider {}", id);
         match self.provider_for_id(id) {
             Some(p) => {
+                if !p.provider_capability().supports_refresh() {
+                    return Err(ProviderError::NoData);
+                }
                 let display_label = Self::display_label_for(id, p);
                 Self::execute_refresh(p, &display_label).await
             }

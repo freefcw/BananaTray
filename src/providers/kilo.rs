@@ -1,7 +1,5 @@
 use super::{AiProvider, ProviderError, ProviderResult};
-use crate::models::{
-    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
-};
+use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -64,12 +62,6 @@ impl AiProvider for KiloProvider {
         } else {
             Err(ProviderError::unavailable("Kilo extension not detected"))
         }
-    }
-
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
-        Err(ProviderError::unavailable(
-            "Kilo Code does not support usage monitoring, it runs as a VS Code extension with no public API",
-        ))
     }
 }
 

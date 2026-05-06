@@ -1,7 +1,5 @@
 use super::{AiProvider, ProviderError, ProviderResult};
-use crate::models::{
-    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
-};
+use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use crate::providers::common::cli;
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -37,11 +35,5 @@ impl AiProvider for OpenCodeProvider {
         } else {
             Err(ProviderError::cli_not_found(OPENCODE_CLI))
         }
-    }
-
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
-        Err(ProviderError::unavailable(
-            "OpenCode requires an active session, usage monitoring not supported yet",
-        ))
     }
 }

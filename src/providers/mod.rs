@@ -440,8 +440,13 @@ pub trait AiProvider: Send + Sync {
         Ok(())
     }
 
-    /// 核心方法：拉取最新的配额/用量情况
-    async fn refresh(&self) -> ProviderResult<RefreshData>;
+    /// 核心方法：拉取最新的配额/用量情况。
+    ///
+    /// 默认返回 `NoData`；`Monitorable` provider 必须覆盖此方法。
+    /// `Placeholder` / `Informational` provider 无需实现。
+    async fn refresh(&self) -> ProviderResult<RefreshData> {
+        Err(ProviderError::NoData)
+    }
 
     /// 声明该 Provider 的设置 UI 能力（默认无交互设置）
     ///
