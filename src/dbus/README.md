@@ -4,6 +4,12 @@ D-Bus 服务模块，提供 `com.bananatray.Daemon` 接口供 GNOME Shell Extens
 
 仅 Linux + `app` feature 下编译（`cfg(target_os = "linux")` + `cfg(feature = "app")`）。
 
+正式 Linux 安装包会安装 Session D-Bus activation 文件
+`/usr/share/dbus-1/services/com.bananatray.Daemon.service` 和 systemd user unit
+`/usr/lib/systemd/user/bananatray.service`。Extension 启动或用户主动刷新/打开设置时会异步请求
+`StartServiceByName("com.bananatray.Daemon")`，由 Session Bus 拉起安装后的 `bananatray` 二进制。
+AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 activation。
+
 ## 架构概览
 
 ```

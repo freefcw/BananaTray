@@ -22,7 +22,9 @@ GNOME Shell Extension
 ```
 
 扩展不直接读取配置文件、不执行 provider 刷新，也不保存业务状态。它只渲染 daemon 推送的
-`DBusQuotaSnapshot`。
+`DBusQuotaSnapshot`。正式 Linux 安装包还会安装 Session D-Bus activation 文件和 systemd user
+service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon 未运行时不再只能被动等待。
+如果用户主动停止 daemon，扩展不会在 `NameOwnerChanged` 下线事件里立即拉起，只会在扩展启动或用户点击刷新/设置时请求 activation。
 
 ## 文件职责
 
@@ -43,6 +45,8 @@ GNOME Shell Extension
 | `scripts/install-gnome-extension.sh` | 当前用户会话安装 / 诊断入口；递归复制扩展文件并检查 `State`。 |
 | `scripts/gnome-extension-mock-daemon.js` | mock `com.bananatray.Daemon`，用于 UI 状态调试。 |
 | `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard。 |
+| `resources/linux/com.bananatray.Daemon.service` | Session D-Bus activation 文件，声明 `com.bananatray.Daemon` 如何启动。 |
+| `resources/linux/bananatray.service` | systemd user service，供 D-Bus activation 或用户手动 `systemctl --user start` 启动。 |
 
 ## Nested Shell 调试
 
@@ -148,6 +152,18 @@ DBUS_SESSION_BUS_ADDRESS="$addr" gdbus call --session \
   --method com.bananatray.Daemon.GetAllQuotas
 ```
 
+正式安装包中的 activation 文件安装后，可检查：
+
+```bash
+test -f /usr/share/dbus-1/services/com.bananatray.Daemon.service
+test -f /usr/lib/systemd/user/bananatray.service || test -f /lib/systemd/user/bananatray.service
+systemctl --user status bananatray.service
+```
+
+`bananatray.service` 使用 `Type=dbus` 和 `BusName=com.bananatray.Daemon`。主程序启动路径会在进入
+GPUI run loop 后初始化 D-Bus 服务并 request name；如果未来把 D-Bus 注册延后到慢 I/O 之后，需要重新评估
+systemd 的默认启动超时。
+
 ## JSON 协议约束
 
 当前 schema 版本是 `1`。同一版本内允许新增字段，但不能删除字段、改名、改类型或改变枚举语义。
@@ -221,7 +237,7 @@ bash scripts/dev-gnome-extension.sh --app-daemon
 | nested 窗口没有出现 | 缺少 `mutter-devkit` | 安装 `mutter-dev-bin`。 |
 | 扩展未加载 | dconf profile 没在 `dbus-run-session` 前准备好，或 metadata 不兼容 | 使用脚本默认流程；检查 `GetExtensionInfo` 的 `state` 和 `error`。 |
 | 主会话 `State: ERROR` 且仍报旧 `add_actor` 错误 | 用户扩展目录之前安装了旧版文件，GNOME Shell 进程仍缓存旧模块错误 | 运行 `bash scripts/install-gnome-extension.sh` 递归安装新版文件；Wayland 需要注销重登，X11 用 Alt+F2 → `r` 重启 Shell。 |
-| 弹窗一直显示 daemon not running | 扩展和 daemon 不在同一个 Session D-Bus | 用 nested child 进程的 `DBUS_SESSION_BUS_ADDRESS` 检查 D-Bus。 |
+| 弹窗一直显示 daemon not running | 扩展和 daemon 不在同一个 Session D-Bus，或当前安装方式没有安装 D-Bus activation 文件 | 用 nested child 进程的 `DBUS_SESSION_BUS_ADDRESS` 检查 D-Bus；正式安装包还要确认 `/usr/share/dbus-1/services/com.bananatray.Daemon.service` 存在。 |
 | `--app-daemon` 显示空 provider | 真实配置目录未被传入，或当前设置没有启用 provider | 检查脚本输出中的日志路径和 provider 配置路径；确认真实 `settings.json`。 |
 | 修改样式后没有变化 | 主会话 Wayland 不能热重启 Shell，或 nested Shell 没重启 | 关闭 nested Shell 后重新运行脚本；主会话需要注销重登。 |
 | 顶栏出现传统 AppIndicator | 调试 app 没有设置 `BANANATRAY_FORCE_GNOME_EXTENSION=1` | 使用 `--app-daemon` 启动真实 app，避免手动漏环境变量。 |

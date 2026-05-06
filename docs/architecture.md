@@ -36,6 +36,7 @@
 - `dbus/`
   - D-Bus 服务，供 GNOME Shell Extension 查询配额数据。仅 Linux + `app` feature 下编译。
   - 对外接口：`DBusServiceHandle`（更新缓存 + 发射信号）+ DTO 类型（re-export 自 `application::selectors::dbus_dto`）。
+  - Linux deb/rpm 安装包提供 `com.bananatray.Daemon` 的 Session D-Bus activation 文件和 `bananatray.service` systemd user unit；Extension 启动和用户主动操作时会异步请求 activation。AppImage 不提供宿主 D-Bus activation。
   - 线程模型：2 线程（D-Bus 线程运行 zbus ObjectServer，GPUI 主线程通过 foreground executor 消费 action）。
   - `BananaTrayIface` 不持有 `AppState`（zbus `Interface` 要求 `Send + Sync`，`Rc<RefCell<_>>` 不满足），改用 `Arc<Mutex<String>>` 快照缓存 + channel 通信。
   - DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨平台可测试），`dbus/serde_types.rs` 仅做 re-export。

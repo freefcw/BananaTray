@@ -58,6 +58,9 @@ if [ -d /usr/share/icons/hicolor ]; then
         gtk-update-icon-cache /usr/share/icons/hicolor || true
     fi
 fi
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+fi
 POSTINST_EOF
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
 
@@ -73,6 +76,9 @@ if [ -d /usr/share/icons/hicolor ]; then
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache /usr/share/icons/hicolor || true
     fi
+fi
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
 fi
 POSTRM_EOF
 chmod 755 "$PKG_DIR/DEBIAN/postrm"

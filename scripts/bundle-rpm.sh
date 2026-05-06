@@ -73,19 +73,23 @@ Claude, Gemini, GitHub Copilot, Codex, and more.
 %files
 %{_bindir}/$APP_NAME
 %{_datadir}/applications/$APP_NAME.desktop
+%{_datadir}/dbus-1/services/com.bananatray.Daemon.service
 %{_datadir}/icons/hicolor/*/apps/$APP_NAME.png
 %{_datadir}/metainfo/com.bananatray.app.metainfo.xml
 %{_datadir}/$APP_NAME/
+%{_prefix}/lib/systemd/user/$APP_NAME.service
 
 %post
 update-desktop-database %{_datadir}/applications &>/dev/null || :
 touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
 gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+systemctl --user daemon-reload &>/dev/null || :
 
 %postun
 update-desktop-database %{_datadir}/applications &>/dev/null || :
 touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
 gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+systemctl --user daemon-reload &>/dev/null || :
 SPEC_EOF
 
 # ------------------------------------------------------------------

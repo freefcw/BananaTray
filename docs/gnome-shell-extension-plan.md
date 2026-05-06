@@ -65,7 +65,7 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 | 实时刷新 | Extension 连接 `RefreshComplete` 信号并重建 Provider 行 | 已实现 |
 | Popup 内用量条形图 | 当前已显示每个 quota 的文本和进度条，后续可增强交互和细节表达 | 已实现，仍可增强 |
 | 拆分 `panelButton.js` / `quotaClient.js` | 已拆为 `extension.js` 生命周期入口、`panelButton.js` 面板控制器、`quotaClient.js` 协议层、`quotaPresentation.js` 展示纯函数和 `quotaWidgets.js` 行组件 | 已实现 |
-| systemd user service + D-Bus activation | 当前应用运行时主动 request name，Extension 只 watch name；未提供 DBus activation 文件 | 待增强 |
+| systemd user service + D-Bus activation | 已提供 `resources/linux/com.bananatray.Daemon.service` 和 `resources/linux/bananatray.service` 模板；deb/rpm 安装包会写入宿主 D-Bus/systemd user 路径并替换二进制路径，Extension 启动和用户主动刷新/打开设置时会异步请求 `StartServiceByName`；AppImage 不携带无效 activation 文件 | 已实现 |
 | 打包发布到 e.g.o / zip | 当前有 `metadata.json` 和 README 安装说明，未提供打包脚本和 e.g.o 发布清单 | 待增强 |
 | Extension 端 i18n | `metadata.json` 声明 `gettext-domain: "bananatray"`，UI 文案通过 `i18n.js` 的 `_()` 翻译，已提供 `po/zh_CN.po` 和运行时 `locale/zh_CN/LC_MESSAGES/bananatray.mo` | 已实现 |
 | 图标资源复用 | 当前面板入口使用状态点，不加载 `src/icons/` SVG | 待增强 |
@@ -81,21 +81,20 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 - 扩展元数据声明兼容 GNOME Shell 45-50。
 - Extension GJS 已拆出生命周期入口、PanelMenu 控制器、D-Bus client、展示纯函数和行组件；安装脚本与静态检查同步校验新增模块，避免手工安装漏复制。
 - Extension UI 文案已接入独立 gettext domain，并把简体中文 `.po/.mo` 纳入安装文件与静态检查。
+- Linux deb/rpm 安装包已纳入 Session D-Bus activation 文件和 systemd user service；Extension 不再只被动等待 bus name，会在启动和用户主动操作时节流触发 activation。
 
 ## 5. 仍需完善的问题
 
 - **UI 表达仍可增强**：当前已显示多 quota 文本和进度条，但还没有展开交互、趋势图或更细的错误恢复提示。
-- **启动激活未完成**：还没有 systemd user service / D-Bus activation 文件，daemon 不运行时扩展只能显示等待状态。
 - **GJS 缺少 GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
 - **发布流程未闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
 - **i18n 语言覆盖仍少**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
 
 ## 6. 推荐后续顺序
 
-1. 增加 systemd user service / D-Bus activation 示例，解决 daemon 未运行时的启动体验。
-2. 增加 Extension zip 打包脚本和 e.g.o 发布材料。
-3. 评估 nested GNOME Shell 自动化测试，覆盖 Extension 加载和 mock daemon 数据刷新。
-4. 补充更多 locale，并增强 PopupMenu 的交互表达，例如展开、趋势和更具体的错误恢复提示。
+1. 增加 Extension zip 打包脚本和 e.g.o 发布材料。
+2. 评估 nested GNOME Shell 自动化测试，覆盖 Extension 加载、activation 和 mock daemon 数据刷新。
+3. 补充更多 locale，并增强 PopupMenu 的交互表达，例如展开、趋势和更具体的错误恢复提示。
 
 ## 7. 关联文档
 
