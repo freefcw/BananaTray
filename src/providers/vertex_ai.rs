@@ -1,7 +1,5 @@
 use super::{AiProvider, ProviderError, ProviderResult};
-use crate::models::{
-    ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
-};
+use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -66,12 +64,6 @@ impl AiProvider for VertexAiProvider {
         } else {
             Err(ProviderError::config_missing(GEMINI_SETTINGS_RELATIVE_PATH))
         }
-    }
-
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
-        Err(ProviderError::unavailable(
-            "Vertex AI shares quota with Gemini CLI, please enable Vertex AI auth in Gemini CLI settings",
-        ))
     }
 }
 

@@ -6,10 +6,10 @@ Provider abstraction layer and all 14 AI provider implementations.
 
 ### `mod.rs` — Trait + Registry
 
-- **`AiProvider`** trait (async_trait) — core interface every provider must implement:
+- **`AiProvider`** trait (async_trait) — core interface every provider exposes:
   - `descriptor() -> ProviderDescriptor` — provider ID + `ProviderMetadata`
   - `check_availability() -> ProviderResult<()>` — environment/config check with structured error
-  - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data
+  - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data; defaults to `NoData`, so `Monitorable` providers must override it while `Informational` / `Placeholder` entries normally do not
   - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
   - `provider_capability() -> ProviderCapability` — declare whether the provider is `Monitorable`, `Informational`, or `Placeholder`
   - `sync_provider_credentials(credentials)` — optional runtime sync hook for BananaTray-managed provider credentials
@@ -48,7 +48,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
-- `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint, checks availability, then delegates to `refresh()`
+- `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint; non-monitorable providers return `NoData`, monitorable providers check availability and then delegate to `refresh()`
 - `sync_provider_credentials(credentials)` — fans out app-managed credentials to registered providers that need runtime credential snapshots
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
@@ -135,7 +135,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
        fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
    }
    ```
-3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` and do not rely on repeated `Unavailable` refreshes as product semantics
+3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` and omit `refresh()` instead of relying on repeated `Unavailable` refreshes as product semantics
 4. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
 5. **Add icon**: `src/icons/provider-myprovider.svg`
 6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches manifest/implementation mismatches

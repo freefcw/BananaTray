@@ -48,7 +48,7 @@
 - 提供身份与展示元数据
 - 提供能力层级（是否属于真正可监控 provider）
 - 提供可用性检查
-- 对 `Monitorable` provider 提供刷新能力
+- 对 `Monitorable` provider 提供刷新能力（`AiProvider::refresh()` 有默认空实现，`Placeholder` / `Informational` provider 无需覆盖）
 - 可选地声明设置页交互能力
 
 ### Provider Identity
@@ -78,6 +78,7 @@
   - 真实可监控 provider。
   - 会进入启动 / 周期 / 手动 / Debug 刷新链路。
   - 设置页会显示刷新按钮和 quota visibility 配置。
+  - `ProviderManager::refresh_by_id()` 在进入 `check_availability → refresh` 前会检查 `supports_refresh()`，非 `Monitorable` 直接返回 `NoData`。
 - `Informational`
   - 说明型入口，用于解释认证路径、provider 关系或外部配置前提。
   - 不参与正常刷新。
