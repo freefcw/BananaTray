@@ -350,12 +350,15 @@ fn normalize_hotkey_error_candidate(hotkey: &str) -> Option<String> {
         .ok()
 }
 
+// BYPASS: bootstrap-only direct state mutation, too simple for full Action-Reducer-Effect cycle.
+// If bootstrap state operations grow beyond 5 call sites, migrate to dispatch pipeline.
 fn clear_global_hotkey_error(state: &Rc<RefCell<AppState>>) {
     let mut s = state.borrow_mut();
     s.session.settings_ui.global_hotkey_error = None;
     s.session.settings_ui.global_hotkey_error_candidate = None;
 }
 
+// BYPASS: bootstrap-only direct state mutation (see clear_global_hotkey_error).
 fn set_global_hotkey_error(
     state: &Rc<RefCell<AppState>>,
     hotkey: String,
@@ -366,6 +369,7 @@ fn set_global_hotkey_error(
     s.session.settings_ui.global_hotkey_error_candidate = Some(hotkey);
 }
 
+// BYPASS: bootstrap-only direct state mutation (see clear_global_hotkey_error).
 fn persist_hotkey_value(state: &Rc<RefCell<AppState>>, hotkey: String, reason: &str) {
     {
         let mut s = state.borrow_mut();
