@@ -164,9 +164,11 @@ impl ProviderConfig {
     }
 
     /// 设置指定 Provider 的启用状态（按 ProviderKind）
+    ///
+    /// 已废弃：请使用 `set_enabled(&ProviderId::BuiltIn(kind), enabled)` 替代。
+    #[deprecated(note = "use set_enabled(&ProviderId::BuiltIn(kind), enabled) instead")]
     pub fn set_provider_enabled(&mut self, kind: ProviderKind, enabled: bool) {
-        self.enabled_providers
-            .insert(kind.id_key().to_string(), enabled);
+        self.set_enabled(&ProviderId::BuiltIn(kind), enabled);
     }
 
     /// 通过 ProviderId 设置启用状态

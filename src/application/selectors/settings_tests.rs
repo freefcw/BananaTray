@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use super::*;
 use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
