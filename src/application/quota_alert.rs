@@ -72,6 +72,9 @@ impl QuotaAlertTracker {
         }
 
         // 计算所有 quota 中最差（最小）的剩余百分比
+        // 注意：不能直接用 q.percent_remaining()，因为 balance_only 配额 limit=0，
+        // percent_remaining() 返回 0.0 会导致误报。balance_only 配额使用独立的
+        // status_level() 绝对值逻辑（$5/$1 阈值），这里用 100-percentage 使其不影响排序。
         let worst_remaining = quotas
             .iter()
             .map(|q| {
@@ -345,6 +348,33 @@ mod tests {
                 Some(QuotaAlert::LowQuota { .. })
             ),
             "恢复后重新进入 Low 应该再次通知"
+        );
+    }
+
+    /// balance_only 配额 (limit=0, used=0) 不应被视为 0% 剩余并触发误报。
+    /// 回归测试：曾误用 percent_remaining() 导致 balance_only 永远 = 0% → 误报 Exhausted。
+    #[test]
+    fn balance_only_quotas_do_not_trigger_false_alerts() {
+        use crate::models::QuotaType;
+
+        let mut tracker = QuotaAlertTracker::new();
+        let provider = pid(ProviderKind::Claude);
+
+        // balance_only: limit=0, remaining_balance=5.0
+        let balance_only = vec![QuotaInfo::balance_only(
+            "credits",
+            5.0,
+            None,
+            QuotaType::Credit,
+            None,
+        )];
+        tracker.update(&provider, "Claude", &balance_only);
+
+        // 第二次更新不应触发告警（balance_only 的 limit=0，remaining 应被视为 100%）
+        let alert = tracker.update(&provider, "Claude", &balance_only);
+        assert!(
+            alert.is_none(),
+            "balance_only quotas should not trigger alerts"
         );
     }
 }
