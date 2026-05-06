@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use super::*;
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
@@ -1056,4 +1057,68 @@ fn session_new_reuses_existing_sidebar_entry_for_custom_provider() {
             .count(),
         1
     );
+}
+
+// ── ProviderKind::first() ─────────────────────────────────
+
+#[test]
+fn provider_kind_first_matches_all_index_zero() {
+    assert_eq!(ProviderKind::first(), ProviderKind::all()[0]);
+}
+
+// ── AppSession::first_sidebar_provider() ──────────────────
+
+#[test]
+fn first_sidebar_provider_returns_first_in_sidebar() {
+    let mut settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
+    settings.provider.sidebar_providers = vec!["gemini".into(), "claude".into()];
+    settings.provider.provider_order = vec!["gemini".into(), "claude".into()];
+
+    let session = AppSession::new(
+        settings,
+        vec![
+            make_provider(ProviderKind::Claude),
+            make_provider(ProviderKind::Gemini),
+        ],
+    );
+
+    assert_eq!(session.first_sidebar_provider(), pid(ProviderKind::Gemini));
+}
+
+#[test]
+fn first_sidebar_provider_falls_back_to_manifest_first() {
+    let settings = AppSettings::default(); // empty sidebar
+    let session = AppSession::new(settings, vec![]);
+
+    assert_eq!(session.first_sidebar_provider(), pid(ProviderKind::first()));
+}
+
+// ── ProviderStore::refreshable_provider_ids() ─────────────
+
+#[test]
+fn refreshable_provider_ids_filters_enabled_monitorable() {
+    let store = make_store(&[
+        ProviderKind::Claude, // Monitorable
+        ProviderKind::Gemini, // Monitorable
+        ProviderKind::Kilo,   // Placeholder
+    ]);
+    let settings = make_settings(&[ProviderKind::Claude, ProviderKind::Kilo]);
+
+    let ids = store.refreshable_provider_ids(&settings);
+
+    // Claude: enabled + Monitorable → included
+    assert!(ids.contains(&pid(ProviderKind::Claude)));
+    // Gemini: not enabled → excluded
+    assert!(!ids.contains(&pid(ProviderKind::Gemini)));
+    // Kilo: enabled but Placeholder → excluded
+    assert!(!ids.contains(&pid(ProviderKind::Kilo)));
+    assert_eq!(ids.len(), 1);
+}
+
+#[test]
+fn refreshable_provider_ids_empty_when_none_enabled() {
+    let store = make_store(&[ProviderKind::Claude]);
+    let settings = AppSettings::default(); // nothing enabled
+
+    assert!(store.refreshable_provider_ids(&settings).is_empty());
 }

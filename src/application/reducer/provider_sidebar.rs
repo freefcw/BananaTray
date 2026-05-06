@@ -181,10 +181,10 @@ pub(super) fn remove_provider_from_sidebar(
         // 选中下一个可用项
         let custom_ids = session.provider_store.custom_provider_ids();
         let remaining = session.settings.provider.sidebar_provider_ids(&custom_ids);
-        if let Some(first) = remaining.first() {
-            session.settings_ui.selected_provider = first.clone();
-        } else {
+        if remaining.is_empty() {
             session.settings_ui.adding_provider = true;
+        } else {
+            session.settings_ui.selected_provider = session.first_sidebar_provider();
         }
         effects.push(SettingsEffect::PersistSettings.into());
         effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());

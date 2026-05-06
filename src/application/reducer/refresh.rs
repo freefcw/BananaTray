@@ -3,7 +3,7 @@ use log::{debug, info};
 use crate::application::{
     AppEffect, ContextEffect, DebugEffect, NotificationEffect, RefreshEffect, SettingsEffect,
 };
-use crate::models::{NavTab, ProviderId, ProviderKind};
+use crate::models::{NavTab, ProviderId};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
 
 use super::super::state::AppSession;
@@ -12,13 +12,9 @@ use super::shared::{
 };
 
 pub(super) fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    let enabled_ids: Vec<ProviderId> = session
+    let enabled_ids = session
         .provider_store
-        .providers
-        .iter()
-        .filter(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
-        .map(|p| p.provider_id.clone())
-        .collect();
+        .refreshable_provider_ids(&session.settings);
 
     if enabled_ids.is_empty() {
         return;
@@ -246,14 +242,9 @@ fn cleanup_dangling_refs(session: &mut AppSession) {
             session.nav.last_provider_id = first;
         }
     }
-    // 设置面板选中的 provider：回退到 sidebar 列表第一个，而非硬编码 Claude
+    // 设置面板选中的 provider：回退到 sidebar 列表第一个
     if !provider_exists(session, &session.settings_ui.selected_provider) {
-        let custom_ids = session.provider_store.custom_provider_ids();
-        let sidebar_ids = session.settings.provider.sidebar_provider_ids(&custom_ids);
-        session.settings_ui.selected_provider = sidebar_ids
-            .first()
-            .cloned()
-            .unwrap_or(ProviderId::BuiltIn(ProviderKind::Claude));
+        session.settings_ui.selected_provider = session.first_sidebar_provider();
     }
     // Debug 面板
     let reset_debug_provider = session
