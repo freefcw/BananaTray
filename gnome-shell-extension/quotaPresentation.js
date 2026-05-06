@@ -17,7 +17,7 @@ const CONNECTION_LABELS = {
 
 export function normalizeStatusLevel(value) {
     const status = String(value || '').toLowerCase();
-    return Object.prototype.hasOwnProperty.call(STATUS_ORDER, status) ? status : 'green';
+    return Object.prototype.hasOwnProperty.call(STATUS_ORDER, status) ? status : 'yellow';
 }
 
 export function normalizeConnection(value) {

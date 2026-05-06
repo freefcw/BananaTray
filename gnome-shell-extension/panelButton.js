@@ -41,6 +41,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
             onVanished: () => this._showLoading(_('BananaTray daemon not running'), 'red', _('Offline')),
             onSnapshot: snapshot => this._updateAllRows(snapshot),
             onError: (logMessage, uiMessage) => this._handleClientError(logMessage, uiMessage),
+            onLog: message => this._handleClientLog(message),
         });
 
         this._buildUI();
@@ -151,6 +152,10 @@ class BananaTrayIndicator extends PanelMenu.Button {
         log(`BananaTray: ${logMessage}`);
         if (uiMessage)
             this._showError(uiMessage);
+    }
+
+    _handleClientLog(message) {
+        log(`BananaTray: ${message}`);
     }
 
     _updateAllRows(data) {
