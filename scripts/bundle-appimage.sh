@@ -51,6 +51,7 @@ rm -rf "$APPDIR"
 
 # 标准安装树 (usr/bin, desktop, icons, metainfo, resources)
 assemble_install_tree "$APPDIR"
+remove_activation_files "$APPDIR/usr"
 
 # AppImage 额外要求：顶层 .desktop 和 .png（appimagetool 规范）
 cp "$PROJECT_DIR/resources/linux/bananatray.desktop" "$APPDIR/$APP_NAME.desktop"

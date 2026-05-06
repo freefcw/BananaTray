@@ -7,7 +7,7 @@
 ## 兼容性
 
 - **GNOME Shell 45/46/47/48/49/50**（ESM imports only）
-- 依赖 BananaTray daemon 正在运行并提供 `com.bananatray.Daemon` D-Bus 服务
+- 依赖 BananaTray daemon 正在运行，或当前 Linux 安装已提供 `com.bananatray.Daemon` D-Bus activation
 
 ## 使用说明
 
@@ -32,8 +32,8 @@
 扩展本身不抓取任何 provider 数据，只消费 BananaTray Rust daemon 暴露的
 `com.bananatray.Daemon` Session D-Bus 服务。因此正常使用时需要同时满足：
 
-1. BananaTray 主程序正在同一用户会话中运行。
-2. D-Bus 上存在 `com.bananatray.Daemon`。
+1. BananaTray 主程序正在同一用户会话中运行，或安装包已安装 D-Bus activation 文件。
+2. D-Bus 上存在 `com.bananatray.Daemon`，或 Session Bus 能激活该服务。
 3. 扩展状态是 `Enabled: Yes` 且 `State: ACTIVE`。
 
 可用下面的命令确认真实数据是否已经可用：
@@ -45,7 +45,8 @@ gdbus call --session \
   --method com.bananatray.Daemon.GetAllQuotas
 ```
 
-如果该命令返回真实 JSON，扩展就会显示同一份数据；如果命令失败，先启动或排查 BananaTray 主程序。
+如果该命令返回真实 JSON，扩展就会显示同一份数据。通过 deb/rpm 安装时，该调用也可以触发
+D-Bus activation；如果命令失败，先确认 BananaTray 主程序或 activation 文件是否已经安装。
 
 ## 安装
 
@@ -80,6 +81,16 @@ sudo mkdir -p /usr/share/gnome-shell/extensions/bananatray@bananatray.github.io
 sudo cp -a gnome-shell-extension/. /usr/share/gnome-shell/extensions/bananatray@bananatray.github.io/
 ```
 
+Linux deb/rpm 安装包会同时安装：
+
+- `/usr/share/dbus-1/services/com.bananatray.Daemon.service`
+- `/usr/lib/systemd/user/bananatray.service`
+
+这两个文件让 Session Bus 在扩展启动、刷新或 `gdbus call` 访问
+`com.bananatray.Daemon` 时自动启动 `/usr/bin/bananatray`。从源码只运行
+`scripts/install-gnome-extension.sh` 时不会写入系统 activation 文件，仍需要手动启动 `cargo run`
+或安装 deb/rpm 打包产物。AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 D-Bus activation。
+
 ### 验证安装
 
 ```bash
@@ -103,7 +114,7 @@ gnome-extensions info bananatray@bananatray.github.io
 ### 调用流程
 
 ```
-扩展启动 → bus_watch_name("com.bananatray.Daemon")
+扩展启动 → bus_watch_name("com.bananatray.Daemon") + StartServiceByName("com.bananatray.Daemon")
          → daemon 出现 → 异步创建 DBusProxy → GetAllQuotasAsync() 获取初始数据
          → daemon 消失 → 显示 "daemon not running" 提示
 

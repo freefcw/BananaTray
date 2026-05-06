@@ -1,0 +1,5 @@
+# Exec is replaced by Linux packaging scripts at install-tree assembly time.
+[D-BUS Service]
+Name=com.bananatray.Daemon
+Exec=@BANANATRAY_EXEC@
+SystemdService=bananatray.service

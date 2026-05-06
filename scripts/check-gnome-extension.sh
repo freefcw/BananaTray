@@ -17,10 +17,21 @@ required_files=(
   "stylesheet.css"
   "icons/bananatray-symbolic.svg"
 )
+required_activation_files=(
+  "resources/linux/com.bananatray.Daemon.service"
+  "resources/linux/bananatray.service"
+)
 
 for file in "${required_files[@]}"; do
   if [[ ! -f "$EXT_DIR/$file" ]]; then
     echo "error: missing GNOME Shell Extension file: $EXT_DIR/$file" >&2
+    exit 1
+  fi
+done
+
+for file in "${required_activation_files[@]}"; do
+  if [[ ! -f "$file" ]]; then
+    echo "error: missing GNOME D-Bus activation file: $file" >&2
     exit 1
   fi
 done
@@ -92,12 +103,20 @@ if command -v rg >/dev/null 2>&1; then
   i18n_matches=$(rg -n '"gettext-domain": "bananatray"' "$EXT_DIR/metadata.json" || true)
   client_import_matches=$(rg -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
   schema_matches=$(rg -n 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
+  activation_matches=$(rg -n 'StartServiceByName' "$EXT_DIR/quotaClient.js" || true)
+  activation_template_matches=$(rg -n '@BANANATRAY_EXEC@' resources/linux/com.bananatray.Daemon.service resources/linux/bananatray.service || true)
+  appimage_removal_matches=$(rg -nF 'remove_activation_files "$APPDIR/usr"' scripts/bundle-appimage.sh || true)
+  daemon_reload_matches=$(rg -n 'systemctl --user daemon-reload' scripts/bundle-deb.sh scripts/bundle-rpm.sh || true)
 else
   sync_matches=$(grep -RInE 'RemoteSync|GetAllQuotasSync|RefreshAllSync|OpenSettingsSync' "$EXT_DIR" scripts/gnome-extension-mock-daemon.js || true)
   entry_import_matches=$(grep -n "from './panelButton\\.js';" "$EXT_DIR/extension.js" || true)
   i18n_matches=$(grep -n '"gettext-domain": "bananatray"' "$EXT_DIR/metadata.json" || true)
   client_import_matches=$(grep -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
   schema_matches=$(grep -RIn 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
+  activation_matches=$(grep -n 'StartServiceByName' "$EXT_DIR/quotaClient.js" || true)
+  activation_template_matches=$(grep -RIn '@BANANATRAY_EXEC@' resources/linux/com.bananatray.Daemon.service resources/linux/bananatray.service || true)
+  appimage_removal_matches=$(grep -nF 'remove_activation_files "$APPDIR/usr"' scripts/bundle-appimage.sh || true)
+  daemon_reload_matches=$(grep -RIn 'systemctl --user daemon-reload' scripts/bundle-deb.sh scripts/bundle-rpm.sh || true)
 fi
 
 if [[ -n "$sync_matches" ]]; then
@@ -124,6 +143,26 @@ fi
 
 if [[ -z "$schema_matches" ]]; then
   echo "error: schema_version must be present in Rust DTO, quotaClient.js, and mock daemon" >&2
+  exit 1
+fi
+
+if [[ -z "$activation_matches" ]]; then
+  echo "error: quotaClient.js must request D-Bus activation with StartServiceByName" >&2
+  exit 1
+fi
+
+if [[ -z "$activation_template_matches" ]]; then
+  echo "error: activation templates must contain @BANANATRAY_EXEC@ for install-time path substitution" >&2
+  exit 1
+fi
+
+if [[ -z "$appimage_removal_matches" ]]; then
+  echo "error: AppImage bundling must remove host D-Bus activation files from AppDir" >&2
+  exit 1
+fi
+
+if [[ -z "$daemon_reload_matches" ]]; then
+  echo "error: deb/rpm packaging scripts must run systemctl --user daemon-reload after systemd user unit changes" >&2
   exit 1
 fi
 

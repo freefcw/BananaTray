@@ -1,10 +1,19 @@
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 import {_} from './i18n.js';
 
 export const DBUS_ID = 'com.bananatray.Daemon';
 export const DBUS_PATH = '/com/bananatray/Daemon';
 export const SUPPORTED_SCHEMA_VERSION = 1;
+
+const DBUS_DAEMON_ID = 'org.freedesktop.DBus';
+const DBUS_DAEMON_PATH = '/org/freedesktop/DBus';
+const DBUS_DAEMON_INTERFACE = 'org.freedesktop.DBus';
+const START_SERVICE_TIMEOUT_MS = 5000;
+const START_SERVICE_RETRY_MS = 10000;
+const START_SERVICE_FAILURE_RETRY_MS = START_SERVICE_RETRY_MS / 2;
+const START_SERVICE_REPLY = new GLib.VariantType('(u)');
 
 const DBUS_INTERFACE_XML = `
 <node>
@@ -93,6 +102,10 @@ function parseSnapshot(jsonData) {
     return validateSnapshot(JSON.parse(jsonData));
 }
 
+function monotonicNowMs() {
+    return GLib.get_monotonic_time() / 1000;
+}
+
 export class QuotaClient {
     constructor({onReady, onVanished, onSnapshot, onError}) {
         this._onReady = onReady;
@@ -104,6 +117,10 @@ export class QuotaClient {
         this._proxySignalId = 0;
         this._busWatchId = 0;
         this._proxyGeneration = 0;
+        this._activationGeneration = 0;
+        this._activationInFlight = false;
+        this._lastActivationRequestMs = 0;
+        this._activationCancellable = null;
         this._destroyed = false;
     }
 
@@ -115,12 +132,16 @@ export class QuotaClient {
             () => this._onDaemonAppeared(),
             () => this._onDaemonVanished(),
         );
+        this._requestDaemonActivation('extension start');
     }
 
     async fetchQuotas() {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
-        if (!proxy) return;
+        if (!proxy) {
+            this._requestDaemonActivation('fetch quotas');
+            return;
+        }
 
         try {
             const [jsonData] = await proxy.GetAllQuotasAsync();
@@ -137,7 +158,10 @@ export class QuotaClient {
     async refreshAll() {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
-        if (!proxy) return;
+        if (!proxy) {
+            this._requestDaemonActivation('manual refresh');
+            return;
+        }
 
         try {
             const [jsonData] = await proxy.RefreshAllAsync();
@@ -154,7 +178,10 @@ export class QuotaClient {
     async openSettings() {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
-        if (!proxy) return;
+        if (!proxy) {
+            this._requestDaemonActivation('open settings');
+            return;
+        }
 
         try {
             await proxy.OpenSettingsAsync();
@@ -168,6 +195,8 @@ export class QuotaClient {
     destroy() {
         this._destroyed = true;
         this._proxyGeneration++;
+        this._activationGeneration++;
+        this._cancelActivationRequest();
         if (this._busWatchId) {
             Gio.bus_unwatch_name(this._busWatchId);
             this._busWatchId = 0;
@@ -215,6 +244,70 @@ export class QuotaClient {
         this._proxyGeneration++;
         this._clearProxy();
         this._onVanished?.();
+    }
+
+    _requestDaemonActivation(reason) {
+        if (this._destroyed || this._activationInFlight)
+            return;
+
+        const now = monotonicNowMs();
+        if (now - this._lastActivationRequestMs < START_SERVICE_RETRY_MS)
+            return;
+
+        this._lastActivationRequestMs = now;
+        this._activationInFlight = true;
+        const generation = ++this._activationGeneration;
+        const connection = Gio.DBus.session;
+        const cancellable = new Gio.Cancellable();
+        this._activationCancellable = cancellable;
+
+        this._emitLog(`requesting D-Bus activation (${reason})`);
+        try {
+            connection.call(
+                DBUS_DAEMON_ID,
+                DBUS_DAEMON_PATH,
+                DBUS_DAEMON_INTERFACE,
+                'StartServiceByName',
+                new GLib.Variant('(su)', [DBUS_ID, 0]),
+                START_SERVICE_REPLY,
+                Gio.DBusCallFlags.NONE,
+                START_SERVICE_TIMEOUT_MS,
+                cancellable,
+                (source, result) => {
+                    if (this._destroyed || generation !== this._activationGeneration) {
+                        try {
+                            source.call_finish(result);
+                        } catch (_e) {
+                            // Stale or canceled activation result; nothing to report.
+                        }
+                        return;
+                    }
+
+                    this._activationInFlight = false;
+                    this._activationCancellable = null;
+                    try {
+                        const [status] = source.call_finish(result).deep_unpack();
+                        this._emitLog(`D-Bus activation request completed with status ${status}`);
+                    } catch (e) {
+                        this._lastActivationRequestMs = monotonicNowMs() - START_SERVICE_FAILURE_RETRY_MS;
+                        this._emitError(`D-Bus activation request failed: ${e.message}`);
+                    }
+                },
+            );
+        } catch (e) {
+            this._activationInFlight = false;
+            this._activationCancellable = null;
+            this._lastActivationRequestMs = monotonicNowMs() - START_SERVICE_FAILURE_RETRY_MS;
+            this._emitError(`D-Bus activation request failed: ${e.message}`);
+        }
+    }
+
+    _cancelActivationRequest() {
+        if (this._activationCancellable) {
+            this._activationCancellable.cancel();
+            this._activationCancellable = null;
+        }
+        this._activationInFlight = false;
     }
 
     _installProxy(proxy) {

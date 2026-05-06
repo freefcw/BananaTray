@@ -1,0 +1,16 @@
+# ExecStart is replaced by Linux packaging scripts at install-tree assembly time.
+[Unit]
+Description=BananaTray quota monitor
+Documentation=https://github.com/bananatray/bananatray
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=com.bananatray.Daemon
+ExecStart=@BANANATRAY_EXEC@
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

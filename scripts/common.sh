@@ -154,12 +154,48 @@ install_metainfo() {
         "$metainfo_template" > "$metainfo_dest"
 }
 
+# 安装 Session D-Bus activation 文件和 systemd user service
+# 用法: install_activation_files <prefix_dir>
+#   安装到 $prefix_dir/share/dbus-1/services/ 和 $prefix_dir/lib/systemd/user/
+#   模板中的 @BANANATRAY_EXEC@ 会替换为安装后的二进制路径。
+install_activation_files() {
+    local prefix_dir="$1"
+    local dbus_service="$PROJECT_DIR/resources/linux/com.bananatray.Daemon.service"
+    local systemd_service="$PROJECT_DIR/resources/linux/$APP_NAME.service"
+    local installed_exec="${2:-/usr/bin/$APP_NAME}"
+
+    if [ ! -f "$dbus_service" ] || [ ! -f "$systemd_service" ]; then
+        echo "⚠️  未找到 D-Bus activation 或 systemd user service 文件，跳过"
+        return
+    fi
+
+    mkdir -p "$prefix_dir/share/dbus-1/services"
+    sed "s|@BANANATRAY_EXEC@|$installed_exec|g" \
+        "$dbus_service" > "$prefix_dir/share/dbus-1/services/com.bananatray.Daemon.service"
+
+    mkdir -p "$prefix_dir/lib/systemd/user"
+    sed "s|@BANANATRAY_EXEC@|$installed_exec|g" \
+        "$systemd_service" > "$prefix_dir/lib/systemd/user/$APP_NAME.service"
+}
+
+# AppImage 内部路径不会被宿主 Session Bus 扫描，不能携带指向 /usr/bin 的 activation 文件。
+# 用法: remove_activation_files <prefix_dir>
+remove_activation_files() {
+    local prefix_dir="$1"
+
+    rm -f "$prefix_dir/share/dbus-1/services/com.bananatray.Daemon.service"
+    rm -f "$prefix_dir/lib/systemd/user/$APP_NAME.service"
+    rmdir "$prefix_dir/share/dbus-1/services" "$prefix_dir/share/dbus-1" 2>/dev/null || true
+    rmdir "$prefix_dir/lib/systemd/user" "$prefix_dir/lib/systemd" "$prefix_dir/lib" 2>/dev/null || true
+}
+
 # 组装标准 Linux 安装树 (FHS 布局)
 # 用法: assemble_install_tree <root_dir>
-#   在 root_dir 下创建: usr/bin/, usr/share/applications/, icons, metainfo, resources
+#   在 root_dir 下创建: usr/bin/, desktop, icons, metainfo, resources, D-Bus activation
 #   注意: root_dir 应为包的根目录（如 $PKG_DIR），函数会在其下创建 usr/ 子树
 assemble_install_tree() {
     local root_dir="$1"
+    local installed_exec="${2:-/usr/bin/$APP_NAME}"
 
     # 二进制
     mkdir -p "$root_dir/usr/bin"
@@ -176,6 +212,9 @@ assemble_install_tree() {
 
     # AppStream metainfo
     install_metainfo "$root_dir/usr"
+
+    # D-Bus activation + systemd user service
+    install_activation_files "$root_dir/usr" "$installed_exec"
 
     # 运行时资源 (SVG 图标 + tray icon)
     copy_runtime_resources "$root_dir/usr/share/$APP_NAME"
