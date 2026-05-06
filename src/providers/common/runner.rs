@@ -97,6 +97,16 @@ impl std::fmt::Display for InteractiveError {
 
 impl std::error::Error for InteractiveError {}
 
+impl From<InteractiveError> for crate::providers::ProviderError {
+    fn from(err: InteractiveError) -> Self {
+        match err {
+            InteractiveError::BinaryNotFound(cli) => Self::cli_not_found(&cli),
+            InteractiveError::TimedOut => Self::Timeout,
+            other => Self::fetch_failed(&other.to_string()),
+        }
+    }
+}
+
 /// Runner for interactive CLI commands using a pseudo-terminal (PTY)
 pub struct InteractiveRunner {
     pty_system: Box<dyn PtySystem>,
@@ -426,5 +436,46 @@ mod tests {
 
         let err = InteractiveError::TimedOut;
         assert!(err.to_string().contains("timeout"));
+    }
+
+    // ── From<InteractiveError> for ProviderError ──────────
+
+    #[test]
+    fn binary_not_found_maps_to_cli_not_found() {
+        use crate::providers::ProviderError;
+        let err: ProviderError = InteractiveError::BinaryNotFound("codex".into()).into();
+        match err {
+            ProviderError::CliNotFound { cli_name } => {
+                assert_eq!(cli_name, "codex");
+            }
+            other => panic!("expected CliNotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn timed_out_maps_to_timeout() {
+        use crate::providers::ProviderError;
+        let err: ProviderError = InteractiveError::TimedOut.into();
+        assert!(
+            matches!(err, ProviderError::Timeout),
+            "expected Timeout variant"
+        );
+    }
+
+    #[test]
+    fn pty_failed_maps_to_fetch_failed() {
+        use crate::providers::ProviderError;
+        let err: ProviderError = InteractiveError::PtyFailed("pipe error".into()).into();
+        match err {
+            ProviderError::FetchFailed { raw_detail, .. } => {
+                let msg = raw_detail.expect("should have detail");
+                assert!(
+                    msg.contains("terminal session"),
+                    "should contain readable message: {}",
+                    msg
+                );
+            }
+            other => panic!("expected FetchFailed, got {:?}", other),
+        }
     }
 }
