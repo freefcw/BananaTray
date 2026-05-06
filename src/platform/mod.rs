@@ -36,7 +36,8 @@ pub(crate) mod single_instance;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
-#[cfg(target_os = "linux")]
+// GNOME extension 检测属于 app-only 行为；仅在 Linux 且启用 `app` feature 时编译
+#[cfg(all(target_os = "linux", feature = "app"))]
 pub(crate) mod gnome_detect;
 pub(crate) mod logging;
 pub mod paths;
