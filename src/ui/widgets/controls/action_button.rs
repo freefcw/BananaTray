@@ -96,7 +96,11 @@ where
 
     // 可选图标
     if let Some((icon_path, icon_color)) = icon {
-        btn = btn.child(super::render_svg_icon(icon_path, px(16.0), icon_color));
+        btn = btn.child(crate::ui::widgets::render_svg_icon(
+            icon_path,
+            px(16.0),
+            icon_color,
+        ));
     }
 
     // 文字标签

@@ -187,6 +187,10 @@ impl AppView {
 
         header
     }
+
+    pub(crate) fn render_toggle_switch_small(&self, enabled: bool, theme: &Theme) -> Div {
+        crate::ui::widgets::render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
+    }
 }
 
 impl Render for AppView {
