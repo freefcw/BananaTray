@@ -8,6 +8,7 @@ use gpui::{
     Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
+use rust_i18n::t;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -146,7 +147,7 @@ impl AppView {
                                     .text_size(px(10.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.text.muted)
-                                    .child("AI USAGE MONITOR"),
+                                    .child(t!("app.subtitle").to_string()),
                             ),
                     ),
             )

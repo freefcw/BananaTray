@@ -1,7 +1,7 @@
 #![allow(deprecated)]
 use super::*;
 use crate::application::AppSession;
-use crate::models::test_helpers::make_test_provider;
+use crate::models::test_helpers::{make_test_provider, setup_test_locale as setup_locale};
 use crate::models::{AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind};
 
 /// 构造一个不含 I/O 的测试 DebugContext
@@ -91,6 +91,7 @@ fn log_view_state_path_but_no_size() {
 
 #[test]
 fn provider_diagnostics_all_disabled() {
+    let _g = setup_locale();
     let settings = AppSettings::default();
     let session = make_session(settings);
     let items = build_provider_diagnostics(&session);
@@ -106,6 +107,7 @@ fn provider_diagnostics_all_disabled() {
 
 #[test]
 fn provider_diagnostics_enabled_disconnected() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -123,6 +125,7 @@ fn provider_diagnostics_enabled_disconnected() {
 
 #[test]
 fn provider_diagnostics_connected() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -141,6 +144,7 @@ fn provider_diagnostics_connected() {
 
 #[test]
 fn provider_diagnostics_refreshing() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -154,11 +158,12 @@ fn provider_diagnostics_refreshing() {
         .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Cursor))
         .unwrap();
     assert_eq!(cursor.status_dot, ProviderDiagnosticStatus::Refreshing);
-    assert_eq!(cursor.status_text, "Refreshing…");
+    assert_eq!(cursor.status_text, "Refreshing\u{2026}");
 }
 
 #[test]
 fn provider_diagnostics_error() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -178,12 +183,13 @@ fn provider_diagnostics_error() {
         .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Gemini))
         .unwrap();
     assert_eq!(gemini.status_dot, ProviderDiagnosticStatus::Error);
-    assert_eq!(gemini.status_text, "Error · auth expired");
+    assert_eq!(gemini.status_text, "Error \u{00b7} auth expired");
     assert_eq!(gemini.error_message.as_deref(), Some("auth expired"));
 }
 
 #[test]
 fn provider_diagnostics_error_without_message() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -195,11 +201,12 @@ fn provider_diagnostics_error_without_message() {
         .iter()
         .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Gemini))
         .unwrap();
-    assert_eq!(gemini.status_text, "Error · unknown error");
+    assert_eq!(gemini.status_text, "Error \u{00b7} Unknown error");
 }
 
 #[test]
 fn provider_diagnostics_disconnected_with_error() {
+    let _g = setup_locale();
     let mut settings = AppSettings::default();
     settings
         .provider
@@ -217,13 +224,14 @@ fn provider_diagnostics_disconnected_with_error() {
         .iter()
         .find(|i| i.id == ProviderId::BuiltIn(ProviderKind::Claude))
         .unwrap();
-    assert_eq!(claude.status_text, "Disconnected · connection reset");
+    assert_eq!(claude.status_text, "Disconnected \u{00b7} connection reset");
 }
 
 // ── EnvironmentViewState 测试 ───────────────────────
 
 #[test]
 fn environment_populated_from_context() {
+    let _g = setup_locale();
     let settings = AppSettings::default();
     let session = make_session(settings);
     let ctx = test_context();
@@ -238,6 +246,7 @@ fn environment_populated_from_context() {
 
 #[test]
 fn environment_log_path_fallback() {
+    let _g = setup_locale();
     let settings = AppSettings::default();
     let session = make_session(settings);
     let ctx = DebugContext {
@@ -250,6 +259,7 @@ fn environment_log_path_fallback() {
 
 #[test]
 fn environment_refresh_manual() {
+    let _g = setup_locale();
     let settings = AppSettings {
         system: crate::models::SystemSettings {
             refresh_interval_mins: 0,
@@ -264,6 +274,7 @@ fn environment_refresh_manual() {
 
 #[test]
 fn environment_refresh_interval() {
+    let _g = setup_locale();
     let settings = AppSettings {
         system: crate::models::SystemSettings {
             refresh_interval_mins: 5,
@@ -317,6 +328,7 @@ fn debug_console_hides_stale_non_monitorable_selection() {
 
 #[test]
 fn debug_info_text_structure() {
+    let _g = setup_locale();
     let settings = AppSettings::default();
     let session = make_session(settings);
     let vs = debug_tab_view_state(&session, &test_context());
@@ -324,13 +336,14 @@ fn debug_info_text_structure() {
 
     assert!(text.contains("BananaTray Debug Info"));
     assert!(text.contains("Provider Status:"));
-    assert!(text.contains("Version:    0.1.0"));
-    assert!(text.contains("OS:         macOS 15.0 (aarch64)"));
-    assert!(text.contains("Log Size:   2.0 KB"));
+    assert!(text.contains("Version: 0.1.0"));
+    assert!(text.contains("OS: macOS 15.0 (aarch64)"));
+    assert!(text.contains("Log Size: 2.0 KB"));
 }
 
 #[test]
 fn debug_info_text_omits_log_size_when_absent() {
+    let _g = setup_locale();
     let settings = AppSettings::default();
     let session = make_session(settings);
     let ctx = DebugContext {

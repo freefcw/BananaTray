@@ -5,6 +5,7 @@ tray.tooltip: "BananaTray - AI Quota Monitor"
 tray.menu.open: "Open BananaTray"
 tray.menu.settings: "Settings"
 tray.menu.quit: "Quit"
+app.subtitle: "AI USAGE MONITOR"
 
 # ── Header status ─────────────────────────────────────────
 header.synced: "Synced"
@@ -83,6 +84,7 @@ about.license: "License"
 about.website: "Website"
 about.build_version: "Build Version"
 about.report_issue: "Report Issue"
+about.copyright: "© %{year} %{author}. All rights reserved."
 settings.save_return: "Save & Return"
 settings.section.toolbar: "TOOLBAR"
 settings.section.developer: "DEVELOPER"
@@ -135,6 +137,9 @@ debug.env.log_path: "Log Path"
 debug.env.open_in_finder: "Open containing directory in file manager"
 debug.env.providers: "Providers"
 debug.env.refresh: "Refresh"
+debug.env.log_size: "Log Size"
+debug.env.refresh_minutes: "%{n} min"
+debug.env.providers_summary: "%{enabled} / %{total} enabled"
 debug.copy_debug_info: "Copy Debug Info"
 
 # Debug tab — Provider Debug Console
@@ -145,6 +150,17 @@ debug.console.empty: "Select a provider and click Force Refresh to capture logs.
 debug.console.entries: "entries"
 debug.console.copy_logs: "Copy Logs"
 debug.console.clear_logs: "Clear"
+
+# Debug tab — Provider diagnostics
+debug.provider.connected: "Connected · %{time}"
+debug.provider.error: "Error · %{msg}"
+debug.provider.disconnected_detail: "Disconnected · %{msg}"
+debug.provider.disconnected: "Disconnected"
+
+# Debug tab — Clipboard debug info
+debug.info.title: "BananaTray Debug Info"
+debug.info.provider_section: "Provider Status:"
+debug.info.quotas_count: "%{n} quotas"
 
 # ── Provider detail (settings window) ─────────────────────
 provider.info.state: "State"

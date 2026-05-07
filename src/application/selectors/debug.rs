@@ -8,6 +8,7 @@ use super::super::state::AppSession;
 use super::format::{format_failure_message, format_last_updated};
 use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
+use rust_i18n::t;
 use std::path::PathBuf;
 
 // ============================================================================
@@ -162,18 +163,21 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
             let is_enabled = session.settings.provider.is_enabled(&provider.provider_id);
 
             let (status_text, status_dot) = if !is_enabled {
-                ("Disabled".to_string(), ProviderDiagnosticStatus::Disabled)
+                (
+                    t!("provider.state.disabled").to_string(),
+                    ProviderDiagnosticStatus::Disabled,
+                )
             } else {
                 match provider.connection {
                     ConnectionStatus::Connected => {
                         let time_text = format_last_updated(provider);
                         (
-                            format!("Connected · {}", time_text),
+                            t!("debug.provider.connected", time = time_text).to_string(),
                             ProviderDiagnosticStatus::Connected,
                         )
                     }
                     ConnectionStatus::Refreshing => (
-                        "Refreshing…".to_string(),
+                        t!("provider.status.refreshing").to_string(),
                         ProviderDiagnosticStatus::Refreshing,
                     ),
                     ConnectionStatus::Error => {
@@ -181,17 +185,24 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                             .last_failure
                             .as_ref()
                             .map(format_failure_message)
-                            .unwrap_or_else(|| "unknown error".to_string());
-                        (format!("Error · {}", msg), ProviderDiagnosticStatus::Error)
+                            .unwrap_or_else(|| t!("provider.unknown_error").to_string());
+                        (
+                            t!("debug.provider.error", msg = msg).to_string(),
+                            ProviderDiagnosticStatus::Error,
+                        )
                     }
                     ConnectionStatus::Disconnected => {
                         let msg = provider
                             .last_failure
                             .as_ref()
                             .map(|failure| {
-                                format!("Disconnected · {}", format_failure_message(failure))
+                                t!(
+                                    "debug.provider.disconnected_detail",
+                                    msg = format_failure_message(failure)
+                                )
+                                .to_string()
                             })
-                            .unwrap_or_else(|| "Disconnected".to_string());
+                            .unwrap_or_else(|| t!("debug.provider.disconnected").to_string());
                         (msg, ProviderDiagnosticStatus::Disconnected)
                     }
                 }
@@ -227,9 +238,13 @@ fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> Env
     let total_count = session.provider_store.providers.len();
 
     let refresh_text = if session.settings.system.refresh_interval_mins == 0 {
-        "Manual".to_string()
+        t!("cadence.manual").to_string()
     } else {
-        format!("{} min", session.settings.system.refresh_interval_mins)
+        t!(
+            "debug.env.refresh_minutes",
+            n = session.settings.system.refresh_interval_mins
+        )
+        .to_string()
     };
 
     EnvironmentViewState {
@@ -243,7 +258,12 @@ fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> Env
             .as_ref()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "—".to_string()),
-        providers_summary: format!("{} / {} enabled", enabled_count, total_count),
+        providers_summary: t!(
+            "debug.env.providers_summary",
+            enabled = enabled_count,
+            total = total_count
+        )
+        .to_string(),
         refresh_interval: refresh_text,
     }
 }
@@ -252,28 +272,28 @@ fn build_environment_view_state(session: &AppSession, ctx: &DebugContext) -> Env
 pub fn build_debug_info_text(state: &DebugTabViewState) -> String {
     let env = &state.environment;
     let mut lines = vec![
-        "BananaTray Debug Info".to_string(),
+        t!("debug.info.title").to_string(),
         "=====================".to_string(),
-        format!("Version:    {}", env.app_version),
-        format!("OS:         {}", env.os_info),
-        format!("Log Level:  {}", env.log_level),
-        format!("Log Path:   {}", env.log_path),
-        format!("Settings:   {}", env.settings_path),
-        format!("Locale:     {}", env.locale),
-        format!("Providers:  {}", env.providers_summary),
-        format!("Refresh:    {}", env.refresh_interval),
+        format!("{}: {}", t!("debug.env.version"), env.app_version),
+        format!("{}: {}", t!("debug.env.os"), env.os_info),
+        format!("{}: {}", t!("debug.env.log_level"), env.log_level),
+        format!("{}: {}", t!("debug.env.log_path"), env.log_path),
+        format!("{}: {}", t!("debug.env.settings_path"), env.settings_path),
+        format!("{}: {}", t!("debug.env.locale"), env.locale),
+        format!("{}: {}", t!("debug.env.providers"), env.providers_summary),
+        format!("{}: {}", t!("debug.env.refresh"), env.refresh_interval),
     ];
 
     if let Some(ref size) = state.log.log_file_size {
-        lines.push(format!("Log Size:   {}", size));
+        lines.push(format!("{}: {}", t!("debug.env.log_size"), size));
     }
 
     lines.push(String::new());
-    lines.push("Provider Status:".to_string());
+    lines.push(t!("debug.info.provider_section").to_string());
 
     for p in &state.providers {
         let quota_info = if p.quota_count > 0 {
-            format!("{} quotas", p.quota_count)
+            t!("debug.info.quotas_count", n = p.quota_count).to_string()
         } else {
             "—".to_string()
         };
