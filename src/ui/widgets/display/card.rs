@@ -1,5 +1,5 @@
-use super::render_checkbox;
 use crate::theme::Theme;
+use crate::ui::widgets::render_checkbox;
 use gpui::{
     div, px, relative, App, Div, FontWeight, InteractiveElement, MouseButton, MouseDownEvent,
     ParentElement, Styled, Window,
@@ -128,7 +128,7 @@ where
                 ),
         )
         .child(
-            super::render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
+            crate::ui::widgets::render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
                 .cursor_pointer()
                 .on_mouse_down(MouseButton::Left, on_click),
         )

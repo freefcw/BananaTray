@@ -8,7 +8,7 @@ use gpui::{
     ParentElement, Styled,
 };
 
-use super::render_svg_icon;
+use crate::ui::widgets::render_svg_icon;
 use crate::ui::AppView;
 
 impl AppView {

@@ -4,8 +4,7 @@ use gpui::{
     MouseDownEvent, ParentElement, Styled, Window,
 };
 
-use super::icon::render_svg_icon;
-use super::tooltip::with_tooltip;
+use crate::ui::widgets::{render_svg_icon, with_tooltip};
 
 pub(crate) struct IconTooltipButtonOptions {
     pub tooltip_text: Option<String>,
