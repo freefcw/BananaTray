@@ -311,7 +311,7 @@ impl SettingsView {
                 div()
                     .text_size(px(11.0))
                     .text_color(copyright_color)
-                    .child(format!("© {year} {APP_AUTHOR}. All rights reserved.")),
+                    .child(t!("about.copyright", year = year, author = APP_AUTHOR).to_string()),
             )
     }
 }
