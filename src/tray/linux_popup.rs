@@ -7,7 +7,7 @@
 use crate::application::AppAction;
 use crate::runtime::AppState;
 use crate::tray::activation::{PopupActivationDecision, PopupActivationTracker};
-use gpui::{App, AppContext, Bounds, Pixels, WindowHandle};
+use gpui::{App, Bounds, Pixels, WindowHandle};
 use log::{debug, info};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
