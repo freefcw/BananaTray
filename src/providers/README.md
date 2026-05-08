@@ -4,9 +4,9 @@ Provider abstraction layer and all 14 AI provider implementations.
 
 ## Core Abstractions
 
-### `mod.rs` — Trait + Registry
+### `mod.rs` — Registry + Helpers | `ai_provider.rs` — Trait | `error.rs` — Error Types
 
-- **`AiProvider`** trait (async_trait) — core interface every provider exposes:
+- **`AiProvider`** trait (`ai_provider.rs`, async_trait) — core interface every provider exposes:
   - `descriptor() -> ProviderDescriptor` — provider ID + `ProviderMetadata`
   - `check_availability() -> ProviderResult<()>` — environment/config check with structured error
   - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data; defaults to `NoData`, so `Monitorable` providers must override it while `Informational` / `Placeholder` entries normally do not
