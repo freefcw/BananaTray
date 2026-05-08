@@ -27,7 +27,7 @@
 | **Antigravity** | 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **Windsurf** | Seat API + 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **MiniMax** | HTTP API (`api.minimax.io`) | 可监控 | 完整配额刷新 |
-| **Kiro** | CLI (`kiro-cli` 交互式 PTY) | 可监控 | 完整配额刷新 |
+| **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | 可监控 | 完整配额刷新 |
 | **Kilo** | 仅扩展检测 | 占位 | 在 UI 中显示，但不参与刷新/重试流程 |
 | **OpenCode** | 仅 CLI 检测 | 占位 | 在 UI 中显示，但不参与刷新/重试流程 |
 | **Vertex AI** | Gemini CLI 配置检测 | 信息参考 | Gemini Vertex AI 认证模式的参考条目 |
@@ -41,7 +41,7 @@
 - **HTTP 客户端**: ureq v3
 - **日志**: fern + log（文件 + 标准输出，含 panic 钩子）
 - **序列化**: serde + serde_json
-- **PTY**: portable-pty（用于基于 CLI 的提供商）
+- **PTY**: portable-pty（用于交互式 CLI 探测与回退）
 - **通知**: UNUserNotificationCenter（macOS）/ notify-rust（Linux）
 - **单实例**: interprocess（本地套接字）
 - **自启动**: smappservice-rs（macOS）/ XDG 桌面文件（Linux）
@@ -63,8 +63,11 @@ cargo test --lib
 # 可选：仅本地验证无 GPUI 的 lib 层
 cargo test --lib --no-default-features
 
-# Lint
-cargo clippy
+# 快速 Lint（无 GPUI 的 lib 层，匹配 PR CI 门禁）
+cargo clippy --lib --no-default-features -- -D warnings
+
+# 完整应用 Lint（匹配 App CI 手动/定时门禁）
+cargo clippy --lib -- -D warnings
 
 # 格式化
 cargo fmt
@@ -75,6 +78,7 @@ cargo fmt
 - 默认构建启用 `app` 功能，是 `cargo run` / `cargo build` 支持的应用程序构建路径。
 - `--no-default-features` **不是**受支持的应用程序构建模式。仅保留用于无 GPUI 的 `lib` 检查/测试。
 - `bananatray` 二进制目标明确需要 `app` 功能。
+- CI 对 PR 和分支推送使用快速 lib clippy 和无 GPUI 测试作为门禁；App CI 在手动触发和定时检查中运行完整 app clippy、标准 app-feature 测试和 app 编译检查。
 
 ## macOS Bundle 与 DMG
 

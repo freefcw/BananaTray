@@ -57,7 +57,7 @@ src/
                            views/               — Tray popup views (app_view, nav, panels, global_actions)
                            widgets/             — Reusable UI components, organized into sub-modules:
                              primitives/        — Atomic visual building blocks (icon, colored_icon, toggle, checkbox, tooltip)
-                             controls/          — Interactive controls (action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions)
+                             controls/          — Interactive controls (action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions, tab)
                              display/           — Data display components (quota_bar, info_row, icon_row, card, provider_icon)
                            settings_window/providers/ — Settings Providers tab sidebar/detail/picker/NewAPI/token panels
   runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配

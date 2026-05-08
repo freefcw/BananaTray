@@ -27,7 +27,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Antigravity** | Local language server API + local cache | Monitorable | Full quota refresh |
 | **Windsurf** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
-| **Kiro** | CLI (`kiro-cli` interactive PTY) | Monitorable | Full quota refresh |
+| **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | Monitorable | Full quota refresh |
 | **Kilo** | Extension detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
 | **OpenCode** | CLI detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
 | **Vertex AI** | Gemini CLI config detection | Informational | Reference-only entry for Gemini Vertex AI auth mode |
@@ -41,7 +41,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 - **HTTP Client**: ureq v3
 - **Logging**: fern + log (file + stdout, with panic hook)
 - **Serialization**: serde + serde_json
-- **PTY**: portable-pty (for CLI-based providers)
+- **PTY**: portable-pty (for interactive CLI probes and fallbacks)
 - **Notifications**: UNUserNotificationCenter (macOS) / notify-rust (Linux)
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG desktop files (Linux)

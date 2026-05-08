@@ -32,6 +32,8 @@
 
 - `src/dbus/README.md`
   - D-Bus 服务架构、线程模型、接口契约（方法/信号/属性）、JSON 快照格式。
+- `src/platform/README.md`
+  - 平台适配层的 app-only / lib-safe 边界、稳定路径和 OS 集成约束。
 - `gnome-shell-extension/README.md`
   - GNOME Shell Extension 安装、使用说明、D-Bus 通信流程、组件架构、排障指南。
 
