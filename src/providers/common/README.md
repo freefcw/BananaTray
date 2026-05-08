@@ -61,6 +61,7 @@ providers/kimi/           → http_client.rs
 providers/cursor/         → http_client.rs
 providers/minimax/        → http_client.rs
 providers/codeium_family/ → http_client.rs
+providers/windsurf/       → http_client.rs
 providers/custom/         → http_client.rs
 ```
 

@@ -85,6 +85,8 @@
 | `tray_icon_light.png` | Monochrome 模式图标（Linux，白色） |
 | `tray_icon_colorful.png` | Colorful 模式图标 |
 | `tray_icon_yellow.png` | Yellow / Dynamic Yellow 状态 |
+| `tray_icon_code.png` | 预留图标资产 |
+| `tray_icon_peeling.png` | 预留图标资产 |
 | `tray_icon_red.png` | Dynamic Red 状态 |
 
 ## 约束

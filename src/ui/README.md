@@ -44,15 +44,13 @@ Separate desktop window with tabbed settings UI:
 
 ### `widgets/` — Reusable UI Components
 
-Small GPUI components used across views:
-- `quota_bar.rs` — progress bar with percentage and color coding
-- `toggle.rs` — iOS-style toggle switch
-- `checkbox.rs` — checkbox with label
-- `cadence_dropdown.rs` — refresh interval dropdown
-- `tab.rs` — navigation tab button
-- `card.rs` — card container
-- `icon.rs` — SVG icon renderer (`render_svg_icon()`)
-- `tooltip.rs` — tooltip component
+Organized into three sub-modules (see [widgets/README.md](widgets/README.md) for full details):
+
+- `primitives/` — Atomic visual building blocks: icon, colored_icon, toggle, checkbox, tooltip
+- `controls/` — Interactive controls: action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions, tab
+- `display/` — Data display components: quota_bar, info_row, icon_row, card, provider_icon
+
+All components are re-exported through `widgets/mod.rs` — callers use `crate::ui::widgets::X` without knowing the sub-directory.
 
 ## Data Flow
 

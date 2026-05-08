@@ -190,6 +190,7 @@ providers/my_provider/
 适用场景：
 - 能检测安装或配置状态
 - 但没有公开 API / CLI 输出，不支持真实配额读取
+- 或者只作为认证路径 / 外部配置说明入口展示
 
 推荐结构：
 
@@ -199,7 +200,8 @@ providers/my_placeholder.rs
 
 实现要点：
 - `check_availability()` 只判断安装或配置是否存在
-- `refresh()` 明确返回 `ProviderError::unavailable(...)`
+- 重写 `provider_capability()`，按产品语义返回 `ProviderCapability::Placeholder` 或 `ProviderCapability::Informational`
+- 不要实现 `refresh()`；非 `Monitorable` provider 不进入正常刷新链路，`ProviderManager::refresh_by_id()` 会在调用 `check_availability → refresh` 前统一返回 `ProviderError::NoData`
 - 探测逻辑尽量抽成纯函数，便于补最小测试
 
 当前参考：

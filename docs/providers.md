@@ -132,7 +132,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 
 新增内置 provider 时，优先遵循以下顺序：
 
-1. 在 `ProviderKind` 中加入新的 built-in key。
+1. 在 `src/builtin_provider_manifest.rs` 中添加新的 built-in provider 条目；`ProviderKind`、`id_key()` / `from_id_key()` 和内置注册都会从这份清单生成。
 2. 选择最接近的 provider blueprint，而不是先发明新抽象。
 3. 实现 provider 本体并返回稳定的元数据 / 刷新语义 / 错误语义。
 4. 明确声明 `provider_capability()`；如果不是可监控 provider，不要继续伪装成“普通 refresh 失败”。
