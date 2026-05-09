@@ -9,9 +9,11 @@ use super::schema::{PlanDef, PlanMode, PlanStepDef, SourceDef};
 
 /// 编译后的自定义 Provider 执行计划。
 ///
-/// 这里集中处理 plan 的 availability、fallback 和 merge 语义，
+/// 持有 PlanDef（定义）和 CompiledPatterns（编译产物），
+/// 保证两者始终一致，消除索引失配风险。
 /// `CustomProvider` 只保留 provider 门面职责。
 pub(super) struct CompiledPlan {
+    plan: PlanDef,
     compiled_steps: Vec<CompiledPatterns>,
 }
 
@@ -22,29 +24,44 @@ impl CompiledPlan {
             .iter()
             .map(|step| CompiledPatterns::compile(&step.parser))
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self { compiled_steps })
+        Ok(Self {
+            plan: plan.clone(),
+            compiled_steps,
+        })
     }
 
     pub fn step_count(&self) -> usize {
         self.compiled_steps.len()
     }
 
-    pub fn check_availability(&self, plan: &PlanDef) -> ProviderResult<()> {
-        match plan.mode {
-            PlanMode::FirstSuccess => check_first_success_availability(plan),
-            PlanMode::Merge => check_merge_availability(plan),
+    pub fn mode(&self) -> PlanMode {
+        self.plan.mode
+    }
+
+    /// 检查 plan 中所有必须可用的 step 是否就绪。
+    pub fn check_availability(&self) -> ProviderResult<()> {
+        match self.plan.mode {
+            PlanMode::FirstSuccess => check_first_success_availability(&self.plan),
+            PlanMode::Merge => check_merge_availability(&self.plan),
         }
+    }
+
+    /// 检查是否所有 step 均为 placeholder source（无实际数据获取能力）。
+    pub fn is_placeholder_only(&self) -> bool {
+        self.plan
+            .steps
+            .iter()
+            .all(|step| matches!(step.source, SourceDef::Placeholder { .. }))
     }
 
     pub fn execute(
         &self,
         provider_id: &str,
         base_url: &Option<String>,
-        plan: &PlanDef,
     ) -> ProviderResult<RefreshData> {
-        match plan.mode {
-            PlanMode::FirstSuccess => self.execute_first_success(provider_id, base_url, plan),
-            PlanMode::Merge => self.execute_merge(provider_id, base_url, plan),
+        match self.plan.mode {
+            PlanMode::FirstSuccess => self.execute_first_success(provider_id, base_url),
+            PlanMode::Merge => self.execute_merge(provider_id, base_url),
         }
     }
 
@@ -52,11 +69,10 @@ impl CompiledPlan {
         &self,
         provider_id: &str,
         base_url: &Option<String>,
-        plan: &PlanDef,
     ) -> ProviderResult<RefreshData> {
         let mut errors = Vec::new();
 
-        for (index, step) in plan.steps.iter().enumerate() {
+        for (index, step) in self.plan.steps.iter().enumerate() {
             match self.execute_step(provider_id, base_url, index, step) {
                 Ok(data) => return Ok(data.with_source_label(step.name.clone())),
                 Err(err) => {
@@ -83,13 +99,12 @@ impl CompiledPlan {
         &self,
         provider_id: &str,
         base_url: &Option<String>,
-        plan: &PlanDef,
     ) -> ProviderResult<RefreshData> {
         let mut merged = RefreshData::quotas_only(Vec::new());
         let mut success_count = 0usize;
         let mut errors = Vec::new();
 
-        for (index, step) in plan.steps.iter().enumerate() {
+        for (index, step) in self.plan.steps.iter().enumerate() {
             match self.execute_step(provider_id, base_url, index, step) {
                 Ok(data) => {
                     merge_refresh_data(&mut merged, data);
@@ -112,6 +127,8 @@ impl CompiledPlan {
             }
         }
 
+        // 防御层：extractor 已保证成功 step 必含 quota（见 extractor.rs:142, 239），
+        // 但此处保留二次检查作为防御性编程，避免未来 extractor 变更后遗漏。
         if success_count == 0 || merged.quotas.is_empty() {
             return Err(ProviderError::no_data());
         }
@@ -135,6 +152,9 @@ impl CompiledPlan {
         index: usize,
         step: &PlanStepDef,
     ) -> ProviderResult<RefreshData> {
+        // 有意在 execute 阶段重新检查 availability：
+        // check_availability() 是快速预检，但运行环境可能在预检与执行之间变化
+        // （如 CLI 被卸载、文件被删除），因此执行时再次确认。
         if let Some(availability) = &step.availability {
             super::availability::check(availability)?;
         }
@@ -167,12 +187,6 @@ impl CompiledPlan {
         }
         Ok(result?)
     }
-}
-
-pub(super) fn is_placeholder_only(plan: &PlanDef) -> bool {
-    plan.steps
-        .iter()
-        .all(|step| matches!(step.source, SourceDef::Placeholder { .. }))
 }
 
 fn check_first_success_availability(plan: &PlanDef) -> ProviderResult<()> {
@@ -415,5 +429,142 @@ mod tests {
         };
 
         assert!(check_merge_availability(&plan).is_ok());
+    }
+
+    // ── execute tests ──────────────────────────
+
+    /// 构造一个 CLI echo step，输出可被 regex 解析的 "used/limit" 数据
+    fn cli_echo_step(name: &str, output: &str, required: bool) -> PlanStepDef {
+        PlanStepDef {
+            name: name.to_string(),
+            required,
+            availability: None,
+            source: SourceDef::Cli {
+                command: "echo".to_string(),
+                args: vec![output.to_string()],
+            },
+            parser: Some(super::super::schema::ParserDef::Regex {
+                account_email: None,
+                quotas: vec![super::super::schema::RegexQuotaRule {
+                    label: name.to_string(),
+                    pattern: r"(\d+)/(\d+)".to_string(),
+                    used_group: 1,
+                    limit_group: 2,
+                    quota_type: super::super::schema::QuotaTypeDef::General,
+                    divisor: None,
+                }],
+            }),
+            preprocess: vec![],
+        }
+    }
+
+    #[test]
+    fn execute_first_success_returns_first_ok() {
+        let plan = PlanDef {
+            mode: PlanMode::FirstSuccess,
+            steps: vec![
+                cli_echo_step("primary", "10/100", true),
+                cli_echo_step("fallback", "20/200", false),
+            ],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let data = compiled.execute("test", &None).unwrap();
+
+        // 应该返回第一个 step 的数据
+        assert_eq!(data.quotas.len(), 1);
+        assert_eq!(data.quotas[0].used, 10.0);
+        assert_eq!(data.quotas[0].limit, 100.0);
+    }
+
+    #[test]
+    fn execute_first_success_falls_back_on_failure() {
+        let plan = PlanDef {
+            mode: PlanMode::FirstSuccess,
+            steps: vec![
+                // 第一个 step 不可用（文件不存在）
+                missing_file_step("primary", false),
+                cli_echo_step("fallback", "30/300", false),
+            ],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let data = compiled.execute("test", &None).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        assert_eq!(data.quotas[0].used, 30.0);
+        assert_eq!(data.quotas[0].limit, 300.0);
+    }
+
+    #[test]
+    fn execute_first_success_all_fail_returns_error() {
+        let plan = PlanDef {
+            mode: PlanMode::FirstSuccess,
+            steps: vec![missing_file_step("a", false), missing_file_step("b", false)],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let err = compiled.execute("test", &None).unwrap_err();
+
+        assert!(matches!(err, ProviderError::FetchFailed { .. }));
+    }
+
+    #[test]
+    fn execute_merge_combines_quotas() {
+        let plan = PlanDef {
+            mode: PlanMode::Merge,
+            steps: vec![
+                cli_echo_step("usage", "10/100", true),
+                cli_echo_step("credits", "5/50", true),
+            ],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let data = compiled.execute("test", &None).unwrap();
+
+        assert_eq!(data.quotas.len(), 2);
+    }
+
+    #[test]
+    fn execute_merge_tolerates_optional_failure() {
+        let plan = PlanDef {
+            mode: PlanMode::Merge,
+            steps: vec![
+                cli_echo_step("usage", "10/100", true),
+                // optional step 不可用，不应导致整体失败
+                missing_file_step("optional-info", false),
+            ],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let data = compiled.execute("test", &None).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        assert_eq!(data.quotas[0].used, 10.0);
+    }
+
+    #[test]
+    fn execute_merge_fails_on_required_step_failure() {
+        let plan = PlanDef {
+            mode: PlanMode::Merge,
+            steps: vec![
+                cli_echo_step("usage", "10/100", false),
+                // required step 不可用，应导致整体失败
+                missing_file_step("credits", true),
+            ],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let err = compiled.execute("test", &None).unwrap_err();
+
+        assert!(matches!(err, ProviderError::FetchFailed { .. }));
+    }
+
+    #[test]
+    fn execute_merge_single_step_returns_data() {
+        // 单 step merge 模式也应正常返回数据
+        let plan = PlanDef {
+            mode: PlanMode::Merge,
+            steps: vec![cli_echo_step("usage", "10/100", true)],
+        };
+        let compiled = CompiledPlan::compile(&plan).unwrap();
+        let data = compiled.execute("test", &None).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        assert_eq!(data.quotas[0].used, 10.0);
     }
 }

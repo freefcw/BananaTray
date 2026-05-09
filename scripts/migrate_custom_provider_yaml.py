@@ -58,11 +58,16 @@ def split_blocks(lines: list[str]) -> list[tuple[str | None, list[str]]]:
 
 
 def indent_block(block: list[str], spaces: int) -> list[str]:
+    """Indent non-blank lines by `spaces` spaces. Blank lines are left unchanged."""
     prefix = " " * spaces
     return [prefix + line if line.strip() else line for line in block]
 
 
 def migrate_source_block(block: list[str]) -> list[str]:
+    """Rename http_get/http_post to unified http + method field.
+
+    Only these two source types need renaming; cli and placeholder are unchanged.
+    """
     migrated: list[str] = []
     for line in block:
         stripped = line.strip()

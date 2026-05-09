@@ -89,7 +89,9 @@ fn fetch_http(
     match method {
         HttpMethodDef::Get => http_client::get_with_timeout(resolved_url, &header_refs, timeout),
         HttpMethodDef::Post => {
-            let body = body.as_deref().unwrap_or("");
+            let body = body.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("HTTP POST requires a body but none was provided")
+            })?;
             http_client::post_json_with_timeout(resolved_url, &header_refs, body, timeout)
         }
     }
