@@ -4,6 +4,7 @@
 # - 通过检查 ~/.gemini/settings.json 中 security.auth.selectedType 字段
 # - Vertex AI 与 Gemini 共享配额，无需单独监控
 id: "vertex-ai:config"
+schema_version: 2
 metadata:
   display_name: "Vertex AI"
   brand_name: "Google"
@@ -11,11 +12,16 @@ metadata:
   dashboard_url: ""
   account_hint: "Google Cloud account"
   source_label: "vertex ai config"
-availability:
-  type: file_json_match
-  path: "~/.gemini/settings.json"
-  json_path: "security.auth.selectedType"
-  expected: "vertex-ai"
-source:
-  type: placeholder
-  reason: "Vertex AI shares quota with Gemini API — monitor via Gemini provider"
+plan:
+  mode: first_success
+  steps:
+    - name: "default"
+      required: true
+      availability:
+        type: file_json_match
+        path: "~/.gemini/settings.json"
+        json_path: "security.auth.selectedType"
+        expected: "vertex-ai"
+      source:
+        type: placeholder
+        reason: "Vertex AI shares quota with Gemini API — monitor via Gemini provider"

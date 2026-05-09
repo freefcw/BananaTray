@@ -1,12 +1,13 @@
 use anyhow::Result;
 use log::{debug, warn};
+use std::time::Duration;
 
 use crate::providers::common::{cli, http_client};
 use crate::providers::ProviderError;
 
 use super::auth::resolve_auth_headers;
 use super::log_utils::mask_auth_header;
-use super::schema::{AuthDef, HeaderDef, PreprocessStep, SourceDef};
+use super::schema::{AuthDef, HeaderDef, HttpMethodDef, PreprocessStep, SourceDef};
 use super::url::resolve_url;
 
 pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> Result<String> {
@@ -15,26 +16,27 @@ pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> 
             debug!(target: "providers::custom", "[{}] fetching via CLI: {} {:?}", id, command, args);
             fetch_cli(command, args)
         }
-        SourceDef::HttpGet { url, auth, headers } => {
-            let resolved = resolve_url(base_url, url);
-            debug!(target: "providers::custom", "[{}] fetching via HTTP GET: {}", id, resolved);
-            let result = fetch_http_get(base_url, &resolved, auth, headers);
-            if let Err(ref e) = result {
-                warn!(target: "providers::custom", "[{}] HTTP GET failed: {}", id, e);
-            }
-            result
-        }
-        SourceDef::HttpPost {
+        SourceDef::Http {
+            method,
             url,
+            timeout_ms,
             auth,
             headers,
             body,
         } => {
             let resolved = resolve_url(base_url, url);
-            debug!(target: "providers::custom", "[{}] fetching via HTTP POST: {} (body {} bytes)", id, resolved, body.len());
-            let result = fetch_http_post(base_url, &resolved, auth, headers, body);
+            debug!(target: "providers::custom", "[{}] fetching via HTTP {:?}: {}", id, method, resolved);
+            let result = fetch_http(
+                base_url,
+                *method,
+                &resolved,
+                *timeout_ms,
+                auth,
+                headers,
+                body,
+            );
             if let Err(ref e) = result {
-                warn!(target: "providers::custom", "[{}] HTTP POST failed: {}", id, e);
+                warn!(target: "providers::custom", "[{}] HTTP {:?} failed: {}", id, method, e);
             }
             result
         }
@@ -66,11 +68,14 @@ fn fetch_cli(command: &str, args: &[String]) -> Result<String> {
     cli::run_lenient_command(command, &args_ref)
 }
 
-fn fetch_http_get(
+fn fetch_http(
     base_url: &Option<String>,
+    method: HttpMethodDef,
     resolved_url: &str,
+    timeout_ms: Option<u64>,
     auth: &Option<AuthDef>,
     headers: &[HeaderDef],
+    body: &Option<String>,
 ) -> Result<String> {
     let header_strings = resolve_auth_headers(base_url, auth, headers)?;
     debug!(
@@ -80,25 +85,14 @@ fn fetch_http_get(
         header_strings.iter().map(|h| mask_auth_header(h)).collect::<Vec<_>>()
     );
     let header_refs: Vec<&str> = header_strings.iter().map(|s| s.as_str()).collect();
-    http_client::get(resolved_url, &header_refs)
-}
-
-fn fetch_http_post(
-    base_url: &Option<String>,
-    resolved_url: &str,
-    auth: &Option<AuthDef>,
-    headers: &[HeaderDef],
-    body: &str,
-) -> Result<String> {
-    let header_strings = resolve_auth_headers(base_url, auth, headers)?;
-    debug!(
-        target: "providers::custom",
-        "request headers ({}): {:?}",
-        header_strings.len(),
-        header_strings.iter().map(|h| mask_auth_header(h)).collect::<Vec<_>>()
-    );
-    let header_refs: Vec<&str> = header_strings.iter().map(|s| s.as_str()).collect();
-    http_client::post_json(resolved_url, &header_refs, body)
+    let timeout = timeout_ms.map(Duration::from_millis);
+    match method {
+        HttpMethodDef::Get => http_client::get_with_timeout(resolved_url, &header_refs, timeout),
+        HttpMethodDef::Post => {
+            let body = body.as_deref().unwrap_or("");
+            http_client::post_json_with_timeout(resolved_url, &header_refs, body, timeout)
+        }
+    }
 }
 
 #[cfg(test)]

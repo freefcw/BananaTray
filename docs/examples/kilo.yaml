@@ -4,6 +4,7 @@
 # - 通过扫描 ~/.vscode/extensions/ 目录检测扩展安装
 # - 无公开 API 可供监控配额
 id: "kilo:ext"
+schema_version: 2
 metadata:
   display_name: "Kilo"
   brand_name: "KiloCode"
@@ -11,10 +12,15 @@ metadata:
   dashboard_url: ""
   account_hint: "KiloCode account"
   source_label: "vscode extension"
-availability:
-  type: dir_contains
-  path: "~/.vscode/extensions"
-  prefix: "kilocode.kilo-code"
-source:
-  type: placeholder
-  reason: "Kilo Code extension does not expose usage data"
+plan:
+  mode: first_success
+  steps:
+    - name: "default"
+      required: true
+      availability:
+        type: dir_contains
+        path: "~/.vscode/extensions"
+        prefix: "kilocode.kilo-code"
+      source:
+        type: placeholder
+        reason: "Kilo Code extension does not expose usage data"

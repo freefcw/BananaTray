@@ -3,6 +3,9 @@ use serde::Deserialize;
 /// 自定义 Provider 的 YAML 定义（顶层结构）
 #[derive(Debug, Clone, Deserialize)]
 pub struct CustomProviderDef {
+    /// Schema 版本。新版自定义 Provider 固定为 2。
+    #[serde(default)]
+    pub schema_version: u32,
     /// 唯一标识符，如 "myai:cli"
     pub id: String,
     /// 基础 URL（可选），其他 URL 字段若以 / 开头则自动拼接此前缀
@@ -10,15 +13,9 @@ pub struct CustomProviderDef {
     pub base_url: Option<String>,
     /// 展示元数据
     pub metadata: MetadataDef,
-    /// 可用性检查规则
-    pub availability: AvailabilityDef,
-    /// 数据获取方式
-    pub source: SourceDef,
-    /// 响应解析规则（placeholder source 时可省略）
-    pub parser: Option<ParserDef>,
-    /// 响应预处理管道（解析前执行，可选）
+    /// 数据获取与解析计划
     #[serde(default)]
-    pub preprocess: Vec<PreprocessStep>,
+    pub plan: PlanDef,
 }
 
 /// Provider 展示元数据
@@ -34,6 +31,59 @@ pub struct MetadataDef {
     pub account_hint: String,
     #[serde(default)]
     pub source_label: String,
+}
+
+/// 自定义 Provider 的执行计划。
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanDef {
+    #[serde(default = "default_plan_mode")]
+    pub mode: PlanMode,
+    #[serde(default)]
+    pub steps: Vec<PlanStepDef>,
+}
+
+impl Default for PlanDef {
+    fn default() -> Self {
+        Self {
+            mode: default_plan_mode(),
+            steps: Vec::new(),
+        }
+    }
+}
+
+/// 多步骤计划的执行模式。
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanMode {
+    /// 按顺序执行，首个成功 step 即返回。
+    FirstSuccess,
+    /// 执行所有 step，并合并成功 step 的配额与账户信息。
+    Merge,
+}
+
+fn default_plan_mode() -> PlanMode {
+    PlanMode::FirstSuccess
+}
+
+/// 单个 source/parser 执行步骤。
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanStepDef {
+    pub name: String,
+    #[serde(default = "default_required")]
+    pub required: bool,
+    #[serde(default)]
+    pub availability: Option<AvailabilityDef>,
+    pub source: SourceDef,
+    /// 响应解析规则（placeholder source 时可省略）
+    #[serde(default)]
+    pub parser: Option<ParserDef>,
+    /// 响应预处理管道（解析前执行，可选）
+    #[serde(default)]
+    pub preprocess: Vec<PreprocessStep>,
+}
+
+fn default_required() -> bool {
+    true
 }
 
 fn default_icon() -> String {
@@ -88,23 +138,19 @@ pub enum SourceDef {
         #[serde(default)]
         args: Vec<String>,
     },
-    /// HTTP GET 请求
-    HttpGet {
+    /// HTTP 请求
+    Http {
+        #[serde(default = "default_http_method")]
+        method: HttpMethodDef,
         url: String,
         #[serde(default)]
-        auth: Option<AuthDef>,
-        #[serde(default)]
-        headers: Vec<HeaderDef>,
-    },
-    /// HTTP POST 请求（JSON body）
-    HttpPost {
-        url: String,
+        timeout_ms: Option<u64>,
         #[serde(default)]
         auth: Option<AuthDef>,
         #[serde(default)]
         headers: Vec<HeaderDef>,
         #[serde(default)]
-        body: String,
+        body: Option<String>,
     },
     /// 占位 Provider：不获取数据，直接返回不可用错误
     ///
@@ -113,6 +159,18 @@ pub enum SourceDef {
         /// 不可用的原因说明
         reason: String,
     },
+}
+
+/// HTTP 方法。
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HttpMethodDef {
+    Get,
+    Post,
+}
+
+fn default_http_method() -> HttpMethodDef {
+    HttpMethodDef::Get
 }
 
 /// 认证方式

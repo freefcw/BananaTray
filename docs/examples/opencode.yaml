@@ -5,6 +5,7 @@
 # - refresh 直接返回 unavailable 错误
 # - 无需 parser 配置
 id: "opencode:cli"
+schema_version: 2
 metadata:
   display_name: "OpenCode"
   brand_name: "OpenCode"
@@ -12,9 +13,14 @@ metadata:
   dashboard_url: ""
   account_hint: "OpenCode account"
   source_label: "opencode cli"
-availability:
-  type: cli_exists
-  value: "opencode"
-source:
-  type: placeholder
-  reason: "OpenCode CLI does not provide usage/quota data yet"
+plan:
+  mode: first_success
+  steps:
+    - name: "default"
+      required: true
+      availability:
+        type: cli_exists
+        value: "opencode"
+      source:
+        type: placeholder
+        reason: "OpenCode CLI does not provide usage/quota data yet"

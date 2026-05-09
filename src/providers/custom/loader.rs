@@ -4,7 +4,9 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use super::provider::CustomProvider;
-use super::schema::{CustomProviderDef, ParserDef, RegexQuotaRule, SourceDef};
+use super::schema::{
+    CustomProviderDef, HttpMethodDef, ParserDef, PlanStepDef, RegexQuotaRule, SourceDef,
+};
 
 /// 自定义 Provider YAML 文件的搜索目录
 fn providers_dir() -> PathBuf {
@@ -85,6 +87,11 @@ fn load_one(path: &Path) -> Result<CustomProvider> {
 
 /// 校验定义的合法性，在加载时 fail-fast
 fn validate(def: &CustomProviderDef) -> Result<()> {
+    if def.schema_version != 2 {
+        anyhow::bail!(
+            "'schema_version' must be 2; run scripts/migrate_custom_provider_yaml.py for legacy YAML"
+        );
+    }
     if def.id.is_empty() {
         anyhow::bail!("'id' cannot be empty");
     }
@@ -92,9 +99,28 @@ fn validate(def: &CustomProviderDef) -> Result<()> {
         anyhow::bail!("'metadata.display_name' cannot be empty");
     }
 
-    validate_source(&def.source)?;
-    validate_parser(&def.parser)?;
+    if def.plan.steps.is_empty() {
+        anyhow::bail!("'plan.steps' must contain at least one step");
+    }
+    for step in &def.plan.steps {
+        validate_step(step)?;
+    }
 
+    Ok(())
+}
+
+fn validate_step(step: &PlanStepDef) -> Result<()> {
+    if step.name.trim().is_empty() {
+        anyhow::bail!("plan step name cannot be empty");
+    }
+    validate_source(&step.source)?;
+    if !matches!(step.source, SourceDef::Placeholder { .. }) && step.parser.is_none() {
+        anyhow::bail!(
+            "plan step '{}': 'parser' is required unless source.type is placeholder",
+            step.name
+        );
+    }
+    validate_parser(&step.parser)?;
     Ok(())
 }
 
@@ -105,9 +131,14 @@ fn validate_source(source: &SourceDef) -> Result<()> {
                 anyhow::bail!("'source.command' cannot be empty");
             }
         }
-        SourceDef::HttpGet { url, .. } | SourceDef::HttpPost { url, .. } => {
+        SourceDef::Http {
+            method, url, body, ..
+        } => {
             if url.is_empty() {
                 anyhow::bail!("'source.url' cannot be empty");
+            }
+            if *method == HttpMethodDef::Post && body.as_ref().is_none_or(|body| body.is_empty()) {
+                anyhow::bail!("'source.body' cannot be empty for HTTP POST");
             }
         }
         SourceDef::Placeholder { reason } => {
@@ -223,6 +254,7 @@ mod tests {
 
     fn make_minimal_def() -> CustomProviderDef {
         CustomProviderDef {
+            schema_version: 2,
             id: "test:cli".to_string(),
             base_url: None,
             metadata: MetadataDef {
@@ -233,26 +265,37 @@ mod tests {
                 account_hint: "account".to_string(),
                 source_label: String::new(),
             },
-            availability: AvailabilityDef::CliExists {
-                value: "echo".to_string(),
-            },
-            source: SourceDef::Cli {
-                command: "echo".to_string(),
-                args: vec![],
-            },
-            parser: Some(ParserDef::Regex {
-                account_email: None,
-                quotas: vec![RegexQuotaRule {
-                    label: "Usage".to_string(),
-                    pattern: r"(\d+)/(\d+)".to_string(),
-                    used_group: 1,
-                    limit_group: 2,
-                    quota_type: QuotaTypeDef::General,
-                    divisor: None,
+            plan: PlanDef {
+                mode: PlanMode::FirstSuccess,
+                steps: vec![PlanStepDef {
+                    name: "default".to_string(),
+                    required: true,
+                    availability: Some(AvailabilityDef::CliExists {
+                        value: "echo".to_string(),
+                    }),
+                    source: SourceDef::Cli {
+                        command: "echo".to_string(),
+                        args: vec![],
+                    },
+                    parser: Some(ParserDef::Regex {
+                        account_email: None,
+                        quotas: vec![RegexQuotaRule {
+                            label: "Usage".to_string(),
+                            pattern: r"(\d+)/(\d+)".to_string(),
+                            used_group: 1,
+                            limit_group: 2,
+                            quota_type: QuotaTypeDef::General,
+                            divisor: None,
+                        }],
+                    }),
+                    preprocess: vec![],
                 }],
-            }),
-            preprocess: vec![],
+            },
         }
+    }
+
+    fn step_mut(def: &mut CustomProviderDef) -> &mut PlanStepDef {
+        def.plan.steps.first_mut().unwrap()
     }
 
     // ── validate ────────────────────────────────
@@ -260,6 +303,14 @@ mod tests {
     #[test]
     fn test_validate_valid() {
         assert!(validate(&make_minimal_def()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_legacy_schema() {
+        let mut def = make_minimal_def();
+        def.schema_version = 1;
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("schema_version"));
     }
 
     #[test]
@@ -277,9 +328,23 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_empty_steps() {
+        let mut def = make_minimal_def();
+        def.plan.steps.clear();
+        assert!(validate(&def).is_err());
+    }
+
+    #[test]
+    fn test_validate_empty_step_name() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).name = String::new();
+        assert!(validate(&def).is_err());
+    }
+
+    #[test]
     fn test_validate_empty_command() {
         let mut def = make_minimal_def();
-        def.source = SourceDef::Cli {
+        step_mut(&mut def).source = SourceDef::Cli {
             command: String::new(),
             args: vec![],
         };
@@ -289,18 +354,36 @@ mod tests {
     #[test]
     fn test_validate_empty_url() {
         let mut def = make_minimal_def();
-        def.source = SourceDef::HttpGet {
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Get,
             url: String::new(),
+            timeout_ms: None,
             auth: None,
             headers: vec![],
+            body: None,
         };
         assert!(validate(&def).is_err());
     }
 
     #[test]
+    fn test_validate_post_requires_body() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Post,
+            url: "https://example.com/api".to_string(),
+            timeout_ms: None,
+            auth: None,
+            headers: vec![],
+            body: None,
+        };
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("source.body"));
+    }
+
+    #[test]
     fn test_validate_empty_quotas() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Regex {
+        step_mut(&mut def).parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![],
         });
@@ -310,7 +393,7 @@ mod tests {
     #[test]
     fn test_validate_invalid_regex() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Regex {
+        step_mut(&mut def).parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Bad".to_string(),
@@ -328,7 +411,7 @@ mod tests {
     #[test]
     fn test_validate_bad_capture_group() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Regex {
+        step_mut(&mut def).parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Bad".to_string(),
@@ -346,7 +429,7 @@ mod tests {
     #[test]
     fn test_validate_empty_json_paths() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -365,7 +448,7 @@ mod tests {
     #[test]
     fn test_validate_json_remaining_mode_valid() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -384,7 +467,7 @@ mod tests {
     #[test]
     fn test_validate_json_remaining_and_limit_conflict() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -404,7 +487,7 @@ mod tests {
     #[test]
     fn test_validate_json_limit_without_used() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -424,7 +507,7 @@ mod tests {
     #[test]
     fn test_validate_json_divisor_zero() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -444,7 +527,7 @@ mod tests {
     #[test]
     fn test_validate_regex_divisor_zero() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Regex {
+        step_mut(&mut def).parser = Some(ParserDef::Regex {
             account_email: None,
             quotas: vec![RegexQuotaRule {
                 label: "Credits".to_string(),
@@ -462,7 +545,7 @@ mod tests {
     #[test]
     fn test_validate_divisor_negative() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -482,7 +565,7 @@ mod tests {
     #[test]
     fn test_validate_divisor_positive_is_ok() {
         let mut def = make_minimal_def();
-        def.parser = Some(ParserDef::Json {
+        step_mut(&mut def).parser = Some(ParserDef::Json {
             account_email: None,
             account_tier: None,
             quotas: vec![JsonQuotaRule {
@@ -503,20 +586,29 @@ mod tests {
     #[test]
     fn test_validate_placeholder_source_valid() {
         let mut def = make_minimal_def();
-        def.source = SourceDef::Placeholder {
+        step_mut(&mut def).source = SourceDef::Placeholder {
             reason: "No API available".to_string(),
         };
-        def.parser = None;
+        step_mut(&mut def).parser = None;
         assert!(validate(&def).is_ok());
+    }
+
+    #[test]
+    fn test_validate_non_placeholder_requires_parser() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).parser = None;
+
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("parser"));
     }
 
     #[test]
     fn test_validate_placeholder_source_empty_reason() {
         let mut def = make_minimal_def();
-        def.source = SourceDef::Placeholder {
+        step_mut(&mut def).source = SourceDef::Placeholder {
             reason: String::new(),
         };
-        def.parser = None;
+        step_mut(&mut def).parser = None;
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("reason"));
     }
@@ -525,16 +617,20 @@ mod tests {
     fn test_load_placeholder_yaml() {
         let dir = tempfile::tempdir().unwrap();
         let yaml = r#"
+schema_version: 2
 id: "placeholder:test"
 metadata:
   display_name: "Placeholder Test"
   brand_name: "Test"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: placeholder
-  reason: "No public API"
+plan:
+  steps:
+    - name: detect
+      availability:
+        type: cli_exists
+        value: "echo"
+      source:
+        type: placeholder
+        reason: "No public API"
 "#;
         fs::write(dir.path().join("placeholder.yaml"), yaml).unwrap();
         let providers = load_from_dir(dir.path());
@@ -554,22 +650,26 @@ source:
     fn test_load_from_dir_with_valid_yaml() {
         let dir = tempfile::tempdir().unwrap();
         let yaml = r#"
+schema_version: 2
 id: "test:cli"
 metadata:
   display_name: "Test"
   brand_name: "Test"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-  args: ["10/100"]
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
+plan:
+  steps:
+    - name: cli
+      availability:
+        type: cli_exists
+        value: "echo"
+      source:
+        type: cli
+        command: "echo"
+        args: ["10/100"]
+      parser:
+        format: regex
+        quotas:
+          - label: "Usage"
+            pattern: '(\d+)/(\d+)'
 "#;
         fs::write(dir.path().join("test.yaml"), yaml).unwrap();
         let providers = load_from_dir(dir.path());
@@ -586,6 +686,30 @@ parser:
     }
 
     #[test]
+    fn test_legacy_yaml_deserializes_but_validation_rejects_schema() {
+        let yaml = r#"
+id: "legacy:cli"
+metadata:
+  display_name: "Legacy"
+  brand_name: "Legacy"
+availability:
+  type: cli_exists
+  value: "echo"
+source:
+  type: cli
+  command: "echo"
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+        let err = validate(&def).unwrap_err();
+        assert!(err.to_string().contains("migrate_custom_provider_yaml.py"));
+    }
+
+    #[test]
     fn test_load_from_dir_skips_non_yaml() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("readme.txt"), "not yaml").unwrap();
@@ -599,21 +723,25 @@ parser:
         let yaml_template = |id: &str| {
             format!(
                 r#"
+schema_version: 2
 id: "{id}"
 metadata:
   display_name: "{id}"
   brand_name: "Test"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
+plan:
+  steps:
+    - name: cli
+      availability:
+        type: cli_exists
+        value: "echo"
+      source:
+        type: cli
+        command: "echo"
+      parser:
+        format: regex
+        quotas:
+          - label: "Usage"
+            pattern: '(\d+)/(\d+)'
 "#
             )
         };
@@ -630,24 +758,35 @@ parser:
     fn test_load_from_dir_validation_rejects_bad_regex() {
         let dir = tempfile::tempdir().unwrap();
         let yaml = r#"
+schema_version: 2
 id: "bad:cli"
 metadata:
   display_name: "Bad"
   brand_name: "Test"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '[invalid'
+plan:
+  steps:
+    - name: cli
+      availability:
+        type: cli_exists
+        value: "echo"
+      source:
+        type: cli
+        command: "echo"
+      parser:
+        format: regex
+        quotas:
+          - label: "Usage"
+            pattern: '[invalid'
 "#;
         fs::write(dir.path().join("bad.yaml"), yaml).unwrap();
         let providers = load_from_dir(dir.path());
         assert!(providers.is_empty());
+    }
+
+    #[test]
+    fn test_docs_examples_load() {
+        let examples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/examples");
+        let providers = load_from_dir(&examples_dir);
+        assert_eq!(providers.len(), 6);
     }
 }

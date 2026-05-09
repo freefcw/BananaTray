@@ -2,12 +2,13 @@
 
 BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 代码。
 
-本文件只保留当前稳定可用的工作流和 Schema 摘要。更细的实现细节请以 `docs/examples/` 和当前代码为准。
+当前稳定契约是 `schema_version: 2`，运行时只解释 `plan.steps`。旧版顶层 `source` / `parser` YAML 不再作为运行时兼容路径保留；可用 `scripts/migrate_custom_provider_yaml.py` 做一次性迁移。
 
 ## 先说结论
 
-- 如果你只是想接入一个常见 NewAPI / OneAPI 中转站，优先使用设置页里的 NewAPI 表单。
-- 如果你需要自定义 HTTP / CLI / 安装检测逻辑，再使用手写 YAML。
+- 常见 NewAPI / OneAPI 中转站优先使用设置页里的 NewAPI 表单。
+- 手写 YAML 适合简单 HTTP API、CLI 输出解析、安装检测入口。
+- 多端点 API 用 `plan.mode: merge`；多 source fallback 用 `plan.mode: first_success`。
 - 当前没有监视 providers 目录的自动 watcher；手工新增或编辑 YAML 后，通常需要重启应用才能重新加载。
 
 ## 配置目录
@@ -36,31 +37,47 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 ## 顶层结构
 
 ```yaml
+schema_version: 2
 id: "provider-name:source"
 base_url: "https://example.com"   # 可选
 metadata: { ... }
-availability: { ... }
-source: { ... }
-parser: { ... }                   # placeholder source 时可省略
-preprocess: [ ... ]               # 可选
+plan:
+  mode: first_success
+  steps:
+    - name: "default"
+      required: true
+      availability: { ... }       # 可选
+      source: { ... }
+      preprocess: [ ... ]         # 可选
+      parser: { ... }             # placeholder source 时可省略
 ```
 
 字段说明：
 
+- `schema_version`
+  - 固定为 `2`。
 - `id`
   - 自定义 provider 的稳定标识，必须唯一。
 - `base_url`
-  - 可选前缀；其他 URL 字段若以 `/` 开头，会自动拼接该前缀。
+  - 可选前缀；step 中的 URL 若以 `/` 开头，会自动拼接该前缀。
 - `metadata`
   - 展示名称、品牌、dashboard 链接等。
-- `availability`
-  - 刷新前的可用性检查。
-- `source`
-  - 真正的数据获取方式。
-- `parser`
-  - 把原始输出解析成额度数据。
-- `preprocess`
-  - 在解析前做输出清洗。
+- `plan`
+  - 数据获取与解析计划。运行时只理解这一套执行模型。
+
+## plan
+
+`plan.mode` 支持两种：
+
+- `first_success`
+  - 按顺序执行 step，首个成功 step 直接作为刷新结果。
+  - 适合 API -> CLI、cookie 候选、主接口失败后的替代来源。
+- `merge`
+  - 执行多个 step，合并成功 step 的 quotas 和账户信息。
+  - `required: false` 的 step 失败不会导致整次刷新失败。
+  - 适合“主端点 + 辅助端点”，例如 credits + key limit。
+
+默认 fallback 规则是保守的：timeout、网络错误、5xx、解析失败、无数据等会继续尝试后续 step；认证错误、配置缺失和 429 不会继续盲目 fallback。
 
 ## metadata
 
@@ -74,7 +91,7 @@ metadata:
   source_label: "api"        # 可选
 ```
 
-## availability
+## step availability
 
 当前支持：
 
@@ -103,29 +120,31 @@ availability:
 
 说明：
 
+- `availability` 是 step 级字段。
 - `~` 会展开到用户 home 目录。
-- 当前 loader 对 `availability` payload 的 fail-fast 校验仍然比较保守；某些空值问题可能要到运行时才暴露。
+- 不配置 `availability` 表示该 step 不做前置可用性检查。
 
 ## source
 
-当前支持四种 source：
+当前支持三种 source：
 
-### 1. `http_get`
+### 1. `http`
 
 ```yaml
 source:
-  type: http_get
+  type: http
+  method: get
   url: "/api/usage"
+  timeout_ms: 8000
   auth:
     type: bearer_env
     env_var: "MY_TOKEN"
 ```
 
-### 2. `http_post`
-
 ```yaml
 source:
-  type: http_post
+  type: http
+  method: post
   url: "/api/usage"
   auth:
     type: cookie
@@ -133,7 +152,13 @@ source:
   body: '{"scope":"coding"}'
 ```
 
-### 3. `cli`
+说明：
+
+- `method` 支持 `get` / `post`，默认是 `get`。
+- `timeout_ms` 可选，不配置时使用全局默认超时。
+- `post` 当前发送 JSON body。
+
+### 2. `cli`
 
 ```yaml
 source:
@@ -142,7 +167,7 @@ source:
   args: ["usage", "--json"]
 ```
 
-### 4. `placeholder`
+### 3. `placeholder`
 
 ```yaml
 source:
@@ -152,9 +177,9 @@ source:
 
 说明：
 
-- `placeholder` source 会把该自定义 provider 标记为 `Placeholder` capability。
+- 所有 step 都是 `placeholder` 时，该 provider 会标记为 `Placeholder` capability。
 - 这类 provider 会显示在 UI 中，但不会参与启动 / 周期 / 手动 / Debug 刷新。
-- `parser` 可以省略；即使配置了也不会改变它是非监控入口这一事实。
+- `parser` 可以省略。
 
 ## auth
 
@@ -170,24 +195,18 @@ HTTP source 当前支持：
 
 常见场景：
 
-- NewAPI / OneAPI 且需要完整 Cookie：
-
 ```yaml
 auth:
   type: cookie
   value: "session=...;cf_clearance=..."
 ```
 
-- 只持有单个 session cookie：
-
 ```yaml
 auth:
   type: session_token
   token: "eyJhbGci..."
-  cookie_name: "session"   # 默认就是 session
+  cookie_name: "session"
 ```
-
-- 共享环境变量中的 Bearer token：
 
 ```yaml
 auth:
@@ -267,20 +286,40 @@ preprocess:
 以下常见字段当前支持 `${ENV_VAR}` 语法：
 
 - `base_url`
-- 各类 URL 字段（如 `source.url`、`login_url`、`dashboard_url`）
+- URL 字段（如 `source.url`、`login_url`、`dashboard_url`）
 - `headers[].value`
 - `login.username`
 - `login.password`
 
 如果环境变量不存在，会展开为空字符串，因此更适合内部自用配置，而不是面向非技术用户分发的模板。
 
+## 旧 YAML 迁移
+
+旧版顶层 `availability/source/parser/preprocess` 可以用脚本迁移：
+
+```bash
+python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/BananaTray/providers --write
+```
+
+默认会生成 `.bak` 备份；确认无误后可自行删除。只预览不写入时去掉 `--write`。
+
+迁移规则：
+
+- 顶层 `source` / `parser` 移到 `plan.steps[0]`。
+- 顶层 `availability` 移到同一个 step。
+- `http_get` / `http_post` 转成 `source.type: http` + `method: get/post`。
+
 ## 当前会做的校验
 
 加载阶段当前会明确校验这些问题：
 
+- `schema_version` 必须为 `2`
 - `id` 不能为空
 - `metadata.display_name` 不能为空
+- `plan.steps` 至少包含一个 step
+- step `name` 不能为空
 - `source.command` / `source.url` 不能为空
+- HTTP POST 必须有 `body`
 - `parser.quotas` 不能为空
 - 正则表达式和 capture group 必须合法
 - `divisor` 必须为正数
@@ -295,16 +334,17 @@ preprocess:
 
 1. YAML 是否位于正确目录
 2. 扩展名是否为 `.yaml` 或 `.yml`
-3. YAML 语法是否有效
-4. 日志里是否有 `providers::custom` 的 warning
+3. 是否包含 `schema_version: 2`
+4. YAML 语法是否有效
+5. 日志里是否有 `providers::custom` 的 warning
 
 ### Provider 显示为 Disconnected 或 Unavailable
 
 优先检查：
 
 1. 认证信息是否过期
-2. `availability` 条件是否真的成立
-3. `source` 能否在命令行里独立跑通
+2. step 的 `availability` 条件是否真的成立
+3. `source` 能否独立跑通
 4. `parser` 的路径 / 正则是否和实际响应匹配
 
 ### 数值不正确
@@ -318,6 +358,7 @@ preprocess:
 ## 推荐做法
 
 - 先从最接近的示例开始改，而不是从空白 YAML 开始写。
+- 简单 API 用一个 step；主端点 + 辅助端点用 `merge`。
 - 先让 `source` 跑通，再写 `parser`。
 - 对 NewAPI / OneAPI 一类站点，优先使用完整 `cookie` 方式，而不是 `login`。
 - 只有当 UI 表单不满足需求时，才手写 NewAPI YAML。

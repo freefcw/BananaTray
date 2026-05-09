@@ -42,28 +42,38 @@ fn first_letter_icon(display_name: &str) -> String {
 mod tests {
     use super::*;
 
+    fn minimal_plan_yaml() -> &'static str {
+        r#"
+plan:
+  steps:
+    - name: cli
+      source:
+        type: cli
+        command: "echo"
+      parser:
+        format: regex
+        quotas:
+          - label: "Usage"
+            pattern: '(\d+)/(\d+)'
+"#
+    }
+
     #[test]
     fn test_custom_provider_descriptor() {
-        let yaml = r#"
+        let yaml = format!(
+            r#"
+schema_version: 2
 id: "test:cli"
 metadata:
   display_name: "Test Provider"
   brand_name: "TestBrand"
   dashboard_url: "https://test.com"
   source_label: "test cli"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
-"#;
-        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
 
         assert_eq!(desc.id.as_ref(), "test:cli");
@@ -95,25 +105,19 @@ parser:
 
     #[test]
     fn test_descriptor_explicit_icon_preserved() {
-        let yaml = r#"
+        let yaml = format!(
+            r#"
+schema_version: 2
 id: "test:cli"
 metadata:
   display_name: "Test Provider"
   brand_name: "TestBrand"
   icon: "X"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
-"#;
-        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(desc.metadata.icon_asset, "X");
     }
@@ -121,25 +125,19 @@ parser:
     #[test]
     fn test_dashboard_url_env_expansion() {
         std::env::set_var("TEST_CUSTOM_BASE_URL", "https://my-newapi.com");
-        let yaml = r#"
+        let yaml = format!(
+            r#"
+schema_version: 2
 id: "test:api"
 metadata:
   display_name: "Test"
   brand_name: "Test"
-  dashboard_url: "${TEST_CUSTOM_BASE_URL}/dashboard"
-availability:
-  type: cli_exists
-  value: "echo"
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
-"#;
-        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+  dashboard_url: "${{TEST_CUSTOM_BASE_URL}}/dashboard"
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(
             desc.metadata.dashboard_url,
@@ -150,25 +148,20 @@ parser:
 
     #[test]
     fn test_descriptor_with_base_url() {
-        let yaml = r#"
+        let yaml = format!(
+            r#"
+schema_version: 2
 id: "test:api"
 base_url: "https://my-site.com"
 metadata:
   display_name: "Test"
   brand_name: "Test"
   dashboard_url: "/dashboard"
-availability:
-  type: always
-source:
-  type: cli
-  command: "echo"
-parser:
-  format: regex
-  quotas:
-    - label: "Usage"
-      pattern: '(\d+)/(\d+)'
-"#;
-        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(desc.metadata.dashboard_url, "https://my-site.com/dashboard");
     }

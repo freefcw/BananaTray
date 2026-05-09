@@ -20,6 +20,18 @@ static AGENT: LazyLock<Agent> = LazyLock::new(|| {
     )
 });
 
+fn agent_with_timeout(timeout: Option<Duration>) -> Agent {
+    match timeout {
+        Some(timeout) => Agent::new_with_config(
+            ureq::config::Config::builder()
+                .http_status_as_error(false)
+                .timeout_global(Some(timeout))
+                .build(),
+        ),
+        None => AGENT.clone(),
+    }
+}
+
 // ── 结构化 HTTP 错误 ──────────────────────────────────
 
 /// HTTP 层结构化错误，provider 可通过 `downcast_ref::<HttpError>()` 精确分类。
@@ -110,9 +122,15 @@ fn check_status(
 /// 4xx/5xx → `HttpError::HttpStatus`，超时 → `HttpError::Timeout`
 #[allow(dead_code)]
 pub fn get(url: &str, headers: &[&str]) -> Result<String> {
+    get_with_timeout(url, headers, None)
+}
+
+/// Perform an HTTP GET with an optional per-request timeout.
+pub fn get_with_timeout(url: &str, headers: &[&str], timeout: Option<Duration>) -> Result<String> {
     debug!(target: "http", "GET {}", url);
 
-    let response = set_headers!(AGENT.get(url), headers)
+    let agent = agent_with_timeout(timeout);
+    let response = set_headers!(agent.get(url), headers)
         .call()
         .map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
 
@@ -171,10 +189,21 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
 ///
 /// 4xx/5xx → `HttpError::HttpStatus`，超时 → `HttpError::Timeout`
 pub fn post_json(url: &str, headers: &[&str], body: &str) -> Result<String> {
+    post_json_with_timeout(url, headers, body, None)
+}
+
+/// Perform an HTTP POST with a JSON body and an optional per-request timeout.
+pub fn post_json_with_timeout(
+    url: &str,
+    headers: &[&str],
+    body: &str,
+    timeout: Option<Duration>,
+) -> Result<String> {
     debug!(target: "http", "POST {} ({} bytes)", url, body.len());
 
+    let agent = agent_with_timeout(timeout);
     let response = set_headers!(
-        AGENT.post(url).header("Content-Type", "application/json"),
+        agent.post(url).header("Content-Type", "application/json"),
         headers
     )
     .send(body.as_bytes())
