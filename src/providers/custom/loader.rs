@@ -80,9 +80,38 @@ pub fn load_from_dir(dir: &Path) -> Vec<CustomProvider> {
 
 fn load_one(path: &Path) -> Result<CustomProvider> {
     let content = std::fs::read_to_string(path)?;
-    let def: CustomProviderDef = serde_yml::from_str(&content)?;
+    let def: CustomProviderDef =
+        serde_yml::from_str(&content).map_err(|err| augment_legacy_schema_hint(err, &content))?;
     validate(&def)?;
     CustomProvider::new(def)
+}
+
+/// 当 deserialize 失败且 YAML 看起来像旧 schema 时，在错误后追加迁移脚本提示。
+///
+/// `deny_unknown_fields` 让旧 YAML 顶层 `availability/source/parser` 在 deserialize
+/// 阶段就死于 `unknown field`，会丢掉 validate 阶段对 `schema_version` 的友好提示，
+/// 这里把同等提示补回来。
+fn augment_legacy_schema_hint(err: serde_yml::Error, content: &str) -> anyhow::Error {
+    if looks_like_legacy_schema(content) {
+        anyhow::anyhow!(
+            "{err}; YAML appears to use the legacy schema (top-level source/parser), \
+             run scripts/migrate_custom_provider_yaml.py to migrate to schema_version 2"
+        )
+    } else {
+        anyhow::Error::from(err)
+    }
+}
+
+fn looks_like_legacy_schema(content: &str) -> bool {
+    let has_schema_version = content
+        .lines()
+        .any(|line| line.trim_start().starts_with("schema_version:"));
+    if has_schema_version {
+        return false;
+    }
+    content
+        .lines()
+        .any(|line| line.starts_with("source:") || line.starts_with("availability:"))
 }
 
 /// 校验定义的合法性，在加载时 fail-fast
@@ -689,7 +718,8 @@ plan:
     }
 
     #[test]
-    fn test_legacy_yaml_deserializes_but_validation_rejects_schema() {
+    fn test_legacy_yaml_load_error_hints_migration_script() {
+        let dir = tempfile::tempdir().unwrap();
         let yaml = r#"
 id: "legacy:cli"
 metadata:
@@ -707,9 +737,46 @@ parser:
     - label: "Usage"
       pattern: '(\d+)/(\d+)'
 "#;
-        let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
-        let err = validate(&def).unwrap_err();
-        assert!(err.to_string().contains("migrate_custom_provider_yaml.py"));
+        let path = dir.path().join("legacy.yaml");
+        fs::write(&path, yaml).unwrap();
+
+        // load_one 应在 deserialize 失败后追加迁移脚本提示
+        let err = match load_one(&path) {
+            Ok(_) => panic!("expected legacy YAML to fail loading"),
+            Err(e) => e,
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("migrate_custom_provider_yaml.py"),
+            "got: {msg}"
+        );
+        assert!(msg.contains("legacy schema"), "got: {msg}");
+    }
+
+    #[test]
+    fn test_unknown_top_level_field_rejected() {
+        // 拼错字段名（plan -> plain）应被 deny_unknown_fields 拦住
+        let yaml = r#"
+schema_version: 2
+id: "typo:cli"
+metadata:
+  display_name: "Typo"
+  brand_name: "Typo"
+plain:
+  steps:
+    - name: cli
+      source:
+        type: cli
+        command: "echo"
+      parser:
+        format: regex
+        quotas:
+          - label: "Usage"
+            pattern: '(\d+)/(\d+)'
+"#;
+        let err = serde_yml::from_str::<CustomProviderDef>(yaml).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
+        assert!(err.to_string().contains("plain"));
     }
 
     #[test]
