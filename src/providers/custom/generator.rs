@@ -53,7 +53,7 @@ pub fn generate_newapi_yaml(config: &NewApiConfig) -> String {
         } else {
             let escaped_uid = escape_yaml_double_quoted(uid);
             format!(
-                "\n  headers:\n    - name: \"New-Api-User\"\n      value: \"{}\"",
+                "\n        headers:\n          - name: \"New-Api-User\"\n            value: \"{}\"",
                 escaped_uid
             )
         }
@@ -66,6 +66,7 @@ pub fn generate_newapi_yaml(config: &NewApiConfig) -> String {
 # 由 BananaTray 快速添加向导创建
 
 id: "{id}"
+schema_version: 2
 
 base_url: "{base_url}"
 
@@ -76,25 +77,29 @@ metadata:
   account_hint: "NewAPI account"
   source_label: "newapi api"
 
-availability:
-  type: always
-
-source:
-  type: http_get
-  url: "/api/user/self"
-  auth:
-    type: cookie
-    value: "{cookie}"{headers}
-
-parser:
-  format: json
-  account_email: "data.display_name"
-  quotas:
-    - label: "Balance"
-      remaining: "data.quota"
-      used: "data.used_quota"
-      quota_type: credit
-      divisor: {divisor}
+plan:
+  mode: first_success
+  steps:
+    - name: "api"
+      required: true
+      availability:
+        type: always
+      source:
+        type: http
+        method: get
+        url: "/api/user/self"
+        auth:
+          type: cookie
+          value: "{cookie}"{headers}
+      parser:
+        format: json
+        account_email: "data.display_name"
+        quotas:
+          - label: "Balance"
+            remaining: "data.quota"
+            used: "data.used_quota"
+            quota_type: credit
+            divisor: {divisor}
 "#,
         id = id,
         base_url = base_url_escaped,
@@ -108,7 +113,7 @@ parser:
 /// 从已有 YAML 配置文件中读取 NewAPI 配置，用于编辑模式回填表单。
 ///
 /// 遍历 providers 目录，找到 id 匹配的 YAML 文件并解析为 NewApiEditData。
-/// 仅支持 NewAPI 型（HttpGet + Cookie auth）Provider。
+/// 仅支持 NewAPI 型（HTTP GET + Cookie auth）Provider。
 ///
 /// **注意**：此函数包含磁盘 I/O，由 `NewApiEffect::LoadConfig` handler 调用。
 #[cfg(feature = "app")]
@@ -166,9 +171,10 @@ fn parse_newapi_edit_data(
 ) -> Option<NewApiEditData> {
     use super::schema::{AuthDef, SourceDef};
 
-    // 从 SourceDef 提取 cookie 和 headers（非 HttpGet 的返回 None）
-    let (cookie, user_id) = match &def.source {
-        SourceDef::HttpGet { auth, headers, .. } => {
+    // 从第一个 step 的 SourceDef 提取 cookie 和 headers（非 HTTP 的返回 None）
+    let step = def.plan.steps.first()?;
+    let (cookie, user_id) = match &step.source {
+        SourceDef::Http { auth, headers, .. } => {
             let cookie = match auth {
                 Some(AuthDef::Cookie { value }) => value.clone(),
                 Some(AuthDef::SessionToken { token, cookie_name }) => {
@@ -187,7 +193,7 @@ fn parse_newapi_edit_data(
     };
 
     // 从 parser 提取 divisor
-    let divisor = def.parser.as_ref().and_then(|p| {
+    let divisor = step.parser.as_ref().and_then(|p| {
         if let super::schema::ParserDef::Json { quotas, .. } = p {
             quotas.first().and_then(|q| q.divisor)
         } else {
@@ -344,14 +350,16 @@ mod tests {
         assert_eq!(def.metadata.display_name, "Test API");
         assert_eq!(def.base_url.as_deref(), Some("https://my-api.example.com"));
 
+        assert_eq!(def.schema_version, 2);
+        let step = def.plan.steps.first().expect("should have one step");
         // 验证使用 cookie auth 类型
-        if let crate::providers::custom::schema::SourceDef::HttpGet { auth, .. } = &def.source {
+        if let crate::providers::custom::schema::SourceDef::Http { auth, .. } = &step.source {
             assert!(matches!(
                 auth.as_ref().unwrap(),
                 crate::providers::custom::schema::AuthDef::Cookie { .. }
             ));
         } else {
-            panic!("Expected HttpGet source");
+            panic!("Expected HTTP source");
         }
     }
 
@@ -367,8 +375,8 @@ mod tests {
             serde_yml::from_str(&yaml).expect("Generated YAML with user_id should be valid");
 
         // URL 始终为 /api/user/self，user_id 仅用于 header
-        if let crate::providers::custom::schema::SourceDef::HttpGet { url, headers, .. } =
-            &def.source
+        let step = def.plan.steps.first().expect("should have one step");
+        if let crate::providers::custom::schema::SourceDef::Http { url, headers, .. } = &step.source
         {
             assert_eq!(url, "/api/user/self");
             // 验证 New-Api-User header 存在
@@ -376,7 +384,7 @@ mod tests {
             assert_eq!(headers[0].name, "New-Api-User");
             assert_eq!(headers[0].value, "42");
         } else {
-            panic!("Expected HttpGet source");
+            panic!("Expected HTTP source");
         }
     }
 

@@ -19,13 +19,14 @@
 ```
 custom/
   mod.rs          — 模块入口，re-export
-  schema.rs       — YAML 反序列化结构体
+  schema.rs       — YAML v2 plan/step 反序列化结构体
   extractor.rs    — 响应解析（JSON 路径提取 / 正则匹配）
-  provider.rs     — CustomProvider 门面（impl AiProvider，只编排 descriptor / availability / fetch / parse）
+  plan.rs         — 编译后的执行计划，集中处理 step availability / fallback / merge
+  provider.rs     — CustomProvider 门面（impl AiProvider，转发 descriptor / availability / refresh）
   descriptor.rs   — ProviderDescriptor 与默认首字母 icon 生成
   availability.rs — availability 规则解释执行（CLI / env / file / JSON / dir）
   auth.rs         — auth/header 解析、环境变量凭证、file token、login token
-  fetch.rs        — source 解释执行（CLI / HTTP GET / HTTP POST / placeholder）与 preprocess
+  fetch.rs        — source 解释执行（CLI / HTTP / placeholder）与 preprocess
   url.rs          — base_url 拼接、${ENV_VAR} 展开、~ 路径展开
   log_utils.rs    — 日志截断与认证 header 脱敏
   json_file.rs    — 本地 JSON 文件读取公共基础设施
@@ -35,17 +36,16 @@ custom/
 
 ## 设计原则
 
-- **SRP**: 每个模块职责单一（schema 定义 / 可用性检查 / 认证 / 获取 / 解析 / Provider 门面 / 文件加载）
+- **SRP**: 每个模块职责单一（schema 定义 / plan 编排 / 可用性检查 / 认证 / 获取 / 解析 / Provider 门面 / 文件加载）
 - **OCP**: 新增自定义 Provider 只需添加 YAML 文件，不修改任何 Rust 代码
-- **DIP**: CustomProvider 依赖 descriptor / availability / fetch / extractor 的函数接口，不依赖具体实现细节
+- **DIP**: CustomProvider 依赖 descriptor / plan 的窄接口，不直接依赖 availability / fetch / extractor 的执行细节
 
 ## 支持的数据获取方式
 
 | type       | 说明 |
 |------------|------|
 | `cli`        | 执行 CLI 命令，获取 stdout/stderr |
-| `http_get`   | HTTP GET 请求 |
-| `http_post`  | HTTP POST 请求（JSON body） |
+| `http`       | HTTP GET / POST 请求，支持 `method` 和 `timeout_ms` |
 | `placeholder`| 占位：不获取数据，仅检测安装状态；运行时 capability 为 `Placeholder` |
 
 `placeholder` source 的稳定语义：
@@ -53,6 +53,17 @@ custom/
 - 会显示在 provider 列表里，方便保留入口或安装检测。
 - 不参与正常刷新，也不会在 UI 中显示 retry / refresh 动作。
 - 可省略 `parser`；即使配置了也不会把它变成 monitorable provider。
+
+## Plan 语义
+
+YAML 顶层固定使用 `schema_version: 2` 和 `plan.steps`。
+
+| mode | 说明 |
+|------|------|
+| `first_success` | 按顺序执行 step，首个成功结果作为刷新结果 |
+| `merge` | 执行多个 step，合并成功 step 的 quotas；`required: false` 的失败不阻断刷新 |
+
+旧版顶层 `availability/source/parser/preprocess` 不再是运行时兼容路径；一次性迁移脚本为 `scripts/migrate_custom_provider_yaml.py`。
 
 ## 支持的认证方式
 
@@ -90,8 +101,8 @@ custom/
 
 | 字段 | 说明 |
 |------|------|
-| `source.url` | HTTP 请求 URL（如 `${NEWAPI_BASE_URL}/api/user/self`） |
-| `source.headers[].value` | HTTP header 值 |
+| `plan.steps[].source.url` | HTTP 请求 URL（如 `${NEWAPI_BASE_URL}/api/user/self`） |
+| `plan.steps[].source.headers[].value` | HTTP header 值 |
 | `metadata.dashboard_url` | 面板跳转链接 |
 
 ## 数值变换

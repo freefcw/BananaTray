@@ -38,7 +38,8 @@
 
 - 手工新增或编辑 YAML 后，当前通常需要重启应用才能重新加载。
 - 应用内通过 NewAPI 表单保存 / 删除 provider 时，会显式触发 reload。
-- `source: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
+- 当前运行时只支持 `schema_version: 2` + `plan.steps`；旧版顶层 `source` / `parser` YAML 需用 `scripts/migrate_custom_provider_yaml.py` 一次性迁移。
+- 所有 step 都是 `source.type: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
 - 详细 Schema 和示例见 `custom-provider.md` 与 `docs/examples/`。
 
 ## Stable Provider Contract

@@ -8,6 +8,7 @@ pub(crate) mod generator;
 mod json_file;
 pub(crate) mod loader;
 mod log_utils;
+mod plan;
 pub(crate) mod provider;
 pub(crate) mod schema;
 mod url;

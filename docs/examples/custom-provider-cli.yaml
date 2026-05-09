@@ -7,6 +7,7 @@
 
 id: "myai:cli"
 
+schema_version: 2
 metadata:
   display_name: "My AI Tool"
   brand_name: "MyCompany"
@@ -16,24 +17,29 @@ metadata:
   source_label: "myai cli"
 
 # 可用性检查：检测 CLI 是否安装
-availability:
-  type: cli_exists
-  value: "myai"
+plan:
+  mode: first_success
+  steps:
+    - name: "default"
+      required: true
+      availability:
+        type: cli_exists
+        value: "myai"
 
-# 数据获取：执行 CLI 命令
-source:
-  type: cli
-  command: "myai"
-  args: ["usage", "--no-color"]
+      # 数据获取：执行 CLI 命令
+      source:
+        type: cli
+        command: "myai"
+        args: ["usage", "--no-color"]
 
-# 响应解析：用正则表达式提取配额数据
-parser:
-  format: regex
-  # 从输出中提取账户邮箱（可选）
-  account_email: 'Signed in as\s+(\S+)'
-  quotas:
-    - label: "Monthly Credits"
-      pattern: 'Credits:\s*\$([0-9.]+)\s*/\s*\$([0-9.]+)'
-      used_group: 1
-      limit_group: 2
-      quota_type: credit
+      # 响应解析：用正则表达式提取配额数据
+      parser:
+        format: regex
+        # 从输出中提取账户邮箱（可选）
+        account_email: 'Signed in as\s+(\S+)'
+        quotas:
+          - label: "Monthly Credits"
+            pattern: 'Credits:\s*\$([0-9.]+)\s*/\s*\$([0-9.]+)'
+            used_group: 1
+            limit_group: 2
+            quota_type: credit
