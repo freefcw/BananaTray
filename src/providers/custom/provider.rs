@@ -36,7 +36,7 @@ impl AiProvider for CustomProvider {
     }
 
     async fn check_availability(&self) -> ProviderResult<()> {
-        self.plan.check_availability(&self.def.plan)
+        self.plan.check_availability()
     }
 
     async fn refresh(&self) -> ProviderResult<RefreshData> {
@@ -46,11 +46,10 @@ impl AiProvider for CustomProvider {
             "[{}] refresh started ({} step(s), mode={:?})",
             id,
             self.step_count(),
-            self.def.plan.mode
+            self.plan.mode()
         );
 
-        self.plan
-            .execute(&self.def.id, &self.def.base_url, &self.def.plan)
+        self.plan.execute(&self.def.id, &self.def.base_url)
     }
 
     fn settings_capability(&self) -> crate::models::SettingsCapability {
@@ -63,7 +62,7 @@ impl AiProvider for CustomProvider {
     }
 
     fn provider_capability(&self) -> ProviderCapability {
-        if super::plan::is_placeholder_only(&self.def.plan) {
+        if self.plan.is_placeholder_only() {
             ProviderCapability::Placeholder
         } else {
             ProviderCapability::Monitorable

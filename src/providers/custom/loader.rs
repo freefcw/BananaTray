@@ -89,7 +89,8 @@ fn load_one(path: &Path) -> Result<CustomProvider> {
 fn validate(def: &CustomProviderDef) -> Result<()> {
     if def.schema_version != 2 {
         anyhow::bail!(
-            "'schema_version' must be 2; run scripts/migrate_custom_provider_yaml.py for legacy YAML"
+            "'schema_version' is {} but must be 2; run scripts/migrate_custom_provider_yaml.py for legacy YAML",
+            def.schema_version
         );
     }
     if def.id.is_empty() {
@@ -311,6 +312,8 @@ mod tests {
         def.schema_version = 1;
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("schema_version"));
+        // 验证错误信息包含实际值
+        assert!(err.to_string().contains(" is 1 "));
     }
 
     #[test]

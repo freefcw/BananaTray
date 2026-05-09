@@ -785,9 +785,9 @@
 
 - 核心文件：`src/providers/custom/schema.rs`、`provider.rs`、`fetch.rs`、`extractor.rs`、`loader.rs`、`docs/custom-provider.md`
 - 抽象：`CustomProvider: AiProvider` 解释 YAML。
-- 数据源：CLI、HTTP GET、HTTP POST、placeholder。
+- 数据源：CLI、HTTP（GET/POST + per-request timeout）、placeholder。
 - 认证：bearer、bearer_env、header_env、file_token、login、cookie、session_token。
-- fallback：无内建多策略 fallback，一份 YAML 选择一种 source。
+- fallback：`schema_version: 2` 的 `plan.steps` 支持 `first_success`（按顺序回退）和 `merge`（多端点聚合）；每个 step 独立 availability / source / parser / preprocess。
 - 返回：统一 `RefreshData` / `QuotaInfo`。
 - 设置：NewAPI provider 可编辑，自定义 provider 进入通用 provider 列表。
 
@@ -809,10 +809,10 @@
 
 ### 差异与借鉴
 
-- BananaTray YAML 安全、可控、易分发，但表达复杂 fallback 较弱。
+- BananaTray YAML 安全、可控、易分发；`schema_version: 2` 的 `plan.steps` 已支持 `first_success` 回退链和 `merge` 多端点聚合，表达力大幅提升。
 - ClaudeBar 脚本扩展表达力最强，但安全边界和跨平台诊断成本更高。
 - CodexBar descriptor/pipeline 最适合高质量内置 provider。
-- 最合理的 BananaTray 方向：保留 YAML custom，同时给内置多源 provider 引入轻量 strategy attempts。
+- BananaTray 方向：保留 YAML custom（plan/step 已满足绝大部分多源场景），内置 provider 继续用 Rust trait 实现。
 
 ## 对 BananaTray 的优先建议
 
@@ -823,4 +823,4 @@
 5. 对 Copilot 借鉴 CodexBar Device Flow，但保留 BananaTray 现有多 token source 自动发现能力。
 6. 对 Placeholder provider 优先评估 Kilo/OpenCode：CodexBar 已有真实监控实现，可作为升级参考。
 7. 对 Gemini/Cursor 借鉴 CodexBar 的 primary/secondary/tertiary 聚合展示，减少 provider-specific quota 在 UI 的散乱感。
-8. 对 YAML custom provider 不建议直接开放任意脚本；若要增强表达力，优先增加受限的 schema 能力和可观测错误。
+8. YAML custom provider 的 `plan.steps` 已支持 `first_success` 和 `merge` 两种多源编排，不建议再开放任意脚本执行；若需进一步增强表达力，优先增加受限的 schema 能力和可观测错误。
