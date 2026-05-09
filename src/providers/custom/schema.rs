@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 /// 自定义 Provider 的 YAML 定义（顶层结构）
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CustomProviderDef {
     /// Schema 版本。新版自定义 Provider 固定为 2。
     #[serde(default)]
@@ -20,6 +21,7 @@ pub struct CustomProviderDef {
 
 /// Provider 展示元数据
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MetadataDef {
     pub display_name: String,
     pub brand_name: String,
@@ -35,6 +37,7 @@ pub struct MetadataDef {
 
 /// 自定义 Provider 的执行计划。
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanDef {
     #[serde(default = "default_plan_mode")]
     pub mode: PlanMode,
@@ -67,6 +70,7 @@ fn default_plan_mode() -> PlanMode {
 
 /// 单个 source/parser 执行步骤。
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanStepDef {
     pub name: String,
     #[serde(default = "default_required")]
@@ -96,7 +100,7 @@ fn default_account_hint() -> String {
 
 /// 可用性检查方式
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AvailabilityDef {
     /// 检查 CLI 命令是否存在
     CliExists { value: String },
@@ -130,7 +134,7 @@ pub enum AvailabilityDef {
 
 /// 数据获取方式
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SourceDef {
     /// 执行 CLI 命令
     Cli {
@@ -175,7 +179,7 @@ fn default_http_method() -> HttpMethodDef {
 
 /// 认证方式
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthDef {
     /// Bearer token 直接写在配置中
     Bearer { token: String },
@@ -251,6 +255,7 @@ fn default_session_key() -> String {
 
 /// 自定义 HTTP header
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HeaderDef {
     pub name: String,
     pub value: String,
@@ -258,7 +263,7 @@ pub struct HeaderDef {
 
 /// 响应解析规则
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "format", rename_all = "snake_case")]
+#[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ParserDef {
     /// JSON 响应解析
     Json {
@@ -287,6 +292,7 @@ pub enum ParserDef {
 /// - 传统模式：`used` + `limit`（已用量 / 总配额），有进度条
 /// - 余额模式：`remaining`（+ 可选 `used`），无进度条，仅展示余额
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct JsonQuotaRule {
     /// 显示标签
     pub label: String,
@@ -312,6 +318,7 @@ pub struct JsonQuotaRule {
 
 /// 正则模式的单条配额提取规则
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegexQuotaRule {
     /// 显示标签
     pub label: String,
