@@ -91,7 +91,7 @@ function validateProvider(provider, index, warn) {
     provider.quotas.forEach((quota, quotaIndex) => validateQuota(quota, provider.id, quotaIndex, warn));
 }
 
-function validateSnapshot(data, warn) {
+export function validateSnapshot(data, warn) {
     if (!isPlainObject(data))
         throw new Error('snapshot is not an object');
     if (data.schema_version !== SUPPORTED_SCHEMA_VERSION)
@@ -109,7 +109,7 @@ function validateSnapshot(data, warn) {
     return data;
 }
 
-function parseSnapshot(jsonData, warn) {
+export function parseSnapshot(jsonData, warn) {
     return validateSnapshot(JSON.parse(jsonData), warn);
 }
 
