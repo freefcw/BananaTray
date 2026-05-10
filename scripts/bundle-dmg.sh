@@ -87,8 +87,9 @@ if command -v create-dmg >/dev/null 2>&1; then
         --hdiutil-quiet
     )
 
-    # 添加背景图片（如果存在）
-    if [ -f "$BACKGROUND_SRC" ]; then
+    # 添加背景图片（如果存在且非占位文件）
+    # 最小 1KB 防止 1x1 占位 PNG 导致 create-dmg AppleScript 失败
+    if [ -f "$BACKGROUND_SRC" ] && [ "$(wc -c < "$BACKGROUND_SRC" | tr -d ' ')" -gt 1024 ]; then
         DMG_ARGS+=(--background "$DMG_DIR/.background.png")
     fi
 
