@@ -111,9 +111,6 @@ msgstr "正在等待 BananaTray 后台服务"
 msgid "Waiting for daemon"
 msgstr "正在等待后台服务"
 
-msgid "%(connected)d/%(total)d OK"
-msgstr "%(connected)d/%(total)d 正常"
-
 msgid "%d connected"
 msgid_plural "%d connected"
 msgstr[0] "%d 个已连接"
