@@ -57,6 +57,10 @@ else
   node --check "$tmp_dir/quotaPresentation.js"
   node --check "$tmp_dir/quotaWidgets.js"
   node --check "$tmp_dir/gnome-extension-mock-daemon.mjs"
+
+  # Unit tests for pure presentation functions
+  node --import ./gnome-shell-extension/tests/register.mjs \
+       --test ./gnome-shell-extension/tests/*.test.mjs
 fi
 
 if ! command -v msgfmt >/dev/null 2>&1; then

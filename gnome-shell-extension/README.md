@@ -50,7 +50,41 @@ D-Bus activation；如果命令失败，先确认 BananaTray 主程序或 activa
 
 ## 安装
 
-### 用户安装目录（推荐，无需 root）
+### 从 extensions.gnome.org 安装（推荐）
+
+访问 [BananaTray on e.g.o](https://extensions.gnome.org/) 搜索 **BananaTray**，
+点击开关启用即可。GNOME Shell 会自动下载、安装和管理更新。
+
+### 从 zip 文件安装
+
+如果你拿到的是发布的 `.zip` 文件（来自 GitHub Release 或手动打包）：
+
+```bash
+gnome-extensions install bananatray@bananatray.github.io-1.0.0.zip
+
+# 重新加载 GNOME Shell
+# Wayland: 注销并重新登录
+# X11: Alt+F2 → 输入 'r' → 回车
+
+# 启用扩展
+gnome-extensions enable bananatray@bananatray.github.io
+```
+
+`gnome-extensions install` 会将 zip 解压到
+`~/.local/share/gnome-shell/extensions/bananatray@bananatray.github.io/`。
+如果之前已安装旧版本，加 `--force` 覆盖：
+
+```bash
+gnome-extensions install --force bananatray@bananatray.github.io-1.1.0.zip
+```
+
+> **注意**：Extension zip 只包含 GNOME Shell 面板 UI（JS、CSS、翻译和图标），
+> 不包含 BananaTray Rust 可执行文件。扩展通过 D-Bus 从 daemon 获取配额数据，
+> 因此还需要从 [GitHub Releases](https://github.com/freefcw/BananaTray/releases)
+> 下载并安装 BananaTray 主程序（deb/rpm/AppImage）。
+> 详见下方"[数据来源](#数据来源)"。
+
+### 从源码安装（开发者，无需 root）
 
 ```bash
 # 递归复制扩展文件、启用扩展，并输出当前 Shell 状态
@@ -106,6 +140,22 @@ gnome-extensions info bananatray@bananatray.github.io
 如果显示 `State: OUT OF DATE`，说明当前 GNOME Shell 版本不在
 `metadata.json` 的 `shell-version` 列表里，Shell 不会加载扩展。更新
 `metadata.json` 后需要重新复制扩展文件，并在 Wayland 会话注销重登。
+
+## 打包发布
+
+生成符合 [extensions.gnome.org](https://extensions.gnome.org/) 提交要求的 zip 文件：
+
+```bash
+bash scripts/bundle-gnome-extension.sh
+```
+
+输出到 `target/release/bundle/bananatray@bananatray.github.io-<version>.zip`。
+可用 `--check` 在打包前执行静态检查，`--output DIR` 指定输出目录。
+
+发布新版本时，先递增 `metadata.json` 中的整数 `version` 字段，再运行打包脚本，
+最后上传 zip 到 https://extensions.gnome.org/upload/ 。
+
+维护者指南详见 `docs/gnome-shell-extension-development.md`。
 
 ## D-Bus 接口
 
@@ -330,10 +380,18 @@ gdbus introspect --session --dest com.bananatray.Daemon \
 
 ### 修改后重载
 
+推荐使用 watch 脚本自动热重载（GNOME 45+ ESM 支持 disable/enable 重载模块）：
+
+```bash
+bash scripts/dev-gnome-extension-watch.sh
+```
+
+手动重载：
+
 1. 修改扩展 JS 模块或 `stylesheet.css`
 2. 复制更新后的文件到扩展目录
-3. 重新加载 GNOME Shell（X11: Alt+F2 → `r`；Wayland: 注销重登）
-4. 或使用 `gnome-extensions disable/enable` 切换
+3. `gnome-extensions disable bananatray@bananatray.github.io && gnome-extensions enable bananatray@bananatray.github.io`
+4. 如果 disable/enable 未生效：X11 用 Alt+F2 → `r`；Wayland 注销重登
 
 ## 排障
 

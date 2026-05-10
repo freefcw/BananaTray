@@ -40,19 +40,59 @@
     color: rgba(255, 255, 255, 0.58);
 }
 
-.bananatray-icon-button {
-    width: 28px;
-    height: 28px;
-    padding: 5px;
-    border-radius: 6px;
+/* -- Header Status Badge (color-coded by status_kind) -- */
+.bananatray-header-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 9pt;
+    font-weight: bold;
+    spacing: 6px;
 }
 
-.bananatray-icon-button:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+.bananatray-header-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
 }
 
-.bananatray-button-icon {
-    icon-size: 16px;
+.bananatray-header-badge-synced {
+    background-color: rgba(76, 175, 80, 0.15);
+}
+.bananatray-header-badge-synced .bananatray-header-badge-dot {
+    background-color: #4caf50;
+}
+.bananatray-header-badge-synced .bananatray-header-badge-text {
+    color: #8ee89a;
+}
+
+.bananatray-header-badge-syncing {
+    background-color: rgba(100, 181, 246, 0.15);
+}
+.bananatray-header-badge-syncing .bananatray-header-badge-dot {
+    background-color: #64b5f6;
+}
+.bananatray-header-badge-syncing .bananatray-header-badge-text {
+    color: #90caf9;
+}
+
+.bananatray-header-badge-stale {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+.bananatray-header-badge-stale .bananatray-header-badge-dot {
+    background-color: rgba(255, 255, 255, 0.40);
+}
+.bananatray-header-badge-stale .bananatray-header-badge-text {
+    color: rgba(255, 255, 255, 0.54);
+}
+
+.bananatray-header-badge-offline {
+    background-color: rgba(244, 67, 54, 0.14);
+}
+.bananatray-header-badge-offline .bananatray-header-badge-dot {
+    background-color: #f44336;
+}
+.bananatray-header-badge-offline .bananatray-header-badge-text {
+    color: #ff8a80;
 }
 
 /* -- Summary -- */
@@ -133,6 +173,43 @@
     color: rgba(255, 255, 255, 0.55);
 }
 
+/* -- Tier Badge (pill) -- */
+.bananatray-tier-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background-color: rgba(100, 181, 246, 0.16);
+    color: #90caf9;
+    font-size: 8pt;
+    font-weight: bold;
+}
+
+/* -- Expand / Collapse Button -- */
+.bananatray-expand-button {
+    min-width: 22px;
+    min-height: 22px;
+    border-radius: 4px;
+    font-size: 9pt;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.60);
+}
+
+.bananatray-expand-button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.90);
+}
+
+/* -- Collapsed Quota Inline (shown in folded state) -- */
+.bananatray-collapsed-value {
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+.bananatray-collapsed-extra {
+    font-size: 8pt;
+    color: rgba(255, 255, 255, 0.45);
+    font-weight: bold;
+}
+
 /* -- Quotas -- */
 .bananatray-quota-list {
     padding-left: 38px;
@@ -160,7 +237,6 @@
 }
 
 .bananatray-quota-bar {
-    width: 96px;
     height: 5px;
     border-radius: 3px;
     background-color: rgba(255, 255, 255, 0.12);
@@ -235,17 +311,38 @@
 .bananatray-footer {
     padding: 8px 12px 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    spacing: 8px;
 }
 
-.bananatray-open-settings {
-    font-size: 10pt;
+.bananatray-footer-btn {
     padding: 7px 12px;
     border-radius: 6px;
+    font-size: 10pt;
+    spacing: 6px;
 }
 
-.bananatray-open-settings:hover {
+.bananatray-footer-btn:hover {
     background-color: rgba(255, 255, 255, 0.08);
 }
+
+.bananatray-footer-btn-primary {
+    background-color: rgba(100, 181, 246, 0.16);
+    color: #90caf9;
+    font-weight: bold;
+}
+
+.bananatray-footer-btn-primary:hover {
+    background-color: rgba(100, 181, 246, 0.24);
+}
+
+.bananatray-footer-btn-icon {
+    icon-size: 14px;
+}
+
+.bananatray-footer-btn-content {
+    spacing: 6px;
+}
+
 
 /* -- Scrollable Area -- */
 .bananatray-scrollview {

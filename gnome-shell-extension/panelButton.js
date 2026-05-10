@@ -9,7 +9,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 import {_} from './i18n.js';
 import {QuotaClient} from './quotaClient.js';
-import {normalizeStatusLevel, summarizeProviders} from './quotaPresentation.js';
+import {normalizeStatusKind, normalizeStatusLevel, summarizeProviders} from './quotaPresentation.js';
 import {BananaTrayProviderRow, createLabel, createStatusDot} from './quotaWidgets.js';
 
 export const BananaTrayIndicator = GObject.registerClass(
@@ -18,6 +18,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
         super._init(0.0, 'BananaTray', false);
 
         this._extension = extension;
+        this._isRefreshing = false;
+        this._pendingSnapshot = null;
         this._panelBox = new St.BoxLayout({
             style_class: 'bananatray-panel-indicator',
             y_align: Clutter.ActorAlign.CENTER,
@@ -29,7 +31,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
             text: 'BT',
             style_class: 'bananatray-panel-summary',
             y_align: Clutter.ActorAlign.CENTER,
-        }, false);
+        });
 
         this._panelBox.add_child(this._panelIcon);
         this._panelBox.add_child(this._panelDot);
@@ -39,7 +41,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._client = new QuotaClient({
             onReady: () => this._showLoading(_('Loading quota data')),
             onVanished: () => this._showLoading(_('BananaTray daemon not running'), 'red', _('Offline')),
-            onSnapshot: snapshot => this._updateAllRows(snapshot),
+            onSnapshot: snapshot => this._onSnapshotReceived(snapshot),
             onError: (logMessage, uiMessage) => this._handleClientError(logMessage, uiMessage),
             onLog: message => this._handleClientLog(message),
         });
@@ -60,6 +62,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
     _buildUI() {
         this.menu.box.add_style_class_name('bananatray-menu-box');
 
+        // -- Header --
         const headerBox = new St.BoxLayout({
             style_class: 'bananatray-header',
             vertical: false,
@@ -86,30 +89,29 @@ class BananaTrayIndicator extends PanelMenu.Button {
         titleBlock.add_child(this._statusLabel);
         headerBox.add_child(titleBlock);
 
-        this._refreshButton = new St.Button({
-            style_class: 'bananatray-icon-button',
-            y_align: Clutter.ActorAlign.CENTER,
-            child: new St.Icon({
-                icon_name: 'view-refresh-symbolic',
-                style_class: 'bananatray-button-icon',
-            }),
-        });
-        this._refreshButton.connect('clicked', () => {
-            this._setPanelState('yellow', _('Refreshing'));
-            this._statusLabel.text = _('Refreshing');
-            this._client.refreshAll();
-        });
-        headerBox.add_child(this._refreshButton);
+        // Header status badge (color-coded)
+        this._headerBadge = this._createHeaderBadge('stale', _('Waiting'));
+        this._headerBadgeDot = this._headerBadge.get_first_child();
+        this._headerBadgeLabel = this._headerBadgeDot?.get_next_sibling();
+        headerBox.add_child(this._headerBadge);
 
         this.menu.box.add_child(headerBox);
 
+        // -- Summary (created once, updated incrementally) --
         this._summaryBox = new St.BoxLayout({
             style_class: 'bananatray-summary',
             vertical: false,
             x_expand: true,
         });
+        this._summaryProviders = this._createSummaryCell(_('Providers'), '0');
+        this._summaryConnected = this._createSummaryCell(_('Connected'), '0');
+        this._summaryAttention = this._createSummaryCell(_('Attention'), '0');
+        this._summaryBox.add_child(this._summaryProviders.cell);
+        this._summaryBox.add_child(this._summaryConnected.cell);
+        this._summaryBox.add_child(this._summaryAttention.cell);
         this.menu.box.add_child(this._summaryBox);
 
+        // -- Scrollable provider list --
         this._scrollView = new St.ScrollView({
             style_class: 'bananatray-scrollview vfade',
             overlay_scrollbars: true,
@@ -123,6 +125,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._scrollView.set_child(this._providerList);
         this.menu.box.add_child(this._scrollView);
 
+        // -- Message label (loading/error) --
         this._messageLabel = createLabel({
             text: _('Waiting for BananaTray daemon'),
             style_class: 'bananatray-loading',
@@ -130,26 +133,116 @@ class BananaTrayIndicator extends PanelMenu.Button {
         });
         this.menu.box.add_child(this._messageLabel);
 
+        // -- Footer: Sync Data + spacer + Settings --
         const footer = new St.BoxLayout({
             style_class: 'bananatray-footer',
             x_expand: true,
         });
-        const openSettingsButton = new St.Button({
-            style_class: 'bananatray-open-settings',
-            label: _('Open Settings'),
-            x_expand: true,
-            x_align: Clutter.ActorAlign.CENTER,
+
+        // Sync Data button (primary)
+        this._syncButton = new St.Button({
+            style_class: 'bananatray-footer-btn bananatray-footer-btn-primary',
+            x_expand: false,
         });
-        openSettingsButton.connect('clicked', () => this._client.openSettings());
-        footer.add_child(openSettingsButton);
+        const syncContent = new St.BoxLayout({
+            style_class: 'bananatray-footer-btn-content',
+            vertical: false,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        syncContent.add_child(new St.Icon({
+            icon_name: 'view-refresh-symbolic',
+            style_class: 'bananatray-footer-btn-icon',
+        }));
+        this._syncLabel = createLabel({
+            text: _('Sync Data'),
+            y_align: Clutter.ActorAlign.CENTER,
+        }, false);
+        syncContent.add_child(this._syncLabel);
+        this._syncButton.set_child(syncContent);
+        this._syncButton.connect('clicked', () => {
+            if (this._isRefreshing)
+                return;
+            this._isRefreshing = true;
+            this._syncLabel.text = _('Refreshing');
+            this._setPanelState('yellow', _('Refreshing'));
+            this._statusLabel.text = _('Refreshing');
+            this._client.refreshAll();
+        });
+        footer.add_child(this._syncButton);
+
+        // Spacer
+        footer.add_child(new St.Widget({x_expand: true}));
+
+        // Settings button
+        const settingsButton = new St.Button({
+            style_class: 'bananatray-footer-btn',
+            x_expand: false,
+        });
+        const settingsContent = new St.BoxLayout({
+            style_class: 'bananatray-footer-btn-content',
+            vertical: false,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        settingsContent.add_child(new St.Icon({
+            icon_name: 'preferences-system-symbolic',
+            style_class: 'bananatray-footer-btn-icon',
+        }));
+        settingsContent.add_child(createLabel({
+            text: _('Settings'),
+            y_align: Clutter.ActorAlign.CENTER,
+        }, false));
+        settingsButton.set_child(settingsContent);
+        settingsButton.connect('clicked', () => this._client.openSettings());
+        footer.add_child(settingsButton);
+
         this.menu.box.add_child(footer);
+
+        // Lazy rendering: only rebuild popup content when menu opens
+        this.menu.connect('open-state-changed', (_menu, open) => {
+            if (open && this._pendingSnapshot) {
+                this._updateAllRows(this._pendingSnapshot);
+                this._pendingSnapshot = null;
+            }
+        });
 
         this._scrollView.hide();
         this._summaryBox.hide();
     }
 
+    _createHeaderBadge(statusKind, text) {
+        const kind = normalizeStatusKind(statusKind);
+        const badge = new St.BoxLayout({
+            style_class: `bananatray-header-badge bananatray-header-badge-${kind}`,
+            vertical: false,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const dot = new St.Widget({
+            style_class: 'bananatray-header-badge-dot',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const label = createLabel({
+            text,
+            style_class: 'bananatray-header-badge-text',
+            y_align: Clutter.ActorAlign.CENTER,
+        }, false);
+        badge.add_child(dot);
+        badge.add_child(label);
+        return badge;
+    }
+
+    _updateHeaderBadge(statusKind, text) {
+        if (!this._headerBadge)
+            return;
+        const kind = normalizeStatusKind(statusKind);
+        this._headerBadge.style_class = `bananatray-header-badge bananatray-header-badge-${kind}`;
+        if (this._headerBadgeLabel)
+            this._headerBadgeLabel.text = text;
+    }
+
     _handleClientError(logMessage, uiMessage) {
         log(`BananaTray: ${logMessage}`);
+        this._isRefreshing = false;
+        this._syncLabel.text = _('Sync Data');
         if (uiMessage)
             this._showError(uiMessage);
     }
@@ -158,16 +251,40 @@ class BananaTrayIndicator extends PanelMenu.Button {
         log(`BananaTray: ${message}`);
     }
 
-    _updateAllRows(data) {
+    _onSnapshotReceived(snapshot) {
+        if (!snapshot || !Array.isArray(snapshot.providers))
+            return;
+
+        this._isRefreshing = false;
+        this._syncLabel.text = _('Sync Data');
+
+        // 始终更新面板指示器（状态点 + 摘要文字），即使弹窗关闭
+        const summary = summarizeProviders(snapshot.providers);
+        this._setPanelState(summary.worstLevel, summary.panelText);
+
+        if (this.menu.isOpen) {
+            this._updateAllRows(snapshot, summary);
+        } else {
+            this._pendingSnapshot = snapshot;
+        }
+    }
+
+    _updateAllRows(data, precomputedSummary = null) {
         if (!data || !Array.isArray(data.providers))
             return;
 
         const providers = data.providers;
-        const summary = summarizeProviders(providers);
+        const summary = precomputedSummary || summarizeProviders(providers);
 
+        // Header status text
         this._statusLabel.text = data.header?.status_text
             ? `${data.header.status_text} · ${summary.headerText}`
             : summary.headerText;
+
+        // Header badge (color-coded by status_kind)
+        const statusKind = data.header?.status_kind || 'Stale';
+        this._updateHeaderBadge(statusKind, data.header?.status_text || _('Unknown'));
+
         this._rebuildSummary(summary);
         this._setPanelState(summary.worstLevel, summary.panelText);
 
@@ -186,10 +303,9 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     _rebuildSummary(summary) {
-        this._summaryBox.destroy_all_children();
-        this._summaryBox.add_child(this._createSummaryCell(_('Providers'), String(summary.total)));
-        this._summaryBox.add_child(this._createSummaryCell(_('Connected'), String(summary.connected)));
-        this._summaryBox.add_child(this._createSummaryCell(_('Attention'), String(summary.attention), summary.attention > 0));
+        this._updateSummaryCell(this._summaryProviders, String(summary.total), false);
+        this._updateSummaryCell(this._summaryConnected, String(summary.connected), false);
+        this._updateSummaryCell(this._summaryAttention, String(summary.attention), summary.attention > 0);
     }
 
     _createSummaryCell(label, value, attention = false) {
@@ -198,17 +314,25 @@ class BananaTrayIndicator extends PanelMenu.Button {
             vertical: true,
             x_expand: true,
         });
-        cell.add_child(createLabel({
+        const valueLabel = createLabel({
             text: value,
             style_class: 'bananatray-summary-value',
             x_align: Clutter.ActorAlign.CENTER,
-        }, false));
+        }, false);
+        cell.add_child(valueLabel);
         cell.add_child(createLabel({
             text: label,
             style_class: 'bananatray-summary-label',
             x_align: Clutter.ActorAlign.CENTER,
         }, false));
-        return cell;
+        return {cell, valueLabel};
+    }
+
+    _updateSummaryCell(ref, value, attention) {
+        ref.valueLabel.text = value;
+        ref.cell.style_class = attention
+            ? 'bananatray-summary-cell bananatray-summary-cell-attention'
+            : 'bananatray-summary-cell';
     }
 
     _setPanelState(level, text) {
@@ -220,12 +344,14 @@ class BananaTrayIndicator extends PanelMenu.Button {
     _showLoading(text, level = 'yellow', panelText = _('Waiting')) {
         this._statusLabel.text = text || _('Loading');
         this._setPanelState(level, panelText);
+        this._updateHeaderBadge(level === 'red' ? 'offline' : 'syncing', text || _('Loading'));
         this._showMessage(text || _('Loading'), 'bananatray-loading');
     }
 
     _showError(text) {
         this._statusLabel.text = text || _('Error');
         this._setPanelState('red', _('Error'));
+        this._updateHeaderBadge('offline', text || _('Error'));
         this._showMessage(text || _('Error'), 'bananatray-error');
     }
 
