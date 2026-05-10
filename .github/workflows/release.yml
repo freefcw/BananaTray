@@ -46,6 +46,7 @@ jobs:
             libssl-dev \
             pkg-config \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
             libvulkan-dev \
             libwayland-dev \
             dpkg-dev \
@@ -97,19 +98,10 @@ jobs:
         run: bash scripts/upload-release-assets.sh "$RELEASE_TAG" dist/*
 
   macos:
-    name: macOS ${{ matrix.arch }} packages
-    runs-on: ${{ matrix.runner }}
+    name: macOS packages
+    runs-on: macos-latest
     permissions:
       contents: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-latest
-            arch: aarch64
-          - runner: macos-13
-            arch: x86_64
 
     steps:
       - name: Checkout repository
@@ -142,12 +134,12 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          arch="${{ matrix.arch }}"
+          arch="$(uname -m)"
           mkdir -p dist
           cp target/release/bundle/bananatray.dmg "dist/BananaTray-${version}-macos-${arch}.dmg"
           tar -C target/release -czf "dist/bananatray-${version}-macos-${arch}.tar.gz" bananatray
           cd dist
-          shasum -a 256 * > "SHA256SUMS-macos-${arch}"
+          shasum -a 256 * > SHA256SUMS-macos
 
       - name: Upload macOS assets to draft release
         env:
