@@ -18,7 +18,7 @@ Release workflow 只负责“构建可下载产物 + 写入 draft release”，�
 - PR / branch push 仍由 `ci.yml` 跑低成本 GPUI-free 门禁。
 - 完整 app 检查仍由 `app-ci.yml` 手动或定时运行。
 - tag release 不再额外跑 clippy / test，避免在已经构建 release 二进制的基础上重复占用 runner 时间。
-- Linux 和 macOS release job 并行执行；各自完成后直接上传本平台产物到同一个 draft release，不再额外开汇总发布 job。
+- Linux 和 macOS release job 并行执行；macOS 使用 matrix 同时构建 aarch64（Apple Silicon）和 x86_64（Intel）两个架构。各 job 完成后直接上传本平台产物到同一个 draft release，不再额外开汇总发布 job。
 
 ## 自动产物
 
@@ -28,10 +28,10 @@ Release workflow 只负责“构建可下载产物 + 写入 draft release”，�
 - Linux `.rpm`
 - Linux `.AppImage`
 - GNOME Shell Extension `.zip`
-- macOS `.dmg`
-- macOS 裸二进制 tarball
+- macOS `.dmg`（aarch64 + x86_64 双架构）
+- macOS 裸二进制 tarball（aarch64 + x86_64 双架构）
 - `SHA256SUMS-linux`
-- `SHA256SUMS-macos`
+- `SHA256SUMS-macos-aarch64` / `SHA256SUMS-macos-x86_64`
 
 Linux deb/rpm 使用仓库里的 `scripts/bundle-deb.sh` 和 `scripts/bundle-rpm.sh`，会包含 D-Bus activation 与 systemd user service。AppImage 会移除这些宿主级 activation 文件。GNOME Shell Extension 作为独立 zip 产物发布，不随 deb/rpm 自动写入系统扩展目录。
 
@@ -59,8 +59,8 @@ git push origin v0.1.0
 5. 等待 `Release` workflow 完成。
 6. 打开 GitHub draft release，检查：
    - release notes 是否准确
-   - Linux 和 macOS 产物是否齐全
-   - `SHA256SUMS-linux` / `SHA256SUMS-macos` 是否覆盖对应平台产物
+   - Linux 和 macOS（aarch64 + x86_64）产物是否齐全
+   - `SHA256SUMS-linux` / `SHA256SUMS-macos-aarch64` / `SHA256SUMS-macos-x86_64` 是否覆盖对应平台产物
    - 预发布版本是否被标记为 prerelease
 7. 确认无误后手动 publish。
 
