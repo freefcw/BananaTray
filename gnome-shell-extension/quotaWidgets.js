@@ -37,10 +37,18 @@ export function createStatusDot(level) {
     });
 }
 
-function createStatusBadge(text, level, extraClass = '') {
+function createStatusBadge(text, level) {
     return createLabel({
         text,
-        style_class: `bananatray-status-badge bananatray-status-badge-${normalizeStatusLevel(level)} ${extraClass}`,
+        style_class: `bananatray-status-badge bananatray-status-badge-${normalizeStatusLevel(level)}`,
+        y_align: Clutter.ActorAlign.CENTER,
+    }, false);
+}
+
+function createTierBadge(tier) {
+    return createLabel({
+        text: tier.toUpperCase(),
+        style_class: 'bananatray-tier-badge',
         y_align: Clutter.ActorAlign.CENTER,
     }, false);
 }
@@ -113,9 +121,15 @@ class BananaTrayProviderRow extends St.BoxLayout {
             x_expand: true,
         });
 
+        this._provider = provider;
+        this._expanded = false;
+
         const level = providerVisualLevel(provider);
         const connection = normalizeConnection(provider.connection);
+        const quotas = sortedQuotas(provider);
+        const isExpandable = connection === 'connected' && quotas.length >= 2;
 
+        // -- Header row --
         const header = new St.BoxLayout({
             style_class: 'bananatray-provider-header',
             vertical: false,
@@ -139,6 +153,7 @@ class BananaTrayProviderRow extends St.BoxLayout {
             x_expand: true,
         }));
 
+        // Meta 行：email
         const meta = this._providerMeta(provider, connection);
         if (meta) {
             titleBlock.add_child(createLabel({
@@ -149,6 +164,12 @@ class BananaTrayProviderRow extends St.BoxLayout {
         }
         header.add_child(titleBlock);
 
+        // Tier badge (colored pill)
+        if (provider.account_tier) {
+            header.add_child(createTierBadge(provider.account_tier));
+        }
+
+        // Status badge or connection label
         if (connection === 'connected') {
             header.add_child(createStatusBadge(statusBadgeLabel(level), level));
         } else {
@@ -159,8 +180,34 @@ class BananaTrayProviderRow extends St.BoxLayout {
             }, false));
         }
 
+        // Expand/collapse button for multi-quota providers
+        if (isExpandable) {
+            this._expandButton = new St.Button({
+                style_class: 'bananatray-expand-button',
+                y_align: Clutter.ActorAlign.CENTER,
+                child: createLabel({text: '▸', y_align: Clutter.ActorAlign.CENTER}, false),
+            });
+            this._expandButton.connect('clicked', () => this._toggleExpanded(quotas));
+            header.add_child(this._expandButton);
+        }
+
         this.add_child(header);
-        this._addQuotaArea(provider, connection);
+
+        // -- Quota area --
+        this._quotaContainer = new St.BoxLayout({
+            style_class: 'bananatray-quota-list',
+            vertical: true,
+            x_expand: true,
+        });
+        this.add_child(this._quotaContainer);
+
+        if (isExpandable) {
+            // 折叠态：显示最差配额的摘要行
+            this._buildCollapsedView(quotas);
+        } else {
+            // 单配额 / 非 connected：直接展示全部
+            this._buildFullQuotaArea(provider, connection, quotas);
+        }
     }
 
     _providerMeta(provider, connection) {
@@ -169,16 +216,68 @@ class BananaTrayProviderRow extends St.BoxLayout {
             parts.push(_('Cached data'));
         if (provider.account_email)
             parts.push(provider.account_email);
-        if (provider.account_tier)
-            parts.push(provider.account_tier);
+        // tier 已经通过 badge 展示，不在 meta 中重复
 
         return parts.join(' · ');
     }
 
-    _addQuotaArea(provider, connection) {
-        const quotas = sortedQuotas(provider);
+    _toggleExpanded(quotas) {
+        this._expanded = !this._expanded;
+        this._quotaContainer.destroy_all_children();
+
+        if (this._expanded) {
+            // 展开态
+            this._expandButton.child.text = '▾';
+            for (const quota of quotas)
+                this._quotaContainer.add_child(new BananaTrayQuotaRow(quota));
+        } else {
+            // 折叠态
+            this._expandButton.child.text = '▸';
+            this._buildCollapsedView(quotas);
+        }
+    }
+
+    _buildCollapsedView(quotas) {
+        // 折叠态：显示最差配额的 display_text + extra count
+        if (quotas.length === 0)
+            return;
+
+        const worst = quotas[0]; // sortedQuotas 按严重度降序
+        const collapsedRow = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            style_class: 'bananatray-quota-line',
+        });
+
+        collapsedRow.add_child(createLabel({
+            text: worst.label || worst.quota_type_key || _('Quota'),
+            style_class: 'bananatray-quota-label',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        }));
+        collapsedRow.add_child(createLabel({
+            text: worst.display_text || '',
+            style_class: 'bananatray-collapsed-value',
+            y_align: Clutter.ActorAlign.CENTER,
+        }, false));
+
+        if (quotas.length > 1) {
+            collapsedRow.add_child(createLabel({
+                text: `+${quotas.length - 1}`,
+                style_class: 'bananatray-collapsed-extra',
+                y_align: Clutter.ActorAlign.CENTER,
+            }, false));
+        }
+
+        this._quotaContainer.add_child(collapsedRow);
+
+        // 折叠态也显示 bar
+        this._quotaContainer.add_child(createQuotaBar(worst));
+    }
+
+    _buildFullQuotaArea(provider, connection, quotas) {
         if (quotas.length === 0) {
-            this.add_child(createLabel({
+            this._quotaContainer.add_child(createLabel({
                 text: connection === 'refreshing' ? _('Refreshing quota data') : _('No quota data available'),
                 style_class: 'bananatray-provider-empty',
                 x_expand: true,
@@ -186,15 +285,7 @@ class BananaTrayProviderRow extends St.BoxLayout {
             return;
         }
 
-        const quotaList = new St.BoxLayout({
-            style_class: 'bananatray-quota-list',
-            vertical: true,
-            x_expand: true,
-        });
-
         for (const quota of quotas)
-            quotaList.add_child(new BananaTrayQuotaRow(quota));
-
-        this.add_child(quotaList);
+            this._quotaContainer.add_child(new BananaTrayQuotaRow(quota));
     }
 });

@@ -8,21 +8,23 @@ const STATUS_ORDER = {
     red: 2,
 };
 
-const CONNECTION_LABELS = {
-    connected: 'Connected',
-    refreshing: 'Refreshing',
-    error: 'Error',
-    disconnected: 'Disconnected',
-};
+const CONNECTION_KEYS = new Set(['connected', 'refreshing', 'error', 'disconnected']);
 
 export function normalizeStatusLevel(value) {
     const status = String(value || '').toLowerCase();
-    return Object.prototype.hasOwnProperty.call(STATUS_ORDER, status) ? status : 'yellow';
+    return status in STATUS_ORDER ? status : 'yellow';
 }
 
 export function normalizeConnection(value) {
     const connection = String(value || '').toLowerCase();
-    return Object.prototype.hasOwnProperty.call(CONNECTION_LABELS, connection) ? connection : 'disconnected';
+    return CONNECTION_KEYS.has(connection) ? connection : 'disconnected';
+}
+
+const STATUS_KIND_KEYS = new Set(['synced', 'syncing', 'stale', 'offline']);
+
+export function normalizeStatusKind(value) {
+    const kind = String(value || '').toLowerCase();
+    return STATUS_KIND_KEYS.has(kind) ? kind : 'stale';
 }
 
 function strongerStatus(left, right) {

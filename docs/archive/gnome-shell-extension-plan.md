@@ -65,10 +65,10 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 | 手动刷新 | 刷新按钮调用 `RefreshAllAsync()`，返回当前缓存并等待后续 `RefreshComplete` 推送 | 已实现 |
 | 打开设置窗口 | Footer 按钮调用 `OpenSettingsAsync()`，Rust 侧转发到 GPUI 主线程 | 已实现 |
 | 实时刷新 | Extension 连接 `RefreshComplete` 信号并重建 Provider 行 | 已实现 |
-| Popup 内用量条形图 | 当前已显示每个 quota 的文本和进度条，后续可增强交互和细节表达 | 已实现，仍可增强 |
+| Popup 内用量条形图 | 已实现每个 quota 的文本和进度条；额外增强：多配额展开/折叠、header 状态 badge 颜色编码、tier badge、footer 双按钮、全宽进度条 | 已实现并增强 |
 | 拆分 `panelButton.js` / `quotaClient.js` | 已拆为 `extension.js` 生命周期入口、`panelButton.js` 面板控制器、`quotaClient.js` 协议层、`quotaPresentation.js` 展示纯函数和 `quotaWidgets.js` 行组件 | 已实现 |
 | systemd user service + D-Bus activation | 已提供 `resources/linux/com.bananatray.Daemon.service` 和 `resources/linux/bananatray.service` 模板；deb/rpm 安装包会写入宿主 D-Bus/systemd user 路径并替换二进制路径，Extension 启动和用户主动刷新/打开设置时会异步请求 `StartServiceByName`；AppImage 不携带无效 activation 文件 | 已实现 |
-| 打包发布到 e.g.o / zip | 当前有 `metadata.json` 和 README 安装说明，未提供打包脚本和 e.g.o 发布清单 | 待增强 |
+| 打包发布到 e.g.o / zip | `metadata.json` 已补充 e.g.o 必需的整数 `version` 和 `url` 字段；`scripts/bundle-gnome-extension.sh` 生成白名单 zip，排除 `.po` / README / 构建脚本 | 已实现 |
 | Extension 端 i18n | `metadata.json` 声明 `gettext-domain: "bananatray"`，UI 文案通过 `i18n.js` 的 `_()` 翻译，已提供 `po/zh_CN.po` 和运行时 `locale/zh_CN/LC_MESSAGES/bananatray.mo` | 已实现 |
 | 图标资源复用 | 当前面板入口使用状态点，不加载 `src/icons/` SVG | 待增强 |
 
@@ -87,9 +87,9 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 
 ## 5. 仍需完善的问题
 
-- **UI 表达仍可增强**：当前已显示多 quota 文本和进度条，但还没有展开交互、趋势图或更细的错误恢复提示。
+- **UI 表达已大幅增强**：已实现多配额 Provider 展开/折叠交互（默认折叠 + ▸/▾ 切换）、header 状态徽章颜色编码（Synced/Syncing/Stale/Offline）、账户 tier 彩色 badge pill、footer 双按钮布局（Sync Data + Settings）、全宽进度条。仍可继续增强：趋势图、更细的错误恢复提示。
 - **GJS 缺少 GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
-- **发布流程未闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
+- **发布流程已基本闭环**：`scripts/bundle-gnome-extension.sh` 可生成 e.g.o zip，`metadata.json` 已包含 `version` 和 `url`；版本矩阵验证仍需手动。
 - **i18n 语言覆盖仍少**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
 
 ## 6. 推荐后续顺序

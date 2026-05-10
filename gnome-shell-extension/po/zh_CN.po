@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: BananaTray GNOME Shell Extension 1.0.0\n"
 "Report-Msgid-Bugs-To: https://github.com/bananatray/bananatray/issues\n"
-"POT-Creation-Date: 2026-05-05 00:00+0000\n"
-"PO-Revision-Date: 2026-05-05 00:00+0000\n"
+"POT-Creation-Date: 2026-05-10 00:00+0000\n"
+"PO-Revision-Date: 2026-05-10 00:00+0000\n"
 "Last-Translator: BananaTray contributors\n"
 "Language-Team: Chinese (Simplified)\n"
 "Language: zh_CN\n"
@@ -75,9 +75,6 @@ msgstr "耗尽"
 msgid "Offline"
 msgstr "离线"
 
-msgid "Open Settings"
-msgstr "打开设置"
-
 msgid "Provider"
 msgstr "Provider"
 
@@ -93,6 +90,17 @@ msgstr "刷新中"
 
 msgid "Refreshing quota data"
 msgstr "正在刷新配额数据"
+
+# Translators: footer button label for manual data refresh.
+msgid "Sync Data"
+msgstr "同步数据"
+
+# Translators: footer button label for opening settings window.
+msgid "Settings"
+msgstr "设置"
+
+msgid "Unknown"
+msgstr "未知"
 
 msgid "Waiting"
 msgstr "等待中"

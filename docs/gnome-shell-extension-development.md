@@ -42,15 +42,38 @@ service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon �
 | `gnome-shell-extension/metadata.json` | UUID、名称和 GNOME Shell 版本兼容声明。 |
 | `gnome-shell-extension/icons/bananatray-symbolic.svg` | 顶栏 symbolic 图标。安装和 nested 调试必须递归复制该目录。 |
 | `scripts/dev-gnome-extension.sh` | nested GNOME Shell 调试入口。 |
+| `scripts/dev-gnome-extension-watch.sh` | 真实桌面会话热重载：监控文件变化，自动 cp + disable/enable。 |
 | `scripts/install-gnome-extension.sh` | 当前用户会话安装 / 诊断入口；递归复制扩展文件并检查 `State`。 |
 | `scripts/gnome-extension-mock-daemon.js` | mock `com.bananatray.Daemon`，用于 UI 状态调试。 |
 | `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard。 |
+| `scripts/bundle-gnome-extension.sh` | e.g.o 提交用 zip 打包：白名单运行时文件、metadata 校验、版本信息输出。 |
 | `resources/linux/com.bananatray.Daemon.service` | Session D-Bus activation 文件，声明 `com.bananatray.Daemon` 如何启动。 |
 | `resources/linux/bananatray.service` | systemd user service，供 D-Bus activation 或用户手动 `systemctl --user start` 启动。 |
 
+## 真实桌面会话热重载
+
+GNOME 45+ ESM 扩展在 `gnome-extensions disable/enable` 周期会完全卸载并重新导入模块，
+不需要注销或重新登录。`dev-gnome-extension-watch.sh` 利用这一点实现自动热重载：
+
+```bash
+bash scripts/dev-gnome-extension-watch.sh
+```
+
+脚本会用 `inotifywait`（Linux）或 `fswatch`（macOS）监控 `gnome-shell-extension/` 目录，
+文件变化时自动复制到用户扩展目录并执行 disable/enable。首次运行会自动安装。
+
+单次同步（不持续监控）：
+
+```bash
+bash scripts/dev-gnome-extension-watch.sh --once
+```
+
+> **注意**：X11 上此方案非常可靠。Wayland 上大部分 GNOME 45+ 版本也支持，但个别早期版本
+> 可能仍需注销重登。如果 disable/enable 后扩展未更新，改用 nested shell 方案。
+
 ## Nested Shell 调试
 
-Wayland 主会话不能热重启 GNOME Shell。扩展开发应使用 nested Shell：
+Wayland 主会话不能热重启 GNOME Shell。需要隔离调试环境时使用 nested Shell：
 
 ```bash
 bash scripts/dev-gnome-extension.sh
@@ -164,6 +187,35 @@ systemctl --user status bananatray.service
 GPUI run loop 后初始化 D-Bus 服务并 request name；如果未来把 D-Bus 注册延后到慢 I/O 之后，需要重新评估
 systemd 的默认启动超时。
 
+## 调试技巧
+
+### GNOME Shell 环境变量
+
+```bash
+# 慢速动画，方便观察过渡效果和 popup 打开行为
+GNOME_SHELL_SLOWDOWN_FACTOR=3 gnome-shell --devkit --wayland --no-x11
+
+# 在 nested shell 中禁用所有其他扩展，只保留 BananaTray
+GNOME_SHELL_DEBUG=backtrace-crashes gnome-shell --devkit --wayland --no-x11
+```
+
+### 实时查看扩展日志
+
+```bash
+# 主会话日志
+journalctl -f -o cat /usr/bin/gnome-shell | grep -i bananatray
+
+# nested shell（进程 PID）
+journalctl -f -o cat _PID=$(pgrep -f 'gnome-shell --devkit')
+```
+
+### Looking Glass
+
+在运行中的 GNOME Shell 里按 `Alt+F2 → lg` 打开 Looking Glass：
+
+- **Extensions** tab 查看扩展状态、错误信息
+- **Evaluator** tab 即时执行 GJS 代码（对 ESM 扩展模块缓存有限制）
+
 ## JSON 协议约束
 
 当前 schema 版本是 `1`。同一版本内允许新增字段，但不能删除字段、改名、改类型或改变枚举语义。
@@ -191,6 +243,43 @@ Rust DTO 定义在 `src/application/selectors/dbus_dto.rs`，D-Bus 服务文档�
 - `St.ScrollView` 使用 `set_child()`，不要使用 GNOME 50 下会崩的 `add_actor()`。
 - 修改 UI 后优先在 nested Shell 中验证实际加载状态，而不是只看主会话。
 - 新增扩展资产时同步 `scripts/check-gnome-extension.sh`、`scripts/install-gnome-extension.sh` 和安装说明，避免用户安装时漏复制子目录。
+
+## ZIP 打包与 e.g.o 发布
+
+### 打包
+
+```bash
+bash scripts/bundle-gnome-extension.sh
+```
+
+默认输出到 `target/release/bundle/bananatray@bananatray.github.io-<version>.zip`。
+可用 `--output DIR` 指定输出目录，`--check` 在打包前执行静态检查。
+
+ZIP 只包含运行时文件（`metadata.json`、JS 模块、`stylesheet.css`、`locale/`、`icons/`），
+不包含 `.po` 源文件、README、构建脚本或仓库元数据。
+
+### metadata.json 版本管理
+
+`metadata.json` 中有两个版本字段：
+
+| 字段 | 类型 | 用途 |
+|------|------|------|
+| `version` | 整数 | e.g.o 必需；每次提交新版本时必须递增 |
+| `version-name` | 字符串 | 人类可读的 semver 版本号 |
+
+发布新版本时：
+1. 递增 `version`（如 1 → 2）
+2. 更新 `version-name`（如 `"1.0.0"` → `"1.1.0"`）
+3. 运行 `bash scripts/bundle-gnome-extension.sh --check`
+4. 上传 zip 到 https://extensions.gnome.org/upload/
+
+### e.g.o 审核要点
+
+- `shell-version` 只列出已测试的版本，不要超前声明
+- 代码必须可读，不能混淆或 minify
+- 不能包含遥测/追踪代码
+- 不能在 `init()` 中执行 UI 修改（当前架构已满足，入口在 `enable/disable`）
+- `metadata.json` 的 `url` 字段应指向公开仓库
 
 ## 验证清单
 
@@ -246,7 +335,7 @@ bash scripts/dev-gnome-extension.sh --app-daemon
 
 以下增强项来自原始预研计划（已归档为 `archive/gnome-shell-extension-plan.md`），当前实现不阻塞使用但值得后续完善：
 
-- **UI 表达增强**：当前已显示多 quota 文本和进度条，但还没有展开交互、趋势图或更细的错误恢复提示。
+- ~~**UI 表达增强**~~：已实现多配额 Provider 展开/折叠交互、header 状态徽章颜色编码（Synced/Syncing/Stale/Offline）、账户 tier 彩色 badge、footer 双按钮（Sync Data + Settings）、全宽进度条。仍可增强：趋势图、更细的错误恢复提示。
 - **GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
-- **发布流程闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
+- ~~**发布流程闭环**~~：已实现 `scripts/bundle-gnome-extension.sh` zip 打包和 e.g.o 发布元数据；版本矩阵验证仍需手动。
 - **i18n 语言覆盖**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
