@@ -156,21 +156,21 @@ export function summarizeProviders(providers) {
 }
 
 function formatProviderCount(count) {
-    return ngettext('%d provider', '%d providers', count).replace('%d', count);
+    return ngettext('%d provider', '%d providers', count).replaceAll('%d', count);
 }
 
 function formatConnectedCount(count) {
-    return ngettext('%d connected', '%d connected', count).replace('%d', count);
+    return ngettext('%d connected', '%d connected', count).replaceAll('%d', count);
 }
 
 function formatRefreshingCount(count) {
-    return ngettext('%d refreshing', '%d refreshing', count).replace('%d', count);
+    return ngettext('%d refreshing', '%d refreshing', count).replaceAll('%d', count);
 }
 
 function formatErrorCount(count) {
-    return ngettext('%d error', '%d errors', count).replace('%d', count);
+    return ngettext('%d error', '%d errors', count).replaceAll('%d', count);
 }
 
 function formatOfflineCount(count) {
-    return ngettext('%d offline', '%d offline', count).replace('%d', count);
+    return ngettext('%d offline', '%d offline', count).replaceAll('%d', count);
 }
