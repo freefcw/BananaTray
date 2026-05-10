@@ -135,7 +135,6 @@ class BananaTrayProviderRow extends St.BoxLayout {
             vertical: false,
             x_expand: true,
         });
-        header.add_child(createStatusDot(level));
         header.add_child(createLabel({
             text: providerInitials(provider),
             style_class: 'bananatray-provider-avatar',

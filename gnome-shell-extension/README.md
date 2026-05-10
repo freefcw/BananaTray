@@ -21,10 +21,10 @@ Provider，在主应用的 Provider 设置页拖拽调整排序即可。
 
 点击顶栏入口会打开总览弹窗：
 
-- 顶部显示 daemon 同步状态和刷新按钮。
-- Summary 区域显示 Provider 总数、Connected 数量和 Attention 数量。
+- 顶部右侧显示 daemon 同步状态，标题副文本显示紧凑 Provider 摘要。
 - Provider 行显示连接状态、账号信息、套餐信息、所有可见 quota、状态徽标和进度条。
-- `Open Settings` 会通过 D-Bus 调用 BananaTray daemon，在主应用中打开设置窗口。
+- `Sync Data` 调用 daemon 刷新缓存，`Settings` 会通过 D-Bus 调用 BananaTray daemon，
+  在主应用中打开设置窗口。
 
 刷新按钮调用 daemon 的 `RefreshAll`。按钮会立即返回当前缓存快照，真实刷新完成后 daemon 会通过
 `RefreshComplete` 信号推送新快照，扩展收到后自动更新。
@@ -230,12 +230,11 @@ BananaTrayExtension (入口)
   └─ BananaTrayIndicator (PanelMenu.Button)
        ├─ Panel icon + 状态点 + 动态摘要
        ├─ Popup Menu:
-       │    ├─ Header (图标 + 状态文本 + 刷新按钮)
-       │    ├─ Summary (Provider / Connected / Attention)
+       │    ├─ Header (图标 + Provider 摘要 + daemon 同步状态)
        │    ├─ ScrollView → ProviderList → BananaTrayProviderRow × N
        │    │    └─ BananaTrayQuotaRow × N
        │    ├─ Loading placeholder (等待 daemon)
-       │    └─ Footer (Open Settings 按钮)
+       │    └─ Footer (Sync Data + Settings 按钮)
        └─ QuotaClient (异步 D-Bus + schema guard)
 
 支撑模块：
@@ -251,9 +250,9 @@ BananaTrayExtension (入口)
 4. 刷新按钮 → 调用 `RefreshAllAsync`（触发刷新 + 返回当前快照）
 5. 设置按钮 → 调用 `OpenSettingsAsync`（daemon 侧在 GPUI 主线程打开设置窗口）
 
-### 状态点颜色规则
+### 状态与摘要规则
 
-面板状态点和每行左侧的状态点颜色由 `worst_status` / 连接状态决定：
+面板状态点颜色由排序第一的已启用 Provider 的 `worst_status` / 连接状态决定：
 
 | worst_status | 颜色 |
 |-------------|------|
@@ -261,10 +260,14 @@ BananaTrayExtension (入口)
 | `Yellow` | `#ff9800` |
 | `Red` | `#f44336` |
 
-面板状态点只取排序第一的已启用 Provider 状态；弹窗内每行左侧状态点取该行 Provider 自身状态。
 如果 Provider 正在 `Refreshing` 或 `Disconnected`，扩展以 Yellow 提醒；如果 `Error` 且没有
 缓存配额，以 Red 提醒；如果 `Error` 但仍有缓存配额，仍展示缓存 quota，并在账号信息行标注
-`Cached data`。弹窗 Summary 的 Attention 仍统计所有已启用 Provider。
+`Cached data`。
+
+弹窗 Header 右侧徽章展示 daemon 返回的全局同步状态（如 `Synced` / `Syncing` / `Offline`）；
+标题副文本展示紧凑 Provider 摘要（总数、已连接数，以及仅在非零时追加 refreshing / error /
+offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `LOW` / `OUT`
+徽章表达，非 connected 状态用连接状态徽章表达。
 
 ## 开发
 

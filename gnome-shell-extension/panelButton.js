@@ -91,25 +91,10 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
         // Header status badge (color-coded)
         this._headerBadge = this._createHeaderBadge('stale', _('Waiting'));
-        this._headerBadgeDot = this._headerBadge.get_first_child();
-        this._headerBadgeLabel = this._headerBadgeDot?.get_next_sibling();
+        this._headerBadgeLabel = this._headerBadge.get_first_child();
         headerBox.add_child(this._headerBadge);
 
         this.menu.box.add_child(headerBox);
-
-        // -- Summary (created once, updated incrementally) --
-        this._summaryBox = new St.BoxLayout({
-            style_class: 'bananatray-summary',
-            vertical: false,
-            x_expand: true,
-        });
-        this._summaryProviders = this._createSummaryCell(_('Providers'), '0');
-        this._summaryConnected = this._createSummaryCell(_('Connected'), '0');
-        this._summaryAttention = this._createSummaryCell(_('Attention'), '0');
-        this._summaryBox.add_child(this._summaryProviders.cell);
-        this._summaryBox.add_child(this._summaryConnected.cell);
-        this._summaryBox.add_child(this._summaryAttention.cell);
-        this.menu.box.add_child(this._summaryBox);
 
         // -- Scrollable provider list --
         this._scrollView = new St.ScrollView({
@@ -206,7 +191,6 @@ class BananaTrayIndicator extends PanelMenu.Button {
         });
 
         this._scrollView.hide();
-        this._summaryBox.hide();
     }
 
     _createHeaderBadge(statusKind, text) {
@@ -216,16 +200,11 @@ class BananaTrayIndicator extends PanelMenu.Button {
             vertical: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        const dot = new St.Widget({
-            style_class: 'bananatray-header-badge-dot',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
         const label = createLabel({
             text,
             style_class: 'bananatray-header-badge-text',
             y_align: Clutter.ActorAlign.CENTER,
         }, false);
-        badge.add_child(dot);
         badge.add_child(label);
         return badge;
     }
@@ -276,16 +255,13 @@ class BananaTrayIndicator extends PanelMenu.Button {
         const providers = data.providers;
         const summary = precomputedSummary || summarizeProviders(providers);
 
-        // Header status text
-        this._statusLabel.text = data.header?.status_text
-            ? `${data.header.status_text} · ${summary.headerText}`
-            : summary.headerText;
+        // Header badge 展示全局同步状态；副标题只保留紧凑 Provider 摘要，避免重复。
+        this._statusLabel.text = summary.headerText;
 
         // Header badge (color-coded by status_kind)
         const statusKind = data.header?.status_kind || 'Stale';
         this._updateHeaderBadge(statusKind, data.header?.status_text || _('Unknown'));
 
-        this._rebuildSummary(summary);
         this._setPanelState(summary.panelLevel, summary.panelText);
 
         this._providerList.destroy_all_children();
@@ -298,41 +274,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         }
 
         this._messageLabel.hide();
-        this._summaryBox.show();
         this._scrollView.show();
-    }
-
-    _rebuildSummary(summary) {
-        this._updateSummaryCell(this._summaryProviders, String(summary.total), false);
-        this._updateSummaryCell(this._summaryConnected, String(summary.connected), false);
-        this._updateSummaryCell(this._summaryAttention, String(summary.attention), summary.attention > 0);
-    }
-
-    _createSummaryCell(label, value, attention = false) {
-        const cell = new St.BoxLayout({
-            style_class: attention ? 'bananatray-summary-cell bananatray-summary-cell-attention' : 'bananatray-summary-cell',
-            vertical: true,
-            x_expand: true,
-        });
-        const valueLabel = createLabel({
-            text: value,
-            style_class: 'bananatray-summary-value',
-            x_align: Clutter.ActorAlign.CENTER,
-        }, false);
-        cell.add_child(valueLabel);
-        cell.add_child(createLabel({
-            text: label,
-            style_class: 'bananatray-summary-label',
-            x_align: Clutter.ActorAlign.CENTER,
-        }, false));
-        return {cell, valueLabel};
-    }
-
-    _updateSummaryCell(ref, value, attention) {
-        ref.valueLabel.text = value;
-        ref.cell.style_class = attention
-            ? 'bananatray-summary-cell bananatray-summary-cell-attention'
-            : 'bananatray-summary-cell';
     }
 
     _setPanelState(level, text) {
@@ -359,7 +301,6 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._messageLabel.text = text;
         this._messageLabel.style_class = styleClass;
         this._messageLabel.show();
-        this._summaryBox.hide();
         this._scrollView.hide();
     }
 
