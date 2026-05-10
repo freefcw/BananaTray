@@ -29,7 +29,12 @@ cargo_version="$(
 )"
 tag_version="${release_tag#v}"
 
-if [ "$cargo_version" != "$tag_version" ]; then
-    echo "Cargo.toml version ($cargo_version) must match tag version ($tag_version)."
+# 允许预发布后缀：v0.1.0-rc.1 的基础版本是 0.1.0，需与 Cargo.toml 一致。
+# 正式 tag v0.1.0 同样通过（无后缀时 base_version == tag_version）。
+base_version="${tag_version%%-*}"
+
+if [ "$cargo_version" != "$base_version" ]; then
+    echo "Cargo.toml version ($cargo_version) must match tag base version ($base_version)."
+    [ "$base_version" != "$tag_version" ] && echo "  (tag $release_tag has pre-release suffix, base version extracted as $base_version)"
     exit 1
 fi
