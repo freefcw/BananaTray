@@ -287,7 +287,7 @@ describe('summarizeProviders', () => {
         assert.equal(summary.total, 0);
         assert.equal(summary.connected, 0);
         assert.equal(summary.attention, 0);
-        assert.equal(summary.worstLevel, 'green');
+        assert.equal(summary.panelLevel, 'green');
     });
 
     it('counts connections correctly', () => {
@@ -314,28 +314,28 @@ describe('summarizeProviders', () => {
         assert.equal(summary.attention, 2);
     });
 
-    it('computes worst level across providers', () => {
+    it('generates panel text from first provider when all-green', () => {
         const providers = [
-            makeProvider({connection: 'Connected', worst_status: 'Green'}),
-            makeProvider({connection: 'Connected', worst_status: 'Red', quotas: [makeQuota()]}),
-        ];
-        const summary = summarizeProviders(providers);
-        assert.equal(summary.worstLevel, 'red');
-    });
-
-    it('generates panel text for all-green', () => {
-        const providers = [
-            makeProvider({connection: 'Connected', worst_status: 'Green'}),
+            makeProvider({
+                display_name: 'Claude',
+                connection: 'Connected',
+                worst_status: 'Green',
+                quotas: [makeQuota({display_text: '60 left'})],
+            }),
             makeProvider({connection: 'Connected', worst_status: 'Green'}),
         ];
         const summary = summarizeProviders(providers);
-        // Mock _() is passthrough: "%(connected)d/%(total)d OK" → "2/2 OK"
-        assert.equal(summary.panelText, '2/2 OK');
+        assert.equal(summary.panelText, 'Claude 60 left');
     });
 
-    it('generates panel text for worst provider', () => {
+    it('keeps panel state on first provider even when another provider is worse', () => {
         const providers = [
-            makeProvider({connection: 'Connected', worst_status: 'Green'}),
+            makeProvider({
+                display_name: 'Codex',
+                connection: 'Connected',
+                worst_status: 'Green',
+                quotas: [makeQuota({display_text: '80 left', status_level: 'Green'})],
+            }),
             makeProvider({
                 display_name: 'Claude',
                 connection: 'Connected',
@@ -344,20 +344,22 @@ describe('summarizeProviders', () => {
             }),
         ];
         const summary = summarizeProviders(providers);
-        assert.equal(summary.panelText, 'Claude 95% used');
+        assert.equal(summary.panelLevel, 'green');
+        assert.equal(summary.panelText, 'Codex 80 left');
     });
 
-    it('generates panel text with connection label when worst has no quotas', () => {
+    it('generates panel text with connection label when first provider has no quotas', () => {
         const providers = [
-            makeProvider({connection: 'Connected', worst_status: 'Green'}),
             makeProvider({
                 display_name: 'Gemini',
                 connection: 'Error',
                 worst_status: 'Red',
                 quotas: [],
             }),
+            makeProvider({connection: 'Connected', worst_status: 'Green'}),
         ];
         const summary = summarizeProviders(providers);
+        assert.equal(summary.panelLevel, 'red');
         assert.equal(summary.panelText, 'Gemini Error');
     });
 

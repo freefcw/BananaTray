@@ -238,7 +238,8 @@ Rust DTO 定义在 `src/application/selectors/dbus_dto.rs`，D-Bus 服务文档�
 - `extension.js` 只保留扩展生命周期入口；PanelMenu 逻辑放在 `panelButton.js`。
 - `panelButton.js` 只通过 `QuotaClient` 访问 D-Bus，不直接定义 D-Bus XML，不直接创建 proxy；协议层放在 `quotaClient.js`。
 - 纯展示数据整理放在 `quotaPresentation.js`，可复用 UI 组件放在 `quotaWidgets.js`，避免后续图表和错误态继续挤回入口文件。
-- 用户可见的 Extension 自有 UI 文案必须通过 `i18n.js` 的 `_()` 包裹；带数量的文案使用 `ngettext()`，不要翻译以分隔符开头的片段。同步更新 `po/zh_CN.po` 与 `locale/zh_CN/LC_MESSAGES/bananatray.mo`。D-Bus 快照里的 provider / quota 文本由 daemon 负责，不在 Extension 端二次翻译。
+- 用户可见的 Extension 自有 UI 文案必须通过 `i18n.js` 的 `_()` 包裹；带数量的文案使用 `ngettext()`，不要翻译以分隔符开头的片段。同步更新 `po/zh_CN.po` 与 `locale/zh_CN/LC_MESSAGES/bananatray.mo`。
+- Extension 自有 UI 文案跟随 GNOME Shell / 系统 locale，不跟随 BananaTray 主应用语言设置；这是有意边界，不要在 Extension 端读取 app settings 或为此新增本地持久化配置。D-Bus 快照里的 provider / quota 文本由 daemon 按 app 当前语言生成，Extension 不做二次翻译。
 - `OK` / `LOW` / `OUT` 等短 badge 文案需要保留 `# Translators:` 注释，说明它们属于 quota 状态语境。
 - `St.ScrollView` 使用 `set_child()`，不要使用 GNOME 50 下会崩的 `add_actor()`。
 - 修改 UI 后优先在 nested Shell 中验证实际加载状态，而不是只看主会话。

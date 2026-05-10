@@ -260,7 +260,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
         // 始终更新面板指示器（状态点 + 摘要文字），即使弹窗关闭
         const summary = summarizeProviders(snapshot.providers);
-        this._setPanelState(summary.worstLevel, summary.panelText);
+        this._setPanelState(summary.panelLevel, summary.panelText);
 
         if (this.menu.isOpen) {
             this._updateAllRows(snapshot, summary);
@@ -286,7 +286,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._updateHeaderBadge(statusKind, data.header?.status_text || _('Unknown'));
 
         this._rebuildSummary(summary);
-        this._setPanelState(summary.worstLevel, summary.panelText);
+        this._setPanelState(summary.panelLevel, summary.panelText);
 
         this._providerList.destroy_all_children();
         for (const provider of providers)
