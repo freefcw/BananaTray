@@ -1,8 +1,10 @@
 # GNOME Shell Extension 方案与实现对照
 
-> 状态：**已部分落地，仍有增强项**。本文最初是 GNOME / Mutter 不支持 layer-shell 时的技术预研；当前仓库已经落地了 Rust D-Bus 服务与 GNOME Shell Extension，因此本文改为记录"原计划 vs 当前实现"的差异、取舍和后续缺口。
+> **Archived.** 本文最初的核心预研使命已完成，GNOME Shell Extension + D-Bus 方案已落地；仍需完善的增强项已合并到 `docs/gnome-shell-extension-development.md`。保留本文作为决策溯源。
+
+> 状态：**已落地**。本文最初是 GNOME / Mutter 不支持 layer-shell 时的技术预研；当前仓库已经落地了 Rust D-Bus 服务与 GNOME Shell Extension，因此本文改为记录"原计划 vs 当前实现"的差异、取舍和后续缺口。
 >
-> 触发背景：[gpui-linux-rendering-investigation.md](gpui-linux-rendering-investigation.md) 中调研 layer-shell 时发现 GNOME 这条路走不通，需要替代方案。
+> 触发背景：调研 Linux layer-shell 时发现 GNOME / Mutter 不支持 `wlr-layer-shell`，需要替代方案。
 
 ## 1. GNOME 对 layer-shell 的现状（2026 年）
 
@@ -30,7 +32,7 @@ BananaTray Rust app                       GNOME Shell Extension
   - JSON DBusQuotaSnapshot                  - RefreshComplete 信号刷新 UI
 ```
 
-当前 D-Bus 契约以 [src/dbus/README.md](../src/dbus/README.md) 为准：
+当前 D-Bus 契约以 [src/dbus/README.md](../../src/dbus/README.md) 为准：
 
 - Bus name：`com.bananatray.Daemon`
 - Object path：`/com/bananatray/Daemon`
@@ -98,7 +100,6 @@ JSON 字符串是 `DBusQuotaSnapshot` 的序列化结果。DTO 定义在 `applic
 
 ## 7. 关联文档
 
-- [gnome-shell-extension/README.md](../gnome-shell-extension/README.md) — Extension 安装、D-Bus 通信流程和排障指南。
-- [src/dbus/README.md](../src/dbus/README.md) — Rust D-Bus 服务线程模型、接口契约和 JSON 快照格式。
-- [architecture.md](architecture.md) — 稳定架构边界。
-- [gpui-linux-rendering-investigation.md](gpui-linux-rendering-investigation.md) — Linux 渲染问题原始调研。
+- [gnome-shell-extension/README.md](../../gnome-shell-extension/README.md) — Extension 安装、D-Bus 通信流程和排障指南。
+- [src/dbus/README.md](../../src/dbus/README.md) — Rust D-Bus 服务线程模型、接口契约和 JSON 快照格式。
+- [architecture.md](../architecture.md) — 稳定架构边界。

@@ -129,10 +129,9 @@
 
 自定义 provider reload 的稳定语义：
 
-- YAML 运行时契约为 `schema_version: 2` + `plan.steps`；旧版顶层 `source` / `parser` 通过一次性脚本迁移，不在运行时长期兼容。
+- YAML 运行时契约为 `schema_version: 2` + `plan.steps`；详见 `custom-provider.md`。
 - reload 会重建 provider manager 快照，并把最新状态发回前台。
-- 当前没有“监视 providers 目录并自动 reload”的文件系统 watcher。
-- 应用内的 NewAPI 保存 / 删除会显式触发 reload；手动编辑 YAML 后通常需要重启应用。
+- 当前没有文件系统 watcher；触发规则和 reload 语义详见 `refresh-strategy.md` §Custom Provider Reload。
 
 ## Persistence And External Storage
 
@@ -141,10 +140,7 @@
 - macOS: `~/Library/Application Support/BananaTray/settings.json`
 - Linux: `$XDG_CONFIG_HOME/bananatray/settings.json`
 
-自定义 provider YAML 的规范目录：
-
-- macOS: `~/Library/Application Support/BananaTray/providers/`
-- Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+自定义 provider YAML 的规范目录见 `custom-provider.md` §配置目录。
 
 稳定事实：
 

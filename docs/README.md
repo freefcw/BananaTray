@@ -9,6 +9,7 @@
 
 - 权威文档只描述稳定职责、行为契约和对外工作流。
 - 文件级实现细节优先放在对应模块的 `README.md`，并以代码为准。
+- 重复信息采用"单一事实源 + 交叉引用"策略，避免多处维护同一事实。
 - 历史复盘、事故记录、重构审查会保留，但默认**不**承诺和当前代码逐行同步。
 
 ## 当前权威文档
@@ -45,17 +46,30 @@
   - 新增 / 重构 provider 时可复用的设计模式。
 - `antigravity-api.md`
   - Antigravity / Windsurf 共享实现的专题说明。
-- `gnome-shell-extension-plan.md`
-  - GNOME 下绕开 layer-shell 的 Shell Extension + DBus 方案与当前实现对照。
+
+## 示例
+
+- `examples/`
+  - 自定义 provider YAML 示例（NewAPI、HTTP、CLI、Placeholder 等）。
 
 ## 历史文档
 
-历史材料目前统一放在 legacy 目录 `archeive/` 下（保留历史拼写）；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
+历史材料统一放在 `archive/` 下；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
 
-- `archeive/gpui-sigbus-bug.md`
-- `archeive/window-not-found-fix.md`
-- `archeive/provider/provider-refactor-retrospective.md`
-- `archeive/`
+- `archive/gnome-shell-extension-plan.md` — GNOME Extension 预研方案与实现对照（使命已完成）
+- `archive/provider-compare-analysis.md` — BananaTray / ClaudeBar / CodexBar 三仓库 provider 横向对比（2026-05-05 快照）
+- `archive/code-review-solid-clean.md` — SOLID & Clean Code 深度分析
+- `archive/gpui-sigbus-bug.md` — GPUI SIGBUS bug 排查记录
+- `archive/window-not-found-fix.md` — Window Not Found 修复记录
+- `archive/lessons-gpui-height-calibration.md` — GPUI 弹窗高度校准经验
+- `archive/ui_layout_troubleshooting.md` — UI 布局排查过程
+- `archive/custom-provider-plan.md` — 自定义 provider 方案设计
+- `archive/review-20260405.md` — 2026-04-05 代码审查
+- `archive/review-20260416-followup-issues.md` — 2026-04-16 审查后续跟进
+- `archive/roadmap-directory-restructure.md` — 目录重组路线图
+- `archive/provider/provider-refactor-retrospective.md` — Provider 重构回顾
+- `archive/provider/refactor.md` — Provider 重构方案
+- `archive/app/analytics.md` — 应用分析功能设计
 
 ## 建议阅读顺序
 
@@ -69,3 +83,4 @@
 - 改架构边界时，先更新 `architecture.md`。
 - 改 provider 契约或扩展方式时，更新 `providers.md`；如果涉及 YAML，再同步 `custom-provider.md`。
 - 如果某段说明只能靠具体文件路径或行级细节才能成立，优先把它移出权威文档，改为专题说明或直接删掉。
+- 重复信息不要复制粘贴，用交叉引用指向单一事实源。

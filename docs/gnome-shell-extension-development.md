@@ -241,3 +241,12 @@ bash scripts/dev-gnome-extension.sh --app-daemon
 | `--app-daemon` 显示空 provider | 真实配置目录未被传入，或当前设置没有启用 provider | 检查脚本输出中的日志路径和 provider 配置路径；确认真实 `settings.json`。 |
 | 修改样式后没有变化 | 主会话 Wayland 不能热重启 Shell，或 nested Shell 没重启 | 关闭 nested Shell 后重新运行脚本；主会话需要注销重登。 |
 | 顶栏出现传统 AppIndicator | 调试 app 没有设置 `BANANATRAY_FORCE_GNOME_EXTENSION=1` | 使用 `--app-daemon` 启动真实 app，避免手动漏环境变量。 |
+
+## 已知待增强项
+
+以下增强项来自原始预研计划（已归档为 `archive/gnome-shell-extension-plan.md`），当前实现不阻塞使用但值得后续完善：
+
+- **UI 表达增强**：当前已显示多 quota 文本和进度条，但还没有展开交互、趋势图或更细的错误恢复提示。
+- **GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
+- **发布流程闭环**：还没有 zip 打包、版本矩阵验证和 e.g.o 审核材料。
+- **i18n 语言覆盖**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
