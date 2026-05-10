@@ -29,18 +29,10 @@
 
 自定义 provider 通过 YAML 声明，不需要新增 Rust 代码。
 
-规范目录：
-
-- macOS: `~/Library/Application Support/BananaTray/providers/`
-- Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
-
-补充说明：
-
-- 手工新增或编辑 YAML 后，当前通常需要重启应用才能重新加载。
-- 应用内通过 NewAPI 表单保存 / 删除 provider 时，会显式触发 reload。
-- 当前运行时只支持 `schema_version: 2` + `plan.steps`；旧版顶层 `source` / `parser` YAML 需用 `scripts/migrate_custom_provider_yaml.py` 一次性迁移。
+- 规范目录、Schema 和示例见 `custom-provider.md` 与 `docs/examples/`。
+- 当前运行时只支持 `schema_version: 2`。
 - 所有 step 都是 `source.type: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
-- 详细 Schema 和示例见 `custom-provider.md` 与 `docs/examples/`。
+- 手工编辑 YAML 后通常需重启应用；应用内 NewAPI 保存 / 删除会显式触发 reload。
 
 ## Stable Provider Contract
 

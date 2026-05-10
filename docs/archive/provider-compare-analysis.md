@@ -1,5 +1,7 @@
 # Provider 实现横向对比分析
 
+> **Archived.** 基于 2026-05-05 本地代码快照的一次性研究成果。内容有参考价值但不作为持续维护的契约文档。当前 provider 模型和扩展边界以 `docs/providers.md` 为准。
+
 本文按 provider 横向比较三个相邻仓库的实现：
 
 - BananaTray：当前仓库，Rust + GPUI，路径 `./`
