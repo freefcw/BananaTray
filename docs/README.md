@@ -24,6 +24,8 @@
   - 刷新触发源、调度规则、并发执行和 reload 语义。
 - `logging.md`
   - 日志级别、日志文件位置、调试相关入口。
+- `release.md`
+  - GitHub Release 的 tag 触发、自动草稿、产物和人工发布清单。
 - `gnome-shell-extension-development.md`
   - GNOME Shell Extension 的开发、nested Shell 调试、mock/真实 daemon、D-Bus 排查和验证清单。
 

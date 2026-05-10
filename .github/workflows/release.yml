@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing release tag, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+
+jobs:
+  linux:
+    name: Linux packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Validate release tag
+        run: bash scripts/validate-release-tag.sh "$RELEASE_TAG"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            libwayland-dev \
+            dpkg-dev \
+            rpm \
+            imagemagick \
+            zip \
+            curl
+          sudo apt-get install -y --no-install-recommends libfuse2 || \
+            sudo apt-get install -y --no-install-recommends libfuse2t64
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Build .deb package
+        run: bash scripts/bundle-deb.sh --skip-build
+
+      - name: Build .rpm package
+        run: bash scripts/bundle-rpm.sh --skip-build
+
+      - name: Build AppImage
+        run: bash scripts/bundle-appimage.sh --skip-build
+
+      # 不传 --check：ci.yml 已独立执行 check-gnome-extension.sh 静态检查，
+      # release 阶段不重复运行，以节省 Actions 时间。
+      - name: Build GNOME Shell Extension package
+        run: bash scripts/bundle-gnome-extension.sh
+
+      - name: Collect Linux release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp target/release/bundle/*.deb dist/
+          cp target/release/bundle/*.rpm dist/
+          cp target/release/bundle/*.AppImage dist/
+          # bundle-gnome-extension.sh 输出 UUID-VERSION.zip 格式
+          cp target/release/bundle/*.zip dist/
+          cd dist
+          sha256sum * > SHA256SUMS-linux
+
+      - name: Upload Linux assets to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/upload-release-assets.sh "$RELEASE_TAG" dist/*
+
+  macos:
+    name: macOS ${{ matrix.arch }} packages
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: aarch64
+          - runner: macos-13
+            arch: x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Validate release tag
+        run: bash scripts/validate-release-tag.sh "$RELEASE_TAG"
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create App Bundle
+        run: bash scripts/bundle.sh --skip-build
+
+      - name: Create DMG
+        run: bash scripts/bundle-dmg.sh --skip-build
+
+      - name: Collect macOS release assets
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          arch="${{ matrix.arch }}"
+          mkdir -p dist
+          cp target/release/bundle/bananatray.dmg "dist/BananaTray-${version}-macos-${arch}.dmg"
+          tar -C target/release -czf "dist/bananatray-${version}-macos-${arch}.tar.gz" bananatray
+          cd dist
+          shasum -a 256 * > "SHA256SUMS-macos-${arch}"
+
+      - name: Upload macOS assets to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/upload-release-assets.sh "$RELEASE_TAG" dist/*
