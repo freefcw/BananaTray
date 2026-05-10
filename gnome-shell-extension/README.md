@@ -193,8 +193,9 @@ bash scripts/bundle-gnome-extension.sh
 
 - 顶栏入口使用扩展自带的 `icons/bananatray-symbolic.svg`，旁边状态点和文字都跟随排序第一的已启用 Provider，显示它的首要 quota/连接状态。
 - 弹窗头部显示 daemon 的 `header.status_text`，并汇总 Provider 总数、Connected 数量、Refreshing / Error / Offline 状态。
-- 每个 Provider 行同步 `display_name`、`connection`、`account_email`、`account_tier`、`worst_status` 和所有可见 `quotas`；quota 按严重度排序，显示 label、预计算 `display_text` 和进度条。
-- quota 进度条优先使用 v1 内新增的可选 `bar_ratio` 字段，使 Remaining / Used 模式与主应用 Overview 保持一致；旧 daemon 未提供时，Extension 会用 `used / limit` 作为降级值。
+- 每个 Provider 行同步 `display_name`、`connection`、`account_email`、`account_tier`、`worst_status` 和所有可见 `quotas`；行内左侧固定为 Provider 身份区，右侧固定为 tier / 状态 / 展开按钮列，避免不同 Provider 状态导致视觉跳动。
+- quota 按严重度排序，显示 label、预计算 `display_text` 和进度条；数值列固定右对齐，折叠态的 `+N` 额外配额数量也落在同一列内。
+- quota 进度条优先使用 v1 内新增的可选 `bar_ratio` 字段，使 Remaining / Used 模式与主应用 Overview 保持一致；旧 daemon 未提供时，Extension 会用 `used / limit` 作为降级值。填充色使用与主应用相同的渐变语义：紫蓝起点过渡到当前状态色。
 
 ### JSON 快照兼容规则
 
@@ -268,6 +269,9 @@ BananaTrayExtension (入口)
 标题副文本展示紧凑 Provider 摘要（总数、已连接数，以及仅在非零时追加 refreshing / error /
 offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `LOW` / `OUT`
 徽章表达，非 connected 状态用连接状态徽章表达。
+
+Footer 中 `Sync Data` 默认为次级按钮；仅当 Header 状态为 `Syncing` / `Stale` /
+`Offline` 时提升为蓝色或红色强调态。`Settings` 保持轻量按钮样式。
 
 ## 开发
 

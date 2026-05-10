@@ -79,22 +79,31 @@
 /* -- Provider Rows -- */
 .bananatray-provider-list {
     spacing: 8px;
-    padding: 0 8px 8px;
+    padding: 0 10px 8px;
 }
 
 .bananatray-provider-row {
     padding: 9px 10px;
     spacing: 8px;
-    border-radius: 7px;
-    background-color: rgba(255, 255, 255, 0.045);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.035);
 }
 
 .bananatray-provider-row:hover {
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.055);
 }
 
 .bananatray-provider-header {
+    spacing: 10px;
+}
+
+.bananatray-provider-identity {
     spacing: 8px;
+}
+
+.bananatray-provider-actions {
+    min-width: 128px;
+    spacing: 6px;
 }
 
 .bananatray-provider-avatar {
@@ -123,7 +132,7 @@
 }
 
 .bananatray-provider-empty {
-    padding-left: 38px;
+    padding-left: 30px;
     font-size: 9pt;
     color: rgba(255, 255, 255, 0.55);
 }
@@ -138,14 +147,21 @@
     font-weight: bold;
 }
 
+.bananatray-tier-slot {
+    min-width: 36px;
+}
+
 /* -- Expand / Collapse Button -- */
 .bananatray-expand-button {
-    min-width: 22px;
-    min-height: 22px;
     border-radius: 4px;
     font-size: 9pt;
     font-weight: bold;
     color: rgba(255, 255, 255, 0.60);
+}
+
+.bananatray-expand-slot {
+    min-width: 22px;
+    min-height: 22px;
 }
 
 .bananatray-expand-button:hover {
@@ -155,8 +171,10 @@
 
 /* -- Collapsed Quota Inline (shown in folded state) -- */
 .bananatray-collapsed-value {
+    min-width: 58px;
     font-size: 9pt;
     font-weight: bold;
+    text-align: right;
 }
 
 .bananatray-collapsed-extra {
@@ -191,6 +209,12 @@
     text-align: right;
 }
 
+.bananatray-quota-value-cell {
+    min-width: 78px;
+    spacing: 4px;
+    text-align: right;
+}
+
 .bananatray-quota-bar {
     height: 5px;
     border-radius: 3px;
@@ -203,15 +227,21 @@
 }
 
 .bananatray-quota-bar-fill-green {
-    background-color: #4caf50;
+    background-gradient-direction: horizontal;
+    background-gradient-start: #6366f1;
+    background-gradient-end: #22c55e;
 }
 
 .bananatray-quota-bar-fill-yellow {
-    background-color: #ff9800;
+    background-gradient-direction: horizontal;
+    background-gradient-start: #6366f1;
+    background-gradient-end: #f59e0b;
 }
 
 .bananatray-quota-bar-fill-red {
-    background-color: #f44336;
+    background-gradient-direction: horizontal;
+    background-gradient-start: #6366f1;
+    background-gradient-end: #ef4444;
 }
 
 /* -- Status -- */
@@ -270,28 +300,46 @@
 }
 
 .bananatray-footer-btn {
-    padding: 7px 12px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 5px;
     font-size: 10pt;
     spacing: 6px;
+    color: rgba(255, 255, 255, 0.78);
 }
 
 .bananatray-footer-btn:hover {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
-.bananatray-footer-btn-primary {
+.bananatray-sync-button {
+    background-color: rgba(255, 255, 255, 0.04);
+    font-weight: normal;
+}
+
+.bananatray-sync-button-syncing,
+.bananatray-sync-button-stale {
     background-color: rgba(100, 181, 246, 0.16);
     color: #90caf9;
     font-weight: bold;
 }
 
-.bananatray-footer-btn-primary:hover {
+.bananatray-sync-button-syncing:hover,
+.bananatray-sync-button-stale:hover {
     background-color: rgba(100, 181, 246, 0.24);
 }
 
+.bananatray-sync-button-offline {
+    background-color: rgba(244, 67, 54, 0.14);
+    color: #ff8a80;
+    font-weight: bold;
+}
+
+.bananatray-sync-button-offline:hover {
+    background-color: rgba(244, 67, 54, 0.22);
+}
+
 .bananatray-footer-btn-icon {
-    icon-size: 14px;
+    icon-size: 13px;
 }
 
 .bananatray-footer-btn-content {

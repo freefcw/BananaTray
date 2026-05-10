@@ -48,9 +48,43 @@ function createStatusBadge(text, level) {
 function createTierBadge(tier) {
     return createLabel({
         text: tier.toUpperCase(),
-        style_class: 'bananatray-tier-badge',
+        style_class: 'bananatray-tier-badge bananatray-tier-slot',
         y_align: Clutter.ActorAlign.CENTER,
     }, false);
+}
+
+function createEmptyTierSlot() {
+    return new St.Widget({
+        style_class: 'bananatray-tier-slot',
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+}
+
+function createQuotaValueCell(text, extraText = null, valueStyleClass = 'bananatray-quota-value') {
+    const cell = new St.BoxLayout({
+        style_class: 'bananatray-quota-value-cell',
+        vertical: false,
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+
+    cell.add_child(createLabel({
+        text,
+        style_class: valueStyleClass,
+        x_expand: true,
+        x_align: Clutter.ActorAlign.END,
+        y_align: Clutter.ActorAlign.CENTER,
+    }, false));
+
+    if (extraText) {
+        cell.add_child(createLabel({
+            text: extraText,
+            style_class: 'bananatray-collapsed-extra',
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.CENTER,
+        }, false));
+    }
+
+    return cell;
 }
 
 function createQuotaBar(quota) {
@@ -101,11 +135,7 @@ class BananaTrayQuotaRow extends St.BoxLayout {
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         }));
-        topLine.add_child(createLabel({
-            text: quota.display_text || '',
-            style_class: 'bananatray-quota-value',
-            y_align: Clutter.ActorAlign.CENTER,
-        }, false));
+        topLine.add_child(createQuotaValueCell(quota.display_text || ''));
 
         this.add_child(topLine);
         this.add_child(createQuotaBar(quota));
@@ -135,7 +165,12 @@ class BananaTrayProviderRow extends St.BoxLayout {
             vertical: false,
             x_expand: true,
         });
-        header.add_child(createLabel({
+        const identity = new St.BoxLayout({
+            style_class: 'bananatray-provider-identity',
+            vertical: false,
+            x_expand: true,
+        });
+        identity.add_child(createLabel({
             text: providerInitials(provider),
             style_class: 'bananatray-provider-avatar',
             y_align: Clutter.ActorAlign.CENTER,
@@ -161,18 +196,25 @@ class BananaTrayProviderRow extends St.BoxLayout {
                 x_expand: true,
             }));
         }
-        header.add_child(titleBlock);
+        identity.add_child(titleBlock);
+        header.add_child(identity);
+
+        const actions = new St.BoxLayout({
+            style_class: 'bananatray-provider-actions',
+            vertical: false,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
 
         // Tier badge (colored pill)
-        if (provider.account_tier) {
-            header.add_child(createTierBadge(provider.account_tier));
-        }
+        actions.add_child(provider.account_tier
+            ? createTierBadge(provider.account_tier)
+            : createEmptyTierSlot());
 
         // Status badge or connection label
         if (connection === 'connected') {
-            header.add_child(createStatusBadge(statusBadgeLabel(level), level));
+            actions.add_child(createStatusBadge(statusBadgeLabel(level), level));
         } else {
-            header.add_child(createLabel({
+            actions.add_child(createLabel({
                 text: connectionLabel(connection),
                 style_class: `bananatray-connection-badge bananatray-connection-${connection}`,
                 y_align: Clutter.ActorAlign.CENTER,
@@ -181,14 +223,21 @@ class BananaTrayProviderRow extends St.BoxLayout {
 
         // Expand/collapse button for multi-quota providers
         if (isExpandable) {
+            this._expandIcon = createLabel({text: '▸', y_align: Clutter.ActorAlign.CENTER}, false);
             this._expandButton = new St.Button({
-                style_class: 'bananatray-expand-button',
+                style_class: 'bananatray-expand-button bananatray-expand-slot',
                 y_align: Clutter.ActorAlign.CENTER,
-                child: createLabel({text: '▸', y_align: Clutter.ActorAlign.CENTER}, false),
+                child: this._expandIcon,
             });
             this._expandButton.connect('clicked', () => this._toggleExpanded(quotas));
-            header.add_child(this._expandButton);
+            actions.add_child(this._expandButton);
+        } else {
+            actions.add_child(new St.Widget({
+                style_class: 'bananatray-expand-slot',
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
         }
+        header.add_child(actions);
 
         this.add_child(header);
 
@@ -226,12 +275,12 @@ class BananaTrayProviderRow extends St.BoxLayout {
 
         if (this._expanded) {
             // 展开态
-            this._expandButton.child.text = '▾';
+            this._expandIcon.text = '▾';
             for (const quota of quotas)
                 this._quotaContainer.add_child(new BananaTrayQuotaRow(quota));
         } else {
             // 折叠态
-            this._expandButton.child.text = '▸';
+            this._expandIcon.text = '▸';
             this._buildCollapsedView(quotas);
         }
     }
@@ -254,19 +303,12 @@ class BananaTrayProviderRow extends St.BoxLayout {
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         }));
-        collapsedRow.add_child(createLabel({
-            text: worst.display_text || '',
-            style_class: 'bananatray-collapsed-value',
-            y_align: Clutter.ActorAlign.CENTER,
-        }, false));
-
-        if (quotas.length > 1) {
-            collapsedRow.add_child(createLabel({
-                text: `+${quotas.length - 1}`,
-                style_class: 'bananatray-collapsed-extra',
-                y_align: Clutter.ActorAlign.CENTER,
-            }, false));
-        }
+        const extraText = quotas.length > 1 ? `+${quotas.length - 1}` : null;
+        collapsedRow.add_child(createQuotaValueCell(
+            worst.display_text || '',
+            extraText,
+            'bananatray-collapsed-value'
+        ));
 
         this._quotaContainer.add_child(collapsedRow);
 

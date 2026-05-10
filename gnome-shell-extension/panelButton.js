@@ -124,9 +124,9 @@ class BananaTrayIndicator extends PanelMenu.Button {
             x_expand: true,
         });
 
-        // Sync Data button (primary)
+        // Sync Data button：默认轻量，数据过期/离线/刷新中时再强调。
         this._syncButton = new St.Button({
-            style_class: 'bananatray-footer-btn bananatray-footer-btn-primary',
+            style_class: 'bananatray-footer-btn bananatray-sync-button',
             x_expand: false,
         });
         const syncContent = new St.BoxLayout({
@@ -149,6 +149,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
                 return;
             this._isRefreshing = true;
             this._syncLabel.text = _('Refreshing');
+            this._setSyncButtonState('syncing');
             this._setPanelState('yellow', _('Refreshing'));
             this._statusLabel.text = _('Refreshing');
             this._client.refreshAll();
@@ -261,6 +262,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         // Header badge (color-coded by status_kind)
         const statusKind = data.header?.status_kind || 'Stale';
         this._updateHeaderBadge(statusKind, data.header?.status_text || _('Unknown'));
+        this._setSyncButtonState(statusKind);
 
         this._setPanelState(summary.panelLevel, summary.panelText);
 
@@ -283,10 +285,21 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._panelSummaryLabel.text = text || 'BT';
     }
 
+    _setSyncButtonState(statusKind) {
+        if (!this._syncButton)
+            return;
+        const kind = normalizeStatusKind(statusKind);
+        const emphasize = kind === 'stale' || kind === 'offline' || kind === 'syncing';
+        this._syncButton.style_class = emphasize
+            ? `bananatray-footer-btn bananatray-sync-button bananatray-sync-button-${kind}`
+            : 'bananatray-footer-btn bananatray-sync-button';
+    }
+
     _showLoading(text, level = 'yellow', panelText = _('Waiting')) {
         this._statusLabel.text = text || _('Loading');
         this._setPanelState(level, panelText);
         this._updateHeaderBadge(level === 'red' ? 'offline' : 'syncing', text || _('Loading'));
+        this._setSyncButtonState(level === 'red' ? 'offline' : 'syncing');
         this._showMessage(text || _('Loading'), 'bananatray-loading');
     }
 
@@ -294,6 +307,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._statusLabel.text = text || _('Error');
         this._setPanelState('red', _('Error'));
         this._updateHeaderBadge('offline', text || _('Error'));
+        this._setSyncButtonState('offline');
         this._showMessage(text || _('Error'), 'bananatray-error');
     }
 
