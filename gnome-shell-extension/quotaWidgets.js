@@ -144,9 +144,13 @@ class BananaTrayQuotaRow extends St.BoxLayout {
 
 export const BananaTrayProviderRow = GObject.registerClass(
 class BananaTrayProviderRow extends St.BoxLayout {
-    _init(provider) {
+    _init(provider, isFirst = false) {
         super._init({
-            style_class: `bananatray-provider-row bananatray-provider-${providerVisualLevel(provider)}`,
+            style_class: [
+                'bananatray-provider-row',
+                `bananatray-provider-${providerVisualLevel(provider)}`,
+                isFirst ? 'bananatray-provider-row-first' : '',
+            ].filter(Boolean).join(' '),
             vertical: true,
             x_expand: true,
         });

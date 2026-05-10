@@ -270,6 +270,9 @@ BananaTrayExtension (入口)
 offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `LOW` / `OUT`
 徽章表达，非 connected 状态用连接状态徽章表达。
 
+弹窗视觉按托盘菜单处理：Provider 行默认透明，以细分隔线形成连续列表；只有 hover 时出现轻背景。
+徽章、按钮和头像使用较小圆角与低透明度背景，避免形成多层 dashboard 卡片。
+
 Footer 中 `Sync Data` 默认为次级按钮；仅当 Header 状态为 `Syncing` / `Stale` /
 `Offline` 时提升为蓝色或红色强调态。`Settings` 保持轻量按钮样式。
 

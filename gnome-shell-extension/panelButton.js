@@ -267,8 +267,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
         this._setPanelState(summary.panelLevel, summary.panelText);
 
         this._providerList.destroy_all_children();
-        for (const provider of providers)
-            this._providerList.add_child(new BananaTrayProviderRow(provider));
+        for (const [index, provider] of providers.entries())
+            this._providerList.add_child(new BananaTrayProviderRow(provider, index === 0));
 
         if (providers.length === 0) {
             this._showMessage(_('No enabled providers'), 'bananatray-loading');
