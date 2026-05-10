@@ -15,9 +15,6 @@ msgstr ""
 msgid "AI coding assistant quota monitor"
 msgstr "AI 编码助手配额监控器"
 
-msgid "Attention"
-msgstr "需关注"
-
 msgid "BananaTray daemon not running"
 msgstr "BananaTray 后台服务未运行"
 
@@ -77,10 +74,6 @@ msgstr "离线"
 
 msgid "Provider"
 msgstr "Provider"
-
-# Translators: summary metric label for the total number of providers.
-msgid "Providers"
-msgstr "Provider 数"
 
 msgid "Quota"
 msgstr "配额"

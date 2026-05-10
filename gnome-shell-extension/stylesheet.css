@@ -22,7 +22,7 @@
 
 /* -- Header -- */
 .bananatray-header {
-    padding: 10px 12px 8px;
+    padding: 10px 12px 10px;
     spacing: 10px;
 }
 
@@ -46,20 +46,10 @@
     border-radius: 12px;
     font-size: 9pt;
     font-weight: bold;
-    spacing: 6px;
-}
-
-.bananatray-header-badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 3px;
 }
 
 .bananatray-header-badge-synced {
     background-color: rgba(76, 175, 80, 0.15);
-}
-.bananatray-header-badge-synced .bananatray-header-badge-dot {
-    background-color: #4caf50;
 }
 .bananatray-header-badge-synced .bananatray-header-badge-text {
     color: #8ee89a;
@@ -68,18 +58,12 @@
 .bananatray-header-badge-syncing {
     background-color: rgba(100, 181, 246, 0.15);
 }
-.bananatray-header-badge-syncing .bananatray-header-badge-dot {
-    background-color: #64b5f6;
-}
 .bananatray-header-badge-syncing .bananatray-header-badge-text {
     color: #90caf9;
 }
 
 .bananatray-header-badge-stale {
     background-color: rgba(255, 255, 255, 0.06);
-}
-.bananatray-header-badge-stale .bananatray-header-badge-dot {
-    background-color: rgba(255, 255, 255, 0.40);
 }
 .bananatray-header-badge-stale .bananatray-header-badge-text {
     color: rgba(255, 255, 255, 0.54);
@@ -88,37 +72,8 @@
 .bananatray-header-badge-offline {
     background-color: rgba(244, 67, 54, 0.14);
 }
-.bananatray-header-badge-offline .bananatray-header-badge-dot {
-    background-color: #f44336;
-}
 .bananatray-header-badge-offline .bananatray-header-badge-text {
     color: #ff8a80;
-}
-
-/* -- Summary -- */
-.bananatray-summary {
-    padding: 0 12px 10px;
-    spacing: 8px;
-}
-
-.bananatray-summary-cell {
-    padding: 7px 8px;
-    border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-.bananatray-summary-cell-attention {
-    background-color: rgba(255, 152, 0, 0.14);
-}
-
-.bananatray-summary-value {
-    font-size: 12pt;
-    font-weight: bold;
-}
-
-.bananatray-summary-label {
-    font-size: 8pt;
-    color: rgba(255, 255, 255, 0.54);
 }
 
 /* -- Provider Rows -- */
@@ -212,7 +167,7 @@
 
 /* -- Quotas -- */
 .bananatray-quota-list {
-    padding-left: 38px;
+    padding-left: 30px;
     spacing: 7px;
 }
 
