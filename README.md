@@ -127,6 +127,17 @@ security find-identity -v -p codesigning
 
 - If the expected identity does not appear, check the certificate chain and private key in Keychain Access. A common cause is an outdated Apple WWDR intermediate certificate or a missing private key.
 
+## Release
+
+GitHub releases are tag-driven and intentionally stop at a draft release for maintainer review:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The `Release` workflow builds Linux and macOS packages, uploads checksums, and leaves the release unpublished. Review the draft on GitHub, then publish it manually. See [docs/release.md](docs/release.md) for the full release checklist.
+
 ## Configuration
 
 Settings are persisted as JSON:

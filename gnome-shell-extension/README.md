@@ -104,6 +104,13 @@ bash scripts/install-gnome-extension.sh
 等必需文件是否已经复制。手工安装时必须递归复制整个
 `gnome-shell-extension/` 目录，不能只复制顶层 `extension.js`、`metadata.json` 和 `stylesheet.css`。
 
+Release 页面提供的 `bananatray-gnome-shell-extension-*.zip` 可直接用 GNOME 工具安装：
+
+```bash
+gnome-extensions install --force bananatray-gnome-shell-extension-*.zip
+gnome-extensions enable bananatray@bananatray.github.io
+```
+
 只查看当前安装和 Shell 状态：
 
 ```bash

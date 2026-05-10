@@ -127,6 +127,17 @@ security find-identity -v -p codesigning
 
 - 如果预期身份未出现，请在 Keychain Access 中检查证书链和私钥。常见原因是 Apple WWDR 中间证书过期或缺少私钥。
 
+## 发布
+
+GitHub Release 由 tag 触发，并有意停在 draft release，等待维护者最终确认：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`Release` workflow 会构建 Linux 和 macOS 包、上传校验文件，并保持未发布状态。请在 GitHub 检查草稿后手动发布。完整清单见 [docs/release.md](docs/release.md)。
+
 ## 配置
 
 设置以 JSON 格式持久化存储：
