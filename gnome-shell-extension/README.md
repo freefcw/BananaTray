@@ -11,11 +11,13 @@
 
 ## 使用说明
 
-扩展加载成功后，GNOME 顶栏右侧会出现 BananaTray 图标、彩色状态点和一段简短摘要：
+扩展加载成功后，GNOME 顶栏右侧会出现 BananaTray 图标、彩色状态点和一段简短摘要。
+状态点和摘要固定跟随 BananaTray 设置页中排序第一的已启用 Provider；要切换顶栏显示哪个
+Provider，在主应用的 Provider 设置页拖拽调整排序即可。
 
-- 绿色：所有已启用 Provider 当前没有明显配额风险。
-- 黄色：至少一个 Provider 正在刷新、离线，或有低配额提醒。
-- 红色：至少一个 Provider 已耗尽、出错且没有可展示的缓存数据，或处于严重状态。
+- 绿色：排序第一的 Provider 当前没有明显配额风险。
+- 黄色：排序第一的 Provider 正在刷新、离线，或有低配额提醒。
+- 红色：排序第一的 Provider 已耗尽、出错且没有可展示的缓存数据，或处于严重状态。
 
 点击顶栏入口会打开总览弹窗：
 
@@ -189,7 +191,7 @@ bash scripts/bundle-gnome-extension.sh
 
 弹窗展示的是 daemon 推送的 `DBusQuotaSnapshot` 总览视图：
 
-- 顶栏入口使用扩展自带的 `icons/bananatray-symbolic.svg`，旁边状态点取所有 Provider 的最差状态（Red > Yellow > Green），文字显示整体 OK 或最需要关注的 Provider / quota。
+- 顶栏入口使用扩展自带的 `icons/bananatray-symbolic.svg`，旁边状态点和文字都跟随排序第一的已启用 Provider，显示它的首要 quota/连接状态。
 - 弹窗头部显示 daemon 的 `header.status_text`，并汇总 Provider 总数、Connected 数量、Refreshing / Error / Offline 状态。
 - 每个 Provider 行同步 `display_name`、`connection`、`account_email`、`account_tier`、`worst_status` 和所有可见 `quotas`；quota 按严重度排序，显示 label、预计算 `display_text` 和进度条。
 - quota 进度条优先使用 v1 内新增的可选 `bar_ratio` 字段，使 Remaining / Used 模式与主应用 Overview 保持一致；旧 daemon 未提供时，Extension 会用 `used / limit` 作为降级值。
@@ -259,10 +261,10 @@ BananaTrayExtension (入口)
 | `Yellow` | `#ff9800` |
 | `Red` | `#f44336` |
 
-面板状态点取所有 Provider 中最差状态（Red > Yellow > Green）。如果 Provider 正在
-`Refreshing` 或 `Disconnected`，扩展以 Yellow 提醒；如果 `Error` 且没有缓存配额，以
-Red 提醒；如果 `Error` 但仍有缓存配额，仍展示缓存 quota，并在账号信息行标注
-`Cached data`。
+面板状态点只取排序第一的已启用 Provider 状态；弹窗内每行左侧状态点取该行 Provider 自身状态。
+如果 Provider 正在 `Refreshing` 或 `Disconnected`，扩展以 Yellow 提醒；如果 `Error` 且没有
+缓存配额，以 Red 提醒；如果 `Error` 但仍有缓存配额，仍展示缓存 quota，并在账号信息行标注
+`Cached data`。弹窗 Summary 的 Attention 仍统计所有已启用 Provider。
 
 ## 开发
 
@@ -281,7 +283,17 @@ ES module 执行语法检查。若本机有 `msgfmt` / `xgettext` / `msgcmp`，�
 ### i18n
 
 Extension 使用 `metadata.json` 中的 `gettext-domain: "bananatray"` 和本地
-`locale/<lang>/LC_MESSAGES/bananatray.mo`。新增用户可见文案时：
+`locale/<lang>/LC_MESSAGES/bananatray.mo`，语言跟随 GNOME Shell / 系统 locale，
+不读取 BananaTray 主应用的 `settings.display.language`。这是有意的边界：Extension 属于
+Shell UI，daemon 未运行时也必须能用 Shell 的语言显示基础状态。
+
+D-Bus 快照里来自 daemon 的 `display_name`、quota `label` 和 `display_text` 不在 Extension
+端二次翻译，由 daemon 按主应用当前语言生成。因此用户可能看到：
+
+- Extension 自有按钮、错误、Summary 等文案跟随 GNOME Shell / 系统语言。
+- Provider 名称、quota 标签和 quota 数值文本跟随 BananaTray 主应用语言。
+
+新增用户可见文案时：
 
 1. 在 JS 中通过 `i18n.js` 导出的 `_()` 包裹普通文案，带数量的文案使用 `ngettext()`。
 2. 同步更新 `po/zh_CN.po`。
@@ -293,9 +305,6 @@ msgfmt --check \
   --output-file=gnome-shell-extension/locale/zh_CN/LC_MESSAGES/bananatray.mo \
   gnome-shell-extension/po/zh_CN.po
 ```
-
-D-Bus 快照里来自 daemon 的 `display_name`、quota `label` 和 `display_text` 不在 Extension
-端二次翻译，由 daemon 侧保持一致语义。
 
 ### Nested Shell 调试（推荐）
 

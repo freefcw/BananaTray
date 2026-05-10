@@ -27,8 +27,12 @@ export function normalizeStatusKind(value) {
     return STATUS_KIND_KEYS.has(kind) ? kind : 'stale';
 }
 
-function strongerStatus(left, right) {
-    return STATUS_ORDER[left] >= STATUS_ORDER[right] ? left : right;
+function primaryProviderPanelText(provider) {
+    const primaryQuota = sortedQuotas(provider)[0];
+    const name = provider.display_name || provider.id || _('Provider');
+    return primaryQuota
+        ? `${name} ${primaryQuota.display_text}`
+        : `${name} ${connectionLabel(provider.connection)}`;
 }
 
 export function providerVisualLevel(provider) {
@@ -107,18 +111,14 @@ export function summarizeProviders(providers) {
         error: 0,
         disconnected: 0,
         attention: 0,
-        worstLevel: 'green',
+        panelLevel: 'green',
         panelText: _('No providers'),
         headerText: _('No enabled providers'),
     };
 
-    let worstProvider = null;
-    let worstProviderLevel = 'green';
-
     for (const provider of providers) {
         const connection = normalizeConnection(provider.connection);
         const level = providerVisualLevel(provider);
-        summary.worstLevel = strongerStatus(summary.worstLevel, level);
 
         if (connection === 'connected')
             summary.connected += 1;
@@ -131,11 +131,6 @@ export function summarizeProviders(providers) {
 
         if (connection !== 'connected' || level !== 'green')
             summary.attention += 1;
-
-        if (!worstProvider || STATUS_ORDER[level] > STATUS_ORDER[worstProviderLevel]) {
-            worstProvider = provider;
-            worstProviderLevel = level;
-        }
     }
 
     if (summary.total === 0)
@@ -153,17 +148,9 @@ export function summarizeProviders(providers) {
         headerParts.push(formatOfflineCount(summary.disconnected));
     summary.headerText = headerParts.join(' · ');
 
-    if (summary.worstLevel === 'green') {
-        summary.panelText = _('%(connected)d/%(total)d OK')
-            .replace('%(connected)d', summary.connected)
-            .replace('%(total)d', summary.total);
-    } else if (worstProvider) {
-        const primaryQuota = sortedQuotas(worstProvider)[0];
-        const name = worstProvider.display_name || worstProvider.id || _('Provider');
-        summary.panelText = primaryQuota
-            ? `${name} ${primaryQuota.display_text}`
-            : `${name} ${connectionLabel(worstProvider.connection)}`;
-    }
+    // providers 已由 daemon 按用户设置顺序排列；顶栏文字和状态点固定跟随第一个。
+    summary.panelLevel = providerVisualLevel(providers[0]);
+    summary.panelText = primaryProviderPanelText(providers[0]);
 
     return summary;
 }
