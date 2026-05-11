@@ -74,23 +74,38 @@ echo "💿 创建 DMG..."
 if command -v create-dmg >/dev/null 2>&1; then
     echo "   使用 create-dmg (推荐)"
 
-    DMG_ARGS=(
-        --volname "$APP_NAME"
-        --volicon "$APP_DIR/Contents/Resources/AppIcon.icns"
-        --window-pos 200 120
-        --window-size 800 600
-        --icon-size 100
-        --icon "$APP_NAME.app" 200 190
-        --hide-extension "$APP_NAME.app"
-        --app-drop-link 600 185
-        --disk-image-size 200
-        --hdiutil-quiet
-    )
+    # CI 环境下 Finder GUI 不可用，create-dmg 的 AppleScript 美化步骤
+    # (--window-pos, --icon, --app-drop-link 等) 全部会触发 Finder 操作，
+    # 在 GitHub Actions runner 上会报 -10006 错误。
+    # 因此 CI 只使用不依赖 Finder 的参数，生成功能完整但外观朴素的 DMG。
+    if [ "${CI:-}" = "true" ]; then
+        echo "   ⏭️  CI 环境：跳过 Finder 美化（AppleScript 不可用）"
+        DMG_ARGS=(
+            --volname "$APP_NAME"
+            --volicon "$APP_DIR/Contents/Resources/AppIcon.icns"
+            --disk-image-size 200
+            --hdiutil-quiet
+            --no-internet-enable
+        )
+    else
+        DMG_ARGS=(
+            --volname "$APP_NAME"
+            --volicon "$APP_DIR/Contents/Resources/AppIcon.icns"
+            --window-pos 200 120
+            --window-size 800 600
+            --icon-size 100
+            --icon "$APP_NAME.app" 200 190
+            --hide-extension "$APP_NAME.app"
+            --app-drop-link 600 185
+            --disk-image-size 200
+            --hdiutil-quiet
+        )
 
-    # 添加背景图片（如果存在且非占位文件）
-    # 最小 1KB 防止 1x1 占位 PNG 导致 create-dmg AppleScript 失败
-    if [ -f "$BACKGROUND_SRC" ] && [ "$(wc -c < "$BACKGROUND_SRC" | tr -d ' ')" -gt 1024 ]; then
-        DMG_ARGS+=(--background "$DMG_DIR/.background.png")
+        # 添加背景图片（如果存在且非占位文件）
+        # 最小 1KB 防止 1x1 占位 PNG 导致 create-dmg AppleScript 失败
+        if [ -f "$BACKGROUND_SRC" ] && [ "$(wc -c < "$BACKGROUND_SRC" | tr -d ' ')" -gt 1024 ]; then
+            DMG_ARGS+=(--background "$DMG_DIR/.background.png")
+        fi
     fi
 
     # 添加许可证（如果存在）
@@ -110,8 +125,8 @@ elif command -v hdiutil >/dev/null 2>&1; then
     # 挂载临时 DMG
     DEVICE=$(hdiutil attach -readwrite -noverify -noautoopen "$TEMP_DMG" | egrep '^/dev/' | sed 1q | awk '{print $1}')
 
-    # 设置外观（如果存在背景图片）
-    if [ -f "$BACKGROUND_SRC" ]; then
+    # 设置外观（如果存在背景图片，且不在 CI 中）
+    if [ "${CI:-}" != "true" ] && [ -f "$BACKGROUND_SRC" ]; then
         echo "   设置 DMG 背景..."
         cat <<EOF | osascript
 tell application "Finder"
