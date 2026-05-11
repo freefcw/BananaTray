@@ -31,6 +31,7 @@ rm -rf "$PKG_DIR"
 
 # DEBIAN/control
 mkdir -p "$PKG_DIR/DEBIAN"
+chmod 755 "$PKG_DIR/DEBIAN"
 cat > "$PKG_DIR/DEBIAN/control" <<EOF
 Package: $APP_NAME
 Version: $VERSION
