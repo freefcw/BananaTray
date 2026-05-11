@@ -62,9 +62,8 @@ mkdir -p "$RESOURCES_DIR"
 cp "$PROJECT_DIR/resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 
 # macOS 要求 CFBundleShortVersionString 为 MAJOR.MINOR.PATCH，
-# 预发布后缀（如 0.1.0-rc.4 → 0.1.0）需剥除。
-PLIST_VERSION="${VERSION%%-*}"
-sed -i.bak "s|<string>[^<]*</string><!-- APP_VERSION -->|<string>${PLIST_VERSION}</string><!-- APP_VERSION -->|" "$CONTENTS_DIR/Info.plist"
+# 预发布后缀已由 common.sh 剥除到 VERSION_BASE 中。
+sed -i.bak "s|<string>[^<]*</string><!-- APP_VERSION -->|<string>${VERSION_BASE}</string><!-- APP_VERSION -->|" "$CONTENTS_DIR/Info.plist"
 rm -f "$CONTENTS_DIR/Info.plist.bak"
 
 # 二进制

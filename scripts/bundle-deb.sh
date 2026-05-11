@@ -20,7 +20,7 @@ ensure_build
 MAINTAINER="BananaTray Team <bananatray@example.com>"
 DESCRIPTION="System tray application for monitoring AI coding assistant quotas"
 
-PKG_NAME="${APP_NAME}_${VERSION}_${ARCH}"
+PKG_NAME="${APP_NAME}_${DEB_VERSION}_${ARCH}"
 PKG_DIR="$BUNDLE_DIR/$PKG_NAME"
 
 # ------------------------------------------------------------------
@@ -34,7 +34,7 @@ mkdir -p "$PKG_DIR/DEBIAN"
 chmod 755 "$PKG_DIR/DEBIAN"
 cat > "$PKG_DIR/DEBIAN/control" <<EOF
 Package: $APP_NAME
-Version: $VERSION
+Version: $DEB_VERSION
 Section: utils
 Priority: optional
 Architecture: $ARCH

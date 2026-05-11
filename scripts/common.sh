@@ -32,8 +32,9 @@ cargo_package_field() {
     ' "$PROJECT_DIR/Cargo.toml"
 }
 
-# 初始化项目路径变量，从 Cargo.toml 读取版本号和仓库地址
+# 初始化项目路径变量，解析版本号（RELEASE_TAG 优先，回退 Cargo.toml）和仓库地址
 # 调用后可用: PROJECT_DIR, RELEASE_DIR, BUNDLE_DIR, APP_NAME, VERSION, BINARY,
+#            VERSION_BASE, RPM_VERSION, DEB_VERSION,
 #            HOMEPAGE_URL, REPOSITORY_URL, BUGTRACKER_URL
 init_project_vars() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
@@ -52,6 +53,23 @@ init_project_vars() {
     else
         VERSION=$(cargo_package_field version)
     fi
+
+    # 派生各打包格式专用版本号：
+    #   VERSION_BASE  — 基础 MAJOR.MINOR.PATCH，无预发布后缀（macOS plist 用）
+    #   RPM_VERSION   — RPM Version 字段禁止连字符，预发布用 ~ 前缀（如 0.1.0~rc.4）
+    #                   ~ 在 RPM 排序中低于无后缀版本，即 0.1.0~rc.4 < 0.1.0 ✓
+    #   DEB_VERSION   — Debian 同样用 ~ 表示预发布（如 0.1.0~rc.4）
+    VERSION_BASE="${VERSION%%-*}"
+    if [ "$VERSION" != "$VERSION_BASE" ]; then
+        # 有预发布后缀：0.1.0-rc.4 → suffix=rc.4
+        local suffix="${VERSION#*-}"
+        RPM_VERSION="${VERSION_BASE}~${suffix}"
+        DEB_VERSION="${VERSION_BASE}~${suffix}"
+    else
+        RPM_VERSION="$VERSION"
+        DEB_VERSION="$VERSION"
+    fi
+
     HOMEPAGE_URL=$(cargo_package_field homepage)
     REPOSITORY_URL=$(cargo_package_field repository)
     BUGTRACKER_URL="${REPOSITORY_URL}/issues"
