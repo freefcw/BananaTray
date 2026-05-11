@@ -60,7 +60,7 @@ jobs:
           # 打包工具
           sudo apt-get install -y --no-install-recommends \
             dpkg-dev rpm imagemagick zip curl
-          sudo apt-get install -y --no-install-recommends libfuse2 || \
+          sudo apt-get install -y --no-install-recommends libfuse2 fuse3 || \
             sudo apt-get install -y --no-install-recommends libfuse2t64
 
       - name: Install stable toolchain
