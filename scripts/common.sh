@@ -5,7 +5,7 @@
 # 用法: source scripts/common.sh
 #
 # 提供:
-#   - init_project_vars        初始化项目路径 + 从 Cargo.toml 读取版本号
+#   - init_project_vars        初始化项目路径 + 版本号（RELEASE_TAG 优先，回退 Cargo.toml）
 #   - parse_args               解析公共参数 (--skip-build, --arch)
 #   - ensure_build             编译 release 并校验二进制存在
 #   - copy_runtime_resources   复制 SVG/PNG 运行时资源到目标目录
@@ -44,8 +44,14 @@ init_project_vars() {
     BUNDLE_DIR="$RELEASE_DIR/bundle"
     BINARY="$RELEASE_DIR/$APP_NAME"
 
-    # 从 Cargo.toml 读取打包元数据（避免多处硬编码）
-    VERSION=$(cargo_package_field version)
+    # 版本号来源优先级：
+    #   1. RELEASE_TAG 环境变量（CI workflow 设置，如 v0.1.0-rc.4）→ 剥除 v 前缀
+    #   2. Cargo.toml version 字段（本地开发回退）
+    if [ -n "${RELEASE_TAG:-}" ]; then
+        VERSION="${RELEASE_TAG#v}"
+    else
+        VERSION=$(cargo_package_field version)
+    fi
     HOMEPAGE_URL=$(cargo_package_field homepage)
     REPOSITORY_URL=$(cargo_package_field repository)
     BUGTRACKER_URL="${REPOSITORY_URL}/issues"
