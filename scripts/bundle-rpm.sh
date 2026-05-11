@@ -32,7 +32,7 @@ DESCRIPTION="System tray application for monitoring AI coding assistant quotas"
 
 RPM_TOPDIR="$BUNDLE_DIR/rpmbuild"
 SPEC_FILE="$RPM_TOPDIR/SPECS/$APP_NAME.spec"
-BUILDROOT="$RPM_TOPDIR/BUILDROOT/${APP_NAME}-${VERSION}-1.${RPM_ARCH}"
+BUILDROOT="$RPM_TOPDIR/BUILDROOT/${APP_NAME}-${RPM_VERSION}-1.${RPM_ARCH}"
 
 # ------------------------------------------------------------------
 # 1. 组装 BUILDROOT
@@ -52,7 +52,7 @@ echo "📝 生成 RPM spec 文件..."
 # spec 中 %install 为空：文件已预装在 BUILDROOT 中，通过 --buildroot 传入
 cat > "$SPEC_FILE" <<SPEC_EOF
 Name:           $APP_NAME
-Version:        $VERSION
+Version:        $RPM_VERSION
 Release:        1%{?dist}
 Summary:        $DESCRIPTION
 License:        MIT
