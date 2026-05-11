@@ -99,7 +99,10 @@ echo "📦 构建 .rpm 包..."
 
 if command -v rpmbuild &>/dev/null; then
     # --buildroot 显式指定预装目录，避免 spec 内使用脆弱的相对路径
+    # __spec_install_pre: rpmbuild 默认会在 %install 前 rm -rf BUILDROOT，
+    # 我们的文件已预装，必须禁用这个自动清理。
     rpmbuild --define "_topdir $RPM_TOPDIR" \
+             --define "__spec_install_pre %{nil}" \
              --buildroot "$BUILDROOT" \
              --target "$RPM_ARCH" \
              -bb "$SPEC_FILE"
