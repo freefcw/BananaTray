@@ -50,6 +50,7 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     adabraka_ui::init(cx);
     adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
     cx.set_keep_alive_without_windows(true);
+    crate::runtime::register_idle_gpu_cache_trim(cx);
 
     if crate::tray::should_use_gpui_tray() {
         // 系统托盘

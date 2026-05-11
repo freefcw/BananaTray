@@ -44,7 +44,9 @@ unexpected_cfgs = "allow"
 # 将同一 commit 的 adabraka-gpui 解析成两份 crate，导致 GPUI 类型不兼容。
 # 禁用不必要的图像格式 features 以减小体积：仅保留 SVG + PNG（app logo）
 gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit", "image-format-png"], optional = true }
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "8c10cbd", default-features = false, optional = true }
+# adabraka-ui 0.6 在 default-features = false 时不再注册内置字体；
+# 这里只启用实际 UI 权重，避免拉入完整 JetBrains Mono Bold 等未用资产。
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "1c6fa5", default-features = false, features = ["font-inter-regular", "font-inter-medium", "font-inter-semibold", "font-inter-bold", "font-mono-regular"], optional = true }
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
 

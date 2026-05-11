@@ -19,7 +19,7 @@ mod tray;
 mod ui;
 mod utils;
 
-use gpui::{App, Application};
+use gpui::{App, AppProfile, Application};
 use log::info;
 use platform::assets::Assets;
 use std::cell::RefCell;
@@ -56,6 +56,7 @@ fn main() {
     };
 
     Application::new()
+        .with_resource_profile(AppProfile::Minimal)
         .with_assets(Assets::new())
         .run(move |cx: &mut App| {
             let settings = bootstrap::load_settings();

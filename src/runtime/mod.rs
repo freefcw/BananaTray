@@ -5,6 +5,7 @@ mod app_state;
 mod diagnostics_context;
 mod effects;
 pub(crate) mod global_hotkey;
+mod gpu_cache;
 mod newapi_io;
 mod settings_window_opener;
 mod settings_writer;
@@ -16,6 +17,7 @@ use std::rc::Rc;
 use self::global_hotkey::rebind_global_hotkey;
 pub use app_state::AppState;
 pub(crate) use diagnostics_context::{collect_debug_context, collect_issue_report_context};
+pub use gpu_cache::register_idle_gpu_cache_trim;
 pub use settings_window_opener::schedule_open_settings_window;
 pub(crate) use settings_writer::SettingsWriter;
 
