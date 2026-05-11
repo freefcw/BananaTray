@@ -45,6 +45,7 @@
 
 - `finalize_popup_close()` 统一关闭后的 UI hook 清理和 `PopupVisibilityChanged(false)` 派发
 - `take_window_if_matches()` 只在当前 slot 仍指向同一个窗口时清空，避免异步 auto-hide 误关新 popup
+- popup 或 settings window 真正关闭后的 GPUI renderer cache 回收由 `bootstrap_ui()` 注册的全局 `on_window_closed` observer 统一处理；回收会短延迟并只在没有 GPUI 窗口存活时执行。Linux popup 复用隐藏路径会保留窗口和 compositor 放置结果，不触发 trim
 
 **托盘交互入口**：
 

@@ -106,6 +106,10 @@
 - 通过 GPUI `tray_icon_anchor()` 获取托盘图标所在显示器
 - 通过 `ui_hooks` 请求 UI 构造 settings view，`runtime` 不再依赖 UI 的窗口管理函数
 
+### `gpu_cache.rs` — GPUI Resource Trimming
+
+`gpu_cache.rs` 在启动阶段注册全局 `on_window_closed` observer。窗口关闭后会 debounce 一个短延迟；若此时没有 GPUI 窗口存活，则调用 `App::trim_gpu_caches()`。这是上游 GPUI 的 best-effort GPU pool 回收接口，用于释放 popup / settings window 关闭后空闲的 renderer buffer，同时避免 popup 切 settings window 时刚释放又重建；Linux popup 的隐藏复用路径不关闭窗口，因此不会触发这条回收。
+
 ### `settings_writer.rs` — 设置文件 Debounce 写入器
 
 合并短时间内的多次 `PersistSettings` 请求，避免快速操作（拖拽排序、连续切换）时频繁写盘。

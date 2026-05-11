@@ -9,6 +9,8 @@
 - 默认受支持的产品路径是开启 `app` feature 的托盘应用构建。
 - `bananatray` 二进制目标通过 Cargo `required-features = ["app"]` 显式要求该 feature。
 - `app` 不只控制模块导出，也隔离托盘壳的运行时依赖（GPUI / adabraka-ui / 单实例 / 通知 / 自启动等）。
+- GPUI 启动使用 `AppProfile::Minimal`，让托盘类长驻进程采用较小的文本布局缓存、glyph raster-bounds 缓存、GPU atlas / instance buffer 初始预算和 element arena。
+- `adabraka-ui` 以 `default-features = false` 引入时不会自动注册内置字体；BananaTray 在 `Cargo.toml` 显式开启 Inter 400/500/600/700 和 JetBrains Mono Regular，保留当前 UI 字重覆盖，同时避免嵌入未使用的 Mono Bold。
 - `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖。
 - i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。
 
@@ -166,6 +168,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 | `src/runtime/settings_window_opener.rs` 的 `10ms` 延迟打开 | 避免 tray/popup 关闭与 settings 建窗发生在同一轮前台事件处理里时出现窗口激活/生命周期时序问题 | 从 tray/popup 切到 settings 时，GPUI 窗口关闭和新窗口创建对同一轮事件循环较敏感；历史上出现过 `"window not found"` 类窗口时序问题 | 当 GPUI 或应用层能证明同轮关闭旧窗并立即建新窗稳定无回归，且多显示器/焦点切换路径实测通过 |
 | `src/runtime/settings_window_opener.rs` 的 `+1px` resize nudge | 强制 settings window 在首次展示后重新走一次布局/绘制，避免初始尺寸或外观状态未完全刷新 | 新窗口刚激活时，GPUI 对首次 viewport/appearance 刷新存在时序敏感性 | 当去掉 nudge 后，多显示器、主题切换、冷启动开窗都能稳定保持正确布局和外观同步 |
 | `src/bootstrap.rs` 在 macOS 启用 `set_tray_panel_mode(true)` | 保证点击菜单栏 status item 时进入 `on_tray_icon_event`，由应用打开 GPUI popup | GPUI macOS status item 默认是 NSMenu 模式；不启用 panel mode 时点击会走菜单路径而不是 tray icon callback，表现为点击托盘图标但弹窗不出现 | 当 GPUI macOS 默认点击行为改为稳定发出 tray icon callback，或应用改为用 NSMenu 作为 macOS 主交互入口 |
+| `src/bootstrap.rs` 注册 `on_window_closed` 后延迟调用 `trim_gpu_caches()` | 最后一个 GPUI 窗口关闭后释放 renderer 中闲置的 pooled GPU buffer，降低托盘应用长期后台驻留的 GPU 内存占用 | 上游 GPUI 的 trim 是 best-effort 且只回收 idle renderer pool；关闭 popup / settings window 后短暂延迟并确认没有窗口，避免 popup 切 settings 时刚释放又重建 | 当 GPUI 自身在窗口关闭后自动回收这些 idle pool，或应用不再长驻后台 |
 | `src/bootstrap.rs` 在 Linux 安装 tray menu（Open / Settings / Quit）作为 fallback | 为仍不稳定转发 `activate` / `secondary_activate` 的 tray host 保留可达入口，避免用户只能依赖左键点击 | 即使 tray callback bridge 已修复，不同 Wayland / Ubuntu tray host 对左键/次级激活的支持仍不一致；menu-based 入口是最后兜底，至少保证 Open / Settings / Quit 可用 | 当目标 Linux tray host 范围内已验证都会稳定发出 tray click 事件，且移除菜单 fallback 后 Ubuntu / Wayland / X11 实测仍可正常打开 popup / settings |
 | `src/tray/controller.rs` + `src/tray/activation.rs`：Linux 打开 popup 后显式 `show_window()`/`activate_window()`（via `linux_popup::ensure_popup_visible`），activation 状态机只在 popup 至少成功激活过一次后才允许关闭 | 避免 Ubuntu / Linux 托盘点击后 popup 没被 WM/compositor 浮到前台，或在尚未真正获得焦点时被失焦观察器立即关掉，表现成“点击托盘没反应” | Linux 上 tray click 触发的建窗与焦点事件顺序不稳定，vendored GPUI 的 Linux `open_window` 也不消费 `WindowOptions.show/focus`，需要应用层补一次显式显示/激活，并把 auto-hide 收紧为“先激活过再允许失焦关闭” | 当 GPUI Linux 建窗对 tray-triggered popup 已能稳定映射并发出一致的激活状态变化，且移除这些保护后 Ubuntu / Wayland / X11 实测无回归 |
 | Linux popup 复用窗口；拖动或已有保存位置后隐藏优先使用透明渲染 + 鼠标穿透，头部拖动时短暂抑制 auto-hide 并在抑制期后复查失焦，同时持久化 `settings.display.tray_popup.linux_last_position` | 让 Linux 用户在 Wayland 无法精确初始定位时仍可拖动 popup，并在同一进程内尽量保留窗口管理器放置结果；X11 下可跨重启恢复上次拖动位置 | Wayland `xdg_toplevel` 不允许客户端指定窗口位置，`hide_window()`/`show_window()` 可能重新映射到屏幕中央，且 `start_window_move()` 期间可能产生失焦事件；普通 `remove_window()`/重建会丢失 compositor 已放置的位置 | 当 GPUI Linux 支持 layer-shell / ext-layer-shell 等可控定位协议且可满足托盘弹窗交互，或确认所有目标桌面环境的普通窗口定位与拖动恢复稳定可控 |
