@@ -74,7 +74,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
 | `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
-| `windsurf.rs` + `windsurf/` | Windsurf | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
+| `windsurf/` | Windsurf | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf/mod.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
 | `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro` | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo` | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
@@ -114,7 +114,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   - `codeium_family/live_source.rs` handles process discovery + local API transport
   - `codeium_family/cache_source.rs` handles SQLite/local cache fallback
   - `antigravity/mod.rs` owns `live -> cache`
-  - `windsurf.rs` owns `seat -> live -> cache`
+  - `windsurf/mod.rs` owns `seat -> live -> cache`
   - `windsurf/seat_source.rs` contains the Windsurf-only cloud source
 
 ## Adding a New Provider

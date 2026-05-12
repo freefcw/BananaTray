@@ -18,8 +18,6 @@ pub mod refresh;
 pub mod settings_store;
 #[cfg(feature = "app")]
 pub mod theme;
-#[cfg(all(test, feature = "app"))]
-mod theme_tests;
 pub mod utils;
 
 // GPUI 视图层和运行时模块，测试时不编译

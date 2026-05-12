@@ -1,6 +1,9 @@
 use gpui::{rgb, rgba, Global, Hsla, WindowAppearance};
 use std::sync::LazyLock;
 
+#[cfg(test)]
+mod tests;
+
 /// 判断 WindowAppearance 是否为深色系
 pub fn is_dark_appearance(appearance: WindowAppearance) -> bool {
     matches!(
@@ -128,8 +131,8 @@ impl Global for Theme {}
 // 使用 serde_yml::Value 动态提取颜色值，无需 #[derive(Deserialize)]
 // 中间结构体，避免与 GPUI proc-macro 冲突，也消除了结构体重复。
 
-pub(crate) const LIGHT_YAML: &str = include_str!("../themes/light.yaml");
-const DARK_YAML: &str = include_str!("../themes/dark.yaml");
+pub(crate) const LIGHT_YAML: &str = include_str!("../../themes/light.yaml");
+const DARK_YAML: &str = include_str!("../../themes/dark.yaml");
 
 /// 从 YAML Value 中按 `section.key` 路径提取颜色并转为 Hsla
 pub(crate) fn color(root: &serde_yml::Value, section: &str, key: &str) -> Hsla {

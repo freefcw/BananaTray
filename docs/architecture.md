@@ -28,7 +28,7 @@
   - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
 - `ui/`
   - GPUI 视图、窗口内容、控件和 view-local 状态。
-- `theme.rs`
+- `theme/`
   - GPUI 主题 token、主题 YAML 解析和 `WindowAppearance` 到运行时主题的映射。
   - 仅在 `app` feature 下编译。
 - `refresh/`

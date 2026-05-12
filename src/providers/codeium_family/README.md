@@ -131,7 +131,7 @@ availability 语义刻意拆成两层：
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试
 
-Windsurf seat API 相关测试位于 `src/providers/windsurf.rs` 与 `src/providers/windsurf/seat_source.rs`。
+Windsurf seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。
 
 ## 维护规则
 
