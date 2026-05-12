@@ -129,6 +129,8 @@ copy_runtime_resources() {
     mkdir -p "$target_dir/src/tray"
     cp "$PROJECT_DIR/src/tray/tray_icon.png" "$target_dir/src/tray/tray_icon.png"
     cp "$PROJECT_DIR"/src/icons/*.svg "$target_dir/src/icons/"
+    # PNG 图标（app_logo 等）供 GPUI img() 加载
+    cp "$PROJECT_DIR"/src/icons/*.png "$target_dir/src/icons/" 2>/dev/null || true
 }
 
 # 安装多尺寸应用图标到 hicolor 图标主题目录

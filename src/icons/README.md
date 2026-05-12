@@ -8,7 +8,12 @@ SVG icon assets used by the GPUI UI layer.
   - The `{name}` matches the lowercase provider identifier
   - Referenced in `ProviderMetadata.icon_asset` as `"src/icons/provider-{name}.svg"`
 - **UI icons**: descriptive name (e.g. `settings.svg`, `refresh.svg`, `close.svg`)
-- **Tray icon**: `tray_icon.svg` (the system tray icon; the PNG version `tray_icon.png` lives in `src/`)
+- **Tray icon**: `tray_icon.svg` (the system tray icon; the PNG version `tray_icon.png` lives in `src/tray/`)
+- **App logo PNG**: `app_logo.png` (the only PNG bundled here; rendered via GPUI `img()` in About / popup header)
+
+> ⚠️ **不要在本目录堆放设计资料 PNG**。打包脚本通过 `cp src/icons/*.png` 通配复制，
+> 任何放进来的 PNG 都会被塞进 macOS .app / Linux deb/rpm/AppImage。
+> 仅供参考的设计稿请放在 [`docs/design-references/`](../../docs/design-references/)。
 
 ## Current Icons
 
