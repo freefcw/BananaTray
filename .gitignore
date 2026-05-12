@@ -1,5 +1,4 @@
 /target
-Cargo.lock
 CLAUDE.local.md
 AGENTS_local.md
 .claude/settings.local.json

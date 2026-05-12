@@ -72,6 +72,8 @@
 - `archive/provider/provider-refactor-retrospective.md` — Provider 重构回顾
 - `archive/provider/refactor.md` — Provider 重构方案
 - `archive/app/analytics.md` — 应用分析功能设计
+- `archive/gpui-linux-rendering-investigation.md` — GPUI Linux/Wayland 渲染问题调查（面向上游的 issue report）
+- `archive/gpui-linux-rendering-investigation-cn.md` — 同上，中文版
 
 ## 建议阅读顺序
 
