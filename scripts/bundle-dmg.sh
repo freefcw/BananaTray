@@ -52,7 +52,7 @@ cp -R "$APP_DIR" "$DMG_DIR/"
 ln -s /Applications "$DMG_DIR/Applications"
 
 # 可选：添加背景图片、许可证等资源
-BACKGROUND_SRC="$PROJECT_DIR/resources/dmg-background.png"
+BACKGROUND_SRC="$PROJECT_DIR/resources/macos/dmg-background.png"
 LICENSE_FILE="$PROJECT_DIR/LICENSE"
 
 if [ -f "$BACKGROUND_SRC" ]; then

@@ -111,7 +111,7 @@ brew install create-dmg
 - 自定义窗口大小和图标布局
 - Applications 符号链接，支持拖拽安装
 - 默认背景图片（自动生成）
-- 可选自定义背景（`resources/dmg-background.png`）
+- 可选自定义背景（`resources/macos/dmg-background.png`）
 - 可选许可证显示（`LICENSE`）
 - 代码签名支持（使用 `CODESIGN_IDENTITY`）
 - 自动依赖检查与回退

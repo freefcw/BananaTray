@@ -111,7 +111,7 @@ brew install create-dmg
 - Custom window size and icon layout
 - Applications symlink for drag-and-drop installation
 - Default background image (auto-generated)
-- Optional custom background (`resources/dmg-background.png`)
+- Optional custom background (`resources/macos/dmg-background.png`)
 - Optional license display (`LICENSE`)
 - Code signing support (with `CODESIGN_IDENTITY`)
 - Automatic dependency checking and fallback

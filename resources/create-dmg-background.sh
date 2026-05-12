@@ -4,7 +4,7 @@
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_FILE="$SCRIPT_DIR/dmg-background.png"
+OUTPUT_FILE="$SCRIPT_DIR/macos/dmg-background.png"
 
 # 使用 sips 创建简单的渐变背景
 if command -v sips >/dev/null 2>&1; then

@@ -59,7 +59,7 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # Info.plist（复制后动态注入版本号）
-cp "$PROJECT_DIR/resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$PROJECT_DIR/resources/macos/Info.plist" "$CONTENTS_DIR/Info.plist"
 
 # macOS 要求 CFBundleShortVersionString 为 MAJOR.MINOR.PATCH，
 # 预发布后缀已由 common.sh 剥除到 VERSION_BASE 中。
@@ -90,7 +90,7 @@ echo "✅ App Bundle 已创建: $APP_DIR"
 # 签名身份优先级：
 #   1. 环境变量 CODESIGN_IDENTITY（如 "Apple Development: you@email.com (TEAMID)"）
 #   2. 回退到 ad-hoc 签名 "-"
-ENTITLEMENTS="$PROJECT_DIR/resources/BananaTray.entitlements"
+ENTITLEMENTS="$PROJECT_DIR/resources/macos/BananaTray.entitlements"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 if [ "$SIGN_IDENTITY" != "-" ] && ! security find-identity -v -p codesigning | grep -Fq "\"$SIGN_IDENTITY\""; then
     echo "❌ 指定的 CODESIGN_IDENTITY 当前不是可用的 macOS 代码签名身份: $SIGN_IDENTITY"
@@ -148,7 +148,7 @@ if [[ "$*" == *"--dmg"* ]]; then
     ln -s /Applications "$DMG_DIR/Applications"
 
     # 可选资源
-    BACKGROUND_SRC="$PROJECT_DIR/resources/dmg-background.png"
+    BACKGROUND_SRC="$PROJECT_DIR/resources/macos/dmg-background.png"
     LICENSE_FILE="$PROJECT_DIR/LICENSE"
 
     if [ -f "$BACKGROUND_SRC" ]; then
