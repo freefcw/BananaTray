@@ -58,22 +58,15 @@
 
 历史材料统一放在 `archive/` 下；其中的旧路径、旧测试数量、旧模块名不应被当成当前事实：
 
+- `archive/README.md` — 归档目录边界和当前保留范围
 - `archive/gnome-shell-extension-plan.md` — GNOME Extension 预研方案与实现对照（使命已完成）
 - `archive/provider-compare-analysis.md` — BananaTray / ClaudeBar / CodexBar 三仓库 provider 横向对比（2026-05-05 快照）
-- `archive/code-review-solid-clean.md` — SOLID & Clean Code 深度分析
 - `archive/gpui-sigbus-bug.md` — GPUI SIGBUS bug 排查记录
 - `archive/window-not-found-fix.md` — Window Not Found 修复记录
 - `archive/lessons-gpui-height-calibration.md` — GPUI 弹窗高度校准经验
-- `archive/ui_layout_troubleshooting.md` — UI 布局排查过程
-- `archive/custom-provider-plan.md` — 自定义 provider 方案设计
-- `archive/review-20260405.md` — 2026-04-05 代码审查
-- `archive/review-20260416-followup-issues.md` — 2026-04-16 审查后续跟进
-- `archive/roadmap-directory-restructure.md` — 目录重组路线图
 - `archive/provider/provider-refactor-retrospective.md` — Provider 重构回顾
-- `archive/provider/refactor.md` — Provider 重构方案
-- `archive/app/analytics.md` — 应用分析功能设计
-- `archive/gpui-linux-rendering-investigation.md` — GPUI Linux/Wayland 渲染问题调查（面向上游的 issue report）
-- `archive/gpui-linux-rendering-investigation-cn.md` — 同上，中文版
+
+已完全被当前权威文档、模块 README 或代码替代的旧计划 / 旧 review 不再保留。需要理解当前架构时，不要从历史目录反推实现。
 
 ## 建议阅读顺序
 

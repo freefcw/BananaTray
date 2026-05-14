@@ -12,7 +12,7 @@
 
 示例文件见 `docs/examples/` 目录。
 
-详细使用指南见 [docs/custom-provider.md](../../docs/custom-provider.md)。
+详细使用指南见 [docs/custom-provider.md](../../../docs/custom-provider.md)。
 
 ## 模块结构
 
@@ -101,9 +101,15 @@ YAML 顶层固定使用 `schema_version: 2` 和 `plan.steps`。
 
 | 字段 | 说明 |
 |------|------|
+| `base_url` | 基础 URL，可配合相对路径使用 |
 | `plan.steps[].source.url` | HTTP 请求 URL（如 `${NEWAPI_BASE_URL}/api/user/self`） |
 | `plan.steps[].source.headers[].value` | HTTP header 值 |
+| `plan.steps[].source.auth.login_url` | login auth 的登录 URL，可为相对路径 |
+| `plan.steps[].source.auth.username` | login auth 用户名 |
+| `plan.steps[].source.auth.password` | login auth 密码 |
 | `metadata.dashboard_url` | 面板跳转链接 |
+
+如果 URL 字段以 `/` 开头，会先和 `base_url` 拼接；环境变量不存在时会展开为空字符串并写 warning 日志。
 
 ## 数值变换
 

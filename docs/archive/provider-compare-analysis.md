@@ -381,7 +381,7 @@
 
 ### BananaTray
 
-- 核心文件：`src/providers/windsurf.rs`、`src/providers/windsurf/seat_source.rs`、`src/providers/codeium_family/*`
+- 核心文件：`src/providers/windsurf/mod.rs`、`src/providers/windsurf/seat_source.rs`、`src/providers/codeium_family/*`
 - 数据源：seat management API -> local language server API -> local cache。
 - 认证：Codeium/Windsurf cache DB 中的 `apiKey`。
 - fallback：seat -> live -> cache；seat daily/weekly 可与 cache weekly 合并。

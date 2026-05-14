@@ -5,7 +5,7 @@ BananaTray 的 GitHub Release 采用“自动构建草稿，人工最终发布�
 ## 发布语义
 
 - 版本来源是 Git tag，格式为 `vX.Y.Z` 或带预发布后缀的 `vX.Y.Z-...`。
-- tag 去掉前缀 `v` 后必须和 `Cargo.toml` 的 `[package].version` 一致。
+- 正式 tag 去掉前缀 `v` 后必须和 `Cargo.toml` 的 `[package].version` 一致；预发布 tag 只要求基础版本一致，例如 `v0.1.0-rc.1` 对应 `Cargo.toml` 的 `0.1.0`。
 - 推送 tag 后，GitHub Actions 会创建或更新同名 draft release。
 - workflow 只上传构建产物和平台校验文件，不会自动 publish。
 - release workflow 为了控制 Actions 用量，不重复运行完整 lint/test；质量门禁依赖常规 CI、App CI 和发布前本地验证。
@@ -46,23 +46,26 @@ cargo fmt --check
 ./scripts/check-gnome-extension.sh
 cargo clippy --lib --no-default-features -- -D warnings
 cargo test --lib --no-default-features
+cargo clippy --lib -- -D warnings
+cargo test --lib
 ```
 
-3. 提交版本号和对应变更。
-4. 创建并推送 tag：
+3. 如本次发布涉及 app-only、托盘、平台集成、打包或 GNOME 扩展行为，额外运行对应 app 检查；Linux 需要系统依赖，macOS 至少运行 `cargo check --bin bananatray`。
+4. 提交版本号和对应变更。
+5. 创建并推送 tag：
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-5. 等待 `Release` workflow 完成。
-6. 打开 GitHub draft release，检查：
+6. 等待 `Release` workflow 完成。
+7. 打开 GitHub draft release，检查：
    - release notes 是否准确
    - Linux 和 macOS 产物是否齐全
    - `SHA256SUMS-linux` / `SHA256SUMS-macos` 是否覆盖对应平台产物
    - 预发布版本是否被标记为 prerelease
-7. 确认无误后手动 publish。
+8. 确认无误后手动 publish。
 
 ## 重新生成草稿
 

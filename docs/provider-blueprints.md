@@ -107,7 +107,7 @@ providers/my_provider/
 
 ### Codeium-family Provider 的稳定分层
 
-- provider facade（如 `antigravity/mod.rs`、`windsurf.rs`）
+- provider facade（如 `antigravity/mod.rs`、`windsurf/mod.rs`）
   - 只做 source orchestration
   - `check_availability()` 判断共享本地 source 是否至少有一条可用
   - `refresh()` 决定 fallback 顺序

@@ -58,6 +58,7 @@ plan:
   - 固定为 `2`。
 - `id`
   - 自定义 provider 的稳定标识，必须唯一。
+  - NewAPI 表单生成的 provider 使用 `{domain-slug}:newapi`，这类 provider 会在设置页显示“编辑配置”入口。
 - `base_url`
   - 可选前缀；step 中的 URL 若以 `/` 开头，会自动拼接该前缀。
 - `metadata`
@@ -78,6 +79,8 @@ plan:
   - 适合“主端点 + 辅助端点”，例如 credits + key limit。
 
 默认 fallback 规则是保守的：timeout、网络错误、5xx、解析失败、无数据等会继续尝试后续 step；认证错误、配置缺失和 429 不会继续盲目 fallback。
+
+`check_availability()` 和实际执行阶段都会检查 step availability。原因是预检与执行之间环境可能变化，例如 CLI 被卸载、文件被删除或环境变量被清空。
 
 ## metadata
 
@@ -286,7 +289,7 @@ preprocess:
 以下常见字段当前支持 `${ENV_VAR}` 语法：
 
 - `base_url`
-- URL 字段（如 `source.url`、`login_url`、`dashboard_url`）
+- URL 字段（如 `source.url`、`login_url`、`dashboard_url`）。以 `/` 开头的 `source.url` / `dashboard_url` 会先和 `base_url` 拼接。
 - `headers[].value`
 - `login.username`
 - `login.password`
@@ -320,7 +323,10 @@ python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/B
 - step `name` 不能为空
 - `source.command` / `source.url` 不能为空
 - HTTP POST 必须有 `body`
+- 非 `placeholder` source 必须配置 `parser`
+- `placeholder.reason` 不能为空
 - `parser.quotas` 不能为空
+- JSON quota 规则必须二选一：`remaining` 或 `used + limit`；`remaining` 不能和 `limit` 同时出现
 - 正则表达式和 capture group 必须合法
 - `divisor` 必须为正数
 

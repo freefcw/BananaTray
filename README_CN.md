@@ -13,14 +13,18 @@
 - **登录时启动** — macOS（SMAppService）和 Linux（XDG autostart）
 - **全局快捷键** — 可配置快捷键切换弹窗；macOS 默认 `cmd-shift-s`，Linux 默认 `super-shift-s`
 
-## 支持的提供商
+## 提供商支持情况
+
+`可监控` 表示当前已经实现配额刷新。`占位` 和 `信息参考` 条目会在应用中显示，但目前不会抓取配额数据。
+
+### 已实现配额监控
 
 | 提供商 | 数据来源 | 能力 | 备注 |
 |----------|-------------|------------|-------|
 | **Claude** | HTTP API (`api.anthropic.com`) + CLI 回退 | 可监控 | 完整配额刷新 |
 | **Gemini** | HTTP API (`googleapis.com`) | 可监控 | 完整配额刷新 |
 | **Copilot** | HTTP API (`api.github.com`) | 可监控 | 完整配额刷新 |
-| **Codex** | HTTP API (`chatgpt.com`) | 可监控 | 完整配额刷新 |
+| **Codex** | HTTP API (`chatgpt.com`) + CLI 回退 | 可监控 | 完整配额刷新 |
 | **Kimi** | HTTP API (`kimi.com`) | 可监控 | 完整配额刷新 |
 | **Amp** | CLI (`amp usage`) | 可监控 | 完整配额刷新 |
 | **Cursor** | HTTP API (`cursor.com`) + 本地 SQLite 令牌 | 可监控 | 完整配额刷新 |
@@ -28,10 +32,16 @@
 | **Windsurf** | Seat API + 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **MiniMax** | HTTP API (`api.minimax.io`) | 可监控 | 完整配额刷新 |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | 可监控 | 完整配额刷新 |
-| **Kilo** | 仅扩展检测 | 占位 | 在 UI 中显示，但不参与刷新/重试流程 |
-| **OpenCode** | 仅 CLI 检测 | 占位 | 在 UI 中显示，但不参与刷新/重试流程 |
-| **Vertex AI** | Gemini CLI 配置检测 | 信息参考 | Gemini Vertex AI 认证模式的参考条目 |
-| **自定义 YAML** | HTTP / CLI / 占位 | 可监控或占位 | `source: placeholder` 保持为参考条目 |
+| **自定义 YAML** | HTTP / CLI | 可监控 | 取决于 YAML plan |
+
+### 参考 / TODO 条目
+
+| 提供商 | 当前数据来源 | 能力 | 状态 |
+|----------|-------------|------------|-------|
+| **Kilo** | 仅扩展检测 | 占位 | TODO：尚未实现直接配额监控 |
+| **OpenCode** | 仅 CLI 检测 | 占位 | TODO：尚未实现直接配额监控 |
+| **Vertex AI** | Gemini CLI 配置检测 | 信息参考 | 仅作为认证模式参考；如需直接抓取 Vertex AI 配额仍是 TODO |
+| **自定义 YAML (`source: placeholder`)** | 占位可用性检查 | 占位 | 仅作参考条目；改用 HTTP 或 CLI 数据源后才会参与配额刷新 |
 
 ## 技术栈
 

@@ -13,14 +13,18 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 - **Launch at login** — macOS (SMAppService) and Linux (XDG autostart)
 - **Global hotkey** — configurable shortcut toggles the popover; defaults to `cmd-shift-s` on macOS and `super-shift-s` on Linux
 
-## Supported Providers
+## Provider Support
+
+`Monitorable` means quota refresh is implemented today. `Placeholder` and `Informational` entries are visible in the app, but they do not fetch quota data yet.
+
+### Implemented Quota Monitoring
 
 | Provider | Data Source | Capability | Notes |
 |----------|-------------|------------|-------|
 | **Claude** | HTTP API (`api.anthropic.com`) + CLI fallback | Monitorable | Full quota refresh |
 | **Gemini** | HTTP API (`googleapis.com`) | Monitorable | Full quota refresh |
 | **Copilot** | HTTP API (`api.github.com`) | Monitorable | Full quota refresh |
-| **Codex** | HTTP API (`chatgpt.com`) | Monitorable | Full quota refresh |
+| **Codex** | HTTP API (`chatgpt.com`) + CLI fallback | Monitorable | Full quota refresh |
 | **Kimi** | HTTP API (`kimi.com`) | Monitorable | Full quota refresh |
 | **Amp** | CLI (`amp usage`) | Monitorable | Full quota refresh |
 | **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Monitorable | Full quota refresh |
@@ -28,10 +32,16 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Windsurf** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | Monitorable | Full quota refresh |
-| **Kilo** | Extension detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
-| **OpenCode** | CLI detection only | Placeholder | Shown in UI, but does not join refresh/retry flows |
-| **Vertex AI** | Gemini CLI config detection | Informational | Reference-only entry for Gemini Vertex AI auth mode |
-| **Custom YAML** | HTTP / CLI / placeholder | Monitorable or Placeholder | `source: placeholder` stays reference-only |
+| **Custom YAML** | HTTP / CLI | Monitorable | Depends on the YAML plan |
+
+### Reference / TODO Entries
+
+| Provider | Current Source | Capability | Status |
+|----------|----------------|------------|--------|
+| **Kilo** | Extension detection only | Placeholder | TODO: direct quota monitoring is not implemented |
+| **OpenCode** | CLI detection only | Placeholder | TODO: direct quota monitoring is not implemented |
+| **Vertex AI** | Gemini CLI config detection | Informational | Reference-only entry; TODO if direct Vertex AI quota monitoring is added |
+| **Custom YAML (`source: placeholder`)** | Placeholder availability check | Placeholder | Reference-only until the YAML plan uses HTTP or CLI data sources |
 
 ## Tech Stack
 

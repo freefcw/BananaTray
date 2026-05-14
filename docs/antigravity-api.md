@@ -12,7 +12,7 @@ BananaTray 把 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in p
 - 各自拥有独立的 metadata、图标和可用性判断
 - 共享一套底层 Codeium-family 实现
 
-共享的本地 source primitive 位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf.rs`。
+共享的本地 source primitive 位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf/`。
 
 ## Stable Design
 
@@ -55,7 +55,7 @@ source orchestration 目前明确分开：
 
 1. Antigravity：优先尝试 live source，失败时回退本地 cache
 2. Windsurf：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
-3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf.rs` 继续用本地 cache 补 weekly quota
+3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota
 4. 所有来源都失败时返回结构化错误
 
 本地 cache 回退之前会做两道陈旧检查：
