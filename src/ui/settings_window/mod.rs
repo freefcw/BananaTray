@@ -57,6 +57,108 @@ pub(crate) struct NewApiFormInputs {
     pub divisor: Entity<InputState>,
 }
 
+/// Script Provider 表单输入状态。
+pub(crate) struct ScriptProviderFormInputs {
+    pub name: Entity<InputState>,
+    pub provider_id: Entity<InputState>,
+    pub interpreter: Entity<InputState>,
+    pub timeout: Entity<InputState>,
+    pub script: Entity<TextareaState>,
+}
+
+impl ScriptProviderFormInputs {
+    pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
+        Self {
+            name: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = t!("script_provider.field.name.placeholder")
+                    .to_string()
+                    .into();
+                s.trim_on_blur = false;
+                s
+            }),
+            provider_id: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.placeholder = "ccswitch:script".to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            interpreter: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = crate::models::DEFAULT_SCRIPT_INTERPRETER.to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            timeout: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = (crate::models::DEFAULT_SCRIPT_TIMEOUT_MS / 1000)
+                    .to_string()
+                    .into();
+                s.trim_on_blur = false;
+                s
+            }),
+            script: cx.new(|cx| {
+                let mut s = TextareaState::new(cx);
+                s.content = crate::providers::custom::generator::default_script_template().into();
+                s
+            }),
+        }
+    }
+
+    pub fn new_edit(
+        data: &crate::models::ScriptProviderEditData,
+        cx: &mut Context<SettingsView>,
+    ) -> Self {
+        Self {
+            name: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = data.display_name.clone().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            provider_id: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = data.provider_id.clone().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            interpreter: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = data.interpreter.clone().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            timeout: cx.new(|cx| {
+                let mut s = InputState::new(cx);
+                s.content = (data.timeout_ms / 1000).to_string().into();
+                s.trim_on_blur = false;
+                s
+            }),
+            script: cx.new(|cx| {
+                let mut s = TextareaState::new(cx);
+                s.content = data.script.clone().into();
+                s
+            }),
+        }
+    }
+
+    pub fn focused_states(&self, window: &Window, cx: &App) -> [bool; 5] {
+        [
+            self.name.read(cx).focus_handle(cx).is_focused(window),
+            self.provider_id
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window),
+            self.interpreter
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window),
+            self.timeout.read(cx).focus_handle(cx).is_focused(window),
+            self.script.read(cx).focus_handle(cx).is_focused(window),
+        ]
+    }
+}
+
 impl NewApiFormInputs {
     /// 新增模式：创建空表单
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
@@ -159,6 +261,8 @@ pub(crate) struct SettingsView {
     pub(crate) _appearance_sub: Option<Subscription>,
     /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
     pub(crate) newapi_inputs: Option<NewApiFormInputs>,
+    /// Script Provider 表单输入组
+    pub(crate) script_provider_inputs: Option<ScriptProviderFormInputs>,
 }
 
 impl SettingsView {
@@ -172,6 +276,7 @@ impl SettingsView {
             global_hotkey_synced_value: None,
             _appearance_sub: None,
             newapi_inputs: None,
+            script_provider_inputs: None,
         }
     }
 

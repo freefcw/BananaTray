@@ -525,6 +525,88 @@ fn render_newapi_action_row(
     row
 }
 
+/// Script 型 provider 的操作按钮行：编辑 + 删除（删除需二次确认）
+fn render_script_provider_action_row(
+    provider_id: ProviderId,
+    confirming_delete: bool,
+    state: Rc<RefCell<AppState>>,
+    theme: &Theme,
+) -> Div {
+    let state_edit = state.clone();
+    let provider_id_edit = provider_id.clone();
+    let provider_id_delete = provider_id.clone();
+
+    let mut row = div()
+        .mt(px(10.0))
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(10.0))
+        .child(render_action_button(
+            &t!("script_provider.edit_button"),
+            "src/icons/settings.svg",
+            theme.text.accent,
+            theme,
+            move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_edit,
+                    AppAction::EditScriptProvider {
+                        provider_id: provider_id_edit.clone(),
+                    },
+                    window,
+                    cx,
+                );
+            },
+        ));
+
+    if confirming_delete {
+        let state_delete = state.clone();
+        let state_cancel = state.clone();
+        row = row.child(render_confirm_cancel_buttons(
+            &t!("script_provider.confirm_delete"),
+            &t!("script_provider.cancel_delete"),
+            move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_delete,
+                    AppAction::DeleteScriptProvider {
+                        provider_id: provider_id_delete.clone(),
+                    },
+                    window,
+                    cx,
+                );
+            },
+            move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_cancel,
+                    AppAction::CancelDeleteScriptProvider,
+                    window,
+                    cx,
+                );
+            },
+            theme,
+        ));
+    } else {
+        let state_confirm = state.clone();
+        row = row.child(render_action_button(
+            &t!("script_provider.delete_button"),
+            "src/icons/trash.svg",
+            theme.status.error,
+            theme,
+            move |_, window, cx| {
+                runtime::dispatch_in_window(
+                    &state_confirm,
+                    AppAction::ConfirmDeleteScriptProvider,
+                    window,
+                    cx,
+                );
+            },
+        ));
+    }
+
+    row
+}
+
 /// 单行：（可选图标 +）配额标签 + 小号 toggle switch
 fn render_quota_visibility_row(
     provider_id: ProviderId,
@@ -755,6 +837,21 @@ impl SettingsView {
                     .modal
                     .is_confirming_delete_newapi();
                 section = section.child(render_newapi_action_row(
+                    provider_id,
+                    confirming_delete,
+                    self.state.clone(),
+                    theme,
+                ));
+            }
+            SettingsCapability::ScriptEditable => {
+                let confirming_delete = self
+                    .state
+                    .borrow()
+                    .session
+                    .settings_ui
+                    .modal
+                    .is_confirming_delete_script_provider();
+                section = section.child(render_script_provider_action_row(
                     provider_id,
                     confirming_delete,
                     self.state.clone(),

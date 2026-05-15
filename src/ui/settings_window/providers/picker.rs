@@ -130,9 +130,10 @@ impl SettingsView {
                     }))
                     .into_any_element()
             })
-            // ── 分割线 + NewAPI 中转站入口（始终可见）──
+            // ── 分割线 + 自定义 Provider 入口（始终可见）──
             .child(
                 div()
+                    .flex_col()
                     .mt(px(12.0))
                     .pt(px(12.0))
                     .border_t_1()
@@ -181,6 +182,56 @@ impl SettingsView {
                                     runtime::dispatch_in_context(
                                         &view.state,
                                         AppAction::EnterAddNewApi,
+                                        cx,
+                                    );
+                                });
+                            })
+                    })
+                    .child({
+                        let entity_script = entity.clone();
+                        let accent = theme.text.accent;
+                        let muted = theme.text.muted;
+                        let bg_hover = theme.bg.subtle;
+
+                        div()
+                            .id("add-provider-script")
+                            .mt(px(8.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(12.0))
+                            .px(px(14.0))
+                            .py(px(12.0))
+                            .rounded(px(8.0))
+                            .border_1()
+                            .border_dashed()
+                            .border_color(hsla(0.0, 0.0, 0.3, 0.3))
+                            .cursor_pointer()
+                            .hover(move |style| style.border_color(accent).bg(bg_hover))
+                            .child(
+                                svg()
+                                    .path("src/icons/advanced.svg")
+                                    .size(px(22.0))
+                                    .text_color(muted),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_size(px(14.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(muted)
+                                    .child(t!("script_provider.add_button").to_string()),
+                            )
+                            .child(
+                                svg()
+                                    .path("src/icons/plus.svg")
+                                    .size(px(14.0))
+                                    .text_color(muted),
+                            )
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                entity_script.update(cx, |view, cx| {
+                                    runtime::dispatch_in_context(
+                                        &view.state,
+                                        AppAction::EnterAddScriptProvider,
                                         cx,
                                     );
                                 });

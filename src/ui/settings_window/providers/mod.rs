@@ -1,6 +1,7 @@
 mod detail;
 mod newapi_form;
 mod picker;
+mod script_provider_form;
 mod sidebar;
 pub(crate) mod token_input_panel;
 
@@ -8,6 +9,7 @@ use super::SettingsView;
 use crate::application::{settings_providers_tab_view_state, SettingsProviderRightPaneViewState};
 use crate::theme::Theme;
 use gpui::{div, px, Context, Div, ParentElement, Styled, Window};
+use script_provider_form::ScriptProviderFormView;
 
 impl SettingsView {
     // ========================================================================
@@ -40,19 +42,36 @@ impl SettingsView {
         if !is_newapi_form && self.newapi_inputs.is_some() {
             self.clear_newapi_inputs();
         }
+        let is_script_form = matches!(
+            view_state.right_pane,
+            SettingsProviderRightPaneViewState::ScriptProviderForm { .. }
+        );
+        if !is_script_form && self.script_provider_inputs.is_some() {
+            self.clear_script_provider_inputs();
+        }
 
         let right_panel = match &view_state.right_pane {
             SettingsProviderRightPaneViewState::NewApiForm { edit_data } => {
                 self.render_newapi_form(edit_data.is_some(), edit_data.as_ref(), theme, window, cx)
             }
+            SettingsProviderRightPaneViewState::ScriptProviderForm {
+                edit_data,
+                testing,
+                test_result,
+            } => self.render_script_provider_form(
+                ScriptProviderFormView {
+                    edit_data: edit_data.as_ref(),
+                    test_result: test_result.as_ref(),
+                    is_testing: *testing,
+                },
+                theme,
+                window,
+                cx,
+            ),
             SettingsProviderRightPaneViewState::ProviderPicker => {
                 self.render_provider_picker(&view_state.available_providers, theme, cx)
             }
             SettingsProviderRightPaneViewState::Detail => {
-                self.render_provider_detail_panel(&view_state.detail, theme, cx)
-            }
-            SettingsProviderRightPaneViewState::ScriptProviderForm { .. } => {
-                // 由后续 commit (feat: add script provider settings UI) 实现完整表单
                 self.render_provider_detail_panel(&view_state.detail, theme, cx)
             }
         };
