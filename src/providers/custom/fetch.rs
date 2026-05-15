@@ -12,9 +12,13 @@ use super::url::resolve_url;
 
 pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> Result<String> {
     match source {
-        SourceDef::Cli { command, args } => {
+        SourceDef::Cli {
+            command,
+            args,
+            timeout_ms,
+        } => {
             debug!(target: "providers::custom", "[{}] fetching via CLI: {} {:?}", id, command, args);
-            fetch_cli(command, args)
+            fetch_cli(command, args, *timeout_ms)
         }
         SourceDef::Http {
             method,
@@ -63,9 +67,9 @@ pub(super) fn apply_preprocess(raw: &str, steps: &[PreprocessStep]) -> String {
     result
 }
 
-fn fetch_cli(command: &str, args: &[String]) -> Result<String> {
+fn fetch_cli(command: &str, args: &[String], timeout_ms: Option<u64>) -> Result<String> {
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    cli::run_lenient_command(command, &args_ref)
+    cli::run_lenient_command_with_timeout(command, &args_ref, timeout_ms.map(Duration::from_millis))
 }
 
 fn fetch_http(

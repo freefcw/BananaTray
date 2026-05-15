@@ -44,7 +44,7 @@ custom/
 
 | type       | 说明 |
 |------------|------|
-| `cli`        | 执行 CLI 命令，获取 stdout/stderr |
+| `cli`        | 执行 CLI 命令，获取 stdout/stderr，支持 `timeout_ms` |
 | `http`       | HTTP GET / POST 请求，支持 `method` 和 `timeout_ms` |
 | `placeholder`| 占位：不获取数据，仅检测安装状态；运行时 capability 为 `Placeholder` |
 

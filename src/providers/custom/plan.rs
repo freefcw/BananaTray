@@ -442,6 +442,7 @@ mod tests {
             source: SourceDef::Cli {
                 command: "echo".to_string(),
                 args: vec![output.to_string()],
+                timeout_ms: None,
             },
             parser: Some(super::super::schema::ParserDef::Regex {
                 account_email: None,

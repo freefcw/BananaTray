@@ -27,6 +27,7 @@ plan:
         type: cli
         command: "myai"
         args: ["usage", "--json"]
+        timeout_ms: 12000
       preprocess:
         - strip_ansi
       parser:
@@ -50,7 +51,18 @@ plan:
         step.availability,
         Some(AvailabilityDef::CliExists { .. })
     ));
-    assert!(matches!(step.source, SourceDef::Cli { .. }));
+    match &step.source {
+        SourceDef::Cli {
+            command,
+            args,
+            timeout_ms,
+        } => {
+            assert_eq!(command, "myai");
+            assert_eq!(args, &vec!["usage".to_string(), "--json".to_string()]);
+            assert_eq!(*timeout_ms, Some(12000));
+        }
+        _ => panic!("expected CLI source"),
+    }
     assert!(matches!(step.parser, Some(ParserDef::Regex { .. })));
     assert!(matches!(step.preprocess[0], PreprocessStep::StripAnsi));
 }

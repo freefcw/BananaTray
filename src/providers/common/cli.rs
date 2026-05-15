@@ -99,7 +99,18 @@ pub fn run_checked_command(binary: &str, args: &[&str]) -> Result<Output> {
 /// 适用于偶发非零退出码但仍有有效输出的 CLI（如 amp、kiro-cli）。
 /// 有输出时直接返回，仅在输出为空时才将非零退出码视为错误。
 pub fn run_lenient_command(binary: &str, args: &[&str]) -> Result<String> {
-    let output = run_command(binary, args)?;
+    run_lenient_command_with_timeout(binary, args, None)
+}
+
+pub fn run_lenient_command_with_timeout(
+    binary: &str,
+    args: &[&str],
+    timeout: Option<Duration>,
+) -> Result<String> {
+    let output = match timeout {
+        Some(timeout) => run_command_with_timeout(binary, args, timeout)?,
+        None => run_command(binary, args)?,
+    };
     let text = stdout_or_stderr_text(&output);
     if text.trim().is_empty() {
         ensure_success(&output)?;

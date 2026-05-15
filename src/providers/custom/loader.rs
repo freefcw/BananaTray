@@ -306,6 +306,7 @@ mod tests {
                     source: SourceDef::Cli {
                         command: "echo".to_string(),
                         args: vec![],
+                        timeout_ms: None,
                     },
                     parser: Some(ParserDef::Regex {
                         account_email: None,
@@ -379,6 +380,7 @@ mod tests {
         step_mut(&mut def).source = SourceDef::Cli {
             command: String::new(),
             args: vec![],
+            timeout_ms: None,
         };
         assert!(validate(&def).is_err());
     }

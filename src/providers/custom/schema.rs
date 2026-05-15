@@ -141,6 +141,8 @@ pub enum SourceDef {
         command: String,
         #[serde(default)]
         args: Vec<String>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
     },
     /// HTTP 请求
     Http {

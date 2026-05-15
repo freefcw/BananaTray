@@ -30,6 +30,7 @@ plan:
       source:
         type: cli
         command: "myai"
+        timeout_ms: 20000
         args: ["usage", "--no-color"]
 
       # 响应解析：用正则表达式提取配额数据
