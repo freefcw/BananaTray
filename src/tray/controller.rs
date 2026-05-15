@@ -31,13 +31,18 @@ pub(crate) struct TrayController {
 impl TrayController {
     pub(crate) fn new(
         refresh_tx: smol::channel::Sender<crate::refresh::RefreshRequest>,
+        script_test_tx: smol::channel::Sender<(u64, crate::models::ScriptProviderConfig)>,
         manager: crate::providers::ProviderManagerHandle,
         settings: AppSettings,
         log_path: Option<std::path::PathBuf>,
     ) -> Self {
         info!(target: "tray", "initializing tray controller");
         let state = Rc::new(RefCell::new(AppState::new(
-            refresh_tx, manager, settings, log_path,
+            refresh_tx,
+            script_test_tx,
+            manager,
+            settings,
+            log_path,
         )));
         Self {
             window: Rc::new(Cell::new(None)),

@@ -53,9 +53,11 @@ impl AiProvider for CustomProvider {
     }
 
     fn settings_capability(&self) -> crate::models::SettingsCapability {
-        // NewAPI 类型的自定义 Provider（ID 以 ":newapi" 结尾）可编辑配置
+        // 由设置页向导生成的自定义 Provider 可回到对应向导编辑。
         if self.def.id.ends_with(":newapi") {
             crate::models::SettingsCapability::NewApiEditable
+        } else if self.def.id.ends_with(":script") {
+            crate::models::SettingsCapability::ScriptEditable
         } else {
             crate::models::SettingsCapability::None
         }

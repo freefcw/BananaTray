@@ -1,6 +1,6 @@
 use super::*;
 use crate::application::TrayIconRequest;
-use crate::models::{AppSettings, TrayIconStyle};
+use crate::models::{AppSettings, ScriptProviderConfig, TrayIconStyle};
 use crate::providers::ProviderManagerHandle;
 
 #[derive(Default)]
@@ -38,9 +38,11 @@ impl FullContextCapabilities for FakeCaps {
 
 fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
+    let (script_tx, _script_rx) = smol::channel::bounded(1);
     let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
         tx,
+        script_tx,
         manager,
         AppSettings::default(),
         None,
@@ -123,4 +125,18 @@ fn run_view_context_effect_rejects_quit_app() {
     let mut caps = FakeCaps::default();
 
     run_view_context_effect(&state, ContextEffect::QuitApp, &mut caps);
+}
+
+#[test]
+fn execute_script_provider_test_delegates_to_script_effect_runner() {
+    let result = execute_script_provider_test(&ScriptProviderConfig {
+        display_name: "Script".to_string(),
+        provider_id: "script:script".to_string(),
+        interpreter: "sh".to_string(),
+        timeout_ms: 1_000,
+        script: r#"printf '{"remaining":7,"unit":"USD"}'"#.to_string(),
+    });
+
+    assert!(result.success, "unexpected failure: {}", result.message);
+    assert_eq!(result.preview.expect("preview").remaining, 7.0);
 }

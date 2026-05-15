@@ -29,6 +29,14 @@ pub fn custom_providers_dir() -> PathBuf {
     app_config_dir().join("providers")
 }
 
+pub fn custom_scripts_dir() -> PathBuf {
+    app_config_dir().join("scripts")
+}
+
 pub fn custom_provider_path(filename: &str) -> PathBuf {
     custom_providers_dir().join(filename)
+}
+
+pub fn custom_script_path(filename: &str) -> PathBuf {
+    custom_scripts_dir().join(filename)
 }

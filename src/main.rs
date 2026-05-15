@@ -66,12 +66,14 @@ fn main() {
 
             // 2. 后台刷新系统
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
+            let (script_test_tx, script_test_rx) = bootstrap::script_test_channel();
 
             bootstrap::sync_initial_auto_launch(&settings);
 
             // 3. 窗口控制器
             let controller = Rc::new(RefCell::new(tray::TrayController::new(
                 refresh_tx,
+                script_test_tx,
                 manager.clone(),
                 settings,
                 log_path.clone(),
@@ -80,6 +82,7 @@ fn main() {
             // 4. 事件泵
             let state = controller.borrow().state();
             bootstrap::start_event_pump(&state, event_rx, cx);
+            bootstrap::start_script_test_pump(&state, script_test_rx, cx);
 
             // 4.5 Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
             #[cfg(target_os = "linux")]

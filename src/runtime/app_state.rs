@@ -1,8 +1,9 @@
 use crate::application::AppSession;
-use crate::models::AppSettings;
+use crate::models::{AppSettings, ScriptProviderConfig};
 use crate::providers::ProviderManagerHandle;
 use crate::refresh::RefreshRequest;
 use log::debug;
+use smol::channel::Sender;
 use std::path::PathBuf;
 
 use super::SettingsWriter;
@@ -17,6 +18,8 @@ pub struct AppState {
     pub manager: ProviderManagerHandle,
     /// 向 RefreshCoordinator 发送请求的通道
     pub refresh_tx: smol::channel::Sender<RefreshRequest>,
+    /// 向前台事件泵发送脚本测试请求。
+    pub(crate) script_test_tx: Sender<(u64, ScriptProviderConfig)>,
     /// 设置文件 debounce 写入器（所有持久化统一通过此句柄串行化）
     pub(crate) settings_writer: SettingsWriter,
     /// 日志文件路径（Debug Tab 展示用）
@@ -34,6 +37,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         refresh_tx: smol::channel::Sender<RefreshRequest>,
+        script_test_tx: Sender<(u64, ScriptProviderConfig)>,
         manager: ProviderManagerHandle,
         settings: AppSettings,
         log_path: Option<PathBuf>,
@@ -51,6 +55,7 @@ impl AppState {
             session,
             manager,
             refresh_tx,
+            script_test_tx,
             settings_writer: SettingsWriter::spawn(),
             log_path,
             #[cfg(target_os = "linux")]

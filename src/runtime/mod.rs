@@ -21,6 +21,13 @@ pub use gpu_cache::register_idle_gpu_cache_trim;
 pub use settings_window_opener::schedule_open_settings_window;
 pub(crate) use settings_writer::SettingsWriter;
 
+#[allow(dead_code)] // bin 启动线程调用；lib 目标自身不会触达 bootstrap.rs
+pub(crate) fn execute_script_provider_test(
+    config: &crate::models::ScriptProviderConfig,
+) -> crate::models::ScriptProviderTestResult {
+    effects::script_provider::execute_script_test(config)
+}
+
 pub fn dispatch_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
     action: AppAction,

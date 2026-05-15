@@ -1,4 +1,4 @@
-//! NewAPI 中转站 YAML 配置生成器
+//! Settings 向导生成的自定义 Provider YAML 配置生成器
 //!
 //! 根据用户输入的必要信息（站点 URL、Session Token 等），
 //! 自动生成完整的自定义 Provider YAML 配置文件。
@@ -8,6 +8,9 @@
 
 // Re-export from models（保持 generator 已有调用方的兼容性）
 pub use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::{
+    script_provider_slug, ScriptProviderConfig, ScriptProviderEditData, DEFAULT_SCRIPT_TIMEOUT_MS,
+};
 
 /// 生成 YAML 配置文件名
 pub fn generate_filename(config: &NewApiConfig) -> String {
@@ -22,6 +25,26 @@ pub fn generate_filename(config: &NewApiConfig) -> String {
 pub fn filename_for_id(custom_id: &str) -> Option<String> {
     let slug = custom_id.strip_suffix(":newapi")?;
     Some(format!("newapi-{}.yaml", slug))
+}
+
+pub fn script_yaml_filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":script")?;
+    Some(format!("script-{}.yaml", slug))
+}
+
+pub fn script_filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":script")?;
+    Some(format!("script-{}.py", slug))
+}
+
+pub fn generate_script_yaml_filename(config: &ScriptProviderConfig) -> String {
+    script_yaml_filename_for_id(&config.provider_id)
+        .unwrap_or_else(|| format!("script-{}.yaml", script_provider_slug(&config.display_name)))
+}
+
+pub fn generate_script_filename(config: &ScriptProviderConfig) -> String {
+    script_filename_for_id(&config.provider_id)
+        .unwrap_or_else(|| format!("script-{}.py", script_provider_slug(&config.display_name)))
 }
 
 /// 转义 YAML 双引号字符串中的特殊字符
@@ -110,6 +133,66 @@ plan:
     )
 }
 
+pub fn generate_script_provider_yaml(
+    config: &ScriptProviderConfig,
+    script_path: &std::path::Path,
+) -> String {
+    let id = escape_yaml_double_quoted(&config.provider_id);
+    let display_name = escape_yaml_double_quoted(&config.display_name);
+    let interpreter = escape_yaml_double_quoted(&config.interpreter);
+    let script_path = escape_yaml_double_quoted(&script_path.to_string_lossy());
+    let source_label = escape_yaml_double_quoted("script");
+    let detail_unit_path = escape_yaml_double_quoted("unit");
+
+    format!(
+        r#"# 自动生成的脚本 Provider 配置
+# 由 BananaTray 脚本向导创建
+
+id: "{id}"
+schema_version: 2
+
+metadata:
+  display_name: "{display_name}"
+  brand_name: "Custom Script"
+  dashboard_url: ""
+  account_hint: "script output"
+  source_label: "{source_label}"
+
+plan:
+  mode: first_success
+  steps:
+    - name: "script"
+      required: true
+      availability:
+        type: cli_exists
+        value: "{interpreter}"
+      source:
+        type: cli
+        command: "{interpreter}"
+        timeout_ms: {timeout_ms}
+        args:
+          - "{script_path}"
+      parser:
+        format: json
+        account_email: "account_email"
+        account_tier: "account_tier"
+        quotas:
+          - label: "Balance"
+            remaining: "remaining"
+            used: "used"
+            quota_type: credit
+            detail: "{detail_unit_path}"
+"#,
+        id = id,
+        display_name = display_name,
+        source_label = source_label,
+        interpreter = interpreter,
+        timeout_ms = config.timeout_ms,
+        script_path = script_path,
+        detail_unit_path = detail_unit_path,
+    )
+}
+
 /// 从已有 YAML 配置文件中读取 NewAPI 配置，用于编辑模式回填表单。
 ///
 /// 遍历 providers 目录，找到 id 匹配的 YAML 文件并解析为 NewApiEditData。
@@ -160,6 +243,103 @@ pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
     }
 
     None
+}
+
+#[cfg(feature = "app")]
+pub fn read_script_provider_config(provider_custom_id: &str) -> Option<ScriptProviderEditData> {
+    use super::schema::{CustomProviderDef, SourceDef};
+
+    let providers_dir = crate::platform::paths::custom_providers_dir();
+    if !providers_dir.exists() {
+        return None;
+    }
+
+    let entries = std::fs::read_dir(&providers_dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            continue;
+        }
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        let def: CustomProviderDef = match serde_yml::from_str(&content) {
+            Ok(def) => def,
+            Err(_) => continue,
+        };
+        if def.id != provider_custom_id {
+            continue;
+        }
+
+        let yaml_filename = path.file_name()?.to_str()?.to_string();
+        let step = def.plan.steps.first()?;
+        let (interpreter, script_path, timeout_ms) = match &step.source {
+            SourceDef::Cli {
+                command,
+                args,
+                timeout_ms,
+            } => (
+                command.clone(),
+                args.first()?.clone(),
+                timeout_ms.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS),
+            ),
+            _ => return None,
+        };
+        let script_path = std::path::PathBuf::from(script_path);
+        let script = std::fs::read_to_string(&script_path).ok()?;
+        let script_filename = script_path.file_name()?.to_str()?.to_string();
+
+        return Some(ScriptProviderEditData {
+            display_name: def.metadata.display_name,
+            provider_id: def.id,
+            interpreter,
+            timeout_ms,
+            script,
+            original_yaml_filename: yaml_filename,
+            original_script_filename: script_filename,
+        });
+    }
+
+    None
+}
+
+pub fn default_script_template() -> String {
+    r#"import json
+import os
+import urllib.request
+
+base_url = os.environ.get("CCSWITCH_BASE_URL", "https://example.com").rstrip("/")
+api_key = os.environ.get("CCSWITCH_API_KEY", "")
+
+request = urllib.request.Request(
+    f"{base_url}/v1/usage",
+    headers={"Authorization": f"Bearer {api_key}"},
+)
+
+with urllib.request.urlopen(request, timeout=15) as response:
+    data = json.loads(response.read().decode("utf-8"))
+
+quota = data.get("quota") or {}
+remaining = data.get("remaining")
+if remaining is None:
+    remaining = quota.get("remaining")
+if remaining is None:
+    remaining = data.get("balance")
+
+unit = data.get("unit") or quota.get("unit") or "USD"
+
+print(json.dumps({
+    "ok": data.get("is_active", data.get("isValid", True)),
+    "remaining": remaining,
+    "unit": unit,
+}))
+"#
+    .to_string()
 }
 
 /// 从已解析的 CustomProviderDef 中提取 NewApiEditData（纯函数，无 I/O）。

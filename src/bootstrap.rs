@@ -1,7 +1,7 @@
 //! 应用初始化 — 启动时调用一次的设置和注册函数
 
 use crate::application::{AppAction, GlobalHotkeyError};
-use crate::models::{AppSettings, SystemSettings};
+use crate::models::{AppSettings, ScriptProviderConfig, SystemSettings};
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::runtime::AppState;
 use crate::tray::TrayController;
@@ -10,6 +10,10 @@ use log::{info, warn};
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+type ScriptTestRequest = (u64, ScriptProviderConfig);
+type ScriptTestSender = smol::channel::Sender<ScriptTestRequest>;
+type ScriptTestReceiver = smol::channel::Receiver<ScriptTestRequest>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayCommand {
@@ -117,6 +121,10 @@ pub(crate) fn bootstrap_refresh() -> (
     (refresh_tx, event_rx, manager)
 }
 
+pub(crate) fn script_test_channel() -> (ScriptTestSender, ScriptTestReceiver) {
+    smol::channel::bounded(8)
+}
+
 /// 启动事件泵：从协调器接收 RefreshEvent，分派到 UI 线程更新 AppState
 pub(crate) fn start_event_pump(
     state: &Rc<RefCell<AppState>>,
@@ -139,6 +147,45 @@ pub(crate) fn start_event_pump(
                     // Linux: D-Bus 信号发射（reducer 已更新 AppState）
                     #[cfg(target_os = "linux")]
                     emit_dbus_signals(&state);
+                });
+            }
+        })
+        .detach();
+}
+
+/// 启动脚本测试事件泵：后台执行脚本，完成后回到 UI 线程回填结果。
+pub(crate) fn start_script_test_pump(
+    state: &Rc<RefCell<AppState>>,
+    script_test_rx: ScriptTestReceiver,
+    cx: &mut App,
+) {
+    let (result_tx, result_rx) =
+        smol::channel::bounded::<(u64, crate::models::ScriptProviderTestResult)>(8);
+
+    std::thread::Builder::new()
+        .name("script-provider-test".into())
+        .spawn(move || {
+            while let Ok((request_id, config)) = smol::block_on(script_test_rx.recv()) {
+                let result = crate::runtime::execute_script_provider_test(&config);
+                if smol::block_on(result_tx.send((request_id, result))).is_err() {
+                    break;
+                }
+            }
+        })
+        .expect("failed to spawn script provider test thread");
+
+    let state = state.clone();
+    let pump_cx = cx.to_async();
+    cx.to_async()
+        .foreground_executor()
+        .spawn(async move {
+            while let Ok((request_id, result)) = result_rx.recv().await {
+                let _ = pump_cx.update(|cx| {
+                    crate::runtime::dispatch_in_app(
+                        &state,
+                        AppAction::ScriptProviderTestFinished { request_id, result },
+                        cx,
+                    );
                 });
             }
         })
