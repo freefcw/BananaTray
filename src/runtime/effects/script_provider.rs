@@ -217,6 +217,13 @@ fn save_provider(
             } else {
                 script_provider_ops::rollback_script_provider_create(&mut s.session, &config);
             }
+            drop(s);
+            let (title_key, body_key) =
+                script_provider_ops::script_provider_save_failed_notification_keys();
+            crate::platform::notification::send_plain_notification(
+                rust_i18n::t!(title_key).as_ref(),
+                rust_i18n::t!(body_key).as_ref(),
+            );
         }
     }
 }

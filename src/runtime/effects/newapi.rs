@@ -51,6 +51,11 @@ fn save_provider(
             } else {
                 newapi_ops::rollback_newapi_create(&mut s.session, &config);
             }
+            drop(s);
+            let (title_key, body_key) = newapi_ops::newapi_save_failed_notification_keys();
+            let title = rust_i18n::t!(title_key).to_string();
+            let body = rust_i18n::t!(body_key).to_string();
+            crate::platform::notification::send_plain_notification(&title, &body);
         }
     }
 }

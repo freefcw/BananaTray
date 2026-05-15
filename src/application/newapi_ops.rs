@@ -63,6 +63,10 @@ pub fn newapi_save_notification_keys(
     }
 }
 
+pub fn newapi_save_failed_notification_keys() -> (&'static str, &'static str) {
+    ("newapi.save_failed_title", "newapi.save_failed_body")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +185,13 @@ mod tests {
         let (title, body) = newapi_save_notification_keys(false, true);
         assert_eq!(title, "newapi.save_success_title");
         assert_eq!(body, "newapi.save_success_body");
+    }
+
+    #[test]
+    fn notification_keys_save_failed() {
+        let (title, body) = newapi_save_failed_notification_keys();
+
+        assert_eq!(title, "newapi.save_failed_title");
+        assert_eq!(body, "newapi.save_failed_body");
     }
 }
