@@ -239,11 +239,21 @@ fn settings_ui_default_values() {
         cadence_dropdown_open: false,
         token_editing_provider: None,
         modal: SettingsModalState::Idle,
+        script_provider_testing: false,
+        script_provider_test_request_id: 0,
+        script_provider_pending_test_request_id: None,
+        script_provider_test_result: None,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     };
     assert_eq!(ui.active_tab, SettingsTab::General);
     assert!(!ui.cadence_dropdown_open);
+    assert!(!ui.modal.is_script_provider_form());
+    assert!(ui.modal.script_provider_edit_data().is_none());
+    assert!(!ui.script_provider_testing);
+    assert_eq!(ui.script_provider_test_request_id, 0);
+    assert!(ui.script_provider_pending_test_request_id.is_none());
+    assert!(ui.script_provider_test_result.is_none());
     assert!(ui.global_hotkey_error.is_none());
     assert!(ui.global_hotkey_error_candidate.is_none());
 }

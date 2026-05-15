@@ -4,7 +4,7 @@
 use super::quota_alert::QuotaAlertTracker;
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
-    ProviderStatus, StatusLevel,
+    ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
 };
 
 // ============================================================================
@@ -287,6 +287,10 @@ fn build_initial_settings_ui_state(
         cadence_dropdown_open: false,
         token_editing_provider: None,
         modal: SettingsModalState::Idle,
+        script_provider_testing: false,
+        script_provider_test_request_id: 0,
+        script_provider_pending_test_request_id: None,
+        script_provider_test_result: None,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     }
@@ -399,9 +403,17 @@ pub struct SettingsUiState {
     /// 右侧面板的互斥模态状态机。
     ///
     /// 把原本散落的 `adding_newapi` / `editing_newapi` / `adding_provider` /
-    /// `confirming_remove_provider` / `confirming_delete_newapi` 字段折叠成
+    /// `confirming_remove_provider` / `confirming_delete_newapi` 等字段折叠成
     /// 单一 enum，使"模式互斥"成为类型层不变量。
     pub modal: SettingsModalState,
+    /// 脚本测试是否正在后台执行
+    pub script_provider_testing: bool,
+    /// 脚本测试请求序号，用于忽略过期异步结果
+    pub script_provider_test_request_id: u64,
+    /// 当前等待回填的脚本测试请求序号
+    pub script_provider_pending_test_request_id: Option<u64>,
+    /// 最近一次脚本测试结果
+    pub script_provider_test_result: Option<ScriptProviderTestResult>,
     /// General Tab 全局热键设置的最近一次错误
     pub global_hotkey_error: Option<GlobalHotkeyError>,
     /// 与 `global_hotkey_error` 对应的候选热键（持久化格式）
@@ -429,12 +441,18 @@ pub enum SettingsModalState {
     ConfirmingRemoveProvider,
     /// 详情页：对当前 NewAPI `selected_provider` 的"删除 YAML 文件"二次确认。
     ConfirmingDeleteNewApi,
+    /// 详情页：对当前脚本 Provider 的"删除配置文件"二次确认。
+    ConfirmingDeleteScriptProvider,
     /// 右面板：显示"添加 Provider"选择列表（picker）。
     AddingProvider,
     /// 右面板：NewAPI 新增表单（空表单，提交后会预注册新 provider）。
     AddingNewApi,
     /// 右面板：NewAPI 编辑表单（含从 YAML 读取的回填数据）。
     EditingNewApi(NewApiEditData),
+    /// 右面板：脚本 Provider 新增表单。
+    AddingScriptProvider,
+    /// 右面板：脚本 Provider 编辑表单（含从 YAML 读取的回填数据）。
+    EditingScriptProvider(ScriptProviderEditData),
 }
 
 impl SettingsModalState {
@@ -458,10 +476,28 @@ impl SettingsModalState {
         matches!(self, Self::ConfirmingDeleteNewApi)
     }
 
+    /// 是否正在确认"删除当前脚本 provider"。
+    pub fn is_confirming_delete_script_provider(&self) -> bool {
+        matches!(self, Self::ConfirmingDeleteScriptProvider)
+    }
+
+    /// 当前是否正在展示脚本 Provider 表单（新增或编辑）。
+    pub fn is_script_provider_form(&self) -> bool {
+        matches!(self, Self::AddingScriptProvider | Self::EditingScriptProvider(_))
+    }
+
     /// 若处于编辑 NewAPI 模式，返回回填数据的引用。
     pub fn newapi_edit_data(&self) -> Option<&NewApiEditData> {
         match self {
             Self::EditingNewApi(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// 若处于编辑脚本 Provider 模式，返回回填数据的引用。
+    pub fn script_provider_edit_data(&self) -> Option<&ScriptProviderEditData> {
+        match self {
+            Self::EditingScriptProvider(data) => Some(data),
             _ => None,
         }
     }

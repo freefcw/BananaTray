@@ -18,5 +18,9 @@ pub(super) fn run_common_effect(state: &Rc<RefCell<AppState>>, effect: CommonEff
         CommonEffect::Refresh(effect) => refresh::run(state, effect),
         CommonEffect::Debug(effect) => debug::run(state, effect),
         CommonEffect::NewApi(effect) => newapi::run(state, effect),
+        CommonEffect::ScriptProvider(_effect) => {
+            // 由后续 commit (feat: add script provider runtime support) 实现
+            log::warn!(target: "app", "ScriptProvider effect not yet implemented");
+        }
     }
 }

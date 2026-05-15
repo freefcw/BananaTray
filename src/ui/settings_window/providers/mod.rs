@@ -51,6 +51,10 @@ impl SettingsView {
             SettingsProviderRightPaneViewState::Detail => {
                 self.render_provider_detail_panel(&view_state.detail, theme, cx)
             }
+            SettingsProviderRightPaneViewState::ScriptProviderForm { .. } => {
+                // 由后续 commit (feat: add script provider settings UI) 实现完整表单
+                self.render_provider_detail_panel(&view_state.detail, theme, cx)
+            }
         };
 
         div()

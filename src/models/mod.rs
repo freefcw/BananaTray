@@ -2,6 +2,7 @@ mod layout;
 pub mod newapi;
 mod provider;
 mod quota;
+mod script_provider;
 mod settings;
 #[cfg(test)]
 pub(crate) mod test_helpers;
@@ -19,6 +20,12 @@ pub use provider::{
 pub use quota::{
     ConnectionStatus, ErrorKind, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,
     QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData, StatusLevel, UpdateStatus,
+};
+pub use script_provider::{
+    parse_script_stdout, script_provider_id, script_provider_id_from_slug, script_provider_slug,
+    unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
+    ScriptProviderQuotaPreview, ScriptProviderTestResult, DEFAULT_SCRIPT_INTERPRETER,
+    DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 pub use settings::{
     AppSettings, AppTheme, DisplaySettings, NotificationSettings, ProviderConfig, ProviderSettings,

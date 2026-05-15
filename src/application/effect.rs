@@ -1,6 +1,6 @@
 use super::quota_alert::QuotaAlert;
 use crate::application::DebugNotificationKind;
-use crate::models::{NewApiConfig, ProviderId, StatusLevel, TrayIconStyle};
+use crate::models::{NewApiConfig, ProviderId, ScriptProviderConfig, StatusLevel, TrayIconStyle};
 use crate::refresh::RefreshRequest;
 
 /// 托盘图标请求 — 区分用户手选的静态样式和动态模式下的状态着色
@@ -45,6 +45,7 @@ pub enum CommonEffect {
     Refresh(RefreshEffect),
     Debug(DebugEffect),
     NewApi(NewApiEffect),
+    ScriptProvider(ScriptProviderEffect),
 }
 
 #[derive(Debug)]
@@ -104,6 +105,27 @@ pub enum NewApiEffect {
     /// 删除 NewAPI Provider：runtime 负责文件名推导 + 文件删除 + 热重载
     DeleteProvider { provider_id: ProviderId },
     /// 从磁盘加载 NewAPI 配置（填充编辑表单），由 runtime 执行 I/O
+    LoadConfig { provider_id: ProviderId },
+}
+
+#[derive(Debug)]
+pub enum ScriptProviderEffect {
+    /// Execute a script from the Settings UI and send the parsed test result
+    /// back through the foreground action pump.
+    TestProvider {
+        request_id: u64,
+        config: ScriptProviderConfig,
+    },
+    /// Save script + generated YAML and reload custom providers on success.
+    SaveProvider {
+        config: ScriptProviderConfig,
+        original_yaml_filename: Option<String>,
+        original_script_filename: Option<String>,
+        is_editing: bool,
+    },
+    /// Delete script-generated YAML and companion script file.
+    DeleteProvider { provider_id: ProviderId },
+    /// Load script-generated config from disk for editing.
     LoadConfig { provider_id: ProviderId },
 }
 
@@ -193,6 +215,18 @@ impl From<NewApiEffect> for CommonEffect {
 
 impl From<NewApiEffect> for AppEffect {
     fn from(e: NewApiEffect) -> Self {
+        CommonEffect::from(e).into()
+    }
+}
+
+impl From<ScriptProviderEffect> for CommonEffect {
+    fn from(e: ScriptProviderEffect) -> Self {
+        Self::ScriptProvider(e)
+    }
+}
+
+impl From<ScriptProviderEffect> for AppEffect {
+    fn from(e: ScriptProviderEffect) -> Self {
         CommonEffect::from(e).into()
     }
 }

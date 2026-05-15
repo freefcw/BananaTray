@@ -4,7 +4,7 @@ use crate::models::{NewApiConfig, ProviderId};
 use super::super::state::{AppSession, SettingsModalState};
 
 pub(super) fn enter_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填）
+    // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填 / 脚本表单）
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
     effects.push(ContextEffect::Render.into());
 }

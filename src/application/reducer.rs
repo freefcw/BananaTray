@@ -2,6 +2,7 @@ mod debug;
 mod newapi;
 mod provider_sidebar;
 mod refresh;
+mod script_provider;
 mod settings;
 mod shared;
 
@@ -110,6 +111,38 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::ConfirmDeleteNewApi => newapi::confirm_delete_newapi(session, &mut effects),
         AppAction::CancelDeleteNewApi => newapi::cancel_delete_newapi(session, &mut effects),
+        AppAction::EnterAddScriptProvider => {
+            script_provider::enter_add_script_provider(session, &mut effects);
+        }
+        AppAction::CancelAddScriptProvider => {
+            script_provider::cancel_add_script_provider(session, &mut effects);
+        }
+        AppAction::TestScriptProvider(config) => {
+            script_provider::test_script_provider(session, config, &mut effects);
+        }
+        AppAction::ScriptProviderTestFinished { request_id, result } => {
+            script_provider::script_provider_test_finished(
+                session,
+                request_id,
+                result,
+                &mut effects,
+            );
+        }
+        AppAction::SubmitScriptProvider(config) => {
+            script_provider::submit_script_provider(session, config, &mut effects);
+        }
+        AppAction::EditScriptProvider { provider_id } => {
+            script_provider::edit_script_provider(provider_id, &mut effects);
+        }
+        AppAction::DeleteScriptProvider { provider_id } => {
+            script_provider::delete_script_provider(session, provider_id, &mut effects);
+        }
+        AppAction::ConfirmDeleteScriptProvider => {
+            script_provider::confirm_delete_script_provider(session, &mut effects);
+        }
+        AppAction::CancelDeleteScriptProvider => {
+            script_provider::cancel_delete_script_provider(session, &mut effects);
+        }
         AppAction::QuitApp => settings::quit_app(&mut effects),
     }
 

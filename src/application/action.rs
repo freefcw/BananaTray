@@ -1,5 +1,8 @@
 use super::state::SettingsTab;
-use crate::models::{AppTheme, NavTab, ProviderId, QuotaDisplayMode, TrayIconStyle};
+use crate::models::{
+    AppTheme, NavTab, ProviderId, QuotaDisplayMode, ScriptProviderConfig, ScriptProviderTestResult,
+    TrayIconStyle,
+};
 use crate::refresh::{RefreshEvent, RefreshReason};
 
 #[derive(Debug)]
@@ -84,6 +87,31 @@ pub enum AppAction {
     ConfirmDeleteNewApi,
     /// 取消删除 NewAPI 的二次确认
     CancelDeleteNewApi,
+    /// 进入脚本 Provider 添加模式（显示脚本编辑表单）
+    EnterAddScriptProvider,
+    /// 取消脚本 Provider 添加 / 编辑（关闭表单）
+    CancelAddScriptProvider,
+    /// 测试脚本 Provider 配置（执行脚本并解析 stdout）
+    TestScriptProvider(ScriptProviderConfig),
+    /// 脚本测试结果回填（由 runtime 后台任务发回前台）
+    ScriptProviderTestFinished {
+        request_id: u64,
+        result: ScriptProviderTestResult,
+    },
+    /// 提交脚本 Provider 配置（生成脚本文件 + YAML）
+    SubmitScriptProvider(ScriptProviderConfig),
+    /// 进入脚本 Provider 编辑模式
+    EditScriptProvider {
+        provider_id: ProviderId,
+    },
+    /// 删除脚本 Provider
+    DeleteScriptProvider {
+        provider_id: ProviderId,
+    },
+    /// 进入删除脚本 Provider 的二次确认状态
+    ConfirmDeleteScriptProvider,
+    /// 取消删除脚本 Provider 的二次确认
+    CancelDeleteScriptProvider,
     QuitApp,
 }
 

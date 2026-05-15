@@ -13,7 +13,7 @@ mod tray;
 use super::state::HeaderStatusKind;
 use crate::models::{
     NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
-    SettingsCapability, StatusLevel,
+    ScriptProviderEditData, ScriptProviderTestResult, SettingsCapability, StatusLevel,
 };
 
 // ── Tray 弹出窗口 ──
@@ -186,6 +186,11 @@ pub enum SettingsProviderRightPaneViewState {
     Detail,
     ProviderPicker,
     NewApiForm { edit_data: Option<NewApiEditData> },
+    ScriptProviderForm {
+        edit_data: Option<ScriptProviderEditData>,
+        testing: bool,
+        test_result: Option<ScriptProviderTestResult>,
+    },
 }
 
 /// 可添加到 sidebar 的 Provider 项

@@ -4,13 +4,15 @@ pub(crate) mod effect;
 pub(crate) mod newapi_ops;
 mod quota_alert;
 mod reducer;
+#[cfg(any(feature = "app", test))]
+pub(crate) mod script_provider_ops;
 mod selectors;
 pub(crate) mod state;
 
 pub use action::{AppAction, DebugNotificationKind, SettingChange};
 pub use effect::{
     AppEffect, CommonEffect, ContextEffect, DebugEffect, NewApiEffect, NotificationEffect,
-    RefreshEffect, SettingsEffect, TrayIconRequest,
+    RefreshEffect, ScriptProviderEffect, SettingsEffect, TrayIconRequest,
 };
 pub use quota_alert::QuotaAlert;
 pub use reducer::{build_config_sync_request, reduce};

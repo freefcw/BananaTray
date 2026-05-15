@@ -334,6 +334,22 @@ fn settings_capability_newapi_editable_for_custom_newapi() {
 }
 
 #[test]
+fn settings_capability_script_editable_for_custom_script() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let id = ProviderId::Custom("my-script:script".to_string());
+    let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
+    let mut provider = ProviderStatus::new(id.clone(), metadata);
+    provider.settings_capability = SettingsCapability::ScriptEditable;
+    let session = make_session(settings, id, vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+    assert_eq!(
+        view_state.detail.settings_capability,
+        SettingsCapability::ScriptEditable
+    );
+}
+
+#[test]
 fn settings_capability_defaults_when_provider_missing() {
     let _locale_guard = setup_locale();
     let settings = AppSettings::default();

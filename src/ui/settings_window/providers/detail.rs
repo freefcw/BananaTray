@@ -778,6 +778,9 @@ impl SettingsView {
                 };
                 section = section.child(render_info_placeholder_card(&title, &desc));
             }
+            SettingsCapability::ScriptEditable => {
+                // 由后续 commit (feat: add script provider settings UI) 实现
+            }
         }
 
         section

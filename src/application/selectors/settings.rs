@@ -90,9 +90,26 @@ fn settings_provider_right_pane_view_state(
         SettingsModalState::EditingNewApi(data) => SettingsProviderRightPaneViewState::NewApiForm {
             edit_data: Some(data.clone()),
         },
+        SettingsModalState::AddingScriptProvider => {
+            SettingsProviderRightPaneViewState::ScriptProviderForm {
+                edit_data: None,
+                testing: session.settings_ui.script_provider_testing,
+                test_result: session.settings_ui.script_provider_test_result.clone(),
+            }
+        }
+        SettingsModalState::EditingScriptProvider(data) => {
+            SettingsProviderRightPaneViewState::ScriptProviderForm {
+                edit_data: Some(data.clone()),
+                testing: session.settings_ui.script_provider_testing,
+                test_result: session.settings_ui.script_provider_test_result.clone(),
+            }
+        }
         SettingsModalState::Idle
         | SettingsModalState::ConfirmingRemoveProvider
-        | SettingsModalState::ConfirmingDeleteNewApi => SettingsProviderRightPaneViewState::Detail,
+        | SettingsModalState::ConfirmingDeleteNewApi
+        | SettingsModalState::ConfirmingDeleteScriptProvider => {
+            SettingsProviderRightPaneViewState::Detail
+        }
     }
 }
 

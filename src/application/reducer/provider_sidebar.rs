@@ -17,7 +17,7 @@ pub(super) fn select_settings_provider(
 ) {
     // 中转站表单打开时忽略侧栏点击：
     // 避免 selected_provider 与表单编辑目标不一致的分叉状态
-    if session.settings_ui.modal.is_newapi_form() {
+    if session.settings_ui.modal.is_newapi_form() || session.settings_ui.modal.is_script_provider_form() {
         return;
     }
     session.settings_ui.selected_provider = id;
@@ -139,7 +139,7 @@ pub(super) fn open_dashboard(session: &AppSession, id: ProviderId, effects: &mut
 }
 
 pub(super) fn enter_add_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    // 进入 picker 自动覆盖其他模态（含 NewAPI 表单和正在确认的二次态）
+    // 进入 picker 自动覆盖其他模态（含 NewAPI / 脚本表单和正在确认的二次态）
     session.settings_ui.modal = SettingsModalState::AddingProvider;
     effects.push(ContextEffect::Render.into());
 }

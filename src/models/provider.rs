@@ -220,6 +220,8 @@ pub enum SettingsCapability {
     TokenInput(TokenInputCapability),
     /// NewAPI 型自定义 Provider — 显示「编辑配置」按钮
     NewApiEditable,
+    /// Script 型自定义 Provider — 显示脚本编辑按钮
+    ScriptEditable,
 }
 
 impl ProviderMetadata {
