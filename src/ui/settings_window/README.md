@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `TokenInputDraft` 与 `NewApiFormInputs` 表单状态管理 |
+| `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理 |
 | `mod.rs` | 窗口壳层与 `build_settings_view()` 工厂，供 `runtime` 创建设置窗口内容 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 
@@ -33,6 +33,7 @@
 | `providers/picker.rs` | 添加面板 — 可选 Provider 列表（从 sidebar 中排除已添加的） |
 | `providers/token_input_panel.rs` | Token 输入面板 — 通用 Provider token 设置 UI，复用 `SettingsView::TokenInputDraft` 保持编辑草稿 |
 | `providers/newapi_form.rs` | NewAPI 表单 — 自定义 Provider 快速添加/编辑表单（name, url, cookie, user_id, divisor） |
+| `providers/script_provider_form.rs` | 自定义脚本表单 — 编辑 provider 名称、解释器、超时和脚本源码；Run Test 后台解析 stdout JSON，保存后生成脚本文件与 `source.type: cli` YAML |
 
 ## 窗口交互流程
 
@@ -48,6 +49,7 @@ SettingsView::render()
                     ├── detail     — Provider 配置详情
                     ├── picker     — 添加新 Provider 选择
                     └── newapi     — NewAPI 自定义 Provider 表单
+                    └── script     — 自定义脚本 Provider 表单
 ```
 
 ## 约束
@@ -59,3 +61,4 @@ SettingsView::render()
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
 - `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）
+- `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件

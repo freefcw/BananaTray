@@ -14,7 +14,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderId`** — unified provider identifier: `BuiltIn(ProviderKind)` for built-in providers, `Custom(String)` for YAML-declared custom providers. Key methods: `id_key()`, `from_id_key()`, `kind()`, `is_custom()`.
 - **`ProviderDescriptor`** — combines a stable provider id with `ProviderMetadata` for registration and UI lookup.
 - **`ProviderCapability`** — provider product capability tier: `Monitorable`, `Informational`, `Placeholder`. Refresh scheduling and empty-state UI semantics are keyed off this enum.
-- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
+- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor), `ScriptEditable` (script provider editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 
 ### `quota/` — Usage Data
@@ -64,6 +64,16 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - **`NewApiEditData`** — 从 YAML 解析出的编辑回填数据（含 `original_filename`）
 - **`extract_domain_slug(base_url)`** — URL → slug 纯函数（如 `https://my-api.example.com` → `my-api-example-com`）
 - **`newapi_provider_id(base_url)`** — 从 URL 计算 Provider ID（`{slug}:newapi`），reducer 用于预注册
+
+### `script_provider.rs` — Script Provider Data Types
+
+设置页脚本向导使用的纯数据类型和 stdout 解析逻辑：
+
+- **`ScriptProviderConfig`** — 表单提交数据（display_name、provider_id、interpreter、timeout_ms、script）
+- **`ScriptProviderEditData`** — 从生成的 YAML + 脚本文件回读出的编辑数据，保留原始 YAML / 脚本文件名
+- **`ScriptProviderTestResult`** / **`ScriptProviderQuotaPreview`** — Run Test 的结果和预览数据
+- **`script_provider_id(name)`** — 从展示名称生成 `{slug}:script` provider id
+- **`parse_script_stdout(stdout)`** — 校验脚本 stdout JSON，读取 `remaining` / `used` / `unit` / `label` 等字段
 
 ### `layout.rs` — Popup Window Sizing
 

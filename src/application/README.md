@@ -12,10 +12,10 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
   - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`DBusQuotaSnapshot::from_session` 等多处复用
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
-- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、全局热键错误及候选值回填）
-- **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 移除二次确认 / 删除二次确认"这五种原本散落的 bool/Option 字段折叠成单一 enum：
-  - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`
-  - helper：`is_newapi_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `newapi_edit_data() -> Option<&NewApiEditData>`
+- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
+- **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 脚本 Provider 新增 / 脚本 Provider 编辑 / 移除二次确认 / 删除二次确认"这些原本散落的 bool/Option 字段折叠成单一 enum：
+  - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`AddingScriptProvider`、`EditingScriptProvider(ScriptProviderEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`、`ConfirmingDeleteScriptProvider`
+  - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()`
   - 互斥关系上升到类型层，reducer 不再需要 `set A = true; set B = false;` 的手工同步
 - **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
 - **`DebugUiState`** — Debug Tab 状态
@@ -42,11 +42,13 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
   - `reducer/refresh.rs` — 手动刷新、刷新事件、Provider 热重载，以及热重载后的悬空引用清理
   - `reducer/newapi.rs` — NewAPI 新增 / 编辑 / 删除表单流与对应 effect 发射
+  - `reducer/script_provider.rs` — 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流与对应 effect 发射
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename`，不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；`EditNewApi` 的磁盘读取委托给 `NewApiEffect::LoadConfig`
 - **NewAPI 删除流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除
+- **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成后由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行
 
 测试文件：`reducer_tests.rs`
 
@@ -54,8 +56,8 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`AppEffect`** — 两级副作用枚举（`Context(ContextEffect)` / `Common(CommonEffect)`）
   - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / ApplyGlobalHotkey / QuitApp）
-  - `CommonEffect` — GPUI-free 的领域路由 effect（Settings / Notification / Refresh / Debug / NewApi）
-  - 领域子枚举：`SettingsEffect`、`NotificationEffect`、`RefreshEffect`、`DebugEffect`、`NewApiEffect`
+  - `CommonEffect` — GPUI-free 的领域路由 effect（Settings / Notification / Refresh / Debug / NewApi / ScriptProvider）
+  - 领域子枚举：`SettingsEffect`、`NotificationEffect`、`RefreshEffect`、`DebugEffect`、`NewApiEffect`、`ScriptProviderEffect`
   - `From<ContextEffect>` / `From<CommonEffect>` / `From<领域子枚举>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）
 
@@ -71,9 +73,21 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`rollback_newapi_edit()`** — 编辑模式失败回滚：从 config 重建 `NewApiEditData` 回填表单
 - **`rollback_newapi_create()`** — 新增模式失败回滚：从 `enabled_providers` + `sidebar_providers` 中移除预注册 ID（而非写回 disabled）+ 恢复空表单 + 回退 `selected_provider`
-- **`newapi_save_notification_keys()`** — 根据保存结果选择通知 i18n key（partial / edit_success / save_success）
+- **`newapi_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）
+- **`newapi_save_failed_notification_keys()`** — YAML 写入失败并回滚表单后使用的失败通知 key。
 
 本模块为纯函数，不包含 I/O 或 GPUI 依赖。生产构建中它只在 `app` feature 开启时参与编译；无 `app` 的 `lib` 本地测试场景仍会编译该模块以保留单元测试覆盖。
+
+### `script_provider_ops.rs` — 脚本 Provider 保存操作纯函数
+
+脚本 Provider 保存失败时的状态回滚和通知 key 选择：
+
+- **`rollback_script_provider_edit()`** — 编辑模式失败时保留原表单数据和原文件名。
+- **`rollback_script_provider_create()`** — 新增模式失败时移除预注册 provider，并恢复添加表单。
+- **`script_provider_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）。
+- **`script_provider_save_failed_notification_keys()`** — 脚本 / YAML 写入失败并回滚表单后使用的失败通知 key。
+
+脚本执行、文件读写和 provider reload 都在 `runtime/effects/script_provider.rs` 中完成。
 
 ### `selectors/` — 视图状态选择器
 
@@ -104,7 +118,7 @@ User Event / Background Event
 ## 约束
 
 - **不可导入 `gpui`** — 这是最核心的测试边界。所有类型必须是纯 Rust。
-- **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`。
+- **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`，脚本 Provider 纯数据类型位于 `models/script_provider.rs`。
 - **不可导入 `platform/notification` 承载业务规则** — quota 告警状态机留在 application，platform 只负责通知发送适配。
 - Reducer 必须是**纯函数**（给定 state + action → 确定的 effects），便于测试。
 - 部分 CommonEffect handler（如 `NewApiEffect::LoadConfig`、`DebugEffect::StartRefresh`）会直接修改 `AppSession` 状态，这是异步 I/O 回填的必要 tradeoff。

@@ -32,7 +32,8 @@
 - 规范目录、Schema 和示例见 `custom-provider.md` 与 `docs/examples/`。
 - 当前运行时只支持 `schema_version: 2`。
 - 所有 step 都是 `source.type: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
-- 手工编辑 YAML 后通常需重启应用；应用内 NewAPI 保存 / 删除会显式触发 reload。
+- 设置页 NewAPI 与自定义脚本向导都会生成普通 YAML；应用内保存 / 删除会显式触发 reload。
+- 手工编辑 YAML 后通常需重启应用。
 
 ## Stable Provider Contract
 
@@ -93,6 +94,8 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
   - 使用通用 token 输入面板。
 - `NewApiEditable`
   - 面向通过 NewAPI 表单创建的自定义 provider，允许在设置页继续编辑。
+- `ScriptEditable`
+  - 面向通过自定义脚本向导创建的 `{slug}:script` provider，允许继续编辑脚本、解释器、测试和删除配置树 `scripts/` 目录内的 companion script 文件。
 
 重要边界：
 

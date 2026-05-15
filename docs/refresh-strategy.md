@@ -94,7 +94,7 @@
 当前要特别注意：
 
 - BananaTray **没有**监视 providers 目录的自动文件 watcher。
-- 应用内通过 NewAPI 保存 / 删除会显式触发 reload。
+- 应用内通过 NewAPI 或自定义脚本向导保存 / 删除会显式触发 reload。
 - 手工编辑 YAML 文件后，通常需要重启应用才能看到变化。
 
 ## Debug Refresh

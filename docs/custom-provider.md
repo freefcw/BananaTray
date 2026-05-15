@@ -7,6 +7,7 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 ## 先说结论
 
 - 常见 NewAPI / OneAPI 中转站优先使用设置页里的 NewAPI 表单。
+- 需要完全自定义取数逻辑时，优先使用设置页里的“自定义脚本”向导；它会生成脚本文件和 `source.type: cli` 的 YAML。
 - 手写 YAML 适合简单 HTTP API、CLI 输出解析、安装检测入口。
 - 多端点 API 用 `plan.mode: merge`；多 source fallback 用 `plan.mode: first_success`。
 - 当前没有监视 providers 目录的自动 watcher；手工新增或编辑 YAML 后，通常需要重启应用才能重新加载。
@@ -17,6 +18,11 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
 
 如果 macOS 上存在旧目录 `~/Library/Application Support/bananatray/providers/`，应用启动时会迁移到规范目录。
+
+脚本向导还会把脚本源码保存到同级配置树下的 `scripts/` 目录：
+
+- macOS: `~/Library/Application Support/BananaTray/scripts/`
+- Linux: `$XDG_CONFIG_HOME/bananatray/scripts/`
 
 ## 快速开始
 
@@ -33,6 +39,67 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 - `docs/examples/opencode.yaml`
 - `docs/examples/kilo.yaml`
 - `docs/examples/vertex-ai.yaml`
+
+## 设置页脚本向导
+
+在 `Settings → Providers → Add Provider → Custom Script` 中可以直接创建脚本型 provider。这个入口适合 ccswitch 这类“客户端无法内置所有 API 形态，但用户可以写少量脚本取数”的场景。
+
+保存时 BananaTray 会生成两类文件：
+
+- `providers/script-{slug}.yaml`
+  - 标准 `schema_version: 2` 自定义 provider。
+  - 使用 `source.type: cli`，命令为表单里的解释器，参数为脚本文件路径。
+  - provider id 形如 `{slug}:script`，设置页会把这类 provider 识别为可继续编辑的脚本 provider。若同名或非 ASCII 名称产生相同 slug，向导会自动追加 `-2`、`-3` 等后缀。
+- `scripts/script-{slug}.py`
+  - 表单中的脚本源码。
+
+脚本向导不新增 runtime schema，也不绕过 provider manager；保存后的刷新仍走 `plan.steps`、availability、parser、fallback 和 hot reload 这套自定义 provider 机制。
+
+删除脚本向导生成的 provider 时，BananaTray 会按 YAML 中记录的实际脚本路径删除 companion script，但只会删除配置树 `scripts/` 目录内的脚本文件；手写 YAML 指向外部脚本时不会删除该外部文件。
+
+### stdout JSON 契约
+
+脚本必须向 stdout 打印一个 JSON 对象。当前稳定字段是：
+
+```json
+{
+  "ok": true,
+  "isValid": true,
+  "is_active": true,
+  "label": "Balance",
+  "remaining": 12.5,
+  "used": 3.0,
+  "unit": "USD",
+  "account_email": "user@example.com",
+  "account_tier": "Pro"
+}
+```
+
+字段说明：
+
+- `remaining`
+  - 必填。数值或可解析为数值的字符串。
+  - 保存后的 YAML 会把它解析为 `quota_type: credit` 的余额模式。
+- `used`
+  - 可选。用于展示已用量。
+- `unit`
+  - 可选。脚本向导生成的 YAML 会把它作为 quota detail 读取；当前 credit quota 主数值仍使用 BananaTray 既有的 `$` 展示规则。
+- `label`
+  - 可选。`Run Test` 预览使用；当前生成的 YAML 固定展示为 `Balance`。
+- `ok` / `isValid` / `is_active`
+  - 可选。任一字段显式为 `false` 时，`Run Test` 会视为无效结果。
+- `account_email` / `account_tier`
+  - 可选。保存后的 YAML 会按这两个字段填充账户信息。
+
+脚本可以从环境变量、文件、HTTP API、CLI 等任意来源取数。建议把密钥放在环境变量或系统凭据中，不要硬编码到脚本里。
+
+### Run Test 与刷新
+
+“Run Test” 会先把当前脚本写入临时目录，用表单中的解释器执行，并按上面的 stdout JSON 契约做预览校验。测试不会保存 provider 文件。
+
+保存后常规刷新走生成的 `source.type: cli`。表单里的 timeout 会写入 YAML 的 `source.timeout_ms`，单位为毫秒；UI 中按秒填写。
+
+脚本测试在后台线程执行，设置窗口会保持可响应；如果用户连续触发测试，只会采纳最新一次测试的回填结果。测试和刷新都会把脚本进程的等待与 stdout/stderr 读取纳入同一个 timeout 窗口。
 
 ## 顶层结构
 
@@ -167,8 +234,13 @@ source:
 source:
   type: cli
   command: "mycli"
+  timeout_ms: 20000
   args: ["usage", "--json"]
 ```
+
+说明：
+
+- `timeout_ms` 可选，不配置时使用共享 CLI 默认超时。
 
 ### 3. `placeholder`
 

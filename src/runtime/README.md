@@ -26,7 +26,7 @@
 | 子枚举 | 职责 | 新增时改动 |
 |--------|------|-----------|
 | `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | `effect.rs` 定义 + `run_view_context_effect` / `run_full_context_effect`（必要时补 capability trait） |
-| `CommonEffect` | GPUI-free 顶层领域路由（Settings / Notification / Refresh / Debug / NewApi） | 对应领域子枚举 + `runtime/effects/` 下同名执行器 |
+| `CommonEffect` | GPUI-free 顶层领域路由（Settings / Notification / Refresh / Debug / NewApi / ScriptProvider） | 对应领域子枚举 + `runtime/effects/` 下同名执行器 |
 
 三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `effects::run_common_effect` 做领域分派；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
 
@@ -39,6 +39,7 @@
 | `RefreshEffect` | refresh 请求发送 |
 | `DebugEffect` | Debug 页日志目录 / 剪贴板动作、日志捕获、Debug 刷新 |
 | `NewApiEffect` | NewAPI 保存 / 删除 / 加载编排 |
+| `ScriptProviderEffect` | 脚本 Provider 测试请求、保存脚本 + YAML、删除和编辑加载编排 |
 
 ### ContextCapabilities 模式
 
@@ -133,8 +134,9 @@
 - `refresh.rs` — `RefreshEffect`，并提供共享的 refresh 请求发送 helper
 - `debug.rs` — `DebugEffect`
 - `newapi.rs` — `NewApiEffect`
+- `script_provider.rs` — `ScriptProviderEffect`
 
-各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 的 YAML 底层读写仍在 `newapi_io.rs`，纯状态回滚仍在 `application/newapi_ops.rs`。
+各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本底层读写仍在 `newapi_io.rs`，纯状态回滚仍在 `application/newapi_ops.rs` / `application/script_provider_ops.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果再回到前台 reducer，避免阻塞设置窗口。
 
 ### `global_hotkey.rs` — 全局热键解析与重绑
 
@@ -148,12 +150,14 @@
 
 ### `newapi_io.rs` — NewAPI YAML 文件 I/O
 
-封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 需要的磁盘文件操作：
+封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 以及 `ScriptProviderEffect::SaveProvider` / `DeleteProvider` 需要的磁盘文件操作：
 
 - **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
 - **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 推导文件路径 + 删除 YAML 文件
+- **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 写入脚本文件，再生成 `source.type: cli` YAML
+- **`delete_script_provider_files(provider_id) → Result<(PathBuf, Result<PathBuf, String>), String>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
 
-回滚逻辑位于 `application/newapi_ops.rs`（纯函数，可测试）；runtime 在删除失败时负责记录日志并发送用户通知。
+回滚逻辑位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）；runtime 在删除失败时负责记录日志并发送用户通知。
 
 ## 约束
 

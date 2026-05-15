@@ -7,7 +7,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | File | Feature Boundary | Responsibility |
 |------|------------------|----------------|
 | `mod.rs` | mixed | Defines app identity constants and gates app-only adapters behind `feature = "app"`. |
-| `paths.rs` | lib-safe | Resolves settings and custom provider directories. |
+| `paths.rs` | lib-safe | Resolves settings, custom provider, and custom script directories. |
 | `system.rs` | lib-safe | Small system helpers: open URL/path, clipboard, OS info, file-size formatting, dark-mode detection. |
 | `logging.rs` | mixed | App logger initialization behind `feature = "app"` plus test/lib-safe log-tail helpers. |
 | `assets.rs` | app-only | GPUI `AssetSource`; resolves resources from `BANANATRAY_RESOURCES`, app bundles, Linux system install paths, then dev root. |
@@ -24,6 +24,9 @@ Platform integration layer. This module owns OS adapters and filesystem location
 - Custom provider directory:
   - macOS: `~/Library/Application Support/BananaTray/providers/`
   - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
+- Custom script directory:
+  - macOS: `~/Library/Application Support/BananaTray/scripts/`
+  - Linux: `$XDG_CONFIG_HOME/bananatray/scripts/`
 - Default log file:
   - macOS: `~/Library/Logs/bananatray/bananatray.log`
   - Linux: `$XDG_STATE_HOME/bananatray/bananatray.log`
