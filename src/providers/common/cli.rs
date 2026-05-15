@@ -3,7 +3,7 @@ use crate::providers::common::path_resolver;
 use crate::providers::ProviderError;
 use anyhow::Result;
 use std::io::Read;
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -20,18 +20,36 @@ pub fn run_command(binary: &str, args: &[&str]) -> Result<Output> {
     run_command_with_timeout(binary, args, COMMAND_TIMEOUT)
 }
 
-fn run_command_with_timeout(binary: &str, args: &[&str], timeout: Duration) -> Result<Output> {
+pub fn run_command_with_timeout(binary: &str, args: &[&str], timeout: Duration) -> Result<Output> {
     let executable_path = path_resolver::locate_executable(binary)
         .ok_or_else(|| ProviderError::cli_not_found(binary))?;
 
-    let mut child = Command::new(&executable_path)
+    let mut command = Command::new(&executable_path);
+    command
         .args(args)
-        .env("PATH", path_resolver::enriched_path())
+        .env("PATH", path_resolver::enriched_path());
+    prepare_process_group(&mut command);
+    let child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| ProviderError::cli_not_found(binary))?;
+    run_child_with_timeout(child, timeout)
+}
 
+pub(crate) fn run_prepared_command_with_timeout(
+    mut command: Command,
+    timeout: Duration,
+) -> Result<Output> {
+    prepare_process_group(&mut command);
+    let child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    run_child_with_timeout(child, timeout)
+}
+
+fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output> {
     let stdout_reader = child.stdout.take().map(|mut handle| {
         thread::spawn(move || {
             let mut stdout = Vec::new();
@@ -47,31 +65,106 @@ fn run_command_with_timeout(binary: &str, args: &[&str], timeout: Duration) -> R
         })
     });
 
+    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+    if let Some(reader) = stdout_reader {
+        thread::spawn(move || {
+            let _ = stdout_tx.send(reader.join().unwrap_or_default());
+        });
+    } else {
+        let _ = stdout_tx.send(Vec::new());
+    }
+    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+    if let Some(reader) = stderr_reader {
+        thread::spawn(move || {
+            let _ = stderr_tx.send(reader.join().unwrap_or_default());
+        });
+    } else {
+        let _ = stderr_tx.send(Vec::new());
+    }
+
     let deadline = Instant::now() + timeout;
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            kill_child_tree(&mut child);
             let _ = child.wait();
             return Err(ProviderError::Timeout.into());
         }
         thread::sleep(COMMAND_POLL_INTERVAL);
     };
 
-    let stdout = stdout_reader
-        .map(|reader| reader.join().unwrap_or_default())
-        .unwrap_or_default();
-    let stderr = stderr_reader
-        .map(|reader| reader.join().unwrap_or_default())
-        .unwrap_or_default();
+    let stdout = recv_output_before_deadline(&stdout_rx, deadline, &mut child)?;
+    let stderr = recv_output_before_deadline(&stderr_rx, deadline, &mut child)?;
 
     Ok(Output {
         status,
         stdout,
         stderr,
     })
+}
+
+fn recv_output_before_deadline(
+    rx: &std::sync::mpsc::Receiver<Vec<u8>>,
+    deadline: Instant,
+    child: &mut std::process::Child,
+) -> Result<Vec<u8>> {
+    let now = Instant::now();
+    if now >= deadline {
+        kill_child_tree(child);
+        let _ = child.wait();
+        return Err(ProviderError::Timeout.into());
+    }
+    match rx.recv_timeout(deadline.saturating_duration_since(now)) {
+        Ok(output) => Ok(output),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            kill_child_tree(child);
+            let _ = child.wait();
+            Err(ProviderError::Timeout.into())
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Ok(Vec::new()),
+    }
+}
+
+#[cfg(unix)]
+fn prepare_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        command.pre_exec(|| {
+            if setpgid(0, 0) == -1 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn prepare_process_group(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn kill_child_tree(child: &mut Child) {
+    unsafe {
+        let _ = kill(-(child.id() as i32), SIGKILL);
+    }
+    let _ = child.kill();
+}
+
+#[cfg(not(unix))]
+fn kill_child_tree(child: &mut Child) {
+    let _ = child.kill();
+}
+
+#[cfg(unix)]
+const SIGKILL: i32 = 9;
+
+#[cfg(unix)]
+extern "C" {
+    fn setpgid(pid: i32, pgid: i32) -> i32;
+    fn kill(pid: i32, sig: i32) -> i32;
 }
 
 /// 统一处理非零退出码，避免各个 CLI provider 重复拼接错误文案。
@@ -236,5 +329,18 @@ mod tests {
         .unwrap();
         let stdout = stdout_text(&output);
         assert!(stdout.lines().count() >= 100000);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_run_command_with_timeout_covers_reader_drain() {
+        let err = run_command_with_timeout(
+            "sh",
+            &["-c", "sh -c 'sleep 1 & exit 0'"],
+            Duration::from_millis(50),
+        )
+        .unwrap_err();
+        let classified = ProviderError::classify(&err);
+        assert!(matches!(classified, ProviderError::Timeout));
     }
 }
