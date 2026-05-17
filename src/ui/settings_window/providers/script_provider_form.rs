@@ -12,8 +12,9 @@ use crate::ui::widgets::{register_input_actions, render_svg_icon};
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, hsla, px, App, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
-    MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement, Styled, Window,
+    div, hsla, prelude::FluentBuilder as _, px, App, Context, Div, Entity, Focusable, FontWeight,
+    InteractiveElement, MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
+    Styled, Window,
 };
 use rust_i18n::t;
 
@@ -180,6 +181,12 @@ fn render_code_field(
             theme,
         ))
         .child(textarea_div.child(textarea_entity.clone()))
+        .child(
+            div()
+                .text_size(px(11.0))
+                .text_color(theme.text.muted)
+                .child(t!("script_provider.field.script.cf_hint").to_string()),
+        )
 }
 
 fn register_textarea_actions(
@@ -212,6 +219,40 @@ fn register_textarea_actions(
         .on_action(window.listener_for(entity, TextareaState::word_right))
         .on_action(window.listener_for(entity, TextareaState::select_word_left))
         .on_action(window.listener_for(entity, TextareaState::select_word_right))
+}
+
+fn looks_like_cf_challenge(result: &ScriptProviderTestResult) -> bool {
+    const SCAN_CHAR_LIMIT: usize = 24_000;
+    let fields = [&result.message, &result.stdout, &result.stderr];
+
+    const KEYWORDS: &[&str] = &[
+        "cloudflare",
+        "cf-ray",
+        "cf_clearance",
+        "__cf_bm",
+        "challenge-platform",
+        "just a moment",
+        "checking your browser",
+        "attention required",
+        "cf-chl",
+    ];
+
+    fields.iter().any(|field| {
+        let haystack = field
+            .chars()
+            .take(SCAN_CHAR_LIMIT)
+            .collect::<String>()
+            .to_ascii_lowercase();
+
+        KEYWORDS.iter().any(|kw| haystack.contains(kw))
+            || haystack.contains("403")
+                && (haystack.contains("forbidden") || haystack.contains("blocked"))
+            || haystack.contains("503") && haystack.contains("unavailable")
+    })
+}
+
+fn should_show_cf_warning(result: &ScriptProviderTestResult) -> bool {
+    !result.success && looks_like_cf_challenge(result)
 }
 
 fn render_test_result(result: Option<&ScriptProviderTestResult>, theme: &Theme) -> Div {
@@ -259,6 +300,14 @@ fn render_test_result(result: Option<&ScriptProviderTestResult>, theme: &Theme) 
                 .text_color(theme.text.secondary)
                 .child(preview.unwrap_or_else(|| result.message.clone())),
         )
+        .when(should_show_cf_warning(result), |d| {
+            d.child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(theme.status.warning)
+                    .child(t!("script_provider.test.cf_warning").to_string()),
+            )
+        })
         .child(
             div()
                 .font_family("SF Mono")
@@ -285,25 +334,6 @@ fn compact_text(text: &str) -> String {
         "-".to_string()
     } else {
         compact
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::compact_text;
-
-    #[test]
-    fn compact_text_truncates_on_char_boundary() {
-        let text = "余".repeat(260);
-        let compact = compact_text(&text);
-
-        assert!(compact.ends_with("..."));
-        assert_eq!(compact.trim_end_matches("...").chars().count(), 220);
-    }
-
-    #[test]
-    fn compact_text_empty_falls_back_to_dash() {
-        assert_eq!(compact_text(" \n "), "-");
     }
 }
 
@@ -650,5 +680,116 @@ impl SettingsView {
                         }
                     }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compact_text, looks_like_cf_challenge, should_show_cf_warning};
+    use crate::models::ScriptProviderTestResult;
+
+    fn make_result(message: &str, stdout: &str, stderr: &str) -> ScriptProviderTestResult {
+        ScriptProviderTestResult {
+            success: false,
+            message: message.to_string(),
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            preview: None,
+        }
+    }
+
+    #[test]
+    fn compact_text_truncates_on_char_boundary() {
+        let text = "余".repeat(260);
+        let compact = compact_text(&text);
+
+        assert!(compact.ends_with("..."));
+        assert_eq!(compact.trim_end_matches("...").chars().count(), 220);
+    }
+
+    #[test]
+    fn compact_text_empty_falls_back_to_dash() {
+        assert_eq!(compact_text(" \n "), "-");
+    }
+
+    #[test]
+    fn cf_detect_matches_cloudflare_html() {
+        let result = make_result(
+            "script exited with a non-zero status",
+            "<title>Just a moment...</title>",
+            "",
+        );
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_cf_ray_header() {
+        let result = make_result("", "", "HTTP/2 403\nCF-RAY: 8a1b2c3d");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_403_forbidden() {
+        let result = make_result("", "", "curl: 403 Forbidden");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_cf_clearance_cookie() {
+        let result = make_result("", "", "Set-Cookie: cf_clearance=abc123; Path=/");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_cf_bm_cookie() {
+        let result = make_result("", "Set-Cookie: __cf_bm=xyz", "");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_challenge_platform() {
+        let result = make_result(
+            "",
+            "<script src=\"/cdn-cgi/challenge-platform/h/g/orchestrate/jsch/v1\">",
+            "",
+        );
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_matches_503_unavailable() {
+        let result = make_result("", "", "HTTP/1.1 503 Service Unavailable");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_is_case_insensitive() {
+        let result = make_result("", "", "<TITLE>JUST A MOMENT...</TITLE>");
+        assert!(looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_ignores_bare_403_without_forbidden_keyword() {
+        let result = make_result("", "rate-limit=403/min", "");
+        assert!(!looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_detect_ignores_normal_failure() {
+        let result = make_result("invalid JSON", "{\"foo\":1}", "");
+        assert!(!looks_like_cf_challenge(&result));
+    }
+
+    #[test]
+    fn cf_warning_is_hidden_for_successful_result() {
+        let result = ScriptProviderTestResult {
+            success: true,
+            message: "OK".to_string(),
+            stdout: "<title>Just a moment...</title>".to_string(),
+            stderr: String::new(),
+            preview: None,
+        };
+
+        assert!(!should_show_cf_warning(&result));
     }
 }

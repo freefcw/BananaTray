@@ -433,6 +433,32 @@ python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/B
 2. `remaining` / `used + limit` 是否选对模式
 3. `divisor` 是否符合站点的真实单位换算
 
+### Cloudflare / CDN 拦截
+
+并非每个站点都有这个问题，但只要脚本访问的站点挂在 Cloudflare、Akamai Bot Manager、AWS WAF 等防护产品后面，原始 `curl` / `requests` / `reqwest` 这类客户端就有可能被识别为机器人。表现通常是：
+
+- HTTP 403 / 503 + 响应体里出现 `Just a moment...` / `Checking your browser` / `Attention Required` / `cf-ray` / `cf_clearance` / `__cf_bm` 等关键字
+- 浏览器里手动访问完全正常，但脚本里就是拿不到 JSON
+- 脚本向导的 `Run Test` 结果框会自动识别这类响应并给出提示
+
+按代价从低到高的常用做法：
+
+1. **优先走 API key 通道，绕开网页 session 路径。**
+   NewAPI / OneAPI 这类站点通常会把 `/api/user/self` 一类网页入口放在 CF 防护后面，但 `/v1/...` 之类需要 `Authorization: Bearer sk-...` 的程序入口往往会在 CF 规则里放行。先翻一下站点文档，能用 API key 就用 API key，这是最干净的方案。
+2. **复用浏览器的 `cf_clearance` cookie + 严格匹配 User-Agent。**
+   浏览器里登录站点后，从 DevTools 拷贝 `cf_clearance`（必要时还有 `__cf_bm`）和当前 UA。脚本请求里 cookie 串带上这些字段，并且 `User-Agent` header 必须和你拿 cookie 时的浏览器一字不差。`cf_clearance` 与 UA + 出口 IP 强绑定，IP 漂移或 UA 不匹配都会立刻失效；它通常 30 分钟到几小时过期，脚本检测到 403/503 时给一条提示自己重抓即可。
+3. **换用带浏览器 TLS 指纹的 HTTP 客户端。**
+   普通 `curl` / `requests` / `reqwest` 的 TLS ClientHello 指纹很容易被 CF 直接拒掉。可以换成：
+   - Python：[`curl_cffi`](https://github.com/lexiforest/curl_cffi)（API 兼容 requests，`impersonate="chrome124"`）或 `tls-client`
+   - Node：`cycletls`
+   - 命令行：`curl-impersonate`（独立 binary）
+
+   脚本结构基本不动，只是换个 HTTP 库；这一档对 Bot Fight Mode 一类的轻量拦截通常已经够。
+4. **JS Challenge / Turnstile：用一次无头浏览器拿 cookie。**
+   如果上面都过不了，只能上 `playwright` / `undetected-chromedriver` / `nodriver` 启动一次浏览器把 `cf_clearance` 拿到，缓存到本地文件，后续请求走方案 2。BananaTray 的脚本是定时被拉起的短命脚本，**不要每次都启动浏览器**，只在 cookie 过期时刷新；否则刷新延迟和资源开销都会很难看。
+
+如果站点同时支持 API key 和网页 session，**优先走 API key**——它不仅绕开 CF，也避免了 cookie 过期导致的间歇性失败。
+
 ## 推荐做法
 
 - 先从最接近的示例开始改，而不是从空白 YAML 开始写。
