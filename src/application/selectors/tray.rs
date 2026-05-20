@@ -4,8 +4,8 @@
 
 use super::super::state::{provider_panel_flags, AppSession};
 use super::format::{
-    format_failure_message, format_last_updated, format_non_monitoring_message, format_quota_label,
-    quota_display_view_state,
+    format_failure_message, format_non_monitoring_message, format_quota_label,
+    format_refresh_status, format_relative_refresh_age, quota_display_view_state,
 };
 use super::*;
 use crate::models::{
@@ -125,7 +125,10 @@ pub fn provider_detail_view_state(
             .map(|email| AccountInfoViewState {
                 email: email.clone(),
                 tier: provider.account_tier.clone(),
-                updated_text: format_last_updated(&provider),
+                updated_text: provider
+                    .last_refreshed_instant
+                    .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()))
+                    .unwrap_or_else(|| format_refresh_status(&provider)),
                 dashboard_url: flags
                     .has_dashboard_url
                     .then(|| provider.dashboard_url().to_string()),

@@ -327,10 +327,10 @@ quota.used_credit: "Used: $%{amount}"
 quota.used_amount: "Used: %{amount}"
 quota.update_failed: "Update failed"
 
-# ── Provider status (format_last_updated) ─────────────────
-provider.updated_just_now: "Updated just now"
-provider.updated_min_ago: "Updated %{n} min ago"
-provider.updated_hr_ago: "Updated %{n} hr ago"
+# ── Provider refresh display ─────────────────────────────
+provider.time.just_now: "just now"
+provider.time.min_ago: "%{n} min ago"
+provider.time.hr_ago: "%{n} hr ago"
 provider.waiting_for_data: "Waiting for data"
 provider.needs_attention: "Needs attention"
 provider.not_connected: "Not connected"

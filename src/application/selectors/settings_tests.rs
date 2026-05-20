@@ -173,8 +173,8 @@ fn settings_provider_subtitle_uses_display_source_label() {
     let view_state = settings_providers_tab_view_state(&session);
 
     assert!(
-        view_state.detail.subtitle.starts_with("GitHub ·"),
-        "subtitle should use display label, got: {}",
+        view_state.detail.subtitle.starts_with("GitHub · just now"),
+        "subtitle should use compact time, got: {}",
         view_state.detail.subtitle
     );
     assert!(!view_state.detail.subtitle.contains("github api"));

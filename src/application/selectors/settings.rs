@@ -5,8 +5,9 @@
 use super::super::state::AppSession;
 use super::super::state::SettingsModalState;
 use super::format::{
-    format_failure_message, format_last_updated, format_non_monitoring_message, format_quota_label,
-    provider_source_label, quota_display_view_state,
+    format_failure_message, format_non_monitoring_message, format_provider_updated_at,
+    format_quota_label, format_relative_refresh_age, provider_source_label,
+    quota_display_view_state,
 };
 use super::*;
 use crate::models::{
@@ -189,7 +190,7 @@ fn settings_provider_info_view_state(
         .map(|_| t!("provider.not_applicable").to_string())
         .unwrap_or_else(|| {
             provider
-                .map(format_last_updated)
+                .map(format_provider_updated_at)
                 .unwrap_or_else(|| t!("provider.not_fetched").to_string())
         });
 
@@ -304,8 +305,8 @@ fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
             t!("provider.detail.refreshing", source = source).to_string()
         }
         ConnectionStatus::Connected => {
-            if provider.last_refreshed_instant.is_some() {
-                let time = format_last_updated(provider).to_lowercase();
+            if let Some(instant) = provider.last_refreshed_instant {
+                let time = format_relative_refresh_age(instant.elapsed().as_secs());
                 t!("provider.detail.updated", source = source, time = time).to_string()
             } else {
                 t!("provider.detail.not_fetched", source = source).to_string()

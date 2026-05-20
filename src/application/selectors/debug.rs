@@ -5,7 +5,7 @@
 //! 所有 I/O 和环境变量读取都由 runtime 层收集后通过 DebugContext 注入。
 
 use super::super::state::AppSession;
-use super::format::{format_failure_message, format_last_updated};
+use super::format::{format_failure_message, format_refresh_status, format_relative_refresh_age};
 use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
 use rust_i18n::t;
@@ -170,7 +170,10 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
             } else {
                 match provider.connection {
                     ConnectionStatus::Connected => {
-                        let time_text = format_last_updated(provider);
+                        let time_text = provider
+                            .last_refreshed_instant
+                            .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()))
+                            .unwrap_or_else(|| format_refresh_status(provider));
                         (
                             t!("debug.provider.connected", time = time_text).to_string(),
                             ProviderDiagnosticStatus::Connected,

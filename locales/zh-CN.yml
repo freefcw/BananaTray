@@ -327,10 +327,10 @@ quota.used_credit: "已用 $%{amount}"
 quota.used_amount: "已用 %{amount}"
 quota.update_failed: "更新失败"
 
-# ── 服务商状态 (format_last_updated) ─────────────────────
-provider.updated_just_now: "刚刚更新"
-provider.updated_min_ago: "%{n} 分钟前更新"
-provider.updated_hr_ago: "%{n} 小时前更新"
+# ── Provider refresh display ─────────────────────────────
+provider.time.just_now: "刚刚"
+provider.time.min_ago: "%{n} 分钟前"
+provider.time.hr_ago: "%{n} 小时前"
 provider.waiting_for_data: "等待数据"
 provider.needs_attention: "需要注意"
 provider.not_connected: "未连接"

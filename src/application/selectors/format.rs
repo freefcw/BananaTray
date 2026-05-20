@@ -45,21 +45,20 @@ pub fn provider_source_label(provider: &ProviderStatus) -> String {
     display_source_label(provider.source_label())
 }
 
-/// 格式化上次刷新的相对时间
-///
-/// 从 `ProviderStatus` 的实例方法提取到 selector 层，
-/// 消除数据模型对 i18n 的依赖（DIP 原则）。
-pub fn format_last_updated(provider: &ProviderStatus) -> String {
-    if let Some(instant) = provider.last_refreshed_instant {
-        let secs = instant.elapsed().as_secs();
-        if secs < 60 {
-            t!("provider.updated_just_now").to_string()
-        } else if secs < 3600 {
-            t!("provider.updated_min_ago", n = secs / 60).to_string()
-        } else {
-            t!("provider.updated_hr_ago", n = secs / 3600).to_string()
-        }
-    } else if let Some(status) = provider.update_status {
+/// 相对刷新时间（仅在有 `last_refreshed_instant` 时使用）。
+pub fn format_relative_refresh_age(secs: u64) -> String {
+    if secs < 60 {
+        t!("provider.time.just_now").to_string()
+    } else if secs < 3600 {
+        t!("provider.time.min_ago", n = secs / 60).to_string()
+    } else {
+        t!("provider.time.hr_ago", n = secs / 3600).to_string()
+    }
+}
+
+/// 无刷新时间戳时的连接 / 更新状态文案（Debug、托盘等独立展示场景）。
+pub fn format_refresh_status(provider: &ProviderStatus) -> String {
+    if let Some(status) = provider.update_status {
         match status {
             UpdateStatus::Failed => t!("quota.update_failed").to_string(),
         }
@@ -71,6 +70,14 @@ pub fn format_last_updated(provider: &ProviderStatus) -> String {
             ConnectionStatus::Disconnected => t!("provider.not_connected").to_string(),
         }
     }
+}
+
+/// 设置页 info table「更新时间」列：有 instant 返回相对时间，否则「尚未获取」。
+pub fn format_provider_updated_at(provider: &ProviderStatus) -> String {
+    provider
+        .last_refreshed_instant
+        .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()))
+        .unwrap_or_else(|| t!("provider.not_fetched").to_string())
 }
 
 /// 格式化 Provider 最近一次失败消息。
@@ -314,78 +321,53 @@ mod tests {
         assert_eq!(display_source_label(""), "Automatic");
     }
 
-    // ── format_last_updated ──────────────────────────────────
+    // ── format_relative_refresh_age / format_refresh_status ──
 
     #[test]
-    fn format_last_updated_no_instant_connected() {
+    fn format_relative_refresh_age_formats_compact_time() {
+        let _locale_guard = setup_locale();
+        assert_eq!(format_relative_refresh_age(0), "just now");
+        assert_eq!(format_relative_refresh_age(120), "2 min ago");
+        assert_eq!(format_relative_refresh_age(3600), "1 hr ago");
+    }
+
+    #[test]
+    fn format_refresh_status_reflects_connection() {
+        let _locale_guard = setup_locale();
+        let connected = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        assert_eq!(format_refresh_status(&connected), "Waiting for data");
+
+        let refreshing = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
+        assert_eq!(format_refresh_status(&refreshing), "Refreshing…");
+
+        let error = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+        assert_eq!(format_refresh_status(&error), "Needs attention");
+
+        let disconnected = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
+        assert_eq!(format_refresh_status(&disconnected), "Not connected");
+    }
+
+    #[test]
+    fn format_refresh_status_reports_update_failed() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.update_status = Some(UpdateStatus::Failed);
+        assert_eq!(format_refresh_status(&p), "Update failed");
+    }
+
+    #[test]
+    fn format_provider_updated_at_uses_not_fetched_without_instant() {
         let _locale_guard = setup_locale();
         let p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        assert_eq!(format_last_updated(&p), "Waiting for data");
+        assert_eq!(format_provider_updated_at(&p), "Not fetched yet");
     }
 
     #[test]
-    fn format_last_updated_no_instant_refreshing() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
-        assert_eq!(format_last_updated(&p), "Refreshing…");
-    }
-
-    #[test]
-    fn format_last_updated_no_instant_error() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        assert_eq!(format_last_updated(&p), "Needs attention");
-    }
-
-    #[test]
-    fn format_last_updated_no_instant_disconnected() {
-        let _locale_guard = setup_locale();
-        let p = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
-        assert_eq!(format_last_updated(&p), "Not connected");
-    }
-
-    #[test]
-    fn format_last_updated_with_failed_status() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        p.update_status = Some(UpdateStatus::Failed);
-        assert_eq!(format_last_updated(&p), "Update failed");
-    }
-
-    #[test]
-    fn format_last_updated_just_now() {
+    fn format_provider_updated_at_uses_relative_time_with_instant() {
         let _locale_guard = setup_locale();
         let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
         p.last_refreshed_instant = Some(std::time::Instant::now());
-        assert_eq!(format_last_updated(&p), "Updated just now");
-    }
-
-    #[test]
-    fn format_last_updated_exactly_60s() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        p.last_refreshed_instant =
-            Some(std::time::Instant::now() - std::time::Duration::from_secs(60));
-        assert_eq!(format_last_updated(&p), "Updated 1 min ago");
-    }
-
-    #[test]
-    fn format_last_updated_exactly_3600s() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-        p.last_refreshed_instant =
-            Some(std::time::Instant::now() - std::time::Duration::from_secs(3600));
-        assert_eq!(format_last_updated(&p), "Updated 1 hr ago");
-    }
-
-    #[test]
-    fn format_last_updated_instant_takes_priority_over_status() {
-        let _locale_guard = setup_locale();
-        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
-        p.last_refreshed_instant = Some(std::time::Instant::now());
-        p.update_status = Some(UpdateStatus::Failed);
-        // instant 存在时，优先显示时间，不显示 "Update failed"
-        assert_eq!(format_last_updated(&p), "Updated just now");
+        assert_eq!(format_provider_updated_at(&p), "just now");
     }
 
     // ── format_failure_message ──────────────────────────────
