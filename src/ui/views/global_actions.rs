@@ -1,14 +1,14 @@
-/// 底部全局操作栏：Sync Data + Settings + Close
+/// 底部全局操作栏：Refresh + Settings + Close
 use crate::application::{tray_global_actions_view_state, AppAction, RefreshTarget};
 use crate::refresh::RefreshReason;
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::{
-    div, px, Context, Div, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton,
+    div, px, Context, Div, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
     ParentElement, Styled,
 };
 
-use crate::ui::widgets::render_svg_icon;
+use crate::ui::widgets::{render_svg_icon, with_tooltip};
 use crate::ui::AppView;
 
 impl AppView {
@@ -20,37 +20,19 @@ impl AppView {
             tray_global_actions_view_state(&state.session)
         };
 
-        // Sync Data 按钮（触发刷新：Overview 全部刷新 / Provider 单个刷新）
+        // 刷新按钮（图标 + tooltip；Overview 全部刷新 / Provider 单个刷新）
         let sync_btn = {
             let entity = cx.entity().clone();
             let refresh = actions.refresh.clone();
             let theme = cx.global::<Theme>();
+            let tooltip = refresh.label.clone();
 
-            let mut btn = div()
-                .flex()
-                .items_center()
-                .justify_center()
-                .gap(px(6.0))
-                .px(px(20.0))
-                .py(px(10.0))
-                .rounded(px(10.0))
-                .bg(theme.button.sync_bg)
-                .border_1()
-                .border_color(theme.button.sync_bg)
-                .cursor_pointer()
-                .hover(|style| style.opacity(0.8))
-                .child(render_svg_icon(
-                    "src/icons/refresh.svg",
-                    px(14.0),
-                    theme.button.sync_text,
-                ))
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.button.sync_text)
-                        .child(refresh.label.clone()),
-                );
+            let mut btn = render_circle_button(
+                "src/icons/refresh.svg",
+                theme.button.sync_text,
+                theme.button.sync_bg,
+                theme.button.sync_bg,
+            );
 
             if let (Some(target), false) = (refresh.target, refresh.is_refreshing) {
                 btn = btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
@@ -65,9 +47,16 @@ impl AppView {
                         runtime::dispatch_in_context(&view.state, action, cx);
                     });
                 });
+            } else if refresh.is_refreshing {
+                btn = btn.opacity(0.6);
             }
 
-            btn
+            with_tooltip(
+                ElementId::Name("tray-global-refresh".into()),
+                &tooltip,
+                theme,
+                btn,
+            )
         };
 
         // 设置按钮（圆形）
