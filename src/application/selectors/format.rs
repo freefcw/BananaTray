@@ -12,6 +12,39 @@ use crate::models::{
 };
 use rust_i18n::t;
 
+/// 将内部 `source_label` 转为设置页副标题用的用户向文案。
+pub fn display_source_label(raw: &str) -> String {
+    match raw {
+        "github api" => t!("provider.source_label.github_api").to_string(),
+        "seat api" => t!("provider.source_label.seat_api").to_string(),
+        "seat api + local cache" => t!("provider.source_label.seat_api_local_cache").to_string(),
+        "local api" => t!("provider.source_label.local_api").to_string(),
+        "local cache" => t!("provider.source_label.local_cache").to_string(),
+        "local/cloud fallback" => t!("provider.source_label.local_cloud_fallback").to_string(),
+        "cursor api" => t!("provider.source_label.cursor_api").to_string(),
+        "gemini api" => t!("provider.source_label.gemini_api").to_string(),
+        "openai api" => t!("provider.source_label.openai_api").to_string(),
+        "claude" => t!("provider.source_label.claude").to_string(),
+        "vertex ai api" => t!("provider.source_label.vertex_ai_api").to_string(),
+        "kiro cli" => t!("provider.source_label.kiro_cli").to_string(),
+        "amp cli" => t!("provider.source_label.amp_cli").to_string(),
+        "kilo api" => t!("provider.source_label.kilo_api").to_string(),
+        "kimi api" => t!("provider.source_label.kimi_api").to_string(),
+        "minimax api" => t!("provider.source_label.minimax_api").to_string(),
+        "opencode api" => t!("provider.source_label.opencode_api").to_string(),
+        "newapi api" => t!("provider.source_label.newapi_api").to_string(),
+        "merged" => t!("provider.source_label.merged").to_string(),
+        "" => t!("provider.source_label.auto").to_string(),
+        _ if raw.ends_with(" cli") => t!("provider.source_label.custom_cli").to_string(),
+        _ => t!("provider.source_label.custom").to_string(),
+    }
+}
+
+/// Provider 数据来源的用户向展示文案（UI 统一入口）。
+pub fn provider_source_label(provider: &ProviderStatus) -> String {
+    display_source_label(provider.source_label())
+}
+
 /// 格式化上次刷新的相对时间
 ///
 /// 从 `ProviderStatus` 的实例方法提取到 selector 层，
@@ -250,6 +283,36 @@ mod tests {
         ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderKind,
         QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
     };
+
+    // ── display_source_label ─────────────────────────────────
+
+    #[test]
+    fn provider_source_label_delegates_to_display_mapping() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
+        p.runtime_source_label = Some("github api".to_string());
+        assert_eq!(provider_source_label(&p), "GitHub");
+    }
+
+    #[test]
+    fn display_source_label_maps_known_labels() {
+        let _locale_guard = setup_locale();
+        assert_eq!(display_source_label("github api"), "GitHub");
+        assert_eq!(display_source_label("seat api"), "Windsurf Cloud");
+        assert_eq!(
+            display_source_label("seat api + local cache"),
+            "Windsurf Cloud + Local cache"
+        );
+        assert_eq!(display_source_label("local api"), "Local language server");
+    }
+
+    #[test]
+    fn display_source_label_falls_back_for_unknown() {
+        let _locale_guard = setup_locale();
+        assert_eq!(display_source_label("my-script"), "Custom");
+        assert_eq!(display_source_label("foo cli"), "Local CLI");
+        assert_eq!(display_source_label(""), "Automatic");
+    }
 
     // ── format_last_updated ──────────────────────────────────
 

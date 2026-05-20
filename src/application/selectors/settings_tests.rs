@@ -158,6 +158,29 @@ fn settings_provider_detail_reports_disabled_usage() {
 }
 
 #[test]
+fn settings_provider_subtitle_uses_display_source_label() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Copilot, true);
+
+    let mut provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
+    provider.runtime_source_label = Some("github api".to_string());
+    provider.last_refreshed_instant = Some(std::time::Instant::now());
+
+    let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert!(
+        view_state.detail.subtitle.starts_with("GitHub ·"),
+        "subtitle should use display label, got: {}",
+        view_state.detail.subtitle
+    );
+    assert!(!view_state.detail.subtitle.contains("github api"));
+}
+
+#[test]
 fn settings_provider_detail_reports_error_usage() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
