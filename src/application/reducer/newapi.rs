@@ -1,18 +1,18 @@
 use crate::application::{AppEffect, ContextEffect, NewApiEffect};
 use crate::models::{NewApiConfig, ProviderId};
 
-use super::super::state::AppSession;
+use super::super::state::{AppSession, SettingsModalState};
 
 pub(super) fn enter_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.adding_provider = false; // 与 picker 互斥
-    session.settings_ui.editing_newapi = None; // 确保进入纯新增模式
+    // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填）
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn cancel_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.adding_newapi = false;
-    session.settings_ui.editing_newapi = None;
+    if session.settings_ui.modal.is_newapi_form() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     effects.push(ContextEffect::Render.into());
 }
 
@@ -25,11 +25,14 @@ pub(super) fn submit_newapi(
     divisor: Option<f64>,
     effects: &mut Vec<AppEffect>,
 ) {
-    let is_editing = session.settings_ui.editing_newapi.is_some();
+    let is_editing = matches!(
+        session.settings_ui.modal,
+        SettingsModalState::EditingNewApi(_)
+    );
     let original_filename = session
         .settings_ui
-        .editing_newapi
-        .as_ref()
+        .modal
+        .newapi_edit_data()
         .map(|d| d.original_filename.clone());
 
     let config = NewApiConfig {
@@ -64,8 +67,7 @@ pub(super) fn submit_newapi(
     );
     // SettingsEffect::PersistSettings 和 NotificationEffect::Plain 由 effect handler
     // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
-    session.settings_ui.adding_newapi = false;
-    session.settings_ui.editing_newapi = None;
+    session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -80,18 +82,22 @@ pub(super) fn delete_newapi(
     provider_id: ProviderId,
     effects: &mut Vec<AppEffect>,
 ) {
-    session.settings_ui.confirming_delete_newapi = false;
+    if session.settings_ui.modal.is_confirming_delete_newapi() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     // 先刷新 UI 关闭确认态，避免等待文件删除 / 热重载结果才消失。
     effects.push(ContextEffect::Render.into());
     effects.push(NewApiEffect::DeleteProvider { provider_id }.into());
 }
 
 pub(super) fn confirm_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.confirming_delete_newapi = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn cancel_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.confirming_delete_newapi = false;
+    if session.settings_ui.modal.is_confirming_delete_newapi() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     effects.push(ContextEffect::Render.into());
 }

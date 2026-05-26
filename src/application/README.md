@@ -12,7 +12,11 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
   - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`DBusQuotaSnapshot::from_session` 等多处复用
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
-- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、Provider picker、NewAPI 表单态，以及全局热键错误及其对应候选值的回填）
+- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、全局热键错误及候选值回填）
+- **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 移除二次确认 / 删除二次确认"这五种原本散落的 bool/Option 字段折叠成单一 enum：
+  - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`
+  - helper：`is_newapi_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `newapi_edit_data() -> Option<&NewApiEditData>`
+  - 互斥关系上升到类型层，reducer 不再需要 `set A = true; set B = false;` 的手工同步
 - **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
 - **`DebugUiState`** — Debug Tab 状态
 - **`SettingsTab`** — 设置窗口 Tab 枚举
@@ -42,7 +46,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；`EditNewApi` 的磁盘读取委托给 `NewApiEffect::LoadConfig`
-- **NewAPI 删除流**：`DeleteNewApi` 会先清空 `confirming_delete_newapi`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除
+- **NewAPI 删除流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除
 
 测试文件：`reducer_tests.rs`
 

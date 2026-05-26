@@ -286,11 +286,7 @@ fn build_initial_settings_ui_state(
         selected_provider,
         cadence_dropdown_open: false,
         token_editing_provider: None,
-        adding_newapi: false,
-        editing_newapi: None,
-        adding_provider: false,
-        confirming_remove_provider: false,
-        confirming_delete_newapi: false,
+        modal: SettingsModalState::Idle,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     }
@@ -400,20 +396,75 @@ pub struct SettingsUiState {
     pub cadence_dropdown_open: bool,
     /// 正在编辑 Token 的 Provider ID（None = 未编辑）
     pub token_editing_provider: Option<ProviderId>,
-    /// 是否正在添加 NewAPI 中转站（右侧面板显示表单）
-    pub adding_newapi: bool,
-    /// 编辑模式：已有配置数据（Some = 编辑，None = 新增）
-    pub editing_newapi: Option<NewApiEditData>,
-    /// 是否正在选择要添加的 Provider（右侧面板显示选择列表）
-    pub adding_provider: bool,
-    /// 正在确认移除的 Provider（二次确认状态）
-    pub confirming_remove_provider: bool,
-    /// 正在确认删除的 NewAPI Provider（二次确认状态）
-    pub confirming_delete_newapi: bool,
+    /// 右侧面板的互斥模态状态机。
+    ///
+    /// 把原本散落的 `adding_newapi` / `editing_newapi` / `adding_provider` /
+    /// `confirming_remove_provider` / `confirming_delete_newapi` 字段折叠成
+    /// 单一 enum，使"模式互斥"成为类型层不变量。
+    pub modal: SettingsModalState,
     /// General Tab 全局热键设置的最近一次错误
     pub global_hotkey_error: Option<GlobalHotkeyError>,
     /// 与 `global_hotkey_error` 对应的候选热键（持久化格式）
     pub global_hotkey_error_candidate: Option<String>,
+}
+
+/// 设置窗口右侧面板的互斥模态状态。
+///
+/// `Idle` 是稳态：显示当前 `selected_provider` 的详情面板。其他变体表示用户
+/// 触发的非默认交互流（picker / 表单 / 二次确认）。所有变体之间互斥，
+/// 切换到任意非 `Idle` 状态时自动取消其他模态。
+///
+/// 设计要点：
+/// - **二次确认（`ConfirmingRemoveProvider` / `ConfirmingDeleteNewApi`）** 与
+///   `selected_provider` 绑定，切换 provider 时必须显式回到 `Idle`。
+/// - **NewAPI 表单** 用两个变体而非 `Option<NewApiEditData>`：`AddingNewApi`
+///   表示新增（空表单），`EditingNewApi(data)` 表示编辑（含回填数据），保证
+///   "新增"和"编辑回填数据缺失"在类型层就不可混淆。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum SettingsModalState {
+    /// 默认：显示当前 `selected_provider` 的详情面板。
+    #[default]
+    Idle,
+    /// 详情页：对当前 `selected_provider` 的"从 sidebar 移除"二次确认。
+    ConfirmingRemoveProvider,
+    /// 详情页：对当前 NewAPI `selected_provider` 的"删除 YAML 文件"二次确认。
+    ConfirmingDeleteNewApi,
+    /// 右面板：显示"添加 Provider"选择列表（picker）。
+    AddingProvider,
+    /// 右面板：NewAPI 新增表单（空表单，提交后会预注册新 provider）。
+    AddingNewApi,
+    /// 右面板：NewAPI 编辑表单（含从 YAML 读取的回填数据）。
+    EditingNewApi(NewApiEditData),
+}
+
+impl SettingsModalState {
+    /// 当前是否正在展示 NewAPI 表单（新增或编辑）。
+    pub fn is_newapi_form(&self) -> bool {
+        matches!(self, Self::AddingNewApi | Self::EditingNewApi(_))
+    }
+
+    /// 当前是否正在展示 "添加 Provider" 选择列表。
+    pub fn is_adding_provider(&self) -> bool {
+        matches!(self, Self::AddingProvider)
+    }
+
+    /// 是否正在确认"从 sidebar 移除当前 Provider"。
+    pub fn is_confirming_remove_provider(&self) -> bool {
+        matches!(self, Self::ConfirmingRemoveProvider)
+    }
+
+    /// 是否正在确认"删除当前 NewAPI provider"。
+    pub fn is_confirming_delete_newapi(&self) -> bool {
+        matches!(self, Self::ConfirmingDeleteNewApi)
+    }
+
+    /// 若处于编辑 NewAPI 模式，返回回填数据的引用。
+    pub fn newapi_edit_data(&self) -> Option<&NewApiEditData> {
+        match self {
+            Self::EditingNewApi(data) => Some(data),
+            _ => None,
+        }
+    }
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

@@ -71,9 +71,9 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
     SettingsProvidersTabViewState {
         items,
         detail: settings_provider_detail_view_state(session, selected),
-        adding_newapi: session.settings_ui.adding_newapi,
-        editing_newapi_data: session.settings_ui.editing_newapi.clone(),
-        adding_provider: session.settings_ui.adding_provider,
+        adding_newapi: session.settings_ui.modal.is_newapi_form(),
+        editing_newapi_data: session.settings_ui.modal.newapi_edit_data().cloned(),
+        adding_provider: session.settings_ui.modal.is_adding_provider(),
         available_providers,
     }
 }

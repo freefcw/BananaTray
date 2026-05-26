@@ -2,8 +2,8 @@
 use super::*;
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{
-    ConnectionStatus, DisplaySettings, ProviderId, ProviderKind, SettingsCapability,
-    TokenInputCapability,
+    ConnectionStatus, DisplaySettings, NewApiEditData, ProviderId, ProviderKind,
+    SettingsCapability, TokenInputCapability,
 };
 
 /// 快捷构造 ProviderId::BuiltIn
@@ -238,11 +238,7 @@ fn settings_ui_default_values() {
         selected_provider: pid(ProviderKind::Claude),
         cadence_dropdown_open: false,
         token_editing_provider: None,
-        adding_newapi: false,
-        editing_newapi: None,
-        adding_provider: false,
-        confirming_remove_provider: false,
-        confirming_delete_newapi: false,
+        modal: SettingsModalState::Idle,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     };
@@ -250,6 +246,36 @@ fn settings_ui_default_values() {
     assert!(!ui.cadence_dropdown_open);
     assert!(ui.global_hotkey_error.is_none());
     assert!(ui.global_hotkey_error_candidate.is_none());
+}
+
+#[test]
+fn modal_state_helpers_match_variants() {
+    let idle = SettingsModalState::Idle;
+    assert!(!idle.is_newapi_form());
+    assert!(!idle.is_adding_provider());
+    assert!(!idle.is_confirming_remove_provider());
+    assert!(!idle.is_confirming_delete_newapi());
+    assert!(idle.newapi_edit_data().is_none());
+
+    assert!(SettingsModalState::AddingNewApi.is_newapi_form());
+    assert!(SettingsModalState::AddingNewApi
+        .newapi_edit_data()
+        .is_none());
+
+    let edit = SettingsModalState::EditingNewApi(NewApiEditData {
+        display_name: "x".into(),
+        base_url: "https://example.com".into(),
+        cookie: String::new(),
+        user_id: None,
+        divisor: None,
+        original_filename: "x.yaml".into(),
+    });
+    assert!(edit.is_newapi_form());
+    assert_eq!(edit.newapi_edit_data().unwrap().display_name, "x");
+
+    assert!(SettingsModalState::AddingProvider.is_adding_provider());
+    assert!(SettingsModalState::ConfirmingRemoveProvider.is_confirming_remove_provider());
+    assert!(SettingsModalState::ConfirmingDeleteNewApi.is_confirming_delete_newapi());
 }
 
 #[test]

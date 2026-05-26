@@ -20,7 +20,7 @@ pub struct NewApiConfig {
 }
 
 /// 从 YAML 配置中解析出的编辑数据（GPUI-free，可用于回填表单）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NewApiEditData {
     /// 显示名称
     pub display_name: String,

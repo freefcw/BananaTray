@@ -1,6 +1,6 @@
 use super::common::{has_effect, has_render, make_custom_token_provider, make_session, pid};
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, RefreshEffect, SettingsEffect,
+    reduce, AppAction, AppEffect, CommonEffect, RefreshEffect, SettingsEffect, SettingsModalState,
 };
 use crate::models::{ProviderId, ProviderKind};
 use crate::refresh::RefreshRequest;
@@ -54,23 +54,23 @@ fn move_provider_to_same_index_produces_no_effects() {
 #[test]
 fn enter_add_provider_sets_flag_and_clears_newapi() {
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     let effects = reduce(&mut session, AppAction::EnterAddProvider);
 
-    assert!(session.settings_ui.adding_provider);
-    assert!(!session.settings_ui.adding_newapi); // 互斥
+    assert!(session.settings_ui.modal.is_adding_provider());
+    assert!(!session.settings_ui.modal.is_newapi_form()); // 互斥
     assert!(has_render(&effects));
 }
 
 #[test]
 fn cancel_add_provider_clears_flag() {
     let mut session = make_session();
-    session.settings_ui.adding_provider = true;
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
 
     let effects = reduce(&mut session, AppAction::CancelAddProvider);
 
-    assert!(!session.settings_ui.adding_provider);
+    assert!(!session.settings_ui.modal.is_adding_provider());
     assert!(has_render(&effects));
 }
 
@@ -79,7 +79,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     let mut session = make_session();
     // 预设 sidebar 只有 claude
     session.settings.provider.sidebar_providers = vec!["claude".into()];
-    session.settings_ui.adding_provider = true;
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
 
     let id = pid(ProviderKind::Gemini);
     let effects = reduce(&mut session, AppAction::AddProviderToSidebar(id.clone()));
@@ -93,7 +93,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     // 选中了刚添加的 provider
     assert_eq!(session.settings_ui.selected_provider, id);
     // 退出添加模式
-    assert!(!session.settings_ui.adding_provider);
+    assert!(!session.settings_ui.modal.is_adding_provider());
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -154,7 +154,7 @@ fn remove_last_sidebar_provider_enters_add_mode() {
     // sidebar 已空
     assert!(session.settings.provider.sidebar_providers.is_empty());
     // 自动进入添加模式
-    assert!(session.settings_ui.adding_provider);
+    assert!(session.settings_ui.modal.is_adding_provider());
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -188,22 +188,22 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
 #[test]
 fn confirm_remove_provider_sets_confirming_flag() {
     let mut session = make_session();
-    assert!(!session.settings_ui.confirming_remove_provider);
+    assert!(!session.settings_ui.modal.is_confirming_remove_provider());
 
     let effects = reduce(&mut session, AppAction::ConfirmRemoveProvider);
 
-    assert!(session.settings_ui.confirming_remove_provider);
+    assert!(session.settings_ui.modal.is_confirming_remove_provider());
     assert!(has_render(&effects));
 }
 
 #[test]
 fn cancel_remove_provider_clears_confirming_flag() {
     let mut session = make_session();
-    session.settings_ui.confirming_remove_provider = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
 
     let effects = reduce(&mut session, AppAction::CancelRemoveProvider);
 
-    assert!(!session.settings_ui.confirming_remove_provider);
+    assert!(!session.settings_ui.modal.is_confirming_remove_provider());
     assert!(has_render(&effects));
 }
 
@@ -211,21 +211,21 @@ fn cancel_remove_provider_clears_confirming_flag() {
 fn remove_provider_resets_confirming_flag() {
     let mut session = make_session();
     session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
-    session.settings_ui.confirming_remove_provider = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
 
     reduce(
         &mut session,
         AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Claude)),
     );
 
-    assert!(!session.settings_ui.confirming_remove_provider);
+    assert!(!session.settings_ui.modal.is_confirming_remove_provider());
 }
 
 #[test]
 fn select_provider_resets_confirming_flags() {
     let mut session = make_session();
-    session.settings_ui.confirming_remove_provider = true;
-    session.settings_ui.confirming_delete_newapi = true;
+    // 进入确认移除态作为初始模态；切换 provider 时应一并清空。
+    session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
     session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     reduce(
@@ -233,8 +233,7 @@ fn select_provider_resets_confirming_flags() {
         AppAction::SelectSettingsProvider(pid(ProviderKind::Gemini)),
     );
 
-    assert!(!session.settings_ui.confirming_remove_provider);
-    assert!(!session.settings_ui.confirming_delete_newapi);
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
     assert!(session.settings_ui.token_editing_provider.is_none());
 }
 

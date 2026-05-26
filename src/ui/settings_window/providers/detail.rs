@@ -649,7 +649,8 @@ impl SettingsView {
             .borrow()
             .session
             .settings_ui
-            .confirming_remove_provider;
+            .modal
+            .is_confirming_remove_provider();
 
         let mut inner = div()
             .flex_col()
@@ -751,7 +752,8 @@ impl SettingsView {
                     .borrow()
                     .session
                     .settings_ui
-                    .confirming_delete_newapi;
+                    .modal
+                    .is_confirming_delete_newapi();
                 section = section.child(render_newapi_action_row(
                     provider_id,
                     confirming_delete,

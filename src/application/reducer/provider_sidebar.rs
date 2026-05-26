@@ -6,7 +6,7 @@ use crate::application::{
 use crate::models::{NavTab, ProviderId, SettingsCapability, TrayIconStyle};
 use crate::refresh::RefreshReason;
 
-use super::super::state::AppSession;
+use super::super::state::{AppSession, SettingsModalState};
 use super::refresh::request_provider_refresh;
 use super::shared::{build_config_sync_request, provider_supports_refresh};
 
@@ -17,15 +17,13 @@ pub(super) fn select_settings_provider(
 ) {
     // 中转站表单打开时忽略侧栏点击：
     // 避免 selected_provider 与表单编辑目标不一致的分叉状态
-    if session.settings_ui.adding_newapi {
+    if session.settings_ui.modal.is_newapi_form() {
         return;
     }
     session.settings_ui.selected_provider = id;
     session.settings_ui.token_editing_provider = None;
-    // 点选已有服务商时退出 picker（轻量操作）
-    session.settings_ui.adding_provider = false;
-    session.settings_ui.confirming_remove_provider = false;
-    session.settings_ui.confirming_delete_newapi = false;
+    // 点选已有服务商时退出 picker / 取消正在确认中的二次状态
+    session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -141,13 +139,15 @@ pub(super) fn open_dashboard(session: &AppSession, id: ProviderId, effects: &mut
 }
 
 pub(super) fn enter_add_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.adding_provider = true;
-    session.settings_ui.adding_newapi = false; // 互斥
+    // 进入 picker 自动覆盖其他模态（含 NewAPI 表单和正在确认的二次态）
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn cancel_add_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.adding_provider = false;
+    if session.settings_ui.modal.is_adding_provider() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     effects.push(ContextEffect::Render.into());
 }
 
@@ -159,7 +159,7 @@ pub(super) fn add_provider_to_sidebar(
     if session.settings.provider.add_to_sidebar(&id) {
         effects.push(SettingsEffect::PersistSettings.into());
     }
-    session.settings_ui.adding_provider = false;
+    session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.selected_provider = id;
     effects.push(ContextEffect::Render.into());
 }
@@ -169,7 +169,10 @@ pub(super) fn remove_provider_from_sidebar(
     id: ProviderId,
     effects: &mut Vec<AppEffect>,
 ) {
-    session.settings_ui.confirming_remove_provider = false;
+    // 先离开二次确认态，无论 sidebar 操作是否成功
+    if session.settings_ui.modal.is_confirming_remove_provider() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     if session.settings.provider.remove_from_sidebar(&id) {
         // 移除同时 disable
         session.settings.provider.set_enabled(&id, false);
@@ -182,7 +185,7 @@ pub(super) fn remove_provider_from_sidebar(
         let custom_ids = session.provider_store.custom_provider_ids();
         let remaining = session.settings.provider.sidebar_provider_ids(&custom_ids);
         if remaining.is_empty() {
-            session.settings_ui.adding_provider = true;
+            session.settings_ui.modal = SettingsModalState::AddingProvider;
         } else {
             session.settings_ui.selected_provider = session.first_sidebar_provider();
         }
@@ -193,11 +196,13 @@ pub(super) fn remove_provider_from_sidebar(
 }
 
 pub(super) fn confirm_remove_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.confirming_remove_provider = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn cancel_remove_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.confirming_remove_provider = false;
+    if session.settings_ui.modal.is_confirming_remove_provider() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     effects.push(ContextEffect::Render.into());
 }

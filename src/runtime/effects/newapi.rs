@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use log::{info, warn};
 
-use crate::application::{newapi_ops, NewApiEffect};
+use crate::application::{newapi_ops, NewApiEffect, SettingsModalState};
 use crate::models::ProviderId;
 use crate::providers::custom::generator;
 use crate::refresh::RefreshRequest;
@@ -74,8 +74,7 @@ fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
     if let ProviderId::Custom(ref custom_id) = provider_id {
         if let Some(edit_data) = generator::read_newapi_config(custom_id) {
             let mut s = state.borrow_mut();
-            s.session.settings_ui.adding_newapi = true;
-            s.session.settings_ui.editing_newapi = Some(edit_data);
+            s.session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data);
         } else {
             warn!(
                 target: "settings",

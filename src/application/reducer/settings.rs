@@ -4,7 +4,7 @@ use crate::application::{
 };
 use crate::models::{NavTab, ProviderId, TrayIconStyle};
 
-use super::super::state::{AppSession, SettingsTab};
+use super::super::state::{AppSession, SettingsModalState, SettingsTab};
 use super::shared::{build_config_sync_request, resolve_tray_icon_request};
 
 pub(super) fn select_nav_tab(session: &mut AppSession, tab: NavTab, effects: &mut Vec<AppEffect>) {
@@ -18,8 +18,11 @@ pub(super) fn set_settings_tab(
     effects: &mut Vec<AppEffect>,
 ) {
     session.settings_ui.active_tab = tab;
-    // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）
-    session.settings_ui.adding_provider = false;
+    // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）。
+    // NewAPI 表单和二次确认态保留，回到 Providers tab 仍能继续。
+    if session.settings_ui.modal.is_adding_provider() {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
     effects.push(ContextEffect::Render.into());
 }
 

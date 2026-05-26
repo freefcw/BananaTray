@@ -5,7 +5,7 @@
 //!
 //! 本模块为纯函数，不包含 I/O 或 GPUI 依赖，可通过 `cargo test --lib` 测试。
 
-use super::state::AppSession;
+use super::state::{AppSession, SettingsModalState};
 use crate::models::{NewApiConfig, NewApiEditData, ProviderId};
 
 /// 编辑模式下的回滚：恢复表单编辑状态，让用户可以重试。
@@ -13,8 +13,7 @@ use crate::models::{NewApiConfig, NewApiEditData, ProviderId};
 /// 编辑模式时旧 YAML 文件仍在磁盘上，不需要回滚 enabled/sidebar 预注册。
 /// 仅需从 config 重建 `NewApiEditData` 回填表单。
 pub fn rollback_newapi_edit(session: &mut AppSession, config: &NewApiConfig, filename: &str) {
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.editing_newapi = Some(NewApiEditData {
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: config.display_name.clone(),
         base_url: config.base_url.clone(),
         cookie: config.cookie.clone(),
@@ -39,8 +38,7 @@ pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
     session.settings.provider.remove_from_sidebar(&rollback_id);
 
     // 重新打开空表单让用户可以重试
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.editing_newapi = None;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     // 恢复 selected_provider 到 sidebar 第一项
     session.settings_ui.selected_provider = session.first_sidebar_provider();
@@ -93,8 +91,8 @@ mod tests {
 
         rollback_newapi_edit(&mut session, &config, "newapi-test.yaml");
 
-        assert!(session.settings_ui.adding_newapi);
-        let edit = session.settings_ui.editing_newapi.as_ref().unwrap();
+        assert!(session.settings_ui.modal.is_newapi_form());
+        let edit = session.settings_ui.modal.newapi_edit_data().unwrap();
         assert_eq!(edit.display_name, "Test API");
         assert_eq!(edit.base_url, "https://my-api.example.com");
         assert_eq!(edit.cookie, "session=abc123");
@@ -131,9 +129,8 @@ mod tests {
             .sidebar_provider_ids(&[])
             .contains(&pre_id));
 
-        // 验证表单恢复为新增模式
-        assert!(session.settings_ui.adding_newapi);
-        assert!(session.settings_ui.editing_newapi.is_none());
+        // 验证表单恢复为新增模式（非编辑回填）
+        assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
     }
 
     #[test]

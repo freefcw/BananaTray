@@ -1,7 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session};
 use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, NewApiEffect, NotificationEffect, RefreshEffect,
-    SettingsEffect, SettingsTab,
+    SettingsEffect, SettingsModalState, SettingsTab,
 };
 use crate::models::{ProviderId, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshRequest};
@@ -11,29 +11,29 @@ use crate::refresh::{RefreshEvent, RefreshRequest};
 #[test]
 fn enter_add_newapi_sets_flag_true() {
     let mut session = make_session();
-    assert!(!session.settings_ui.adding_newapi);
+    assert!(!session.settings_ui.modal.is_newapi_form());
 
     let effects = reduce(&mut session, AppAction::EnterAddNewApi);
 
-    assert!(session.settings_ui.adding_newapi);
+    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
     assert!(has_render(&effects));
 }
 
 #[test]
 fn cancel_add_newapi_resets_flag() {
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     let effects = reduce(&mut session, AppAction::CancelAddNewApi);
 
-    assert!(!session.settings_ui.adding_newapi);
+    assert!(!session.settings_ui.modal.is_newapi_form());
     assert!(has_render(&effects));
 }
 
 #[test]
 fn submit_newapi_produces_save_and_notification_effects() {
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     let effects = reduce(
         &mut session,
@@ -47,7 +47,7 @@ fn submit_newapi_produces_save_and_notification_effects() {
     );
 
     // 状态：表单已关闭
-    assert!(!session.settings_ui.adding_newapi);
+    assert!(!session.settings_ui.modal.is_newapi_form());
 
     // Effect: NewApiEffect::SaveProvider（检查 config 包含关键字段 + 新增模式）
     assert!(has_effect(&effects, |e| {
@@ -73,7 +73,7 @@ fn submit_newapi_produces_save_and_notification_effects() {
 #[test]
 fn submit_newapi_auto_enables_and_adds_to_sidebar() {
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
     // sidebar 初始为空（模拟全新用户场景）
     session.settings.provider.sidebar_providers = vec!["claude".into()];
 
@@ -120,8 +120,7 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
         .sidebar_providers
         .push("old-site-com:newapi".to_string());
 
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.editing_newapi = Some(NewApiEditData {
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: "Old Site".to_string(),
         base_url: "https://old-site.com".to_string(),
         cookie: "c=old".to_string(),
@@ -148,7 +147,7 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
 #[test]
 fn submit_newapi_reenables_same_provider_after_create_rollback() {
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     let base_url = "https://retry.example.com";
     let retry_id = ProviderId::Custom("retry-example-com:newapi".to_string());
@@ -302,7 +301,7 @@ fn select_provider_is_noop_during_newapi_form() {
     // 中转站表单打开时，侧栏点击应完全忽略：
     // 不修改 selected_provider，避免侧栏高亮与表单编辑目标不一致的分叉状态
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
     let original_selected = session.settings_ui.selected_provider.clone();
 
     let other_id = session.provider_store.providers[1].provider_id.clone();
@@ -310,7 +309,7 @@ fn select_provider_is_noop_during_newapi_form() {
 
     let effects = reduce(&mut session, AppAction::SelectSettingsProvider(other_id));
 
-    assert!(session.settings_ui.adding_newapi); // 表单保留
+    assert!(session.settings_ui.modal.is_newapi_form()); // 表单保留
     assert_eq!(session.settings_ui.selected_provider, original_selected); // 选中不变
     assert!(effects.is_empty()); // 完全 no-op
 }
@@ -319,12 +318,12 @@ fn select_provider_is_noop_during_newapi_form() {
 fn select_provider_clears_adding_provider() {
     // 添加内置服务商的 picker 是轻量操作，点选已有服务商应退出
     let mut session = make_session();
-    session.settings_ui.adding_provider = true;
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
 
     let id = session.provider_store.providers[0].provider_id.clone();
     let effects = reduce(&mut session, AppAction::SelectSettingsProvider(id));
 
-    assert!(!session.settings_ui.adding_provider); // picker 已退出
+    assert!(!session.settings_ui.modal.is_adding_provider()); // picker 已退出
     assert!(has_render(&effects));
 }
 
@@ -332,14 +331,14 @@ fn select_provider_clears_adding_provider() {
 fn set_settings_tab_clears_adding_provider() {
     // 切换 tab 时应退出 picker
     let mut session = make_session();
-    session.settings_ui.adding_provider = true;
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
 
     let effects = reduce(
         &mut session,
         AppAction::SetSettingsTab(SettingsTab::General),
     );
 
-    assert!(!session.settings_ui.adding_provider);
+    assert!(!session.settings_ui.modal.is_adding_provider());
     assert!(has_render(&effects));
 }
 
@@ -348,14 +347,14 @@ fn set_settings_tab_preserves_adding_newapi() {
     // 中转站表单是复杂操作，切换 tab 不应丢失表单状态；
     // 用户切回 Providers tab 时应恢复表单界面
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     reduce(
         &mut session,
         AppAction::SetSettingsTab(SettingsTab::General),
     );
 
-    assert!(session.settings_ui.adding_newapi); // 表单状态保留
+    assert!(session.settings_ui.modal.is_newapi_form()); // 表单状态保留
 }
 
 // ── 编辑模式 ──────────────────────────────────────
@@ -365,8 +364,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     use crate::models::NewApiEditData;
 
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.editing_newapi = Some(NewApiEditData {
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: "Old Name".to_string(),
         base_url: "https://old-site.com".to_string(),
         cookie: "old_cookie".to_string(),
@@ -386,9 +384,8 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
         },
     );
 
-    // 状态：编辑模式已清除
-    assert!(!session.settings_ui.adding_newapi);
-    assert!(session.settings_ui.editing_newapi.is_none());
+    // 状态：编辑模式已清除（modal 回到 Idle）
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
 
     // Effect: 使用原始文件名 + 编辑模式标志
     assert!(has_effect(&effects, |e| {
@@ -412,8 +409,7 @@ fn cancel_add_newapi_clears_editing_state() {
     use crate::models::NewApiEditData;
 
     let mut session = make_session();
-    session.settings_ui.adding_newapi = true;
-    session.settings_ui.editing_newapi = Some(NewApiEditData {
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: "Test".to_string(),
         base_url: "https://test.com".to_string(),
         cookie: "c".to_string(),
@@ -424,8 +420,7 @@ fn cancel_add_newapi_clears_editing_state() {
 
     let effects = reduce(&mut session, AppAction::CancelAddNewApi);
 
-    assert!(!session.settings_ui.adding_newapi);
-    assert!(session.settings_ui.editing_newapi.is_none());
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
     assert!(has_render(&effects));
 }
 
@@ -435,7 +430,7 @@ fn enter_add_newapi_clears_stale_editing_state() {
 
     let mut session = make_session();
     // 模拟残留的编辑状态
-    session.settings_ui.editing_newapi = Some(NewApiEditData {
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: "Stale".to_string(),
         base_url: "https://stale.com".to_string(),
         cookie: "c".to_string(),
@@ -446,8 +441,8 @@ fn enter_add_newapi_clears_stale_editing_state() {
 
     let effects = reduce(&mut session, AppAction::EnterAddNewApi);
 
-    assert!(session.settings_ui.adding_newapi);
-    assert!(session.settings_ui.editing_newapi.is_none()); // 确保进入纯新增模式
+    // 进入纯新增模式：modal 切到 AddingNewApi，回填数据被丢弃
+    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
     assert!(has_render(&effects));
 }
 
@@ -457,7 +452,7 @@ fn enter_add_newapi_clears_stale_editing_state() {
 fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
     let mut session = make_session();
     let id = ProviderId::Custom("my-api-example-com:newapi".to_string());
-    session.settings_ui.confirming_delete_newapi = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
 
     let effects = reduce(
         &mut session,
@@ -471,7 +466,7 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
         AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id }))
             if *provider_id == id
     )));
-    assert!(!session.settings_ui.confirming_delete_newapi);
+    assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
     assert!(has_render(&effects));
 }
 
@@ -511,33 +506,33 @@ fn delete_newapi_emits_effect_for_builtin_provider() {
 #[test]
 fn confirm_delete_newapi_sets_confirming_flag() {
     let mut session = make_session();
-    assert!(!session.settings_ui.confirming_delete_newapi);
+    assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
 
     let effects = reduce(&mut session, AppAction::ConfirmDeleteNewApi);
 
-    assert!(session.settings_ui.confirming_delete_newapi);
+    assert!(session.settings_ui.modal.is_confirming_delete_newapi());
     assert!(has_render(&effects));
 }
 
 #[test]
 fn cancel_delete_newapi_clears_confirming_flag() {
     let mut session = make_session();
-    session.settings_ui.confirming_delete_newapi = true;
+    session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
 
     let effects = reduce(&mut session, AppAction::CancelDeleteNewApi);
 
-    assert!(!session.settings_ui.confirming_delete_newapi);
+    assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
     assert!(has_render(&effects));
 }
 
 #[test]
 fn enter_add_newapi_clears_adding_provider() {
     let mut session = make_session();
-    session.settings_ui.adding_provider = true;
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
 
     let effects = reduce(&mut session, AppAction::EnterAddNewApi);
 
-    assert!(session.settings_ui.adding_newapi);
-    assert!(!session.settings_ui.adding_provider); // 互斥清除
+    assert!(session.settings_ui.modal.is_newapi_form());
+    assert!(!session.settings_ui.modal.is_adding_provider()); // 互斥清除
     assert!(has_render(&effects));
 }

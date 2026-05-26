@@ -27,4 +27,4 @@ pub use selectors::{
 };
 #[cfg(any(target_os = "linux", test))]
 pub use selectors::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
-pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsTab};
+pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab};
