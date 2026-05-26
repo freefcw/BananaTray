@@ -140,6 +140,47 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 5. **Add icon**: `src/icons/provider-myprovider.svg`
 6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches manifest/implementation mismatches
 
+### 单文件 vs 多文件 Provider — 升级阈值
+
+新 provider **默认应该从单文件 `my_provider.rs` 开始**（如 `amp.rs` / `kiro.rs` / `kilo.rs` / `opencode.rs` / `vertex_ai.rs`）。强行套用 `auth.rs / client.rs / parser.rs / mod.rs` 的多文件骨架在小 provider 上只会制造无意义的跳转成本。
+
+当 provider 出现 **以下任意一条** 时，再升级到多文件结构：
+
+- 单文件超过 ~250 行，并且能按"认证 / 请求 / 解析"自然切分
+- 有 **多个数据源 / 多个 fallback 路径**（如 Claude 的 API + CLI、Codex 的 HTTP + JSON-RPC + PTY、Codeium-family 的 live + cache）
+- 有独立的 **认证流程**（如 OAuth token refresh、JWT 解析、本地 SQLite token 读取）需要独立测试边界
+- 同一个 provider 对应 **多种 payload 解析策略**，并且策略本身需要按 trait 实现（参考 Claude `UsageProbe` / Codeium-family `ParseStrategy`）
+
+升级时按以下顺序拆分，**不要一次拆光**：
+
+1. 先拆 `auth.rs`（凭证读取 / token 解码 / 多源 fallback）
+2. 再拆 `client.rs` 或 `*_source.rs`（HTTP / CLI / 本地缓存的具体源）
+3. 最后拆 `parser.rs`（payload 反序列化 + `QuotaInfo` 组装）
+4. `mod.rs` 只保留 `AiProvider` impl + 源编排（"先 API 后 CLI"这类业务规则属于这里）
+
+反模式：
+
+- **不要** 为只有一处使用的 helper 单独建文件 — 留在 `mod.rs` 内
+- **不要** 在 provider 模块内复制 `common/http_client` / `common/cli` / `common/runner` 已有的能力
+- **不要** 把 i18n 文案下沉到 provider 层；provider 只返回 `ProviderError` / `QuotaLabelSpec` / `QuotaDetailSpec`
+
+## Adding a New `ProviderError` Variant
+
+`ProviderError` 是 closed enum（不接受 `Custom(String)` 兜底），新增一个变体属于"语义级改动"，需要把语义在多个层级保持对齐：
+
+1. **加变体**：`src/providers/error.rs` 中添加 variant，并实现 `Display` 分支
+2. **降级到稳定语义**：
+   - `ProviderError::to_failure()` — 映射到 `ProviderFailure { reason, advice }`，让 reducer / selector 在不感知具体错误的情况下展示
+   - `ProviderError::error_kind()` — 映射到 `ErrorKind`，让 refresh 调度器分类（决定是否计入连续失败、是否触发 retry 提示等）
+3. **HTTP 升级路径**：如果新错误可能来自 transport 层，更新 `ProviderError::classify()`，把对应的 `HttpError::HttpStatus { code, .. }` 升级到这个变体
+4. **i18n 文案**：在 `locales/<lang>.yml` 中**每一种语言**都加上对应的 `provider.failure.<key>.*` 文案；`src/i18n.rs` 的测试会捕获缺失
+5. **selector 格式化**：`src/application/selectors/format.rs::format_failure_message` 增加分支（如有专属 advice，也要在 `format_failure_advice` 处理）
+6. **避免**：
+   - 不要在 `anyhow::Context` 里写用户可见 remediation —— 那些只会留在日志里，不会进入 `ProviderFailure`
+   - 不要在 provider 层硬编码语言相关文案 —— 用 `ProviderError` 表达语义，让 selector 决定文案
+   - 不要把"特定 provider 才出现"的错误塞进通用变体 —— 如果只有一两个 provider 触发，保留为 `Unavailable { message }` 或 `FetchFailed { message }` 内的结构化信息更合适
+7. **测试**：在 `src/providers/error_tests.rs` 中补 `error_kind()` / `to_failure()` 的映射用例，以及 `classify()` 对相关 `HttpError` 的分类用例
+
 ## Constraints
 
 - Providers run on background threads (via `smol::unblock`). They must be `Send + Sync`.
