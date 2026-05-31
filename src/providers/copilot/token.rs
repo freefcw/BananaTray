@@ -49,6 +49,15 @@ struct TokenCache {
     cached_cli_token: Option<String>,
 }
 
+impl TokenCache {
+    fn should_refresh(&self, now: Instant) -> bool {
+        match self.last_resolve {
+            Some(last_resolve) => now.duration_since(last_resolve) > CACHE_DURATION,
+            None => true,
+        }
+    }
+}
+
 /// 进程级 token 缓存。
 ///
 /// OAuth / CLI token 来源来自进程外共享配置，缓存也按进程共享。
@@ -89,12 +98,11 @@ pub fn resolve_token(memory_token: Option<&str>) -> CopilotTokenStatus {
 
     // ③④ 以下为隐式自动检测来源，使用缓存避免频繁 I/O 和进程 fork
     let now = Instant::now();
-    let mut cache = TOKEN_CACHE.lock().unwrap();
+    let mut cache = TOKEN_CACHE
+        .lock()
+        .expect("copilot token cache lock poisoned");
 
-    let should_refresh = cache.last_resolve.is_none()
-        || now.duration_since(cache.last_resolve.unwrap()) > CACHE_DURATION;
-
-    if should_refresh {
+    if cache.should_refresh(now) {
         cache.cached_oauth_token = read_copilot_oauth_token();
         cache.cached_cli_token = read_copilot_cli_keychain_token();
         cache.last_resolve = Some(now);
@@ -223,7 +231,9 @@ fn read_copilot_cli_keychain_token() -> Option<String> {
 
 #[cfg(test)]
 pub(crate) fn set_test_cache(oauth: Option<&str>, cli: Option<&str>) {
-    let mut cache = TOKEN_CACHE.lock().unwrap();
+    let mut cache = TOKEN_CACHE
+        .lock()
+        .expect("copilot token cache lock poisoned");
     cache.cached_oauth_token = oauth.map(str::to_string);
     cache.cached_cli_token = cli.map(str::to_string);
     cache.last_resolve = Some(Instant::now());
