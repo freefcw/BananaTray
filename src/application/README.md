@@ -45,7 +45,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
-- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；`EditNewApi` 的磁盘读取委托给 `NewApiEffect::LoadConfig`
+- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename`，不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；`EditNewApi` 的磁盘读取委托给 `NewApiEffect::LoadConfig`
 - **NewAPI 删除流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除
 
 测试文件：`reducer_tests.rs`

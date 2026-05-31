@@ -25,15 +25,15 @@ pub(super) fn submit_newapi(
     divisor: Option<f64>,
     effects: &mut Vec<AppEffect>,
 ) {
-    let is_editing = matches!(
-        session.settings_ui.modal,
-        SettingsModalState::EditingNewApi(_)
-    );
-    let original_filename = session
-        .settings_ui
-        .modal
-        .newapi_edit_data()
-        .map(|d| d.original_filename.clone());
+    let (base_url, original_filename, is_editing) =
+        match session.settings_ui.modal.newapi_edit_data() {
+            Some(edit_data) => (
+                edit_data.base_url.clone(),
+                Some(edit_data.original_filename.clone()),
+                true,
+            ),
+            None => (base_url, None, false),
+        };
 
     let config = NewApiConfig {
         display_name,
@@ -44,7 +44,7 @@ pub(super) fn submit_newapi(
     };
 
     // ── 预注册 Provider ID：确保热重载后 Provider 立即可见 ──
-    // 编辑模式下 URL 为只读，所以 ID 不会变化，仅需处理新增场景。
+    // 编辑模式使用 EditingNewApi 中的原始 URL，Provider 身份不受 action payload 影响。
     let new_id = ProviderId::Custom(crate::models::newapi_provider_id(&base_url));
     if !session
         .settings

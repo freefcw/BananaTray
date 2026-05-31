@@ -405,6 +405,46 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
 }
 
 #[test]
+fn submit_newapi_in_edit_mode_keeps_original_base_url_identity() {
+    use crate::models::NewApiEditData;
+
+    let mut session = make_session();
+    let original_id = ProviderId::Custom("old-site-com:newapi".to_string());
+    let payload_id = ProviderId::Custom("changed-site-com:newapi".to_string());
+    session.settings.provider.set_enabled(&original_id, true);
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
+        display_name: "Old Name".to_string(),
+        base_url: "https://old-site.com".to_string(),
+        cookie: "old_cookie".to_string(),
+        user_id: None,
+        divisor: None,
+        original_filename: "original-file.yaml".to_string(),
+    });
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SubmitNewApi {
+            display_name: "Updated Name".to_string(),
+            base_url: "https://changed-site.com".to_string(),
+            cookie: "new_cookie".to_string(),
+            user_id: None,
+            divisor: None,
+        },
+    );
+
+    assert!(session.settings.provider.is_enabled(&original_id));
+    assert!(!session.settings.provider.is_enabled(&payload_id));
+    assert_eq!(session.settings_ui.selected_provider, original_id);
+    assert!(has_effect(&effects, |e| {
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, is_editing }))
+            if config.base_url == "https://old-site.com"
+            && *original_filename == Some("original-file.yaml".to_string())
+            && *is_editing
+        )
+    }));
+}
+
+#[test]
 fn cancel_add_newapi_clears_editing_state() {
     use crate::models::NewApiEditData;
 
