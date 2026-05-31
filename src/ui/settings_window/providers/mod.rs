@@ -5,7 +5,7 @@ mod sidebar;
 pub(crate) mod token_input_panel;
 
 use super::SettingsView;
-use crate::application::settings_providers_tab_view_state;
+use crate::application::{settings_providers_tab_view_state, SettingsProviderRightPaneViewState};
 use crate::theme::Theme;
 use gpui::{div, px, Context, Div, ParentElement, Styled, Window};
 
@@ -32,28 +32,25 @@ impl SettingsView {
             .py(px(20.0))
             .child(div().w_full().h_full().bg(theme.border.subtle));
 
-        // 状态同步：退出添加模式后释放表单输入实体
-        if !view_state.adding_newapi && self.newapi_inputs.is_some() {
+        // 状态同步：退出 NewAPI 表单后释放输入实体
+        let is_newapi_form = matches!(
+            view_state.right_pane,
+            SettingsProviderRightPaneViewState::NewApiForm { .. }
+        );
+        if !is_newapi_form && self.newapi_inputs.is_some() {
             self.clear_newapi_inputs();
         }
 
-        // 右侧面板：三态切换
-        let right_panel = if view_state.adding_newapi {
-            // NewAPI 表单
-            let is_editing = view_state.editing_newapi_data.is_some();
-            self.render_newapi_form(
-                is_editing,
-                view_state.editing_newapi_data.as_ref(),
-                theme,
-                window,
-                cx,
-            )
-        } else if view_state.adding_provider {
-            // Provider 选择列表
-            self.render_provider_picker(&view_state.available_providers, theme, cx)
-        } else {
-            // Provider 详情
-            self.render_provider_detail_panel(&view_state.detail, theme, cx)
+        let right_panel = match &view_state.right_pane {
+            SettingsProviderRightPaneViewState::NewApiForm { edit_data } => {
+                self.render_newapi_form(edit_data.is_some(), edit_data.as_ref(), theme, window, cx)
+            }
+            SettingsProviderRightPaneViewState::ProviderPicker => {
+                self.render_provider_picker(&view_state.available_providers, theme, cx)
+            }
+            SettingsProviderRightPaneViewState::Detail => {
+                self.render_provider_detail_panel(&view_state.detail, theme, cx)
+            }
         };
 
         div()

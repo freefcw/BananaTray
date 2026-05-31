@@ -23,7 +23,8 @@ pub use selectors::{
     OverviewQuotaItem, ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction,
     ProviderEmptyViewState, ProviderPanelViewState, QuotaDisplayViewState, QuotaVisibilityItem,
     RefreshTarget, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
-    SettingsProviderListItemViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
+    SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
+    SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]

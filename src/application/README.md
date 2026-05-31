@@ -83,7 +83,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 |------|------|
 | `mod.rs` | ViewModel 类型定义（含 `OverviewQuotaItem`）+ 公共 re-export（含 D-Bus DTO） |
 | `tray.rs` | 弹窗面板 ViewModel（header / provider detail / nav / global actions） |
-| `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers） |
+| `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers / 右侧面板 enum） |
 | `dbus_dto.rs` | D-Bus JSON DTO（`DBusQuotaSnapshot` 等）+ 格式化函数，跨平台可测试 |
 | `debug.rs` | Debug Tab ViewModel（系统信息、日志捕获、调试刷新） |
 | `format.rs` | 共享格式化函数（时间、百分比、quota 文本） |

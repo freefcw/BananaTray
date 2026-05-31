@@ -72,6 +72,65 @@ fn settings_providers_tab_respects_order_and_selection() {
 }
 
 #[test]
+fn settings_providers_tab_right_pane_defaults_to_detail() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(
+        view_state.right_pane,
+        SettingsProviderRightPaneViewState::Detail
+    );
+}
+
+#[test]
+fn settings_providers_tab_right_pane_reports_provider_picker() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+    session.settings_ui.modal = SettingsModalState::AddingProvider;
+
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(
+        view_state.right_pane,
+        SettingsProviderRightPaneViewState::ProviderPicker
+    );
+}
+
+#[test]
+fn settings_providers_tab_right_pane_reports_newapi_form() {
+    use crate::models::NewApiEditData;
+
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+    let edit_data = NewApiEditData {
+        display_name: "Relay".to_string(),
+        base_url: "https://relay.example.com".to_string(),
+        cookie: "c=1".to_string(),
+        user_id: None,
+        divisor: None,
+        original_filename: "relay.yaml".to_string(),
+    };
+    session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data.clone());
+
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(
+        view_state.right_pane,
+        SettingsProviderRightPaneViewState::NewApiForm {
+            edit_data: Some(edit_data)
+        }
+    );
+}
+
+#[test]
 fn settings_provider_detail_reports_disabled_usage() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();

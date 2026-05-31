@@ -11,7 +11,7 @@ ViewModel 选择器层，从 `AppSession` 中派生 UI 所需的 ViewModel 结�
 | 文件 | 输入 | 输出 | 职责 |
 |------|------|------|------|
 | `tray.rs` | `&AppSession` | `HeaderViewState`, `ProviderDetailViewState`, `GlobalActionsViewState` | 弹窗面板的所有 ViewModel |
-| `settings.rs` | `&AppSession` | `SettingsProvidersTabViewState` | 设置窗口 Provider 管理页 |
+| `settings.rs` | `&AppSession` | `SettingsProvidersTabViewState` | 设置窗口 Provider 管理页；右侧面板用 `SettingsProviderRightPaneViewState` 表达 detail / picker / NewAPI form 三态 |
 | `dbus_dto.rs` | `&AppSession` | `DBusQuotaSnapshot` | D-Bus JSON DTO：扁平化配额快照，供 GNOME Shell Extension 消费 |
 | `debug.rs` | `&AppSession` + `DebugContext` | `DebugTabViewState` | Debug Tab（系统信息、日志捕获） |
 | `issue_report.rs` | `&AppSession` + `IssueReportContext` | `IssueReport` | About 页 Issue 上报（环境 + 日志 → GitHub URL） |
@@ -27,7 +27,7 @@ ViewModel 选择器层，从 `AppSession` 中派生 UI 所需的 ViewModel 结�
 | 测试文件 | 覆盖范围 |
 |----------|---------|
 | `tray_tests.rs` | header/provider detail/nav/global actions 全场景 |
-| `settings_tests.rs` | provider list/detail/available providers/quota visibility |
+| `settings_tests.rs` | provider list/detail/right pane/available providers/quota visibility |
 | `debug_tests.rs` | debug info text/system info/log capture |
 | `issue_report_tests.rs` | issue report 生成/URL 编码/日志截断/provider 状态 |
 | `dbus_dto.rs` (内联 `#[cfg(test)]`) | StatusLevel/ConnectionStatus/ProviderId 格式化、QuotaEntry used/remaining/credit 模式、Snapshot JSON round-trip |
