@@ -163,7 +163,7 @@ mod tests {
         let expected_primary =
             dirs::config_dir().map(|d| d.join(spec.cache_db_config_relative_path));
         assert_eq!(
-            candidates.first().map(|p| p.clone()),
+            candidates.first().cloned(),
             expected_primary,
             "primary candidate should be dirs::config_dir()/{}, got: {:?}",
             spec.cache_db_config_relative_path,
@@ -206,7 +206,7 @@ mod tests {
         assert!(
             candidates
                 .iter()
-                .all(|p| p.ends_with(&spec.cache_db_config_relative_path)),
+                .all(|p| p.ends_with(spec.cache_db_config_relative_path)),
             "all candidates should end with the spec-relative path, got: {:?}",
             candidates
         );

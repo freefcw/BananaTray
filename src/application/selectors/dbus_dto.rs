@@ -341,6 +341,6 @@ mod tests {
         assert_eq!(parsed["schema_version"].as_u64(), Some(1));
         assert!(parsed.get("providers").is_some());
         assert!(parsed.get("header").is_some());
-        assert!(parsed["providers"].as_array().unwrap().len() >= 1);
+        assert!(!parsed["providers"].as_array().unwrap().is_empty());
     }
 }

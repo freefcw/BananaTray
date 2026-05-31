@@ -295,21 +295,6 @@ pub(crate) fn query_auth_status_json(
     cache_source::query_auth_status_json(conn, spec)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_mask_secret_short() {
-        assert_eq!(mask_secret("short"), "***");
-    }
-
-    #[test]
-    fn test_mask_secret_long() {
-        assert_eq!(mask_secret("abcdefgh12345678"), "abcd…5678");
-    }
-}
-
 /// 使用候选路径列表执行 pgrep，避免 GUI 环境下 PATH 缺失导致找不到 pgrep。
 #[allow(dead_code)]
 fn run_pgrep() -> Result<std::process::Output> {
@@ -329,4 +314,19 @@ fn run_pgrep() -> Result<std::process::Output> {
     Err(last_error
         .map(|e| anyhow::anyhow!("pgrep not available: {e}"))
         .unwrap_or_else(|| anyhow::anyhow!("pgrep not available")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mask_secret_short() {
+        assert_eq!(mask_secret("short"), "***");
+    }
+
+    #[test]
+    fn test_mask_secret_long() {
+        assert_eq!(mask_secret("abcdefgh12345678"), "abcd…5678");
+    }
 }

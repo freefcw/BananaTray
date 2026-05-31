@@ -409,7 +409,7 @@ mod tests {
         let candidates = copilot_config_candidates();
         let expected_primary = dirs::config_dir().map(|d| d.join("github-copilot"));
         assert_eq!(
-            candidates.first().map(|p| p.clone()),
+            candidates.first().cloned(),
             expected_primary,
             "primary candidate should be dirs::config_dir()/github-copilot"
         );
