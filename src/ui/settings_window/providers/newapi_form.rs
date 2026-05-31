@@ -44,15 +44,18 @@ fn render_field_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
     col
 }
 
-/// 渲染单个表单字段（标签 + InputState 输入框）
-#[allow(clippy::too_many_arguments)]
-fn render_form_field(
+struct FieldSpec<'a> {
     id: &'static str,
-    label: &str,
-    hint: Option<&str>,
-    input_entity: &Entity<InputState>,
+    label: &'a str,
+    hint: Option<&'a str>,
     is_focused: bool,
     margin_top: Pixels,
+}
+
+/// 渲染单个表单字段（标签 + InputState 输入框）
+fn render_form_field(
+    field: FieldSpec<'_>,
+    input_entity: &Entity<InputState>,
     theme: &Theme,
     window: &mut Window,
     cx: &App,
@@ -60,7 +63,7 @@ fn render_form_field(
     let focus_handle = input_entity.read(cx).focus_handle(cx);
 
     let input_div = div()
-        .id(id)
+        .id(field.id)
         .key_context("Input")
         .track_focus(&focus_handle)
         .w_full()
@@ -72,7 +75,7 @@ fn render_form_field(
         .rounded(px(8.0))
         .bg(theme.bg.card)
         .border_1()
-        .border_color(if is_focused {
+        .border_color(if field.is_focused {
             theme.text.accent
         } else {
             theme.border.strong
@@ -89,8 +92,8 @@ fn render_form_field(
     div()
         .flex_col()
         .gap(px(6.0))
-        .mt(margin_top)
-        .child(render_field_label(label, hint, theme))
+        .mt(field.margin_top)
+        .child(render_field_label(field.label, field.hint, theme))
         .child(input_div.child(div().flex_1().overflow_hidden().child(input_entity.clone())))
 }
 
@@ -98,14 +101,9 @@ fn render_form_field(
 ///
 /// Cookie 等长文本字段使用 TextareaState entity 直接渲染，样式与 render_form_field 对齐，
 /// 使用 BananaTray 的 Theme 而非 adabraka-ui 的内置主题，保证视觉一致性。
-#[allow(clippy::too_many_arguments)]
 fn render_textarea_field(
-    id: &'static str,
-    label: &str,
-    hint: Option<&str>,
+    field: FieldSpec<'_>,
     textarea_entity: &Entity<TextareaState>,
-    is_focused: bool,
-    margin_top: Pixels,
     theme: &Theme,
     window: &mut Window,
     cx: &App,
@@ -113,7 +111,7 @@ fn render_textarea_field(
     let focus_handle = textarea_entity.read(cx).focus_handle(cx);
 
     let textarea_div = div()
-        .id(id)
+        .id(field.id)
         .key_context("Textarea")
         .track_focus(&focus_handle)
         .w_full()
@@ -124,7 +122,7 @@ fn render_textarea_field(
         .rounded(px(8.0))
         .bg(theme.bg.card)
         .border_1()
-        .border_color(if is_focused {
+        .border_color(if field.is_focused {
             theme.text.accent
         } else {
             theme.border.strong
@@ -142,8 +140,8 @@ fn render_textarea_field(
     div()
         .flex_col()
         .gap(px(6.0))
-        .mt(margin_top)
-        .child(render_field_label(label, hint, theme))
+        .mt(field.margin_top)
+        .child(render_field_label(field.label, field.hint, theme))
         .child(textarea_div.child(textarea_entity.clone()))
 }
 
@@ -221,14 +219,15 @@ fn render_readonly_field(
 
 impl SettingsView {
     /// 确保 NewAPI 表单输入状态已创建（编辑模式时预填已有配置数据）
-    fn ensure_newapi_inputs(&mut self, edit_data: Option<&NewApiEditData>, cx: &mut Context<Self>) {
-        if self.newapi_inputs.is_some() {
-            return;
-        }
-        self.newapi_inputs = Some(match edit_data {
+    fn ensure_newapi_inputs(
+        &mut self,
+        edit_data: Option<&NewApiEditData>,
+        cx: &mut Context<Self>,
+    ) -> &NewApiFormInputs {
+        self.newapi_inputs.get_or_insert_with(|| match edit_data {
             Some(data) => NewApiFormInputs::new_edit(data, cx),
             None => NewApiFormInputs::new_add(cx),
-        });
+        })
     }
 
     /// 清除所有 NewAPI 表单输入状态
@@ -245,8 +244,7 @@ impl SettingsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        self.ensure_newapi_inputs(edit_data, cx);
-        let inputs = self.newapi_inputs.as_ref().unwrap();
+        let inputs = self.ensure_newapi_inputs(edit_data, cx).clone();
 
         let focused = inputs.focused_states(window, cx);
 
@@ -305,12 +303,14 @@ impl SettingsView {
             )
             // ── 表单字段 ──
             .child(render_form_field(
-                "newapi-name",
-                &t!("newapi.field.name"),
-                Some(&t!("newapi.field.name.placeholder")),
+                FieldSpec {
+                    id: "newapi-name",
+                    label: &t!("newapi.field.name"),
+                    hint: Some(&t!("newapi.field.name.placeholder")),
+                    is_focused: focused[0],
+                    margin_top: px(24.0),
+                },
                 &inputs.name,
-                focused[0],
-                px(24.0),
                 theme,
                 window,
                 cx,
@@ -326,46 +326,54 @@ impl SettingsView {
                 )
             } else {
                 render_form_field(
-                    "newapi-url",
-                    &t!("newapi.field.url"),
-                    Some(&t!("newapi.field.url.placeholder")),
+                    FieldSpec {
+                        id: "newapi-url",
+                        label: &t!("newapi.field.url"),
+                        hint: Some(&t!("newapi.field.url.placeholder")),
+                        is_focused: focused[1],
+                        margin_top: px(16.0),
+                    },
                     &inputs.url,
-                    focused[1],
-                    px(16.0),
                     theme,
                     window,
                     cx,
                 )
             })
             .child(render_textarea_field(
-                "newapi-cookie",
-                &t!("newapi.field.cookie"),
-                Some(&t!("newapi.field.cookie.hint")),
+                FieldSpec {
+                    id: "newapi-cookie",
+                    label: &t!("newapi.field.cookie"),
+                    hint: Some(&t!("newapi.field.cookie.hint")),
+                    is_focused: focused[2],
+                    margin_top: px(16.0),
+                },
                 &inputs.cookie,
-                focused[2],
-                px(16.0),
                 theme,
                 window,
                 cx,
             ))
             .child(render_form_field(
-                "newapi-userid",
-                &t!("newapi.field.user_id"),
-                Some(&t!("newapi.field.user_id.placeholder")),
+                FieldSpec {
+                    id: "newapi-userid",
+                    label: &t!("newapi.field.user_id"),
+                    hint: Some(&t!("newapi.field.user_id.placeholder")),
+                    is_focused: focused[3],
+                    margin_top: px(16.0),
+                },
                 &inputs.user_id,
-                focused[3],
-                px(16.0),
                 theme,
                 window,
                 cx,
             ))
             .child(render_form_field(
-                "newapi-divisor",
-                &t!("newapi.field.divisor"),
-                Some(&t!("newapi.field.divisor.placeholder")),
+                FieldSpec {
+                    id: "newapi-divisor",
+                    label: &t!("newapi.field.divisor"),
+                    hint: Some(&t!("newapi.field.divisor.placeholder")),
+                    is_focused: focused[4],
+                    margin_top: px(16.0),
+                },
                 &inputs.divisor,
-                focused[4],
-                px(16.0),
                 theme,
                 window,
                 cx,

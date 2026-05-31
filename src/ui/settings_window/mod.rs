@@ -48,6 +48,7 @@ pub(crate) fn register_runtime_hooks() {
 // ============================================================================
 
 /// NewAPI 表单输入状态（使用 adabraka-ui InputState，支持鼠标选择、光标闪烁等）
+#[derive(Clone)]
 pub(crate) struct NewApiFormInputs {
     pub name: Entity<InputState>,
     pub url: Entity<InputState>,
@@ -60,79 +61,44 @@ impl NewApiFormInputs {
     /// 新增模式：创建空表单
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
         Self {
-            name: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.name.placeholder").to_string().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            url: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.url.placeholder").to_string().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            cookie: cx.new(|cx| {
-                let mut s = TextareaState::new(cx);
-                s.placeholder = t!("newapi.field.cookie.placeholder").to_string().into();
-                s
-            }),
-            user_id: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.user_id.placeholder").to_string().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            divisor: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.divisor.placeholder").to_string().into();
-                s.trim_on_blur = false;
-                s
-            }),
+            name: newapi_input(cx, t!("newapi.field.name.placeholder").to_string(), ""),
+            url: newapi_input(cx, t!("newapi.field.url.placeholder").to_string(), ""),
+            cookie: newapi_textarea(cx, t!("newapi.field.cookie.placeholder").to_string(), ""),
+            user_id: newapi_input(cx, t!("newapi.field.user_id.placeholder").to_string(), ""),
+            divisor: newapi_input(cx, t!("newapi.field.divisor.placeholder").to_string(), ""),
         }
     }
 
     /// 编辑模式：用已有数据预填表单
     pub fn new_edit(data: &crate::models::NewApiEditData, cx: &mut Context<SettingsView>) -> Self {
         Self {
-            name: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.name.placeholder").to_string().into();
-                s.content = data.display_name.clone().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            url: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.url.placeholder").to_string().into();
-                s.content = data.base_url.clone().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            cookie: cx.new(|cx| {
-                let mut s = TextareaState::new(cx);
-                s.placeholder = t!("newapi.field.cookie.placeholder").to_string().into();
-                s.content = data.cookie.clone().into();
-                s
-            }),
-            user_id: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.user_id.placeholder").to_string().into();
-                s.content = data.user_id.as_deref().unwrap_or("").to_string().into();
-                s.trim_on_blur = false;
-                s
-            }),
-            divisor: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("newapi.field.divisor.placeholder").to_string().into();
-                s.content = data
-                    .divisor
+            name: newapi_input(
+                cx,
+                t!("newapi.field.name.placeholder").to_string(),
+                data.display_name.clone(),
+            ),
+            url: newapi_input(
+                cx,
+                t!("newapi.field.url.placeholder").to_string(),
+                data.base_url.clone(),
+            ),
+            cookie: newapi_textarea(
+                cx,
+                t!("newapi.field.cookie.placeholder").to_string(),
+                data.cookie.clone(),
+            ),
+            user_id: newapi_input(
+                cx,
+                t!("newapi.field.user_id.placeholder").to_string(),
+                data.user_id.clone().unwrap_or_default(),
+            ),
+            divisor: newapi_input(
+                cx,
+                t!("newapi.field.divisor.placeholder").to_string(),
+                data.divisor
                     .map(|d| (d as u64).to_string())
-                    .unwrap_or_default()
-                    .into();
-                s.trim_on_blur = false;
-                s
-            }),
+                    .unwrap_or_default(),
+            ),
         }
     }
 
@@ -146,6 +112,33 @@ impl NewApiFormInputs {
             self.divisor.read(cx).focus_handle(cx).is_focused(window),
         ]
     }
+}
+
+fn newapi_input(
+    cx: &mut Context<SettingsView>,
+    placeholder: String,
+    content: impl Into<String>,
+) -> Entity<InputState> {
+    cx.new(|cx| {
+        let mut state = InputState::new(cx);
+        state.placeholder = placeholder.into();
+        state.content = content.into().into();
+        state.trim_on_blur = false;
+        state
+    })
+}
+
+fn newapi_textarea(
+    cx: &mut Context<SettingsView>,
+    placeholder: String,
+    content: impl Into<String>,
+) -> Entity<TextareaState> {
+    cx.new(|cx| {
+        let mut state = TextareaState::new(cx);
+        state.placeholder = placeholder.into();
+        state.content = content.into().into();
+        state
+    })
 }
 
 /// Token 输入框的 view-local 草稿状态。
@@ -187,16 +180,11 @@ impl SettingsView {
         saved_hotkey: &str,
         cx: &mut Context<Self>,
     ) -> Entity<HotkeyInputState> {
-        if self.global_hotkey_input.is_none() {
-            let initial_hotkey = hotkey_value_from_saved_hotkey(saved_hotkey);
-            self.global_hotkey_input = Some(cx.new(|cx| match initial_hotkey {
-                Some(hotkey) => HotkeyInputState::with_hotkey(cx, hotkey),
-                None => HotkeyInputState::new(cx),
-            }));
-            self.global_hotkey_synced_value = Some(saved_hotkey.to_string());
-        }
+        let input = match &self.global_hotkey_input {
+            Some(input) => input.clone(),
+            None => self.create_global_hotkey_input(saved_hotkey, cx),
+        };
 
-        let input = self.global_hotkey_input.as_ref().unwrap().clone();
         if self.global_hotkey_synced_value.as_deref() != Some(saved_hotkey) {
             let synced_hotkey = hotkey_value_from_saved_hotkey(saved_hotkey);
             input.update(cx, |input, cx| {
@@ -205,6 +193,21 @@ impl SettingsView {
             self.global_hotkey_synced_value = Some(saved_hotkey.to_string());
         }
 
+        input
+    }
+
+    fn create_global_hotkey_input(
+        &mut self,
+        saved_hotkey: &str,
+        cx: &mut Context<Self>,
+    ) -> Entity<HotkeyInputState> {
+        let initial_hotkey = hotkey_value_from_saved_hotkey(saved_hotkey);
+        let input = cx.new(|cx| match initial_hotkey {
+            Some(hotkey) => HotkeyInputState::with_hotkey(cx, hotkey),
+            None => HotkeyInputState::new(cx),
+        });
+        self.global_hotkey_input = Some(input.clone());
+        self.global_hotkey_synced_value = Some(saved_hotkey.to_string());
         input
     }
 

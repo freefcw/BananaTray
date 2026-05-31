@@ -1,4 +1,4 @@
-use super::components::{render_dark_card, render_divider, render_section_header};
+use super::components::{render_dark_card, render_divider, render_section_header, IconSwitchRow};
 use super::SettingsView;
 use crate::application::{AppAction, GlobalHotkeyError, SettingChange};
 use crate::models::AppSettings;
@@ -59,12 +59,14 @@ impl SettingsView {
             .child(
                 render_dark_card(theme)
                     .child(Self::render_icon_switch_row(
-                        "src/icons/switch.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_LOGIN).into(),
-                        &t!("settings.start_at_login"),
-                        &t!("settings.start_at_login.desc"),
-                        login_checked,
+                        IconSwitchRow {
+                            icon_path: "src/icons/switch.svg",
+                            icon_color: rgb(ICON_FG).into(),
+                            icon_bg: rgb(ICON_BG_LOGIN).into(),
+                            title: &t!("settings.start_at_login"),
+                            description: &t!("settings.start_at_login.desc"),
+                            enabled: login_checked,
+                        },
                         theme,
                         move |_, window, cx| {
                             runtime::dispatch_in_window(
@@ -98,12 +100,14 @@ impl SettingsView {
                     .child(render_divider(theme))
                     // Quota Notifications
                     .child(Self::render_icon_switch_row(
-                        "src/icons/status.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_NOTIF).into(),
-                        &t!("settings.session_quota_notifications"),
-                        &t!("settings.session_quota_notifications.desc"),
-                        notif_checked,
+                        IconSwitchRow {
+                            icon_path: "src/icons/status.svg",
+                            icon_color: rgb(ICON_FG).into(),
+                            icon_bg: rgb(ICON_BG_NOTIF).into(),
+                            title: &t!("settings.session_quota_notifications"),
+                            description: &t!("settings.session_quota_notifications.desc"),
+                            enabled: notif_checked,
+                        },
                         theme,
                         move |_, window, cx| {
                             runtime::dispatch_in_window(
@@ -119,12 +123,14 @@ impl SettingsView {
                     .child(render_divider(theme))
                     // Notification Sound
                     .child(Self::render_icon_switch_row(
-                        "src/icons/usage.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_SOUND).into(),
-                        &t!("settings.notification_sound"),
-                        &t!("settings.notification_sound.desc"),
-                        sound_checked,
+                        IconSwitchRow {
+                            icon_path: "src/icons/usage.svg",
+                            icon_color: rgb(ICON_FG).into(),
+                            icon_bg: rgb(ICON_BG_SOUND).into(),
+                            title: &t!("settings.notification_sound"),
+                            description: &t!("settings.notification_sound.desc"),
+                            enabled: sound_checked,
+                        },
                         theme,
                         move |_, window, cx| {
                             runtime::dispatch_in_window(

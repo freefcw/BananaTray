@@ -43,17 +43,20 @@ pub(super) fn render_divider(theme: &Theme) -> Div {
 // 带彩色圆形图标的设置行（基于公共 render_icon_row 组件）
 // ============================================================================
 
+pub(super) struct IconSwitchRow<'a> {
+    pub icon_path: &'static str,
+    pub icon_color: Hsla,
+    pub icon_bg: Hsla,
+    pub title: &'a str,
+    pub description: &'a str,
+    pub enabled: bool,
+}
+
 impl SettingsView {
     /// 渲染带彩色圆形背景图标的开关行
     /// 快捷函数：render_icon_row + render_toggle_switch 组合
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_icon_switch_row<F>(
-        icon_path: &'static str,
-        icon_color: Hsla,
-        icon_bg: Hsla,
-        title: &str,
-        description: &str,
-        enabled: bool,
+        row: IconSwitchRow<'_>,
         theme: &Theme,
         on_click: F,
     ) -> Div
@@ -61,13 +64,13 @@ impl SettingsView {
         F: Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
     {
         render_icon_row(
-            icon_path,
-            icon_color,
-            icon_bg,
-            title,
-            description,
+            row.icon_path,
+            row.icon_color,
+            row.icon_bg,
+            row.title,
+            row.description,
             theme,
-            render_toggle_switch(enabled, px(44.0), px(24.0), px(18.0), theme)
+            render_toggle_switch(row.enabled, px(44.0), px(24.0), px(18.0), theme)
                 .flex_shrink_0()
                 .cursor_pointer()
                 .on_mouse_down(MouseButton::Left, on_click),

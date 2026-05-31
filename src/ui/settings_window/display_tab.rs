@@ -1,4 +1,4 @@
-use super::components::{render_dark_card, render_divider, render_section_header};
+use super::components::{render_dark_card, render_divider, render_section_header, IconSwitchRow};
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
@@ -149,12 +149,14 @@ impl SettingsView {
                 render_dark_card(theme)
                     // Show Dashboard Button
                     .child(Self::render_icon_switch_row(
-                        "src/icons/overview.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_DASHBOARD).into(),
-                        &t!("settings.show_dashboard"),
-                        &t!("settings.show_dashboard.desc"),
-                        settings.display.show_dashboard_button,
+                        IconSwitchRow {
+                            icon_path: "src/icons/overview.svg",
+                            icon_color: rgb(ICON_FG).into(),
+                            icon_bg: rgb(ICON_BG_DASHBOARD).into(),
+                            title: &t!("settings.show_dashboard"),
+                            description: &t!("settings.show_dashboard.desc"),
+                            enabled: settings.display.show_dashboard_button,
+                        },
                         theme,
                         {
                             let state = self.state.clone();
@@ -173,12 +175,14 @@ impl SettingsView {
                     .child(render_divider(theme))
                     // Show Refresh Button
                     .child(Self::render_icon_switch_row(
-                        "src/icons/refresh.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_REFRESH).into(),
-                        &t!("settings.show_refresh"),
-                        &t!("settings.show_refresh.desc"),
-                        settings.display.show_refresh_button,
+                        IconSwitchRow {
+                            icon_path: "src/icons/refresh.svg",
+                            icon_color: rgb(ICON_FG).into(),
+                            icon_bg: rgb(ICON_BG_REFRESH).into(),
+                            title: &t!("settings.show_refresh"),
+                            description: &t!("settings.show_refresh.desc"),
+                            enabled: settings.display.show_refresh_button,
+                        },
                         theme,
                         {
                             let state = self.state.clone();
@@ -201,12 +205,14 @@ impl SettingsView {
                 theme,
             ))
             .child(render_dark_card(theme).child(Self::render_icon_switch_row(
-                "src/icons/advanced.svg",
-                rgb(ICON_FG).into(),
-                rgb(ICON_BG_DEBUG).into(),
-                &t!("settings.show_debug_tab"),
-                &t!("settings.show_debug_tab.desc"),
-                settings.display.show_debug_tab,
+                IconSwitchRow {
+                    icon_path: "src/icons/advanced.svg",
+                    icon_color: rgb(ICON_FG).into(),
+                    icon_bg: rgb(ICON_BG_DEBUG).into(),
+                    title: &t!("settings.show_debug_tab"),
+                    description: &t!("settings.show_debug_tab.desc"),
+                    enabled: settings.display.show_debug_tab,
+                },
                 theme,
                 {
                     let state = self.state.clone();
