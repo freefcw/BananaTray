@@ -1,3 +1,4 @@
+use crate::providers::common::config_paths;
 use log::debug;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -161,22 +162,7 @@ fn read_copilot_oauth_token() -> Option<String> {
 /// 但 VSCode 扩展在 macOS 上可能将数据存储在 `~/Library/Application Support/` 下。
 /// 同时扫描两个位置以确保覆盖。
 fn copilot_config_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-
-    // 主候选：dirs::config_dir() 解析的平台标准路径
-    if let Some(config_dir) = dirs::config_dir() {
-        candidates.push(config_dir.join("github-copilot"));
-    }
-
-    // Fallback：Copilot CLI 遵循 XDG 约定，在 macOS 上也可能使用 ~/.config
-    if let Some(home) = dirs::home_dir() {
-        let xdg_path = home.join(".config").join("github-copilot");
-        if !candidates.contains(&xdg_path) {
-            candidates.push(xdg_path);
-        }
-    }
-
-    candidates
+    config_paths::config_dir_with_xdg_fallback("github-copilot")
 }
 
 /// 从 Copilot 扩展的 JSON 内容中提取 oauth_token。

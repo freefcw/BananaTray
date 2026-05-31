@@ -32,7 +32,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
 - **`ProviderError::to_failure()` / `error_kind()`** — maps provider errors to stable `ProviderFailure` and `ErrorKind`; final locale-specific message generation belongs to selector/UI
-- **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers)
+- **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers, config path candidates)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`src/builtin_provider_manifest.rs`** — single compile-time manifest for built-in providers; feeds both `ProviderKind` generation and built-in registration
@@ -161,7 +161,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 反模式：
 
 - **不要** 为只有一处使用的 helper 单独建文件 — 留在 `mod.rs` 内
-- **不要** 在 provider 模块内复制 `common/http_client` / `common/cli` / `common/runner` 已有的能力
+- **不要** 在 provider 模块内复制 `common/http_client` / `common/cli` / `common/runner` / `common/config_paths` 已有的能力
 - **不要** 把 i18n 文案下沉到 provider 层；provider 只返回 `ProviderError` / `QuotaLabelSpec` / `QuotaDetailSpec`
 
 ## Adding a New `ProviderError` Variant

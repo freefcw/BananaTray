@@ -22,6 +22,13 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`enriched_path()` / `enrich_path(path)`** — 补充 `~/.local/bin`、`~/.bun/bin`、`~/.cargo/bin`、`~/.npm-global/bin`、`~/.amp/bin`、Homebrew 和系统路径
 - **`locate_executable(binary)`** — 先查绝对路径和当前 `PATH`，再按共享候选目录兜底定位可执行文件
 
+### `config_paths.rs` — 配置目录候选路径
+
+为读取本地应用配置的 Provider 提供统一的候选路径构造：
+
+- **`config_dir_with_xdg_fallback(relative_path)`** — 先使用 `dirs::config_dir()` 解析平台标准 config 根目录，再追加 `~/.config/` fallback，并自动去重
+- 覆盖 Cursor、Copilot、Windsurf / Antigravity 这类本地配置扫描场景，保留 macOS `~/Library/Application Support` 与 XDG fallback 双路径扫描能力
+
 ### `http_client.rs` — HTTP 客户端（ureq）
 
 为 API 类 Provider（Gemini, Custom YAML 等）提供统一的 HTTP 请求层：
@@ -55,14 +62,15 @@ providers/claude/         → cli.rs + runner.rs
 providers/codex/          → runner.rs + http_client.rs
 providers/amp.rs          → cli.rs
 providers/kiro.rs         → cli.rs
-providers/copilot/        → http_client.rs + jwt.rs
+providers/copilot/        → config_paths.rs + http_client.rs + jwt.rs
 providers/gemini/         → http_client.rs
 providers/kimi/           → http_client.rs
-providers/cursor/         → http_client.rs
+providers/cursor/         → config_paths.rs + http_client.rs
 providers/minimax/        → http_client.rs
-providers/codeium_family/ → http_client.rs
+providers/codeium_family/ → config_paths.rs + http_client.rs
 providers/windsurf/       → http_client.rs
 providers/custom/         → http_client.rs
 ```
 
-`path_resolver.rs` 是 `cli.rs` / `runner.rs` 的内部依赖，不由 provider facade 直接拼路径规则。
+`path_resolver.rs` 是 `cli.rs` / `runner.rs` 的内部依赖，不由 provider facade 直接拼路径规则。`config_paths.rs`
+只负责平台 config 根目录和 XDG fallback 候选，不读取文件、不决定 provider 级错误语义。

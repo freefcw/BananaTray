@@ -1,4 +1,5 @@
 use super::super::spec::CodeiumFamilySpec;
+use crate::providers::common::config_paths;
 use crate::providers::{ProviderError, ProviderResult};
 use log::debug;
 use rusqlite::Connection;
@@ -10,28 +11,7 @@ pub(in crate::providers::codeium_family) fn cache_db_path_candidates(
     // Windsurf / Antigravity 都是 VS Code 系 Electron 应用：
     // macOS 使用 ~/Library/Application Support，Linux 使用 XDG config。
     // dirs::config_dir() 已自动适配平台，无需 cfg! 分支。
-    let config_relative = PathBuf::from(spec.cache_db_config_relative_path);
-    let mut candidates = Vec::new();
-
-    // 主候选：dirs::config_dir() 解析的平台标准路径
-    if let Some(config_dir) = dirs::config_dir() {
-        push_unique(&mut candidates, config_dir.join(&config_relative));
-    }
-
-    // Fallback：当 XDG_CONFIG_HOME 非默认时，应用可能仍在 ~/.config/ 下留有数据。
-    // macOS 上此路径与主候选不同，会被 push_unique 保留；
-    // Linux 上此路径与主候选相同，会被 push_unique 去重。
-    if let Some(home) = dirs::home_dir() {
-        push_unique(&mut candidates, home.join(".config").join(&config_relative));
-    }
-
-    candidates
-}
-
-fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
-    if !paths.contains(&path) {
-        paths.push(path);
-    }
+    config_paths::config_dir_with_xdg_fallback(spec.cache_db_config_relative_path)
 }
 
 pub(in crate::providers::codeium_family) fn cache_db_path(
@@ -210,20 +190,5 @@ mod tests {
             "all candidates should end with the spec-relative path, got: {:?}",
             candidates
         );
-    }
-
-    #[test]
-    fn test_push_unique_adds_new_path() {
-        let mut paths = vec![PathBuf::from("/a")];
-        push_unique(&mut paths, PathBuf::from("/b"));
-        assert_eq!(paths.len(), 2);
-        assert_eq!(paths[1], PathBuf::from("/b"));
-    }
-
-    #[test]
-    fn test_push_unique_skips_duplicate() {
-        let mut paths = vec![PathBuf::from("/a")];
-        push_unique(&mut paths, PathBuf::from("/a"));
-        assert_eq!(paths.len(), 1, "duplicate should be skipped");
     }
 }
