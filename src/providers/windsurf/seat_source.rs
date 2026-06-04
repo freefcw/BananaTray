@@ -151,28 +151,99 @@ fn build_seat_quota(
 }
 
 fn get_api_key(spec: &CodeiumFamilySpec) -> Result<String> {
+    get_api_key_from_candidates(spec, codeium_family::cache_db_path_candidates(spec))
+}
+
+fn get_api_key_from_candidates(
+    spec: &CodeiumFamilySpec,
+    candidates: impl IntoIterator<Item = std::path::PathBuf>,
+) -> Result<String> {
     use rusqlite::{Connection, OpenFlags};
 
-    let db_path = codeium_family::cache_db_path(spec)?;
+    /// 累积错误：保留之前的错误信息作为上下文，避免诊断信息丢失。
+    fn accumulate_error(slot: &mut Option<anyhow::Error>, new_err: anyhow::Error) {
+        if let Some(prev) = slot.take() {
+            *slot = Some(anyhow::anyhow!("{}; previously: {}", new_err, prev));
+        } else {
+            *slot = Some(new_err);
+        }
+    }
 
-    let conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .with_context(|| format!("cannot open {} cache DB", spec.log_label))?;
-    let auth_status_json = codeium_family::query_auth_status_json(&conn, spec)?;
-    let auth_status: serde_json::Value = serde_json::from_str(&auth_status_json)
-        .with_context(|| "invalid auth status JSON while reading apiKey")?;
+    let mut last_error: Option<anyhow::Error> = None;
 
-    auth_status
-        .get("apiKey")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .map(ToString::to_string)
-        .ok_or_else(|| {
+    for db_path in candidates {
+        if !db_path.exists() {
+            continue;
+        }
+
+        let conn = match Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+            Ok(conn) => conn,
+            Err(err) => {
+                accumulate_error(
+                    &mut last_error,
+                    anyhow::anyhow!(
+                        "cannot open {} cache DB at {}: {}",
+                        spec.log_label,
+                        db_path.display(),
+                        err
+                    ),
+                );
+                continue;
+            }
+        };
+
+        let auth_status_json = match codeium_family::query_auth_status_json(&conn, spec) {
+            Ok(value) => value,
+            Err(err) => {
+                accumulate_error(&mut last_error, err.into());
+                continue;
+            }
+        };
+
+        let auth_status: serde_json::Value = match serde_json::from_str(&auth_status_json) {
+            Ok(value) => value,
+            Err(err) => {
+                accumulate_error(
+                    &mut last_error,
+                    anyhow::anyhow!(
+                        "invalid auth status JSON while reading apiKey from {}: {}",
+                        db_path.display(),
+                        err
+                    ),
+                );
+                continue;
+            }
+        };
+
+        if let Some(api_key) = auth_status
+            .get("apiKey")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            return Ok(api_key.to_string());
+        }
+
+        accumulate_error(
+            &mut last_error,
             ProviderError::parse_failed(&format!(
-                "cannot find apiKey in auth status: {}",
+                "cannot find apiKey in auth status from {}: {}",
+                db_path.display(),
                 spec.auth_status_key_candidates.join(", ")
             ))
-            .into()
-        })
+            .into(),
+        );
+    }
+
+    if let Some(err) = last_error {
+        return Err(err);
+    }
+
+    // 所有 candidate 路径都不存在
+    Err(ProviderError::unavailable(&format!(
+        "{} local cache database not found",
+        spec.log_label
+    ))
+    .into())
 }
 
 fn build_request_body(
@@ -480,17 +551,56 @@ mod tests {
     }
 
     #[test]
+    fn test_get_api_key_falls_back_to_legacy_db() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let fallback_dir = tempfile::tempdir().unwrap();
+        let primary_db = primary_dir.path().join("state.vscdb");
+        let fallback_db = fallback_dir.path().join("state.vscdb");
+
+        write_auth_status_db(
+            &primary_db,
+            "windsurfAuthStatus",
+            r#"{"email":"new@devin.ai"}"#,
+        );
+        write_auth_status_db(
+            &fallback_db,
+            "windsurfAuthStatus",
+            r#"{"apiKey":"legacy-key"}"#,
+        );
+
+        let api_key = get_api_key_from_candidates(
+            &codeium_family::WINDSURF_SPEC,
+            vec![primary_db, fallback_db],
+        )
+        .unwrap();
+
+        assert_eq!(api_key, "legacy-key");
+    }
+
+    #[test]
     #[cfg(target_os = "macos")]
-    fn test_info_plist_from_binary_path() {
+    fn test_info_plist_from_binary_path_devin() {
         let path = info_plist_from_binary_path(
-            "/Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm",
+            "/Applications/Devin.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm",
         );
 
         assert_eq!(
             path,
-            Some(PathBuf::from(
-                "/Applications/Windsurf.app/Contents/Info.plist"
-            ))
+            Some(PathBuf::from("/Applications/Devin.app/Contents/Info.plist"))
         );
+    }
+
+    fn write_auth_status_db(path: &std::path::Path, key: &str, value: &str) {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            [key, value],
+        )
+        .unwrap();
     }
 }

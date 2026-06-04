@@ -228,6 +228,7 @@ fn list_interesting_cache_keys(conn: &Connection) -> Result<Vec<String>> {
         "SELECT key FROM ItemTable \
          WHERE key LIKE '%AuthStatus%' \
             OR key LIKE '%windsurf%' \
+            OR key LIKE '%devin%' \
             OR key LIKE '%antigravity%' \
             OR key LIKE '%codeium%' \
          ORDER BY key",
@@ -284,8 +285,8 @@ pub(crate) fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<Process
     live_source::detect_process(spec)
 }
 
-pub(crate) fn cache_db_path(spec: &CodeiumFamilySpec) -> ProviderResult<PathBuf> {
-    cache_source::cache_db_path(spec)
+pub(crate) fn cache_db_path_candidates(spec: &CodeiumFamilySpec) -> Vec<PathBuf> {
+    cache_source::cache_db_path_candidates(spec)
 }
 
 pub(crate) fn query_auth_status_json(
