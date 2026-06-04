@@ -483,7 +483,10 @@ impl SettingsModalState {
 
     /// 当前是否正在展示脚本 Provider 表单（新增或编辑）。
     pub fn is_script_provider_form(&self) -> bool {
-        matches!(self, Self::AddingScriptProvider | Self::EditingScriptProvider(_))
+        matches!(
+            self,
+            Self::AddingScriptProvider | Self::EditingScriptProvider(_)
+        )
     }
 
     /// 若处于编辑 NewAPI 模式，返回回填数据的引用。

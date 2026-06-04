@@ -185,7 +185,9 @@ pub struct SettingsProvidersTabViewState {
 pub enum SettingsProviderRightPaneViewState {
     Detail,
     ProviderPicker,
-    NewApiForm { edit_data: Option<NewApiEditData> },
+    NewApiForm {
+        edit_data: Option<NewApiEditData>,
+    },
     ScriptProviderForm {
         edit_data: Option<ScriptProviderEditData>,
         testing: bool,

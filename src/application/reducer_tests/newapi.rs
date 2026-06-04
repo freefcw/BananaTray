@@ -607,7 +607,10 @@ fn enter_add_script_provider_sets_exclusive_flag() {
 
     let effects = reduce(&mut session, AppAction::EnterAddScriptProvider);
 
-    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingScriptProvider);
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::AddingScriptProvider
+    );
     assert!(has_render(&effects));
 }
 
@@ -618,7 +621,10 @@ fn enter_add_script_provider_clears_confirming_flags() {
 
     let effects = reduce(&mut session, AppAction::EnterAddScriptProvider);
 
-    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingScriptProvider);
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::AddingScriptProvider
+    );
     assert!(has_render(&effects));
 }
 

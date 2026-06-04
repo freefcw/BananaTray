@@ -17,7 +17,9 @@ pub(super) fn select_settings_provider(
 ) {
     // 中转站表单打开时忽略侧栏点击：
     // 避免 selected_provider 与表单编辑目标不一致的分叉状态
-    if session.settings_ui.modal.is_newapi_form() || session.settings_ui.modal.is_script_provider_form() {
+    if session.settings_ui.modal.is_newapi_form()
+        || session.settings_ui.modal.is_script_provider_form()
+    {
         return;
     }
     session.settings_ui.selected_provider = id;

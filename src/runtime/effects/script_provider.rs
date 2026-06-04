@@ -269,8 +269,8 @@ fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
     if let ProviderId::Custom(ref custom_id) = provider_id {
         if let Some(edit_data) = generator::read_script_provider_config(custom_id) {
             let mut s = state.borrow_mut();
-            s.session.settings_ui.adding_script_provider = true;
-            s.session.settings_ui.editing_script_provider = Some(edit_data);
+            s.session.settings_ui.modal =
+                crate::application::SettingsModalState::EditingScriptProvider(edit_data);
             s.session.settings_ui.script_provider_test_result = None;
         } else {
             warn!(

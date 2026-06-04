@@ -61,7 +61,11 @@ pub(super) fn submit_script_provider(
     mut config: ScriptProviderConfig,
     effects: &mut Vec<AppEffect>,
 ) {
-    let is_editing = session.settings_ui.modal.script_provider_edit_data().is_some();
+    let is_editing = session
+        .settings_ui
+        .modal
+        .script_provider_edit_data()
+        .is_some();
     let original_yaml_filename = session
         .settings_ui
         .modal
@@ -142,7 +146,11 @@ pub(super) fn delete_script_provider(
     provider_id: ProviderId,
     effects: &mut Vec<AppEffect>,
 ) {
-    if session.settings_ui.modal.is_confirming_delete_script_provider() {
+    if session
+        .settings_ui
+        .modal
+        .is_confirming_delete_script_provider()
+    {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     effects.push(ContextEffect::Render.into());
@@ -161,7 +169,11 @@ pub(super) fn cancel_delete_script_provider(
     session: &mut AppSession,
     effects: &mut Vec<AppEffect>,
 ) {
-    if session.settings_ui.modal.is_confirming_delete_script_provider() {
+    if session
+        .settings_ui
+        .modal
+        .is_confirming_delete_script_provider()
+    {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     effects.push(ContextEffect::Render.into());
