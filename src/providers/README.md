@@ -33,7 +33,7 @@ Provider abstraction layer and all 14 AI provider implementations.
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
 - **`ProviderError::to_failure()` / `error_kind()`** — maps provider errors to stable `ProviderFailure` and `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers, config path candidates)
-- **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Windsurf; provider-specific orchestration stays in each facade
+- **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Devin Desktop; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`src/builtin_provider_manifest.rs`** — single compile-time manifest for built-in providers; feeds both `ProviderKind` generation and built-in registration
 - **`register_providers!`** macro — consumes the manifest to declare private built-in provider modules and generate crate-internal `register_all()` function
@@ -74,7 +74,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
 | `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
-| `windsurf/` | Windsurf | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf/mod.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
+| `windsurf/` | Devin Desktop | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf/mod.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
 | `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro` | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo` | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
@@ -115,7 +115,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   - `codeium_family/cache_source.rs` handles SQLite/local cache fallback
   - `antigravity/mod.rs` owns `live -> cache`
   - `windsurf/mod.rs` owns `seat -> live -> cache`
-  - `windsurf/seat_source.rs` contains the Windsurf-only cloud source
+  - `windsurf/seat_source.rs` contains the Devin Desktop-only cloud source
 
 ## Adding a New Provider
 

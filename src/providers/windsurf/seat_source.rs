@@ -53,7 +53,7 @@ struct SeatResponse {
 
 pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     if spec.kind != crate::models::ProviderKind::Windsurf {
-        return Err(ProviderError::unavailable("seat API only available for Windsurf").into());
+        return Err(ProviderError::unavailable("seat API only available for Devin Desktop").into());
     }
 
     let api_key = get_api_key(spec)?;
@@ -219,13 +219,13 @@ fn detect_windsurf_app_version_platform(spec: &CodeiumFamilySpec) -> Option<Stri
                 .into_iter()
                 .find_map(|path| read_cf_bundle_short_version(&path))
         })
-        // Fallback：app bundle 路径异常或 CLI 安装时，尝试 windsurf --version
-        .or_else(read_windsurf_cli_version)
+        // Fallback：app bundle 路径异常或 CLI 安装时，尝试 devin/windsurf --version
+        .or_else(read_cli_version)
 }
 
 #[cfg(not(target_os = "macos"))]
 fn detect_windsurf_app_version_platform(_spec: &CodeiumFamilySpec) -> Option<String> {
-    read_windsurf_cli_version()
+    read_cli_version()
 }
 
 #[cfg(target_os = "macos")]
@@ -238,10 +238,12 @@ fn info_plist_from_binary_path(binary_path: &str) -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn info_plist_candidates() -> Vec<PathBuf> {
-    let mut candidates = vec![PathBuf::from(
-        "/Applications/Windsurf.app/Contents/Info.plist",
-    )];
+    let mut candidates = vec![
+        PathBuf::from("/Applications/Devin.app/Contents/Info.plist"),
+        PathBuf::from("/Applications/Windsurf.app/Contents/Info.plist"),
+    ];
     if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join("Applications/Devin.app/Contents/Info.plist"));
         candidates.push(home.join("Applications/Windsurf.app/Contents/Info.plist"));
     }
     candidates
@@ -268,12 +270,16 @@ fn read_cf_bundle_short_version(plist_path: &Path) -> Option<String> {
     }
 }
 
-/// 通过 `windsurf --version` CLI 读取版本号，作为所有平台的最终 fallback。
+/// 通过 CLI 读取版本号，作为所有平台的最终 fallback。
 ///
-/// macOS 上 Info.plist 不可用时（app bundle 路径异常、CLI 安装等），
-/// 以及 Linux 上，都可用此方法获取版本。
-fn read_windsurf_cli_version() -> Option<String> {
-    let output = Command::new("windsurf").arg("--version").output().ok()?;
+/// 优先尝试 `devin --version`（品牌重命名后的新命令），
+/// 失败则 fallback 到 `windsurf --version`（旧命令）。
+fn read_cli_version() -> Option<String> {
+    try_cli_version("devin").or_else(|| try_cli_version("windsurf"))
+}
+
+fn try_cli_version(cmd: &str) -> Option<String> {
+    let output = Command::new(cmd).arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
     }

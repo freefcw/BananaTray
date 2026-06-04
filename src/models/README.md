@@ -6,7 +6,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 
 ### `provider.rs` — Provider Identity
 
-- **`ProviderKind`** — enum of all supported providers (Claude, Gemini, Copilot, Codex, Kimi, Amp, Cursor, OpenCode, MiniMax, VertexAi, Kilo, Kiro, Antigravity, Windsurf, Custom). Generated from the crate-level `builtin_provider_manifest!` via the local `define_provider_kind!` macro.
+- **`ProviderKind`** — enum of all supported providers (Claude, Gemini, Copilot, Codex, Kimi, Amp, Cursor, OpenCode, MiniMax, VertexAi, Kilo, Kiro, Antigravity, Windsurf, Custom). Generated from the crate-level `builtin_provider_manifest!` via the local `define_provider_kind!` macro. `Windsurf` is now the compatibility key for Devin Desktop: the UI display name and icon have moved to Devin Desktop, but the enum value, persisted state, and internal key remain `Windsurf` / `"windsurf"` to avoid breaking user config.
   - `all()` — static slice of all variants (defines canonical ordering)
   - `id_key()` — lowercase string identifier used in settings serialization (e.g. `"claude"`, `"vertexai"`)
   - `from_id_key()` — reverse lookup from string

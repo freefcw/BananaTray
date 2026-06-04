@@ -83,8 +83,8 @@ mod tests {
     }
 
     #[test]
-    fn test_is_antigravity_process_rejects_windsurf() {
-        let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+    fn test_is_antigravity_process_rejects_devin_desktop() {
+        let line = "10733 /Applications/Devin.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.self-serve.windsurf.com --run_child --enable_lsp --extension_server_port 62503 --ide_name windsurf";
         assert!(!codeium_family::matches_process_line(
             line,
             &ANTIGRAVITY_SPEC

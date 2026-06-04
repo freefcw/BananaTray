@@ -29,7 +29,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Amp** | CLI (`amp usage`) | Monitorable | Full quota refresh |
 | **Cursor** | HTTP API (`cursor.com`) + local SQLite token | Monitorable | Full quota refresh |
 | **Antigravity** | Local language server API + local cache | Monitorable | Full quota refresh |
-| **Windsurf** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
+| **Devin Desktop** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | Monitorable | Full quota refresh |
 | **Custom YAML** | HTTP / CLI | Monitorable | Depends on the YAML plan |

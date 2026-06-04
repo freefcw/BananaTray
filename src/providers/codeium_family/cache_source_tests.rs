@@ -14,18 +14,19 @@ fn test_windsurf_spec() -> CodeiumFamilySpec {
     CodeiumFamilySpec {
         kind: crate::models::ProviderKind::Windsurf,
         provider_id: "windsurf:api",
-        display_name: "Windsurf",
-        brand_name: "Codeium",
-        icon_asset: "src/icons/provider-windsurf.svg",
-        dashboard_url: "https://windsurf.com/subscription/usage",
-        account_hint: "Windsurf account",
+        display_name: "Devin Desktop",
+        brand_name: "Cognition",
+        icon_asset: "src/icons/provider-devin-desktop.svg",
+        dashboard_url: "https://app.devin.ai",
+        account_hint: "Devin account",
         source_label: "local api",
-        log_label: "Windsurf",
+        log_label: "Devin Desktop",
         ide_name: "windsurf",
-        unavailable_message: "Windsurf live source and local cache are both unavailable",
-        cache_db_config_relative_path: "Windsurf/User/globalStorage/state.vscdb",
+        unavailable_message: "Devin Desktop live source and local cache are both unavailable",
+        cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
+        cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
         auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
-        process_markers: &["--ide_name windsurf", "/windsurf/", "/windsurf.app/"],
+        process_markers: &["--ide_name windsurf", "/devin.app/", "/devin/", ".devin/"],
         cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
         cache_max_age_secs: 0,
     }
@@ -36,10 +37,17 @@ fn test_cache_db_candidates_include_platform_config_path() {
     let spec = test_windsurf_spec();
     let candidates = cache_db_path_candidates(&spec);
 
-    let expected_suffix = std::path::Path::new("Windsurf/User/globalStorage/state.vscdb");
+    // 主路径：Devin
+    let expected_primary = std::path::Path::new("Devin/User/globalStorage/state.vscdb");
     assert!(candidates
         .iter()
-        .any(|path| path.ends_with(expected_suffix)));
+        .any(|path| path.ends_with(expected_primary)));
+
+    // 兜底路径：Windsurf
+    let expected_fallback = std::path::Path::new("Windsurf/User/globalStorage/state.vscdb");
+    assert!(candidates
+        .iter()
+        .any(|path| path.ends_with(expected_fallback)));
 }
 
 #[test]

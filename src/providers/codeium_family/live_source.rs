@@ -373,6 +373,7 @@ mod tests {
             ide_name: "antigravity",
             unavailable_message: "Antigravity live source and local cache are both unavailable",
             cache_db_config_relative_path: "Antigravity/User/globalStorage/state.vscdb",
+            cache_db_fallback_paths: &[],
             auth_status_key_candidates: &["antigravityAuthStatus"],
             process_markers: &[
                 "--app_data_dir antigravity",

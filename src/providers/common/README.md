@@ -27,7 +27,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 为读取本地应用配置的 Provider 提供统一的候选路径构造：
 
 - **`config_dir_with_xdg_fallback(relative_path)`** — 先使用 `dirs::config_dir()` 解析平台标准 config 根目录，再追加 `~/.config/` fallback，并自动去重
-- 覆盖 Cursor、Copilot、Windsurf / Antigravity 这类本地配置扫描场景，保留 macOS `~/Library/Application Support` 与 XDG fallback 双路径扫描能力
+- 覆盖 Cursor、Copilot、Devin Desktop（兼容旧 Windsurf 目录）/ Antigravity 这类本地配置扫描场景，保留 macOS `~/Library/Application Support` 与 XDG fallback 双路径扫描能力
 
 ### `http_client.rs` — HTTP 客户端（ureq）
 
@@ -68,7 +68,7 @@ providers/kimi/           → http_client.rs
 providers/cursor/         → config_paths.rs + http_client.rs
 providers/minimax/        → http_client.rs
 providers/codeium_family/ → config_paths.rs + http_client.rs
-providers/windsurf/       → http_client.rs
+providers/windsurf/       → http_client.rs（Devin Desktop / legacy Windsurf auth lookup。注：`windsurf` 目录与代码中各标识仍作为兼容稳定键/包名，对应界面上的 Devin Desktop）
 providers/custom/         → http_client.rs
 ```
 

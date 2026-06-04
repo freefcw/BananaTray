@@ -5,18 +5,26 @@ use log::debug;
 use rusqlite::Connection;
 use std::path::PathBuf;
 
-pub(in crate::providers::codeium_family) fn cache_db_path_candidates(
-    spec: &CodeiumFamilySpec,
-) -> Vec<PathBuf> {
-    // Windsurf / Antigravity 都是 VS Code 系 Electron 应用：
+pub(crate) fn cache_db_path_candidates(spec: &CodeiumFamilySpec) -> Vec<PathBuf> {
+    // Devin Desktop / Antigravity 都是 VS Code 系 Electron 应用：
     // macOS 使用 ~/Library/Application Support，Linux 使用 XDG config。
     // dirs::config_dir() 已自动适配平台，无需 cfg! 分支。
-    config_paths::config_dir_with_xdg_fallback(spec.cache_db_config_relative_path)
+    let mut candidates =
+        config_paths::config_dir_with_xdg_fallback(spec.cache_db_config_relative_path);
+
+    // 品牌迁移兜底：主路径不存在时尝试旧路径（例如 Windsurf → Devin 后旧 data dir 仍可用）
+    for fallback in spec.cache_db_fallback_paths {
+        for path in config_paths::config_dir_with_xdg_fallback(fallback) {
+            if !candidates.contains(&path) {
+                candidates.push(path);
+            }
+        }
+    }
+
+    candidates
 }
 
-pub(in crate::providers::codeium_family) fn cache_db_path(
-    spec: &CodeiumFamilySpec,
-) -> ProviderResult<PathBuf> {
+pub(crate) fn cache_db_path(spec: &CodeiumFamilySpec) -> ProviderResult<PathBuf> {
     let candidates = cache_db_path_candidates(spec);
 
     if candidates.is_empty() {
@@ -43,7 +51,7 @@ pub(in crate::providers::codeium_family) fn cache_db_path(
     )))
 }
 
-pub(in crate::providers::codeium_family) fn query_auth_status_json(
+pub(crate) fn query_auth_status_json(
     conn: &Connection,
     spec: &CodeiumFamilySpec,
 ) -> ProviderResult<String> {
@@ -68,7 +76,7 @@ pub(in crate::providers::codeium_family) fn query_auth_status_json(
     )))
 }
 
-pub(super) fn query_cached_plan_info(
+pub(crate) fn query_cached_plan_info(
     conn: &Connection,
     spec: &CodeiumFamilySpec,
 ) -> ProviderResult<String> {
@@ -110,16 +118,17 @@ mod tests {
         CodeiumFamilySpec {
             kind: ProviderKind::Windsurf,
             provider_id: "windsurf:api",
-            display_name: "Windsurf",
-            brand_name: "Windsurf",
-            icon_asset: "src/icons/provider-windsurf.svg",
+            display_name: "Devin Desktop",
+            brand_name: "Cognition",
+            icon_asset: "src/icons/provider-devin-desktop.svg",
             dashboard_url: "",
-            account_hint: "Windsurf account",
+            account_hint: "Devin account",
             source_label: "local cache",
-            log_label: "Windsurf",
+            log_label: "Devin Desktop",
             ide_name: "windsurf",
-            unavailable_message: "Windsurf local cache unavailable",
-            cache_db_config_relative_path: "Windsurf/User/globalStorage/state.vscdb",
+            unavailable_message: "Devin Desktop local cache unavailable",
+            cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
+            cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
             auth_status_key_candidates: &["windsurfAuthStatus"],
             process_markers: &[],
             cached_plan_info_key_candidates: &[],
@@ -180,14 +189,17 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_db_path_candidates_ends_with_spec_relative() {
+    fn test_cache_db_path_candidates_ends_with_known_relative() {
         let spec = windsurf_spec();
         let candidates = cache_db_path_candidates(&spec);
+        let all_relative: Vec<&str> = std::iter::once(spec.cache_db_config_relative_path)
+            .chain(spec.cache_db_fallback_paths.iter().copied())
+            .collect();
         assert!(
             candidates
                 .iter()
-                .all(|p| p.ends_with(spec.cache_db_config_relative_path)),
-            "all candidates should end with the spec-relative path, got: {:?}",
+                .all(|p| all_relative.iter().any(|rel| p.ends_with(rel))),
+            "all candidates should end with primary or fallback relative path, got: {:?}",
             candidates
         );
     }

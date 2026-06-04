@@ -1,16 +1,16 @@
-# Codeium-family Providers
+# Cognition-family Providers
 
-本文件说明 BananaTray 当前对 Antigravity / Windsurf 的共享实现方式。
+本文件说明 BananaTray 当前对 Antigravity / Devin Desktop 的共享实现方式。
 
 它是专题参考文档，不是 provider 注册表的完整契约。对外稳定边界请以 `docs/providers.md` 为准。
 
 ## 当前定位
 
-BananaTray 把 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in provider：
+BananaTray 把 **Antigravity** 和 **Devin Desktop** 视为两个独立的 built-in provider：
 
 - UI 中独立展示
 - 各自拥有独立的 metadata、图标和可用性判断
-- 共享一套底层 Codeium-family 实现
+- 共享一套底层 Cognition-family 实现
 
 共享的本地 source primitive 位于 `src/providers/codeium_family/`，具体 provider facade 分别位于 `src/providers/antigravity/` 和 `src/providers/windsurf/`。
 
@@ -23,7 +23,7 @@ BananaTray 把 **Antigravity** 和 **Windsurf** 视为两个独立的 built-in p
 - 本地 cache fallback
 - JSON / protobuf 解析
 
-Windsurf 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Windsurf facade 自己决定何时插入 seat API。
+Devin Desktop 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Devin Desktop facade 自己决定何时插入 seat API。
 
 provider facade 负责两类东西：
 
@@ -42,20 +42,20 @@ provider facade 负责两类东西：
 source orchestration 目前明确分开：
 
 - Antigravity：`live -> cache`
-- Windsurf：`seat -> live -> cache`
+- Devin Desktop：`seat -> live -> cache`
 
 这意味着：
 
-- 不要把 Windsurf 折叠成 Antigravity 的别名。
-- 也不要把 Windsurf 的云端 fallback 反向塞进共享流程逻辑里。
+- 不要把 Devin Desktop 折叠成 Antigravity 的别名。
+- 也不要把 Devin Desktop 的云端 fallback 反向塞进共享流程逻辑里。
 
 ## Refresh Path
 
 当前 refresh 策略保持为：
 
 1. Antigravity：优先尝试 live source，失败时回退本地 cache
-2. Windsurf：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
-3. Windsurf 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota
+2. Devin Desktop：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
+3. Devin Desktop 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota
 4. 所有来源都失败时返回结构化错误
 
 本地 cache 回退之前会做两道陈旧检查：
@@ -63,7 +63,7 @@ source orchestration 目前明确分开：
 - **mtime 闸**：`cache_source::read_refresh_data` 会遍历 cache DB 候选路径，选择第一份
   新鲜 cache。单个 DB 的新鲜度取 `state.vscdb`、`state.vscdb-wal`、
   `state.vscdb-journal` 三者中**最新的 mtime**作为 cache 实际活跃时间，超过
-  `spec.cache_max_age_secs`（Antigravity / Windsurf 当前都是 3 小时）即视为该候选
+  `spec.cache_max_age_secs`（Antigravity / Devin Desktop 当前都是 3 小时）即视为该候选
   整体快照不可信，并继续尝试后续候选；所有存在的候选都陈旧时才返回 `Unavailable`。
   之所以要看 sidecar：VS Code/Electron 系 SQLite 走 WAL 模式，新写入先到 `-wal`，
   主 DB 文件 mtime 在 checkpoint 之前可能远落后；只看主文件会把"还在活跃写入"的
@@ -72,7 +72,7 @@ source orchestration 目前明确分开：
   `remaining_fraction` 是过期数据，统一视为 100% 剩余并清除倒计时。
 
 `cache_source::is_available()` 与 `read_refresh_data()` 共用同一道 mtime 闸，避免本地
-quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Windsurf 的
+quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Devin Desktop 的
 provider-level `check_availability()` 还会单独接受"存在 cache DB"这个更弱条件，因为
 seat API 只需要从 DB 中读取 apiKey，不应该被陈旧 quota 快照阻断。
 
@@ -124,8 +124,8 @@ cargo run -- debug-codeium-family windsurf
 - 本地服务的参数格式和 marker 可能随上游版本变化。
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
-- Windsurf seat API 依赖本地 auth status 中的 `apiKey`，请求体里的版本号使用本机安装版本的最佳努力探测；探测不到时不发送版本字段。
-- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；Windsurf 周配额应优先采用 seat API 的实时 `weeklyQuotaRemainingPercent`。
+- Devin Desktop seat API 依赖本地 auth status 中的 `apiKey`，请求体里的版本号使用本机安装版本的最佳努力探测；探测不到时不发送版本字段。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；Devin Desktop 周配额应优先采用 seat API 的实时 `weeklyQuotaRemainingPercent`。
 
 ## Maintenance Rule
 
@@ -134,6 +134,6 @@ cargo run -- debug-codeium-family windsurf
 只有在以下场景才需要同步更新这里：
 
 - 修改 `codeium_family` 共享层边界
-- 修改 Antigravity / Windsurf 的差异建模方式
+- 修改 Antigravity / Devin Desktop 的差异建模方式
 - 修改 provider facade 的 source orchestration 顺序
 - 修改运行时校验命令或关键诊断入口

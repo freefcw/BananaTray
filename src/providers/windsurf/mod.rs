@@ -177,13 +177,26 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_windsurf_process() {
-        let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --csrf_token abc --extension_server_port 55114 --ide_name windsurf";
+    fn test_matches_devin_desktop_process() {
+        let line = "10733 /Applications/Devin.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.self-serve.windsurf.com --run_child --enable_lsp --extension_server_port 62503 --ide_name windsurf";
         assert!(codeium_family::matches_process_line(line, &WINDSURF_SPEC));
     }
 
     #[test]
-    fn test_matches_windsurf_linux_process() {
+    fn test_matches_devin_desktop_linux_process() {
+        let line = "3483 /usr/share/devin/resources/app/extensions/windsurf/bin/language_server_linux_x64 --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+        assert!(codeium_family::matches_process_line(line, &WINDSURF_SPEC));
+    }
+
+    #[test]
+    fn test_matches_legacy_windsurf_process_via_ide_name() {
+        // 尚未升级到 Devin 品牌的旧 Windsurf 安装，依赖 --ide_name windsurf 标记匹配
+        let line = "3483 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
+        assert!(codeium_family::matches_process_line(line, &WINDSURF_SPEC));
+    }
+
+    #[test]
+    fn test_matches_legacy_windsurf_linux_process() {
         let line = "3483 /usr/share/windsurf/resources/app/extensions/windsurf/bin/language_server_linux_x64 --api_server_url https://server.codeium.com --run_child --enable_lsp --extension_server_port 55114 --ide_name windsurf";
         assert!(codeium_family::matches_process_line(line, &WINDSURF_SPEC));
     }

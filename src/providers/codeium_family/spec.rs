@@ -14,6 +14,9 @@ pub struct CodeiumFamilySpec {
     pub ide_name: &'static str,
     pub unavailable_message: &'static str,
     pub cache_db_config_relative_path: &'static str,
+    /// 当主路径 (`cache_db_config_relative_path`) 不存在时，按序尝试的备选 DB 路径。
+    /// 典型场景：品牌重命名后 data dir 迁移（Windsurf → Devin），旧路径仍需兜底。
+    pub cache_db_fallback_paths: &'static [&'static str],
     pub auth_status_key_candidates: &'static [&'static str],
     pub process_markers: &'static [&'static str],
     /// 当 protobuf 解码失败时，尝试从这些 key 读取 JSON 格式的 cachedPlanInfo
@@ -36,6 +39,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     ide_name: "antigravity",
     unavailable_message: "Antigravity live source and local cache are both unavailable",
     cache_db_config_relative_path: "Antigravity/User/globalStorage/state.vscdb",
+    cache_db_fallback_paths: &[],
     auth_status_key_candidates: &["antigravityAuthStatus"],
     process_markers: &[
         "--app_data_dir antigravity",
@@ -48,27 +52,36 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     cache_max_age_secs: 3 * 60 * 60,
 };
 
+/// Devin Desktop（原 Windsurf）的 provider spec。
+///
+/// 2026-06 品牌重命名后：app bundle、data dir、CLI 已改为 Devin，
+/// 但内部协议（`--ide_name windsurf`、DB auth key、seat API endpoint）仍用 windsurf。
+/// `id_key` 保持 `"windsurf"` 以兼容已有用户设置。
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     kind: ProviderKind::Windsurf,
     provider_id: "windsurf:api",
-    display_name: "Windsurf",
-    brand_name: "Codeium",
-    icon_asset: "src/icons/provider-windsurf.svg",
-    dashboard_url: "https://windsurf.com/subscription/usage",
-    account_hint: "Windsurf account",
+    display_name: "Devin Desktop",
+    brand_name: "Cognition",
+    icon_asset: "src/icons/provider-devin-desktop.svg",
+    dashboard_url: "https://app.devin.ai",
+    account_hint: "Devin account",
     source_label: "local/cloud fallback",
-    log_label: "Windsurf",
-    ide_name: "windsurf",
-    unavailable_message: "Windsurf live source and local cache are both unavailable",
-    cache_db_config_relative_path: "Windsurf/User/globalStorage/state.vscdb",
+    log_label: "Devin Desktop",
+    ide_name: "windsurf", // 进程仍用 --ide_name windsurf，不可改
+    unavailable_message: "Devin Desktop live source and local cache are both unavailable",
+    cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
+    cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
     auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
     process_markers: &[
         "--ide_name windsurf",
+        "/devin.app/",
+        "/devin/",
+        ".devin/",
+        // legacy backward compat：尚未升级到 Devin 品牌的 Windsurf 安装
         "/windsurf/",
         ".windsurf/",
-        "/windsurf.app/",
     ],
     cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
-    // 3 小时：与 Antigravity 一致；Windsurf 仍有 seat_source 云端兜底
+    // 3 小时：与 Antigravity 一致；仍有 seat_source 云端兜底
     cache_max_age_secs: 3 * 60 * 60,
 };

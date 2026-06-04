@@ -1,8 +1,8 @@
 # src/providers/codeium_family/
 
-Codeium 系 Provider 的共享底层实现。
+Cognition 系 Provider 的共享底层实现。
 
-这里故意只放 **Antigravity / Windsurf** 都会长期复用的本地 source primitive，不负责完整的 source orchestration。
+这里故意只放 **Antigravity / Devin Desktop** 都会长期复用的本地 source primitive，不负责完整的 source orchestration。
 
 ## 架构
 
@@ -16,7 +16,7 @@ codeium_family/
 └── parse_strategy.rs — 同一领域数据的多种载荷解析（protobuf / JSON）
 ```
 
-Windsurf 专属的云端 seat management API 实现不在这里，而在 `src/providers/windsurf/seat_source.rs`。
+Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `src/providers/windsurf/seat_source.rs`。
 
 ## 共享层职责
 
@@ -33,9 +33,9 @@ Windsurf 专属的云端 seat management API 实现不在这里，而在 `src/pr
 
 这里**不负责**：
 
-- Antigravity / Windsurf 的 fallback 顺序
-- Windsurf seat API 调用
-- Windsurf seat + cache 的 quota 合并策略
+- Antigravity / Devin Desktop 的 fallback 顺序
+- Devin Desktop seat API 调用
+- Devin Desktop seat + cache 的 quota 合并策略
 
 ## Provider-Owned Orchestration
 
@@ -47,7 +47,7 @@ Antigravity
     ├─→ codeium_family::refresh_live()
     └─→ codeium_family::refresh_cache()
 
-Windsurf
+Devin Desktop
   refresh()
     ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly
     ├─→ codeium_family::refresh_live()
@@ -56,8 +56,8 @@ Windsurf
 
 这样拆的原因是：
 
-- Antigravity 和 Windsurf 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
-- Windsurf 的 seat API 是产品特有实时数据源，不应反向污染共享层
+- Antigravity 和 Devin Desktop 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
+- Devin Desktop 的 seat API 是产品特有实时数据源，不应反向污染共享层
 - 共享层保留为“本地 source primitive”，未来更容易继续复用或替换
 
 ## Runtime Source Labels
@@ -69,7 +69,7 @@ Windsurf
 - `seat api`
 - `seat api + local cache`
 
-`spec.source_label` 只是静态兜底文案；Windsurf 当前使用 `"local/cloud fallback"` 作为默认说明。
+`spec.source_label` 只是静态兜底文案；Devin Desktop 当前使用 `"local/cloud fallback"` 作为默认说明。
 
 ## `CodeiumFamilySpec`
 
@@ -112,13 +112,13 @@ SQLite WAL 模式下新写入先到 `-wal`，主 DB 文件 mtime 在 checkpoint 
 availability 语义刻意拆成两层：
 
 - `cache_source::is_available()` 表示本地 quota cache source 可用，要求 DB 存在且新鲜。
-- `cache_source::has_cache_db()` 只表示存在可尝试读取 auth / apiKey 的 DB。Windsurf
+- `cache_source::has_cache_db()` 只表示存在可尝试读取 auth / apiKey 的 DB。Devin Desktop
   provider-level `check_availability()` 使用这一层，让 seat API 不会被陈旧 quota 快照阻断。
 
 进入解析后还有第二道闸：
 
-- `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Windsurf）
-- `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Windsurf）
+- `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Devin Desktop）
+- `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Devin Desktop）
 
 两条路径都对单条 quota 的 `reset_at_unix` 做 `<= now` 判断：reset 时间已过 →
 服务端已经重置配额，缓存的 `remaining_fraction` 是过期数据，统一视为 100% 剩余
@@ -131,12 +131,12 @@ availability 语义刻意拆成两层：
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试
 
-Windsurf seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。
+Devin Desktop seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。
 
 ## 维护规则
 
 如果你在这里新增代码，先问一句：
 
-> 这是 Antigravity 和 Windsurf 都会共享的本地 primitive，还是只是某个 provider 的编排特例？
+> 这是 Antigravity 和 Devin Desktop 都会共享的本地 primitive，还是只是某个 provider 的编排特例？
 
 只有前者才应该进入 `codeium_family/`。
