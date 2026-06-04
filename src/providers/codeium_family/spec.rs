@@ -60,7 +60,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     kind: ProviderKind::Windsurf,
     provider_id: "windsurf:api",
-    display_name: "Devin Desktop",
+    display_name: "Devin",
     brand_name: "Cognition",
     icon_asset: "src/icons/provider-devin-desktop.svg",
     dashboard_url: "https://app.devin.ai",

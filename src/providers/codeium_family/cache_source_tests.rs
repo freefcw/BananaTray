@@ -14,7 +14,7 @@ fn test_windsurf_spec() -> CodeiumFamilySpec {
     CodeiumFamilySpec {
         kind: crate::models::ProviderKind::Windsurf,
         provider_id: "windsurf:api",
-        display_name: "Devin Desktop",
+        display_name: "Devin",
         brand_name: "Cognition",
         icon_asset: "src/icons/provider-devin-desktop.svg",
         dashboard_url: "https://app.devin.ai",
