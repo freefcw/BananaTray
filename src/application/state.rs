@@ -214,6 +214,22 @@ impl AppSession {
             .unwrap_or_else(default_builtin_provider_id)
     }
 
+    /// 检查 script provider ID 是否已被占用（用于生成唯一 ID）。
+    ///
+    /// 检查范围包括：已加载的自定义 provider、已启用 provider、
+    /// provider_order、sidebar_providers。
+    pub fn is_script_provider_id_occupied(&self, id: &str) -> bool {
+        let provider_id = ProviderId::Custom(id.to_string());
+        let key = provider_id.id_key();
+        self.provider_store
+            .custom_provider_ids()
+            .iter()
+            .any(|existing| existing.id_key() == key)
+            || self.settings.provider.enabled_providers.contains_key(&key)
+            || self.settings.provider.provider_order.contains(&key)
+            || self.settings.provider.sidebar_providers.contains(&key)
+    }
+
     pub fn default_provider_tab(&mut self) -> Option<NavTab> {
         if !self.has_enabled_providers() {
             return None;

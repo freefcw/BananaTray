@@ -3,7 +3,7 @@
 use super::super::{ScriptProviderFormInputs, SettingsView};
 use crate::application::AppAction;
 use crate::models::{
-    unique_script_provider_id, ProviderId, ScriptProviderConfig, ScriptProviderEditData,
+    unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
     ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 use crate::runtime;
@@ -537,33 +537,7 @@ impl SettingsView {
     fn unique_script_provider_id_for_name(&self, display_name: &str) -> String {
         let state = self.state.borrow();
         unique_script_provider_id(display_name, |id| {
-            let provider_id = ProviderId::Custom(id.to_string());
-            let key = provider_id.id_key();
-
-            state
-                .session
-                .provider_store
-                .custom_provider_ids()
-                .iter()
-                .any(|existing| existing.id_key() == key)
-                || state
-                    .session
-                    .settings
-                    .provider
-                    .enabled_providers
-                    .contains_key(&key)
-                || state
-                    .session
-                    .settings
-                    .provider
-                    .provider_order
-                    .contains(&key)
-                || state
-                    .session
-                    .settings
-                    .provider
-                    .sidebar_providers
-                    .contains(&key)
+            state.session.is_script_provider_id_occupied(id)
         })
     }
 

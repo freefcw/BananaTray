@@ -118,21 +118,7 @@ pub(super) fn submit_script_provider(
 
 fn unique_script_provider_id_for_session(session: &AppSession, display_name: &str) -> String {
     unique_script_provider_id_for_name(display_name, |id| {
-        let provider_id = ProviderId::Custom(id.to_string());
-        let key = provider_id.id_key();
-
-        session
-            .provider_store
-            .custom_provider_ids()
-            .iter()
-            .any(|existing| existing.id_key() == key)
-            || session
-                .settings
-                .provider
-                .enabled_providers
-                .contains_key(&key)
-            || session.settings.provider.provider_order.contains(&key)
-            || session.settings.provider.sidebar_providers.contains(&key)
+        session.is_script_provider_id_occupied(id)
     })
 }
 
