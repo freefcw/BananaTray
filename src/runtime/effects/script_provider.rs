@@ -278,6 +278,10 @@ fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
                 "ScriptProviderEffect::LoadConfig: failed to read config for {}",
                 custom_id
             );
+            crate::platform::notification::send_plain_notification(
+                rust_i18n::t!("script_provider.load_failed_title").as_ref(),
+                rust_i18n::t!("script_provider.load_failed_body").as_ref(),
+            );
         }
     }
 }

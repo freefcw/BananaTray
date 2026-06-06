@@ -816,6 +816,55 @@ fn script_provider_test_finished_ignores_stale_result() {
 }
 
 #[test]
+fn edit_script_provider_emits_load_config_effect() {
+    let mut session = make_session();
+    let id = ProviderId::Custom("ccswitch:script".to_string());
+
+    let effects = reduce(
+        &mut session,
+        AppAction::EditScriptProvider {
+            provider_id: id.clone(),
+        },
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::ScriptProvider(ScriptProviderEffect::LoadConfig { provider_id }))
+            if *provider_id == id
+    )));
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn edit_script_provider_clears_stale_test_state() {
+    let mut session = make_session();
+    session.settings_ui.script_provider_testing = true;
+    session.settings_ui.script_provider_pending_test_request_id = Some(42);
+    session.settings_ui.script_provider_test_result = Some(ScriptProviderTestResult {
+        success: true,
+        message: String::new(),
+        stdout: String::new(),
+        stderr: String::new(),
+        preview: None,
+    });
+    let id = ProviderId::Custom("ccswitch:script".to_string());
+
+    let _effects = reduce(
+        &mut session,
+        AppAction::EditScriptProvider {
+            provider_id: id.clone(),
+        },
+    );
+
+    assert!(!session.settings_ui.script_provider_testing);
+    assert_eq!(
+        session.settings_ui.script_provider_pending_test_request_id,
+        None
+    );
+    assert_eq!(session.settings_ui.script_provider_test_result, None);
+}
+
+#[test]
 fn delete_script_provider_produces_delete_effect() {
     let mut session = make_session();
     let id = ProviderId::Custom("ccswitch:script".to_string());

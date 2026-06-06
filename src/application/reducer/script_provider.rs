@@ -122,7 +122,14 @@ fn unique_script_provider_id_for_session(session: &AppSession, display_name: &st
     })
 }
 
-pub(super) fn edit_script_provider(provider_id: ProviderId, effects: &mut Vec<AppEffect>) {
+pub(super) fn edit_script_provider(
+    session: &mut AppSession,
+    provider_id: ProviderId,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.settings_ui.script_provider_testing = false;
+    session.settings_ui.script_provider_pending_test_request_id = None;
+    session.settings_ui.script_provider_test_result = None;
     effects.push(ScriptProviderEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
 }

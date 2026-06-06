@@ -287,6 +287,8 @@ script_provider.save_failed_title: "Could not save script provider"
 script_provider.save_failed_body: "The provider was not saved. Check file permissions and try again."
 script_provider.delete_partial_title: "Script provider removed"
 script_provider.delete_partial_body: "The provider was removed, but BananaTray could not delete the companion script file."
+script_provider.load_failed_title: "Could not load script provider"
+script_provider.load_failed_body: "The provider configuration could not be read. Check the YAML file and try again."
 script_provider.delete_failed_title: "Could not delete script provider"
 script_provider.delete_failed_body: "The provider files could not be removed. Check permissions and try again."
 

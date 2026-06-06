@@ -287,6 +287,8 @@ script_provider.save_failed_title: "无法保存脚本服务商"
 script_provider.save_failed_body: "Provider 未保存，请检查文件权限后重试。"
 script_provider.delete_partial_title: "脚本服务商已移除"
 script_provider.delete_partial_body: "Provider 已移除，但 BananaTray 未能删除配套脚本文件。"
+script_provider.load_failed_title: "无法加载脚本服务商"
+script_provider.load_failed_body: "无法读取 provider 配置文件，请检查 YAML 文件后重试。"
 script_provider.delete_failed_title: "无法删除脚本服务商"
 script_provider.delete_failed_body: "无法移除 provider 文件，请检查权限后重试。"
 

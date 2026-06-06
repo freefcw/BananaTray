@@ -132,7 +132,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             script_provider::submit_script_provider(session, config, &mut effects);
         }
         AppAction::EditScriptProvider { provider_id } => {
-            script_provider::edit_script_provider(provider_id, &mut effects);
+            script_provider::edit_script_provider(session, provider_id, &mut effects);
         }
         AppAction::DeleteScriptProvider { provider_id } => {
             script_provider::delete_script_provider(session, provider_id, &mut effects);
