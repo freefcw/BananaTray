@@ -133,7 +133,7 @@ fn prepare_process_group(command: &mut Command) {
 
     unsafe {
         command.pre_exec(|| {
-            if setpgid(0, 0) == -1 {
+            if libc::setpgid(0, 0) == -1 {
                 Err(std::io::Error::last_os_error())
             } else {
                 Ok(())
@@ -147,8 +147,10 @@ fn prepare_process_group(_command: &mut Command) {}
 
 #[cfg(unix)]
 fn kill_child_tree(child: &mut Child) {
-    unsafe {
-        let _ = kill(-(child.id() as i32), SIGKILL);
+    if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+        unsafe {
+            let _ = libc::kill(-pgid, libc::SIGKILL);
+        }
     }
     let _ = child.kill();
 }
@@ -156,15 +158,6 @@ fn kill_child_tree(child: &mut Child) {
 #[cfg(not(unix))]
 fn kill_child_tree(child: &mut Child) {
     let _ = child.kill();
-}
-
-#[cfg(unix)]
-const SIGKILL: i32 = 9;
-
-#[cfg(unix)]
-extern "C" {
-    fn setpgid(pid: i32, pgid: i32) -> i32;
-    fn kill(pid: i32, sig: i32) -> i32;
 }
 
 /// 统一处理非零退出码，避免各个 CLI provider 重复拼接错误文案。

@@ -679,6 +679,7 @@ dependencies = [
  "dirs",
  "fern",
  "interprocess",
+ "libc",
  "log",
  "notify-rust",
  "objc2",

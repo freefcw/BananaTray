@@ -70,6 +70,7 @@ rust-i18n = "3"
 sys-locale = "0.3"
 rusqlite = { version = "0.40", features = ["bundled"] }
 prost = "0.13"
+libc = "0.2.186"
 
 # -- macOS native deps --
 [target.'cfg(target_os = "macos")'.dependencies]
