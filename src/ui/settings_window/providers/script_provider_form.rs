@@ -244,10 +244,12 @@ fn looks_like_cf_challenge(result: &ScriptProviderTestResult) -> bool {
             .collect::<String>()
             .to_ascii_lowercase();
 
-        KEYWORDS.iter().any(|kw| haystack.contains(kw))
-            || haystack.contains("403")
-                && (haystack.contains("forbidden") || haystack.contains("blocked"))
-            || haystack.contains("503") && haystack.contains("unavailable")
+        let has_cf_keyword = KEYWORDS.iter().any(|kw| haystack.contains(kw));
+        let is_403_blocked = haystack.contains("403")
+            && (haystack.contains("forbidden") || haystack.contains("blocked"));
+        let is_503_unavailable = haystack.contains("503") && haystack.contains("unavailable");
+
+        has_cf_keyword || is_403_blocked || is_503_unavailable
     })
 }
 
