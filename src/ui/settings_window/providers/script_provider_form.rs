@@ -521,6 +521,7 @@ impl SettingsView {
             || provider_id.is_empty()
             || interpreter.is_empty()
             || script.trim().is_empty()
+            || timeout_secs == 0
         {
             return None;
         }
