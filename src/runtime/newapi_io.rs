@@ -143,12 +143,13 @@ fn write_script_provider_files(
     let script_backup = backup_existing_file(script_path)?;
     let yaml_backup = backup_existing_file(yaml_path)?;
 
-    if let Err(err) = replace_with_backup(script_tmp, script_path, script_backup.as_deref()) {
+    if let Err(err) = try_rename(script_tmp, script_path) {
+        restore_backup(script_path, script_backup.as_deref());
         restore_backup(yaml_path, yaml_backup.as_deref());
         return Err(err);
     }
 
-    if let Err(err) = replace_with_backup(yaml_tmp, yaml_path, yaml_backup.as_deref()) {
+    if let Err(err) = try_rename(yaml_tmp, yaml_path) {
         restore_backup(script_path, script_backup.as_deref());
         restore_backup(yaml_path, yaml_backup.as_deref());
         return Err(err);
@@ -210,17 +211,15 @@ fn backup_existing_file(path: &Path) -> Result<Option<PathBuf>, String> {
     Ok(Some(backup))
 }
 
-fn replace_with_backup(tmp: &Path, path: &Path, backup: Option<&Path>) -> Result<(), String> {
-    if let Err(e) = std::fs::rename(tmp, path) {
-        restore_backup(path, backup);
-        return Err(format!(
+fn try_rename(tmp: &Path, dest: &Path) -> Result<(), String> {
+    std::fs::rename(tmp, dest).map_err(|e| {
+        format!(
             "failed to replace {} from {}: {}",
-            path.display(),
+            dest.display(),
             tmp.display(),
             e
-        ));
-    }
-    Ok(())
+        )
+    })
 }
 
 fn restore_backup(path: &Path, backup: Option<&Path>) {
@@ -613,6 +612,53 @@ plan:
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "old script");
         assert!(!backup.exists());
+    }
+
+    #[test]
+    fn write_script_provider_files_rolls_back_script_when_yaml_rename_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let script_dir = dir.path().join("scripts");
+        std::fs::create_dir_all(&script_dir).unwrap();
+        let script_path = script_dir.join("test.py");
+        std::fs::write(&script_path, "old script").unwrap();
+
+        let script_tmp = script_dir.join("test.py.tmp");
+        let yaml_tmp = dir.path().join("test.yaml.tmp");
+        // yaml_path 的父目录不存在 → rename 必然失败
+        let yaml_path = dir.path().join("nonexistent_dir").join("test.yaml");
+
+        let err = write_script_provider_files(
+            &script_tmp,
+            &yaml_tmp,
+            &script_path,
+            &yaml_path,
+            "new script",
+            "new yaml",
+        )
+        .unwrap_err();
+
+        assert!(err.contains("failed to replace"));
+        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "old script");
+    }
+
+    #[test]
+    fn rollback_restores_both_files_after_partial_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let script_path = dir.path().join("script.py");
+        let yaml_path = dir.path().join("config.yaml");
+        std::fs::write(&script_path, "old script").unwrap();
+        std::fs::write(&yaml_path, "old yaml").unwrap();
+
+        // 模拟：备份两个文件，script rename 成功后 yaml rename 失败的回滚路径
+        let script_backup = backup_existing_file(&script_path).unwrap();
+        let yaml_backup = backup_existing_file(&yaml_path).unwrap();
+        std::fs::write(&script_path, "new script").unwrap();
+
+        restore_backup(&script_path, script_backup.as_deref());
+        restore_backup(&yaml_path, yaml_backup.as_deref());
+
+        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "old script");
+        assert_eq!(std::fs::read_to_string(&yaml_path).unwrap(), "old yaml");
     }
 
     #[test]
