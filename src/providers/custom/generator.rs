@@ -225,7 +225,7 @@ pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
             Ok(c) => c,
             Err(_) => continue,
         };
-        let def: CustomProviderDef = match serde_yml::from_str(&content) {
+        let def: CustomProviderDef = match serde_norway::from_str(&content) {
             Ok(d) => d,
             Err(_) => continue,
         };
@@ -268,7 +268,7 @@ pub fn read_script_provider_config(provider_custom_id: &str) -> Option<ScriptPro
             Ok(content) => content,
             Err(_) => continue,
         };
-        let def: CustomProviderDef = match serde_yml::from_str(&content) {
+        let def: CustomProviderDef = match serde_norway::from_str(&content) {
             Ok(def) => def,
             Err(_) => continue,
         };
@@ -524,7 +524,7 @@ mod tests {
         let yaml = generate_newapi_yaml(&config);
 
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).expect("Generated YAML should be valid");
+            serde_norway::from_str(&yaml).expect("Generated YAML should be valid");
 
         assert_eq!(def.id, "my-api-example-com:newapi");
         assert_eq!(def.metadata.display_name, "Test API");
@@ -552,7 +552,7 @@ mod tests {
         let yaml = generate_newapi_yaml(&config);
 
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).expect("Generated YAML with user_id should be valid");
+            serde_norway::from_str(&yaml).expect("Generated YAML with user_id should be valid");
 
         // URL 始终为 /api/user/self，user_id 仅用于 header
         let step = def.plan.steps.first().expect("should have one step");
@@ -591,7 +591,7 @@ mod tests {
         assert!(yaml.contains(r#"display_name: "My \"API\" Site""#));
 
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).expect("YAML with special chars should be valid");
+            serde_norway::from_str(&yaml).expect("YAML with special chars should be valid");
         assert_eq!(def.metadata.display_name, r#"My "API" Site"#);
     }
 
@@ -602,7 +602,7 @@ mod tests {
         let yaml = generate_newapi_yaml(config);
         let filename = generate_filename(config);
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).expect("Generated YAML must be parseable");
+            serde_norway::from_str(&yaml).expect("Generated YAML must be parseable");
         parse_newapi_edit_data(&def, filename).expect("parse_newapi_edit_data must succeed")
     }
 

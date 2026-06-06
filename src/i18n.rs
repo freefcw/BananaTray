@@ -86,7 +86,7 @@ pub(crate) fn test_locale_guard(locale: &str) -> TestLocaleGuard {
 mod tests {
     use super::*;
     use regex::Regex;
-    use serde_yml::Value;
+    use serde_norway::Value;
     use std::collections::{BTreeMap, BTreeSet};
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -211,7 +211,7 @@ mod tests {
 
     fn locale_keys(contents: &str) -> BTreeSet<String> {
         let map: BTreeMap<String, Value> =
-            serde_yml::from_str(contents).expect("locale file should be valid YAML");
+            serde_norway::from_str(contents).expect("locale file should be valid YAML");
         map.into_keys().filter(|key| key != "_version").collect()
     }
 

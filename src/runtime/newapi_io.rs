@@ -311,7 +311,7 @@ fn find_script_provider_paths_in_dir(
         let Ok(content) = std::fs::read_to_string(&yaml_path) else {
             continue;
         };
-        let Ok(def) = serde_yml::from_str::<CustomProviderDef>(&content) else {
+        let Ok(def) = serde_norway::from_str::<CustomProviderDef>(&content) else {
             continue;
         };
         if def.id != custom_id {
@@ -515,7 +515,7 @@ plan:
         let yaml = std::fs::read_to_string(&yaml_path).unwrap();
         assert!(yaml.contains("timeout_ms: 12000"));
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).unwrap();
+            serde_norway::from_str(&yaml).unwrap();
         assert_eq!(def.id, "script:script");
     }
 
@@ -537,7 +537,7 @@ plan:
         let yaml = std::fs::read_to_string(&yaml_path).unwrap();
         assert!(yaml.contains(r#"display_name: "Script \"Quoted\"""#));
         let def: crate::providers::custom::schema::CustomProviderDef =
-            serde_yml::from_str(&yaml).unwrap();
+            serde_norway::from_str(&yaml).unwrap();
         assert_eq!(def.metadata.display_name, r#"Script "Quoted""#);
         let SourceDef::Cli { args, .. } = &def.plan.steps[0].source else {
             panic!("expected cli source");

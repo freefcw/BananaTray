@@ -38,7 +38,7 @@ plan:
             used_group: 1
             limit_group: 2
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
 
     assert_eq!(def.schema_version, 2);
     assert_eq!(def.id, "myai:cli");
@@ -103,7 +103,7 @@ plan:
             limit: "usage.limit"
             quota_type: weekly
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     assert_eq!(def.plan.mode, PlanMode::Merge);
     let step = first_step(&def);
     assert!(matches!(
@@ -158,7 +158,7 @@ plan:
           - label: "Usage"
             pattern: '(\d+)/(\d+)'
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     assert_eq!(def.metadata.icon, "");
     assert_eq!(def.metadata.account_hint, "account");
     assert_eq!(def.plan.mode, PlanMode::FirstSuccess);
@@ -198,7 +198,7 @@ plan:
             quota_type: credit
             divisor: 500000
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     if let Some(ParserDef::Json { quotas, .. }) = &first_step(&def).parser {
         assert_eq!(quotas[0].divisor, Some(500000.0));
         assert!(matches!(quotas[0].quota_type, QuotaTypeDef::Credit));
@@ -287,7 +287,7 @@ plan:
             used: "used"
             limit: "limit"
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     assert_eq!(def.plan.steps.len(), 5);
 
     let source_auth = |index: usize| match &def.plan.steps[index].source {
@@ -331,7 +331,7 @@ plan:
         type: placeholder
         reason: "No public API available for quota monitoring"
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     let step = first_step(&def);
     assert!(matches!(step.source, SourceDef::Placeholder { .. }));
     assert!(step.parser.is_none());
@@ -366,7 +366,7 @@ plan:
         type: placeholder
         reason: "No public API"
 "#;
-    let def: CustomProviderDef = serde_yml::from_str(yaml).unwrap();
+    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
     assert!(matches!(
         def.plan.steps[0].availability,
         Some(AvailabilityDef::FileJsonMatch { .. })

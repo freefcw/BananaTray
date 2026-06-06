@@ -80,8 +80,8 @@ pub fn load_from_dir(dir: &Path) -> Vec<CustomProvider> {
 
 fn load_one(path: &Path) -> Result<CustomProvider> {
     let content = std::fs::read_to_string(path)?;
-    let def: CustomProviderDef =
-        serde_yml::from_str(&content).map_err(|err| augment_legacy_schema_hint(err, &content))?;
+    let def: CustomProviderDef = serde_norway::from_str(&content)
+        .map_err(|err| augment_legacy_schema_hint(err, &content))?;
     validate(&def)?;
     CustomProvider::new(def)
 }
@@ -91,7 +91,7 @@ fn load_one(path: &Path) -> Result<CustomProvider> {
 /// `deny_unknown_fields` 让旧 YAML 顶层 `availability/source/parser` 在 deserialize
 /// 阶段就死于 `unknown field`，会丢掉 validate 阶段对 `schema_version` 的友好提示，
 /// 这里把同等提示补回来。
-fn augment_legacy_schema_hint(err: serde_yml::Error, content: &str) -> anyhow::Error {
+fn augment_legacy_schema_hint(err: serde_norway::Error, content: &str) -> anyhow::Error {
     if looks_like_legacy_schema(content) {
         anyhow::anyhow!(
             "{err}; YAML appears to use the legacy schema (top-level source/parser), \
@@ -776,7 +776,7 @@ plain:
           - label: "Usage"
             pattern: '(\d+)/(\d+)'
 "#;
-        let err = serde_yml::from_str::<CustomProviderDef>(yaml).unwrap_err();
+        let err = serde_norway::from_str::<CustomProviderDef>(yaml).unwrap_err();
         assert!(err.to_string().contains("unknown field"));
         assert!(err.to_string().contains("plain"));
     }

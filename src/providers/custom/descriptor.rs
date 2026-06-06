@@ -73,7 +73,7 @@ metadata:
 "#,
             minimal_plan_yaml()
         );
-        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
 
         assert_eq!(desc.id.as_ref(), "test:cli");
@@ -117,7 +117,7 @@ metadata:
 "#,
             minimal_plan_yaml()
         );
-        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(desc.metadata.icon_asset, "X");
     }
@@ -137,7 +137,7 @@ metadata:
 "#,
             minimal_plan_yaml()
         );
-        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(
             desc.metadata.dashboard_url,
@@ -161,7 +161,7 @@ metadata:
 "#,
             minimal_plan_yaml()
         );
-        let def: CustomProviderDef = serde_yml::from_str(&yaml).unwrap();
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
         let desc = descriptor(&def);
         assert_eq!(desc.metadata.dashboard_url, "https://my-site.com/dashboard");
     }
