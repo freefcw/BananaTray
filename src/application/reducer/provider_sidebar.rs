@@ -1,4 +1,4 @@
-use log::info;
+use log::debug;
 
 use crate::application::{
     AppEffect, ContextEffect, RefreshEffect, SettingsEffect, TrayIconRequest,
@@ -92,7 +92,7 @@ pub(super) fn toggle_provider(
     effects: &mut Vec<AppEffect>,
 ) {
     let new_val = !session.settings.provider.is_enabled(&id);
-    info!(
+    debug!(
         target: "providers",
         "toggling provider {} from {} to {}",
         id,

@@ -159,77 +159,28 @@ impl From<CommonEffect> for AppEffect {
     }
 }
 
-impl From<SettingsEffect> for CommonEffect {
-    fn from(e: SettingsEffect) -> Self {
-        Self::Settings(e)
-    }
+/// 为子 Effect 类型生成 `From<SubEffect> for CommonEffect` 和 `From<SubEffect> for AppEffect`。
+macro_rules! impl_common_effect_from {
+    ($sub:ident => $variant:ident) => {
+        impl From<$sub> for CommonEffect {
+            fn from(e: $sub) -> Self {
+                Self::$variant(e)
+            }
+        }
+        impl From<$sub> for AppEffect {
+            fn from(e: $sub) -> Self {
+                CommonEffect::from(e).into()
+            }
+        }
+    };
 }
 
-impl From<SettingsEffect> for AppEffect {
-    fn from(e: SettingsEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
-
-impl From<NotificationEffect> for CommonEffect {
-    fn from(e: NotificationEffect) -> Self {
-        Self::Notification(e)
-    }
-}
-
-impl From<NotificationEffect> for AppEffect {
-    fn from(e: NotificationEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
-
-impl From<RefreshEffect> for CommonEffect {
-    fn from(e: RefreshEffect) -> Self {
-        Self::Refresh(e)
-    }
-}
-
-impl From<RefreshEffect> for AppEffect {
-    fn from(e: RefreshEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
-
-impl From<DebugEffect> for CommonEffect {
-    fn from(e: DebugEffect) -> Self {
-        Self::Debug(e)
-    }
-}
-
-impl From<DebugEffect> for AppEffect {
-    fn from(e: DebugEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
-
-impl From<NewApiEffect> for CommonEffect {
-    fn from(e: NewApiEffect) -> Self {
-        Self::NewApi(e)
-    }
-}
-
-impl From<NewApiEffect> for AppEffect {
-    fn from(e: NewApiEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
-
-impl From<ScriptProviderEffect> for CommonEffect {
-    fn from(e: ScriptProviderEffect) -> Self {
-        Self::ScriptProvider(e)
-    }
-}
-
-impl From<ScriptProviderEffect> for AppEffect {
-    fn from(e: ScriptProviderEffect) -> Self {
-        CommonEffect::from(e).into()
-    }
-}
+impl_common_effect_from!(SettingsEffect => Settings);
+impl_common_effect_from!(NotificationEffect => Notification);
+impl_common_effect_from!(RefreshEffect => Refresh);
+impl_common_effect_from!(DebugEffect => Debug);
+impl_common_effect_from!(NewApiEffect => NewApi);
+impl_common_effect_from!(ScriptProviderEffect => ScriptProvider);
 
 #[cfg(test)]
 mod tests {
