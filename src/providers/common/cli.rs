@@ -50,37 +50,20 @@ pub(crate) fn run_prepared_command_with_timeout(
 }
 
 fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output> {
-    let stdout_reader = child.stdout.take().map(|mut handle| {
+    let stdout_handle = child.stdout.take().map(|mut handle| {
         thread::spawn(move || {
-            let mut stdout = Vec::new();
-            let _ = handle.read_to_end(&mut stdout);
-            stdout
+            let mut buf = Vec::new();
+            let _ = handle.read_to_end(&mut buf);
+            buf
         })
     });
-    let stderr_reader = child.stderr.take().map(|mut handle| {
+    let stderr_handle = child.stderr.take().map(|mut handle| {
         thread::spawn(move || {
-            let mut stderr = Vec::new();
-            let _ = handle.read_to_end(&mut stderr);
-            stderr
+            let mut buf = Vec::new();
+            let _ = handle.read_to_end(&mut buf);
+            buf
         })
     });
-
-    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
-    if let Some(reader) = stdout_reader {
-        thread::spawn(move || {
-            let _ = stdout_tx.send(reader.join().unwrap_or_default());
-        });
-    } else {
-        let _ = stdout_tx.send(Vec::new());
-    }
-    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
-    if let Some(reader) = stderr_reader {
-        thread::spawn(move || {
-            let _ = stderr_tx.send(reader.join().unwrap_or_default());
-        });
-    } else {
-        let _ = stderr_tx.send(Vec::new());
-    }
 
     let deadline = Instant::now() + timeout;
     let status = loop {
@@ -95,8 +78,8 @@ fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output>
         thread::sleep(COMMAND_POLL_INTERVAL);
     };
 
-    let stdout = recv_output_before_deadline(&stdout_rx, deadline, &mut child)?;
-    let stderr = recv_output_before_deadline(&stderr_rx, deadline, &mut child)?;
+    let stdout = join_reader_before_deadline(stdout_handle, deadline, &mut child)?;
+    let stderr = join_reader_before_deadline(stderr_handle, deadline, &mut child)?;
 
     Ok(Output {
         status,
@@ -105,25 +88,24 @@ fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output>
     })
 }
 
-fn recv_output_before_deadline(
-    rx: &std::sync::mpsc::Receiver<Vec<u8>>,
+fn join_reader_before_deadline(
+    handle: Option<thread::JoinHandle<Vec<u8>>>,
     deadline: Instant,
-    child: &mut std::process::Child,
+    child: &mut Child,
 ) -> Result<Vec<u8>> {
-    let now = Instant::now();
-    if now >= deadline {
-        kill_child_tree(child);
-        let _ = child.wait();
-        return Err(ProviderError::Timeout.into());
-    }
-    match rx.recv_timeout(deadline.saturating_duration_since(now)) {
-        Ok(output) => Ok(output),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+    let Some(handle) = handle else {
+        return Ok(Vec::new());
+    };
+    loop {
+        if handle.is_finished() {
+            return Ok(handle.join().unwrap_or_default());
+        }
+        if Instant::now() >= deadline {
             kill_child_tree(child);
             let _ = child.wait();
-            Err(ProviderError::Timeout.into())
+            return Err(ProviderError::Timeout.into());
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Ok(Vec::new()),
+        thread::sleep(COMMAND_POLL_INTERVAL);
     }
 }
 
