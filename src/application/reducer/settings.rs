@@ -55,19 +55,7 @@ pub(super) fn apply_setting_change(
             let new_val = !session.settings.system.start_at_login;
             session.settings.system.start_at_login = new_val;
             effects.push(SettingsEffect::SyncAutoLaunch(new_val).into());
-            // 自启动状态变更通知（与 SyncAutoLaunch 解耦，各自单一职责）
-            let (title, body) = if new_val {
-                (
-                    rust_i18n::t!("notification.auto_launch.enabled.title").to_string(),
-                    rust_i18n::t!("notification.auto_launch.enabled.body").to_string(),
-                )
-            } else {
-                (
-                    rust_i18n::t!("notification.auto_launch.disabled.title").to_string(),
-                    rust_i18n::t!("notification.auto_launch.disabled.body").to_string(),
-                )
-            };
-            effects.push(NotificationEffect::Plain { title, body }.into());
+            effects.push(NotificationEffect::AutoLaunchToggled { enabled: new_val }.into());
         }
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =

@@ -65,7 +65,7 @@ pub(super) fn submit_newapi(
         }
         .into(),
     );
-    // SettingsEffect::PersistSettings 和 NotificationEffect::Plain 由 effect handler
+    // SettingsEffect::PersistSettings 和通知由 effect handler
     // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
     session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(ContextEffect::Render.into());

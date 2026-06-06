@@ -1,3 +1,5 @@
+use rust_i18n::t;
+
 use crate::application::{DebugNotificationKind, NotificationEffect, QuotaAlert};
 use crate::platform::notification::send_system_notification;
 
@@ -6,7 +8,18 @@ pub(super) fn run(effect: NotificationEffect) {
         NotificationEffect::Quota { alert, with_sound } => {
             send_system_notification(&alert, with_sound);
         }
-        NotificationEffect::Plain { title, body } => {
+        NotificationEffect::AutoLaunchToggled { enabled } => {
+            let (title, body) = if enabled {
+                (
+                    t!("notification.auto_launch.enabled.title").to_string(),
+                    t!("notification.auto_launch.enabled.body").to_string(),
+                )
+            } else {
+                (
+                    t!("notification.auto_launch.disabled.title").to_string(),
+                    t!("notification.auto_launch.disabled.body").to_string(),
+                )
+            };
             crate::platform::notification::send_plain_notification(&title, &body);
         }
         NotificationEffect::Debug { kind, with_sound } => {

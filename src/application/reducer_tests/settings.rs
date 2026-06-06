@@ -85,7 +85,9 @@ fn toggle_start_at_login_produces_sync_and_notification() {
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Plain { .. }))
+        AppEffect::Common(CommonEffect::Notification(
+            NotificationEffect::AutoLaunchToggled { enabled: true }
+        ))
     )));
     assert!(has_effect(&effects, |e| matches!(
         e,
@@ -108,6 +110,12 @@ fn toggle_start_at_login_round_trip() {
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::SyncAutoLaunch(true)))
     )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(
+            NotificationEffect::AutoLaunchToggled { enabled: true }
+        ))
+    )));
 
     // disable
     let effects = reduce(
@@ -120,6 +128,12 @@ fn toggle_start_at_login_round_trip() {
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::SyncAutoLaunch(
             false
         )))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(
+            NotificationEffect::AutoLaunchToggled { enabled: false }
+        ))
     )));
 }
 

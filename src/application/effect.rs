@@ -58,10 +58,9 @@ pub enum SettingsEffect {
 
 #[derive(Debug)]
 pub enum NotificationEffect {
-    /// 发送简单文本通知（无 QuotaAlert 包装）
-    Plain {
-        title: String,
-        body: String,
+    /// 自启动状态变更通知，由 runtime 层负责 i18n
+    AutoLaunchToggled {
+        enabled: bool,
     },
     Quota {
         alert: QuotaAlert,
@@ -94,7 +93,7 @@ pub enum DebugEffect {
 pub enum NewApiEffect {
     /// 保存 NewAPI Provider：runtime 负责 YAML 生成 + 文件写入 + 持久化 + 通知 + 热重载
     ///
-    /// 只有写入成功时才执行 SettingsEffect::PersistSettings 和 NotificationEffect::Plain，
+    /// 只有写入成功时才执行 SettingsEffect::PersistSettings 和通知，
     /// 确保失败时不会产生幽灵 Provider 或虚假成功通知。
     SaveProvider {
         config: NewApiConfig,

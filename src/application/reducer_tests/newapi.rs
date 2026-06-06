@@ -1,7 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session};
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, NewApiEffect, NotificationEffect, RefreshEffect,
-    SettingsEffect, SettingsModalState, SettingsTab,
+    reduce, AppAction, AppEffect, CommonEffect, NewApiEffect, RefreshEffect, SettingsEffect,
+    SettingsModalState, SettingsTab,
 };
 use crate::models::{ProviderId, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshRequest};
@@ -61,7 +61,7 @@ fn submit_newapi_produces_save_and_notification_effects() {
         )
     }));
 
-    // SettingsEffect::PersistSettings 和 NotificationEffect::Plain 已移至 runtime 成功路径
+    // SettingsEffect::PersistSettings 和通知已移至 runtime 成功路径
     assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -400,7 +400,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     // SettingsEffect::PersistSettings 和通知已移至 runtime 成功路径
     assert!(!has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Plain { .. }))
+        AppEffect::Common(CommonEffect::Notification(..))
     )));
 }
 
