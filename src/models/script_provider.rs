@@ -87,11 +87,12 @@ pub fn script_provider_id(name: &str) -> String {
 }
 
 /// Compute the first available script-provider id for a user-facing name.
+///
+/// 最多尝试 1000 个后缀，超过时使用时间戳保证唯一性。
 pub fn unique_script_provider_id(name: &str, mut is_occupied: impl FnMut(&str) -> bool) -> String {
     let base_slug = script_provider_slug(name);
-    let mut suffix = 1;
 
-    loop {
+    for suffix in 1..=1000 {
         let slug = if suffix == 1 {
             base_slug.clone()
         } else {
@@ -101,8 +102,12 @@ pub fn unique_script_provider_id(name: &str, mut is_occupied: impl FnMut(&str) -
         if !is_occupied(&id) {
             return id;
         }
-        suffix += 1;
     }
+
+    script_provider_id_from_slug(&format!(
+        "{base_slug}-{}",
+        chrono::Utc::now().timestamp_millis()
+    ))
 }
 
 /// Parse stdout emitted by a script-provider script.
