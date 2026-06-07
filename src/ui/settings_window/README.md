@@ -28,10 +28,11 @@
 | 文件 | 职责 |
 |------|------|
 | `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换） |
+| `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮） |
 | `providers/sidebar.rs` | 左侧 Sidebar — Provider 列表（拖拽排序、添加/删除按钮） |
 | `providers/detail.rs` | 右侧详情 — Provider 信息/状态/配额/配额可见性/启用开关/Copilot Token 输入 |
 | `providers/picker.rs` | 添加面板 — 可选 Provider 列表（从 sidebar 中排除已添加的） |
-| `providers/token_input_panel.rs` | Token 输入面板 — 通用 Provider token 设置 UI，复用 `SettingsView::TokenInputDraft` 保持编辑草稿 |
+| `providers/token_input_panel.rs` | Token 输入面板 — 通用 Provider token 设置 UI；编辑草稿由 `SettingsView::begin_token_input()` 创建并在会话内复用 |
 | `providers/newapi_form.rs` | NewAPI 表单 — 自定义 Provider 快速添加/编辑表单（name, url, cookie, user_id, divisor） |
 | `providers/script_provider_form.rs` | 自定义脚本表单 — 编辑 provider 名称、解释器、超时和脚本源码；Run Test 后台解析 stdout JSON，保存后生成脚本文件与 `source.type: cli` YAML |
 
@@ -56,7 +57,7 @@ SettingsView::render()
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - 设置窗口的异步调度与多显示器复用逻辑已迁至 `runtime/settings_window_opener.rs`
-- Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，避免设置页重渲染时丢失正在输入的 token；输入容器必须注册 `key_context("Input")` 才能接收标准编辑动作
+- Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器必须注册 `key_context("Input")` 才能接收标准编辑动作
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听

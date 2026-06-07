@@ -1,4 +1,5 @@
 use super::super::SettingsView;
+use super::shared::render_confirm_cancel_buttons;
 use crate::application::{
     AppAction, QuotaVisibilityItem, SettingChange, SettingsProviderDetailViewState,
     SettingsProviderInfoViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
@@ -9,8 +10,9 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use gpui::{
-    div, hsla, px, relative, App, Context, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
-    MouseDownEvent, ParentElement, StatefulInteractiveElement, Styled, TextAlign, Window,
+    div, hsla, px, relative, App, Context, Div, Entity, FontWeight, Hsla, InteractiveElement,
+    MouseButton, MouseDownEvent, ParentElement, StatefulInteractiveElement, Styled, TextAlign,
+    Window,
 };
 use rust_i18n::t;
 use std::cell::RefCell;
@@ -285,68 +287,10 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
         })
 }
 
-/// 二次确认按钮组（通用）：确认（红色）+ 取消
-fn render_confirm_cancel_buttons(
-    confirm_label: &str,
-    cancel_label: &str,
-    on_confirm: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-    on_cancel: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-    theme: &Theme,
-) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(px(4.0))
-        .child(
-            div()
-                .h(px(24.0))
-                .px(px(8.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .gap(px(4.0))
-                .rounded(px(6.0))
-                .bg(theme.status.error)
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.85))
-                .child(crate::ui::widgets::render_svg_icon(
-                    "src/icons/trash.svg",
-                    px(12.0),
-                    gpui::white(),
-                ))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(gpui::white())
-                        .child(confirm_label.to_string()),
-                )
-                .on_mouse_down(MouseButton::Left, on_confirm),
-        )
-        .child(
-            div()
-                .h(px(24.0))
-                .px(px(6.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(6.0))
-                .bg(theme.bg.subtle)
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.8))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(theme.text.muted)
-                        .child(cancel_label.to_string()),
-                )
-                .on_mouse_down(MouseButton::Left, on_cancel),
-        )
-}
-
 /// Header 右侧操作区：移除按钮（二次确认） + 刷新按钮 + 启用/禁用开关
 fn render_detail_action_buttons(
     state: Rc<RefCell<AppState>>,
+    view_entity: Entity<SettingsView>,
     id: &ProviderId,
     is_enabled: bool,
     can_refresh: bool,
@@ -402,6 +346,9 @@ fn render_detail_action_buttons(
                     theme.text.muted,
                 ))
                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    view_entity.update(cx, |view, _| {
+                        view.clear_token_input();
+                    });
                     runtime::dispatch_in_window(
                         &state_confirm,
                         AppAction::ConfirmRemoveProvider,
@@ -447,11 +394,13 @@ fn render_newapi_action_row(
     provider_id: ProviderId,
     confirming_delete: bool,
     state: Rc<RefCell<AppState>>,
+    view_entity: Entity<SettingsView>,
     theme: &Theme,
 ) -> Div {
     let state_edit = state.clone();
     let provider_id_edit = provider_id.clone();
     let provider_id_delete = provider_id.clone();
+    let view_entity_edit = view_entity.clone();
 
     let mut row = div()
         .mt(px(10.0))
@@ -466,6 +415,9 @@ fn render_newapi_action_row(
             theme.text.accent,
             theme,
             move |_, window, cx| {
+                view_entity_edit.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_edit,
                     AppAction::EditNewApi {
@@ -481,10 +433,15 @@ fn render_newapi_action_row(
         // 确认态：复用通用确认/取消按钮组
         let state_delete = state.clone();
         let state_cancel = state.clone();
+        let view_entity_delete = view_entity.clone();
+        let view_entity_cancel = view_entity.clone();
         row = row.child(render_confirm_cancel_buttons(
             &t!("newapi.confirm_delete"),
             &t!("newapi.cancel_delete"),
             move |_, window, cx| {
+                view_entity_delete.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_delete,
                     AppAction::DeleteNewApi {
@@ -495,6 +452,9 @@ fn render_newapi_action_row(
                 );
             },
             move |_, window, cx| {
+                view_entity_cancel.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_cancel,
                     AppAction::CancelDeleteNewApi,
@@ -506,12 +466,16 @@ fn render_newapi_action_row(
         ));
     } else {
         let state_confirm = state.clone();
+        let view_entity_confirm = view_entity.clone();
         row = row.child(render_action_button(
             &t!("newapi.delete_button"),
             "src/icons/trash.svg",
             theme.status.error,
             theme,
             move |_, window, cx| {
+                view_entity_confirm.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_confirm,
                     AppAction::ConfirmDeleteNewApi,
@@ -530,11 +494,13 @@ fn render_script_provider_action_row(
     provider_id: ProviderId,
     confirming_delete: bool,
     state: Rc<RefCell<AppState>>,
+    view_entity: Entity<SettingsView>,
     theme: &Theme,
 ) -> Div {
     let state_edit = state.clone();
     let provider_id_edit = provider_id.clone();
     let provider_id_delete = provider_id.clone();
+    let view_entity_edit = view_entity.clone();
 
     let mut row = div()
         .mt(px(10.0))
@@ -549,6 +515,9 @@ fn render_script_provider_action_row(
             theme.text.accent,
             theme,
             move |_, window, cx| {
+                view_entity_edit.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_edit,
                     AppAction::EditScriptProvider {
@@ -563,10 +532,15 @@ fn render_script_provider_action_row(
     if confirming_delete {
         let state_delete = state.clone();
         let state_cancel = state.clone();
+        let view_entity_delete = view_entity.clone();
+        let view_entity_cancel = view_entity.clone();
         row = row.child(render_confirm_cancel_buttons(
             &t!("script_provider.confirm_delete"),
             &t!("script_provider.cancel_delete"),
             move |_, window, cx| {
+                view_entity_delete.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_delete,
                     AppAction::DeleteScriptProvider {
@@ -577,6 +551,9 @@ fn render_script_provider_action_row(
                 );
             },
             move |_, window, cx| {
+                view_entity_cancel.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_cancel,
                     AppAction::CancelDeleteScriptProvider,
@@ -588,12 +565,16 @@ fn render_script_provider_action_row(
         ));
     } else {
         let state_confirm = state.clone();
+        let view_entity_confirm = view_entity.clone();
         row = row.child(render_action_button(
             &t!("script_provider.delete_button"),
             "src/icons/trash.svg",
             theme.status.error,
             theme,
             move |_, window, cx| {
+                view_entity_confirm.update(cx, |view, _| {
+                    view.clear_token_input();
+                });
                 runtime::dispatch_in_window(
                     &state_confirm,
                     AppAction::ConfirmDeleteScriptProvider,
@@ -733,6 +714,7 @@ impl SettingsView {
             .settings_ui
             .modal
             .is_confirming_remove_provider();
+        let view_entity = cx.entity().clone();
 
         let mut inner = div()
             .flex_col()
@@ -753,6 +735,7 @@ impl SettingsView {
                     ))
                     .child(render_detail_action_buttons(
                         self.state.clone(),
+                        view_entity.clone(),
                         &detail.id,
                         detail.is_enabled,
                         detail.can_refresh,
@@ -783,6 +766,7 @@ impl SettingsView {
             detail.settings_capability.clone(),
             detail.provider_capability,
             theme,
+            view_entity,
             cx,
         ));
 
@@ -803,6 +787,7 @@ impl SettingsView {
         settings_capability: SettingsCapability,
         provider_capability: ProviderCapability,
         theme: &Theme,
+        view_entity: Entity<SettingsView>,
         cx: &mut Context<Self>,
     ) -> Div {
         let mut section =
@@ -840,6 +825,7 @@ impl SettingsView {
                     provider_id,
                     confirming_delete,
                     self.state.clone(),
+                    view_entity.clone(),
                     theme,
                 ));
             }
@@ -855,6 +841,7 @@ impl SettingsView {
                     provider_id,
                     confirming_delete,
                     self.state.clone(),
+                    view_entity.clone(),
                     theme,
                 ));
             }

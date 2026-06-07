@@ -9,213 +9,19 @@
 //! Cookie 字段使用 Textarea 多行编辑组件，便于查看和编辑长字符串。
 
 use super::super::{NewApiFormInputs, SettingsView};
+use super::shared::{
+    render_input_field, render_readonly_field, render_textarea_field, FormFieldSpec,
+};
 use crate::application::AppAction;
 use crate::models::NewApiEditData;
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{register_input_actions, render_svg_icon};
-use adabraka_ui::components::input_state::InputState;
-use adabraka_ui::components::textarea_state::TextareaState;
+use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, hsla, px, App, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
-    MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement, Styled, Window,
+    div, px, App, Context, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
+    StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
-
-/// 渲染字段标签 + 描述（如果有）
-fn render_field_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
-    let mut col = div().flex_col().gap(px(2.0)).child(
-        div()
-            .text_size(px(12.5))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.text.primary)
-            .child(label.to_string()),
-    );
-
-    if let Some(hint_text) = hint {
-        col = col.child(
-            div()
-                .text_size(px(11.0))
-                .text_color(theme.text.muted)
-                .child(hint_text.to_string()),
-        );
-    }
-
-    col
-}
-
-struct FieldSpec<'a> {
-    id: &'static str,
-    label: &'a str,
-    hint: Option<&'a str>,
-    is_focused: bool,
-    margin_top: Pixels,
-}
-
-/// 渲染单个表单字段（标签 + InputState 输入框）
-fn render_form_field(
-    field: FieldSpec<'_>,
-    input_entity: &Entity<InputState>,
-    theme: &Theme,
-    window: &mut Window,
-    cx: &App,
-) -> Div {
-    let focus_handle = input_entity.read(cx).focus_handle(cx);
-
-    let input_div = div()
-        .id(field.id)
-        .key_context("Input")
-        .track_focus(&focus_handle)
-        .w_full()
-        .flex()
-        .items_center()
-        .px(px(12.0))
-        .py(px(8.0))
-        .h(px(36.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(if field.is_focused {
-            theme.text.accent
-        } else {
-            theme.border.strong
-        })
-        .text_size(px(13.0))
-        .text_color(theme.text.primary)
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-
-    let input_div = register_input_actions(input_div, input_entity, window);
-
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(field.margin_top)
-        .child(render_field_label(field.label, field.hint, theme))
-        .child(input_div.child(div().flex_1().overflow_hidden().child(input_entity.clone())))
-}
-
-/// 渲染 Textarea 表单字段（标签 + 多行文本编辑框）
-///
-/// Cookie 等长文本字段使用 TextareaState entity 直接渲染，样式与 render_form_field 对齐，
-/// 使用 BananaTray 的 Theme 而非 adabraka-ui 的内置主题，保证视觉一致性。
-fn render_textarea_field(
-    field: FieldSpec<'_>,
-    textarea_entity: &Entity<TextareaState>,
-    theme: &Theme,
-    window: &mut Window,
-    cx: &App,
-) -> Div {
-    let focus_handle = textarea_entity.read(cx).focus_handle(cx);
-
-    let textarea_div = div()
-        .id(field.id)
-        .key_context("Textarea")
-        .track_focus(&focus_handle)
-        .w_full()
-        .px(px(12.0))
-        .py(px(8.0))
-        .min_h(px(72.0))
-        .max_h(px(140.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(if field.is_focused {
-            theme.text.accent
-        } else {
-            theme.border.strong
-        })
-        .text_size(px(13.0))
-        .text_color(theme.text.primary)
-        .overflow_y_scroll()
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-
-    let textarea_div = register_textarea_actions(textarea_div, textarea_entity, window);
-
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(field.margin_top)
-        .child(render_field_label(field.label, field.hint, theme))
-        .child(textarea_div.child(textarea_entity.clone()))
-}
-
-/// 注册 TextareaState 的所有键盘事件处理器
-///
-/// 与 `register_input_actions` 对称，但针对 TextareaState（多行编辑），
-/// 额外支持上下方向键导航、Enter 换行、Tab 缩进等。
-fn register_textarea_actions(
-    div: Stateful<Div>,
-    entity: &Entity<TextareaState>,
-    window: &mut Window,
-) -> Stateful<Div> {
-    div.on_action(window.listener_for(entity, TextareaState::backspace))
-        .on_action(window.listener_for(entity, TextareaState::delete))
-        .on_action(window.listener_for(entity, TextareaState::left))
-        .on_action(window.listener_for(entity, TextareaState::right))
-        .on_action(window.listener_for(entity, TextareaState::up))
-        .on_action(window.listener_for(entity, TextareaState::down))
-        .on_action(window.listener_for(entity, TextareaState::select_left))
-        .on_action(window.listener_for(entity, TextareaState::select_right))
-        .on_action(window.listener_for(entity, TextareaState::select_up))
-        .on_action(window.listener_for(entity, TextareaState::select_down))
-        .on_action(window.listener_for(entity, TextareaState::select_all))
-        .on_action(window.listener_for(entity, TextareaState::home))
-        .on_action(window.listener_for(entity, TextareaState::end))
-        .on_action(window.listener_for(entity, TextareaState::copy))
-        .on_action(window.listener_for(entity, TextareaState::cut))
-        .on_action(window.listener_for(entity, TextareaState::paste))
-        .on_action(window.listener_for(entity, TextareaState::enter))
-        .on_action(window.listener_for(entity, TextareaState::shift_enter))
-        .on_action(window.listener_for(entity, TextareaState::tab))
-        .on_action(window.listener_for(entity, TextareaState::shift_tab))
-        .on_action(window.listener_for(entity, TextareaState::escape))
-        .on_action(window.listener_for(entity, TextareaState::word_left))
-        .on_action(window.listener_for(entity, TextareaState::word_right))
-        .on_action(window.listener_for(entity, TextareaState::select_word_left))
-        .on_action(window.listener_for(entity, TextareaState::select_word_right))
-}
-
-/// 渲染只读字段（编辑模式下身份标识字段不可修改）
-fn render_readonly_field(
-    label: &str,
-    hint: Option<&str>,
-    value: &str,
-    margin_top: Pixels,
-    theme: &Theme,
-) -> Div {
-    let muted = theme.text.muted;
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(margin_top)
-        .child(render_field_label(label, hint, theme))
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .px(px(12.0))
-                .py(px(8.0))
-                .h(px(36.0))
-                .rounded(px(8.0))
-                .bg(hsla(0.0, 0.0, 0.2, 0.5))
-                .border_1()
-                .border_color(theme.border.subtle)
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .text_color(muted)
-                        .overflow_hidden()
-                        .child(value.to_string()),
-                ),
-        )
-}
 
 impl SettingsView {
     /// 确保 NewAPI 表单输入状态已创建（编辑模式时预填已有配置数据）
@@ -302,8 +108,8 @@ impl SettingsView {
                     ),
             )
             // ── 表单字段 ──
-            .child(render_form_field(
-                FieldSpec {
+            .child(render_input_field(
+                FormFieldSpec {
                     id: "newapi-name",
                     label: &t!("newapi.field.name"),
                     hint: Some(&t!("newapi.field.name.placeholder")),
@@ -325,8 +131,8 @@ impl SettingsView {
                     theme,
                 )
             } else {
-                render_form_field(
-                    FieldSpec {
+                render_input_field(
+                    FormFieldSpec {
                         id: "newapi-url",
                         label: &t!("newapi.field.url"),
                         hint: Some(&t!("newapi.field.url.placeholder")),
@@ -340,7 +146,7 @@ impl SettingsView {
                 )
             })
             .child(render_textarea_field(
-                FieldSpec {
+                FormFieldSpec {
                     id: "newapi-cookie",
                     label: &t!("newapi.field.cookie"),
                     hint: Some(&t!("newapi.field.cookie.hint")),
@@ -352,8 +158,8 @@ impl SettingsView {
                 window,
                 cx,
             ))
-            .child(render_form_field(
-                FieldSpec {
+            .child(render_input_field(
+                FormFieldSpec {
                     id: "newapi-userid",
                     label: &t!("newapi.field.user_id"),
                     hint: Some(&t!("newapi.field.user_id.placeholder")),
@@ -365,8 +171,8 @@ impl SettingsView {
                 window,
                 cx,
             ))
-            .child(render_form_field(
-                FieldSpec {
+            .child(render_input_field(
+                FormFieldSpec {
                     id: "newapi-divisor",
                     label: &t!("newapi.field.divisor"),
                     hint: Some(&t!("newapi.field.divisor.placeholder")),

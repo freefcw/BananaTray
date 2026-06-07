@@ -2,6 +2,7 @@ mod detail;
 mod newapi_form;
 mod picker;
 mod script_provider_form;
+mod shared;
 mod sidebar;
 pub(crate) mod token_input_panel;
 

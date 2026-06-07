@@ -1,6 +1,7 @@
 //! Custom Script Provider add/edit form.
 
 use super::super::{ScriptProviderFormInputs, SettingsView};
+use super::shared::{render_code_field, render_input_field, render_readonly_field, FormFieldSpec};
 use crate::application::AppAction;
 use crate::models::{
     unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
@@ -8,34 +9,12 @@ use crate::models::{
 };
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{register_input_actions, render_svg_icon};
-use adabraka_ui::components::input_state::InputState;
-use adabraka_ui::components::textarea_state::TextareaState;
+use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, hsla, prelude::FluentBuilder as _, px, App, Context, Div, Entity, Focusable, FontWeight,
-    InteractiveElement, MouseButton, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
-    Styled, Window,
+    div, prelude::FluentBuilder as _, px, App, Context, Div, FontWeight, InteractiveElement,
+    MouseButton, ParentElement, StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
-
-fn render_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
-    let mut col = div().flex_col().gap(px(2.0)).child(
-        div()
-            .text_size(px(12.5))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.text.primary)
-            .child(label.to_string()),
-    );
-    if let Some(hint) = hint {
-        col = col.child(
-            div()
-                .text_size(px(11.0))
-                .text_color(theme.text.muted)
-                .child(hint.to_string()),
-        );
-    }
-    col
-}
 
 pub(in crate::ui::settings_window) struct ScriptProviderFormView<'a> {
     pub edit_data: Option<&'a ScriptProviderEditData>,
@@ -47,178 +26,6 @@ impl ScriptProviderFormView<'_> {
     fn is_editing(&self) -> bool {
         self.edit_data.is_some()
     }
-}
-
-struct InputFieldView<'a> {
-    id: &'static str,
-    label: &'a str,
-    hint: Option<&'a str>,
-    input_entity: &'a Entity<InputState>,
-    is_focused: bool,
-    margin_top: Pixels,
-}
-
-fn render_input_field(
-    field: InputFieldView<'_>,
-    theme: &Theme,
-    window: &mut Window,
-    cx: &App,
-) -> Div {
-    let focus_handle = field.input_entity.read(cx).focus_handle(cx);
-    let input_div = div()
-        .id(field.id)
-        .key_context("Input")
-        .track_focus(&focus_handle)
-        .w_full()
-        .flex()
-        .items_center()
-        .px(px(12.0))
-        .py(px(8.0))
-        .h(px(36.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(if field.is_focused {
-            theme.text.accent
-        } else {
-            theme.border.strong
-        })
-        .text_size(px(13.0))
-        .text_color(theme.text.primary)
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-    let input_div = register_input_actions(input_div, field.input_entity, window);
-
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(field.margin_top)
-        .child(render_label(field.label, field.hint, theme))
-        .child(
-            input_div.child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(field.input_entity.clone()),
-            ),
-        )
-}
-
-fn render_readonly_field(
-    label: &str,
-    hint: Option<&str>,
-    value: &str,
-    margin_top: Pixels,
-    theme: &Theme,
-) -> Div {
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(margin_top)
-        .child(render_label(label, hint, theme))
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .px(px(12.0))
-                .py(px(8.0))
-                .h(px(36.0))
-                .rounded(px(8.0))
-                .bg(hsla(0.0, 0.0, 0.2, 0.5))
-                .border_1()
-                .border_color(theme.border.subtle)
-                .text_size(px(13.0))
-                .text_color(theme.text.muted)
-                .child(value.to_string()),
-        )
-}
-
-fn render_code_field(
-    textarea_entity: &Entity<TextareaState>,
-    is_focused: bool,
-    theme: &Theme,
-    window: &mut Window,
-    cx: &App,
-) -> Div {
-    let focus_handle = textarea_entity.read(cx).focus_handle(cx);
-    let textarea_div = div()
-        .id("script-provider-code")
-        .key_context("Textarea")
-        .track_focus(&focus_handle)
-        .w_full()
-        .px(px(12.0))
-        .py(px(10.0))
-        .min_h(px(260.0))
-        .max_h(px(420.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(if is_focused {
-            theme.text.accent
-        } else {
-            theme.border.strong
-        })
-        .font_family("SF Mono")
-        .text_size(px(12.0))
-        .text_color(theme.text.primary)
-        .overflow_y_scroll()
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-    let textarea_div = register_textarea_actions(textarea_div, textarea_entity, window);
-
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(px(16.0))
-        .child(render_label(
-            &t!("script_provider.field.script"),
-            Some(&t!("script_provider.field.script.hint")),
-            theme,
-        ))
-        .child(textarea_div.child(textarea_entity.clone()))
-        .child(
-            div()
-                .text_size(px(11.0))
-                .text_color(theme.text.muted)
-                .child(t!("script_provider.field.script.cf_hint").to_string()),
-        )
-}
-
-fn register_textarea_actions(
-    div: Stateful<Div>,
-    entity: &Entity<TextareaState>,
-    window: &mut Window,
-) -> Stateful<Div> {
-    div.on_action(window.listener_for(entity, TextareaState::backspace))
-        .on_action(window.listener_for(entity, TextareaState::delete))
-        .on_action(window.listener_for(entity, TextareaState::left))
-        .on_action(window.listener_for(entity, TextareaState::right))
-        .on_action(window.listener_for(entity, TextareaState::up))
-        .on_action(window.listener_for(entity, TextareaState::down))
-        .on_action(window.listener_for(entity, TextareaState::select_left))
-        .on_action(window.listener_for(entity, TextareaState::select_right))
-        .on_action(window.listener_for(entity, TextareaState::select_up))
-        .on_action(window.listener_for(entity, TextareaState::select_down))
-        .on_action(window.listener_for(entity, TextareaState::select_all))
-        .on_action(window.listener_for(entity, TextareaState::home))
-        .on_action(window.listener_for(entity, TextareaState::end))
-        .on_action(window.listener_for(entity, TextareaState::copy))
-        .on_action(window.listener_for(entity, TextareaState::cut))
-        .on_action(window.listener_for(entity, TextareaState::paste))
-        .on_action(window.listener_for(entity, TextareaState::enter))
-        .on_action(window.listener_for(entity, TextareaState::shift_enter))
-        .on_action(window.listener_for(entity, TextareaState::tab))
-        .on_action(window.listener_for(entity, TextareaState::shift_tab))
-        .on_action(window.listener_for(entity, TextareaState::escape))
-        .on_action(window.listener_for(entity, TextareaState::word_left))
-        .on_action(window.listener_for(entity, TextareaState::word_right))
-        .on_action(window.listener_for(entity, TextareaState::select_word_left))
-        .on_action(window.listener_for(entity, TextareaState::select_word_right))
 }
 
 fn looks_like_cf_challenge(result: &ScriptProviderTestResult) -> bool {
@@ -427,14 +234,14 @@ impl SettingsView {
                     ),
             )
             .child(render_input_field(
-                InputFieldView {
+                FormFieldSpec {
                     id: "script-provider-name",
                     label: &t!("script_provider.field.name"),
                     hint: Some(&t!("script_provider.field.name.placeholder")),
-                    input_entity: &inputs.name,
                     is_focused: focused[0],
                     margin_top: px(24.0),
                 },
+                &inputs.name,
                 theme,
                 window,
                 cx,
@@ -447,34 +254,41 @@ impl SettingsView {
                 theme,
             ))
             .child(render_input_field(
-                InputFieldView {
+                FormFieldSpec {
                     id: "script-provider-interpreter",
                     label: &t!("script_provider.field.interpreter"),
                     hint: Some(&t!("script_provider.field.interpreter.hint")),
-                    input_entity: &inputs.interpreter,
                     is_focused: focused[2],
                     margin_top: px(16.0),
                 },
+                &inputs.interpreter,
                 theme,
                 window,
                 cx,
             ))
             .child(render_input_field(
-                InputFieldView {
+                FormFieldSpec {
                     id: "script-provider-timeout",
                     label: &t!("script_provider.field.timeout"),
                     hint: Some(&t!("script_provider.field.timeout.hint")),
-                    input_entity: &inputs.timeout,
                     is_focused: focused[3],
                     margin_top: px(16.0),
                 },
+                &inputs.timeout,
                 theme,
                 window,
                 cx,
             ))
             .child(render_code_field(
+                FormFieldSpec {
+                    id: "script-provider-code",
+                    label: &t!("script_provider.field.script"),
+                    hint: Some(&t!("script_provider.field.script.hint")),
+                    is_focused: focused[4],
+                    margin_top: px(16.0),
+                },
                 &inputs.script,
-                focused[4],
+                &t!("script_provider.field.script.cf_hint"),
                 theme,
                 window,
                 cx,
