@@ -6,7 +6,7 @@ mod general_tab;
 mod providers;
 use crate::application::AppAction;
 use crate::application::SettingsTab;
-use crate::models::ProviderId;
+use crate::models::{ProviderId, TokenEditMode, TokenInputCapability};
 use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
@@ -244,6 +244,8 @@ fn newapi_textarea(
 }
 
 /// Token 输入框的 view-local 草稿状态。
+///
+/// 仅在用户进入编辑时创建，保存 / 取消或离开当前 provider 入口后清理。
 pub(crate) struct TokenInputDraft {
     pub provider_id: ProviderId,
     pub input: Entity<InputState>,
@@ -269,6 +271,12 @@ impl SettingsView {
     #[allow(dead_code)]
     pub(crate) fn new(state: Rc<RefCell<AppState>>, _cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
+        // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记
+        state
+            .borrow_mut()
+            .session
+            .settings_ui
+            .token_editing_provider = None;
         Self {
             state,
             token_input: None,
@@ -316,25 +324,36 @@ impl SettingsView {
         input
     }
 
-    pub(in crate::ui::settings_window) fn ensure_token_input(
+    pub(in crate::ui::settings_window) fn begin_token_input(
         &mut self,
         provider_id: &ProviderId,
-        placeholder: &str,
-        initial_value: Option<String>,
+        capability: TokenInputCapability,
+        edit_mode: TokenEditMode,
         cx: &mut Context<Self>,
     ) -> Entity<InputState> {
+        // 同一 provider 重新进入编辑时复用已有草稿，避免丢失用户输入
         if let Some(draft) = &self.token_input {
             if &draft.provider_id == provider_id {
                 return draft.input.clone();
             }
         }
-
-        let placeholder = placeholder.to_string();
-        let initial_value = initial_value.unwrap_or_default();
+        let placeholder = t!(capability.placeholder_i18n_key).to_string();
+        let initial_value = if edit_mode == TokenEditMode::EditStored {
+            self.state
+                .borrow()
+                .session
+                .settings
+                .provider
+                .credentials
+                .get_credential(capability.credential_key)
+                .map(str::to_string)
+        } else {
+            None
+        };
         let input = cx.new(|cx| {
             let mut state = InputState::new(cx);
             state.placeholder = placeholder.into();
-            state.content = initial_value.into();
+            state.content = initial_value.unwrap_or_default().into();
             state.trim_on_blur = false;
             state
         });
@@ -438,8 +457,14 @@ impl SettingsView {
     // Tab 导航栏：水平 pill 风格
     // ========================================================================
 
-    fn render_tab_bar(&self, active_tab: SettingsTab, theme: &Theme) -> Div {
+    fn render_tab_bar(
+        &self,
+        active_tab: SettingsTab,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let show_debug = self.state.borrow().session.settings.display.show_debug_tab;
+        let view_entity = cx.entity().clone();
 
         let mut tabs: Vec<(&str, String, SettingsTab)> = vec![
             (
@@ -484,6 +509,7 @@ impl SettingsView {
         for (icon, label, tab) in tabs {
             let is_active = active_tab == tab;
             let state = self.state.clone();
+            let tab_view_entity = view_entity.clone();
             let (bg, text_color, icon_color, border_color) = if is_active {
                 (
                     theme.nav.pill_active_bg,
@@ -536,6 +562,9 @@ impl SettingsView {
                             .child(label),
                     )
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        tab_view_entity.update(cx, |view, _| {
+                            view.clear_token_input();
+                        });
                         runtime::dispatch_in_window(
                             &state,
                             AppAction::SetSettingsTab(tab),
@@ -615,7 +644,7 @@ impl Render for SettingsView {
             // 头部
             .child(self.render_header(&theme))
             // Tab 栏
-            .child(self.render_tab_bar(active_tab, &theme))
+            .child(self.render_tab_bar(active_tab, &theme, cx))
             // Tab 栏与内容区分隔线
             .child(div().w_full().h(px(1.0)).bg(theme.border.subtle))
             // 内容区

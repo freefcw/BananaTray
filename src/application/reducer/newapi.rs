@@ -6,6 +6,7 @@ use super::super::state::{AppSession, SettingsModalState};
 pub(super) fn enter_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填 / 脚本表单）
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -13,6 +14,7 @@ pub(super) fn cancel_add_newapi(session: &mut AppSession, effects: &mut Vec<AppE
     if session.settings_ui.modal.is_newapi_form() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -68,11 +70,18 @@ pub(super) fn submit_newapi(
     // SettingsEffect::PersistSettings 和通知由 effect handler
     // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
     session.settings_ui.modal = SettingsModalState::Idle;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
-pub(super) fn edit_newapi(provider_id: ProviderId, effects: &mut Vec<AppEffect>) {
+pub(super) fn edit_newapi(
+    session: &mut AppSession,
+    provider_id: ProviderId,
+    effects: &mut Vec<AppEffect>,
+) {
     // 磁盘 I/O 委托给 runtime effect handler，保持 reducer 纯函数
+    // 切到 NewAPI 编辑面板时，token 编辑上下文需要结束。
+    session.settings_ui.token_editing_provider = None;
     effects.push(NewApiEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
 }
@@ -85,6 +94,7 @@ pub(super) fn delete_newapi(
     if session.settings_ui.modal.is_confirming_delete_newapi() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
+    session.settings_ui.token_editing_provider = None;
     // 先刷新 UI 关闭确认态，避免等待文件删除 / 热重载结果才消失。
     effects.push(ContextEffect::Render.into());
     effects.push(NewApiEffect::DeleteProvider { provider_id }.into());
@@ -92,6 +102,7 @@ pub(super) fn delete_newapi(
 
 pub(super) fn confirm_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -99,5 +110,6 @@ pub(super) fn cancel_delete_newapi(session: &mut AppSession, effects: &mut Vec<A
     if session.settings_ui.modal.is_confirming_delete_newapi() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }

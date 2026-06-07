@@ -104,7 +104,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             &mut effects,
         ),
         AppAction::EditNewApi { provider_id } => {
-            newapi::edit_newapi(provider_id, &mut effects);
+            newapi::edit_newapi(session, provider_id, &mut effects);
         }
         AppAction::DeleteNewApi { provider_id } => {
             newapi::delete_newapi(session, provider_id, &mut effects);

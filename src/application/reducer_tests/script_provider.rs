@@ -18,6 +18,8 @@ fn make_script_config() -> ScriptProviderConfig {
 fn enter_add_script_provider_sets_exclusive_flag() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    session.settings_ui.token_editing_provider =
+        Some(ProviderId::BuiltIn(crate::models::ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::EnterAddScriptProvider);
 
@@ -25,6 +27,7 @@ fn enter_add_script_provider_sets_exclusive_flag() {
         session.settings_ui.modal,
         SettingsModalState::AddingScriptProvider
     );
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -39,6 +42,20 @@ fn enter_add_script_provider_clears_confirming_flags() {
         session.settings_ui.modal,
         SettingsModalState::AddingScriptProvider
     );
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn cancel_add_script_provider_resets_flag() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
+    session.settings_ui.token_editing_provider =
+        Some(ProviderId::BuiltIn(crate::models::ProviderKind::Copilot));
+
+    let effects = reduce(&mut session, AppAction::CancelAddScriptProvider);
+
+    assert!(!session.settings_ui.modal.is_script_provider_form());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -232,6 +249,8 @@ fn script_provider_test_finished_ignores_stale_result() {
 #[test]
 fn edit_script_provider_emits_load_config_effect() {
     let mut session = make_session();
+    session.settings_ui.token_editing_provider =
+        Some(ProviderId::BuiltIn(crate::models::ProviderKind::Copilot));
     let id = ProviderId::Custom("ccswitch:script".to_string());
 
     let effects = reduce(
@@ -241,6 +260,7 @@ fn edit_script_provider_emits_load_config_effect() {
         },
     );
 
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::ScriptProvider(ScriptProviderEffect::LoadConfig { provider_id }))
@@ -281,6 +301,8 @@ fn edit_script_provider_clears_stale_test_state() {
 #[test]
 fn delete_script_provider_produces_delete_effect() {
     let mut session = make_session();
+    session.settings_ui.token_editing_provider =
+        Some(ProviderId::BuiltIn(crate::models::ProviderKind::Copilot));
     let id = ProviderId::Custom("ccswitch:script".to_string());
 
     let effects = reduce(
@@ -295,4 +317,5 @@ fn delete_script_provider_produces_delete_effect() {
         AppEffect::Common(CommonEffect::ScriptProvider(ScriptProviderEffect::DeleteProvider { provider_id }))
             if *provider_id == id
     )));
+    assert!(session.settings_ui.token_editing_provider.is_none());
 }

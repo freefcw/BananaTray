@@ -120,6 +120,7 @@ impl SettingsView {
                             )
                             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                                 entity_item.update(cx, |view, cx| {
+                                    view.clear_token_input();
                                     runtime::dispatch_in_context(
                                         &view.state,
                                         AppAction::AddProviderToSidebar(id.clone()),
@@ -179,6 +180,7 @@ impl SettingsView {
                             )
                             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                                 entity_newapi.update(cx, |view, cx| {
+                                    view.clear_token_input();
                                     runtime::dispatch_in_context(
                                         &view.state,
                                         AppAction::EnterAddNewApi,
@@ -229,6 +231,7 @@ impl SettingsView {
                             )
                             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                                 entity_script.update(cx, |view, cx| {
+                                    view.clear_token_input();
                                     runtime::dispatch_in_context(
                                         &view.state,
                                         AppAction::EnterAddScriptProvider,

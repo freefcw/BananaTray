@@ -18,6 +18,7 @@ pub(super) fn set_settings_tab(
     effects: &mut Vec<AppEffect>,
 ) {
     session.settings_ui.active_tab = tab;
+    session.settings_ui.token_editing_provider = None;
     // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）。
     // NewAPI 表单和二次确认态保留，回到 Providers tab 仍能继续。
     if session.settings_ui.modal.is_adding_provider() {

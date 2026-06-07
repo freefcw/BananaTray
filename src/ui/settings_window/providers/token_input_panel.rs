@@ -3,6 +3,7 @@
 //! 从 `SettingsCapability::TokenInput` 的声明字段驱动渲染（OCP）。
 //! 任何 provider 只要声明了 `TokenInput` capability，即可自动获得此面板，
 //! 无需额外注册或编写 provider-specific UI 代码。
+//! 草稿由 `SettingsView::begin_token_input()` 创建，并在保存 / 取消 / 导航离开时清理。
 
 use super::super::SettingsView;
 use crate::application::AppAction;
@@ -87,12 +88,9 @@ pub(crate) fn render_token_input_panel(
     cx: &mut Context<SettingsView>,
 ) -> Div {
     let TokenInputCapability {
-        credential_key,
-        placeholder_i18n_key,
         help_tip_i18n_key,
         title_i18n_key,
         description_i18n_key,
-        create_url,
         ..
     } = capability;
 
@@ -179,25 +177,13 @@ pub(crate) fn render_token_input_panel(
         .is_some_and(|id| id == provider_id);
 
     if is_editing {
-        // 编辑模式：复用输入状态，避免父视图重渲染时清空用户正在输入的 token。
-        let initial_value = if display_info.edit_mode == TokenEditMode::EditStored {
-            view.state
-                .borrow()
-                .session
-                .settings
-                .provider
-                .credentials
-                .get_credential(credential_key)
-                .map(str::to_string)
-        } else {
-            None
-        };
-        let input_entity = view.ensure_token_input(
-            provider_id,
-            t!(placeholder_i18n_key).as_ref(),
-            initial_value,
-            cx,
-        );
+        // 编辑模式：输入草稿在点击 Edit/Set 时创建，这里只读取。
+        let input_entity = view
+            .token_input
+            .as_ref()
+            .expect("token input draft must exist while editing")
+            .input
+            .clone();
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
         card = card.child(TokenInputBox {
@@ -207,7 +193,6 @@ pub(crate) fn render_token_input_panel(
             focus_handle,
         });
     } else if has_token {
-        view.clear_token_input();
         // Token 已配置状态
         card = card.child(
             div()
@@ -237,7 +222,6 @@ pub(crate) fn render_token_input_panel(
                 ),
         );
     } else {
-        view.clear_token_input();
         // Token 未配置提示
         card = card.child(
             div().h(px(40.0)).flex().items_center().child(
@@ -285,11 +269,12 @@ pub(crate) fn render_token_input_panel(
     // ── 操作按钮 ──
     card = card.child(render_token_action_buttons(
         provider_id.clone(),
-        create_url,
+        capability,
         view,
         display_info.edit_mode,
         theme,
         is_editing,
+        cx,
     ));
 
     card
@@ -301,11 +286,12 @@ pub(crate) fn render_token_input_panel(
 
 fn render_token_action_buttons(
     provider_id: ProviderId,
-    create_url: &'static str,
+    capability: TokenInputCapability,
     view: &mut SettingsView,
     edit_mode: TokenEditMode,
     theme: &Theme,
     is_editing: bool,
+    cx: &mut Context<SettingsView>,
 ) -> Div {
     let mut row = div().flex().gap(px(10.0)).mt(px(2.0));
 
@@ -319,6 +305,8 @@ fn render_token_action_buttons(
     let input_entity_opt = view.token_input.as_ref().map(|draft| draft.input.clone());
     let state_left = view.state.clone();
     let left_provider_id = provider_id.clone();
+    let left_view_entity = cx.entity().clone();
+    let right_view_entity = cx.entity().clone();
 
     row = row.child(
         div()
@@ -338,22 +326,26 @@ fn render_token_action_buttons(
             .child(left_label)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 if is_editing {
-                    if let Some(entity) = &input_entity_opt {
-                        let text = entity.read(cx).content().trim().to_string();
-                        runtime::dispatch_in_window(
-                            &state_left,
-                            AppAction::SaveProviderToken {
-                                provider_id: left_provider_id.clone(),
-                                token: text,
-                            },
-                            window,
-                            cx,
-                        );
-                    }
+                    let entity = input_entity_opt
+                        .as_ref()
+                        .expect("token input draft must exist while editing");
+                    let text = entity.read(cx).content().trim().to_string();
+                    left_view_entity.update(cx, |view, _| {
+                        view.clear_token_input();
+                    });
+                    runtime::dispatch_in_window(
+                        &state_left,
+                        AppAction::SaveProviderToken {
+                            provider_id: left_provider_id.clone(),
+                            token: text,
+                        },
+                        window,
+                        cx,
+                    );
                 } else {
                     runtime::dispatch_in_window(
                         &state_left,
-                        AppAction::OpenUrl(create_url.to_string()),
+                        AppAction::OpenUrl(capability.create_url.to_string()),
                         window,
                         cx,
                     );
@@ -391,15 +383,33 @@ fn render_token_action_buttons(
             .hover(|s| s.opacity(0.9))
             .child(right_label)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                runtime::dispatch_in_window(
-                    &state_right,
-                    AppAction::SetTokenEditing {
-                        provider_id: provider_id.clone(),
-                        editing: !is_editing,
-                    },
-                    window,
-                    cx,
-                );
+                if is_editing {
+                    right_view_entity.update(cx, |view, _| {
+                        view.clear_token_input();
+                    });
+                    runtime::dispatch_in_window(
+                        &state_right,
+                        AppAction::SetTokenEditing {
+                            provider_id: provider_id.clone(),
+                            editing: false,
+                        },
+                        window,
+                        cx,
+                    );
+                } else {
+                    right_view_entity.update(cx, |view, cx| {
+                        view.begin_token_input(&provider_id, capability, edit_mode, cx);
+                    });
+                    runtime::dispatch_in_window(
+                        &state_right,
+                        AppAction::SetTokenEditing {
+                            provider_id: provider_id.clone(),
+                            editing: true,
+                        },
+                        window,
+                        cx,
+                    );
+                }
             }),
     );
 

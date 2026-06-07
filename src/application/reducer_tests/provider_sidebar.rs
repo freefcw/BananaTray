@@ -55,11 +55,13 @@ fn move_provider_to_same_index_produces_no_effects() {
 fn enter_add_provider_sets_flag_and_clears_newapi() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::EnterAddProvider);
 
     assert!(session.settings_ui.modal.is_adding_provider());
     assert!(!session.settings_ui.modal.is_newapi_form()); // 互斥
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -67,10 +69,12 @@ fn enter_add_provider_sets_flag_and_clears_newapi() {
 fn cancel_add_provider_clears_flag() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingProvider;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::CancelAddProvider);
 
     assert!(!session.settings_ui.modal.is_adding_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -80,6 +84,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     // 预设 sidebar 只有 claude
     session.settings.provider.sidebar_providers = vec!["claude".into()];
     session.settings_ui.modal = SettingsModalState::AddingProvider;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let id = pid(ProviderKind::Gemini);
     let effects = reduce(&mut session, AppAction::AddProviderToSidebar(id.clone()));
@@ -94,6 +99,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     assert_eq!(session.settings_ui.selected_provider, id);
     // 退出添加模式
     assert!(!session.settings_ui.modal.is_adding_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -113,6 +119,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .settings
         .provider
         .set_enabled(&pid(ProviderKind::Gemini), true);
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let effects = reduce(
         &mut session,
@@ -130,6 +137,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .settings
         .provider
         .is_enabled(&pid(ProviderKind::Claude)));
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -189,10 +197,12 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
 fn confirm_remove_provider_sets_confirming_flag() {
     let mut session = make_session();
     assert!(!session.settings_ui.modal.is_confirming_remove_provider());
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::ConfirmRemoveProvider);
 
     assert!(session.settings_ui.modal.is_confirming_remove_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -200,10 +210,12 @@ fn confirm_remove_provider_sets_confirming_flag() {
 fn cancel_remove_provider_clears_confirming_flag() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::CancelRemoveProvider);
 
     assert!(!session.settings_ui.modal.is_confirming_remove_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -212,6 +224,7 @@ fn remove_provider_resets_confirming_flag() {
     let mut session = make_session();
     session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
     reduce(
         &mut session,
@@ -219,6 +232,7 @@ fn remove_provider_resets_confirming_flag() {
     );
 
     assert!(!session.settings_ui.modal.is_confirming_remove_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
 }
 
 #[test]

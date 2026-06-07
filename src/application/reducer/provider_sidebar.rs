@@ -143,6 +143,7 @@ pub(super) fn open_dashboard(session: &AppSession, id: ProviderId, effects: &mut
 pub(super) fn enter_add_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     // 进入 picker 自动覆盖其他模态（含 NewAPI / 脚本表单和正在确认的二次态）
     session.settings_ui.modal = SettingsModalState::AddingProvider;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -150,6 +151,7 @@ pub(super) fn cancel_add_provider(session: &mut AppSession, effects: &mut Vec<Ap
     if session.settings_ui.modal.is_adding_provider() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -163,6 +165,7 @@ pub(super) fn add_provider_to_sidebar(
     }
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.selected_provider = id;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -194,11 +197,13 @@ pub(super) fn remove_provider_from_sidebar(
         effects.push(SettingsEffect::PersistSettings.into());
         effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
     }
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn confirm_remove_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -206,5 +211,6 @@ pub(super) fn cancel_remove_provider(session: &mut AppSession, effects: &mut Vec
     if session.settings_ui.modal.is_confirming_remove_provider() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
+    session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }

@@ -6,9 +6,9 @@ use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    div, hsla, px, App, AppContext, Context, Div, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Pixels, Point, Render, Stateful, StatefulInteractiveElement,
-    Styled, Window,
+    div, hsla, px, App, AppContext, Context, Div, Entity, FontWeight, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, Pixels, Point, Render, Stateful,
+    StatefulInteractiveElement, Styled, Window,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -34,6 +34,12 @@ struct DraggedProvider {
 struct DragPreview {
     icon: String,
     display_name: String,
+}
+
+#[derive(Clone)]
+struct SidebarActionContext {
+    state: Rc<RefCell<AppState>>,
+    view_entity: Entity<SettingsView>,
 }
 
 impl Render for DragPreview {
@@ -139,7 +145,7 @@ fn render_sidebar_item(
     item_content: Div,
     is_selected: bool,
     theme: &Theme,
-    state: Rc<RefCell<AppState>>,
+    ctx: SidebarActionContext,
     id: ProviderId,
     index: usize,
     dragged: DraggedProvider,
@@ -164,9 +170,9 @@ fn render_sidebar_item(
             .child(item_content)
     };
 
-    let select_state = state.clone();
+    let select_state = ctx.state.clone();
     let select_id = id.clone();
-    let drop_state = state.clone();
+    let drop_state = ctx.state.clone();
 
     div()
         .id(("sidebar-provider", index))
@@ -200,7 +206,7 @@ fn render_sidebar_item(
                 cx,
             );
         })
-        // 点击选中
+        // 点击选中（保留 token 输入草稿，切回时可恢复）
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
             runtime::dispatch_in_window(
                 &select_state,
@@ -212,9 +218,11 @@ fn render_sidebar_item(
 }
 
 /// 「+ 新增中转站」按钮
-fn render_add_relay_button(state: Rc<RefCell<AppState>>, theme: &Theme) -> Div {
+fn render_add_relay_button(theme: &Theme, ctx: SidebarActionContext) -> Div {
     let accent = theme.text.accent;
     let muted = theme.text.muted;
+    let state = ctx.state.clone();
+    let view_entity = ctx.view_entity.clone();
 
     div()
         .flex()
@@ -241,6 +249,9 @@ fn render_add_relay_button(state: Rc<RefCell<AppState>>, theme: &Theme) -> Div {
                 .child(t!("provider.add_button").to_string()),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            view_entity.update(cx, |view, _| {
+                view.clear_token_input();
+            });
             runtime::dispatch_in_window(&state, AppAction::EnterAddProvider, window, cx);
         })
 }
@@ -252,10 +263,14 @@ impl SettingsView {
         &mut self,
         items: &[SettingsProviderListItemViewState],
         theme: &Theme,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Div {
         // 设计稿：sidebar 无背景色，直接在暗色底上列出 provider
         let mut list = div().flex_col().py(px(4.0));
+        let sidebar_ctx = SidebarActionContext {
+            state: self.state.clone(),
+            view_entity: cx.entity().clone(),
+        };
 
         for (index, item_state) in items.iter().enumerate() {
             let content = render_sidebar_item_content(
@@ -276,7 +291,7 @@ impl SettingsView {
                 content,
                 item_state.is_selected,
                 theme,
-                self.state.clone(),
+                sidebar_ctx.clone(),
                 item_state.id.clone(),
                 index,
                 dragged,
@@ -286,7 +301,7 @@ impl SettingsView {
         }
 
         // 「+ 新增中转站」按钮
-        list = list.child(render_add_relay_button(self.state.clone(), theme));
+        list = list.child(render_add_relay_button(theme, sidebar_ctx));
 
         // 使用 h_full() 自适应父容器高度（父容器已统一负责可用高度）
         div()

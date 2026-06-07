@@ -9,13 +9,37 @@ use crate::refresh::{RefreshEvent, RefreshRequest};
 // ── NewAPI 快速添加 ────────────────────────────────
 
 #[test]
+fn edit_newapi_clears_token_editing_state() {
+    let mut session = make_session();
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
+    let id = ProviderId::Custom("ccswitch:newapi".to_string());
+
+    let effects = reduce(
+        &mut session,
+        AppAction::EditNewApi {
+            provider_id: id.clone(),
+        },
+    );
+
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::LoadConfig { provider_id }))
+            if *provider_id == id
+    )));
+    assert!(has_render(&effects));
+}
+
+#[test]
 fn enter_add_newapi_sets_flag_true() {
     let mut session = make_session();
     assert!(!session.settings_ui.modal.is_newapi_form());
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::EnterAddNewApi);
 
     assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -23,10 +47,12 @@ fn enter_add_newapi_sets_flag_true() {
 fn cancel_add_newapi_resets_flag() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::CancelAddNewApi);
 
     assert!(!session.settings_ui.modal.is_newapi_form());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -332,6 +358,7 @@ fn set_settings_tab_clears_adding_provider() {
     // 切换 tab 时应退出 picker
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingProvider;
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(
         &mut session,
@@ -339,6 +366,7 @@ fn set_settings_tab_clears_adding_provider() {
     );
 
     assert!(!session.settings_ui.modal.is_adding_provider());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -493,6 +521,7 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
     let mut session = make_session();
     let id = ProviderId::Custom("my-api-example-com:newapi".to_string());
     session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(
         &mut session,
@@ -507,6 +536,7 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
             if *provider_id == id
     )));
     assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -547,10 +577,12 @@ fn delete_newapi_emits_effect_for_builtin_provider() {
 fn confirm_delete_newapi_sets_confirming_flag() {
     let mut session = make_session();
     assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::ConfirmDeleteNewApi);
 
     assert!(session.settings_ui.modal.is_confirming_delete_newapi());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
@@ -558,10 +590,12 @@ fn confirm_delete_newapi_sets_confirming_flag() {
 fn cancel_delete_newapi_clears_confirming_flag() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
+    session.settings_ui.token_editing_provider = Some(ProviderId::BuiltIn(ProviderKind::Copilot));
 
     let effects = reduce(&mut session, AppAction::CancelDeleteNewApi);
 
     assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
+    assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_render(&effects));
 }
 
