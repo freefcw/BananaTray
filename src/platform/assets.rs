@@ -107,13 +107,8 @@ impl AssetSource for Assets {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
     use std::env;
-    use std::sync::{Mutex, OnceLock};
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
-    }
 
     #[test]
     fn test_from_env_with_valid_dir() {
@@ -122,7 +117,7 @@ mod tests {
         let tmp = env::temp_dir().join("bananatray_test_env");
         fs::create_dir_all(&tmp).unwrap();
 
-        // SAFETY: 测试串行执行（cargo test 默认单线程），无并发 env 访问
+        // SAFETY: 通过共享 env_lock 串行化进程级环境变量修改。
         unsafe { env::set_var("BANANATRAY_RESOURCES", tmp.to_str().unwrap()) };
         let result = Assets::from_env();
         assert!(result.is_some());
@@ -135,7 +130,7 @@ mod tests {
     #[test]
     fn test_from_env_with_nonexistent_dir() {
         let _guard = env_lock().lock().unwrap();
-        // SAFETY: 测试串行执行，无并发 env 访问
+        // SAFETY: 通过共享 env_lock 串行化进程级环境变量修改。
         unsafe { env::set_var("BANANATRAY_RESOURCES", "/nonexistent/path/bananatray") };
         let result = Assets::from_env();
         assert!(result.is_none());
@@ -145,7 +140,7 @@ mod tests {
     #[test]
     fn test_from_env_unset() {
         let _guard = env_lock().lock().unwrap();
-        // SAFETY: 测试串行执行，无并发 env 访问
+        // SAFETY: 通过共享 env_lock 串行化进程级环境变量修改。
         unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         let result = Assets::from_env();
         assert!(result.is_none());
@@ -176,7 +171,7 @@ mod tests {
     fn test_resolve_base_fallback_to_dev() {
         let _guard = env_lock().lock().unwrap();
         // 确保没有干扰环境变量
-        // SAFETY: 测试串行执行，无并发 env 访问
+        // SAFETY: 通过共享 env_lock 串行化进程级环境变量修改。
         unsafe { env::remove_var("BANANATRAY_RESOURCES") };
         let result = Assets::resolve_base();
         // 在开发环境中，应该回退到 CARGO_MANIFEST_DIR

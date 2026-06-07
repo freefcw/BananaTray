@@ -206,12 +206,7 @@ impl AiProvider for CopilotProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
-    }
+    use crate::utils::test_support::env_lock;
 
     #[test]
     fn copilot_token_input_state_from_config_file_is_editable() {

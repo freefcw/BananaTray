@@ -148,21 +148,24 @@ fn read_file_token(path: &str, token_path: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     #[test]
     fn test_resolve_auth_headers_bearer_env() {
-        std::env::set_var("TEST_TOKEN_FETCHER", "tok123");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_TOKEN_FETCHER", "tok123") };
         let auth = Some(AuthDef::BearerEnv {
             env_var: "TEST_TOKEN_FETCHER".to_string(),
         });
         let headers = resolve_auth_headers(&None, &auth, &[]).unwrap();
         assert_eq!(headers, vec!["Authorization: Bearer tok123"]);
-        std::env::remove_var("TEST_TOKEN_FETCHER");
+        unsafe { std::env::remove_var("TEST_TOKEN_FETCHER") };
     }
 
     #[test]
     fn test_resolve_auth_headers_missing_env() {
-        std::env::remove_var("MISSING_TOKEN_12345");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("MISSING_TOKEN_12345") };
         let auth = Some(AuthDef::BearerEnv {
             env_var: "MISSING_TOKEN_12345".to_string(),
         });
@@ -171,14 +174,15 @@ mod tests {
 
     #[test]
     fn test_resolve_auth_headers_custom_with_env_expansion() {
-        std::env::set_var("TEST_CUSTOM_HEADER_VAL", "secret");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_CUSTOM_HEADER_VAL", "secret") };
         let headers = vec![HeaderDef {
             name: "X-Custom".to_string(),
             value: "Bearer ${TEST_CUSTOM_HEADER_VAL}".to_string(),
         }];
         let result = resolve_auth_headers(&None, &None, &headers).unwrap();
         assert_eq!(result, vec!["X-Custom: Bearer secret"]);
-        std::env::remove_var("TEST_CUSTOM_HEADER_VAL");
+        unsafe { std::env::remove_var("TEST_CUSTOM_HEADER_VAL") };
     }
 
     #[test]
@@ -272,16 +276,17 @@ mod tests {
 
     #[test]
     fn test_resolve_auth_headers_login_env_expansion() {
-        std::env::set_var("TEST_LOGIN_USER", "admin");
-        std::env::set_var("TEST_LOGIN_PASS", "secret123");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_LOGIN_USER", "admin") };
+        unsafe { std::env::set_var("TEST_LOGIN_PASS", "secret123") };
 
         let username = expand_env_vars("${TEST_LOGIN_USER}");
         let password = expand_env_vars("${TEST_LOGIN_PASS}");
         assert_eq!(username, "admin");
         assert_eq!(password, "secret123");
 
-        std::env::remove_var("TEST_LOGIN_USER");
-        std::env::remove_var("TEST_LOGIN_PASS");
+        unsafe { std::env::remove_var("TEST_LOGIN_USER") };
+        unsafe { std::env::remove_var("TEST_LOGIN_PASS") };
     }
 
     #[test]

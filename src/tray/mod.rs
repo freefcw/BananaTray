@@ -39,10 +39,13 @@ pub(crate) fn should_use_gpui_tray() -> bool {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
+    use crate::utils::test_support::env_lock;
+
     #[test]
     fn gpui_tray_is_disabled_when_gnome_extension_mode_is_forced() {
-        std::env::set_var("BANANATRAY_FORCE_GNOME_EXTENSION", "1");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("BANANATRAY_FORCE_GNOME_EXTENSION", "1") };
         assert!(!super::should_use_gpui_tray());
-        std::env::remove_var("BANANATRAY_FORCE_GNOME_EXTENSION");
+        unsafe { std::env::remove_var("BANANATRAY_FORCE_GNOME_EXTENSION") };
     }
 }

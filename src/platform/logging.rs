@@ -201,6 +201,7 @@ fn install_panic_hook() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     #[cfg(feature = "app")]
     #[test]
@@ -222,10 +223,11 @@ mod tests {
     #[cfg(feature = "app")]
     #[test]
     fn resolve_log_path_env_override() {
+        let _guard = env_lock().lock().unwrap();
         let dir = std::env::temp_dir().join("bananatray_log_test");
-        std::env::set_var("BANANATRAY_LOG_DIR", &dir);
+        unsafe { std::env::set_var("BANANATRAY_LOG_DIR", &dir) };
         let path = resolve_log_path().unwrap();
-        std::env::remove_var("BANANATRAY_LOG_DIR");
+        unsafe { std::env::remove_var("BANANATRAY_LOG_DIR") };
         assert_eq!(path, dir.join("bananatray.log"));
     }
 

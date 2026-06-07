@@ -15,10 +15,12 @@ pub(super) fn api_url() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     #[test]
     fn test_api_url_default() {
-        std::env::remove_var("MINIMAX_REGION");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("MINIMAX_REGION") };
         assert_eq!(
             api_url(),
             "https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains"

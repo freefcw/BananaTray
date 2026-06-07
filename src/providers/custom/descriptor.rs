@@ -41,6 +41,7 @@ fn first_letter_icon(display_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     fn minimal_plan_yaml() -> &'static str {
         r#"
@@ -124,7 +125,8 @@ metadata:
 
     #[test]
     fn test_dashboard_url_env_expansion() {
-        std::env::set_var("TEST_CUSTOM_BASE_URL", "https://my-newapi.com");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_CUSTOM_BASE_URL", "https://my-newapi.com") };
         let yaml = format!(
             r#"
 schema_version: 2
@@ -143,7 +145,7 @@ metadata:
             desc.metadata.dashboard_url,
             "https://my-newapi.com/dashboard"
         );
-        std::env::remove_var("TEST_CUSTOM_BASE_URL");
+        unsafe { std::env::remove_var("TEST_CUSTOM_BASE_URL") };
     }
 
     #[test]

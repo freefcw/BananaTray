@@ -84,6 +84,7 @@ fn check_file_exists(path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     fn check_sync(def: &AvailabilityDef) -> bool {
         check(def).is_ok()
@@ -91,14 +92,16 @@ mod tests {
 
     #[test]
     fn test_check_env_var_set() {
-        std::env::set_var("TEST_CUSTOM_AVAIL", "value");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_CUSTOM_AVAIL", "value") };
         assert!(check_env_var("TEST_CUSTOM_AVAIL").is_ok());
-        std::env::remove_var("TEST_CUSTOM_AVAIL");
+        unsafe { std::env::remove_var("TEST_CUSTOM_AVAIL") };
     }
 
     #[test]
     fn test_check_env_var_missing() {
-        std::env::remove_var("NONEXISTENT_CUSTOM_99");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("NONEXISTENT_CUSTOM_99") };
         assert!(check_env_var("NONEXISTENT_CUSTOM_99").is_err());
     }
 

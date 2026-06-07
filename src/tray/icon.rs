@@ -88,6 +88,8 @@ pub fn apply_tray_icon(cx: &mut App, request: TrayIconRequest) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    use crate::utils::test_support::env_lock;
 
     /// 所有可能的 TrayIconRequest 变体
     fn all_requests() -> Vec<TrayIconRequest> {
@@ -199,8 +201,9 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn gnome_extension_mode_is_detectable_for_tests() {
-        std::env::set_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED", "1");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED", "1") };
         assert!(crate::platform::gnome_detect::should_use_gnome_extension());
-        std::env::remove_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED");
+        unsafe { std::env::remove_var("BANANATRAY_TEST_GNOME_EXTENSION_ENABLED") };
     }
 }
