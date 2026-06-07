@@ -318,12 +318,14 @@ describe('summarizeProviders', () => {
             makeProvider({connection: 'Connected', worst_status: 'Green'}),
             makeProvider({connection: 'Error', quotas: []}),
             makeProvider({connection: 'Refreshing'}),
+            makeProvider({connection: 'Disconnected'}),
         ];
         const summary = summarizeProviders(providers);
-        assert.equal(summary.total, 4);
+        assert.equal(summary.total, 5);
         assert.equal(summary.connected, 2);
         assert.equal(summary.error, 1);
         assert.equal(summary.refreshing, 1);
+        assert.equal(summary.disconnected, 1);
     });
 
     it('computes attention count', () => {

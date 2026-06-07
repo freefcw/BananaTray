@@ -338,6 +338,9 @@ export class QuotaClient {
     }
 
     _onRefreshComplete(jsonData) {
+        // destroy() 中 disconnectSignal 后，已排队的信号回调仍可能执行（GJS 事件循环语义）。
+        if (this._destroyed)
+            return;
         try {
             this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
         } catch (e) {

@@ -305,6 +305,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     _showLoading(text, level = 'yellow', panelText = _('Waiting')) {
+        // 进入 loading/offline 状态时，之前的刷新操作已不再有意义，重置标志避免 Sync 按钮短暂锁死。
+        this._isRefreshing = false;
         this._statusLabel.text = text || _('Loading');
         this._setPanelState(level, panelText);
         this._updateHeaderBadge(level === 'red' ? 'offline' : 'syncing', text || _('Loading'));
