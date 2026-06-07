@@ -309,6 +309,16 @@ impl InteractiveRunner {
             .map(|(k, v)| (Self::normalize_for_matching(k), v.clone()))
             .collect();
 
+        // Sliding window size for prompt scanning: the longest normalized prompt
+        // could originate from raw text ~10x its length (ANSI codes, whitespace),
+        // plus one chunk (8KB) to cover chunk-boundary splits.
+        let max_prompt_len = prompt_responses
+            .iter()
+            .map(|(p, _)| p.len())
+            .max()
+            .unwrap_or(0);
+        let prompt_scan_window = max_prompt_len * 10 + 8192;
+
         while Instant::now() < deadline {
             // Non-blocking receive from reader thread
             match rx.recv_timeout(Duration::from_millis(60)) {
@@ -319,8 +329,11 @@ impl InteractiveRunner {
                     }
                     buffer.extend_from_slice(&data);
 
-                    // Check for auto-response triggers
-                    let text = String::from_utf8_lossy(&buffer);
+                    // Check for auto-response triggers using a sliding window.
+                    // Prompts appear in recent output, so we only scan the tail
+                    // to avoid O(n²) re-processing of the entire buffer.
+                    let window_start = buffer.len().saturating_sub(prompt_scan_window);
+                    let text = String::from_utf8_lossy(&buffer[window_start..]);
                     let normalized = Self::normalize_for_matching(&text);
 
                     for (prompt, response) in &prompt_responses {
