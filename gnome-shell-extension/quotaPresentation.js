@@ -27,6 +27,29 @@ export function normalizeStatusKind(value) {
     return STATUS_KIND_KEYS.has(kind) ? kind : 'stale';
 }
 
+export function headerStatusText(statusKind, elapsedSecs) {
+    switch (normalizeStatusKind(statusKind)) {
+    case 'synced':
+        return _('Synced');
+    case 'syncing':
+        return _('Syncing');
+    case 'offline':
+        return _('Offline');
+    default:
+        if (typeof elapsedSecs !== 'number' || !Number.isFinite(elapsedSecs))
+            return null;
+
+        const secs = Math.max(0, Math.floor(elapsedSecs));
+        if (secs < 3600) {
+            const minutes = Math.floor(secs / 60);
+            return ngettext('%d minute ago', '%d minutes ago', minutes).replaceAll('%d', minutes);
+        }
+
+        const hours = Math.floor(secs / 3600);
+        return ngettext('%d hour ago', '%d hours ago', hours).replaceAll('%d', hours);
+    }
+}
+
 function primaryProviderPanelText(provider) {
     const primaryQuota = sortedQuotas(provider)[0];
     const name = provider.display_name || provider.id || _('Provider');

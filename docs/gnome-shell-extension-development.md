@@ -229,6 +229,8 @@ Extension 当前依赖的最小字段：
 
 `bar_ratio` 是 v1 内的可选增强字段。存在时扩展优先使用它渲染进度条；不存在时用 `used / limit` 降级。
 
+`elapsed_secs` 是 v1 内的可选增强字段，仅在 `status_kind == Stale` 时由 daemon 填充。扩展会优先用它本地化 `Synced` / `Syncing` / `Offline` / `x minutes ago` / `x hours ago`；若缺失则回退到 daemon 提供的 `status_text`。
+
 Rust DTO 定义在 `src/application/selectors/dbus_dto.rs`，D-Bus 服务文档见 `src/dbus/README.md`。
 
 ## 开发约束

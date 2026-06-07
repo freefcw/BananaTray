@@ -52,6 +52,9 @@ msgstr "加载中"
 msgid "Loading quota data"
 msgstr "正在加载配额数据"
 
+msgid "Synced"
+msgstr "已同步"
+
 msgid "No enabled providers"
 msgstr "没有启用的 Provider"
 
@@ -84,6 +87,9 @@ msgstr "刷新中"
 msgid "Refreshing quota data"
 msgstr "正在刷新配额数据"
 
+msgid "Syncing"
+msgstr "同步中"
+
 # Translators: footer button label for manual data refresh.
 msgid "Sync Data"
 msgstr "同步数据"
@@ -107,6 +113,14 @@ msgstr "正在等待后台服务"
 msgid "%d connected"
 msgid_plural "%d connected"
 msgstr[0] "%d 个已连接"
+
+msgid "%d minute ago"
+msgid_plural "%d minutes ago"
+msgstr[0] "%d 分钟前"
+
+msgid "%d hour ago"
+msgid_plural "%d hours ago"
+msgstr[0] "%d 小时前"
 
 msgid "%d error"
 msgid_plural "%d errors"

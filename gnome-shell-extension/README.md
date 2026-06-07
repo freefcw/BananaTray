@@ -199,7 +199,7 @@ bash scripts/bundle-gnome-extension.sh
 弹窗展示的是 daemon 推送的 `DBusQuotaSnapshot` 总览视图：
 
 - 顶栏入口使用扩展自带的 `icons/bananatray-symbolic.svg`，旁边状态点和文字都跟随排序第一的已启用 Provider，显示它的首要 quota/连接状态。
-- 弹窗头部显示 daemon 的 `header.status_text`，并汇总 Provider 总数、Connected 数量、Refreshing / Error / Offline 状态。
+- 弹窗头部徽章由 daemon 的 `header.status_kind` + `header.elapsed_secs` 驱动；扩展端按 Shell locale 本地化 `Synced` / `Syncing` / `Offline` / `x minutes ago` / `x hours ago`，并汇总 Provider 总数、Connected 数量、Refreshing / Error / Offline 状态。
 - 每个 Provider 行同步 `display_name`、`connection`、`account_email`、`account_tier`、`worst_status` 和所有可见 `quotas`；行内左侧固定为 Provider 身份区，右侧固定为 tier / 状态 / 展开按钮列，避免不同 Provider 状态导致视觉跳动。
 - quota 按严重度排序，显示 label、预计算 `display_text` 和进度条；数值列固定右对齐，折叠态的 `+N` 额外配额数量也落在同一列内。
 - quota 进度条优先使用 v1 内新增的可选 `bar_ratio` 字段，使 Remaining / Used 模式与主应用 Overview 保持一致；旧 daemon 未提供时，Extension 会用 `used / limit` 作为降级值。填充色使用与主应用相同的渐变语义：紫蓝起点过渡到当前状态色。
@@ -208,6 +208,7 @@ bash scripts/bundle-gnome-extension.sh
 
 `DBusQuotaSnapshot` 顶层必须包含 `schema_version`。当前 Extension 只接受
 `schema_version: 1`，并在渲染前校验最小必填字段；字段缺失、类型不匹配或版本不支持时会显示错误态并写入 GNOME Shell 日志。
+`header.elapsed_secs` 是可选字段，仅在 `status_kind == Stale` 时用于本地化“多久前”文案；若缺失，Extension 仍会回退读取 daemon 的 `status_text`。
 `connection`、`worst_status` 和 quota `status_level` 的未知枚举值会写入日志，状态等级未知时按 Yellow 渲染，
 用于暴露同版本内的 daemon / Extension 协议漂移。
 

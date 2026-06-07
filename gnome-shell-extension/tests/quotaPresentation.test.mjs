@@ -10,6 +10,7 @@ import {
     normalizeStatusLevel,
     normalizeConnection,
     normalizeStatusKind,
+    headerStatusText,
     providerVisualLevel,
     statusBadgeLabel,
     connectionLabel,
@@ -104,6 +105,27 @@ describe('normalizeStatusKind', () => {
         assert.equal(normalizeStatusKind(''), 'stale');
         assert.equal(normalizeStatusKind(null), 'stale');
         assert.equal(normalizeStatusKind(undefined), 'stale');
+    });
+});
+
+// ============================================================
+// headerStatusText
+// ============================================================
+describe('headerStatusText', () => {
+    it('localizes stable status kinds', () => {
+        assert.equal(headerStatusText('Synced'), 'Synced');
+        assert.equal(headerStatusText('Syncing'), 'Syncing');
+        assert.equal(headerStatusText('Offline'), 'Offline');
+    });
+
+    it('formats stale elapsed time in minutes and hours', () => {
+        assert.equal(headerStatusText('Stale', 59), '0 minutes ago');
+        assert.equal(headerStatusText('Stale', 600), '10 minutes ago');
+        assert.equal(headerStatusText('Stale', 7200), '2 hours ago');
+    });
+
+    it('returns null for stale without elapsed time', () => {
+        assert.equal(headerStatusText('Stale', undefined), null);
     });
 });
 

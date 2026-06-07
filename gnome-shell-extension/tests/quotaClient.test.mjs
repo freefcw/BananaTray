@@ -163,6 +163,17 @@ describe('validateSnapshot — top-level structure', () => {
         );
     });
 
+    it('accepts optional header.elapsed_secs', () => {
+        const snapshot = makeSnapshot({
+            header: {
+                status_text: '10 min ago',
+                status_kind: 'Stale',
+                elapsed_secs: 600,
+            },
+        });
+        assert.doesNotThrow(() => validateSnapshot(snapshot));
+    });
+
     it('rejects non-array providers', () => {
         assert.throws(
             () => validateSnapshot(makeSnapshot({providers: 'not array'})),

@@ -79,7 +79,8 @@ zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满�
   "schema_version": 1,
   "header": {
     "status_text": "Synced",
-    "status_kind": "Synced"
+    "status_kind": "Synced",
+    "elapsed_secs": null
   },
   "providers": [
     {
@@ -115,12 +116,15 @@ DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨�
 - 删除字段、字段改名、字段类型变化、枚举字符串语义变化，都必须提升 `schema_version`。
 - Extension 当前只接受 `schema_version == 1`，并在渲染前校验最小必填字段：
   - 顶层：`schema_version`、`header`、`providers`
-  - `header`：`status_text`、`status_kind`
+  - `header`：`status_text`、`status_kind`、`elapsed_secs`（可选）
   - provider：`id`、`display_name`、`icon_asset`、`connection`、`worst_status`、`quotas`
   - quota：`label`、`used`、`limit`、`status_level`、`display_text`、`quota_type_key`
 
 `quota.bar_ratio` 是 schema v1 内新增的可选字段，表示 Overview 进度条比例 `[0.0, 1.0]`。
 它的语义与当前 `quota_display_mode` 对齐：Remaining 模式表示剩余比例，Used 模式表示已用比例。GNOME Shell Extension 会优先使用该字段；旧 daemon 未提供时会降级为 `used / limit`。
+
+`header.elapsed_secs` 是 schema v1 内新增的可选字段，仅在 `header.status_kind == "Stale"` 时填充。
+它用于让 GNOME Shell Extension 自行本地化“多久前”的徽章文案；旧 daemon 未提供时，Extension 仍会回退读取 `header.status_text`。
 
 ## 数据流
 

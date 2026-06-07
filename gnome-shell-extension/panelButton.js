@@ -9,7 +9,12 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 import {_} from './i18n.js';
 import {QuotaClient} from './quotaClient.js';
-import {normalizeStatusKind, normalizeStatusLevel, summarizeProviders} from './quotaPresentation.js';
+import {
+    headerStatusText,
+    normalizeStatusKind,
+    normalizeStatusLevel,
+    summarizeProviders,
+} from './quotaPresentation.js';
 import {BananaTrayProviderRow, createLabel, createStatusDot} from './quotaWidgets.js';
 
 export const BananaTrayIndicator = GObject.registerClass(
@@ -261,7 +266,11 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
         // Header badge (color-coded by status_kind)
         const statusKind = data.header?.status_kind || 'Stale';
-        this._updateHeaderBadge(statusKind, data.header?.status_text || _('Unknown'));
+        const statusText =
+            headerStatusText(statusKind, data.header?.elapsed_secs) ||
+            data.header?.status_text ||
+            _('Unknown');
+        this._updateHeaderBadge(statusKind, statusText);
         this._setSyncButtonState(statusKind);
 
         this._setPanelState(summary.panelLevel, summary.panelText);

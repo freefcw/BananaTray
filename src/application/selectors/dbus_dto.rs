@@ -36,6 +36,8 @@ pub struct DBusHeaderInfo {
     pub status_text: String,
     /// 状态种类标识符（"Synced" / "Syncing" / "Stale" / "Offline"）
     pub status_kind: String,
+    /// 状态经过秒数（仅在 Stale 时填充，供扩展本地化展示）
+    pub elapsed_secs: Option<u64>,
 }
 
 // ============================================================================
@@ -99,13 +101,17 @@ impl DBusQuotaSnapshot {
             .map(|p| DBusProviderEntry::from_provider(p, session))
             .collect();
 
-        let (status_kind, _) = session.header_status_text();
+        let (status_kind, elapsed_secs) = session.header_status_text();
+        let elapsed_secs = matches!(status_kind, HeaderStatusKind::Stale)
+            .then_some(elapsed_secs)
+            .flatten();
         DBusQuotaSnapshot {
             schema_version: DBUS_QUOTA_SCHEMA_VERSION,
             providers,
             header: DBusHeaderInfo {
                 status_text: dbus_header_status_text(session),
                 status_kind: format!("{:?}", status_kind),
+                elapsed_secs,
             },
         }
     }
@@ -184,7 +190,7 @@ pub fn format_provider_id(id: &ProviderId) -> String {
     }
 }
 
-/// D-Bus 专用头部状态文本（与 GPUI selector 逻辑对齐，但不依赖 ViewModel）
+/// D-Bus 专用头部状态文本（兼容旧消费者；新扩展优先用 `status_kind` + `elapsed_secs`）
 fn dbus_header_status_text(session: &AppSession) -> String {
     let (status_kind, elapsed) = session.header_status_text();
     match status_kind {
@@ -210,6 +216,7 @@ fn dbus_header_status_text(session: &AppSession) -> String {
 mod tests {
     use super::*;
     use crate::models::test_helpers::setup_test_locale as setup_locale;
+    use std::time::Duration;
 
     // ── 格式化函数 ──────────────────────────────────────
 
@@ -342,5 +349,30 @@ mod tests {
         assert!(parsed.get("providers").is_some());
         assert!(parsed.get("header").is_some());
         assert!(!parsed["providers"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dbus_header_includes_elapsed_secs_for_stale_snapshot() {
+        let _g = setup_locale();
+        use crate::models::test_helpers::make_test_provider;
+        use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind};
+
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .set_enabled(&ProviderId::BuiltIn(ProviderKind::Claude), true);
+
+        let mut provider = make_test_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        provider.last_refreshed_instant = Some(std::time::Instant::now() - Duration::from_secs(90));
+
+        let session = AppSession::new(settings, vec![provider]);
+        let snapshot = DBusQuotaSnapshot::from_session(&session);
+
+        assert_eq!(snapshot.header.status_kind, "Stale");
+        let elapsed = snapshot
+            .header
+            .elapsed_secs
+            .expect("elapsed_secs should exist");
+        assert!((89..=91).contains(&elapsed));
     }
 }
