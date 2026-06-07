@@ -7,8 +7,8 @@
 use super::QuotaDisplayViewState;
 use crate::models::{
     ConnectionStatus, FailureAdvice, FailureReason, ProviderCapability, ProviderFailure,
-    ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType,
-    UpdateStatus,
+    ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec,
+    QuotaType, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -280,6 +280,62 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
     }
 }
 
+/// 设置页 quota 卡片的主显示文本。
+pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> String {
+    if quota.is_balance_only() {
+        let balance = quota.remaining_balance.unwrap_or(0.0);
+        return if matches!(quota.quota_type, QuotaType::Credit) {
+            format!("${:.2}", balance)
+        } else {
+            format!("{:.2}", balance)
+        };
+    }
+
+    let remaining_pct = quota.percent_remaining();
+    match (&quota.quota_type, display_mode) {
+        (QuotaType::Credit, QuotaDisplayMode::Remaining) => quota.format_remaining_signed("$"),
+        (QuotaType::Credit, QuotaDisplayMode::Used) => format!("${:.2}", quota.used),
+        (QuotaType::Points, QuotaDisplayMode::Remaining) => quota.format_remaining_signed(""),
+        (QuotaType::Points, QuotaDisplayMode::Used) => format!("{:.2}", quota.used),
+        (_, QuotaDisplayMode::Remaining) => format!("{:.0}", remaining_pct.max(0.0)),
+        (_, QuotaDisplayMode::Used) => format!("{:.0}", quota.percentage().clamp(0.0, 100.0)),
+    }
+}
+
+/// 设置页 quota 卡片的模式标签。
+pub fn format_quota_card_mode_label(is_balance: bool, display_mode: QuotaDisplayMode) -> String {
+    if is_balance {
+        return t!("quota.mode.balance").to_string();
+    }
+
+    match display_mode {
+        QuotaDisplayMode::Remaining => t!("quota.mode.remaining").to_string(),
+        QuotaDisplayMode::Used => t!("quota.mode.used").to_string(),
+    }
+}
+
+/// 设置页 quota 卡片是否需要额外的百分号单位。
+pub fn format_quota_card_has_unit(quota: &QuotaInfo) -> bool {
+    !quota.is_balance_only() && !matches!(quota.quota_type, QuotaType::Credit | QuotaType::Points)
+}
+
+/// 设置页 quota 卡片的第四行详情文本。
+pub fn format_quota_card_detail_text(quota_view: &QuotaDisplayViewState) -> String {
+    let quota = &quota_view.quota;
+    if !quota.is_balance_only() {
+        return quota_view.detail.clone();
+    }
+
+    let used_text = quota_usage_detail_text(quota);
+    if used_text.is_empty() {
+        quota_view.detail.clone()
+    } else if quota_view.detail.is_empty() {
+        used_text
+    } else {
+        format!("{} · {}", used_text, quota_view.detail)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,7 +344,7 @@ mod tests {
     };
     use crate::models::{
         ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderKind,
-        QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
+        QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
     };
 
     // ── display_source_label ─────────────────────────────────
@@ -489,5 +545,64 @@ mod tests {
         let _locale_guard = setup_locale();
         let q = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
         assert_eq!(quota_usage_detail_text(&q), "");
+    }
+
+    #[test]
+    fn quota_card_display_text_balance_mode() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("Balance", 10.0, Some(3.0), QuotaType::Credit, None);
+        assert_eq!(
+            format_quota_card_display_text(&q, QuotaDisplayMode::Remaining),
+            "$10.00"
+        );
+    }
+
+    #[test]
+    fn quota_card_display_text_used_mode_for_percentage_quota() {
+        let _locale_guard = setup_locale();
+        let q = QuotaInfo::new("test", 25.0, 100.0);
+        assert_eq!(
+            format_quota_card_display_text(&q, QuotaDisplayMode::Used),
+            "25"
+        );
+    }
+
+    #[test]
+    fn quota_card_mode_label_uses_balance_variant() {
+        let _locale_guard = setup_locale();
+        assert_eq!(
+            format_quota_card_mode_label(true, QuotaDisplayMode::Remaining),
+            "Balance"
+        );
+    }
+
+    #[test]
+    fn quota_card_has_unit_skips_credit_and_points() {
+        let _locale_guard = setup_locale();
+        assert!(!format_quota_card_has_unit(&QuotaInfo::with_details(
+            "Credit",
+            5.0,
+            20.0,
+            QuotaType::Credit,
+            None,
+        )));
+        assert!(format_quota_card_has_unit(&QuotaInfo::new(
+            "General", 25.0, 100.0
+        )));
+    }
+
+    #[test]
+    fn quota_card_detail_merges_usage_when_balance_mode_has_existing_detail() {
+        let _locale_guard = setup_locale();
+        let quota = QuotaInfo::balance_only("Balance", 10.0, Some(3.5), QuotaType::Credit, None);
+        let view = QuotaDisplayViewState {
+            quota,
+            label: "Balance".to_string(),
+            detail: "Resets tomorrow".to_string(),
+        };
+        assert_eq!(
+            format_quota_card_detail_text(&view),
+            "Used: $3.50 · Resets tomorrow"
+        );
     }
 }

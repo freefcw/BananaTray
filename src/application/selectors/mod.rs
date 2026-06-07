@@ -277,7 +277,10 @@ pub use debug::{
 };
 #[cfg(any(target_os = "linux", test))]
 pub(crate) use format::format_quota_label;
-pub use format::quota_usage_detail_text;
+pub(crate) use format::{
+    format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
+    format_quota_card_mode_label,
+};
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;

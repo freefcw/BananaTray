@@ -1,7 +1,10 @@
 use std::time::Duration;
 
-use crate::application::{quota_usage_detail_text, QuotaDisplayViewState};
-use crate::models::{QuotaDisplayMode, QuotaType, StatusLevel};
+use crate::application::{
+    format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
+    format_quota_card_mode_label, QuotaDisplayViewState,
+};
+use crate::models::{QuotaDisplayMode, QuotaInfo, StatusLevel};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -9,7 +12,6 @@ use gpui::{
     AnimationExt, Div, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement,
     Stateful, StyleRefinement, Styled,
 };
-use rust_i18n::t;
 
 /// 状态徽章文本
 fn status_badge_label(level: StatusLevel) -> &'static str {
@@ -38,6 +40,174 @@ fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
     }
 }
 
+fn render_quota_card_frame(
+    quota: &QuotaInfo,
+    theme: &Theme,
+    hover_bg: Hsla,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(ElementId::Name(
+            format!("quota-card-{}", quota.stable_key).into(),
+        ))
+        .w_full()
+        .flex_col()
+        .gap(px(6.0))
+        .px(px(16.0))
+        .py(px(14.0))
+        .rounded(px(12.0))
+        .bg(theme.bg.card_inner)
+        .border_1()
+        .border_color(theme.border.strong)
+        .hover(move |style: StyleRefinement| style.bg(hover_bg))
+}
+
+fn render_quota_header_row(
+    quota_view: &QuotaDisplayViewState,
+    badge_color: Hsla,
+    badge_label: &'static str,
+    theme: &Theme,
+) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .justify_between()
+        .items_center()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .flex_shrink_0()
+                .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(badge_color))
+                .child(
+                    div()
+                        .overflow_hidden()
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.text.secondary)
+                        .whitespace_nowrap()
+                        .child(quota_view.label.to_uppercase()),
+                ),
+        )
+        .child(
+            div()
+                .flex_shrink_0()
+                .text_size(px(10.0))
+                .font_weight(FontWeight::BOLD)
+                .text_color(badge_color)
+                .px(px(8.0))
+                .py(px(2.0))
+                .rounded(px(6.0))
+                .border_1()
+                .border_color(badge_color)
+                .child(badge_label),
+        )
+}
+
+fn render_quota_value_row(
+    display_text: &str,
+    mode_label: &str,
+    has_unit: bool,
+    theme: &Theme,
+) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .justify_between()
+        .items_end()
+        .child(
+            div()
+                .flex()
+                .items_end()
+                .flex_shrink_0()
+                .child(
+                    div()
+                        .text_size(px(36.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme.text.primary)
+                        .line_height(relative(1.0))
+                        .whitespace_nowrap()
+                        .child(display_text.to_string()),
+                )
+                .children(if has_unit {
+                    Some(
+                        div()
+                            .text_size(px(18.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text.secondary)
+                            .line_height(relative(1.0))
+                            .ml(px(2.0))
+                            .mb(px(6.0))
+                            .child("%"),
+                    )
+                } else {
+                    None
+                }),
+        )
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(theme.text.secondary)
+                .line_height(relative(1.0))
+                .mb(px(1.0))
+                .child(mode_label.to_string()),
+        )
+}
+
+fn render_quota_progress_row(
+    quota: &QuotaInfo,
+    fill_color: Hsla,
+    generation: u64,
+    theme: &Theme,
+) -> Div {
+    let remaining_pct = quota.percent_remaining();
+    let target_ratio = if remaining_pct < 0.0 {
+        0.0_f32
+    } else {
+        remaining_pct as f32 / 100.0
+    };
+    let anim_id = ElementId::Name(format!("quota-bar-{}-{}", quota.stable_key, generation).into());
+    let gradient_start = theme.status.bar_gradient_start;
+    let gradient_mid = theme.status.bar_gradient_mid;
+
+    div()
+        .w_full()
+        .h(px(5.0))
+        .mt(px(6.0))
+        .mb(px(6.0))
+        .bg(theme.status.progress_track)
+        .rounded_full()
+        .overflow_hidden()
+        .child(
+            div()
+                .id("quota-bar-fill")
+                .h_full()
+                .rounded_full()
+                .bg(multi_stop_linear_gradient(
+                    90.,
+                    &[
+                        linear_color_stop(gradient_start, 0.),
+                        linear_color_stop(gradient_mid, 0.5),
+                        linear_color_stop(fill_color, 1.),
+                    ],
+                ))
+                .with_animation(
+                    anim_id,
+                    Animation::new(Duration::from_millis(1000)).with_easing(ease_out_quint()),
+                    move |el: Stateful<Div>, delta| el.w(relative(delta * target_ratio)),
+                ),
+        )
+}
+
+fn render_quota_detail_row(detail_text: &str, theme: &Theme) -> Div {
+    div().flex().items_center().gap(px(4.0)).mt(px(12.0)).child(
+        div()
+            .text_size(px(11.0))
+            .text_color(theme.text.muted)
+            .child(detail_text.to_string()),
+    )
+}
+
 /// Lumina Bar 风格的 quota 卡片
 pub(crate) fn render_quota_bar(
     quota_view: &QuotaDisplayViewState,
@@ -51,223 +221,27 @@ pub(crate) fn render_quota_bar(
     let badge_label = status_badge_label(status);
     let fill_color = bar_color(status, theme);
     let is_balance = q.is_balance_only();
-
-    // 主显示文本
-    let display_text = if is_balance {
-        // 余额模式：直接显示余额（保留2位小数）
-        let balance = q.remaining_balance.unwrap_or(0.0);
-        if matches!(q.quota_type, QuotaType::Credit) {
-            format!("${:.2}", balance)
-        } else {
-            format!("{:.2}", balance)
-        }
-    } else {
-        // 传统模式
-        let remaining_pct = q.percent_remaining();
-        match (&q.quota_type, display_mode) {
-            (QuotaType::Credit, QuotaDisplayMode::Remaining) => q.format_remaining_signed("$"),
-            (QuotaType::Credit, QuotaDisplayMode::Used) => {
-                format!("${:.2}", q.used)
-            }
-            (QuotaType::Points, QuotaDisplayMode::Remaining) => q.format_remaining_signed(""),
-            (QuotaType::Points, QuotaDisplayMode::Used) => {
-                format!("{:.2}", q.used)
-            }
-            (_, QuotaDisplayMode::Remaining) => {
-                let pct = remaining_pct.max(0.0);
-                format!("{:.0}", pct)
-            }
-            (_, QuotaDisplayMode::Used) => {
-                let pct = q.percentage().clamp(0.0, 100.0);
-                format!("{:.0}", pct)
-            }
-        }
-    };
-
-    // 模式标签
-    let mode_label = if is_balance {
-        t!("quota.mode.balance").to_string()
-    } else {
-        match display_mode {
-            QuotaDisplayMode::Remaining => t!("quota.mode.remaining").to_string(),
-            QuotaDisplayMode::Used => t!("quota.mode.used").to_string(),
-        }
-    };
-
-    // 余额模式无 % 单位；传统模式 Credit 和 Points 也无 % 单位
-    let has_unit = !is_balance && !matches!(q.quota_type, QuotaType::Credit | QuotaType::Points);
-
+    let display_text = format_quota_card_display_text(q, display_mode);
+    let mode_label = format_quota_card_mode_label(is_balance, display_mode);
+    let has_unit = format_quota_card_has_unit(q);
+    let detail_text = format_quota_card_detail_text(quota_view);
     let hover_bg = theme.bg.card_inner_hovered;
+    let card = render_quota_card_frame(q, theme, hover_bg);
 
-    let card = div()
-        .id(ElementId::Name(
-            format!("quota-card-{}", q.stable_key).into(),
-        ))
-        .w_full()
-        .flex_col()
-        .gap(px(6.0))
-        .px(px(16.0))
-        .py(px(14.0))
-        .rounded(px(12.0))
-        .bg(theme.bg.card_inner)
-        .border_1()
-        .border_color(theme.border.strong)
-        .hover(move |style: StyleRefinement| style.bg(hover_bg));
-
-    card
-        // ── 第一行：● MODEL-NAME + [HEALTHY] ──
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .justify_between()
-                .items_center()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .flex_shrink_0()
-                        // 状态指示点
-                        .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(badge_color))
-                        .child(
-                            div()
-                                .overflow_hidden()
-                                .text_size(px(11.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.text.secondary)
-                                .whitespace_nowrap()
-                                .child(quota_view.label.to_uppercase()),
-                        ),
-                )
-                // 状态徽章
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .text_size(px(10.0))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(badge_color)
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .rounded(px(6.0))
-                        .border_1()
-                        .border_color(badge_color)
-                        .child(badge_label),
-                ),
-        )
-        // ── 第二行：大号数字 + "Remaining" / "Balance" ──
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .justify_between()
-                .items_end()
-                .child(
-                    div()
-                        .flex()
-                        .items_end()
-                        .flex_shrink_0()
-                        .child(
-                            div()
-                                .text_size(px(36.0))
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme.text.primary)
-                                .line_height(relative(1.0))
-                                .whitespace_nowrap()
-                                .child(display_text),
-                        )
-                        .children(if has_unit {
-                            Some(
-                                div()
-                                    .text_size(px(18.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text.secondary)
-                                    .line_height(relative(1.0))
-                                    .ml(px(2.0))
-                                    .mb(px(6.0))
-                                    .child("%"),
-                            )
-                        } else {
-                            None
-                        }),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.0))
-                        .text_color(theme.text.secondary)
-                        .line_height(relative(1.0))
-                        .mb(px(1.0))
-                        .child(mode_label),
-                ),
-        )
-        // ── 第三行：进度条（余额模式隐藏） ──
-        .when(!is_balance, |card: Stateful<Div>| {
-            let remaining_pct = q.percent_remaining();
-            let is_over_limit = remaining_pct < 0.0;
-            let target_ratio = if is_over_limit {
-                0.0_f32
-            } else {
-                remaining_pct as f32 / 100.0
-            };
-            let anim_id =
-                ElementId::Name(format!("quota-bar-{}-{}", q.stable_key, generation).into());
-            let gradient_start = theme.status.bar_gradient_start;
-            let gradient_mid = theme.status.bar_gradient_mid;
-            let gradient_end = fill_color;
-
-            card.child(
-                div()
-                    .w_full()
-                    .h(px(5.0))
-                    .mt(px(6.0))
-                    .mb(px(6.0))
-                    .bg(theme.status.progress_track)
-                    .rounded_full()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .id("quota-bar-fill")
-                            .h_full()
-                            .rounded_full()
-                            .bg(multi_stop_linear_gradient(
-                                90.,
-                                &[
-                                    linear_color_stop(gradient_start, 0.),
-                                    linear_color_stop(gradient_mid, 0.5),
-                                    linear_color_stop(gradient_end, 1.),
-                                ],
-                            ))
-                            .with_animation(
-                                anim_id,
-                                Animation::new(Duration::from_millis(1000))
-                                    .with_easing(ease_out_quint()),
-                                move |el: Stateful<Div>, delta| {
-                                    el.w(relative(delta * target_ratio))
-                                },
-                            ),
-                    ),
-            )
-        })
-        // ── 第四行：详情文本 ──
-        .child({
-            // 余额模式显示已用额度，传统模式显示 selector 已格式化的 detail
-            let detail_str = if is_balance {
-                let used_text = quota_usage_detail_text(q);
-                if used_text.is_empty() {
-                    quota_view.detail.clone()
-                } else if quota_view.detail.is_empty() {
-                    used_text
-                } else {
-                    format!("{} · {}", used_text, quota_view.detail)
-                }
-            } else {
-                quota_view.detail.clone()
-            };
-            div().flex().items_center().gap(px(4.0)).mt(px(12.0)).child(
-                div()
-                    .text_size(px(11.0))
-                    .text_color(theme.text.muted)
-                    .child(detail_str),
-            )
-        })
+    card.child(render_quota_header_row(
+        quota_view,
+        badge_color,
+        badge_label,
+        theme,
+    ))
+    .child(render_quota_value_row(
+        &display_text,
+        &mode_label,
+        has_unit,
+        theme,
+    ))
+    .when(!is_balance, |card: Stateful<Div>| {
+        card.child(render_quota_progress_row(q, fill_color, generation, theme))
+    })
+    .child(render_quota_detail_row(&detail_text, theme))
 }

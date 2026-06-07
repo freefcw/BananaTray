@@ -18,7 +18,7 @@ pub use quota_alert::QuotaAlert;
 pub use reducer::{build_config_sync_request, reduce};
 pub use selectors::{
     build_debug_info_text, build_issue_report, build_issue_url, debug_tab_view_state,
-    header_view_state, overview_view_state, provider_detail_view_state, quota_usage_detail_text,
+    header_view_state, overview_view_state, provider_detail_view_state,
     settings_providers_tab_view_state, tray_global_actions_view_state, AccountInfoViewState,
     AvailableProviderItem, DebugContext, DebugTabViewState, DisabledProviderViewState,
     IssueReportContext, LogLevelColor, OverviewItemStatus, OverviewItemViewState,
@@ -27,6 +27,10 @@ pub use selectors::{
     RefreshTarget, SettingsProviderDetailViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
     SettingsProviderStatusKind, SettingsProviderUsageViewState,
+};
+pub(crate) use selectors::{
+    format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
+    format_quota_card_mode_label,
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]
