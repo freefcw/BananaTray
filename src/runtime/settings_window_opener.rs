@@ -88,11 +88,6 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
         return;
     }
 
-    // 确保旧 slot 已清空（stale handle 或异常关闭场景）
-    SETTINGS_WINDOW.with(|slot| {
-        *slot.borrow_mut() = None;
-    });
-
     let settings_state = state.clone();
     let window_size = size(px(600.0), px(640.0));
     // 计算显示器居中位置，使用完整 display bounds（含 origin 偏移），

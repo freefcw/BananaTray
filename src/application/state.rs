@@ -620,8 +620,9 @@ pub fn compute_header_status(
         }
     } else {
         match provider.connection {
-            ConnectionStatus::Error => (HeaderStatusKind::Offline, None),
-            ConnectionStatus::Disconnected => (HeaderStatusKind::Offline, None),
+            ConnectionStatus::Error | ConnectionStatus::Disconnected => {
+                (HeaderStatusKind::Offline, None)
+            }
             _ => (HeaderStatusKind::Syncing, None),
         }
     }
