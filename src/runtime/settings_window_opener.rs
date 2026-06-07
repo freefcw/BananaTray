@@ -88,6 +88,14 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
         return;
     }
 
+    #[cfg(debug_assertions)]
+    SETTINGS_WINDOW.with(|slot| {
+        debug_assert!(
+            slot.borrow().is_none(),
+            "stale settings window slot before opening a new window"
+        );
+    });
+
     let settings_state = state.clone();
     let window_size = size(px(600.0), px(640.0));
     // 计算显示器居中位置，使用完整 display bounds（含 origin 偏移），

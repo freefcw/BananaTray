@@ -167,7 +167,7 @@ pub(crate) fn render_token_input_panel(
     );
 
     // ── Token 状态区 or 输入框 ──
-    let is_editing = view
+    let editing_provider_matches = view
         .state
         .borrow()
         .session
@@ -175,15 +175,23 @@ pub(crate) fn render_token_input_panel(
         .token_editing_provider
         .as_ref()
         .is_some_and(|id| id == provider_id);
+    let token_input_entity = view
+        .token_input
+        .as_ref()
+        .filter(|draft| &draft.provider_id == provider_id)
+        .map(|draft| draft.input.clone());
+    let is_editing = editing_provider_matches && token_input_entity.is_some();
 
-    if is_editing {
+    if editing_provider_matches && token_input_entity.is_none() {
+        log::warn!(
+            target: "settings",
+            "token editing requested for {} but no matching input draft exists; rendering read-only state",
+            provider_id
+        );
+    }
+
+    if let (true, Some(input_entity)) = (is_editing, token_input_entity) {
         // 编辑模式：输入草稿在点击 Edit/Set 时创建，这里只读取。
-        let input_entity = view
-            .token_input
-            .as_ref()
-            .expect("token input draft must exist while editing")
-            .input
-            .clone();
         let focus_handle = input_entity.read(cx).focus_handle(cx);
 
         card = card.child(TokenInputBox {
@@ -302,7 +310,11 @@ fn render_token_action_buttons(
         t!("settings.token.create").to_string()
     };
 
-    let input_entity_opt = view.token_input.as_ref().map(|draft| draft.input.clone());
+    let input_entity_opt = view
+        .token_input
+        .as_ref()
+        .filter(|draft| draft.provider_id == provider_id)
+        .map(|draft| draft.input.clone());
     let state_left = view.state.clone();
     let left_provider_id = provider_id.clone();
     let left_view_entity = cx.entity().clone();
@@ -326,22 +338,36 @@ fn render_token_action_buttons(
             .child(left_label)
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 if is_editing {
-                    let entity = input_entity_opt
-                        .as_ref()
-                        .expect("token input draft must exist while editing");
-                    let text = entity.read(cx).content().trim().to_string();
-                    left_view_entity.update(cx, |view, _| {
-                        view.clear_token_input();
-                    });
-                    runtime::dispatch_in_window(
-                        &state_left,
-                        AppAction::SaveProviderToken {
-                            provider_id: left_provider_id.clone(),
-                            token: text,
-                        },
-                        window,
-                        cx,
-                    );
+                    if let Some(entity) = input_entity_opt.as_ref() {
+                        let text = entity.read(cx).content().trim().to_string();
+                        left_view_entity.update(cx, |view, _| {
+                            view.clear_token_input();
+                        });
+                        runtime::dispatch_in_window(
+                            &state_left,
+                            AppAction::SaveProviderToken {
+                                provider_id: left_provider_id.clone(),
+                                token: text,
+                            },
+                            window,
+                            cx,
+                        );
+                    } else {
+                        log::warn!(
+                            target: "settings",
+                            "token save requested for {} but input draft is missing; cancelling edit state",
+                            left_provider_id
+                        );
+                        runtime::dispatch_in_window(
+                            &state_left,
+                            AppAction::SetTokenEditing {
+                                provider_id: left_provider_id.clone(),
+                                editing: false,
+                            },
+                            window,
+                            cx,
+                        );
+                    }
                 } else {
                     runtime::dispatch_in_window(
                         &state_left,
