@@ -238,6 +238,7 @@ pub fn quota_display_view_state(quota: &QuotaInfo) -> QuotaDisplayViewState {
 /// - Credit 类型: "$X.XX / $Y.YY"
 /// - Points 类型: "X.XX / Y.YY"
 /// - 其他类型: "X used / Y total" 或 "X% used"
+#[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
     if quota.remaining_balance.is_some() {
         // 余额模式：显示已用额度
@@ -281,6 +282,7 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
 }
 
 /// 设置页 quota 卡片的主显示文本。
+#[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> String {
     if quota.is_balance_only() {
         let balance = quota.remaining_balance.unwrap_or(0.0);
@@ -303,6 +305,7 @@ pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisp
 }
 
 /// 设置页 quota 卡片的模式标签。
+#[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_mode_label(is_balance: bool, display_mode: QuotaDisplayMode) -> String {
     if is_balance {
         return t!("quota.mode.balance").to_string();
@@ -315,11 +318,13 @@ pub fn format_quota_card_mode_label(is_balance: bool, display_mode: QuotaDisplay
 }
 
 /// 设置页 quota 卡片是否需要额外的百分号单位。
+#[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_has_unit(quota: &QuotaInfo) -> bool {
     !quota.is_balance_only() && !matches!(quota.quota_type, QuotaType::Credit | QuotaType::Points)
 }
 
 /// 设置页 quota 卡片的第四行详情文本。
+#[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_detail_text(quota_view: &QuotaDisplayViewState) -> String {
     let quota = &quota_view.quota;
     if !quota.is_balance_only() {

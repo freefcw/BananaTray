@@ -28,6 +28,7 @@ pub use selectors::{
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
     SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
+#[allow(unused_imports)] // app feature 下 ui/widgets 使用
 pub(crate) use selectors::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
     format_quota_card_mode_label,

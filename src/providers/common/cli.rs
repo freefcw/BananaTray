@@ -37,6 +37,7 @@ pub fn run_command_with_timeout(binary: &str, args: &[&str], timeout: Duration) 
     run_child_with_timeout(child, timeout)
 }
 
+#[allow(dead_code)] // 仅 app feature 下的 runtime/effects/script_provider.rs 调用
 pub(crate) fn run_prepared_command_with_timeout(
     mut command: Command,
     timeout: Duration,
