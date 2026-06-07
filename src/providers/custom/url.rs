@@ -31,7 +31,22 @@ pub(super) fn expand_env_vars(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '$' && chars.peek() == Some(&'{') {
             chars.next();
-            let var_name: String = chars.by_ref().take_while(|&ch| ch != '}').collect();
+            let mut var_name = String::new();
+            let mut closed = false;
+            for ch in chars.by_ref() {
+                if ch == '}' {
+                    closed = true;
+                    break;
+                }
+                var_name.push(ch);
+            }
+
+            if !closed {
+                result.push_str("${");
+                result.push_str(&var_name);
+                break;
+            }
+
             match std::env::var(&var_name) {
                 Ok(val) => result.push_str(&val),
                 Err(_) => {
@@ -53,6 +68,7 @@ pub(super) fn expand_env_vars(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     #[test]
     fn test_expand_tilde() {
@@ -68,12 +84,13 @@ mod tests {
 
     #[test]
     fn test_expand_env_vars() {
-        std::env::set_var("TEST_FETCHER_VAR", "hello");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_FETCHER_VAR", "hello") };
         assert_eq!(
             expand_env_vars("prefix-${TEST_FETCHER_VAR}-suffix"),
             "prefix-hello-suffix"
         );
-        std::env::remove_var("TEST_FETCHER_VAR");
+        unsafe { std::env::remove_var("TEST_FETCHER_VAR") };
     }
 
     #[test]
@@ -88,11 +105,12 @@ mod tests {
 
     #[test]
     fn test_expand_env_vars_multiple_vars() {
-        std::env::set_var("TEST_EV_A", "hello");
-        std::env::set_var("TEST_EV_B", "world");
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::set_var("TEST_EV_A", "hello") };
+        unsafe { std::env::set_var("TEST_EV_B", "world") };
         assert_eq!(expand_env_vars("${TEST_EV_A}-${TEST_EV_B}"), "hello-world");
-        std::env::remove_var("TEST_EV_A");
-        std::env::remove_var("TEST_EV_B");
+        unsafe { std::env::remove_var("TEST_EV_A") };
+        unsafe { std::env::remove_var("TEST_EV_B") };
     }
 
     #[test]
@@ -103,6 +121,14 @@ mod tests {
     #[test]
     fn test_expand_env_vars_empty_var_name() {
         assert_eq!(expand_env_vars("before${}after"), "beforeafter");
+    }
+
+    #[test]
+    fn test_expand_env_vars_unterminated_placeholder_is_preserved() {
+        assert_eq!(
+            expand_env_vars("https://api.example.com/${API_KEY"),
+            "https://api.example.com/${API_KEY"
+        );
     }
 
     #[test]

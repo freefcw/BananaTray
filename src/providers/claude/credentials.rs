@@ -145,12 +145,23 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> ProviderResult
     let mut json: serde_json::Value = serde_json::from_str(&existing)
         .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
 
-    json["claudeAiOauth"] = serde_json::json!({
-        "accessToken": creds.access_token,
-        "refreshToken": creds.refresh_token,
-        "expiresAt": creds.expires_at,
-        "subscriptionType": creds.subscription_type,
-    });
+    let oauth = json
+        .get_mut("claudeAiOauth")
+        .and_then(|value| value.as_object_mut())
+        .ok_or_else(|| ProviderError::parse_failed("claudeAiOauth is not an object"))?;
+    oauth.insert(
+        "accessToken".to_string(),
+        serde_json::json!(creds.access_token),
+    );
+    oauth.insert(
+        "refreshToken".to_string(),
+        serde_json::json!(creds.refresh_token),
+    );
+    oauth.insert("expiresAt".to_string(), serde_json::json!(creds.expires_at));
+    oauth.insert(
+        "subscriptionType".to_string(),
+        serde_json::json!(creds.subscription_type),
+    );
 
     let serialized = serde_json::to_string_pretty(&json)
         .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
@@ -179,6 +190,7 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> ProviderResult
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support::env_lock;
 
     #[test]
     fn test_needs_refresh_when_expired() {
@@ -245,5 +257,59 @@ mod tests {
         assert_eq!(creds.refresh_token, Some("new_rt".to_string()));
         assert!(creds.expires_at.is_some());
         assert!(!creds.needs_refresh());
+    }
+
+    #[test]
+    fn test_save_credentials_atomic_preserves_extra_fields() {
+        let _guard = env_lock().lock().unwrap();
+        let temp_home = tempfile::tempdir().unwrap();
+        let claude_dir = temp_home.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let credentials_path = claude_dir.join(".credentials.json");
+        std::fs::write(
+            &credentials_path,
+            serde_json::json!({
+                "claudeAiOauth": {
+                    "accessToken": "old-access",
+                    "refreshToken": "old-refresh",
+                    "expiresAt": 123.0,
+                    "subscriptionType": "pro",
+                    "userId": "user-123",
+                    "createdAt": 111.0,
+                    "scopes": ["user:profile"]
+                },
+                "other": "keep-me"
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let old_home = std::env::var("HOME").ok();
+        unsafe { std::env::set_var("HOME", temp_home.path()) };
+
+        let result = save_credentials_atomic(&ClaudeOAuthCredentials {
+            access_token: "new-access".to_string(),
+            refresh_token: Some("new-refresh".to_string()),
+            expires_at: Some(456.0),
+            subscription_type: Some("max".to_string()),
+        });
+
+        match old_home {
+            Some(home) => unsafe { std::env::set_var("HOME", home) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+
+        assert!(result.is_ok());
+
+        let updated: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&credentials_path).unwrap()).unwrap();
+        assert_eq!(updated["other"], "keep-me");
+        assert_eq!(updated["claudeAiOauth"]["userId"], "user-123");
+        assert_eq!(updated["claudeAiOauth"]["createdAt"], 111.0);
+        assert_eq!(updated["claudeAiOauth"]["scopes"][0], "user:profile");
+        assert_eq!(updated["claudeAiOauth"]["accessToken"], "new-access");
+        assert_eq!(updated["claudeAiOauth"]["refreshToken"], "new-refresh");
+        assert_eq!(updated["claudeAiOauth"]["expiresAt"], 456.0);
+        assert_eq!(updated["claudeAiOauth"]["subscriptionType"], "max");
     }
 }
