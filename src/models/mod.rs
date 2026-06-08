@@ -12,7 +12,10 @@ pub use layout::{
     compute_popup_height_detailed, compute_popup_height_for_overview,
     compute_popup_height_for_quotas, PopupLayout,
 };
-pub use newapi::{newapi_provider_id, NewApiConfig, NewApiEditData};
+pub use newapi::{
+    format_divisor_value, format_optional_divisor_value, newapi_provider_id, parse_divisor_input,
+    NewApiConfig, NewApiDivisorError, NewApiEditData,
+};
 pub use provider::{
     NavTab, ProviderCapability, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata,
     SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,

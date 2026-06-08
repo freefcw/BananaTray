@@ -3,6 +3,13 @@
 //! 从 `providers/custom/generator.rs` 迁入，消除 `application/` → `providers/` 的反向依赖。
 //! 本模块不包含磁盘 I/O 或 YAML 模板生成，仅包含纯数据结构和纯函数。
 
+/// NewAPI divisor 输入解析错误。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewApiDivisorError {
+    InvalidNumber,
+    NonPositive,
+}
+
 /// NewAPI 配置输入（用户通过表单提交的数据）
 #[derive(Debug, Clone)]
 pub struct NewApiConfig {
@@ -34,6 +41,45 @@ pub struct NewApiEditData {
     pub divisor: Option<f64>,
     /// 原始 YAML 文件名（编辑保存时复用，避免身份变更导致文件残留）
     pub original_filename: String,
+}
+
+/// 将 divisor 格式化为适合 UI / YAML 的稳定文本。
+///
+/// - 整数值去掉多余的 `.0`
+/// - 非整数值保留标准 `f64::to_string()` 输出
+pub fn format_divisor_value(divisor: f64) -> String {
+    if divisor.fract().abs() < f64::EPSILON {
+        format!("{divisor:.0}")
+    } else {
+        divisor.to_string()
+    }
+}
+
+/// 将可选 divisor 格式化为表单回填值。
+pub fn format_optional_divisor_value(divisor: Option<f64>) -> String {
+    divisor.map(format_divisor_value).unwrap_or_default()
+}
+
+/// 解析表单中的 divisor 输入。
+///
+/// 空字符串表示使用默认值；其余输入必须是有限的正数。
+pub fn parse_divisor_input(input: &str) -> Result<Option<f64>, NewApiDivisorError> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let divisor = trimmed
+        .parse::<f64>()
+        .map_err(|_| NewApiDivisorError::InvalidNumber)?;
+    if !divisor.is_finite() {
+        return Err(NewApiDivisorError::InvalidNumber);
+    }
+    if divisor <= 0.0 {
+        return Err(NewApiDivisorError::NonPositive);
+    }
+
+    Ok(Some(divisor))
 }
 
 /// 从 base_url 中提取域名部分，用于生成 id 和文件名
@@ -88,6 +134,45 @@ mod tests {
         assert_eq!(
             newapi_provider_id("https://my-api.example.com"),
             "my-api-example-com:newapi"
+        );
+    }
+
+    #[test]
+    fn format_divisor_value_trims_integer_suffix() {
+        assert_eq!(format_divisor_value(500000.0), "500000");
+        assert_eq!(format_divisor_value(0.5), "0.5");
+    }
+
+    #[test]
+    fn format_optional_divisor_value_uses_empty_for_none() {
+        assert_eq!(format_optional_divisor_value(None), "");
+        assert_eq!(format_optional_divisor_value(Some(42.25)), "42.25");
+    }
+
+    #[test]
+    fn parse_divisor_input_accepts_empty_and_positive_decimal() {
+        assert_eq!(parse_divisor_input("   "), Ok(None));
+        assert_eq!(parse_divisor_input("500000"), Ok(Some(500000.0)));
+        assert_eq!(parse_divisor_input("0.5"), Ok(Some(0.5)));
+    }
+
+    #[test]
+    fn parse_divisor_input_rejects_invalid_or_non_positive_values() {
+        assert_eq!(
+            parse_divisor_input("oops"),
+            Err(NewApiDivisorError::InvalidNumber)
+        );
+        assert_eq!(
+            parse_divisor_input("inf"),
+            Err(NewApiDivisorError::InvalidNumber)
+        );
+        assert_eq!(
+            parse_divisor_input("0"),
+            Err(NewApiDivisorError::NonPositive)
+        );
+        assert_eq!(
+            parse_divisor_input("-1"),
+            Err(NewApiDivisorError::NonPositive)
         );
     }
 }
