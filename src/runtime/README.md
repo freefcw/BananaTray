@@ -153,7 +153,7 @@
 封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 以及 `ScriptProviderEffect::SaveProvider` / `DeleteProvider` 需要的磁盘文件操作：
 
 - **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
-- **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 推导文件路径 + 删除 YAML 文件
+- **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
 - **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 写入脚本文件，再生成 `source.type: cli` YAML
 - **`delete_script_provider_files(provider_id) → Result<(PathBuf, Result<PathBuf, String>), String>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
 

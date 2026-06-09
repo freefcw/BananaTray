@@ -83,16 +83,26 @@ pub fn settings_providers_tab_view_state(session: &AppSession) -> SettingsProvid
 fn settings_provider_right_pane_view_state(
     session: &AppSession,
 ) -> SettingsProviderRightPaneViewState {
+    let form_identity = session.settings_ui.modal.form_identity();
     match &session.settings_ui.modal {
         SettingsModalState::AddingProvider => SettingsProviderRightPaneViewState::ProviderPicker,
-        SettingsModalState::AddingNewApi => {
-            SettingsProviderRightPaneViewState::NewApiForm { edit_data: None }
-        }
+        SettingsModalState::AddingNewApi => SettingsProviderRightPaneViewState::NewApiForm {
+            identity: form_identity
+                .clone()
+                .expect("AddingNewApi must have form identity"),
+            edit_data: None,
+        },
         SettingsModalState::EditingNewApi(data) => SettingsProviderRightPaneViewState::NewApiForm {
+            identity: form_identity
+                .clone()
+                .expect("EditingNewApi must have form identity"),
             edit_data: Some(data.clone()),
         },
         SettingsModalState::AddingScriptProvider => {
             SettingsProviderRightPaneViewState::ScriptProviderForm {
+                identity: form_identity
+                    .clone()
+                    .expect("AddingScriptProvider must have form identity"),
                 edit_data: None,
                 testing: session.settings_ui.script_provider_testing,
                 test_result: session.settings_ui.script_provider_test_result.clone(),
@@ -100,6 +110,7 @@ fn settings_provider_right_pane_view_state(
         }
         SettingsModalState::EditingScriptProvider(data) => {
             SettingsProviderRightPaneViewState::ScriptProviderForm {
+                identity: form_identity.expect("EditingScriptProvider must have form identity"),
                 edit_data: Some(data.clone()),
                 testing: session.settings_ui.script_provider_testing,
                 test_result: session.settings_ui.script_provider_test_result.clone(),

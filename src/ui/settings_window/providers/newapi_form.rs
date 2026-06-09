@@ -8,12 +8,13 @@
 //! 支持鼠标选择、光标闪烁、Alt+方向键按单词跳转等标准编辑功能。
 //! Cookie 字段使用 Textarea 多行编辑组件，便于查看和编辑长字符串。
 
-use super::super::{NewApiFormInputs, SettingsView};
+use super::super::{FormInputsCache, NewApiFormInputs, SettingsView};
 use super::shared::{
     render_input_field, render_readonly_field, render_textarea_field, FormFieldSpec,
 };
 use crate::application::AppAction;
-use crate::models::NewApiEditData;
+use crate::application::FormIdentity;
+use crate::models::{parse_divisor_input, NewApiEditData};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
@@ -27,30 +28,33 @@ impl SettingsView {
     /// 确保 NewAPI 表单输入状态已创建（编辑模式时预填已有配置数据）
     fn ensure_newapi_inputs(
         &mut self,
+        identity: FormIdentity,
         edit_data: Option<&NewApiEditData>,
         cx: &mut Context<Self>,
     ) -> &NewApiFormInputs {
-        self.newapi_inputs.get_or_insert_with(|| match edit_data {
-            Some(data) => NewApiFormInputs::new_edit(data, cx),
-            None => NewApiFormInputs::new_add(cx),
-        })
-    }
+        let should_rebuild =
+            should_rebuild_form_inputs_cache(self.newapi_inputs.as_ref(), &identity);
+        if should_rebuild {
+            let inputs = match edit_data {
+                Some(data) => NewApiFormInputs::new_edit(data, cx),
+                None => NewApiFormInputs::new_add(cx),
+            };
+            self.newapi_inputs = Some(FormInputsCache { identity, inputs });
+        }
 
-    /// 清除所有 NewAPI 表单输入状态
-    pub(in crate::ui::settings_window) fn clear_newapi_inputs(&mut self) {
-        self.newapi_inputs = None;
+        &self.newapi_inputs.as_ref().expect("newapi inputs").inputs
     }
-
     /// 渲染 NewAPI 添加/编辑表单（右侧 detail 面板内嵌）
     pub(in crate::ui::settings_window) fn render_newapi_form(
         &mut self,
+        identity: FormIdentity,
         is_editing: bool,
         edit_data: Option<&NewApiEditData>,
         theme: &Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let inputs = self.ensure_newapi_inputs(edit_data, cx).clone();
+        let inputs = self.ensure_newapi_inputs(identity, edit_data, cx).clone();
 
         let focused = inputs.focused_states(window, cx);
 
@@ -201,6 +205,7 @@ impl SettingsView {
     /// 从表单当前值构造提交 Action；必填字段缺失时返回 None
     fn collect_submit_action(&self, cx: &App) -> Option<AppAction> {
         let inputs = self.newapi_inputs.as_ref()?;
+        let inputs = &inputs.inputs;
         let name_val = inputs.name.read(cx).content().trim().to_string();
         let url_val = inputs.url.read(cx).content().trim().to_string();
         let cookie_val = inputs.cookie.read(cx).content().trim().to_string();
@@ -212,6 +217,18 @@ impl SettingsView {
 
         let user_id_val = inputs.user_id.read(cx).content().trim().to_string();
         let divisor_val = inputs.divisor.read(cx).content().trim().to_string();
+        let divisor = match parse_divisor_input(&divisor_val) {
+            Ok(divisor) => divisor,
+            Err(err) => {
+                log::warn!(
+                    target: "settings",
+                    "NewAPI save: invalid divisor input '{}': {:?}",
+                    divisor_val,
+                    err
+                );
+                return None;
+            }
+        };
 
         Some(AppAction::SubmitNewApi {
             display_name: name_val,
@@ -222,11 +239,7 @@ impl SettingsView {
             } else {
                 Some(user_id_val)
             },
-            divisor: if divisor_val.is_empty() {
-                None
-            } else {
-                divisor_val.parse::<f64>().ok()
-            },
+            divisor,
         })
     }
 
@@ -293,5 +306,42 @@ impl SettingsView {
                         }
                     })
             })
+    }
+}
+
+pub(super) fn should_rebuild_form_inputs_cache<T>(
+    cache: Option<&FormInputsCache<T>>,
+    identity: &FormIdentity,
+) -> bool {
+    cache.is_none_or(|cache| cache.identity != *identity)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_rebuild_form_inputs_cache;
+    use crate::application::FormIdentity;
+    use crate::ui::settings_window::FormInputsCache;
+
+    #[test]
+    fn rebuilds_when_cache_missing_or_identity_changes() {
+        assert!(should_rebuild_form_inputs_cache::<()>(
+            None,
+            &FormIdentity::NewApiAdd
+        ));
+
+        let cache = FormInputsCache {
+            identity: FormIdentity::NewApiAdd,
+            inputs: (),
+        };
+        assert!(!should_rebuild_form_inputs_cache(
+            Some(&cache),
+            &FormIdentity::NewApiAdd
+        ));
+        assert!(should_rebuild_form_inputs_cache(
+            Some(&cache),
+            &FormIdentity::NewApiEdit {
+                original_filename: "relay.yaml".into(),
+            }
+        ));
     }
 }

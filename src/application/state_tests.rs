@@ -286,6 +286,33 @@ fn modal_state_helpers_match_variants() {
     assert!(SettingsModalState::AddingProvider.is_adding_provider());
     assert!(SettingsModalState::ConfirmingRemoveProvider.is_confirming_remove_provider());
     assert!(SettingsModalState::ConfirmingDeleteNewApi.is_confirming_delete_newapi());
+    assert_eq!(
+        SettingsModalState::AddingNewApi.form_identity(),
+        Some(FormIdentity::NewApiAdd)
+    );
+    assert_eq!(
+        edit.form_identity(),
+        Some(FormIdentity::NewApiEdit {
+            original_filename: "x.yaml".into()
+        })
+    );
+
+    let script_edit = SettingsModalState::EditingScriptProvider(ScriptProviderEditData {
+        display_name: "script".into(),
+        provider_id: "script:script".into(),
+        interpreter: "python3".into(),
+        timeout_ms: 20_000,
+        script: "print(1)".into(),
+        original_yaml_filename: "script.yaml".into(),
+        original_script_filename: "script.py".into(),
+    });
+    assert_eq!(
+        script_edit.form_identity(),
+        Some(FormIdentity::ScriptProviderEdit {
+            original_yaml_filename: "script.yaml".into(),
+            original_script_filename: "script.py".into(),
+        })
+    );
 }
 
 #[test]

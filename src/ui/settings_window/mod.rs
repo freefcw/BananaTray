@@ -5,8 +5,11 @@ mod display_tab;
 mod general_tab;
 mod providers;
 use crate::application::AppAction;
+use crate::application::FormIdentity;
 use crate::application::SettingsTab;
-use crate::models::{ProviderId, TokenEditMode, TokenInputCapability};
+use crate::models::{
+    format_optional_divisor_value, ProviderId, TokenEditMode, TokenInputCapability,
+};
 use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
@@ -64,6 +67,11 @@ pub(crate) struct ScriptProviderFormInputs {
     pub interpreter: Entity<InputState>,
     pub timeout: Entity<InputState>,
     pub script: Entity<TextareaState>,
+}
+
+pub(crate) struct FormInputsCache<T> {
+    pub identity: FormIdentity,
+    pub inputs: T,
 }
 
 impl ScriptProviderFormInputs {
@@ -197,9 +205,7 @@ impl NewApiFormInputs {
             divisor: newapi_input(
                 cx,
                 t!("newapi.field.divisor.placeholder").to_string(),
-                data.divisor
-                    .map(|d| (d as u64).to_string())
-                    .unwrap_or_default(),
+                format_optional_divisor_value(data.divisor),
             ),
         }
     }
@@ -261,10 +267,10 @@ pub(crate) struct SettingsView {
     pub(crate) global_hotkey_synced_value: Option<String>,
     /// 监听系统深色模式变化，自动切换主题
     pub(crate) _appearance_sub: Option<Subscription>,
-    /// NewAPI 快速添加表单输入组（进入表单模式时创建，退出时置 None）
-    pub(crate) newapi_inputs: Option<NewApiFormInputs>,
-    /// Script Provider 表单输入组
-    pub(crate) script_provider_inputs: Option<ScriptProviderFormInputs>,
+    /// NewAPI 快速添加表单输入组（identity 变化时重建）
+    pub(crate) newapi_inputs: Option<FormInputsCache<NewApiFormInputs>>,
+    /// Script Provider 表单输入组（identity 变化时重建）
+    pub(crate) script_provider_inputs: Option<FormInputsCache<ScriptProviderFormInputs>>,
 }
 
 impl SettingsView {

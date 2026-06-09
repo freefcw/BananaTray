@@ -35,32 +35,26 @@ impl SettingsView {
             .py(px(20.0))
             .child(div().w_full().h_full().bg(theme.border.subtle));
 
-        // 状态同步：退出 NewAPI 表单后释放输入实体
-        let is_newapi_form = matches!(
-            view_state.right_pane,
-            SettingsProviderRightPaneViewState::NewApiForm { .. }
-        );
-        if !is_newapi_form && self.newapi_inputs.is_some() {
-            self.clear_newapi_inputs();
-        }
-        let is_script_form = matches!(
-            view_state.right_pane,
-            SettingsProviderRightPaneViewState::ScriptProviderForm { .. }
-        );
-        if !is_script_form && self.script_provider_inputs.is_some() {
-            self.clear_script_provider_inputs();
-        }
-
         let right_panel = match &view_state.right_pane {
-            SettingsProviderRightPaneViewState::NewApiForm { edit_data } => {
-                self.render_newapi_form(edit_data.is_some(), edit_data.as_ref(), theme, window, cx)
-            }
+            SettingsProviderRightPaneViewState::NewApiForm {
+                identity,
+                edit_data,
+            } => self.render_newapi_form(
+                identity.clone(),
+                edit_data.is_some(),
+                edit_data.as_ref(),
+                theme,
+                window,
+                cx,
+            ),
             SettingsProviderRightPaneViewState::ScriptProviderForm {
+                identity,
                 edit_data,
                 testing,
                 test_result,
             } => self.render_script_provider_form(
                 ScriptProviderFormView {
+                    identity: identity.clone(),
                     edit_data: edit_data.as_ref(),
                     test_result: test_result.as_ref(),
                     is_testing: *testing,

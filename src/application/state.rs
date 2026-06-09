@@ -7,6 +7,19 @@ use crate::models::{
     ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormIdentity {
+    NewApiAdd,
+    NewApiEdit {
+        original_filename: String,
+    },
+    ScriptProviderAdd,
+    ScriptProviderEdit {
+        original_yaml_filename: String,
+        original_script_filename: String,
+    },
+}
+
 // ============================================================================
 // Provider 面板可见性规则（单一真理来源，供 selector 和 popup_height 共用）
 // ============================================================================
@@ -517,6 +530,26 @@ impl SettingsModalState {
     pub fn script_provider_edit_data(&self) -> Option<&ScriptProviderEditData> {
         match self {
             Self::EditingScriptProvider(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// 当前表单的稳定身份。
+    ///
+    /// 用于 view-local 输入缓存判断是否应该复用已有实体：
+    /// - 同一 identity 复用，保留用户草稿
+    /// - identity 变化时重建，避免把上一个 provider 的输入串到当前表单
+    pub fn form_identity(&self) -> Option<FormIdentity> {
+        match self {
+            Self::AddingNewApi => Some(FormIdentity::NewApiAdd),
+            Self::EditingNewApi(data) => Some(FormIdentity::NewApiEdit {
+                original_filename: data.original_filename.clone(),
+            }),
+            Self::AddingScriptProvider => Some(FormIdentity::ScriptProviderAdd),
+            Self::EditingScriptProvider(data) => Some(FormIdentity::ScriptProviderEdit {
+                original_yaml_filename: data.original_yaml_filename.clone(),
+                original_script_filename: data.original_script_filename.clone(),
+            }),
             _ => None,
         }
     }

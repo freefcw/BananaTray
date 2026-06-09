@@ -9,8 +9,11 @@
 // Re-export from models（保持 generator 已有调用方的兼容性）
 pub use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
 use crate::models::{
-    script_provider_slug, ScriptProviderConfig, ScriptProviderEditData, DEFAULT_SCRIPT_TIMEOUT_MS,
+    format_divisor_value, script_provider_slug, ScriptProviderConfig, ScriptProviderEditData,
+    DEFAULT_SCRIPT_TIMEOUT_MS,
 };
+#[cfg(feature = "app")]
+use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
 
 /// 生成 YAML 配置文件名
 pub fn generate_filename(config: &NewApiConfig) -> String {
@@ -62,6 +65,7 @@ pub fn generate_newapi_yaml(config: &NewApiConfig) -> String {
     let id = format!("{}:newapi", slug);
     let base_url = config.base_url.trim_end_matches('/');
     let divisor = config.divisor.unwrap_or(500_000.0);
+    let divisor_text = format_divisor_value(divisor);
 
     // 转义用户输入，防止 YAML 注入
     let display_name_escaped = escape_yaml_double_quoted(&config.display_name);
@@ -129,7 +133,7 @@ plan:
         display_name = display_name_escaped,
         cookie = cookie_escaped,
         headers = headers_block,
-        divisor = divisor as u64,
+        divisor = divisor_text,
     )
 }
 
@@ -201,111 +205,43 @@ plan:
 /// **注意**：此函数包含磁盘 I/O，由 `NewApiEffect::LoadConfig` handler 调用。
 #[cfg(feature = "app")]
 pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
-    use super::schema::CustomProviderDef;
-
     let providers_dir = crate::platform::paths::custom_providers_dir();
-    if !providers_dir.exists() {
-        return None;
-    }
-
-    let entries = match std::fs::read_dir(&providers_dir) {
-        Ok(entries) => entries,
-        Err(_) => return None,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path
-            .extension()
-            .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        {
-            continue;
-        }
-
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let def: CustomProviderDef = match serde_norway::from_str(&content) {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-
-        if def.id != provider_custom_id {
-            continue;
-        }
-
-        let filename = match path.file_name().and_then(|f| f.to_str()) {
-            Some(name) => name.to_string(),
-            None => continue,
-        };
-
-        return parse_newapi_edit_data(&def, filename);
-    }
-
-    None
+    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, &providers_dir)?;
+    parse_newapi_edit_data(&yaml.def, yaml.filename)
 }
 
 #[cfg(feature = "app")]
 pub fn read_script_provider_config(provider_custom_id: &str) -> Option<ScriptProviderEditData> {
-    use super::schema::{CustomProviderDef, SourceDef};
+    use super::schema::SourceDef;
 
     let providers_dir = crate::platform::paths::custom_providers_dir();
-    if !providers_dir.exists() {
-        return None;
-    }
-
-    let entries = std::fs::read_dir(&providers_dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path
-            .extension()
-            .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        {
-            continue;
-        }
-
-        let content = match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(_) => continue,
-        };
-        let def: CustomProviderDef = match serde_norway::from_str(&content) {
-            Ok(def) => def,
-            Err(_) => continue,
-        };
-        if def.id != provider_custom_id {
-            continue;
-        }
-
-        let yaml_filename = path.file_name()?.to_str()?.to_string();
-        let step = def.plan.steps.first()?;
-        let (interpreter, script_path, timeout_ms) = match &step.source {
-            SourceDef::Cli {
-                command,
-                args,
-                timeout_ms,
-            } => (
-                command.clone(),
-                args.first()?.clone(),
-                timeout_ms.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS),
-            ),
-            _ => return None,
-        };
-        let script_path = std::path::PathBuf::from(script_path);
-        let script = std::fs::read_to_string(&script_path).ok()?;
-        let script_filename = script_path.file_name()?.to_str()?.to_string();
-
-        return Some(ScriptProviderEditData {
-            display_name: def.metadata.display_name,
-            provider_id: def.id,
-            interpreter,
+    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, &providers_dir)?;
+    let step = yaml.def.plan.steps.first()?;
+    let (interpreter, script_path, timeout_ms) = match &step.source {
+        SourceDef::Cli {
+            command,
+            args,
             timeout_ms,
-            script,
-            original_yaml_filename: yaml_filename,
-            original_script_filename: script_filename,
-        });
-    }
+        } => (
+            command.clone(),
+            args.first()?.clone(),
+            timeout_ms.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS),
+        ),
+        _ => return None,
+    };
+    let script_path = std::path::PathBuf::from(script_path);
+    let script = std::fs::read_to_string(&script_path).ok()?;
+    let script_filename = script_path.file_name()?.to_str()?.to_string();
 
-    None
+    Some(ScriptProviderEditData {
+        display_name: yaml.def.metadata.display_name,
+        provider_id: yaml.def.id,
+        interpreter,
+        timeout_ms,
+        script,
+        original_yaml_filename: yaml.filename,
+        original_script_filename: script_filename,
+    })
 }
 
 pub fn default_script_template() -> String {
@@ -508,6 +444,17 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_yaml_with_fractional_divisor() {
+        let config = NewApiConfig {
+            divisor: Some(0.5),
+            ..make_config()
+        };
+        let yaml = generate_newapi_yaml(&config);
+
+        assert!(yaml.contains("divisor: 0.5"));
+    }
+
+    #[test]
     fn test_generate_yaml_trailing_slash_stripped() {
         let config = NewApiConfig {
             base_url: "https://my-api.example.com/".to_string(),
@@ -641,6 +588,17 @@ mod tests {
         let edit = roundtrip(&config);
 
         assert_eq!(edit.divisor, Some(1_000_000.0));
+    }
+
+    #[test]
+    fn roundtrip_preserves_fractional_divisor() {
+        let config = NewApiConfig {
+            divisor: Some(0.5),
+            ..make_config()
+        };
+        let edit = roundtrip(&config);
+
+        assert_eq!(edit.divisor, Some(0.5));
     }
 
     #[test]

@@ -36,4 +36,6 @@ pub(crate) use selectors::{
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]
 pub use selectors::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
-pub use state::{AppSession, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab};
+pub use state::{
+    AppSession, FormIdentity, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab,
+};

@@ -5,6 +5,7 @@
 
 use crate::models::{NewApiConfig, ProviderId, ScriptProviderConfig};
 use crate::providers::custom::generator;
+use crate::providers::custom::locator::{find_custom_provider_yaml_by_id, is_yaml_path};
 use crate::providers::custom::schema::{CustomProviderDef, SourceDef};
 use std::path::{Path, PathBuf};
 
@@ -253,12 +254,8 @@ pub fn delete_newapi_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
         }
     };
 
-    let filename = generator::filename_for_id(custom_id).ok_or_else(|| {
-        format!("NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}")
-    })?;
-    let path = crate::platform::paths::custom_provider_path(&filename);
-
-    delete_yaml_file(&path)
+    let yaml_path = find_newapi_yaml_path(custom_id)?;
+    delete_yaml_file(&yaml_path)
 }
 
 pub fn delete_script_provider_files(
@@ -289,6 +286,40 @@ fn find_script_provider_paths(custom_id: &str) -> Result<(PathBuf, PathBuf), Str
         &crate::platform::paths::custom_providers_dir(),
         &crate::platform::paths::custom_scripts_dir(),
     )
+}
+
+fn find_newapi_yaml_path(custom_id: &str) -> Result<PathBuf, String> {
+    if !custom_id.ends_with(":newapi") {
+        return Err(format!(
+            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
+        ));
+    }
+
+    let providers_dir = crate::platform::paths::custom_providers_dir();
+    if let Ok(path) = find_newapi_yaml_path_in_dir(custom_id, &providers_dir) {
+        return Ok(path);
+    }
+
+    let fallback_yaml = generator::filename_for_id(custom_id)
+        .map(|filename| crate::platform::paths::custom_provider_path(&filename));
+    match fallback_yaml {
+        Some(path) => Err(format!(
+            "NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {} (expected {} or matching .yml)",
+            custom_id,
+            path.display()
+        )),
+        None => Err(format!(
+            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
+        )),
+    }
+}
+
+fn find_newapi_yaml_path_in_dir(custom_id: &str, providers_dir: &Path) -> Result<PathBuf, String> {
+    find_custom_provider_yaml_by_id(custom_id, providers_dir)
+        .map(|yaml| yaml.path)
+        .ok_or_else(|| {
+            format!("NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {custom_id}")
+        })
 }
 
 fn find_script_provider_paths_in_dir(
@@ -339,11 +370,6 @@ fn find_script_provider_paths_in_dir(
             "ScriptProviderEffect::DeleteProvider: not a script provider id: {custom_id}"
         )),
     }
-}
-
-fn is_yaml_path(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|ext| ext == "yaml" || ext == "yml")
 }
 
 fn script_path_from_def(def: &CustomProviderDef) -> Option<PathBuf> {
@@ -458,6 +484,40 @@ mod tests {
     fn delete_newapi_yaml_rejects_non_newapi_custom_provider() {
         let err = delete_newapi_yaml(&ProviderId::Custom("custom:cli".to_string())).unwrap_err();
         assert!(err.contains("not a newapi provider id"));
+    }
+
+    #[test]
+    fn find_newapi_yaml_path_matches_yaml_id_not_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers_dir = dir.path().join("providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        let yaml_path = providers_dir.join("renamed-provider.yaml");
+        std::fs::write(
+            &yaml_path,
+            r#"id: "my-api:newapi"
+schema_version: 2
+base_url: "https://example.com"
+metadata:
+  display_name: "Example"
+  brand_name: "NewAPI Relay"
+plan:
+  steps:
+    - name: "api"
+      source:
+        type: http
+        method: get
+        url: "/api/user/self"
+      parser:
+        format: json
+        quotas:
+          - label: "Balance"
+            remaining: "data.quota"
+"#,
+        )
+        .unwrap();
+
+        let found = find_newapi_yaml_path_in_dir("my-api:newapi", &providers_dir).unwrap();
+        assert_eq!(found, yaml_path);
     }
 
     fn make_script_config(script: &str) -> ScriptProviderConfig {

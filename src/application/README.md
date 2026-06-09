@@ -15,7 +15,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
 - **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 脚本 Provider 新增 / 脚本 Provider 编辑 / 移除二次确认 / 删除二次确认"这些原本散落的 bool/Option 字段折叠成单一 enum：
   - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`AddingScriptProvider`、`EditingScriptProvider(ScriptProviderEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`、`ConfirmingDeleteScriptProvider`
-  - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()`
+  - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()` / `form_identity()`
   - 互斥关系上升到类型层，reducer 不再需要 `set A = true; set B = false;` 的手工同步
 - **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
 - **`DebugUiState`** — Debug Tab 状态
@@ -97,7 +97,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 |------|------|
 | `mod.rs` | ViewModel 类型定义（含 `OverviewQuotaItem`）+ 公共 re-export（含 D-Bus DTO） |
 | `tray.rs` | 弹窗面板 ViewModel（header / provider detail / nav / global actions） |
-| `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers / 右侧面板 enum） |
+| `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers / 右侧面板 enum）；表单类 right pane 显式携带 `FormIdentity`，供 UI 判断输入缓存是否可复用 |
 | `dbus_dto.rs` | D-Bus JSON DTO（`DBusQuotaSnapshot` 等）+ 格式化函数，跨平台可测试 |
 | `debug.rs` | Debug Tab ViewModel（系统信息、日志捕获、调试刷新） |
 | `format.rs` | 共享格式化函数（时间、百分比、quota 文本） |

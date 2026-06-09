@@ -1,8 +1,10 @@
 //! Custom Script Provider add/edit form.
 
-use super::super::{ScriptProviderFormInputs, SettingsView};
+use super::super::{FormInputsCache, ScriptProviderFormInputs, SettingsView};
+use super::newapi_form::should_rebuild_form_inputs_cache;
 use super::shared::{render_code_field, render_input_field, render_readonly_field, FormFieldSpec};
 use crate::application::AppAction;
+use crate::application::FormIdentity;
 use crate::models::{
     unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
     ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
@@ -17,6 +19,7 @@ use gpui::{
 use rust_i18n::t;
 
 pub(in crate::ui::settings_window) struct ScriptProviderFormView<'a> {
+    pub identity: FormIdentity,
     pub edit_data: Option<&'a ScriptProviderEditData>,
     pub test_result: Option<&'a ScriptProviderTestResult>,
     pub is_testing: bool,
@@ -149,20 +152,19 @@ fn compact_text(text: &str) -> String {
 impl SettingsView {
     fn ensure_script_provider_inputs(
         &mut self,
+        identity: FormIdentity,
         edit_data: Option<&ScriptProviderEditData>,
         cx: &mut Context<Self>,
     ) {
-        if self.script_provider_inputs.is_some() {
-            return;
+        let should_rebuild =
+            should_rebuild_form_inputs_cache(self.script_provider_inputs.as_ref(), &identity);
+        if should_rebuild {
+            let inputs = match edit_data {
+                Some(data) => ScriptProviderFormInputs::new_edit(data, cx),
+                None => ScriptProviderFormInputs::new_add(cx),
+            };
+            self.script_provider_inputs = Some(FormInputsCache { identity, inputs });
         }
-        self.script_provider_inputs = Some(match edit_data {
-            Some(data) => ScriptProviderFormInputs::new_edit(data, cx),
-            None => ScriptProviderFormInputs::new_add(cx),
-        });
-    }
-
-    pub(in crate::ui::settings_window) fn clear_script_provider_inputs(&mut self) {
-        self.script_provider_inputs = None;
     }
 
     pub(in crate::ui::settings_window) fn render_script_provider_form(
@@ -172,8 +174,8 @@ impl SettingsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        self.ensure_script_provider_inputs(form.edit_data, cx);
-        let inputs = self.script_provider_inputs.as_ref().unwrap();
+        self.ensure_script_provider_inputs(form.identity.clone(), form.edit_data, cx);
+        let inputs = &self.script_provider_inputs.as_ref().unwrap().inputs;
         let focused = inputs.focused_states(window, cx);
         let title = if form.is_editing() {
             t!("script_provider.edit_title").to_string()
@@ -308,6 +310,7 @@ impl SettingsView {
 
     fn collect_script_provider_config(&self, cx: &App) -> Option<ScriptProviderConfig> {
         let inputs = self.script_provider_inputs.as_ref()?;
+        let inputs = &inputs.inputs;
         let display_name = inputs.name.read(cx).content().trim().to_string();
         let is_editing = self
             .state

@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理 |
+| `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理；表单缓存按 modal identity 驱动重建 |
 | `mod.rs` | 窗口壳层与 `build_settings_view()` 工厂，供 `runtime` 创建设置窗口内容 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 
@@ -27,7 +27,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换） |
+| `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换），右侧表单 identity 由 selector 显式下发 |
 | `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮） |
 | `providers/sidebar.rs` | 左侧 Sidebar — Provider 列表（拖拽排序、添加/删除按钮） |
 | `providers/detail.rs` | 右侧详情 — Provider 信息/状态/配额/配额可见性/启用开关/Copilot Token 输入 |
@@ -61,5 +61,5 @@ SettingsView::render()
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
-- `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）
-- `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件
+- `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）；右侧面板 selector 会显式传入当前 form identity，同一 identity 复用输入实体，不同 identity 重建，避免跨 provider 串用旧草稿
+- `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件；缓存重建规则与 NewAPI 表单一致

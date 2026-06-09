@@ -10,7 +10,7 @@ mod tray;
 // ViewModel 类型定义（所有 selector 的共享产出物）
 // ============================================================================
 
-use super::state::HeaderStatusKind;
+use super::state::{FormIdentity, HeaderStatusKind};
 use crate::models::{
     NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
     ScriptProviderEditData, ScriptProviderTestResult, SettingsCapability, StatusLevel,
@@ -186,9 +186,11 @@ pub enum SettingsProviderRightPaneViewState {
     Detail,
     ProviderPicker,
     NewApiForm {
+        identity: FormIdentity,
         edit_data: Option<NewApiEditData>,
     },
     ScriptProviderForm {
+        identity: FormIdentity,
         edit_data: Option<ScriptProviderEditData>,
         testing: bool,
         test_result: Option<ScriptProviderTestResult>,

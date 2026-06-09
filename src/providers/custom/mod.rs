@@ -7,6 +7,8 @@ mod fetch;
 pub(crate) mod generator;
 mod json_file;
 pub(crate) mod loader;
+#[cfg(any(feature = "app", test))]
+pub(crate) mod locator;
 mod log_utils;
 mod plan;
 pub(crate) mod provider;

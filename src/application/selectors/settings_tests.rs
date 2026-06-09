@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 use super::*;
+use crate::application::FormIdentity;
 use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
 };
@@ -125,7 +126,64 @@ fn settings_providers_tab_right_pane_reports_newapi_form() {
     assert_eq!(
         view_state.right_pane,
         SettingsProviderRightPaneViewState::NewApiForm {
+            identity: FormIdentity::NewApiEdit {
+                original_filename: "relay.yaml".into()
+            },
             edit_data: Some(edit_data)
+        }
+    );
+}
+
+#[test]
+fn settings_providers_tab_right_pane_reports_add_form_identity() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(
+        view_state.right_pane,
+        SettingsProviderRightPaneViewState::NewApiForm {
+            identity: FormIdentity::NewApiAdd,
+            edit_data: None,
+        }
+    );
+}
+
+#[test]
+fn settings_providers_tab_right_pane_reports_script_form_identity() {
+    use crate::models::ScriptProviderEditData;
+
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+    let edit_data = ScriptProviderEditData {
+        display_name: "Script".to_string(),
+        provider_id: "script:script".to_string(),
+        interpreter: "python3".to_string(),
+        timeout_ms: 12_000,
+        script: "print(1)".to_string(),
+        original_yaml_filename: "script.yaml".to_string(),
+        original_script_filename: "script.py".to_string(),
+    };
+    session.settings_ui.modal = SettingsModalState::EditingScriptProvider(edit_data.clone());
+
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(
+        view_state.right_pane,
+        SettingsProviderRightPaneViewState::ScriptProviderForm {
+            identity: FormIdentity::ScriptProviderEdit {
+                original_yaml_filename: "script.yaml".into(),
+                original_script_filename: "script.py".into(),
+            },
+            edit_data: Some(edit_data),
+            testing: false,
+            test_result: None,
         }
     );
 }
