@@ -7,12 +7,12 @@ use crate::application::{script_provider_ops, ScriptProviderEffect};
 use crate::models::{
     parse_script_stdout, ProviderId, ScriptProviderConfig, ScriptProviderTestResult,
 };
-use crate::providers::custom::generator;
+use crate::providers::custom::api;
 use crate::refresh::RefreshRequest;
 use std::process::Command;
 use std::time::Duration;
 
-use super::super::{newapi_io, AppState};
+use super::super::AppState;
 
 pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: ScriptProviderEffect) {
     match effect {
@@ -179,11 +179,11 @@ fn save_provider(
     is_editing: bool,
 ) {
     let yaml_filename =
-        original_yaml_filename.unwrap_or_else(|| generator::generate_script_yaml_filename(&config));
+        original_yaml_filename.unwrap_or_else(|| api::generate_script_yaml_filename(&config));
     let script_filename =
-        original_script_filename.unwrap_or_else(|| generator::generate_script_filename(&config));
+        original_script_filename.unwrap_or_else(|| api::generate_script_filename(&config));
 
-    match newapi_io::save_script_provider(&config, &yaml_filename, &script_filename, is_editing) {
+    match api::save_script_provider(&config, &yaml_filename, &script_filename, is_editing) {
         Ok((yaml_path, script_path)) => {
             info!(
                 target: "runtime",
@@ -229,7 +229,7 @@ fn save_provider(
 }
 
 fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
-    match newapi_io::delete_script_provider_files(&provider_id) {
+    match api::delete_script_provider_files(&provider_id) {
         Ok((yaml_path, script_result)) => {
             match script_result {
                 Ok(script_path) => {
@@ -267,7 +267,7 @@ fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
 
 fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
     if let ProviderId::Custom(ref custom_id) = provider_id {
-        if let Some(edit_data) = generator::read_script_provider_config(custom_id) {
+        if let Some(edit_data) = api::read_script_provider_config(custom_id) {
             let mut s = state.borrow_mut();
             s.session.settings_ui.modal =
                 crate::application::SettingsModalState::EditingScriptProvider(edit_data);

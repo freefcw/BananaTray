@@ -1,54 +1,13 @@
-//! Settings 向导生成的自定义 Provider YAML 配置生成器
+//! Custom provider YAML text generator
 //!
 //! 根据用户输入的必要信息（站点 URL、Session Token 等），
 //! 自动生成完整的自定义 Provider YAML 配置文件。
 //!
 //! 纯数据类型（`NewApiConfig`、`NewApiEditData`）和 ID 计算函数
-//! 已迁移至 `models/newapi.rs`，本模块仅保留 YAML 模板生成和磁盘 I/O。
+//! 已迁移至 `models/newapi.rs`，本模块仅保留 YAML 文本生成和纯解析辅助。
 
-// Re-export from models（保持 generator 已有调用方的兼容性）
-pub use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
-use crate::models::{
-    format_divisor_value, script_provider_slug, ScriptProviderConfig, ScriptProviderEditData,
-    DEFAULT_SCRIPT_TIMEOUT_MS,
-};
-#[cfg(feature = "app")]
-use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
-
-/// 生成 YAML 配置文件名
-pub fn generate_filename(config: &NewApiConfig) -> String {
-    let slug = extract_domain_slug(&config.base_url);
-    format!("newapi-{}.yaml", slug)
-}
-
-/// 从 custom provider id 直接推导文件名，无需读取磁盘。
-///
-/// id 格式为 `{slug}:newapi`（由 `generate_newapi_yaml` 生成），
-/// 对应文件名为 `newapi-{slug}.yaml`。
-pub fn filename_for_id(custom_id: &str) -> Option<String> {
-    let slug = custom_id.strip_suffix(":newapi")?;
-    Some(format!("newapi-{}.yaml", slug))
-}
-
-pub fn script_yaml_filename_for_id(custom_id: &str) -> Option<String> {
-    let slug = custom_id.strip_suffix(":script")?;
-    Some(format!("script-{}.yaml", slug))
-}
-
-pub fn script_filename_for_id(custom_id: &str) -> Option<String> {
-    let slug = custom_id.strip_suffix(":script")?;
-    Some(format!("script-{}.py", slug))
-}
-
-pub fn generate_script_yaml_filename(config: &ScriptProviderConfig) -> String {
-    script_yaml_filename_for_id(&config.provider_id)
-        .unwrap_or_else(|| format!("script-{}.yaml", script_provider_slug(&config.display_name)))
-}
-
-pub fn generate_script_filename(config: &ScriptProviderConfig) -> String {
-    script_filename_for_id(&config.provider_id)
-        .unwrap_or_else(|| format!("script-{}.py", script_provider_slug(&config.display_name)))
-}
+use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::{format_divisor_value, ScriptProviderConfig};
 
 /// 转义 YAML 双引号字符串中的特殊字符
 ///
@@ -60,7 +19,7 @@ fn escape_yaml_double_quoted(s: &str) -> String {
 }
 
 /// 根据输入生成完整的 NewAPI YAML 配置
-pub fn generate_newapi_yaml(config: &NewApiConfig) -> String {
+pub(crate) fn generate_newapi_yaml(config: &NewApiConfig) -> String {
     let slug = extract_domain_slug(&config.base_url);
     let id = format!("{}:newapi", slug);
     let base_url = config.base_url.trim_end_matches('/');
@@ -137,7 +96,7 @@ plan:
     )
 }
 
-pub fn generate_script_provider_yaml(
+pub(crate) fn generate_script_provider_yaml(
     config: &ScriptProviderConfig,
     script_path: &std::path::Path,
 ) -> String {
@@ -197,91 +156,10 @@ plan:
     )
 }
 
-/// 从已有 YAML 配置文件中读取 NewAPI 配置，用于编辑模式回填表单。
-///
-/// 遍历 providers 目录，找到 id 匹配的 YAML 文件并解析为 NewApiEditData。
-/// 仅支持 NewAPI 型（HTTP GET + Cookie auth）Provider。
-///
-/// **注意**：此函数包含磁盘 I/O，由 `NewApiEffect::LoadConfig` handler 调用。
-#[cfg(feature = "app")]
-pub fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
-    let providers_dir = crate::platform::paths::custom_providers_dir();
-    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, &providers_dir)?;
-    parse_newapi_edit_data(&yaml.def, yaml.filename)
-}
-
-#[cfg(feature = "app")]
-pub fn read_script_provider_config(provider_custom_id: &str) -> Option<ScriptProviderEditData> {
-    use super::schema::SourceDef;
-
-    let providers_dir = crate::platform::paths::custom_providers_dir();
-    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, &providers_dir)?;
-    let step = yaml.def.plan.steps.first()?;
-    let (interpreter, script_path, timeout_ms) = match &step.source {
-        SourceDef::Cli {
-            command,
-            args,
-            timeout_ms,
-        } => (
-            command.clone(),
-            args.first()?.clone(),
-            timeout_ms.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS),
-        ),
-        _ => return None,
-    };
-    let script_path = std::path::PathBuf::from(script_path);
-    let script = std::fs::read_to_string(&script_path).ok()?;
-    let script_filename = script_path.file_name()?.to_str()?.to_string();
-
-    Some(ScriptProviderEditData {
-        display_name: yaml.def.metadata.display_name,
-        provider_id: yaml.def.id,
-        interpreter,
-        timeout_ms,
-        script,
-        original_yaml_filename: yaml.filename,
-        original_script_filename: script_filename,
-    })
-}
-
-pub fn default_script_template() -> String {
-    r#"import json
-import os
-import urllib.request
-
-base_url = os.environ.get("CCSWITCH_BASE_URL", "https://example.com").rstrip("/")
-api_key = os.environ.get("CCSWITCH_API_KEY", "")
-
-request = urllib.request.Request(
-    f"{base_url}/v1/usage",
-    headers={"Authorization": f"Bearer {api_key}"},
-)
-
-with urllib.request.urlopen(request, timeout=15) as response:
-    data = json.loads(response.read().decode("utf-8"))
-
-quota = data.get("quota") or {}
-remaining = data.get("remaining")
-if remaining is None:
-    remaining = quota.get("remaining")
-if remaining is None:
-    remaining = data.get("balance")
-
-unit = data.get("unit") or quota.get("unit") or "USD"
-
-print(json.dumps({
-    "ok": data.get("is_active", data.get("isValid", True)),
-    "remaining": remaining,
-    "unit": unit,
-}))
-"#
-    .to_string()
-}
-
 /// 从已解析的 CustomProviderDef 中提取 NewApiEditData（纯函数，无 I/O）。
 ///
-/// 与 `read_newapi_config` 分离以便独立测试 roundtrip 一致性。
-fn parse_newapi_edit_data(
+/// 由 `providers::custom::api` 组合磁盘 I/O 后调用。
+pub(in crate::providers::custom) fn parse_newapi_edit_data(
     def: &super::schema::CustomProviderDef,
     original_filename: String,
 ) -> Option<NewApiEditData> {
@@ -352,31 +230,6 @@ mod tests {
             "localhost-3000"
         );
         assert_eq!(extract_domain_slug("https://api.site.io/"), "api-site-io");
-    }
-
-    #[test]
-    fn test_generate_filename() {
-        let config = make_config();
-        assert_eq!(generate_filename(&config), "newapi-my-api-example-com.yaml");
-    }
-
-    #[test]
-    fn test_filename_for_id_roundtrip() {
-        // generate_newapi_yaml 生成的 id 格式为 "{slug}:newapi"
-        // filename_for_id 应能从中还原出与 generate_filename 一致的文件名
-        let config = make_config();
-        let yaml = generate_newapi_yaml(&config);
-        // 从 yaml 中提取 id 行
-        let id_line = yaml.lines().find(|l| l.starts_with("id:")).unwrap();
-        let id = id_line.trim_start_matches("id:").trim().trim_matches('"');
-        assert_eq!(filename_for_id(id), Some(generate_filename(&config)));
-    }
-
-    #[test]
-    fn test_filename_for_id_non_newapi_returns_none() {
-        assert_eq!(filename_for_id("some-provider:cli"), None);
-        assert_eq!(filename_for_id("newapi"), None);
-        assert_eq!(filename_for_id(""), None);
     }
 
     #[test]
@@ -547,7 +400,7 @@ mod tests {
     /// 辅助：生成 YAML → 解析为 CustomProviderDef → 提取 NewApiEditData
     fn roundtrip(config: &NewApiConfig) -> NewApiEditData {
         let yaml = generate_newapi_yaml(config);
-        let filename = generate_filename(config);
+        let filename = format!("newapi-{}.yaml", extract_domain_slug(&config.base_url));
         let def: crate::providers::custom::schema::CustomProviderDef =
             serde_norway::from_str(&yaml).expect("Generated YAML must be parseable");
         parse_newapi_edit_data(&def, filename).expect("parse_newapi_edit_data must succeed")

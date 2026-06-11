@@ -1,24 +1,145 @@
-//! NewAPI Provider YAML 文件的磁盘 I/O 操作。
+//! Custom provider lifecycle API.
 //!
-//! 封装 YAML 生成、目录创建、文件写入 / 删除等 I/O 步骤，
-//! 供 `runtime/effects/newapi.rs` 中的 NewAPI effect handlers 调用。
+//! Runtime 和 Settings UI 只应依赖这里的稳定入口：
+//! - filename / YAML 生成
+//! - 默认脚本模板
+//! - edit-data 读取
+//! - 保存 / 删除 custom provider 文件
+//!
+//! schema / locator / generator 继续作为内部实现细节存在。
 
-use crate::models::{NewApiConfig, ProviderId, ScriptProviderConfig};
+use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::{
+    script_provider_slug, ProviderId, ScriptProviderConfig, ScriptProviderEditData,
+    DEFAULT_SCRIPT_TIMEOUT_MS,
+};
 use crate::providers::custom::generator;
 use crate::providers::custom::locator::{find_custom_provider_yaml_by_id, is_yaml_path};
 use crate::providers::custom::schema::{CustomProviderDef, SourceDef};
 use std::path::{Path, PathBuf};
 
+pub(crate) fn generate_filename(config: &NewApiConfig) -> String {
+    format!("newapi-{}.yaml", extract_domain_slug(&config.base_url))
+}
+
+pub(crate) fn generate_script_yaml_filename(config: &ScriptProviderConfig) -> String {
+    script_yaml_filename_for_id(&config.provider_id)
+        .unwrap_or_else(|| format!("script-{}.yaml", script_provider_slug(&config.display_name)))
+}
+
+pub(crate) fn generate_script_filename(config: &ScriptProviderConfig) -> String {
+    script_filename_for_id(&config.provider_id)
+        .unwrap_or_else(|| format!("script-{}.py", script_provider_slug(&config.display_name)))
+}
+
+pub(crate) fn default_script_template() -> &'static str {
+    r#"import json
+import os
+import urllib.request
+
+base_url = os.environ.get("CCSWITCH_BASE_URL", "https://example.com").rstrip("/")
+api_key = os.environ.get("CCSWITCH_API_KEY", "")
+
+request = urllib.request.Request(
+    f"{base_url}/v1/usage",
+    headers={"Authorization": f"Bearer {api_key}"},
+)
+
+with urllib.request.urlopen(request, timeout=15) as response:
+    data = json.loads(response.read().decode("utf-8"))
+
+quota = data.get("quota") or {}
+remaining = data.get("remaining")
+if remaining is None:
+    remaining = quota.get("remaining")
+if remaining is None:
+    remaining = data.get("balance")
+
+unit = data.get("unit") or quota.get("unit") or "USD"
+
+print(json.dumps({
+    "ok": data.get("is_active", data.get("isValid", True)),
+    "remaining": remaining,
+    "unit": unit,
+}))
+"#
+}
+
+pub(crate) fn read_newapi_config(provider_custom_id: &str) -> Option<NewApiEditData> {
+    read_newapi_config_in_dir(
+        provider_custom_id,
+        &crate::platform::paths::custom_providers_dir(),
+    )
+}
+
+pub(crate) fn read_script_provider_config(
+    provider_custom_id: &str,
+) -> Option<ScriptProviderEditData> {
+    read_script_provider_config_in_dir(
+        provider_custom_id,
+        &crate::platform::paths::custom_providers_dir(),
+    )
+}
+
+fn newapi_filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":newapi")?;
+    Some(format!("newapi-{}.yaml", slug))
+}
+
+fn script_yaml_filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":script")?;
+    Some(format!("script-{}.yaml", slug))
+}
+
+fn script_filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":script")?;
+    Some(format!("script-{}.py", slug))
+}
+
+fn read_newapi_config_in_dir(
+    provider_custom_id: &str,
+    providers_dir: &Path,
+) -> Option<NewApiEditData> {
+    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, providers_dir)?;
+    generator::parse_newapi_edit_data(&yaml.def, yaml.filename)
+}
+
+fn read_script_provider_config_in_dir(
+    provider_custom_id: &str,
+    providers_dir: &Path,
+) -> Option<ScriptProviderEditData> {
+    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, providers_dir)?;
+    let step = yaml.def.plan.steps.first()?;
+    let (interpreter, script_path, timeout_ms) = match &step.source {
+        SourceDef::Cli {
+            command,
+            args,
+            timeout_ms,
+        } => (
+            command.clone(),
+            args.first()?.clone(),
+            timeout_ms.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS),
+        ),
+        _ => return None,
+    };
+
+    let script_path = PathBuf::from(script_path);
+    let script = std::fs::read_to_string(&script_path).ok()?;
+    let script_filename = script_path.file_name()?.to_str()?.to_string();
+
+    Some(ScriptProviderEditData {
+        display_name: yaml.def.metadata.display_name,
+        provider_id: yaml.def.id,
+        interpreter,
+        timeout_ms,
+        script,
+        original_yaml_filename: yaml.filename,
+        original_script_filename: script_filename,
+    })
+}
+
 /// 将 NewAPI 配置写入磁盘 YAML 文件。
-///
-/// 步骤：
-/// 1. 生成 YAML 内容（`generator::generate_newapi_yaml`）
-/// 2. 计算文件路径（`custom_provider_path`）
-/// 3. 确保目录存在（`create_dir_all`）
-/// 4. 写入文件（`fs::write`）
-///
-/// 成功返回文件路径，失败返回错误描述。
-pub fn save_newapi_yaml(config: &NewApiConfig, filename: &str) -> Result<PathBuf, String> {
+pub(crate) fn save_newapi_yaml(config: &NewApiConfig, filename: &str) -> Result<PathBuf, String> {
     let yaml_content = generator::generate_newapi_yaml(config);
     let path = crate::platform::paths::custom_provider_path(filename);
 
@@ -35,7 +156,8 @@ pub fn save_newapi_yaml(config: &NewApiConfig, filename: &str) -> Result<PathBuf
     Ok(path)
 }
 
-pub fn save_script_provider(
+/// 保存脚本 provider 的 YAML 和 companion script。
+pub(crate) fn save_script_provider(
     config: &ScriptProviderConfig,
     yaml_filename: &str,
     script_filename: &str,
@@ -237,14 +359,7 @@ fn cleanup_backup(backup: Option<&Path>) {
 }
 
 /// 删除 NewAPI 配置对应的 YAML 文件。
-///
-/// 步骤：
-/// 1. 校验 provider id 是 NewAPI custom provider
-/// 2. 计算文件路径
-/// 3. 删除 YAML 文件
-///
-/// 成功返回被删除的文件路径，失败返回错误描述。
-pub fn delete_newapi_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
+pub(crate) fn delete_newapi_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
     let custom_id = match provider_id {
         ProviderId::Custom(custom_id) => custom_id,
         _ => {
@@ -258,7 +373,8 @@ pub fn delete_newapi_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
     delete_yaml_file(&yaml_path)
 }
 
-pub fn delete_script_provider_files(
+/// 删除 script provider 的 YAML 文件与 companion script。
+pub(crate) fn delete_script_provider_files(
     provider_id: &ProviderId,
 ) -> Result<(PathBuf, Result<PathBuf, String>), String> {
     let custom_id = match provider_id {
@@ -300,7 +416,7 @@ fn find_newapi_yaml_path(custom_id: &str) -> Result<PathBuf, String> {
         return Ok(path);
     }
 
-    let fallback_yaml = generator::filename_for_id(custom_id)
+    let fallback_yaml = newapi_filename_for_id(custom_id)
         .map(|filename| crate::platform::paths::custom_provider_path(&filename));
     match fallback_yaml {
         Some(path) => Err(format!(
@@ -358,7 +474,7 @@ fn find_script_provider_paths_in_dir(
         return Ok((yaml_path, script_path));
     }
 
-    let fallback_yaml = generator::script_yaml_filename_for_id(custom_id)
+    let fallback_yaml = script_yaml_filename_for_id(custom_id)
         .map(|filename| crate::platform::paths::custom_provider_path(&filename));
     match fallback_yaml {
         Some(path) => Err(format!(
@@ -433,7 +549,7 @@ fn path_for_delete_boundary(path: &Path) -> Result<PathBuf, String> {
     Ok(parent.join(filename))
 }
 
-pub fn delete_script_provider_paths(
+fn delete_script_provider_paths(
     yaml_path: &Path,
     script_path: &Path,
 ) -> Result<(PathBuf, Result<PathBuf, String>), String> {
@@ -460,7 +576,17 @@ fn delete_file_if_exists(path: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ProviderKind, ScriptProviderConfig};
+    use crate::models::{NewApiConfig, ProviderKind, ScriptProviderConfig};
+
+    fn make_newapi_config() -> NewApiConfig {
+        NewApiConfig {
+            display_name: "Example".to_string(),
+            base_url: "https://example.com".to_string(),
+            cookie: "session=abc".to_string(),
+            user_id: Some("42".to_string()),
+            divisor: Some(500000.0),
+        }
+    }
 
     #[test]
     fn delete_yaml_file_removes_existing_file() {
@@ -518,6 +644,71 @@ plan:
 
         let found = find_newapi_yaml_path_in_dir("my-api:newapi", &providers_dir).unwrap();
         assert_eq!(found, yaml_path);
+    }
+
+    #[test]
+    fn generate_filename_uses_newapi_slug() {
+        let filename = generate_filename(&make_newapi_config());
+        assert_eq!(filename, "newapi-example-com.yaml");
+    }
+
+    #[test]
+    fn generate_script_filenames_follow_provider_id_suffix() {
+        let config = ScriptProviderConfig {
+            display_name: "Anything".to_string(),
+            provider_id: "relay-node:script".to_string(),
+            interpreter: "python3".to_string(),
+            timeout_ms: 12_000,
+            script: "print(1)".to_string(),
+        };
+
+        assert_eq!(
+            generate_script_yaml_filename(&config),
+            "script-relay-node.yaml"
+        );
+        assert_eq!(generate_script_filename(&config), "script-relay-node.py");
+    }
+
+    #[test]
+    fn read_newapi_config_in_dir_uses_yaml_id_and_actual_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers_dir = dir.path().join("providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        let config = make_newapi_config();
+        let yaml = generator::generate_newapi_yaml(&config);
+        let yaml_path = providers_dir.join("renamed-provider.yaml");
+        std::fs::write(&yaml_path, yaml).unwrap();
+
+        let edit = read_newapi_config_in_dir("example-com:newapi", &providers_dir).unwrap();
+
+        assert_eq!(edit.display_name, "Example");
+        assert_eq!(edit.base_url, "https://example.com");
+        assert_eq!(edit.cookie, "session=abc");
+        assert_eq!(edit.user_id.as_deref(), Some("42"));
+        assert_eq!(edit.original_filename, "renamed-provider.yaml");
+    }
+
+    #[test]
+    fn read_script_provider_config_in_dir_reads_companion_script_and_actual_filenames() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers_dir = dir.path().join("providers");
+        let scripts_dir = dir.path().join("scripts");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::create_dir_all(&scripts_dir).unwrap();
+        let script_path = scripts_dir.join("renamed-script.py");
+        std::fs::write(&script_path, "print('hello')").unwrap();
+        let yaml_path = providers_dir.join("renamed-provider.yml");
+        std::fs::write(&yaml_path, make_script_yaml("relay:script", &script_path)).unwrap();
+
+        let edit = read_script_provider_config_in_dir("relay:script", &providers_dir).unwrap();
+
+        assert_eq!(edit.display_name, "Script");
+        assert_eq!(edit.provider_id, "relay:script");
+        assert_eq!(edit.interpreter, "python3");
+        assert_eq!(edit.timeout_ms, DEFAULT_SCRIPT_TIMEOUT_MS);
+        assert_eq!(edit.script, "print('hello')");
+        assert_eq!(edit.original_yaml_filename, "renamed-provider.yml");
+        assert_eq!(edit.original_script_filename, "renamed-script.py");
     }
 
     fn make_script_config(script: &str) -> ScriptProviderConfig {

@@ -136,7 +136,7 @@
 - `newapi.rs` — `NewApiEffect`
 - `script_provider.rs` — `ScriptProviderEffect`
 
-各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本底层读写仍在 `newapi_io.rs`，纯状态回滚仍在 `application/newapi_ops.rs` / `application/script_provider_ops.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果再回到前台 reducer，避免阻塞设置窗口。
+各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本、编辑态加载、删除都统一放在 `providers::custom::api`，纯状态回滚仍在 `application/newapi_ops.rs` / `application/script_provider_ops.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果再回到前台 reducer，避免阻塞设置窗口。
 
 ### `global_hotkey.rs` — 全局热键解析与重绑
 
@@ -148,10 +148,13 @@
 - 启动阶段也复用同一套规则；若磁盘配置无效，`bootstrap` 会先把配置修正为默认热键再尝试注册，因此即便默认热键本身也注册失败，磁盘里也不会继续残留不可解析的坏值；若配置合法但注册失败，则保留用户原值并回填错误
 - macOS 底层注册现改为系统级 `RegisterEventHotKey`，并使用 exclusive 选项注册，避免继续依赖 `NSEvent` monitor 的监听式实现；Windows / X11 仍沿用各自平台 API
 
-### `newapi_io.rs` — NewAPI YAML 文件 I/O
+### `providers::custom::api` — Custom Provider lifecycle API
 
-封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 以及 `ScriptProviderEffect::SaveProvider` / `DeleteProvider` 需要的磁盘文件操作：
+封装 `NewApiEffect::SaveProvider` / `DeleteProvider` 以及 `ScriptProviderEffect::SaveProvider` / `DeleteProvider` / `LoadConfig` 需要的稳定入口：
 
+- **`generate_filename()` / `generate_script_yaml_filename()` / `generate_script_filename()`** — 由 custom provider id / config 推导落盘文件名
+- **`default_script_template()`** — Settings 窗口脚本 provider 新增页的默认模板
+- **`read_newapi_config()` / `read_script_provider_config()`** — 按 YAML `id` 读取编辑态回填数据
 - **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
 - **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
 - **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 写入脚本文件，再生成 `source.type: cli` YAML

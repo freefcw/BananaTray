@@ -93,7 +93,7 @@ impl ScriptProviderFormInputs {
             }),
             interpreter: cx.new(|cx| {
                 let mut s = InputState::new(cx);
-                s.content = crate::models::DEFAULT_SCRIPT_INTERPRETER.to_string().into();
+                s.content = crate::models::DEFAULT_SCRIPT_INTERPRETER.into();
                 s.trim_on_blur = false;
                 s
             }),
@@ -107,7 +107,7 @@ impl ScriptProviderFormInputs {
             }),
             script: cx.new(|cx| {
                 let mut s = TextareaState::new(cx);
-                s.content = crate::providers::custom::generator::default_script_template().into();
+                s.content = crate::providers::custom::api::default_script_template().into();
                 s
             }),
         }

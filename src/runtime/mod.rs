@@ -6,7 +6,6 @@ mod diagnostics_context;
 mod effects;
 pub(crate) mod global_hotkey;
 mod gpu_cache;
-mod newapi_io;
 mod settings_window_opener;
 mod settings_writer;
 pub mod ui_hooks;

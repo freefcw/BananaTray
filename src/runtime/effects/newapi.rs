@@ -5,10 +5,10 @@ use log::{info, warn};
 
 use crate::application::{newapi_ops, NewApiEffect, SettingsModalState};
 use crate::models::ProviderId;
-use crate::providers::custom::generator;
+use crate::providers::custom::api;
 use crate::refresh::RefreshRequest;
 
-use super::super::{newapi_io, AppState};
+use super::super::AppState;
 
 pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: NewApiEffect) {
     match effect {
@@ -28,9 +28,9 @@ fn save_provider(
     original_filename: Option<String>,
     is_editing: bool,
 ) {
-    let filename = original_filename.unwrap_or_else(|| generator::generate_filename(&config));
+    let filename = original_filename.unwrap_or_else(|| api::generate_filename(&config));
 
-    match newapi_io::save_newapi_yaml(&config, &filename) {
+    match api::save_newapi_yaml(&config, &filename) {
         Ok(path) => {
             info!(target: "runtime", "saved custom provider YAML to {}", path.display());
             let s = state.borrow();
@@ -61,7 +61,7 @@ fn save_provider(
 }
 
 fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
-    match newapi_io::delete_newapi_yaml(&provider_id) {
+    match api::delete_newapi_yaml(&provider_id) {
         Ok(path) => {
             info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
             let _ = super::refresh::send_request(state, RefreshRequest::ReloadProviders);
@@ -77,7 +77,7 @@ fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
 
 fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
     if let ProviderId::Custom(ref custom_id) = provider_id {
-        if let Some(edit_data) = generator::read_newapi_config(custom_id) {
+        if let Some(edit_data) = api::read_newapi_config(custom_id) {
             let mut s = state.borrow_mut();
             s.session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data);
         } else {
