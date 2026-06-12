@@ -201,6 +201,7 @@ fn install_panic_hook() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "app")]
     use crate::utils::test_support::env_lock;
 
     #[cfg(feature = "app")]

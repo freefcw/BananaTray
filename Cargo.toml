@@ -56,7 +56,9 @@ dirs = "5"
 interprocess = { version = "2", default-features = false, optional = true }
 fern = { version = "0.7", optional = true }
 log = "0.4"
-regex = { version = "1", default-features = false, features = ["std", "perf"] }
+# Keep default features off for size, but parser tests and provider regexes rely on
+# Unicode Perl classes (`\d`, `\s`, `\w`) and case-insensitive matching in lib-only builds.
+regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
 serde_norway = "0.9"

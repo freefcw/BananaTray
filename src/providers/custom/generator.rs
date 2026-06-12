@@ -395,6 +395,39 @@ mod tests {
         assert_eq!(def.metadata.display_name, r#"My "API" Site"#);
     }
 
+    #[test]
+    fn test_generate_script_provider_yaml_is_valid() {
+        let config = ScriptProviderConfig {
+            display_name: r#"My "Script""#.to_string(),
+            provider_id: "script:custom".to_string(),
+            interpreter: "python3".to_string(),
+            timeout_ms: 12_000,
+            script: "print('{}')".to_string(),
+        };
+        let script_path = std::path::Path::new("/tmp/banana script.py");
+        let yaml = generate_script_provider_yaml(&config, script_path);
+
+        let def: crate::providers::custom::schema::CustomProviderDef =
+            serde_norway::from_str(&yaml).expect("Generated script YAML should be valid");
+        assert_eq!(def.id, "script:custom");
+        assert_eq!(def.metadata.display_name, r#"My "Script""#);
+
+        let step = def.plan.steps.first().expect("should have one step");
+        match &step.source {
+            crate::providers::custom::schema::SourceDef::Cli {
+                command,
+                args,
+                timeout_ms,
+                ..
+            } => {
+                assert_eq!(command, "python3");
+                assert_eq!(args, &[script_path.to_string_lossy().to_string()]);
+                assert_eq!(*timeout_ms, Some(12_000));
+            }
+            other => panic!("Expected CLI source, got {other:?}"),
+        }
+    }
+
     // ── roundtrip: generate → parse ──────────────────────────
 
     /// 辅助：生成 YAML → 解析为 CustomProviderDef → 提取 NewApiEditData

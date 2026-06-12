@@ -122,4 +122,28 @@ mod tests {
         assert_eq!(title, "script_provider.save_failed_title");
         assert_eq!(body, "script_provider.save_failed_body");
     }
+
+    #[test]
+    fn notification_keys_save_success() {
+        let (title, body) = script_provider_save_notification_keys(false, true);
+
+        assert_eq!(title, "script_provider.save_success_title");
+        assert_eq!(body, "script_provider.save_success_body");
+    }
+
+    #[test]
+    fn notification_keys_edit_success() {
+        let (title, body) = script_provider_save_notification_keys(true, true);
+
+        assert_eq!(title, "script_provider.edit_success_title");
+        assert_eq!(body, "script_provider.edit_success_body");
+    }
+
+    #[test]
+    fn notification_keys_partial_when_settings_not_saved() {
+        let (title, body) = script_provider_save_notification_keys(true, false);
+
+        assert_eq!(title, "script_provider.save_partial_title");
+        assert_eq!(body, "script_provider.save_partial_body");
+    }
 }
