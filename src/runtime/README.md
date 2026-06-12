@@ -94,15 +94,18 @@
 
 `ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。设置页保存的 app-managed provider credentials 会随 `RefreshRequest::UpdateConfig` 发给后台协调器，再由 `ProviderManager::sync_provider_credentials()` 注入需要运行时凭证快照的 provider。
 
-### `bootstrap.rs` — Shell Hook Registry
+### `bootstrap.rs` + `bootstrap/` — Shell Hook Registry
 
-`bootstrap` 现在承担 shell composition root 的职责，集中持有 UI / tray / settings window / D-Bus 的具体适配器入口：
+`bootstrap` 承担 shell composition root 的职责：`bootstrap.rs` 是薄模块入口，`bootstrap/`
+按生命周期边界拆分 UI / settings window / worker bridge / event source / D-Bus 的具体适配器入口：
 
 - 请求当前 popup view 重新渲染
 - 清理 popup view 注册
 - 构造 settings window 的 view entity
 - 调度 settings window 打开与复用
 - 实现 `Window + App` / `App` 级 full-context dispatch facade
+- 通过 `bootstrap/event_sources/` 注册 tray / hotkey / secondary-instance 事件源
+- 通过 `bootstrap/workers/` 桥接 refresh 与 script provider test 后台 worker 到前台 reducer
 - 在 Linux 上把 `DBusServiceHandle` 作为 event pump 的局部输入，用于更新快照缓存并发射信号
 
 `ui/` 只负责提供 hooks factory；`bootstrap` 统一注册这些 hooks，`runtime` 只调用抽象端口，不再知道 `SettingsView` 或 `DBusServiceHandle` 的具体归属。
