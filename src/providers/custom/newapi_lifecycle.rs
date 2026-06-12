@@ -1,0 +1,176 @@
+//! NewAPI custom provider lifecycle operations.
+//!
+//! 本模块只持有 NewAPI provider 的身份、文件名、编辑态加载、保存和删除语义。
+//! 低层文件替换与回滚由 `file_ops.rs` 负责。
+
+use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::ProviderId;
+use crate::providers::custom::file_ops;
+use crate::providers::custom::generator;
+use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
+use std::path::{Path, PathBuf};
+
+pub(crate) fn generate_filename(config: &NewApiConfig) -> String {
+    format!("newapi-{}.yaml", extract_domain_slug(&config.base_url))
+}
+
+pub(crate) fn read_config(provider_custom_id: &str) -> Option<NewApiEditData> {
+    read_config_in_dir(
+        provider_custom_id,
+        &crate::platform::paths::custom_providers_dir(),
+    )
+}
+
+/// 将 NewAPI 配置写入磁盘 YAML 文件。
+pub(crate) fn save_yaml(config: &NewApiConfig, filename: &str) -> Result<PathBuf, String> {
+    let yaml_content = generator::generate_newapi_yaml(config);
+    let path = crate::platform::paths::custom_provider_path(filename);
+
+    file_ops::write_newapi_yaml(&path, &yaml_content)
+}
+
+/// 删除 NewAPI 配置对应的 YAML 文件。
+pub(crate) fn delete_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
+    let custom_id = match provider_id {
+        ProviderId::Custom(custom_id) => custom_id,
+        _ => {
+            return Err(format!(
+                "NewApiEffect::DeleteProvider: not a custom provider id: {provider_id}"
+            ))
+        }
+    };
+
+    let yaml_path = find_yaml_path(custom_id)?;
+    file_ops::delete_yaml_file(&yaml_path)
+}
+
+fn filename_for_id(custom_id: &str) -> Option<String> {
+    let slug = custom_id.strip_suffix(":newapi")?;
+    Some(format!("newapi-{}.yaml", slug))
+}
+
+fn read_config_in_dir(provider_custom_id: &str, providers_dir: &Path) -> Option<NewApiEditData> {
+    let yaml = find_custom_provider_yaml_by_id(provider_custom_id, providers_dir)?;
+    generator::parse_newapi_edit_data(&yaml.def, yaml.filename)
+}
+
+fn find_yaml_path(custom_id: &str) -> Result<PathBuf, String> {
+    if !custom_id.ends_with(":newapi") {
+        return Err(format!(
+            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
+        ));
+    }
+
+    let providers_dir = crate::platform::paths::custom_providers_dir();
+    if let Ok(path) = find_yaml_path_in_dir(custom_id, &providers_dir) {
+        return Ok(path);
+    }
+
+    let fallback_yaml = filename_for_id(custom_id)
+        .map(|filename| crate::platform::paths::custom_provider_path(&filename));
+    match fallback_yaml {
+        Some(path) => Err(format!(
+            "NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {} (expected {} or matching .yml)",
+            custom_id,
+            path.display()
+        )),
+        None => Err(format!(
+            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
+        )),
+    }
+}
+
+fn find_yaml_path_in_dir(custom_id: &str, providers_dir: &Path) -> Result<PathBuf, String> {
+    find_custom_provider_yaml_by_id(custom_id, providers_dir)
+        .map(|yaml| yaml.path)
+        .ok_or_else(|| {
+            format!("NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {custom_id}")
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{NewApiConfig, ProviderKind};
+
+    fn make_newapi_config() -> NewApiConfig {
+        NewApiConfig {
+            display_name: "Example".to_string(),
+            base_url: "https://example.com".to_string(),
+            cookie: "session=abc".to_string(),
+            user_id: Some("42".to_string()),
+            divisor: Some(500000.0),
+        }
+    }
+
+    #[test]
+    fn delete_yaml_rejects_builtin_provider() {
+        let err = delete_yaml(&ProviderId::BuiltIn(ProviderKind::Claude)).unwrap_err();
+        assert!(err.contains("not a custom provider id"));
+    }
+
+    #[test]
+    fn delete_yaml_rejects_non_newapi_custom_provider() {
+        let err = delete_yaml(&ProviderId::Custom("custom:cli".to_string())).unwrap_err();
+        assert!(err.contains("not a newapi provider id"));
+    }
+
+    #[test]
+    fn find_yaml_path_matches_yaml_id_not_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers_dir = dir.path().join("providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        let yaml_path = providers_dir.join("renamed-provider.yaml");
+        std::fs::write(
+            &yaml_path,
+            r#"id: "my-api:newapi"
+schema_version: 2
+base_url: "https://example.com"
+metadata:
+  display_name: "Example"
+  brand_name: "NewAPI Relay"
+plan:
+  steps:
+    - name: "api"
+      source:
+        type: http
+        method: get
+        url: "/api/user/self"
+      parser:
+        format: json
+        quotas:
+          - label: "Balance"
+            remaining: "data.quota"
+"#,
+        )
+        .unwrap();
+
+        let found = find_yaml_path_in_dir("my-api:newapi", &providers_dir).unwrap();
+        assert_eq!(found, yaml_path);
+    }
+
+    #[test]
+    fn generate_filename_uses_newapi_slug() {
+        let filename = generate_filename(&make_newapi_config());
+        assert_eq!(filename, "newapi-example-com.yaml");
+    }
+
+    #[test]
+    fn read_config_in_dir_uses_yaml_id_and_actual_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers_dir = dir.path().join("providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        let config = make_newapi_config();
+        let yaml = generator::generate_newapi_yaml(&config);
+        let yaml_path = providers_dir.join("renamed-provider.yaml");
+        std::fs::write(&yaml_path, yaml).unwrap();
+
+        let edit = read_config_in_dir("example-com:newapi", &providers_dir).unwrap();
+
+        assert_eq!(edit.display_name, "Example");
+        assert_eq!(edit.base_url, "https://example.com");
+        assert_eq!(edit.cookie, "session=abc");
+        assert_eq!(edit.user_id.as_deref(), Some("42"));
+        assert_eq!(edit.original_filename, "renamed-provider.yaml");
+    }
+}

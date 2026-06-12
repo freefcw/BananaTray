@@ -24,7 +24,7 @@ custom/
   plan.rs         — 编译后的执行计划，集中处理 step availability / fallback / merge
   provider.rs     — CustomProvider 门面（impl AiProvider，转发 descriptor / availability / refresh）
   descriptor.rs   — ProviderDescriptor 与默认首字母 icon 生成
-  locator.rs      — 按 YAML `id` 定位 provider 文件的内部 helper（供 api / generator 复用）
+  locator.rs      — 按 YAML `id` 定位 provider 文件的内部 helper（供 NewAPI / Script lifecycle 与 generator 复用）
   availability.rs — availability 规则解释执行（CLI / env / file / JSON / dir）
   auth.rs         — auth/header 解析、环境变量凭证、file token、login token
   fetch.rs        — source 解释执行（CLI / HTTP / placeholder）与 preprocess
@@ -32,8 +32,11 @@ custom/
   log_utils.rs    — 日志截断与认证 header 脱敏
   json_file.rs    — 本地 JSON 文件读取公共基础设施
   loader.rs       — 文件扫描 + 加载 + 校验
-  generator.rs    — NewAPI / Script Provider YAML 生成 + 纯解析辅助（由 api 持有外部契约）
-  api.rs          — runtime / settings window 唯一入口：filename、默认模板、加载、保存、删除
+  generator.rs    — NewAPI / Script Provider YAML 生成 + 纯解析辅助（由各 lifecycle 持有外部契约）
+  newapi_lifecycle.rs          — NewAPI 生命周期：filename、加载、保存、删除
+  script_provider_lifecycle.rs — Script Provider 生命周期：filename、默认模板、加载、保存、删除
+  file_ops.rs     — 低层文件事务：目录创建、临时文件、备份/替换、删除
+  api.rs          — runtime / settings window 唯一稳定门面，re-export 两条 lifecycle 入口
 ```
 
 ## 设计原则
@@ -43,6 +46,7 @@ custom/
 - **DIP**: CustomProvider 依赖 descriptor / plan 的窄接口，不直接依赖 availability / fetch / extractor 的执行细节
 - **Identity over filename**: 自定义 provider 的真实身份来自 YAML `id`，不是文件名；编辑/删除等流程必须通过 `locator.rs` 按 `id` 定位真实文件
 - **Single façade**: runtime / UI 只允许依赖 `api.rs`，不要直接碰 `generator.rs` / `locator.rs` / `schema.rs`
+- **Per-type lifecycle vs file ops**: `newapi_lifecycle.rs` / `script_provider_lifecycle.rs` 分别持有各自 provider 类型、身份和用户可见语义；`file_ops.rs` 只处理文件事务。保存 NewAPI YAML 和脚本 provider 双文件时都使用同目录临时文件 + 备份/替换，失败后尽量恢复旧文件或清理已创建的新文件。
 - **Enforced information hiding**: `generator.rs` / `locator.rs` / `schema.rs` 的模块可见性限制在 `providers::custom` 内部，不只是调用约定
 
 ## 支持的数据获取方式

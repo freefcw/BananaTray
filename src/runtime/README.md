@@ -158,12 +158,12 @@
 - **`generate_filename()` / `generate_script_yaml_filename()` / `generate_script_filename()`** — 由 custom provider id / config 推导落盘文件名
 - **`default_script_template()`** — Settings 窗口脚本 provider 新增页的默认模板
 - **`read_newapi_config()` / `read_script_provider_config()`** — 按 YAML `id` 读取编辑态回填数据
-- **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 文件写入
+- **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 同目录临时文件/备份替换写入
 - **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
-- **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 写入脚本文件，再生成 `source.type: cli` YAML
+- **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 生成 `source.type: cli` YAML，并以同目录临时文件/备份替换方式写入脚本 + YAML 双文件
 - **`delete_script_provider_files(provider_id) → Result<(PathBuf, Result<PathBuf, String>), String>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
 
-回滚逻辑位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）；runtime 在删除失败时负责记录日志并发送用户通知。
+文件级回滚由 `providers::custom::file_ops` 处理；UI 状态回滚位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）。runtime 在删除失败时负责记录日志并发送用户通知。
 
 ## 约束
 

@@ -5,6 +5,8 @@ mod availability;
 mod descriptor;
 pub(crate) mod extractor;
 mod fetch;
+#[cfg(feature = "app")]
+mod file_ops;
 #[cfg(any(feature = "app", test))]
 pub(in crate::providers::custom) mod generator;
 mod json_file;
@@ -12,9 +14,13 @@ pub(crate) mod loader;
 #[cfg(any(feature = "app", test))]
 pub(in crate::providers::custom) mod locator;
 mod log_utils;
+#[cfg(feature = "app")]
+mod newapi_lifecycle;
 mod plan;
 pub(crate) mod provider;
 pub(in crate::providers::custom) mod schema;
+#[cfg(feature = "app")]
+mod script_provider_lifecycle;
 mod url;
 
 pub use loader::load_custom_providers;
