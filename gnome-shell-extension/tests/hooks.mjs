@@ -1,5 +1,5 @@
 // ESM resolve + load hooks: redirects GNOME-only imports to Node.js-compatible mocks.
-// Used by register.mjs via module.register().
+// Keep hooks synchronous so Node's registerHooks() API can use them without warnings.
 
 const GI_MODULES = new Map([
     ['gi://Gio', 'Gio'],
@@ -25,7 +25,7 @@ export function resolve(specifier, context, nextResolve) {
     return nextResolve(specifier, context);
 }
 
-export async function load(url, context, nextLoad) {
+export function load(url, context, nextLoad) {
     // For gi:// redirects, wrap the mock module to re-export the correct named export as default.
     const parsed = new URL(url);
     const giName = parsed.searchParams.get('name');

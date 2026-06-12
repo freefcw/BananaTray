@@ -1,5 +1,10 @@
 // Register ESM resolve hooks before any test imports.
 // Usage: node --import ./gnome-shell-extension/tests/register.mjs --test ...
-import { register } from 'node:module';
+import * as moduleApi from 'node:module';
 
-register('./hooks.mjs', import.meta.url);
+if (typeof moduleApi.registerHooks === 'function') {
+    const hooks = await import('./hooks.mjs');
+    moduleApi.registerHooks(hooks);
+} else {
+    moduleApi.register('./hooks.mjs', import.meta.url);
+}
