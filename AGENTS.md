@@ -46,21 +46,21 @@ cargo fmt                  # format
 ```
 src/
   builtin_provider_manifest.rs — 内置 Provider 单一编译期清单，生成 ProviderKind 与 register_all
-  main.rs / bootstrap.rs — App entry, startup wiring, background bridge setup (`main.rs` requires `app` feature)
+  main.rs / bootstrap.rs — App entry, shell composition root, startup wiring, background bridge setup (`main.rs` requires `app` feature)
   lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
                            selectors/           — GPUI-free ViewModel / D-Bus DTO / issue-report selectors
                            reducer/             — reducer domain slices; top-level reducer.rs only dispatches actions
   models/                — Core data types and settings domain models (GPUI-free)
                            settings/            — User preferences with nested sub-structures
-  ui/                    — GPUI views, settings window, reusable widgets, AppState bridge
+  ui/                    — GPUI views, settings window, reusable widgets, shell hook factories
                            views/               — Tray popup views (app_view, nav, panels, global_actions)
                            widgets/             — Reusable UI components, organized into sub-modules:
                              primitives/        — Atomic visual building blocks (icon, colored_icon, toggle, checkbox, tooltip)
                              controls/          — Interactive controls (action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions, tab)
                              display/           — Data display components (quota_bar, info_row, icon_row, card, provider_icon)
                            settings_window/providers/ — Settings Providers tab sidebar/detail/picker/NewAPI/token panels
-  runtime/               — Effect executor, shared AppState, GPUI/context bridge, NewAPI 文件 I/O 适配
+  runtime/               — Effect executor, shared AppState, context capability abstraction, NewAPI 文件 I/O 适配
                            effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
@@ -84,6 +84,7 @@ This map is intentionally high-level. File-level structure and public APIs live 
 2. **Pure logic modules must NOT import `gpui`** — this is the testability boundary.
 3. **`#![recursion_limit = "512"]`** is required in `main.rs` and `lib.rs` (GPUI macro expansion).
 4. **Provider identity boundary** — built-in provider settings/state keys come from `ProviderKind::id_key()` via `ProviderId::BuiltIn` (e.g. `codex`, `windsurf`). `ProviderDescriptor.id` is a registration/dedup/source descriptor and may include suffixes such as `codex:api`; do not persist built-in settings under descriptor IDs. Custom providers persist their YAML `id` through `ProviderId::Custom`.
+5. **Shell boundary** — `runtime` is the foreground kernel (reducer + effect execution + capability traits). Concrete shell orchestration belongs in `bootstrap` (settings window, tray icon, D-Bus handle, app/window dispatch facade). Do not reintroduce runtime-owned `SettingsView`, `DBusServiceHandle`, full-context dispatch, or generic shell manager/bridge services.
 
 ## Code Conventions
 

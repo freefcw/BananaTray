@@ -1,23 +1,28 @@
 # src/runtime/
 
-前台运行时与 effect 执行层。负责持有共享运行时状态、调用 reducer、执行 effects，并编排与 GPUI / tray / refresh / settings persistence 相关的前台行为。
+前台运行时与 effect 执行层。负责持有共享运行时状态、调用 reducer、执行 effects，并协调 settings persistence / refresh / 热键 / 诊断等前台行为。需要窗口或 App 级能力的 shell 操作由 `bootstrap` 负责。
 
 ## Responsibilities
 
 - 持有共享状态 `AppState`
-- 提供 `dispatch_*()` 入口，把 `AppAction` 送入 reducer
+- 提供 `dispatch_in_context()` 入口，把 `AppAction` 送入 reducer
 - 执行 `AppEffect`，把声明式 effect 转成真实副作用
-- 管理设置窗口打开/复用调度
 - 串行化设置持久化写入
 - 解析、注册并热更新全局热键
 - 收集 Debug / Issue Report 需要的诊断上下文
-- 通过 `ui_hooks` 与具体 UI 视图交互
+- 通过 `bootstrap` 的 shell facade 与具体 UI / tray / D-Bus 适配器交互
 
 ## Boundaries
 
 - `application/` 只声明状态变化与 effects，不执行副作用
 - `runtime/` 执行副作用，但不再把 UI 句柄存进 `AppState`
-- `ui/` 持有具体 GPUI 视图类型，并在启动时把必要 hooks 注册给 `runtime`
+- `ui/` 持有具体 GPUI 视图类型，并提供 hooks factory；真正的注册动作由 `bootstrap` 统一完成
+
+## Shell Boundary Decision
+
+`runtime` 是前台内核，不是 shell owner。这里保留 reducer dispatch、effect routing、settings / refresh / diagnostics 等前台能力，以及 `ContextCapabilities` / `FullContextCapabilities` 这类能力抽象。
+
+具体 shell 语义属于 `bootstrap`：settings window 的打开与复用、popup view hook registry、tray icon 应用、D-Bus handle 连接、App/Window 级 dispatch facade 都在那里组合。不要把旧的 `dispatch_in_app()` / `dispatch_in_window()`、`SettingsView` 句柄、D-Bus handle 或通用 shell manager 加回 `runtime`。如果新增 effect 需要强上下文能力，先扩展 capability trait 和 `bootstrap` adapter，而不是让 runtime 直接认识具体 UI / tray / D-Bus 类型。
 
 ## 两级路由架构
 
@@ -28,7 +33,7 @@
 | `ContextEffect` | 需要 GPUI 上下文（Render, OpenSettingsWindow, OpenUrl, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp） | `effect.rs` 定义 + `run_view_context_effect` / `run_full_context_effect`（必要时补 capability trait） |
 | `CommonEffect` | GPUI-free 顶层领域路由（Settings / Notification / Refresh / Debug / NewApi / ScriptProvider） | 对应领域子枚举 + `runtime/effects/` 下同名执行器 |
 
-三路 dispatcher 统一使用两级路由。`CommonEffect` 委托给 `effects::run_common_effect` 做领域分派；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。
+`dispatch_in_context()` 使用两级路由。`CommonEffect` 委托给 `effects::run_common_effect` 做领域分派；`ContextEffect` 则由于各入口能力差异，使用 **Capability Trait** 模式进行收敛。`Window + App` / `App` 级别的完整 dispatch facade 已上移到 `bootstrap`。
 
 `CommonEffect` 的具体变体按领域放在子枚举里：
 
@@ -43,13 +48,15 @@
 
 ### ContextCapabilities 模式
 
-为了实现 `ContextEffect` 执行逻辑的收敛，同时避免错误 GPUI 上下文静默丢副作用，运行时把能力拆成 View-safe 与 Full context 两层：
+为了实现 `ContextEffect` 执行逻辑的收敛，同时避免错误 GPUI 上下文静默丢副作用，运行时把能力拆成 View-safe 与 Full context 两层；`bootstrap` 在 shell 层实现 Full context adapter：
 
 - **`ContextCapabilities`** — View-safe 能力（Render, OpenUrl），可用于 `Context<V>` / `Window + App` / `App`。
 - **`FullContextCapabilities`** — 强上下文能力（OpenSettingsWindow, ApplyTrayIcon, ApplyGlobalHotkey, QuitApp），只有 `Window + App` 与 `App` adapter 可实现。
 - **`ViewCaps`** — `Context<V>` 的适配器，只执行 Render / OpenUrl；如果收到 OpenSettingsWindow / ApplyTrayIcon / ApplyGlobalHotkey / QuitApp，会立即 panic，暴露错误 dispatch 入口。
-- **`WindowCaps`** — `Window + App` 的适配器，覆盖窗口场景需要的完整能力，`render` 实现为 `window.refresh()`，也负责设置窗口里热键保存后的即时重绑。
-- **`AppCaps`** — `App` 的适配器，支持大部分能力，Render 实现为通过 `ui_hooks` 请求当前 popup view 刷新。
+- `bootstrap` 额外实现两种 full-context adapter：
+
+  - `WindowShellCaps` — `Window + App` 场景；负责窗口关闭、settings 复用、热键重绑和 tray 图标应用
+  - `AppShellCaps` — `App` 场景；负责 popup 视图刷新、settings 打开调度、tray 图标应用和热键重绑
 
 在这种模式下，新增一个 `ContextEffect` 变体需要先判断它是否 View-safe：View-safe effect 同步补 `run_view_context_effect()`；强上下文 effect 补 `FullContextCapabilities` 与 `run_full_context_effect()`。禁止用默认 `warn!` 降级吞掉不支持的强副作用。
 
@@ -58,8 +65,8 @@
 | 函数 | GPUI 上下文 | 使用场景 |
 |------|-------------|---------|
 | `dispatch_in_context<V>()` | `Context<V>` | View render 回调中（如按钮点击） |
-| `dispatch_in_window()` | `Window + App` | 窗口级事件处理（如设置窗口操作） |
-| `dispatch_in_app()` | `App` | 全局事件（如后台刷新事件泵） |
+| `bootstrap::dispatch_in_window()` | `Window + App` | 窗口级事件处理（如设置窗口操作） |
+| `bootstrap::dispatch_in_app()` | `App` | 全局事件（如后台刷新事件泵） |
 
 所有 dispatch 函数共享同一流程：
 1. 借用 `AppState`，调用 `reduce(&mut session, action)` 得到 `Vec<AppEffect>`
@@ -83,29 +90,22 @@
 - `settings_writer: SettingsWriter` — 设置持久化串行写入器
 - `log_path` — Debug 页展示的日志路径
 
-`AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用与设置窗口构造入口通过 `ui_hooks` 注册到 `runtime`，避免把 UI 句柄直接存进 `AppState`。
+`AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用与设置窗口构造入口现在注册到 `bootstrap` 的 shell hook registry，避免把 UI 句柄直接存进 `AppState`。
 
 `ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。设置页保存的 app-managed provider credentials 会随 `RefreshRequest::UpdateConfig` 发给后台协调器，再由 `ProviderManager::sync_provider_credentials()` 注入需要运行时凭证快照的 provider。
 
-### `ui_hooks.rs` — UI 注册边界
+### `bootstrap.rs` — Shell Hook Registry
 
-定义 `runtime` 与 `ui` 之间剩余的窄桥接层：
+`bootstrap` 现在承担 shell composition root 的职责，集中持有 UI / tray / settings window / D-Bus 的具体适配器入口：
 
 - 请求当前 popup view 重新渲染
 - 清理 popup view 注册
 - 构造 settings window 的 view entity
+- 调度 settings window 打开与复用
+- 实现 `Window + App` / `App` 级 full-context dispatch facade
+- 在 Linux 上把 `DBusServiceHandle` 作为 event pump 的局部输入，用于更新快照缓存并发射信号
 
-这些 hook 在 `bootstrap::bootstrap_ui()` 阶段由 `ui` 模块注册。
-
-### `settings_window_opener.rs` — 设置窗口打开与复用
-
-封装设置窗口的异步调度、窗口复用、多显示器选择与前台激活逻辑：
-
-- **`schedule_open_settings_window()`** — 通过 `10ms` 延迟调度设置窗口打开，避免 tray/popup 关闭与立即建窗落在同一轮前台处理里引发窗口时序问题
-- 内部维护 `SETTINGS_WINDOW` 句柄，优先复用现有窗口
-- 跨显示器时自动关闭旧窗口并在目标显示器重建
-- 通过 GPUI `tray_icon_anchor()` 获取托盘图标所在显示器
-- 通过 `ui_hooks` 请求 UI 构造 settings view，`runtime` 不再依赖 UI 的窗口管理函数
+`ui/` 只负责提供 hooks factory；`bootstrap` 统一注册这些 hooks，`runtime` 只调用抽象端口，不再知道 `SettingsView` 或 `DBusServiceHandle` 的具体归属。
 
 ### `gpu_cache.rs` — GPUI Resource Trimming
 
@@ -172,7 +172,7 @@
 
 ```text
 AppAction
-  -> dispatch_*()
+  -> runtime::dispatch_in_context() / bootstrap::dispatch_in_app() / bootstrap::dispatch_in_window()
   -> application::reduce(&mut AppState.session, action)
   -> Vec<AppEffect>
   -> run_context_effect / effects::run_common_effect

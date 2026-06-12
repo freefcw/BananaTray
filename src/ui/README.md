@@ -13,7 +13,7 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 - render tray popup and settings window views
 - keep GPUI-only state local to views
 - translate user interaction into `AppAction`
-- register UI hooks into `runtime` during bootstrap
+- register shell hooks during bootstrap
 
 ## Boundaries
 
@@ -37,7 +37,7 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 ### `settings_window/` — Full Settings Window
 
 Separate desktop window with tabbed settings UI:
-- `mod.rs` — window shell, tab routing, `SettingsView`, and runtime hook registration
+- `mod.rs` — window shell, tab routing, `SettingsView`, and shell hook factory for `bootstrap`
 - `general_tab.rs` — theme, refresh cadence, auto-hide, launch-at-login
 - `providers/` — provider sidebar + detail panel
 - `display_tab.rs` / `debug_tab.rs` / `about_tab.rs` — remaining settings tabs
@@ -58,16 +58,22 @@ All components are re-exported through `widgets/mod.rs` — callers use `crate::
 TrayController (tray/controller.rs)
   └─ runtime::AppState (Rc<RefCell<...>>)
        ├─ View reads `state.session` or selector output during render
-       ├─ User / background event → `runtime::dispatch_*()`
+       ├─ View-safe action → `runtime::dispatch_in_context()`
+       ├─ Window / App action → `bootstrap::dispatch_in_window()` / `bootstrap::dispatch_in_app()`
        │   ├─ `application::reduce(&mut state.session, action)`
        │   └─ execute `AppEffect` in GPUI / App context
        └─ RefreshCoordinator event → `AppAction::RefreshEventReceived` → reducer
 
 bootstrap_ui()
-  └─ ui::settings_window::register_runtime_hooks()
-       ├─ runtime requests popup rerender through UI hook
-       ├─ runtime requests popup-view cleanup through UI hook
-       └─ runtime requests settings-window view construction through UI hook
+  └─ ui::register_shell_hooks()
+       ├─ ui::views::app_view::register_shell_hooks()
+       └─ ui::settings_window::register_shell_hooks()
+            ├─ bootstrap registers popup rerender / clear callbacks
+            └─ bootstrap registers settings-window view factory
+
+View / window actions
+  ├─ view-safe callbacks → `runtime::dispatch_in_context()`
+  └─ App / Window callbacks → `bootstrap::dispatch_in_app()` / `bootstrap::dispatch_in_window()`
 ```
 
 ## Constraints

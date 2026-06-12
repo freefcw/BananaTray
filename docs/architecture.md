@@ -23,11 +23,14 @@
   - Provider、Quota、Settings 等核心数据模型。
   - 必须保持 GPUI-free。
 - `runtime/`
-  - 共享前台状态、dispatcher、effect 执行、设置写入、设置窗口打开编排，以及全局热键解析、预检、注册/重绑。
+  - 共享前台状态、dispatcher、effect 执行、设置写入，以及全局热键解析、预检、注册/重绑。
   - `runtime/effects/` 按领域执行 GPUI-free 的 `CommonEffect`，避免把持久化、通知、refresh、Debug、NewAPI / 脚本 Provider I/O 全部集中在 `runtime/mod.rs`。
   - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
+- `bootstrap.rs`
+  - shell composition root，负责 full-context dispatch facade、popup view callback registry、settings window 打开 / 复用编排，以及 Linux D-Bus 事件泵连接。
+  - 统一注册 UI hooks，并持有具体 tray / settings window / D-Bus 适配器入口。
 - `ui/`
-  - GPUI 视图、窗口内容、控件和 view-local 状态。
+  - GPUI 视图、窗口内容、控件和 view-local 状态，以及向 `bootstrap` 提供 hooks factory。
 - `theme/`
   - GPUI 主题 token、主题 YAML 解析和 `WindowAppearance` 到运行时主题的映射。
   - 仅在 `app` feature 下编译。
@@ -62,7 +65,6 @@
   - refresh 请求通道
   - settings writer
   - 当前日志文件路径
-  - `DBusServiceHandle`（Linux only，用于向 GNOME Shell Extension 发射 D-Bus 信号）
 - `AppSession` 持有：
   - `ProviderStore`
   - `NavigationState`
@@ -74,15 +76,15 @@
 
 重要边界：
 
-- `AppState` 不再保存 GPUI view 句柄。
-- 具体视图对象和弱引用留在 `ui/`，只通过窄桥接接口与 `runtime/` 交互。
+- `AppState` 不再保存 GPUI view 句柄或 D-Bus 句柄。
+- 具体视图对象和弱引用留在 `ui/`，只通过窄桥接接口与 `bootstrap` / `runtime` 交互。
 
 ## Foreground Flow
 
 前台主路径保持稳定为：
 
 1. UI 交互或后台事件产生 `AppAction`
-2. `runtime::dispatch_*()` 调用 reducer
+2. `runtime::dispatch_in_context()` 或 `bootstrap::dispatch_in_app()` / `bootstrap::dispatch_in_window()` 调用 reducer
 3. reducer 返回 `Vec<AppEffect>`
 4. runtime 执行 effect
 5. 必要时请求 UI 重绘、打开窗口、发送 refresh 请求、预检并重绑全局热键，或写入设置
@@ -95,25 +97,46 @@
   - 不依赖具体 GPUI 上下文，例如持久化设置、发送 refresh 请求、普通 I/O。
   - 顶层按领域路由到 `SettingsEffect`、`NotificationEffect`、`RefreshEffect`、`DebugEffect`、`NewApiEffect`、`ScriptProviderEffect`，由 `runtime/effects/` 下对应模块执行。
 
-## Runtime / UI Ownership
+## Runtime / Bootstrap / UI Ownership
 
 稳定分工如下：
 
 - `runtime/` 负责：
   - reducer 调用
   - effect 执行
-  - 设置窗口打开 / 复用编排
   - 与 refresh / settings persistence 的对接
   - 为 Debug / Issue Report 收集平台信息、日志等诊断上下文
+- `bootstrap/` 负责：
+  - full-context dispatch facade
+  - popup view 注册与清理
+  - settings window 打开 / 复用编排
+  - tray 图标应用
+  - Linux D-Bus 事件泵连接
 - `ui/` 负责：
   - popup 和 settings window 的具体视图类型
   - 渲染逻辑与 view-local state（例如设置页里的热键捕获控件）
-  - 把少量必要 hook 注册给 `runtime/`
+  - 提供给 `bootstrap` 注册的 hooks factory
 
 这意味着：
 
-- `runtime/` 可以编排窗口行为，但不拥有视图实现。
+- `runtime/` 保持内核职责，不直接依赖具体 UI / tray / D-Bus 类型。
+- `bootstrap/` 作为组合根连接具体适配器。
 - `ui/` 可以构造和刷新视图，但不承担全局副作用调度。
+
+### Shell Boundary Decision
+
+当前边界的设计结论是：**runtime 是前台内核，bootstrap 是 shell composition root**。
+
+`runtime/` 只需要 reducer、effect 执行和 capability abstraction。它不需要、也不应该拥有“shell 边界服务”。需要具体窗口、托盘、D-Bus、退出、重开或 App/Window 上下文的动作，由 `bootstrap/` 的 full-context adapter 组合后调用 `runtime::dispatch_with_full_context()`。
+
+禁止回流的模式：
+
+- 不要把 `dispatch_in_app()` / `dispatch_in_window()` 重新放回 `runtime/`
+- 不要把 `SettingsView`、settings window handle、popup weak ref 或 `DBusServiceHandle` 存进 `runtime::AppState`
+- 不要为了兼容旧入口新增 runtime-owned shell helper / shell manager / bridge service
+- 不要让 `ui/` 或 `dbus/` 直接请求具体 shell 语义；它们应发 `AppAction`，由 `bootstrap` 承担 shell 组合
+
+如果未来需求迫使 `runtime/` 认识具体窗口类型、具体 tray 实现或 D-Bus handle，应先重审这条边界，而不是局部补一个兼容入口。
 
 ## Refresh Boundary
 
@@ -165,8 +188,8 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 
 | 位置 | 目的 | 触发条件 / 根因 | 删除条件 |
 |------|------|-----------------|----------|
-| `src/runtime/settings_window_opener.rs` 的 `10ms` 延迟打开 | 避免 tray/popup 关闭与 settings 建窗发生在同一轮前台事件处理里时出现窗口激活/生命周期时序问题 | 从 tray/popup 切到 settings 时，GPUI 窗口关闭和新窗口创建对同一轮事件循环较敏感；历史上出现过 `"window not found"` 类窗口时序问题 | 当 GPUI 或应用层能证明同轮关闭旧窗并立即建新窗稳定无回归，且多显示器/焦点切换路径实测通过 |
-| `src/runtime/settings_window_opener.rs` 的 `+1px` resize nudge | 强制 settings window 在首次展示后重新走一次布局/绘制，避免初始尺寸或外观状态未完全刷新 | 新窗口刚激活时，GPUI 对首次 viewport/appearance 刷新存在时序敏感性 | 当去掉 nudge 后，多显示器、主题切换、冷启动开窗都能稳定保持正确布局和外观同步 |
+| `src/bootstrap.rs` 的 `10ms` 延迟打开 | 避免 tray/popup 关闭与 settings 建窗发生在同一轮前台事件处理里时出现窗口激活/生命周期时序问题 | 从 tray/popup 切到 settings 时，GPUI 窗口关闭和新窗口创建对同一轮事件循环较敏感；历史上出现过 `"window not found"` 类窗口时序问题 | 当 GPUI 或应用层能证明同轮关闭旧窗并立即建新窗稳定无回归，且多显示器/焦点切换路径实测通过 |
+| `src/bootstrap.rs` 的 `+1px` resize nudge | 强制 settings window 在首次展示后重新走一次布局/绘制，避免初始尺寸或外观状态未完全刷新 | 新窗口刚激活时，GPUI 对首次 viewport/appearance 刷新存在时序敏感性 | 当去掉 nudge 后，多显示器、主题切换、冷启动开窗都能稳定保持正确布局和外观同步 |
 | `src/bootstrap.rs` 在 macOS 启用 `set_tray_panel_mode(true)` | 保证点击菜单栏 status item 时进入 `on_tray_icon_event`，由应用打开 GPUI popup | GPUI macOS status item 默认是 NSMenu 模式；不启用 panel mode 时点击会走菜单路径而不是 tray icon callback，表现为点击托盘图标但弹窗不出现 | 当 GPUI macOS 默认点击行为改为稳定发出 tray icon callback，或应用改为用 NSMenu 作为 macOS 主交互入口 |
 | `src/bootstrap.rs` 注册 `on_window_closed` 后延迟调用 `trim_gpu_caches()` | 最后一个 GPUI 窗口关闭后释放 renderer 中闲置的 pooled GPU buffer，降低托盘应用长期后台驻留的 GPU 内存占用 | 上游 GPUI 的 trim 是 best-effort 且只回收 idle renderer pool；关闭 popup / settings window 后短暂延迟并确认没有窗口，避免 popup 切 settings 时刚释放又重建 | 当 GPUI 自身在窗口关闭后自动回收这些 idle pool，或应用不再长驻后台 |
 | `src/bootstrap.rs` 在 Linux 安装 tray menu（Open / Settings / Quit）作为 fallback | 为仍不稳定转发 `activate` / `secondary_activate` 的 tray host 保留可达入口，避免用户只能依赖左键点击 | 即使 tray callback bridge 已修复，不同 Wayland / Ubuntu tray host 对左键/次级激活的支持仍不一致；menu-based 入口是最后兜底，至少保证 Open / Settings / Quit 可用 | 当目标 Linux tray host 范围内已验证都会稳定发出 tray click 事件，且移除菜单 fallback 后 Ubuntu / Wayland / X11 实测仍可正常打开 popup / settings |

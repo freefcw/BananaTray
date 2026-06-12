@@ -8,8 +8,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | **`SettingsView`** 主视图 — 头部、Tab 导航栏、内容区路由。含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理；表单缓存按 modal identity 驱动重建 |
-| `mod.rs` | 窗口壳层与 `build_settings_view()` 工厂，供 `runtime` 创建设置窗口内容 |
+| `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理；表单缓存按 modal identity 驱动重建，shell hook 由 `bootstrap` 注册 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 
 ### Tab 内容页
@@ -56,7 +55,7 @@ SettingsView::render()
 ## 约束
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
-- 设置窗口的异步调度与多显示器复用逻辑已迁至 `runtime/settings_window_opener.rs`
+- 设置窗口的异步调度与多显示器复用逻辑已迁至 `bootstrap::schedule_open_settings_window()`
 - Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器必须注册 `key_context("Input")` 才能接收标准编辑动作
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上

@@ -19,7 +19,7 @@ AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 activation。
   ├─ signal_tx.send(json) ─────────────>  ├─ RefreshAll 读取 snapshot_cache + 通知 GPUI
   │                                       ├─ ObjectServer 处理方法调用
   │ <── action_rx.recv() ────────────── │
-  └─ dispatch_in_app() 处理               └─ iface_ref.refresh_complete(json)
+  └─ bootstrap::dispatch_in_app() 处理    └─ iface_ref.refresh_complete(json)
      OpenSettings / RefreshAll            └─ smol 异步执行器
 ```
 
@@ -138,14 +138,14 @@ DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨�
 
 1. GNOME Shell Extension 调用 `RefreshAll`
 2. `BananaTrayIface::refresh_all()` 通过 `action_tx` 发送 `RefreshAll` 请求 + 返回缓存快照
-3. GPUI 主线程 `spawn_action_bridge` 收到请求 → `dispatch_in_app(AppAction::RefreshAll)`
+3. GPUI 主线程 `spawn_action_bridge` 收到请求 → `bootstrap::dispatch_in_app(AppAction::RefreshAll)`
 4. 刷新完成后，事件泵更新缓存并发射 `RefreshComplete` 信号
 
 ### RefreshComplete 信号（缓存更新 + 信号发射）
 
 1. 后台 `RefreshCoordinator` 完成刷新 → 发送 `RefreshEvent`
 2. 事件泵收到 `RefreshEventReceived` → reducer 更新 `AppState`
-3. `emit_dbus_signals()` 构建 `DBusQuotaSnapshot` → `DBusServiceHandle::emit_refresh_complete()`
+3. `bootstrap::emit_current_dbus_snapshot()` 构建 `DBusQuotaSnapshot` → `DBusServiceHandle::emit_refresh_complete()`
 4. `emit_refresh_complete()` 更新 `Arc<Mutex<String>>` 缓存 + 通过 `signal_tx` 通知 D-Bus 线程
 5. D-Bus 线程通过 `InterfaceRef::refresh_complete()` 发射 zbus 信号
 
