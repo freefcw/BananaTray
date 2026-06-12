@@ -36,14 +36,8 @@ pub(crate) fn build_settings_view(
 }
 
 #[allow(dead_code)]
-pub(crate) fn register_runtime_hooks() {
-    crate::runtime::ui_hooks::register_build_settings_view(build_settings_view);
-    crate::runtime::ui_hooks::register_notify_view(|_state, cx| {
-        crate::ui::views::app_view::notify_current_view(cx);
-    });
-    crate::runtime::ui_hooks::register_clear_popup_view(|_state| {
-        crate::ui::views::app_view::clear_current_view();
-    });
+pub(crate) fn register_shell_hooks() {
+    crate::bootstrap::register_build_settings_view(build_settings_view);
 }
 
 // ============================================================================
@@ -571,7 +565,7 @@ impl SettingsView {
                         tab_view_entity.update(cx, |view, _| {
                             view.clear_token_input();
                         });
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state,
                             AppAction::SetSettingsTab(tab),
                             window,

@@ -1,19 +1,38 @@
-//! 应用初始化 — 启动时调用一次的设置和注册函数
+//! 应用初始化 — 启动时调用一次的设置和注册函数。
+//!
+//! `bootstrap` 是 shell composition root：这里组合具体 GPUI window、tray、
+//! D-Bus handle 和 App/Window 级 dispatch facade；`runtime` 只接收能力抽象。
 
 use crate::application::{AppAction, GlobalHotkeyError};
 use crate::models::{AppSettings, ScriptProviderConfig, SystemSettings};
 use crate::refresh::{RefreshCoordinator, RefreshReason, RefreshRequest};
 use crate::runtime::AppState;
 use crate::tray::TrayController;
-use gpui::{App, TrayIconClickEvent};
+use gpui::{
+    point, px, size, App, Bounds, DisplayId, TrayIconClickEvent, Window, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions,
+};
 use log::{info, warn};
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 type ScriptTestRequest = (u64, ScriptProviderConfig);
 type ScriptTestSender = smol::channel::Sender<ScriptTestRequest>;
 type ScriptTestReceiver = smol::channel::Receiver<ScriptTestRequest>;
+
+type NotifyPopupViewFn = fn(&Rc<RefCell<AppState>>, &mut App);
+type BuildSettingsViewFn =
+    fn(Rc<RefCell<AppState>>, &mut App) -> gpui::Entity<crate::ui::settings_window::SettingsView>;
+type ClearPopupViewFn = fn(&Rc<RefCell<AppState>>);
+
+thread_local! {
+    static NOTIFY_POPUP_VIEW_FN: RefCell<Option<NotifyPopupViewFn>> = const { RefCell::new(None) };
+    static BUILD_SETTINGS_VIEW_FN: RefCell<Option<BuildSettingsViewFn>> = const { RefCell::new(None) };
+    static CLEAR_POPUP_VIEW_FN: RefCell<Option<ClearPopupViewFn>> = const { RefCell::new(None) };
+    static SETTINGS_WINDOW: RefCell<Option<WindowHandle<crate::ui::settings_window::SettingsView>>> = const { RefCell::new(None) };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayCommand {
@@ -44,11 +63,280 @@ pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
     crate::platform::auto_launch::sync(settings.system.start_at_login);
 }
 
+pub(crate) fn register_notify_view(f: NotifyPopupViewFn) {
+    NOTIFY_POPUP_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+}
+
+pub(crate) fn register_build_settings_view(f: BuildSettingsViewFn) {
+    BUILD_SETTINGS_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+}
+
+pub(crate) fn register_clear_popup_view(f: ClearPopupViewFn) {
+    CLEAR_POPUP_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+}
+
+pub(crate) fn notify_popup_view(state: &Rc<RefCell<AppState>>, cx: &mut App) {
+    NOTIFY_POPUP_VIEW_FN.with(|slot| {
+        if let Some(f) = *slot.borrow() {
+            f(state, cx);
+        }
+    });
+}
+
+pub(crate) fn clear_popup_view(state: &Rc<RefCell<AppState>>) {
+    CLEAR_POPUP_VIEW_FN.with(|slot| {
+        if let Some(f) = *slot.borrow() {
+            f(state);
+        }
+    });
+}
+
+pub(crate) fn build_settings_view(
+    state: Rc<RefCell<AppState>>,
+    cx: &mut App,
+) -> Option<gpui::Entity<crate::ui::settings_window::SettingsView>> {
+    BUILD_SETTINGS_VIEW_FN.with(|slot| slot.borrow().map(|f| f(state, cx)))
+}
+
+pub(crate) fn apply_tray_icon(cx: &mut App, request: crate::application::TrayIconRequest) {
+    crate::tray::apply_tray_icon(cx, request);
+}
+
+pub(crate) fn schedule_open_settings_window(
+    state: Rc<RefCell<AppState>>,
+    display_id: Option<DisplayId>,
+    cx: &mut App,
+) {
+    info!(
+        target: "settings",
+        "scheduled async settings window open (display: {:?})",
+        display_id
+    );
+    let async_cx = cx.to_async();
+    let delayed_cx = async_cx.clone();
+    async_cx
+        .foreground_executor()
+        .spawn(async move {
+            smol::Timer::after(Duration::from_millis(10)).await;
+            let _ = delayed_cx.update(|cx| {
+                open_settings_window(state, display_id, cx);
+            });
+        })
+        .detach();
+}
+
+fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<DisplayId>, cx: &mut App) {
+    info!(target: "settings", "requested settings window");
+    let target_display_id = display_id.or_else(|| cx.tray_icon_anchor().map(|a| a.display_id));
+
+    let existing_handle = SETTINGS_WINDOW.with(|slot| *slot.borrow());
+    let activated_existing = if let Some(handle) = existing_handle {
+        info!(
+            target: "settings",
+            "existing settings window found, attempting to activate it"
+        );
+        let mut should_reopen = false;
+
+        if let Some(target_id) = target_display_id {
+            let on_different_display = handle
+                .update(cx, |_, window, cx| {
+                    window
+                        .display(cx)
+                        .map(|d| d.id() != target_id)
+                        .unwrap_or(true)
+                })
+                .unwrap_or(false);
+
+            if on_different_display {
+                info!(
+                    target: "settings",
+                    "window on different display, closing to reopen on target display"
+                );
+                let _ = handle.update(cx, |_, window, _| {
+                    window.remove_window();
+                });
+                SETTINGS_WINDOW.with(|slot| {
+                    *slot.borrow_mut() = None;
+                });
+                should_reopen = true;
+            }
+        }
+
+        if !should_reopen {
+            let ok = handle
+                .update(cx, |_, window, _| {
+                    window.show_window();
+                    window.activate_window();
+                })
+                .is_ok();
+            if !ok {
+                info!(target: "settings", "existing handle is stale, clearing");
+                SETTINGS_WINDOW.with(|slot| {
+                    *slot.borrow_mut() = None;
+                });
+            }
+            ok
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if activated_existing {
+        cx.activate(true);
+        info!(target: "settings", "activated existing settings window");
+        return;
+    }
+
+    #[cfg(debug_assertions)]
+    SETTINGS_WINDOW.with(|slot| {
+        debug_assert!(
+            slot.borrow().is_none(),
+            "stale settings window slot before opening a new window"
+        );
+    });
+
+    let settings_state = state.clone();
+    let window_size = size(px(600.0), px(640.0));
+    let display_bounds = target_display_id
+        .and_then(|id| cx.find_display(id))
+        .or_else(|| cx.primary_display())
+        .map(|d| d.bounds());
+    let origin = match display_bounds {
+        Some(db) => point(
+            db.origin.x + (db.size.width - window_size.width) / 2.0,
+            db.origin.y + (db.size.height - window_size.height) / 2.0,
+        ),
+        None => point(px(0.0), px(0.0)),
+    };
+    let window_bounds = WindowBounds::Windowed(Bounds {
+        origin,
+        size: window_size,
+    });
+
+    let Some(build_view) = build_settings_view(settings_state, cx) else {
+        log::error!(target: "settings", "settings view factory not registered");
+        return;
+    };
+
+    let result = cx.open_window(
+        WindowOptions {
+            window_bounds: Some(window_bounds),
+            window_min_size: Some(size(px(460.0), px(520.0))),
+            titlebar: None,
+            kind: WindowKind::Normal,
+            display_id: target_display_id,
+            ..Default::default()
+        },
+        |_window, _cx| build_view,
+    );
+
+    if let Ok(handle) = result {
+        info!(target: "settings", "opened new settings window");
+        cx.activate(true);
+        let _ = handle.update(cx, |view, window, cx| {
+            window.show_window();
+            window.activate_window();
+            let vp = window.viewport_size();
+            window.resize(size(vp.width + px(1.0), vp.height));
+            window.resize(vp);
+            let appearance_sub = cx.observe_window_appearance(window, |_view, _window, cx| {
+                cx.notify();
+                log::debug!(
+                    target: "settings",
+                    "system appearance changed, settings window refreshed"
+                );
+            });
+            view._appearance_sub = Some(appearance_sub);
+        });
+        info!(target: "settings", "requested app/window activation for settings window");
+        SETTINGS_WINDOW.with(|slot| {
+            *slot.borrow_mut() = Some(handle);
+        });
+    } else if let Err(err) = result {
+        log::error!(target: "settings", "failed to open settings window: {err:?}");
+    }
+}
+
+struct WindowShellCaps<'a> {
+    window: &'a mut Window,
+    cx: &'a mut App,
+}
+
+impl crate::runtime::ContextCapabilities for WindowShellCaps<'_> {
+    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
+        self.window.refresh();
+    }
+}
+
+impl crate::runtime::FullContextCapabilities for WindowShellCaps<'_> {
+    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
+        let display_id = self.window.display(self.cx).map(|display| display.id());
+        clear_popup_view(state);
+        self.window.remove_window();
+        schedule_open_settings_window(state.clone(), display_id, self.cx);
+    }
+
+    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
+        apply_tray_icon(self.cx, request);
+    }
+
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
+        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx);
+    }
+
+    fn quit(&mut self) {
+        self.cx.quit();
+    }
+}
+
+struct AppShellCaps<'a> {
+    cx: &'a mut App,
+}
+
+impl crate::runtime::ContextCapabilities for AppShellCaps<'_> {
+    fn render(&mut self, state: &Rc<RefCell<AppState>>) {
+        notify_popup_view(state, self.cx);
+    }
+}
+
+impl crate::runtime::FullContextCapabilities for AppShellCaps<'_> {
+    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
+        schedule_open_settings_window(state.clone(), None, self.cx);
+    }
+
+    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
+        apply_tray_icon(self.cx, request);
+    }
+
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
+        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx);
+    }
+
+    fn quit(&mut self) {
+        self.cx.quit();
+    }
+}
+
+pub(crate) fn dispatch_in_window(
+    state: &Rc<RefCell<AppState>>,
+    action: AppAction,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    crate::runtime::dispatch_with_full_context(state, action, &mut WindowShellCaps { window, cx });
+}
+
+pub(crate) fn dispatch_in_app(state: &Rc<RefCell<AppState>>, action: AppAction, cx: &mut App) {
+    crate::runtime::dispatch_with_full_context(state, action, &mut AppShellCaps { cx });
+}
+
 /// 初始化 i18n、UI 工具包、托盘图标（在 GPUI run 闭包内调用）
 pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     // i18n locale
     crate::i18n::apply_locale(&settings.display.language);
-    crate::ui::settings_window::register_runtime_hooks();
+    crate::ui::register_shell_hooks();
 
     // adabraka-ui 工具包
     adabraka_ui::init(cx);
@@ -67,7 +355,7 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
             }
             style => crate::application::TrayIconRequest::Static(style),
         };
-        crate::tray::apply_tray_icon(cx, icon_request);
+        apply_tray_icon(cx, icon_request);
         cx.set_tray_tooltip(&t!("tray.tooltip"));
         #[cfg(target_os = "macos")]
         {
@@ -126,6 +414,32 @@ pub(crate) fn script_test_channel() -> (ScriptTestSender, ScriptTestReceiver) {
 }
 
 /// 启动事件泵：从协调器接收 RefreshEvent，分派到 UI 线程更新 AppState
+#[cfg(target_os = "linux")]
+pub(crate) fn start_event_pump(
+    state: &Rc<RefCell<AppState>>,
+    event_rx: smol::channel::Receiver<crate::refresh::RefreshEvent>,
+    dbus_handle: Option<crate::dbus::DBusServiceHandle>,
+    cx: &mut App,
+) {
+    let state = state.clone();
+    let pump_cx = cx.to_async();
+    cx.to_async()
+        .foreground_executor()
+        .spawn(async move {
+            while let Ok(event) = event_rx.recv().await {
+                let _ = pump_cx.update(|cx| {
+                    dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
+
+                    // Linux: D-Bus 信号发射（reducer 已更新 AppState）
+                    #[cfg(target_os = "linux")]
+                    emit_current_dbus_snapshot(&state, dbus_handle.as_ref());
+                });
+            }
+        })
+        .detach();
+}
+
+#[cfg(not(target_os = "linux"))]
 pub(crate) fn start_event_pump(
     state: &Rc<RefCell<AppState>>,
     event_rx: smol::channel::Receiver<crate::refresh::RefreshEvent>,
@@ -138,15 +452,7 @@ pub(crate) fn start_event_pump(
         .spawn(async move {
             while let Ok(event) = event_rx.recv().await {
                 let _ = pump_cx.update(|cx| {
-                    crate::runtime::dispatch_in_app(
-                        &state,
-                        AppAction::RefreshEventReceived(event),
-                        cx,
-                    );
-
-                    // Linux: D-Bus 信号发射（reducer 已更新 AppState）
-                    #[cfg(target_os = "linux")]
-                    emit_dbus_signals(&state);
+                    dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
                 });
             }
         })
@@ -181,7 +487,7 @@ pub(crate) fn start_script_test_pump(
         .spawn(async move {
             while let Ok((request_id, result)) = result_rx.recv().await {
                 let _ = pump_cx.update(|cx| {
-                    crate::runtime::dispatch_in_app(
+                    dispatch_in_app(
                         &state,
                         AppAction::ScriptProviderTestFinished { request_id, result },
                         cx,
@@ -192,19 +498,16 @@ pub(crate) fn start_script_test_pump(
         .detach();
 }
 
-/// 向 GNOME Shell Extension 发射 D-Bus 信号
-#[cfg(target_os = "linux")]
-fn emit_dbus_signals(state: &Rc<RefCell<AppState>>) {
-    emit_current_dbus_snapshot(state);
-}
-
 /// 向 GNOME Shell Extension 发射当前状态快照。
 #[cfg(target_os = "linux")]
-pub(crate) fn emit_current_dbus_snapshot(state: &Rc<RefCell<AppState>>) {
+pub(crate) fn emit_current_dbus_snapshot(
+    state: &Rc<RefCell<AppState>>,
+    handle: Option<&crate::dbus::DBusServiceHandle>,
+) {
     use crate::application::DBusQuotaSnapshot;
 
-    let state_ref = state.borrow();
-    if let Some(handle) = &state_ref.dbus_handle {
+    if let Some(handle) = handle {
+        let state_ref = state.borrow();
         let snapshot = DBusQuotaSnapshot::from_session(&state_ref.session);
         match serde_json::to_string(&snapshot) {
             Ok(json) => {

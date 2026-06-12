@@ -69,7 +69,7 @@ impl SettingsView {
                         },
                         theme,
                         move |_, window, cx| {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &login_state,
                                 AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
                                 window,
@@ -110,7 +110,7 @@ impl SettingsView {
                         },
                         theme,
                         move |_, window, cx| {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &notif_state,
                                 AppAction::UpdateSetting(
                                     SettingChange::ToggleSessionQuotaNotifications,
@@ -133,7 +133,7 @@ impl SettingsView {
                         },
                         theme,
                         move |_, window, cx| {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &sound_state,
                                 AppAction::UpdateSetting(SettingChange::ToggleNotificationSound),
                                 window,
@@ -234,7 +234,7 @@ impl SettingsView {
                                 .cloned()
                                 .map(|hotkey| Self::persist_hotkey_candidate(&hotkey))
                                 .unwrap_or_default();
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &state,
                                 AppAction::SaveGlobalHotkey(hotkey),
                                 window,
@@ -323,7 +323,7 @@ impl SettingsView {
                 true,
                 theme,
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
+                    crate::bootstrap::dispatch_in_window(&state, AppAction::QuitApp, window, cx);
                 },
             )))
     }

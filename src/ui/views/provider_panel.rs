@@ -105,7 +105,7 @@ impl AppView {
                     .cursor_pointer()
                     .child(t!("provider.open_settings").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state,
                             AppAction::OpenSettings {
                                 provider: Some(id.clone()),
@@ -158,7 +158,7 @@ impl AppView {
                 &t!("tooltip.dashboard"),
                 &theme,
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_for_dashboard,
                         AppAction::OpenDashboard(dashboard_id.clone()),
                         window,
@@ -320,7 +320,7 @@ impl AppView {
             {
                 let id = id.clone();
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_for_click,
                         AppAction::OpenDashboard(id.clone()),
                         window,
@@ -452,7 +452,7 @@ impl AppView {
                     &t!("provider.open_config"),
                     theme,
                     move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_for_settings,
                             AppAction::OpenSettings {
                                 provider: Some(id.clone()),

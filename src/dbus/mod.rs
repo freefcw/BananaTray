@@ -12,7 +12,7 @@
 //!   +-- signal_tx.send(json) ---------->   +-- RefreshAll 读取 snapshot_cache + 通知 GPUI
 //!   |                                       +-- ObjectServer 处理方法调用
 //!   |  <-- action_rx.recv() -------------  |
-//!   +-- dispatch_in_app() 处理              +-- iface_ref.refresh_complete(json)
+//!   +-- bootstrap::dispatch_in_app() 处理   +-- iface_ref.refresh_complete(json)
 //!      OpenSettings / RefreshAll           └─ smol 异步执行器
 //! ```
 //!
@@ -74,7 +74,7 @@ impl DBusServiceHandle {
 ///
 /// D-Bus 服务在独立线程运行，使用自己的 smol 执行器。
 /// `action_rx` 的消费在 GPUI 的 foreground executor 上进行，
-/// 仍需要 `state` 来调用 `dispatch_in_app`。
+/// 仍需要 `state` 来调用 `bootstrap::dispatch_in_app`。
 pub fn start_dbus_service(
     state: Rc<RefCell<AppState>>,
     async_cx: gpui::AsyncApp,
@@ -128,7 +128,7 @@ fn spawn_action_bridge(
                     DBusActionRequest::OpenSettings => {
                         info!(target: "dbus", "scheduling OpenSettings on GPUI main thread");
                         let _ = ui_cx.update(|cx| {
-                            crate::runtime::dispatch_in_app(
+                            crate::bootstrap::dispatch_in_app(
                                 &state,
                                 crate::application::AppAction::OpenSettings { provider: None },
                                 cx,
@@ -138,7 +138,7 @@ fn spawn_action_bridge(
                     DBusActionRequest::RefreshAll => {
                         info!(target: "dbus", "scheduling RefreshAll on GPUI main thread");
                         let _ = ui_cx.update(|cx| {
-                            crate::runtime::dispatch_in_app(
+                            crate::bootstrap::dispatch_in_app(
                                 &state,
                                 crate::application::AppAction::RefreshAll,
                                 cx,

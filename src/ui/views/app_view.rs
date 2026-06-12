@@ -42,6 +42,16 @@ pub(crate) fn notify_current_view(cx: &mut gpui::App) {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) fn register_shell_hooks() {
+    crate::bootstrap::register_notify_view(|_state, cx| {
+        notify_current_view(cx);
+    });
+    crate::bootstrap::register_clear_popup_view(|_state| {
+        clear_current_view();
+    });
+}
+
 // ============================================================================
 // 窗口视图 (可多次创建/销毁)
 // ============================================================================

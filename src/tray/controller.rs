@@ -3,8 +3,8 @@
 //! 持有全局窗口句柄和 AppState，负责弹窗的打开、关闭、切换等操作。
 
 use crate::application::AppAction;
+use crate::bootstrap::schedule_open_settings_window;
 use crate::models::{AppSettings, NavTab};
-use crate::runtime::schedule_open_settings_window;
 use crate::runtime::AppState;
 #[cfg(target_os = "linux")]
 use crate::tray::activation::GRACE_PERIOD;
@@ -167,7 +167,7 @@ impl TrayController {
 
     fn show(&mut self, tab: NavTab, cx: &mut App) {
         info!(target: "tray", "show window for tab {:?}", tab);
-        crate::runtime::dispatch_in_app(&self.state, AppAction::SelectNavTab(tab), cx);
+        crate::bootstrap::dispatch_in_app(&self.state, AppAction::SelectNavTab(tab), cx);
 
         if let Some(handle) = self.window.get() {
             info!(target: "tray", "reusing existing tray window");
@@ -189,7 +189,7 @@ impl TrayController {
         self.state
             .borrow_mut()
             .suppress_linux_popup_auto_hide_for(GRACE_PERIOD);
-        crate::runtime::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(true), cx);
+        crate::bootstrap::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(true), cx);
         let _ = handle.update(cx, |_, window, cx| {
             #[cfg(target_os = "linux")]
             window.set_mouse_passthrough(false);
@@ -282,7 +282,7 @@ impl TrayController {
         if let Ok(handle) = result {
             info!(target: "tray", "tray popup opened successfully");
             // 标记弹窗可见
-            crate::runtime::dispatch_in_app(
+            crate::bootstrap::dispatch_in_app(
                 &self.state,
                 AppAction::PopupVisibilityChanged(true),
                 cx,

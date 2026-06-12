@@ -7,6 +7,9 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod application;
+#[cfg(feature = "app")]
+#[allow(dead_code)]
+pub mod bootstrap;
 mod builtin_provider_manifest;
 #[cfg(all(target_os = "linux", feature = "app"))]
 mod dbus;

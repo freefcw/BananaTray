@@ -15,7 +15,6 @@ use super::shared::{
 use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::models::{parse_divisor_input, NewApiEditData};
-use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
@@ -273,7 +272,7 @@ impl SettingsView {
                     .hover(|s| s.opacity(0.9))
                     .child(t!("newapi.cancel").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_cancel,
                             AppAction::CancelAddNewApi,
                             window,
@@ -302,7 +301,7 @@ impl SettingsView {
                         let ok =
                             view.update(cx, |view: &mut Self, cx| view.collect_submit_action(cx));
                         if let Some(action) = ok {
-                            runtime::dispatch_in_window(&state_save, action, window, cx);
+                            crate::bootstrap::dispatch_in_window(&state_save, action, window, cx);
                         }
                     })
             })

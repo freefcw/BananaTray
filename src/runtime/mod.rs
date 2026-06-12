@@ -1,25 +1,23 @@
 use crate::application::{reduce, AppAction, AppEffect, ContextEffect};
-use gpui::{App, Context, Window};
+use gpui::Context;
 
 mod app_state;
 mod diagnostics_context;
 mod effects;
 pub(crate) mod global_hotkey;
 mod gpu_cache;
-mod settings_window_opener;
 mod settings_writer;
-pub mod ui_hooks;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use self::global_hotkey::rebind_global_hotkey;
 pub use app_state::AppState;
 pub(crate) use diagnostics_context::{collect_debug_context, collect_issue_report_context};
 pub use gpu_cache::register_idle_gpu_cache_trim;
-pub use settings_window_opener::schedule_open_settings_window;
 pub(crate) use settings_writer::SettingsWriter;
 
+// runtime 是前台内核：只持有 reducer/effect 执行和上下文能力抽象。
+// 具体窗口、托盘、D-Bus 句柄与 App/Window 级 dispatch facade 由 bootstrap 组合。
 #[allow(dead_code)] // bin 启动线程调用；lib 目标自身不会触达 bootstrap.rs
 pub(crate) fn execute_script_provider_test(
     config: &crate::models::ScriptProviderConfig,
@@ -37,19 +35,14 @@ pub fn dispatch_in_context<V: 'static>(
     });
 }
 
-pub fn dispatch_in_window(
+pub(crate) fn dispatch_with_full_context(
     state: &Rc<RefCell<AppState>>,
     action: AppAction,
-    window: &mut Window,
-    cx: &mut App,
+    caps: &mut dyn FullContextCapabilities,
 ) {
     dispatch_effects(state, action, |effect| {
-        run_effect_in_window(state, effect, window, cx);
+        run_effect_with_full_context(state, effect, caps);
     });
-}
-
-pub fn dispatch_in_app(state: &Rc<RefCell<AppState>>, action: AppAction, cx: &mut App) {
-    dispatch_effects(state, action, |effect| run_effect_in_app(state, effect, cx));
 }
 
 /// 将 action 通过 reducer 转换为 effects 并逐个执行。
@@ -113,14 +106,14 @@ fn dispatch_effects(
 ///
 /// 不同 GPUI 入口（Context<V> / Window+App / App）通过 adapter 实现此 trait，
 /// 将"当前环境能做什么"与"要做什么"解耦。effect runner 只关心后者。
-trait ContextCapabilities {
+pub(crate) trait ContextCapabilities {
     fn render(&mut self, state: &Rc<RefCell<AppState>>);
     fn open_url(&mut self, url: &str) {
         crate::platform::system::open_url(url);
     }
 }
 
-trait FullContextCapabilities: ContextCapabilities {
+pub(crate) trait FullContextCapabilities: ContextCapabilities {
     fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>);
     fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest);
     fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str);
@@ -137,70 +130,6 @@ impl<V: 'static> ContextCapabilities for ViewCaps<'_, '_, V> {
     }
     // open_url 使用 trait 默认实现（platform::system::open_url）。
     // 其它强上下文能力必须走 WindowCaps / AppCaps，避免在 View context 中静默丢 effect。
-}
-
-// ── Adapter: Window + App（全能力）──────────────────
-
-struct WindowCaps<'a> {
-    window: &'a mut Window,
-    cx: &'a mut App,
-}
-
-impl ContextCapabilities for WindowCaps<'_> {
-    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
-        self.window.refresh();
-    }
-}
-
-impl FullContextCapabilities for WindowCaps<'_> {
-    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
-        let display_id = self.window.display(self.cx).map(|display| display.id());
-        ui_hooks::clear_popup_view(state);
-        self.window.remove_window();
-        schedule_open_settings_window(state.clone(), display_id, self.cx);
-    }
-
-    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
-        crate::tray::apply_tray_icon(self.cx, request);
-    }
-
-    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
-        rebind_global_hotkey(state, hotkey, self.cx);
-    }
-
-    fn quit(&mut self) {
-        self.cx.quit();
-    }
-}
-
-// ── Adapter: App（大部分能力，Render 使用 view entity）
-
-struct AppCaps<'a> {
-    cx: &'a mut App,
-}
-
-impl ContextCapabilities for AppCaps<'_> {
-    fn render(&mut self, state: &Rc<RefCell<AppState>>) {
-        notify_view_entity(state, self.cx);
-    }
-}
-
-impl FullContextCapabilities for AppCaps<'_> {
-    fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>) {
-        schedule_open_settings_window(state.clone(), None, self.cx);
-    }
-
-    fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest) {
-        crate::tray::apply_tray_icon(self.cx, request);
-    }
-
-    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
-        rebind_global_hotkey(state, hotkey, self.cx);
-    }
-
-    fn quit(&mut self) {
-        self.cx.quit();
-    }
 }
 
 // ── ContextEffect 统一分派（单一 match）─────────────
@@ -230,7 +159,7 @@ fn run_view_context_effect(
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
         other => panic!(
             "BUG: ContextEffect::{other:?} requires App or Window context; \
-             dispatch this action with dispatch_in_app or dispatch_in_window"
+             dispatch this action with bootstrap::dispatch_in_app or bootstrap::dispatch_in_window"
         ),
     }
 }
@@ -248,35 +177,15 @@ fn run_effect_in_context<V: 'static>(
     }
 }
 
-fn run_effect_in_window(
+fn run_effect_with_full_context(
     state: &Rc<RefCell<AppState>>,
     effect: AppEffect,
-    window: &mut Window,
-    cx: &mut App,
+    caps: &mut dyn FullContextCapabilities,
 ) {
     match effect {
-        AppEffect::Context(ctx) => {
-            run_full_context_effect(state, ctx, &mut WindowCaps { window, cx });
-        }
+        AppEffect::Context(ctx) => run_full_context_effect(state, ctx, caps),
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
-}
-
-fn run_effect_in_app(state: &Rc<RefCell<AppState>>, effect: AppEffect, cx: &mut App) {
-    match effect {
-        AppEffect::Context(ctx) => {
-            run_full_context_effect(state, ctx, &mut AppCaps { cx });
-        }
-        AppEffect::Common(common) => effects::run_common_effect(state, common),
-    }
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-fn notify_view_entity(state: &Rc<RefCell<AppState>>, cx: &mut App) {
-    ui_hooks::notify_view(state, cx);
 }
 
 #[cfg(test)]

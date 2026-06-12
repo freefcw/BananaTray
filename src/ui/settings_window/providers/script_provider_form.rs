@@ -9,7 +9,6 @@ use crate::models::{
     unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
     ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
-use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
@@ -396,7 +395,7 @@ impl SettingsView {
                     .hover(|s| s.opacity(0.9))
                     .child(t!("script_provider.cancel").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_cancel,
                             AppAction::CancelAddScriptProvider,
                             window,
@@ -435,7 +434,7 @@ impl SettingsView {
                             view.collect_script_provider_config(cx)
                         });
                         if let Some(config) = config {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &state_test,
                                 AppAction::TestScriptProvider(config),
                                 window,
@@ -465,7 +464,7 @@ impl SettingsView {
                             view.collect_script_provider_config(cx)
                         });
                         if let Some(config) = config {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &state_save,
                                 AppAction::SubmitScriptProvider(config),
                                 window,

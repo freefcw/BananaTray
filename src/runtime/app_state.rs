@@ -28,10 +28,6 @@ pub struct AppState {
     linux_popup_auto_hide_suppressed_until: Option<std::time::Instant>,
     #[cfg(target_os = "linux")]
     linux_popup_position_save_requested: bool,
-    /// D-Bus 服务句柄（Linux: 供事件泵发射信号给 GNOME Shell Extension）
-    #[cfg(target_os = "linux")]
-    #[allow(dead_code)]
-    pub(crate) dbus_handle: Option<crate::dbus::DBusServiceHandle>,
 }
 
 impl AppState {
@@ -62,8 +58,6 @@ impl AppState {
             linux_popup_auto_hide_suppressed_until: None,
             #[cfg(target_os = "linux")]
             linux_popup_position_save_requested: false,
-            #[cfg(target_os = "linux")]
-            dbus_handle: None,
         }
     }
 

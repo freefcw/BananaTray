@@ -12,9 +12,9 @@ use std::rc::Rc;
 
 /// 同步弹窗关闭后的 session 状态。
 pub(super) fn finalize_popup_close(state: &Rc<RefCell<AppState>>, cx: &mut App) {
-    crate::runtime::ui_hooks::clear_popup_view(state);
+    crate::bootstrap::clear_popup_view(state);
     // 弹窗关闭后同步动态图标
-    crate::runtime::dispatch_in_app(state, AppAction::PopupVisibilityChanged(false), cx);
+    crate::bootstrap::dispatch_in_app(state, AppAction::PopupVisibilityChanged(false), cx);
 }
 
 /// 仅当 slot 里仍是当前窗口时才清空，避免 auto-hide 误关闭新开的窗口。

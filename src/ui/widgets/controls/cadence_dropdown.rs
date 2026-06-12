@@ -1,5 +1,4 @@
 use crate::application::{AppAction, SettingChange};
-use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
 use gpui::{
@@ -75,7 +74,7 @@ pub(crate) fn render_cadence_trigger(
                 .child(if dropdown_open { "▲" } else { "▼" }),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &toggle_state,
                 AppAction::ToggleCadenceDropdown,
                 window,
@@ -167,7 +166,7 @@ fn render_cadence_options(
                 row.on_mouse_down(
                     MouseButton::Left,
                     move |_: &MouseDownEvent, window: &mut Window, cx: &mut App| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &opt_state,
                             AppAction::UpdateSetting(SettingChange::RefreshCadence(mins)),
                             window,

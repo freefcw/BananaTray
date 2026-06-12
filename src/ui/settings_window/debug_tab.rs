@@ -131,7 +131,7 @@ impl SettingsView {
                 SegmentedSize::Compact,
                 theme,
                 move |level: String, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_clone,
                         AppAction::UpdateLogLevel(level),
                         window,
@@ -170,7 +170,7 @@ impl SettingsView {
                 false,
                 theme,
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_open,
                         AppAction::OpenLogDirectory,
                         window,
@@ -185,7 +185,7 @@ impl SettingsView {
                 false,
                 theme,
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_copy,
                         AppAction::CopyToClipboard(path_for_copy.clone()),
                         window,
@@ -333,7 +333,7 @@ impl SettingsView {
                     true,
                     theme,
                     move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state,
                             AppAction::CopyToClipboard(debug_text.clone()),
                             window,
@@ -379,7 +379,7 @@ impl SettingsView {
                 false,
                 theme,
                 move |_, window, cx| {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state,
                         AppAction::SendDebugNotification(alert_kind),
                         window,
@@ -445,7 +445,7 @@ impl SettingsView {
                             .child(name.clone()),
                     )
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_select,
                             AppAction::SelectDebugProvider(kind_clone.clone()),
                             window,
@@ -502,7 +502,7 @@ impl SettingsView {
                                 .child(btn_label),
                         )
                         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                            runtime::dispatch_in_window(
+                            crate::bootstrap::dispatch_in_window(
                                 &state_refresh,
                                 AppAction::DebugRefreshProvider,
                                 window,
@@ -648,7 +648,7 @@ impl SettingsView {
                                     .child(t!("debug.console.copy_logs").to_string()),
                             )
                             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state_copy,
                                     AppAction::CopyToClipboard(log_text.clone()),
                                     window,
@@ -674,7 +674,7 @@ impl SettingsView {
                                     .child(t!("debug.console.clear_logs").to_string()),
                             )
                             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state_clear,
                                     AppAction::ClearDebugLogs,
                                     window,

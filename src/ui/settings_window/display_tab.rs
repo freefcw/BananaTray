@@ -2,7 +2,6 @@ use super::components::{render_dark_card, render_divider, render_section_header,
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
-use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_segmented_control, SegmentedSize};
 use gpui::{div, px, rgb, App, Div, FontWeight, ParentElement, Styled, Window};
@@ -40,7 +39,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |variant: AppTheme, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(SettingChange::Theme(variant)),
                                     window,
@@ -62,7 +61,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |code: String, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(SettingChange::Language(code)),
                                     window,
@@ -98,7 +97,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |style: TrayIconStyle, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(SettingChange::SetTrayIconStyle(
                                         style,
@@ -128,7 +127,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |mode: QuotaDisplayMode, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(
                                         mode,
@@ -161,7 +160,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |_, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(
                                         SettingChange::ToggleShowDashboardButton,
@@ -187,7 +186,7 @@ impl SettingsView {
                         {
                             let state = self.state.clone();
                             move |_, window, cx| {
-                                runtime::dispatch_in_window(
+                                crate::bootstrap::dispatch_in_window(
                                     &state,
                                     AppAction::UpdateSetting(
                                         SettingChange::ToggleShowRefreshButton,
@@ -217,7 +216,7 @@ impl SettingsView {
                 {
                     let state = self.state.clone();
                     move |_, window, cx| {
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state,
                             AppAction::UpdateSetting(SettingChange::ToggleShowDebugTab),
                             window,

@@ -2,7 +2,6 @@ use super::super::SettingsView;
 use crate::application::AppAction;
 use crate::application::SettingsProviderListItemViewState;
 use crate::models::ProviderId;
-use crate::runtime;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -196,7 +195,7 @@ fn render_sidebar_item(
         })
         // 放置处理：将拖动的 provider 移动到此位置
         .on_drop::<DraggedProvider>(move |data, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &drop_state,
                 AppAction::MoveProviderToIndex {
                     id: data.id.clone(),
@@ -208,7 +207,7 @@ fn render_sidebar_item(
         })
         // 点击选中（保留 token 输入草稿，切回时可恢复）
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &select_state,
                 AppAction::SelectSettingsProvider(select_id.clone()),
                 window,
@@ -252,7 +251,7 @@ fn render_add_relay_button(theme: &Theme, ctx: SidebarActionContext) -> Div {
             view_entity.update(cx, |view, _| {
                 view.clear_token_input();
             });
-            runtime::dispatch_in_window(&state, AppAction::EnterAddProvider, window, cx);
+            crate::bootstrap::dispatch_in_window(&state, AppAction::EnterAddProvider, window, cx);
         })
 }
 

@@ -8,7 +8,6 @@
 use super::super::SettingsView;
 use crate::application::AppAction;
 use crate::models::{ProviderId, TokenEditMode, TokenInputCapability};
-use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::register_input_actions;
 use gpui::{
@@ -343,7 +342,7 @@ fn render_token_action_buttons(
                         left_view_entity.update(cx, |view, _| {
                             view.clear_token_input();
                         });
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_left,
                             AppAction::SaveProviderToken {
                                 provider_id: left_provider_id.clone(),
@@ -358,7 +357,7 @@ fn render_token_action_buttons(
                             "token save requested for {} but input draft is missing; cancelling edit state",
                             left_provider_id
                         );
-                        runtime::dispatch_in_window(
+                        crate::bootstrap::dispatch_in_window(
                             &state_left,
                             AppAction::SetTokenEditing {
                                 provider_id: left_provider_id.clone(),
@@ -369,7 +368,7 @@ fn render_token_action_buttons(
                         );
                     }
                 } else {
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_left,
                         AppAction::OpenUrl(capability.create_url.to_string()),
                         window,
@@ -413,7 +412,7 @@ fn render_token_action_buttons(
                     right_view_entity.update(cx, |view, _| {
                         view.clear_token_input();
                     });
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_right,
                         AppAction::SetTokenEditing {
                             provider_id: provider_id.clone(),
@@ -426,7 +425,7 @@ fn render_token_action_buttons(
                     right_view_entity.update(cx, |view, cx| {
                         view.begin_token_input(&provider_id, capability, edit_mode, cx);
                     });
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_right,
                         AppAction::SetTokenEditing {
                             provider_id: provider_id.clone(),

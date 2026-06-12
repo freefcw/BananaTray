@@ -6,7 +6,6 @@ use crate::application::{
 };
 use crate::models::{ProviderCapability, ProviderId, QuotaDisplayMode, SettingsCapability};
 use crate::refresh::RefreshReason;
-use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_detail_section_title, render_info_cell, render_svg_icon};
 use gpui::{
@@ -275,7 +274,7 @@ fn render_refresh_button(state: Rc<RefCell<AppState>>, id: ProviderId, theme: &T
             theme.text.muted,
         ))
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &state,
                 AppAction::RefreshProvider {
                     id: id.clone(),
@@ -309,7 +308,7 @@ fn render_detail_action_buttons(
             &t!("common.confirm"),
             &t!("common.cancel"),
             move |_, window, cx| {
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_confirm,
                     AppAction::RemoveProviderFromSidebar(id_remove.clone()),
                     window,
@@ -317,7 +316,7 @@ fn render_detail_action_buttons(
                 );
             },
             move |_, window, cx| {
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_cancel,
                     AppAction::CancelRemoveProvider,
                     window,
@@ -349,7 +348,7 @@ fn render_detail_action_buttons(
                     view_entity.update(cx, |view, _| {
                         view.clear_token_input();
                     });
-                    runtime::dispatch_in_window(
+                    crate::bootstrap::dispatch_in_window(
                         &state_confirm,
                         AppAction::ConfirmRemoveProvider,
                         window,
@@ -373,7 +372,7 @@ fn render_detail_action_buttons(
                 theme,
             )
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_toggle,
                     AppAction::ToggleProvider(id_toggle.clone()),
                     window,
@@ -418,7 +417,7 @@ fn render_newapi_action_row(
                 view_entity_edit.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_edit,
                     AppAction::EditNewApi {
                         provider_id: provider_id_edit.clone(),
@@ -442,7 +441,7 @@ fn render_newapi_action_row(
                 view_entity_delete.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_delete,
                     AppAction::DeleteNewApi {
                         provider_id: provider_id_delete.clone(),
@@ -455,7 +454,7 @@ fn render_newapi_action_row(
                 view_entity_cancel.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_cancel,
                     AppAction::CancelDeleteNewApi,
                     window,
@@ -476,7 +475,7 @@ fn render_newapi_action_row(
                 view_entity_confirm.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_confirm,
                     AppAction::ConfirmDeleteNewApi,
                     window,
@@ -518,7 +517,7 @@ fn render_script_provider_action_row(
                 view_entity_edit.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_edit,
                     AppAction::EditScriptProvider {
                         provider_id: provider_id_edit.clone(),
@@ -541,7 +540,7 @@ fn render_script_provider_action_row(
                 view_entity_delete.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_delete,
                     AppAction::DeleteScriptProvider {
                         provider_id: provider_id_delete.clone(),
@@ -554,7 +553,7 @@ fn render_script_provider_action_row(
                 view_entity_cancel.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_cancel,
                     AppAction::CancelDeleteScriptProvider,
                     window,
@@ -575,7 +574,7 @@ fn render_script_provider_action_row(
                 view_entity_confirm.update(cx, |view, _| {
                     view.clear_token_input();
                 });
-                runtime::dispatch_in_window(
+                crate::bootstrap::dispatch_in_window(
                     &state_confirm,
                     AppAction::ConfirmDeleteScriptProvider,
                     window,
@@ -635,7 +634,7 @@ fn render_quota_visibility_row(
                 .flex_shrink_0(),
         )
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &state,
                 AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
                     provider_id: provider_id.clone(),

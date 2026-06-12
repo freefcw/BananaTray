@@ -45,7 +45,12 @@ pub(super) fn hide_popup_window(
     } else if window.is_window_visible() {
         window.hide_window();
     }
-    crate::runtime::dispatch_in_window(state, AppAction::PopupVisibilityChanged(false), window, cx);
+    crate::bootstrap::dispatch_in_window(
+        state,
+        AppAction::PopupVisibilityChanged(false),
+        window,
+        cx,
+    );
     cx.notify();
 }
 

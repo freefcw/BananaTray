@@ -68,7 +68,7 @@ impl AppView {
         );
         let settings_state = self.state.clone();
         let settings_btn = settings_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(
+            crate::bootstrap::dispatch_in_window(
                 &settings_state,
                 AppAction::OpenSettings { provider: None },
                 window,
@@ -85,7 +85,7 @@ impl AppView {
         );
         let close_state = self.state.clone();
         let close_btn = close_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            runtime::dispatch_in_window(&close_state, AppAction::QuitApp, window, cx);
+            crate::bootstrap::dispatch_in_window(&close_state, AppAction::QuitApp, window, cx);
         });
 
         let mut footer = div()
