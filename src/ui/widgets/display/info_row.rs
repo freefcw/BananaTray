@@ -22,7 +22,7 @@ use rust_i18n::t;
 ///
 /// # 使用场景
 /// - `settings_window/about_tab.rs` — Build Version / Developer / License / Website 行
-/// - `settings_window/providers/detail.rs` — Provider 信息单元格
+/// - `settings_window/providers/detail/info.rs` — Provider 信息单元格
 pub(crate) fn render_kv_info_row(
     label: &str,
     value: &str,
@@ -73,7 +73,7 @@ pub(crate) fn render_kv_info_row(
 /// 渲染信息单元格（标签 + 值），水平排列用于两列布局
 ///
 /// # 使用场景
-/// - `settings_window/providers/detail.rs` — Provider 信息表格单元格
+/// - `settings_window/providers/detail/info.rs` — Provider 信息表格单元格
 pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, theme: &Theme) -> Div {
     div()
         .flex()

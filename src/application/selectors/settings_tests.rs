@@ -31,6 +31,34 @@ fn test_failure(message: &str) -> ProviderFailure {
     }
 }
 
+fn detail_snapshot(session: &AppSession) -> SettingsProviderDetailViewState {
+    settings_providers_tab_view_state(session).detail
+}
+
+fn assert_detail_confirmation_flags(
+    session: &AppSession,
+    remove: bool,
+    delete_newapi: bool,
+    delete_script_provider: bool,
+) {
+    let detail = detail_snapshot(session);
+    assert_eq!(detail.confirming_remove, remove);
+    assert_eq!(detail.confirming_delete_newapi, delete_newapi);
+    assert_eq!(
+        detail.confirming_delete_script_provider,
+        delete_script_provider
+    );
+}
+
+fn detail_quota_visible(session: &AppSession, quota_key: &str) -> bool {
+    detail_snapshot(session)
+        .quota_visibility
+        .iter()
+        .find(|item| item.quota_key == quota_key)
+        .unwrap_or_else(|| panic!("missing quota visibility item for key {quota_key}"))
+        .visible
+}
+
 #[test]
 fn settings_providers_tab_respects_order_and_selection() {
     let _locale_guard = setup_locale();
@@ -216,6 +244,69 @@ fn settings_provider_detail_reports_disabled_usage() {
 }
 
 #[test]
+fn settings_provider_detail_reports_confirming_actions() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+
+    session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
+    assert_detail_confirmation_flags(&session, true, false, false);
+
+    session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
+    assert_detail_confirmation_flags(&session, false, true, false);
+
+    session.settings_ui.modal = SettingsModalState::ConfirmingDeleteScriptProvider;
+    assert_detail_confirmation_flags(&session, false, false, true);
+}
+
+#[test]
+fn settings_provider_detail_confirmation_flags_track_reducer_actions() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+
+    assert_detail_confirmation_flags(&session, false, false, false);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::ConfirmRemoveProvider,
+    );
+    assert_detail_confirmation_flags(&session, true, false, false);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::CancelRemoveProvider,
+    );
+    assert_detail_confirmation_flags(&session, false, false, false);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::ConfirmDeleteNewApi,
+    );
+    assert_detail_confirmation_flags(&session, false, true, false);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::CancelDeleteNewApi,
+    );
+    assert_detail_confirmation_flags(&session, false, false, false);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::ConfirmDeleteScriptProvider,
+    );
+    assert_detail_confirmation_flags(&session, false, false, true);
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::CancelDeleteScriptProvider,
+    );
+    assert_detail_confirmation_flags(&session, false, false, false);
+}
+
+#[test]
 fn settings_provider_subtitle_uses_display_source_label() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
@@ -327,6 +418,55 @@ fn settings_detail_builds_quota_visibility_from_stable_key() {
     // Weekly 应仍可见
     assert_eq!(view_state.detail.quota_visibility[1].quota_key, "weekly");
     assert!(view_state.detail.quota_visibility[1].visible);
+}
+
+#[test]
+fn settings_detail_quota_visibility_tracks_toggle_action() {
+    use crate::models::{QuotaInfo, QuotaType};
+
+    let _locale_guard = setup_locale();
+    let provider_id = pid(ProviderKind::Claude);
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::with_details(
+            QuotaLabelSpec::Session,
+            30.0,
+            100.0,
+            QuotaType::Session,
+            None,
+        ),
+        QuotaInfo::with_details(QuotaLabelSpec::Weekly, 50.0, 100.0, QuotaType::Weekly, None),
+    ];
+
+    let mut session = make_session(settings, provider_id.clone(), vec![provider]);
+    assert!(detail_quota_visible(&session, "session"));
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::UpdateSetting(
+            crate::application::SettingChange::ToggleQuotaVisibility {
+                provider_id: provider_id.clone(),
+                quota_key: "session".to_string(),
+            },
+        ),
+    );
+    assert!(!detail_quota_visible(&session, "session"));
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::UpdateSetting(
+            crate::application::SettingChange::ToggleQuotaVisibility {
+                provider_id,
+                quota_key: "session".to_string(),
+            },
+        ),
+    );
+    assert!(detail_quota_visible(&session, "session"));
 }
 
 #[test]

@@ -170,6 +170,12 @@ fn settings_provider_detail_view_state(
         is_enabled,
         can_refresh: provider.is_some_and(ProviderStatus::supports_refresh),
         show_quota_visibility: provider.is_some_and(ProviderStatus::supports_refresh),
+        confirming_remove: session.settings_ui.modal.is_confirming_remove_provider(),
+        confirming_delete_newapi: session.settings_ui.modal.is_confirming_delete_newapi(),
+        confirming_delete_script_provider: session
+            .settings_ui
+            .modal
+            .is_confirming_delete_script_provider(),
         provider_capability: provider
             .map(|p| p.provider_capability)
             .unwrap_or(ProviderCapability::Monitorable),

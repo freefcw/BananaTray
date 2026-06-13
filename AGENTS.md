@@ -62,6 +62,7 @@ src/
                              controls/          — Interactive controls (action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions, tab)
                              display/           — Data display components (quota_bar, info_row, icon_row, card, provider_icon)
                            settings_window/providers/ — Settings Providers tab sidebar/detail/picker/NewAPI/token panels
+                             detail/          — Provider detail panel shell, section renderers, quota visibility, editable-provider actions
   runtime/               — Effect executor, shared AppState, context capability abstraction, NewAPI 文件 I/O 适配
                            effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
