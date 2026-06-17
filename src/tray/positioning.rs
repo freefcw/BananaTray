@@ -193,3 +193,64 @@ fn fallback_window_bounds(
         (cx.compute_window_bounds(window_size, &position), None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 最小 mock：所有锚点返回 None，displays 返回空，
+    /// compute_window_bounds 返回预设值。用于测试 fallback 路径。
+    ///
+    /// 注意：DisplayId 的构造函数在 GPUI 中是 pub(crate)，
+    /// 无法在 crate 外构造 TrayAnchor，因此仅测试无锚点的 fallback 路径。
+    struct MockCtx {
+        bounds_result: Bounds<Pixels>,
+    }
+
+    impl PopupPositionContext for MockCtx {
+        fn tray_icon_anchor(&self) -> Option<TrayAnchor> {
+            None
+        }
+        fn tray_anchor_for_position(&self, _pos: Point<Pixels>) -> Option<TrayAnchor> {
+            None
+        }
+        fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
+            vec![]
+        }
+        fn compute_window_bounds(
+            &self,
+            _size: Size<Pixels>,
+            _position: &WindowPosition,
+        ) -> Bounds<Pixels> {
+            self.bounds_result
+        }
+    }
+
+    fn dummy_bounds() -> Bounds<Pixels> {
+        Bounds::new(
+            gpui::point(px(0.0), px(0.0)),
+            gpui::size(px(100.0), px(100.0)),
+        )
+    }
+
+    fn dummy_inputs() -> PopupPositionInputs {
+        PopupPositionInputs {
+            window_size: gpui::size(px(320.0), px(400.0)),
+            last_click_position: None,
+            saved_position: None,
+        }
+    }
+
+    /// 无锚点时走 fallback 路径，返回 mock 的 compute_window_bounds 结果
+    #[test]
+    fn fallback_when_no_anchor_available() {
+        let cx = MockCtx {
+            bounds_result: dummy_bounds(),
+        };
+        let (bounds, display_id) = preferred_window_bounds(&cx, dummy_inputs());
+
+        assert_eq!(bounds, dummy_bounds());
+        // 非 Linux fallback 不返回 display_id
+        assert!(display_id.is_none());
+    }
+}
