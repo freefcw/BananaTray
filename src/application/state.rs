@@ -662,5 +662,5 @@ pub fn compute_header_status(
 }
 
 #[cfg(test)]
-#[path = "state_tests.rs"]
+#[path = "state_tests/mod.rs"]
 mod tests;

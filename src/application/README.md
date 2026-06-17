@@ -25,7 +25,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`compute_popup_height()`** — 弹窗高度计算
 - **`compute_header_status()`** — 头部状态文本计算
 
-测试文件：`state_tests.rs`
+测试目录：`state_tests/`（按域拆分，共享 fixture 在 `common.rs`）
 
 ### `action.rs` — 动作定义
 
