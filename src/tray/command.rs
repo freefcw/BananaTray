@@ -26,10 +26,9 @@ pub(super) fn provider_toggle_target(session: &mut AppSession) -> ProviderToggle
 mod tests {
     use super::*;
     use crate::models::test_helpers::make_test_provider;
-    use crate::models::{ConnectionStatus, ProviderKind};
+    use crate::models::{ConnectionStatus, ProviderId, ProviderKind};
 
     fn make_session(kinds: &[ProviderKind], enabled: &[ProviderKind]) -> AppSession {
-        use crate::models::ProviderId;
         let providers = kinds
             .iter()
             .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))

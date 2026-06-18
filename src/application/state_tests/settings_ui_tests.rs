@@ -1,11 +1,12 @@
 use super::super::*;
+use super::common::*;
 use crate::models::{NewApiEditData, ProviderKind, ScriptProviderEditData};
 
 #[test]
 fn settings_ui_default_values() {
     let ui = SettingsUiState {
         active_tab: SettingsTab::General,
-        selected_provider: super::common::pid(ProviderKind::Claude),
+        selected_provider: pid(ProviderKind::Claude),
         cadence_dropdown_open: false,
         token_editing_provider: None,
         modal: SettingsModalState::Idle,
