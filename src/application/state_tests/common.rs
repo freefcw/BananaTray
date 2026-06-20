@@ -1,6 +1,6 @@
-use super::super::*;
+use crate::application::state::{NavigationState, ProviderStatus, ProviderStore};
 use crate::models::test_helpers::make_test_provider;
-use crate::models::{ConnectionStatus, ProviderId, ProviderKind, SettingsCapability};
+use crate::models::{AppSettings, ConnectionStatus, ProviderId, ProviderKind, SettingsCapability};
 
 /// 快捷构造 ProviderId::BuiltIn
 pub(super) fn pid(kind: ProviderKind) -> ProviderId {
