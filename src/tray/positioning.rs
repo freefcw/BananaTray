@@ -242,6 +242,7 @@ mod tests {
     }
 
     /// 无锚点时走 fallback 路径，返回 mock 的 compute_window_bounds 结果
+    #[cfg(not(target_os = "linux"))]
     #[test]
     fn fallback_when_no_anchor_available() {
         let cx = MockCtx {
@@ -251,6 +252,21 @@ mod tests {
 
         assert_eq!(bounds, dummy_bounds());
         // 非 Linux fallback 不返回 display_id
+        assert!(display_id.is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn fallback_when_no_anchor_available_linux() {
+        // On Linux the fallback path uses the provided window_size when displays() is empty.
+        let cx = MockCtx {
+            bounds_result: dummy_bounds(),
+        };
+        let (bounds, display_id) = preferred_window_bounds(&cx, dummy_inputs());
+
+        let expected = Bounds::new(gpui::point(px(0.0), px(0.0)), dummy_inputs().window_size);
+        assert_eq!(bounds, expected);
+        // displays() was empty so display_id may be None
         assert!(display_id.is_none());
     }
 }
