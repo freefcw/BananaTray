@@ -45,10 +45,10 @@ unexpected_cfgs = "allow"
 # 禁用不必要的图像格式 features 以减小体积：仅保留 SVG + PNG（app logo）
 # 使用 fork 版本，包含 character_index_for_point 崩溃修复
 # (assert_eq! → guard clause，防止 macOS IME 回调时 layout 缓存过期导致 panic)
-gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", default-features = false, features = ["font-kit", "image-format-png"], optional = true }
+gpui = { package = "adabraka-gpui", git = "https://github.com/freefcw/adabraka-gpui", rev = "cb783cd", default-features = false, features = ["font-kit", "image-format-png"], optional = true }
 # adabraka-ui 0.6 在 default-features = false 时不再注册内置字体；
 # 这里只启用实际 UI 权重，避免拉入完整 JetBrains Mono Bold 等未用资产。
-adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "00fa3fe", default-features = false, features = ["font-inter-regular", "font-inter-medium", "font-inter-semibold", "font-inter-bold", "font-mono-regular"], optional = true }
+adabraka-ui = { git = "https://github.com/freefcw/adabraka-ui", rev = "fe90bad", default-features = false, features = ["font-inter-regular", "font-inter-medium", "font-inter-semibold", "font-inter-bold", "font-mono-regular"], optional = true }
 
 anyhow = "1.0"
 async-trait = "0.1"
