@@ -229,6 +229,26 @@ mod tests {
     }
 
     #[test]
+    fn copilot_token_input_state_from_config_file_handles_multibyte_token() {
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+        crate::providers::copilot::token::set_test_cache(None, None);
+
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .credentials
+            .set_credential("github_token", "测试令牌abcdWXYZ".to_string());
+
+        let state = copilot_token_input_state(&settings, "github_token");
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::EditStored);
+        assert_eq!(state.source_i18n_key, Some("copilot.source.config_file"));
+        assert_eq!(state.masked.as_deref(), Some("测试令牌••••WXYZ"));
+    }
+
+    #[test]
     fn copilot_token_input_state_from_env_is_set_new() {
         let _guard = env_lock().lock().unwrap();
         unsafe { std::env::set_var("GITHUB_TOKEN", "ghp_env_123456") };

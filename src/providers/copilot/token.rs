@@ -34,11 +34,9 @@ pub struct CopilotTokenStatus {
 impl CopilotTokenStatus {
     pub fn masked(&self) -> Option<String> {
         self.token.as_ref().map(|t| {
-            if t.len() <= 8 {
+            crate::providers::common::secret::mask_secret_preview(t, "••••", |_| {
                 "••••••••".to_string()
-            } else {
-                format!("{}••••{}", &t[..4], &t[t.len() - 4..])
-            }
+            })
         })
     }
 }
@@ -268,6 +266,15 @@ mod tests {
             source: CopilotTokenSource::CopilotCli,
         };
         assert_eq!(status.masked().as_deref(), Some("gho_••••KPBP"));
+    }
+
+    #[test]
+    fn test_masked_multibyte_token() {
+        let status = CopilotTokenStatus {
+            token: Some("测试令牌abcdWXYZ".to_string()),
+            source: CopilotTokenSource::ConfigFile,
+        };
+        assert_eq!(status.masked().as_deref(), Some("测试令牌••••WXYZ"));
     }
 
     #[test]

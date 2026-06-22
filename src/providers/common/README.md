@@ -46,6 +46,10 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`decode_payload<T>(token)`** — 从 JWT 中提取 payload 段并反序列化
 - 不做签名验证（仅用于读取 claim 信息，如 Copilot 的 token 到期时间）
 
+### `secret.rs` — Secret 预览脱敏
+
+- **`mask_secret_preview(secret, middle_mask, short_mask)`** — Unicode-safe 的 secret 预览脱敏辅助函数，统一前后各 4 个字符的保留规则；默认 token 预览、Copilot token preview、Codeium-family debug preview 都复用它，短字符串由调用方决定展示样式
+
 ### `runner.rs` — 交互式 PTY 运行器
 
 为需要终端环境的 CLI（Claude, Codex）提供 PTY 模拟：

@@ -10,6 +10,7 @@ use crate::models::{AppSettings, TokenEditMode, TokenInputState};
 use std::sync::Arc;
 
 pub use ai_provider::AiProvider;
+use common::secret::mask_secret_preview;
 #[cfg(test)]
 pub(crate) use copilot::copilot_settings_capability;
 pub use error::{ProviderError, ProviderResult};
@@ -23,7 +24,7 @@ pub(crate) fn default_token_input_state(
     let has_token = value.is_some();
     TokenInputState {
         has_token,
-        masked: value.map(mask_token),
+        masked: value.map(|token| mask_secret_preview(token, "•••", |len| "•".repeat(len))),
         source_i18n_key: None,
         edit_mode: if has_token {
             TokenEditMode::EditStored
@@ -33,14 +34,24 @@ pub(crate) fn default_token_input_state(
     }
 }
 
-fn mask_token(token: &str) -> String {
-    let chars: Vec<char> = token.chars().collect();
-    if chars.len() <= 8 {
-        "•".repeat(chars.len())
-    } else {
-        let prefix: String = chars[..4].iter().collect();
-        let suffix: String = chars[chars.len() - 4..].iter().collect();
-        format!("{}•••{}", prefix, suffix)
+#[cfg(test)]
+mod tests {
+    use super::default_token_input_state;
+    use crate::models::{AppSettings, TokenEditMode};
+
+    #[test]
+    fn default_token_input_state_handles_multibyte_credential() {
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .credentials
+            .set_credential("github_token", "测试令牌abcdWXYZ".to_string());
+
+        let state = default_token_input_state(&settings, "github_token");
+
+        assert!(state.has_token);
+        assert_eq!(state.edit_mode, TokenEditMode::EditStored);
+        assert_eq!(state.masked.as_deref(), Some("测试令牌•••WXYZ"));
     }
 }
 

@@ -251,13 +251,7 @@ fn cache_key_exists(conn: &Connection, key: &str) -> Result<bool> {
 
 #[allow(dead_code)]
 fn mask_secret(secret: &str) -> String {
-    if secret.len() <= 8 {
-        return "***".to_string();
-    }
-
-    let head = &secret[..4];
-    let tail = &secret[secret.len() - 4..];
-    format!("{}…{}", head, tail)
+    crate::providers::common::secret::mask_secret_preview(secret, "…", |_| "***".to_string())
 }
 
 pub(crate) fn classify_unavailable(spec: &CodeiumFamilySpec) -> ProviderResult<()> {
@@ -329,5 +323,10 @@ mod tests {
     #[test]
     fn test_mask_secret_long() {
         assert_eq!(mask_secret("abcdefgh12345678"), "abcd…5678");
+    }
+
+    #[test]
+    fn test_mask_secret_multibyte() {
+        assert_eq!(mask_secret("测试abcdWXYZ"), "测试ab…WXYZ");
     }
 }
