@@ -211,6 +211,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 - 标准测试命令是 `cargo test --lib`。
 - `cargo test --lib --no-default-features` 应保持可用，用于验证 lib 层不会回流 app-only 依赖。
 - 主路径 CI 使用 `cargo clippy --lib --no-default-features -- -D warnings` 和 `cargo test --lib --no-default-features` 作为快速门禁；完整默认 feature clippy、`cargo test --lib` 与 `cargo check --bin bananatray` 仅在 App CI 的手动触发和定时检查中运行。
+- Provider secret/token 预览必须复用 `providers::common::secret::mask_secret_preview`；`scripts/check-provider-secret-slicing.sh` 在 CI / pre-commit 中禁止 `src/providers` 重新出现直接字节切片式预览。
 - `application/` 和 `models/` 是主要单元测试面。
 - provider parser、scheduler、settings store、selector 也有独立测试。
 - `runtime/` 和 `ui/` 仍属于 `app` feature 范围，但会尽量把纯逻辑抽离到可测试模块。

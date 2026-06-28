@@ -101,6 +101,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 
 - `provider.credentials` 只保存 BananaTray 自己托管的 token override。
 - 某些 provider 的真实认证来源仍可能是外部配置文件、环境变量或 CLI 登录态。
+- token / secret 预览脱敏必须复用 `providers::common::secret::mask_secret_preview`，不要在 provider 内直接用字节索引切片；CI / pre-commit 会检查 `src/providers` 中重新出现的危险固定切片写法。
 - 设置页展示状态和后台刷新不是同一条调用栈：保存 token 后 reducer 会发送 `UpdateConfig`，后台 `RefreshCoordinator` 再调用 `ProviderManager::sync_provider_credentials()` 更新 provider 运行时快照；需要 app-managed override 的 provider 必须实现 `AiProvider::sync_provider_credentials()`。
 
 ## Error And Presentation Boundary

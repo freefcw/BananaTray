@@ -37,6 +37,9 @@ jobs:
       - name: Forbid GPUI glob imports
         run: ./scripts/check-gpui-imports.sh
 
+      - name: Forbid provider secret byte slicing
+        run: ./scripts/check-provider-secret-slicing.sh
+
       - name: Check GNOME Shell Extension
         run: ./scripts/check-gnome-extension.sh
 

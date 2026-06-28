@@ -43,6 +43,7 @@ Linux deb/rpm 使用仓库里的 `scripts/bundle-deb.sh` 和 `scripts/bundle-rpm
 ```bash
 cargo fmt --check
 ./scripts/check-gpui-imports.sh
+./scripts/check-provider-secret-slicing.sh
 ./scripts/check-gnome-extension.sh
 cargo clippy --lib --no-default-features -- -D warnings
 cargo test --lib --no-default-features

@@ -60,6 +60,13 @@ repos:
         pass_filenames: false
         files: ^src/.*\.rs$
 
+      - id: forbid-provider-secret-byte-slicing
+        name: Forbid provider secret byte slicing
+        entry: ./scripts/check-provider-secret-slicing.sh
+        language: system
+        pass_filenames: false
+        files: ^src/providers/.*\.rs$
+
   # 提交信息规范检查（可选）
   # - repo: https://github.com/commitizen-tools/commitizen
   #   rev: v3.13.0
