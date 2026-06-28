@@ -1,4 +1,11 @@
 /target
-CLAUDE.local.md
 AGENTS_local.md
+CLAUDE.local.md
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+*.swp
 .claude/settings.local.json
