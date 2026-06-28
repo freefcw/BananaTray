@@ -35,6 +35,8 @@ cargo build --release      # release
 cargo test --lib                        # tests (MUST use --lib, see below)
 cargo clippy               # lint
 cargo fmt                  # format
+just ci-fast               # fast local gate, mirrors the main CI path
+just release-verify        # release-oriented local verification wrapper
 ```
 
 > **`cargo test --lib` is the standard test command.** 默认支持的应用构建路径始终带 `app` feature。该 feature 现在同时隔离托盘壳的运行时依赖（GPUI / adabraka-ui / 单实例 / 通知 / 自启动等）；`--no-default-features` 只保留给 `lib` 层局部验证，不是受支持的 app 构建契约。All GPUI glob imports (`use gpui::*`) are banned via CI check, so SIGBUS regressions are prevented. Provider secret/token previews must use the shared Unicode-safe masking helper; CI rejects direct literal byte slicing in `src/providers`.
