@@ -100,71 +100,121 @@ fn extract_json(
     tier_path: &Option<String>,
     rules: &[JsonQuotaRule],
 ) -> Result<RefreshData> {
-    let json: serde_json::Value = serde_json::from_str(raw)
-        .map_err(|_| ProviderError::parse_failed("invalid JSON response"))?;
+    let json = parse_json_response(raw)?;
+    let account = extract_account_fields(&json, email_path, tier_path);
+    let quotas = extract_json_quotas(&json, rules)?;
 
-    let account_email = email_path.as_ref().and_then(|p| json_string(&json, p));
-    let account_tier = tier_path.as_ref().and_then(|p| json_string(&json, p));
+    Ok(RefreshData::with_account(
+        quotas,
+        account.email,
+        account.tier,
+    ))
+}
 
+struct JsonAccountFields {
+    email: Option<String>,
+    tier: Option<String>,
+}
+
+fn parse_json_response(raw: &str) -> Result<serde_json::Value> {
+    serde_json::from_str(raw)
+        .map_err(|_| ProviderError::parse_failed("invalid JSON response").into())
+}
+
+fn extract_account_fields(
+    json: &serde_json::Value,
+    email_path: &Option<String>,
+    tier_path: &Option<String>,
+) -> JsonAccountFields {
+    JsonAccountFields {
+        email: email_path.as_ref().and_then(|p| json_string(json, p)),
+        tier: tier_path.as_ref().and_then(|p| json_string(json, p)),
+    }
+}
+
+fn extract_json_quotas(
+    json: &serde_json::Value,
+    rules: &[JsonQuotaRule],
+) -> Result<Vec<QuotaInfo>> {
     let mut quotas = Vec::new();
     for rule in rules {
-        let detail = rule.detail.as_ref().and_then(|p| json_string(&json, p));
-        let detail_spec = detail.map(QuotaDetailSpec::Raw);
-        let quota_type = map_quota_type(&rule.quota_type);
-
-        if let Some(ref remaining_path) = rule.remaining {
-            // 余额模式：只取 remaining，used 可选
-            let remaining_raw = json_f64(&json, remaining_path).ok_or_else(|| {
-                ProviderError::parse_failed(&format!(
-                    "JSON path '{}' not found or not numeric",
-                    remaining_path
-                ))
-            })?;
-            let used_raw = rule.used.as_ref().and_then(|p| json_f64(&json, p));
-            let (remaining, used) = apply_divisor_balance(remaining_raw, used_raw, rule.divisor);
-            quotas.push(QuotaInfo::balance_only(
-                &rule.label,
-                remaining,
-                used,
-                quota_type,
-                detail_spec,
-            ));
-        } else {
-            // 传统模式：used + limit
-            let used_path = rule.used.as_deref().unwrap_or("");
-            let limit_path = rule.limit.as_deref().unwrap_or("");
-            let used = json_f64(&json, used_path).ok_or_else(|| {
-                ProviderError::parse_failed(&format!(
-                    "JSON path '{}' not found or not numeric",
-                    used_path
-                ))
-            })?;
-            let limit = json_f64(&json, limit_path).ok_or_else(|| {
-                ProviderError::parse_failed(&format!(
-                    "JSON path '{}' not found or not numeric",
-                    limit_path
-                ))
-            })?;
-            let (used, limit) = apply_divisor(used, limit, rule.divisor);
-            quotas.push(QuotaInfo::with_details(
-                &rule.label,
-                used,
-                limit,
-                quota_type,
-                detail_spec,
-            ));
-        }
+        quotas.push(extract_json_quota(json, rule)?);
     }
 
     if quotas.is_empty() {
         return Err(ProviderError::no_data().into());
     }
 
-    Ok(RefreshData::with_account(
-        quotas,
-        account_email,
-        account_tier,
+    Ok(quotas)
+}
+
+fn extract_json_quota(json: &serde_json::Value, rule: &JsonQuotaRule) -> Result<QuotaInfo> {
+    let detail_spec = extract_json_detail(json, rule.detail.as_deref());
+    let quota_type = map_quota_type(&rule.quota_type);
+
+    match rule.remaining.as_deref() {
+        Some(remaining_path) => {
+            extract_balance_quota(json, rule, remaining_path, quota_type, detail_spec)
+        }
+        None => extract_usage_quota(json, rule, quota_type, detail_spec),
+    }
+}
+
+fn extract_json_detail(
+    json: &serde_json::Value,
+    detail_path: Option<&str>,
+) -> Option<QuotaDetailSpec> {
+    detail_path
+        .and_then(|path| json_string(json, path))
+        .map(QuotaDetailSpec::Raw)
+}
+
+fn extract_balance_quota(
+    json: &serde_json::Value,
+    rule: &JsonQuotaRule,
+    remaining_path: &str,
+    quota_type: QuotaType,
+    detail_spec: Option<QuotaDetailSpec>,
+) -> Result<QuotaInfo> {
+    let remaining_raw = required_json_number(json, remaining_path)?;
+    let used_raw = rule.used.as_deref().and_then(|path| json_f64(json, path));
+    let (remaining, used) = apply_divisor_balance(remaining_raw, used_raw, rule.divisor);
+
+    Ok(QuotaInfo::balance_only(
+        &rule.label,
+        remaining,
+        used,
+        quota_type,
+        detail_spec,
     ))
+}
+
+fn extract_usage_quota(
+    json: &serde_json::Value,
+    rule: &JsonQuotaRule,
+    quota_type: QuotaType,
+    detail_spec: Option<QuotaDetailSpec>,
+) -> Result<QuotaInfo> {
+    let used_path = rule.used.as_deref().unwrap_or("");
+    let limit_path = rule.limit.as_deref().unwrap_or("");
+    let used = required_json_number(json, used_path)?;
+    let limit = required_json_number(json, limit_path)?;
+    let (used, limit) = apply_divisor(used, limit, rule.divisor);
+
+    Ok(QuotaInfo::with_details(
+        &rule.label,
+        used,
+        limit,
+        quota_type,
+        detail_spec,
+    ))
+}
+
+fn required_json_number(root: &serde_json::Value, path: &str) -> Result<f64> {
+    json_f64(root, path).ok_or_else(|| {
+        ProviderError::parse_failed(&format!("JSON path '{}' not found or not numeric", path))
+            .into()
+    })
 }
 
 /// 点分路径 JSON 值提取（如 "data.usage.used"）
@@ -403,7 +453,8 @@ mod tests {
     #[test]
     fn test_extract_json_no_rules() {
         let raw = r#"{"empty": true}"#;
-        assert!(extract_json(raw, &None, &None, &[]).is_err());
+        let err = extract_json(raw, &None, &None, &[]).unwrap_err();
+        assert_eq!(err.to_string(), "no quota data");
     }
 
     #[test]
@@ -419,7 +470,10 @@ mod tests {
             divisor: None,
         }];
         let err = extract_json(raw, &None, &None, &rules).unwrap_err();
-        assert!(err.to_string().contains("usage.used"));
+        assert_eq!(
+            err.to_string(),
+            "parse failed: JSON path 'usage.used' not found or not numeric"
+        );
     }
 
     #[test]
@@ -435,7 +489,10 @@ mod tests {
             divisor: None,
         }];
         let err = extract_json(raw, &None, &None, &rules).unwrap_err();
-        assert!(err.to_string().contains("usage.limit"));
+        assert_eq!(
+            err.to_string(),
+            "parse failed: JSON path 'usage.limit' not found or not numeric"
+        );
     }
 
     #[test]
@@ -451,13 +508,16 @@ mod tests {
             divisor: None,
         }];
         let err = extract_json(raw, &None, &None, &rules).unwrap_err();
-        assert!(err.to_string().contains("usage.used"));
+        assert_eq!(
+            err.to_string(),
+            "parse failed: JSON path 'usage.used' not found or not numeric"
+        );
     }
 
     #[test]
     fn test_extract_json_invalid_json() {
         let err = extract_json("not json", &None, &None, &[]).unwrap_err();
-        assert!(err.to_string().contains("invalid JSON"));
+        assert_eq!(err.to_string(), "parse failed: invalid JSON response");
     }
 
     // ── extract_regex ───────────────────────────
@@ -682,6 +742,9 @@ mod tests {
         }];
 
         let err = extract_json(raw, &None, &None, &rules).unwrap_err();
-        assert!(err.to_string().contains("data.quota"));
+        assert_eq!(
+            err.to_string(),
+            "parse failed: JSON path 'data.quota' not found or not numeric"
+        );
     }
 }
