@@ -9,10 +9,15 @@ use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize, PtySystem};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::providers::common::path_resolver;
 use crate::utils::text_utils;
+
+const READER_CHUNK_SIZE: usize = 8192;
+const CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(60);
 
 /// Result of running an interactive command
 #[derive(Debug)]
@@ -276,145 +281,308 @@ impl InteractiveRunner {
         child: &mut Box<dyn portable_pty::Child + Send + Sync>,
         options: &InteractiveOptions,
     ) -> Result<Vec<u8>> {
-        let mut reader = pair.master.try_clone_reader()?;
-
-        // Spawn a reader thread that sends chunks via channel, avoiding blocking read
-        // in the main loop which would prevent timeout/idle checks from executing.
-        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
-        let reader_handle = std::thread::spawn(move || {
-            let mut chunk = [0u8; 8192];
-            loop {
-                match reader.read(&mut chunk) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if tx.send(chunk[..n].to_vec()).is_err() {
-                            break; // receiver dropped
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
-        let deadline = Instant::now() + options.timeout;
-        let mut buffer = Vec::new();
-        let mut last_meaningful_data = Instant::now();
-        let mut responded_prompts = HashSet::new();
-        let mut last_enter = Instant::now();
-
-        // Prepare prompt-response pairs (normalized for matching)
-        let prompt_responses: Vec<(String, String)> = options
-            .auto_responses
-            .iter()
-            .map(|(k, v)| (Self::normalize_for_matching(k), v.clone()))
-            .collect();
-
-        while Instant::now() < deadline {
-            // Non-blocking receive from reader thread
-            match rx.recv_timeout(Duration::from_millis(60)) {
-                Ok(data) => {
-                    // Check if this is meaningful data
-                    if self.is_meaningful_data(&data) {
-                        last_meaningful_data = Instant::now();
-                    }
-                    buffer.extend_from_slice(&data);
-
-                    // Check for auto-response triggers against the full buffer.
-                    // This keeps matching deterministic even if the process emits
-                    // a large burst of output after the prompt appears.
-                    let text = String::from_utf8_lossy(&buffer);
-                    let normalized = Self::normalize_for_matching(&text);
-
-                    for (prompt, response) in &prompt_responses {
-                        if !responded_prompts.contains(prompt) && normalized.contains(prompt) {
-                            match pair.master.take_writer() {
-                                Ok(mut writer) => {
-                                    let _ = writer.write_all(response.as_bytes());
-                                    log::info!(
-                                        target: "interactive_runner",
-                                        "Auto-responded to prompt '{}' with '{}'",
-                                        prompt,
-                                        response.trim()
-                                    );
-                                }
-                                Err(e) => {
-                                    log::warn!(
-                                        target: "interactive_runner",
-                                        "Auto-response matched '{}' but take_writer failed: {}",
-                                        prompt, e
-                                    );
-                                }
-                            }
-                            responded_prompts.insert(prompt.clone());
-                            last_meaningful_data = Instant::now();
-                        }
-                    }
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // No data received in this interval, fall through to checks
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    log::info!(target: "interactive_runner", "Reader thread ended (EOF or error)");
-                    break;
-                }
-            }
-
-            // Check if process has exited
-            if let Some(_status) = child.try_wait()? {
-                log::info!(target: "interactive_runner", "Process exited");
-                break;
-            }
-
-            // Check idle timeout
-            if !buffer.is_empty()
-                && Instant::now().duration_since(last_meaningful_data) > options.idle_timeout
-            {
-                log::info!(
-                    target: "interactive_runner",
-                    "Idle timeout reached after {:.1}s without new data, buffer: {} bytes",
-                    options.idle_timeout.as_secs_f64(),
-                    buffer.len()
-                );
-                break;
-            }
-
-            // Send periodic Enter if configured
-            if let Some(every) = options.send_enter_every {
-                if Instant::now().duration_since(last_enter) >= every {
-                    if let Ok(mut writer) = pair.master.take_writer() {
-                        let _ = writer.write_all(b"\r");
-                    }
-                    last_enter = Instant::now();
-                }
-            }
-        }
-
-        if Instant::now() >= deadline {
-            log::warn!(
-                target: "interactive_runner",
-                "Overall timeout ({:.0}s) reached, buffer: {} bytes",
-                options.timeout.as_secs_f64(),
-                buffer.len()
-            );
-        }
-
-        // Drain any remaining data from channel (non-blocking)
-        while let Ok(data) = rx.try_recv() {
-            buffer.extend_from_slice(&data);
-        }
-
-        // Don't wait for reader thread — it will be cleaned up when the PTY master is dropped
-        drop(reader_handle);
-
+        let ReaderThread { receiver, handle } = spawn_reader(pair)?;
+        let buffer = CaptureLoop::new(pair, child, options, receiver).run()?;
+        drop(handle);
         Ok(buffer)
     }
 
     fn normalize_for_matching(text: &str) -> String {
         text_utils::normalize_for_matching(text)
     }
+}
 
-    fn is_meaningful_data(&self, data: &[u8]) -> bool {
-        text_utils::has_meaningful_content(data)
+struct ReaderThread {
+    receiver: Receiver<Vec<u8>>,
+    handle: JoinHandle<()>,
+}
+
+fn spawn_reader(pair: &PtyPair) -> Result<ReaderThread> {
+    let mut reader = pair.master.try_clone_reader()?;
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+    let handle = std::thread::spawn(move || {
+        let mut chunk = [0u8; READER_CHUNK_SIZE];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if tx.send(chunk[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(ReaderThread {
+        receiver: rx,
+        handle,
+    })
+}
+
+struct PromptResponse {
+    normalized_prompt: String,
+    response: String,
+}
+
+struct PromptMatch {
+    normalized_prompt: String,
+    response: String,
+}
+
+struct PromptResponder {
+    prompt_responses: Vec<PromptResponse>,
+    responded_prompts: HashSet<String>,
+}
+
+impl PromptResponder {
+    fn new(auto_responses: &HashMap<String, String>) -> Self {
+        let prompt_responses = auto_responses
+            .iter()
+            .map(|(prompt, response)| PromptResponse {
+                normalized_prompt: InteractiveRunner::normalize_for_matching(prompt),
+                response: response.clone(),
+            })
+            .collect();
+
+        Self {
+            prompt_responses,
+            responded_prompts: HashSet::new(),
+        }
+    }
+
+    fn take_matches(&mut self, output: &str) -> Vec<PromptMatch> {
+        let normalized_output = InteractiveRunner::normalize_for_matching(output);
+        let mut matches = Vec::new();
+
+        for prompt_response in &self.prompt_responses {
+            if !self
+                .responded_prompts
+                .contains(&prompt_response.normalized_prompt)
+                && normalized_output.contains(&prompt_response.normalized_prompt)
+            {
+                self.responded_prompts
+                    .insert(prompt_response.normalized_prompt.clone());
+                matches.push(PromptMatch {
+                    normalized_prompt: prompt_response.normalized_prompt.clone(),
+                    response: prompt_response.response.clone(),
+                });
+            }
+        }
+
+        matches
+    }
+}
+
+struct CaptureState {
+    buffer: Vec<u8>,
+    deadline: Instant,
+    last_meaningful_data: Instant,
+    last_enter: Instant,
+}
+
+impl CaptureState {
+    fn new(timeout: Duration, now: Instant) -> Self {
+        Self {
+            buffer: Vec::new(),
+            deadline: now + timeout,
+            last_meaningful_data: now,
+            last_enter: now,
+        }
+    }
+
+    fn should_continue(&self, now: Instant) -> bool {
+        now < self.deadline
+    }
+
+    fn timed_out(&self, now: Instant) -> bool {
+        now >= self.deadline
+    }
+
+    fn record_chunk(&mut self, data: &[u8], now: Instant) {
+        if text_utils::has_meaningful_content(data) {
+            self.last_meaningful_data = now;
+        }
+        self.buffer.extend_from_slice(data);
+    }
+
+    fn record_prompt_response(&mut self, now: Instant) {
+        self.last_meaningful_data = now;
+    }
+
+    fn is_idle(&self, idle_timeout: Duration, now: Instant) -> bool {
+        !self.buffer.is_empty() && now.duration_since(self.last_meaningful_data) > idle_timeout
+    }
+
+    fn should_send_enter(&self, every: Duration, now: Instant) -> bool {
+        now.duration_since(self.last_enter) >= every
+    }
+
+    fn record_enter_attempt(&mut self, now: Instant) {
+        self.last_enter = now;
+    }
+
+    fn drain_remaining(&mut self, receiver: &Receiver<Vec<u8>>) {
+        while let Ok(data) = receiver.try_recv() {
+            self.buffer.extend_from_slice(&data);
+        }
+    }
+
+    fn buffer(&self) -> &[u8] {
+        &self.buffer
+    }
+
+    fn buffer_len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    fn into_buffer(self) -> Vec<u8> {
+        self.buffer
+    }
+}
+
+struct CaptureLoop<'a> {
+    pair: &'a PtyPair,
+    child: &'a mut Box<dyn portable_pty::Child + Send + Sync>,
+    options: &'a InteractiveOptions,
+    receiver: Receiver<Vec<u8>>,
+    state: CaptureState,
+    prompt_responder: PromptResponder,
+}
+
+impl<'a> CaptureLoop<'a> {
+    fn new(
+        pair: &'a PtyPair,
+        child: &'a mut Box<dyn portable_pty::Child + Send + Sync>,
+        options: &'a InteractiveOptions,
+        receiver: Receiver<Vec<u8>>,
+    ) -> Self {
+        Self {
+            pair,
+            child,
+            options,
+            receiver,
+            state: CaptureState::new(options.timeout, Instant::now()),
+            prompt_responder: PromptResponder::new(&options.auto_responses),
+        }
+    }
+
+    fn run(mut self) -> Result<Vec<u8>> {
+        while self.state.should_continue(Instant::now()) {
+            if !self.receive_reader_event() {
+                break;
+            }
+            if self.process_exited()? {
+                break;
+            }
+            if self.idle_timeout_reached() {
+                break;
+            }
+            self.send_periodic_enter_if_due();
+        }
+
+        self.log_overall_timeout();
+        self.state.drain_remaining(&self.receiver);
+        Ok(self.state.into_buffer())
+    }
+
+    fn receive_reader_event(&mut self) -> bool {
+        match self.receiver.recv_timeout(CAPTURE_POLL_INTERVAL) {
+            Ok(data) => {
+                self.handle_output_chunk(&data);
+                true
+            }
+            Err(RecvTimeoutError::Timeout) => true,
+            Err(RecvTimeoutError::Disconnected) => {
+                log::info!(target: "interactive_runner", "Reader thread ended (EOF or error)");
+                false
+            }
+        }
+    }
+
+    fn handle_output_chunk(&mut self, data: &[u8]) {
+        self.state.record_chunk(data, Instant::now());
+        let text = String::from_utf8_lossy(self.state.buffer()).into_owned();
+
+        for prompt_match in self.prompt_responder.take_matches(&text) {
+            self.send_auto_response(&prompt_match);
+            self.state.record_prompt_response(Instant::now());
+        }
+    }
+
+    fn send_auto_response(&self, prompt_match: &PromptMatch) {
+        match self.pair.master.take_writer() {
+            Ok(mut writer) => {
+                let _ = writer.write_all(prompt_match.response.as_bytes());
+                log::info!(
+                    target: "interactive_runner",
+                    "Auto-responded to normalized prompt '{}' with '{}'",
+                    prompt_match.normalized_prompt,
+                    prompt_match.response.trim()
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "interactive_runner",
+                    "Auto-response matched normalized prompt '{}' but take_writer failed: {}",
+                    prompt_match.normalized_prompt, e
+                );
+            }
+        }
+    }
+
+    fn process_exited(&mut self) -> Result<bool> {
+        if let Some(_status) = self.child.try_wait()? {
+            log::info!(target: "interactive_runner", "Process exited");
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn idle_timeout_reached(&self) -> bool {
+        if self
+            .state
+            .is_idle(self.options.idle_timeout, Instant::now())
+        {
+            log::info!(
+                target: "interactive_runner",
+                "Idle timeout reached after {:.1}s without new data, buffer: {} bytes",
+                self.options.idle_timeout.as_secs_f64(),
+                self.state.buffer_len()
+            );
+            return true;
+        }
+
+        false
+    }
+
+    fn send_periodic_enter_if_due(&mut self) {
+        let Some(every) = self.options.send_enter_every else {
+            return;
+        };
+        let now = Instant::now();
+        if !self.state.should_send_enter(every, now) {
+            return;
+        }
+
+        if let Ok(mut writer) = self.pair.master.take_writer() {
+            let _ = writer.write_all(b"\r");
+        }
+        self.state.record_enter_attempt(Instant::now());
+    }
+
+    fn log_overall_timeout(&self) {
+        if self.state.timed_out(Instant::now()) {
+            log::warn!(
+                target: "interactive_runner",
+                "Overall timeout ({:.0}s) reached, buffer: {} bytes",
+                self.options.timeout.as_secs_f64(),
+                self.state.buffer_len()
+            );
+        }
     }
 }
 
@@ -438,6 +606,86 @@ mod tests {
 
         let err = InteractiveError::TimedOut;
         assert!(err.to_string().contains("timeout"));
+    }
+
+    #[test]
+    fn prompt_responder_matches_normalized_full_output_once() {
+        let mut auto_responses = HashMap::new();
+        auto_responses.insert("Continue? [y/n]".to_string(), "y\n".to_string());
+        let mut responder = PromptResponder::new(&auto_responses);
+
+        let first_matches = responder.take_matches("\x1b[32mContinue?\x1b[0m   [y/n]");
+        assert_eq!(first_matches.len(), 1);
+        assert_eq!(first_matches[0].response, "y\n");
+
+        let second_matches = responder.take_matches("Continue? [y/n]");
+        assert!(second_matches.is_empty());
+    }
+
+    #[test]
+    fn prompt_responder_matches_prompt_split_across_buffer_chunks() {
+        let mut auto_responses = HashMap::new();
+        auto_responses.insert(
+            "Do you trust this directory?".to_string(),
+            "y\n".to_string(),
+        );
+        let mut responder = PromptResponder::new(&auto_responses);
+
+        assert!(responder.take_matches("Do you trust").is_empty());
+
+        let matches = responder.take_matches("Do you trust this directory?");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].response, "y\n");
+    }
+
+    #[test]
+    fn capture_state_tracks_idle_only_after_meaningful_data() {
+        let start = Instant::now();
+        let mut state = CaptureState::new(Duration::from_secs(10), start);
+
+        state.record_chunk("\x1b7⠙\x1b8".as_bytes(), start + Duration::from_secs(1));
+        assert!(state.is_idle(Duration::from_millis(500), start + Duration::from_secs(1)));
+
+        state.record_chunk(b"ready", start + Duration::from_secs(2));
+        assert!(!state.is_idle(Duration::from_secs(1), start + Duration::from_secs(2)));
+        assert!(state.is_idle(Duration::from_secs(1), start + Duration::from_secs(4)));
+    }
+
+    #[test]
+    fn capture_state_prompt_response_refreshes_idle_clock() {
+        let start = Instant::now();
+        let mut state = CaptureState::new(Duration::from_secs(10), start);
+
+        state.record_chunk(b"prompt", start);
+        state.record_prompt_response(start + Duration::from_secs(3));
+
+        assert!(!state.is_idle(Duration::from_secs(2), start + Duration::from_secs(4)));
+        assert!(state.is_idle(Duration::from_secs(2), start + Duration::from_secs(6)));
+    }
+
+    #[test]
+    fn capture_state_tracks_periodic_enter_attempts() {
+        let start = Instant::now();
+        let mut state = CaptureState::new(Duration::from_secs(10), start);
+
+        assert!(!state.should_send_enter(
+            Duration::from_millis(500),
+            start + Duration::from_millis(499)
+        ));
+        assert!(state.should_send_enter(
+            Duration::from_millis(500),
+            start + Duration::from_millis(500)
+        ));
+
+        state.record_enter_attempt(start + Duration::from_millis(500));
+        assert!(!state.should_send_enter(
+            Duration::from_millis(500),
+            start + Duration::from_millis(999)
+        ));
+        assert!(state.should_send_enter(
+            Duration::from_millis(500),
+            start + Duration::from_millis(1000)
+        ));
     }
 
     // ── From<InteractiveError> for ProviderError ──────────
