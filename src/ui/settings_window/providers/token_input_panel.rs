@@ -78,7 +78,7 @@ impl RenderOnce for TokenInputBox {
 /// 渲染 Token 输入型设置面板，完全从 `SettingsCapability::TokenInput` 字段驱动。
 ///
 /// 此函数是 TokenInput 类型 provider 的唯一渲染入口。新增 TokenInput provider 时
-/// 只需在 `AiProvider::settings_capability()` 返回正确字段，无需编写额外 UI 代码。
+/// 只需在 `ProviderCapabilities::settings_capability()` 返回正确字段，无需编写额外 UI 代码。
 pub(crate) fn render_token_input_panel(
     provider_id: &ProviderId,
     capability: TokenInputCapability,

@@ -6,13 +6,16 @@ Provider abstraction layer and all 14 AI provider implementations.
 
 ### `mod.rs` — Registry + Helpers | `ai_provider.rs` — Trait | `error.rs` — Error Types
 
-- **`AiProvider`** trait (`ai_provider.rs`, async_trait) — core interface every provider exposes:
+- **`AiProvider`** trait (`ai_provider.rs`, async_trait) — core refresh contract every provider exposes:
   - `descriptor() -> ProviderDescriptor` — provider ID + `ProviderMetadata`
-  - `check_availability() -> ProviderResult<()>` — environment/config check with structured error
-  - `refresh() -> ProviderResult<RefreshData>` — fetch latest quota data; defaults to `NoData`, so `Monitorable` providers must override it while `Informational` / `Placeholder` entries normally do not
+  - `check_availability(ctx: &ProviderExecutionContext) -> ProviderResult<()>` — environment/config check with structured error
+  - `refresh(ctx: &ProviderExecutionContext) -> ProviderResult<RefreshData>` — fetch latest quota data; defaults to `NoData`, so `Monitorable` providers must override it while `Informational` / `Placeholder` entries normally do not
+- **`ProviderExecutionContext`** — explicit refresh-time inputs, currently carrying BananaTray-managed `ProviderSettings` credentials for this refresh attempt
+- **`ProviderCapabilities`** — product/settings capability adapter kept separate from the refresh contract:
   - `settings_capability() -> SettingsCapability` — declare settings UI capability (default: `None`)
   - `provider_capability() -> ProviderCapability` — declare whether the provider is `Monitorable`, `Informational`, or `Placeholder`
-  - `sync_provider_credentials(credentials)` — optional runtime sync hook for BananaTray-managed provider credentials
+  - `resolve_token_input_state(settings)` — optional provider-side runtime token display state (masked value / source / edit mode)
+- **`ProviderEntry`** — registry trait object combining `AiProvider + ProviderCapabilities`
 - **`SettingsCapability`** — provider-defined settings capability:
   - `None` — no extra settings UI
   - `TokenInput(TokenInputCapability)` — generic token panel driven by static i18n keys + `credential_key`
@@ -26,8 +29,7 @@ Provider abstraction layer and all 14 AI provider implementations.
   - every `*_i18n_key` and token source key must exist in all files under `locales/`; `src/i18n.rs` tests enforce this for literal and provider-declared keys
   - `credential_key` for persisted storage in `ProviderConfig::credentials`
   - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
-- **`resolve_token_input_state()`** — optional `AiProvider` hook for provider-side runtime token display state (masked value / source / edit mode); override only when default credential-store behavior is insufficient
-- **`sync_provider_credentials()`** — optional `AiProvider` hook used by the background refresh runtime. `RefreshRequest::UpdateConfig` carries the latest `ProviderConfig::credentials`; `RefreshCoordinator` syncs them into `ProviderManager` before refresh and after provider reload. TokenInput providers whose refresh path uses app-managed overrides must store a thread-safe snapshot here.
+- **`resolve_token_input_state()`** — optional `ProviderCapabilities` hook for provider-side runtime token display state; override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata. For built-in providers, `descriptor().id` is a registration/dedup/source descriptor and may include suffixes such as `codex:api`; settings/state routing uses `ProviderId::BuiltIn(kind)` and `ProviderKind::id_key()` instead. For custom providers, the YAML `id` is persisted as `ProviderId::Custom`.
 - **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
@@ -48,8 +50,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
-- `refresh_by_id(id)` — routes built-in and custom providers through one refresh entrypoint; non-monitorable providers return `NoData`, monitorable providers check availability and then delegate to `refresh()`
-- `sync_provider_credentials(credentials)` — fans out app-managed credentials to registered providers that need runtime credential snapshots
+- `refresh_by_id(id, provider_credentials)` — routes built-in and custom providers through one refresh entrypoint; non-monitorable providers return `NoData`, monitorable providers receive a `ProviderExecutionContext`, run `check_availability(ctx)`, and then delegate to `refresh(ctx)`
 - `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
 ProviderManager / ProviderManagerHandle form the provider facade used by the rest of the app.
@@ -68,8 +69,8 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 |------|----------|--------------|---------------|------------|-------------|-------|
 | `claude/` | Claude | `claude` | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources; `credentials.rs` handles OAuth credential loading/refresh/save; `probe.rs` defines `UsageProbe` trait + `ProbeMode` |
 | `gemini/` | Gemini | `gemini` | `gemini:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
-| `copilot/` | Copilot | `copilot` | `copilot:api` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, uses the shared Unicode-safe secret preview helper, and syncs `github_token` into a runtime snapshot for refresh |
-| `codex/` | Codex | `codex` | `codex:api` | `Monitorable` | ChatGPT API + CLI fallback | Split into `auth.rs`, `client.rs`, `config.rs`, `parser.rs`, `rpc_probe.rs`, `status_probe.rs`, `mod.rs`. `refresh()` uses HTTP first; recoverable HTTP failures fall back to `codex app-server` JSON-RPC before PTY `/status`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; credentials are reloaded after token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` reflect the latest state. `config.rs` reads `~/.codex/config.toml` for `chatgpt_base_url` to support self-hosted ChatGPT gateways |
+| `copilot/` | Copilot | `copilot` | `copilot:api` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, uses the shared Unicode-safe secret preview helper, and reads app-managed `github_token` from `ProviderExecutionContext` during refresh |
+| `codex/` | Codex | `codex` | `codex:api` | `Monitorable` | ChatGPT API + CLI fallback | Split into `auth.rs`, `client.rs`, `config.rs`, `parser.rs`, `rpc_probe.rs`, `status_probe.rs`, `mod.rs`. `refresh(ctx)` uses HTTP first; recoverable HTTP failures fall back to `codex app-server` JSON-RPC before PTY `/status`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; credentials are reloaded after token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` reflect the latest state. `config.rs` reads `~/.codex/config.toml` for `chatgpt_base_url` to support self-hosted ChatGPT gateways |
 | `kimi/` | Kimi | `kimi` | `kimi:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`) |
@@ -107,7 +108,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   - `ParseStrategy` decodes different payload formats from the same domain data
   - Share the fallback pattern conceptually, not via a forced common trait
 - `Claude` uses explicit source orchestration in `mod.rs`:
-  - `check_availability()` accepts either API or CLI source
+  - `check_availability(ctx)` accepts either API or CLI source
   - `ProbeMode::Auto` prefers API and falls back to CLI
   - concrete source logic stays in `api_probe.rs` / `cli_probe.rs`
 - Codeium-family providers keep orchestration in the provider facade instead of in the shared module:
@@ -122,7 +123,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 1. **Add manifest entry** in `src/builtin_provider_manifest.rs`: `MyProviderKind => "myprovider" => my_provider::MyProvider`
 2. **Create provider file or directory** matching the manifest module path:
    ```rust
-   use super::{define_unit_provider, AiProvider, ProviderResult};
+   use super::{define_unit_provider, AiProvider, ProviderCapabilities, ProviderExecutionContext, ProviderResult};
    use crate::models::*;
 
    define_unit_provider!(MyProvider);
@@ -130,12 +131,15 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
    #[async_trait::async_trait]
    impl AiProvider for MyProvider {
        fn descriptor(&self) -> ProviderDescriptor { /* ... */ }
-       async fn check_availability(&self) -> ProviderResult<()> { Ok(()) }
-       async fn refresh(&self) -> ProviderResult<RefreshData> { /* ... */ }
+       async fn check_availability(&self, ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> { Ok(()) }
+       async fn refresh(&self, ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> { /* ... */ }
+   }
+
+   impl ProviderCapabilities for MyProvider {
        fn settings_capability(&self) -> SettingsCapability { SettingsCapability::None }
    }
    ```
-3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` and omit `refresh()` instead of relying on repeated `Unavailable` refreshes as product semantics
+3. **Capability first**: if the entry is not truly monitorable, override `provider_capability()` in `ProviderCapabilities` and omit `refresh(ctx)` instead of relying on repeated `Unavailable` refreshes as product semantics
 4. **Optional interactive settings**: return `SettingsCapability::TokenInput(TokenInputCapability { .. })` and choose a stable `credential_key`
 5. **Add icon**: `src/icons/provider-myprovider.svg`
 6. **Test**: `cargo test --lib` — `test_all_provider_kinds_have_implementation` catches manifest/implementation mismatches
@@ -156,7 +160,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 1. 先拆 `auth.rs`（凭证读取 / token 解码 / 多源 fallback）
 2. 再拆 `client.rs` 或 `*_source.rs`（HTTP / CLI / 本地缓存的具体源）
 3. 最后拆 `parser.rs`（payload 反序列化 + `QuotaInfo` 组装）
-4. `mod.rs` 只保留 `AiProvider` impl + 源编排（"先 API 后 CLI"这类业务规则属于这里）
+4. `mod.rs` 只保留 `AiProvider` 刷新 impl、`ProviderCapabilities` impl 和源编排（"先 API 后 CLI"这类业务规则属于这里）
 
 反模式：
 

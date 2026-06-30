@@ -154,7 +154,7 @@
   - `Manual` 和 `ProviderToggled` 可跳过 cooldown
 - `Informational` / `Placeholder` provider 只保留展示入口，不进入启动、周期、手动、Debug 或 reload 后即时刷新链路。
 - refresh 结果通过 `RefreshEvent` 回到前台，再进入 reducer。
-- `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。后台协调器收到后会调用 `ProviderManager::sync_provider_credentials()`，让 Copilot 这类 token 面板 provider 的刷新线程读取到设置页保存的 override。
+- `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。后台协调器保存最新 credentials，执行刷新时通过 `ProviderExecutionContext` 显式传给 provider，让 Copilot 这类 token 面板 provider 读取设置页保存的 override，而不在 provider 内维护凭证快照。
 
 自定义 provider reload 的稳定语义：
 

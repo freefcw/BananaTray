@@ -5,7 +5,9 @@ mod parser;
 mod rpc_probe;
 mod status_probe;
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -62,7 +64,7 @@ impl AiProvider for CodexProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if auth_path().exists() {
             Ok(())
         } else {
@@ -70,7 +72,7 @@ impl AiProvider for CodexProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let mut credentials = load_credentials()?;
         // Proactive refresh：成功会原地 reload credentials，使后续 resolve_account
         // 与被动 refresh 路径都拿到新 id_token / refresh_token。
@@ -203,6 +205,8 @@ fn should_fallback_to_cli(err: &anyhow::Error) -> bool {
         ProviderError::Timeout | ProviderError::NetworkFailed { .. }
     )
 }
+
+impl ProviderCapabilities for CodexProvider {}
 
 #[cfg(test)]
 mod tests {

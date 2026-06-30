@@ -4,7 +4,7 @@ use log::{debug, info, warn};
 use crate::models::RefreshData;
 use crate::providers::{ProviderError, ProviderResult};
 
-use super::extractor::{self, CompiledPatterns};
+use super::extractor::{self, CompiledPatterns, CompiledStep};
 use super::schema::{PlanDef, PlanMode, PlanStepDef, SourceDef};
 
 /// 编译后的自定义 Provider 执行计划。
@@ -14,7 +14,7 @@ use super::schema::{PlanDef, PlanMode, PlanStepDef, SourceDef};
 /// `CustomProvider` 只保留 provider 门面职责。
 pub(super) struct CompiledPlan {
     plan: PlanDef,
-    compiled_steps: Vec<CompiledPatterns>,
+    compiled_steps: Vec<CompiledStep>,
 }
 
 impl CompiledPlan {
@@ -22,7 +22,9 @@ impl CompiledPlan {
         let compiled_steps = plan
             .steps
             .iter()
-            .map(|step| CompiledPatterns::compile(&step.parser))
+            .map(|step| {
+                CompiledPatterns::compile(&step.parser).map(|pattern| CompiledStep { pattern })
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             plan: plan.clone(),

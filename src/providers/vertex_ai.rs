@@ -1,4 +1,6 @@
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -54,16 +56,18 @@ impl AiProvider for VertexAiProvider {
         }
     }
 
-    fn provider_capability(&self) -> ProviderCapability {
-        ProviderCapability::Informational
-    }
-
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if Self::is_vertex_ai_configured() {
             Ok(())
         } else {
             Err(ProviderError::config_missing(GEMINI_SETTINGS_RELATIVE_PATH))
         }
+    }
+}
+
+impl ProviderCapabilities for VertexAiProvider {
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Informational
     }
 }
 

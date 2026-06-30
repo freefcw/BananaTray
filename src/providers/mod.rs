@@ -9,7 +9,7 @@ pub(crate) mod manager;
 use crate::models::{AppSettings, TokenEditMode, TokenInputState};
 use std::sync::Arc;
 
-pub use ai_provider::AiProvider;
+pub use ai_provider::{AiProvider, ProviderCapabilities, ProviderEntry, ProviderExecutionContext};
 use common::secret::mask_secret_preview;
 #[cfg(test)]
 pub(crate) use copilot::copilot_settings_capability;

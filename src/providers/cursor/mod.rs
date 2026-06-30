@@ -2,7 +2,9 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -31,7 +33,7 @@ impl AiProvider for CursorProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         let candidates = db_path_candidates();
         if candidates.iter().any(|p| p.exists()) {
             Ok(())
@@ -40,7 +42,7 @@ impl AiProvider for CursorProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let access_token = read_access_token().context("Failed to read Cursor access token")?;
         let user_id = extract_user_id_from_jwt(&access_token)
             .context("Failed to extract user ID from Cursor JWT")?;
@@ -51,3 +53,5 @@ impl AiProvider for CursorProvider {
         Ok(RefreshData::quotas_only(parse_usage_response(&body)?))
     }
 }
+
+impl ProviderCapabilities for CursorProvider {}

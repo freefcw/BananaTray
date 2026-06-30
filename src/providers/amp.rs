@@ -1,4 +1,6 @@
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
     ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
     QuotaType, RefreshData,
@@ -121,7 +123,7 @@ impl AiProvider for AmpProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if cli::command_exists("amp") {
             Ok(())
         } else {
@@ -129,7 +131,7 @@ impl AiProvider for AmpProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let start = std::time::Instant::now();
         log::debug!(target: "providers", "amp: running `amp usage --no-color`");
 
@@ -139,6 +141,8 @@ impl AiProvider for AmpProvider {
         Ok(Self::parse_usage_output(&output)?)
     }
 }
+
+impl ProviderCapabilities for AmpProvider {}
 
 #[cfg(test)]
 mod tests {

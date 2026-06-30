@@ -4,7 +4,8 @@ use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData,
 };
 use crate::providers::{
-    AiProvider, ProviderError, ProviderManager, ProviderManagerHandle, ProviderResult,
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderManager,
+    ProviderManagerHandle, ProviderResult,
 };
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -95,11 +96,13 @@ impl AiProvider for DelayedProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         std::thread::sleep(self.delay);
         Ok(RefreshData::quotas_only(Vec::new()))
     }
 }
+
+impl ProviderCapabilities for DelayedProvider {}
 
 #[test]
 fn test_execute_refresh_concurrent_reports_completion_order() {
@@ -220,10 +223,12 @@ impl AiProvider for PanicProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         panic!("simulated provider panic");
     }
 }
+
+impl ProviderCapabilities for PanicProvider {}
 
 /// Provider panic 时 in-flight 标志必须被清除，否则后续刷新永远返回 SkippedInFlight。
 #[test]

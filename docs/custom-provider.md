@@ -147,7 +147,7 @@ plan:
 
 默认 fallback 规则是保守的：timeout、网络错误、5xx、解析失败、无数据等会继续尝试后续 step；认证错误、配置缺失和 429 不会继续盲目 fallback。
 
-`check_availability()` 和实际执行阶段都会检查 step availability。原因是预检与执行之间环境可能变化，例如 CLI 被卸载、文件被删除或环境变量被清空。
+provider-level `check_availability(ctx)` 和实际执行阶段都会检查 step availability。原因是预检与执行之间环境可能变化，例如 CLI 被卸载、文件被删除或环境变量被清空。
 
 ## metadata
 

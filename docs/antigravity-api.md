@@ -73,7 +73,7 @@ source orchestration 目前明确分开：
 
 `cache_source::is_available()` 与 `read_refresh_data()` 共用同一道 mtime 闸，避免本地
 quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Devin Desktop 的
-provider-level `check_availability()` 还会单独接受"存在 cache DB"这个更弱条件，因为
+provider-level `check_availability(ctx)` 还会单独接受"存在 cache DB"这个更弱条件，因为
 seat API 只需要从 DB 中读取 apiKey，不应该被陈旧 quota 快照阻断。
 
 因此用户可见行为是：缓存"还新但部分配额到期"→ 自动归零；缓存"整体太老"→

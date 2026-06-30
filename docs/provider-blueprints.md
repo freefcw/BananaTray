@@ -9,10 +9,10 @@
 
 - 先按稳定职责拆分，再考虑抽象复用。
 - 只抽“跨 provider 长期稳定重复出现的动作”，不要抽一次性的业务流程。
-- provider 层只返回结构化事实：
-  - `descriptor()`
-  - `check_availability()`
-  - `refresh()`
+- provider 边界分成两层：
+  - `AiProvider` 负责 `descriptor()`、`check_availability(ctx)`、`refresh(ctx)` 这条核心刷新契约
+  - `ProviderCapabilities` 负责 `provider_capability()`、`settings_capability()`、`resolve_token_input_state()` 这类产品 / 设置能力声明
+- `ProviderExecutionContext` 是 refresh-time 输入；当前主要承载 BananaTray 托管的 provider credentials，不需要时可直接忽略 `_ctx`。
 - 用户提示文案统一交给 selector/UI；provider 只返回 `ProviderError`、`QuotaLabelSpec`、`QuotaDetailSpec` 等稳定语义，不在 provider 内做 UI 拼接。
 
 ## 蓝图 A：标准 HTTP Provider
@@ -109,8 +109,8 @@ providers/my_provider/
 
 - provider facade（如 `antigravity/mod.rs`、`windsurf/mod.rs`）
   - 只做 source orchestration
-  - `check_availability()` 判断共享本地 source 是否至少有一条可用
-  - `refresh()` 决定 fallback 顺序
+  - `check_availability(ctx)` 判断共享本地 source 是否至少有一条可用
+  - `refresh(ctx)` 决定 fallback 顺序
 - `codeium_family/live_source.rs`
   - 查进程
   - 解析 `--csrf_token`
@@ -149,8 +149,8 @@ providers/my_provider/
 
 错误处理建议：
 
-- `check_availability()` 反映“是否至少有一条可行 source”
-- `refresh()` 记录 primary source 失败原因
+- `check_availability(ctx)` 反映“是否至少有一条可行 source”
+- `refresh(ctx)` 记录 primary source 失败原因
 - fallback 也失败时，把 primary + fallback 错误一起带回，便于诊断
 
 ## 蓝图 C-1：多 Source 编排 Provider
@@ -175,8 +175,8 @@ providers/my_provider/
 
 实现要点：
 - `mod.rs` 只负责：
-  - `check_availability()` 的“任一 source 可用即可”
-  - `refresh()` 的 source 优先级
+  - `check_availability(ctx)` 的“任一 source 可用即可”
+  - `refresh(ctx)` 的 source 优先级
   - `ProbeMode` / source policy
 - 每个 source 文件只负责自己的取数与解析
 - 适合保留 trait，当且仅当 source 确实存在多个实现
@@ -199,9 +199,9 @@ providers/my_placeholder.rs
 ```
 
 实现要点：
-- `check_availability()` 只判断安装或配置是否存在
-- 重写 `provider_capability()`，按产品语义返回 `ProviderCapability::Placeholder` 或 `ProviderCapability::Informational`
-- 不要实现 `refresh()`；非 `Monitorable` provider 不进入正常刷新链路，`ProviderManager::refresh_by_id()` 会在调用 `check_availability → refresh` 前统一返回 `ProviderError::NoData`
+- `check_availability(ctx)` 只判断安装或配置是否存在
+- 在 `ProviderCapabilities` 中重写 `provider_capability()`，按产品语义返回 `ProviderCapability::Placeholder` 或 `ProviderCapability::Informational`
+- 不要实现 `refresh(ctx)`；非 `Monitorable` provider 不进入正常刷新链路，`ProviderManager::refresh_by_id(id, provider_credentials)` 会在调用 `check_availability(ctx) → refresh(ctx)` 前统一返回 `ProviderError::NoData`
 - 探测逻辑尽量抽成纯函数，便于补最小测试
 
 当前参考：
@@ -227,7 +227,7 @@ providers/my_placeholder.rs
 
 1. 先判断它属于哪种蓝图
 2. 先按蓝图建目录，不急着抽 trait
-3. 先把 `refresh()` 跑通
+3. 先把 `refresh(ctx)` 跑通
 4. 再把重复动作提到 `providers/common/`
 5. 最后补文档和测试
 

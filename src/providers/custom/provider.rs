@@ -3,10 +3,13 @@ use async_trait::async_trait;
 use log::info;
 
 use crate::models::{ProviderCapability, ProviderDescriptor, RefreshData};
-use crate::providers::{AiProvider, ProviderResult};
+use crate::providers::{
+    AiProvider, ProviderCapabilities, ProviderExecutionContext, ProviderResult,
+};
 
 use super::plan::CompiledPlan;
 use super::schema::CustomProviderDef;
+use super::CustomProviderOrigin;
 
 /// 基于 YAML 定义的自定义 Provider 运行时。
 pub struct CustomProvider {
@@ -35,11 +38,11 @@ impl AiProvider for CustomProvider {
         super::descriptor::descriptor(&self.def)
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         self.plan.check_availability()
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let id = &self.def.id;
         info!(
             target: "providers::custom",
@@ -51,15 +54,14 @@ impl AiProvider for CustomProvider {
 
         self.plan.execute(&self.def.id, &self.def.base_url)
     }
+}
 
+impl ProviderCapabilities for CustomProvider {
     fn settings_capability(&self) -> crate::models::SettingsCapability {
-        // 由设置页向导生成的自定义 Provider 可回到对应向导编辑。
-        if self.def.id.ends_with(":newapi") {
-            crate::models::SettingsCapability::NewApiEditable
-        } else if self.def.id.ends_with(":script") {
-            crate::models::SettingsCapability::ScriptEditable
-        } else {
-            crate::models::SettingsCapability::None
+        match CustomProviderOrigin::from_id(&self.def.id) {
+            Some(CustomProviderOrigin::NewApi) => crate::models::SettingsCapability::NewApiEditable,
+            Some(CustomProviderOrigin::Script) => crate::models::SettingsCapability::ScriptEditable,
+            None => crate::models::SettingsCapability::None,
         }
     }
 

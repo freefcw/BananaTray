@@ -145,10 +145,14 @@ impl RefreshCoordinator {
 
     /// Run a single provider refresh on the blocking thread pool, catching panics.
     /// Panics are converted to `RefreshResult::Failed` so in-flight state is always cleared.
-    async fn run_refresh(mgr: Arc<ProviderManager>, id: ProviderId) -> RefreshOutcome {
+    async fn run_refresh(
+        mgr: Arc<ProviderManager>,
+        id: ProviderId,
+        provider_credentials: ProviderSettings,
+    ) -> RefreshOutcome {
         smol::unblock(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                smol::block_on(mgr.refresh_by_id(&id))
+                smol::block_on(mgr.refresh_by_id(&id, &provider_credentials))
             }))
             .unwrap_or_else(|_| {
                 log::error!(target: "refresh", "provider {} panicked during refresh", id);
@@ -168,20 +172,24 @@ impl RefreshCoordinator {
         mgr: Arc<ProviderManager>,
         id: ProviderId,
         reason: RefreshReason,
+        provider_credentials: ProviderSettings,
     ) -> RefreshOutcome {
         let timeout = Self::provider_refresh_timeout();
         let timeout_id = id.clone();
-        smol::future::or(Self::run_refresh(mgr, id), async move {
-            smol::Timer::after(timeout).await;
-            log::warn!(
-                target: "refresh",
-                "provider {} refresh timed out after {:?} ({:?})",
-                timeout_id,
-                timeout,
-                reason
-            );
-            Self::build_outcome(timeout_id, Err(ProviderError::Timeout))
-        })
+        smol::future::or(
+            Self::run_refresh(mgr, id, provider_credentials),
+            async move {
+                smol::Timer::after(timeout).await;
+                log::warn!(
+                    target: "refresh",
+                    "provider {} refresh timed out after {:?} ({:?})",
+                    timeout_id,
+                    timeout,
+                    reason
+                );
+                Self::build_outcome(timeout_id, Err(ProviderError::Timeout))
+            },
+        )
         .await
     }
 
@@ -193,7 +201,13 @@ impl RefreshCoordinator {
         }
 
         self.begin_refresh(&id).await;
-        let outcome = Self::run_refresh_with_timeout(self.manager.snapshot(), id, reason).await;
+        let outcome = Self::run_refresh_with_timeout(
+            self.manager.snapshot(),
+            id,
+            reason,
+            self.provider_credentials.clone(),
+        )
+        .await;
         self.record_outcome(outcome).await;
     }
 
@@ -223,9 +237,12 @@ impl RefreshCoordinator {
         for id in to_refresh {
             let mgr = self.manager.snapshot();
             let tx = result_tx.clone();
+            let provider_credentials = self.provider_credentials.clone();
             smol::spawn(async move {
                 let _ = tx
-                    .send(Self::run_refresh_with_timeout(mgr, id, reason).await)
+                    .send(
+                        Self::run_refresh_with_timeout(mgr, id, reason, provider_credentials).await,
+                    )
                     .await;
             })
             .detach();
@@ -292,15 +309,11 @@ impl RefreshCoordinator {
                         provider_credentials,
                     } => {
                         self.provider_credentials = provider_credentials;
-                        self.manager
-                            .snapshot()
-                            .sync_provider_credentials(&self.provider_credentials);
                         self.scheduler.update_config(interval_mins, enabled);
                     }
                     RefreshRequest::ReloadProviders => {
                         log::info!(target: "refresh", "reloading custom providers");
                         let new_manager = Arc::new(crate::providers::ProviderManager::new());
-                        new_manager.sync_provider_credentials(&self.provider_credentials);
                         let statuses = new_manager.initial_statuses();
 
                         // 清理已不存在的 provider 的残留状态

@@ -76,11 +76,11 @@
 - `interval_mins`
 - enabled provider 列表
 - 周期 deadline
-- `ProviderSettings` credentials 快照，并调用 `ProviderManager::sync_provider_credentials()`
+- `ProviderSettings` credentials 快照，供后续刷新构造 `ProviderExecutionContext`
 
 这保证了前后台对“谁应该刷新、多久刷新一次”保持一致。
 
-需要 app-managed token override 的 provider（例如 Copilot）必须实现 `AiProvider::sync_provider_credentials()`，在后台 provider 实例中保存线程安全快照。设置页展示 token 状态和后台 refresh 读取 token 不是同一条调用栈；只改 UI 状态不会自动改变后台刷新凭证。
+需要 app-managed token override 的 provider（例如 Copilot）必须从 `ProviderExecutionContext` 读取当前 credentials，而不是在 provider 实例中保存线程安全快照。设置页展示 token 状态和后台 refresh 读取 token 不是同一条调用栈；只改 UI 状态不会自动改变后台刷新凭证，必须通过 `RefreshRequest::UpdateConfig` 更新后台 credentials 快照。
 
 ## Custom Provider Reload
 

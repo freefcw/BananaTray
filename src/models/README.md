@@ -14,7 +14,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderId`** — unified provider identifier: `BuiltIn(ProviderKind)` for built-in providers, `Custom(String)` for YAML-declared custom providers. Key methods: `id_key()`, `from_id_key()`, `kind()`, `is_custom()`.
 - **`ProviderDescriptor`** — combines a stable provider id with `ProviderMetadata` for registration and UI lookup.
 - **`ProviderCapability`** — provider product capability tier: `Monitorable`, `Informational`, `Placeholder`. Refresh scheduling and empty-state UI semantics are keyed off this enum.
-- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor), `ScriptEditable` (script provider editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `AiProvider::resolve_token_input_state()`.
+- **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable` (NewAPI config editor), `ScriptEditable` (script provider editor). `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `ProviderCapabilities::resolve_token_input_state()`.
 - **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
 
 ### `quota/` — Usage Data
@@ -41,7 +41,7 @@ Refactored into a sub-directory with its own [README](quota/README.md). External
 - **`ProviderStatus`** — full runtime state for one provider: metadata + connection status + quotas + account info + `last_failure` + timestamps
   - `last_failure` holds structured failure semantics, replacing the old cached `error_message`
   - locale switching should only re-render selector/UI text; it should not require provider refresh to clear cached strings
-  - runtime-only `provider_capability` mirrors the registered `AiProvider::provider_capability()` so selectors can hide refresh/retry affordances for non-monitorable entries
+  - runtime-only `provider_capability` mirrors the registered `ProviderCapabilities::provider_capability()` so selectors can hide refresh/retry affordances for non-monitorable entries
   - `ProviderStatus::new(provider_id, metadata)` — unified constructor for built-in and custom providers. Callers must keep `provider_id.kind()` and `metadata.kind` aligned; debug builds assert this invariant.
 - **`RefreshData`** — refresh result payload: `quotas: Vec<QuotaInfo>` + optional `account_email`, `account_tier`, runtime `source_label`
 

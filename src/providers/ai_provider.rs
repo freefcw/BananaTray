@@ -1,21 +1,25 @@
 //! AI Provider 核心接口定义。
 
+use super::{default_token_input_state, ProviderError, ProviderResult};
 use crate::models::{
-    AppSettings, ProviderCapability, ProviderDescriptor, RefreshData, SettingsCapability,
-    TokenInputState,
+    AppSettings, ProviderCapability, ProviderDescriptor, ProviderSettings, RefreshData,
+    SettingsCapability, TokenInputState,
 };
 use async_trait::async_trait;
 
-use super::{default_token_input_state, ProviderError, ProviderResult};
+/// Provider 执行时的运行上下文。
+pub struct ProviderExecutionContext<'a> {
+    pub provider_credentials: &'a ProviderSettings,
+}
 
-/// AI Provider 的核心接口
+/// AI Provider 的核心刷新接口。
 #[async_trait]
 pub trait AiProvider: Send + Sync {
     /// 获取 Provider 的描述符（ID + 元数据）
     fn descriptor(&self) -> ProviderDescriptor;
 
     /// 检查当前环境是否满足刷新条件。
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         Ok(())
     }
 
@@ -23,10 +27,13 @@ pub trait AiProvider: Send + Sync {
     ///
     /// 默认返回 `NoData`；`Monitorable` provider 必须覆盖此方法。
     /// `Placeholder` / `Informational` provider 无需实现。
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         Err(ProviderError::NoData)
     }
+}
 
+/// Provider 的产品 / 设置能力适配器。
+pub trait ProviderCapabilities: Send + Sync {
     /// 声明该 Provider 的设置 UI 能力（默认无交互设置）
     ///
     /// 返回 `SettingsCapability::TokenInput` 即可让 Settings UI 自动显示
@@ -55,10 +62,9 @@ pub trait AiProvider: Send + Sync {
             _ => None,
         }
     }
-
-    /// 同步 BananaTray 自己持久化的 provider credentials 到 provider 运行时。
-    ///
-    /// Provider 默认不需要此钩子；使用 `TokenInput` 且刷新路径依赖本地 override 的
-    /// provider 可在内部保存线程安全快照，供后台刷新线程读取。
-    fn sync_provider_credentials(&self, _credentials: &crate::models::ProviderSettings) {}
 }
+
+/// Provider 注册表中使用的完整条目类型。
+pub trait ProviderEntry: AiProvider + ProviderCapabilities {}
+
+impl<T> ProviderEntry for T where T: AiProvider + ProviderCapabilities {}

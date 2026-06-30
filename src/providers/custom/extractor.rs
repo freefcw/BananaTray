@@ -9,22 +9,36 @@ use super::schema::{JsonQuotaRule, ParserDef, QuotaTypeDef, RegexQuotaRule};
 pub(super) struct CompiledPatterns {
     /// 用于提取 account_email 的正则（可选）
     pub email_regex: Option<Regex>,
-    /// 各条配额规则对应的预编译正则
-    pub quota_regexes: Vec<Regex>,
+    /// 各条配额规则对应的预编译结果，和原始 rule 一一配对
+    pub quota_rules: Vec<CompiledQuotaRule>,
+}
+
+impl CompiledPatterns {
+    pub(super) fn empty() -> Self {
+        Self {
+            email_regex: None,
+            quota_rules: Vec::new(),
+        }
+    }
+}
+
+pub(super) struct CompiledStep {
+    pub pattern: CompiledPatterns,
+}
+
+pub(super) struct CompiledQuotaRule {
+    pub rule: RegexQuotaRule,
+    pub regex: Regex,
 }
 
 impl CompiledPatterns {
     /// 从 ParserDef 中预编译所有正则。JSON 模式和 None 返回空缓存。
     pub fn compile(parser: &Option<ParserDef>) -> Result<Self> {
-        let empty = Self {
-            email_regex: None,
-            quota_regexes: Vec::new(),
-        };
         let Some(parser) = parser else {
-            return Ok(empty);
+            return Ok(Self::empty());
         };
         match parser {
-            ParserDef::Json { .. } => Ok(empty),
+            ParserDef::Json { .. } => Ok(Self::empty()),
             ParserDef::Regex {
                 account_email,
                 quotas,
@@ -37,17 +51,20 @@ impl CompiledPatterns {
                         ProviderError::parse_failed(&format!("invalid email regex: {}", e))
                     })?;
 
-                let mut quota_regexes = Vec::with_capacity(quotas.len());
+                let mut quota_rules = Vec::with_capacity(quotas.len());
                 for rule in quotas {
                     let re = Regex::new(&rule.pattern).map_err(|e| {
                         ProviderError::parse_failed(&format!("invalid regex: {}", e))
                     })?;
-                    quota_regexes.push(re);
+                    quota_rules.push(CompiledQuotaRule {
+                        rule: rule.clone(),
+                        regex: re,
+                    });
                 }
 
                 Ok(Self {
                     email_regex,
-                    quota_regexes,
+                    quota_rules,
                 })
             }
         }
@@ -58,7 +75,7 @@ impl CompiledPatterns {
 pub(super) fn extract(
     parser: &ParserDef,
     raw: &str,
-    compiled: &CompiledPatterns,
+    compiled: &CompiledStep,
 ) -> Result<RefreshData> {
     match parser {
         ParserDef::Json {
@@ -68,8 +85,8 @@ pub(super) fn extract(
         } => extract_json(raw, account_email, account_tier, quotas),
         ParserDef::Regex {
             account_email: _,
-            quotas,
-        } => extract_regex_compiled(raw, compiled, quotas),
+            quotas: _,
+        } => extract_regex_compiled(raw, &compiled.pattern),
     }
 }
 
@@ -192,21 +209,17 @@ pub(super) fn json_string(root: &serde_json::Value, path: &str) -> Option<String
 // ============================================================================
 
 /// 使用预编译正则缓存进行提取
-fn extract_regex_compiled(
-    raw: &str,
-    compiled: &CompiledPatterns,
-    rules: &[RegexQuotaRule],
-) -> Result<RefreshData> {
+fn extract_regex_compiled(raw: &str, compiled: &CompiledPatterns) -> Result<RefreshData> {
     let account_email = compiled.email_regex.as_ref().and_then(|re| {
         re.captures(raw)
             .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
     });
 
     let mut quotas = Vec::new();
-    for (i, rule) in rules.iter().enumerate() {
-        let re = &compiled.quota_regexes[i];
+    for compiled_rule in &compiled.quota_rules {
+        let rule = &compiled_rule.rule;
 
-        if let Some(caps) = re.captures(raw) {
+        if let Some(caps) = compiled_rule.regex.captures(raw) {
             let used_str = caps.get(rule.used_group).map(|m| m.as_str());
             let limit_str = caps.get(rule.limit_group).map(|m| m.as_str());
 
@@ -287,7 +300,7 @@ mod tests {
             quotas: rules.to_vec(),
         });
         let compiled = CompiledPatterns::compile(&parser)?;
-        extract_regex_compiled(raw, &compiled, rules)
+        extract_regex_compiled(raw, &compiled)
     }
 
     // ── json_navigate ───────────────────────────

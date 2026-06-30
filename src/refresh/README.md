@@ -26,7 +26,7 @@
 后台线程上运行的事件循环：
 
 - 接收 `RefreshRequest`，通过 `ProviderManagerHandle` 读取当前 `ProviderManager` 快照并执行刷新
-- 处理 `UpdateConfig` 时同步 app-managed credentials 到 `ProviderManager`，确保后台 refresh 读取到设置页保存的 token override
+- 处理 `UpdateConfig` 时保存最新的 app-managed credentials 快照并更新调度配置；实际执行 refresh 时再通过 `ProviderExecutionContext` 显式传给 provider，确保后台读取到设置页保存的 token override
 - 通过 `smol::unblock` 并发执行多个 Provider 刷新
 - 对每个 Provider 刷新施加协调器级 timeout guard，避免单个卡死任务阻塞整轮结果回收
 - timeout guard 只负责停止等待和释放 in-flight 状态，不会强制取消底层已经开始的阻塞任务
@@ -42,7 +42,7 @@
 UI Thread                          Background Thread
 ─────────                          ─────────────────
 RefreshRequest ──(channel)──→ RefreshCoordinator
-                                    ├─ UpdateConfig: sync credentials + scheduler config
+                                    ├─ UpdateConfig: store credentials + scheduler config
                                     ├─ scheduler 决策
                                     ├─ ProviderManager.refresh_by_id()
                                     └─ RefreshEvent ──(channel)──→ UI

@@ -97,7 +97,7 @@ This map is intentionally high-level. File-level structure and public APIs live 
 - Comments in Chinese for domain-specific logic
 - Providers return `ProviderError` variants (not raw strings)
 - Primary log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`; focused helper targets such as `"http"` / `"notification"` / `"single_instance"` may appear for subsystem diagnostics.
-- When a setting affects background refresh credentials, synchronize through `RefreshRequest::UpdateConfig` and `AiProvider::sync_provider_credentials()`; foreground settings UI state is not the refresh runtime state.
+- When a setting affects background refresh credentials, synchronize through `RefreshRequest::UpdateConfig`; providers read app-managed credentials from `ProviderExecutionContext`, and foreground settings UI state is not the refresh runtime state.
 
 ## Reference Docs
 

@@ -1,4 +1,6 @@
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -52,16 +54,18 @@ impl AiProvider for KiloProvider {
         }
     }
 
-    fn provider_capability(&self) -> ProviderCapability {
-        ProviderCapability::Placeholder
-    }
-
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if Self::has_kilo_extension() {
             Ok(())
         } else {
             Err(ProviderError::unavailable("Kilo extension not detected"))
         }
+    }
+}
+
+impl ProviderCapabilities for KiloProvider {
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Placeholder
     }
 }
 

@@ -23,4 +23,22 @@ pub(in crate::providers::custom) mod schema;
 mod script_provider_lifecycle;
 mod url;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::providers::custom) enum CustomProviderOrigin {
+    NewApi,
+    Script,
+}
+
+impl CustomProviderOrigin {
+    pub(in crate::providers::custom) fn from_id(custom_id: &str) -> Option<Self> {
+        if custom_id.ends_with(":newapi") {
+            Some(Self::NewApi)
+        } else if custom_id.ends_with(":script") {
+            Some(Self::Script)
+        } else {
+            None
+        }
+    }
+}
+
 pub use loader::load_custom_providers;

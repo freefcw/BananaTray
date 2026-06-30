@@ -1,6 +1,6 @@
 use super::codeium_family::{self, ANTIGRAVITY_SPEC};
 use super::ProviderError;
-use super::{AiProvider, ProviderResult};
+use super::{AiProvider, ProviderCapabilities, ProviderExecutionContext, ProviderResult};
 use crate::models::RefreshData;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -14,11 +14,11 @@ impl AiProvider for AntigravityProvider {
         codeium_family::descriptor(&ANTIGRAVITY_SPEC)
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         Ok(codeium_family::classify_unavailable(&ANTIGRAVITY_SPEC)?)
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         Ok(refresh_antigravity()?)
     }
 }
@@ -45,6 +45,8 @@ fn refresh_antigravity() -> Result<RefreshData> {
         }
     }
 }
+
+impl ProviderCapabilities for AntigravityProvider {}
 
 #[cfg(test)]
 mod tests {

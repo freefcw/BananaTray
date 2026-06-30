@@ -40,10 +40,9 @@
 每个 provider 都遵守同一组稳定边界：
 
 - 提供身份与展示元数据
-- 提供能力层级（是否属于真正可监控 provider）
+- 通过 `ProviderCapabilities` 提供能力层级（是否属于真正可监控 provider）和可选设置页交互能力
 - 提供可用性检查
-- 对 `Monitorable` provider 提供刷新能力（`AiProvider::refresh()` 有默认空实现，`Placeholder` / `Informational` provider 无需覆盖）
-- 可选地声明设置页交互能力
+- 对 `Monitorable` provider 提供刷新能力（`AiProvider::refresh(ctx)` 默认返回 `NoData`，`Monitorable` provider 需要按需覆盖；`Placeholder` / `Informational` provider 无需覆盖）
 
 ### Provider Identity
 
@@ -59,12 +58,12 @@
 
 - provider 返回结构化事实，不直接拼 UI 文案。
 - 错误统一返回 `ProviderError` 语义，而不是裸字符串。
-- `AiProvider` 与 `ProviderManager::refresh_by_id` 对 refresh/runtime 层返回 `ProviderResult<RefreshData>`；底层 helper 仍可用 `anyhow` 保存技术上下文，但不能穿过 provider 边界。
+- `AiProvider` 只承载 descriptor、availability 和 refresh 核心契约；settings/token UI 能力属于 `ProviderCapabilities`。`AiProvider` 与 `ProviderManager::refresh_by_id` 对 refresh/runtime 层返回 `ProviderResult<RefreshData>`；底层 helper 仍可用 `anyhow` 保存技术上下文，但不能穿过 provider 边界。
 - selector / UI 才负责把稳定语义格式化成当前语言。
 
 ## Provider Capability
 
-`AiProvider::provider_capability()` 用来声明 provider 的产品语义层级，而不只是“能不能调用 `refresh()`”。
+`ProviderCapabilities::provider_capability()` 用来声明 provider 的产品语义层级，而不只是“能不能调用 `refresh(ctx)`”。
 
 当前稳定层级：
 
@@ -72,7 +71,7 @@
   - 真实可监控 provider。
   - 会进入启动 / 周期 / 手动 / Debug 刷新链路。
   - 设置页会显示刷新按钮和 quota visibility 配置。
-  - `ProviderManager::refresh_by_id()` 在进入 `check_availability → refresh` 前会检查 `supports_refresh()`，非 `Monitorable` 直接返回 `NoData`。
+  - `ProviderManager::refresh_by_id(id, provider_credentials)` 在进入 `check_availability(ctx) → refresh(ctx)` 前会检查 `supports_refresh()`，非 `Monitorable` 直接返回 `NoData`。
 - `Informational`
   - 说明型入口，用于解释认证路径、provider 关系或外部配置前提。
   - 不参与正常刷新。
@@ -102,7 +101,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 - `provider.credentials` 只保存 BananaTray 自己托管的 token override。
 - 某些 provider 的真实认证来源仍可能是外部配置文件、环境变量或 CLI 登录态。
 - token / secret 预览脱敏必须复用 `providers::common::secret::mask_secret_preview`，不要在 provider 内直接用字节索引切片；CI / pre-commit 会检查 `src/providers` 中重新出现的危险固定切片写法。
-- 设置页展示状态和后台刷新不是同一条调用栈：保存 token 后 reducer 会发送 `UpdateConfig`，后台 `RefreshCoordinator` 再调用 `ProviderManager::sync_provider_credentials()` 更新 provider 运行时快照；需要 app-managed override 的 provider 必须实现 `AiProvider::sync_provider_credentials()`。
+- 设置页展示状态和后台刷新不是同一条调用栈：保存 token 后 reducer 会发送 `UpdateConfig`，后台 `RefreshCoordinator` 保存最新配置；执行单个 provider 刷新时，`ProviderManager::refresh_by_id` 会通过 `ProviderExecutionContext` 显式传入当前 `ProviderSettings` credentials。需要 app-managed override 的 provider 不应保存内部凭证快照，而应从 refresh context 读取。
 
 ## Error And Presentation Boundary
 

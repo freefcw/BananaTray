@@ -1,4 +1,6 @@
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{ProviderCapability, ProviderDescriptor, ProviderKind, ProviderMetadata};
 use crate::providers::common::cli;
 use async_trait::async_trait;
@@ -25,15 +27,17 @@ impl AiProvider for OpenCodeProvider {
         }
     }
 
-    fn provider_capability(&self) -> ProviderCapability {
-        ProviderCapability::Placeholder
-    }
-
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if cli::command_exists(OPENCODE_CLI) {
             Ok(())
         } else {
             Err(ProviderError::cli_not_found(OPENCODE_CLI))
         }
+    }
+}
+
+impl ProviderCapabilities for OpenCodeProvider {
+    fn provider_capability(&self) -> ProviderCapability {
+        ProviderCapability::Placeholder
     }
 }

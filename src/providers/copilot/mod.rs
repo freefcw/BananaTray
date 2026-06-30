@@ -2,9 +2,11 @@ mod client;
 mod parser;
 mod token;
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
-    AppSettings, ProviderDescriptor, ProviderKind, ProviderMetadata, ProviderSettings, RefreshData,
+    AppSettings, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
     SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
 };
 use crate::providers::common::http_client::HttpError;
@@ -12,16 +14,13 @@ use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use std::borrow::Cow;
-use std::sync::RwLock;
 
 use client::{fetch_github_user, fetch_user_info};
 use parser::{parse_github_user, parse_user_info_response};
 #[allow(unused_imports)]
 pub use token::{resolve_token, CopilotTokenSource, CopilotTokenStatus};
 
-pub struct CopilotProvider {
-    settings_token: RwLock<Option<String>>,
-}
+pub struct CopilotProvider;
 
 impl Default for CopilotProvider {
     fn default() -> Self {
@@ -31,16 +30,7 @@ impl Default for CopilotProvider {
 
 impl CopilotProvider {
     pub fn new() -> Self {
-        Self {
-            settings_token: RwLock::new(None),
-        }
-    }
-
-    fn settings_token(&self) -> Option<String> {
-        self.settings_token
-            .read()
-            .expect("copilot settings token lock poisoned")
-            .clone()
+        Self
     }
 }
 
@@ -109,31 +99,9 @@ impl AiProvider for CopilotProvider {
         }
     }
 
-    fn settings_capability(&self) -> SettingsCapability {
-        copilot_settings_capability()
-    }
-
-    fn resolve_token_input_state(&self, settings: &AppSettings) -> Option<TokenInputState> {
-        let SettingsCapability::TokenInput(config) = self.settings_capability() else {
-            return None;
-        };
-        Some(copilot_token_input_state(settings, config.credential_key))
-    }
-
-    fn sync_provider_credentials(&self, credentials: &ProviderSettings) {
-        let token = credentials
-            .get_credential("github_token")
-            .filter(|token| !token.trim().is_empty())
-            .map(str::to_string);
-        *self
-            .settings_token
-            .write()
-            .expect("copilot settings token lock poisoned") = token;
-    }
-
-    async fn check_availability(&self) -> ProviderResult<()> {
-        let settings_token = self.settings_token();
-        let token_status = resolve_token(settings_token.as_deref());
+    async fn check_availability(&self, ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
+        let settings_token = ctx.provider_credentials.get_credential("github_token");
+        let token_status = resolve_token(settings_token);
         let available = token_status.token.is_some();
         debug!(
             target: "providers",
@@ -148,10 +116,10 @@ impl AiProvider for CopilotProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let start = std::time::Instant::now();
-        let settings_token = self.settings_token();
-        let token_status = resolve_token(settings_token.as_deref());
+        let settings_token = ctx.provider_credentials.get_credential("github_token");
+        let token_status = resolve_token(settings_token);
 
         let token = token_status.token.context(
             "GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.",
@@ -200,6 +168,19 @@ impl AiProvider for CopilotProvider {
             .and_then(|user_body| parse_github_user(&user_body));
 
         Ok(parse_user_info_response(&body, account_name)?)
+    }
+}
+
+impl ProviderCapabilities for CopilotProvider {
+    fn settings_capability(&self) -> SettingsCapability {
+        copilot_settings_capability()
+    }
+
+    fn resolve_token_input_state(&self, settings: &AppSettings) -> Option<TokenInputState> {
+        let SettingsCapability::TokenInput(config) = self.settings_capability() else {
+            return None;
+        };
+        Some(copilot_token_input_state(settings, config.credential_key))
     }
 }
 
@@ -278,16 +259,17 @@ mod tests {
     }
 
     #[test]
-    fn check_availability_uses_synced_settings_token() {
+    fn check_availability_uses_context_credentials() {
         let _guard = env_lock().lock().unwrap();
         unsafe { std::env::remove_var("GITHUB_TOKEN") };
         crate::providers::copilot::token::set_test_cache(None, None);
 
         let provider = CopilotProvider::new();
-        let mut credentials = ProviderSettings::default();
+        let mut credentials = crate::models::ProviderSettings::default();
         credentials.set_credential("github_token", "ghp_runtime_123456".to_string());
-        provider.sync_provider_credentials(&credentials);
-
-        assert!(smol::block_on(provider.check_availability()).is_ok());
+        let ctx = ProviderExecutionContext {
+            provider_credentials: &credentials,
+        };
+        assert!(smol::block_on(provider.check_availability(&ctx)).is_ok());
     }
 }

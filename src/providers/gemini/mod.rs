@@ -2,7 +2,9 @@ mod auth;
 mod client;
 mod parser;
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -55,7 +57,7 @@ impl AiProvider for GeminiProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if credentials_path().exists() {
             Ok(())
         } else {
@@ -63,7 +65,7 @@ impl AiProvider for GeminiProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         check_auth_type()?;
 
         let creds = load_credentials()?;
@@ -114,6 +116,8 @@ impl AiProvider for GeminiProvider {
         }
     }
 }
+
+impl ProviderCapabilities for GeminiProvider {}
 
 #[cfg(test)]
 mod tests {

@@ -6,7 +6,9 @@
 //! Regular Credits 的 `stable_key` 保持为 `"general"` 以兼容老版本设置中的
 //! `hidden_quotas`（详见 `models/quota/label.rs`）。
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
     ProviderDescriptor, ProviderKind, ProviderMetadata, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec,
     QuotaType, RefreshData,
@@ -176,7 +178,7 @@ impl AiProvider for KiroProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if cli::command_exists(KIRO_CLI) {
             Ok(())
         } else {
@@ -184,7 +186,7 @@ impl AiProvider for KiroProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         let stdout = Self::run_usage()?;
 
         let quotas = Self::parse_usage_output(&stdout)?;
@@ -205,6 +207,8 @@ impl AiProvider for KiroProvider {
         ))
     }
 }
+
+impl ProviderCapabilities for KiroProvider {}
 
 #[cfg(test)]
 mod tests {

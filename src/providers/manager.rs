@@ -1,4 +1,4 @@
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{ProviderEntry, ProviderError, ProviderExecutionContext, ProviderResult};
 use crate::models::{
     AppSettings, ProviderId, ProviderKind, ProviderMetadata, ProviderSettings, ProviderStatus,
     TokenInputCapability, TokenInputState,
@@ -59,8 +59,8 @@ impl Default for ProviderManagerHandle {
 /// - 内置 Provider 按 `ProviderKind` 查找
 /// - 自定义 Provider 按字符串 ID 查找
 pub struct ProviderManager {
-    providers_by_kind: HashMap<ProviderKind, Arc<dyn AiProvider>>,
-    custom_providers_by_id: HashMap<String, Arc<dyn AiProvider>>,
+    providers_by_kind: HashMap<ProviderKind, Arc<dyn ProviderEntry>>,
+    custom_providers_by_id: HashMap<String, Arc<dyn ProviderEntry>>,
 }
 
 impl Default for ProviderManager {
@@ -78,18 +78,23 @@ impl ProviderManager {
     }
 
     pub fn new() -> Self {
+        let custom_providers = super::custom::load_custom_providers()
+            .into_iter()
+            .map(|provider| Arc::new(provider) as Arc<dyn ProviderEntry>);
+        Self::with_custom_providers(custom_providers)
+    }
+
+    pub(crate) fn with_custom_providers<I>(custom_providers: I) -> Self
+    where
+        I: IntoIterator<Item = Arc<dyn ProviderEntry>>,
+    {
         let mut manager = Self::empty();
-
-        // 注册所有内置 Provider
         super::register_all(&mut manager);
-
-        // 加载自定义 Provider
-        manager.load_custom_providers();
-
+        manager.register_custom_providers(custom_providers);
         manager
     }
 
-    pub fn register(&mut self, provider: Arc<dyn AiProvider>) {
+    pub fn register(&mut self, provider: Arc<dyn ProviderEntry>) {
         let descriptor = provider.descriptor();
         let provider_id = descriptor.id.clone();
         let kind = descriptor.kind();
@@ -131,19 +136,21 @@ impl ProviderManager {
                 .any(|p| p.descriptor().id.as_ref() == id)
     }
 
-    fn load_custom_providers(&mut self) {
-        let custom = super::custom::load_custom_providers();
-        for provider in custom {
-            self.register(Arc::new(provider));
+    fn register_custom_providers<I>(&mut self, custom_providers: I)
+    where
+        I: IntoIterator<Item = Arc<dyn ProviderEntry>>,
+    {
+        for provider in custom_providers {
+            self.register(provider);
         }
     }
 
-    fn provider_for_kind(&self, kind: ProviderKind) -> Option<&(dyn AiProvider + '_)> {
+    fn provider_for_kind(&self, kind: ProviderKind) -> Option<&(dyn ProviderEntry + '_)> {
         self.providers_by_kind.get(&kind).map(Arc::as_ref)
     }
 
     /// 按 ID 查找自定义 Provider
-    pub fn custom_provider_by_id(&self, id: &str) -> Option<&(dyn AiProvider + '_)> {
+    pub fn custom_provider_by_id(&self, id: &str) -> Option<&(dyn ProviderEntry + '_)> {
         self.custom_providers_by_id.get(id).map(Arc::as_ref)
     }
 
@@ -188,7 +195,7 @@ impl ProviderManager {
     }
 
     /// 按 ProviderId 统一查找 Provider
-    fn provider_for_id(&self, id: &ProviderId) -> Option<&(dyn AiProvider + '_)> {
+    fn provider_for_id(&self, id: &ProviderId) -> Option<&(dyn ProviderEntry + '_)> {
         match id {
             ProviderId::BuiltIn(kind) => self.provider_for_kind(*kind),
             ProviderId::Custom(custom_id) => self.custom_provider_by_id(custom_id),
@@ -211,29 +218,22 @@ impl ProviderManager {
             })
     }
 
-    /// 将 app-managed provider credentials 同步到需要运行时快照的 provider。
-    pub fn sync_provider_credentials(&self, credentials: &ProviderSettings) {
-        for provider in self.providers_by_kind.values() {
-            provider.sync_provider_credentials(credentials);
-        }
-        for provider in self.custom_providers_by_id.values() {
-            provider.sync_provider_credentials(credentials);
-        }
-    }
-
-    /// 统一的刷新方法：根据 ProviderId 路由到对应的 Provider
     pub async fn refresh_by_id(
         &self,
         id: &ProviderId,
+        provider_credentials: &ProviderSettings,
     ) -> ProviderResult<crate::models::RefreshData> {
         debug!(target: "providers", "manager: refreshing provider {}", id);
+        let ctx = ProviderExecutionContext {
+            provider_credentials,
+        };
         match self.provider_for_id(id) {
             Some(p) => {
                 if !p.provider_capability().supports_refresh() {
                     return Err(ProviderError::NoData);
                 }
                 let display_label = Self::display_label_for(id, p);
-                Self::execute_refresh(p, &display_label).await
+                Self::execute_refresh(p, &display_label, &ctx).await
             }
             None => Err(ProviderError::unavailable(&format!(
                 "No provider registered for {}",
@@ -242,7 +242,7 @@ impl ProviderManager {
         }
     }
 
-    fn display_label_for(id: &ProviderId, provider: &dyn AiProvider) -> String {
+    fn display_label_for(id: &ProviderId, provider: &dyn ProviderEntry) -> String {
         match id {
             ProviderId::BuiltIn(_) => provider.descriptor().metadata.display_name,
             ProviderId::Custom(_) => id.to_string(),
@@ -251,10 +251,11 @@ impl ProviderManager {
 
     /// 通用刷新执行：check_availability → refresh
     async fn execute_refresh(
-        provider: &dyn AiProvider,
+        provider: &dyn ProviderEntry,
         display_label: &str,
+        ctx: &ProviderExecutionContext<'_>,
     ) -> ProviderResult<crate::models::RefreshData> {
-        if let Err(err) = provider.check_availability().await {
+        if let Err(err) = provider.check_availability(ctx).await {
             warn!(
                 target: "providers",
                 "provider {} is unavailable: {}",
@@ -263,7 +264,7 @@ impl ProviderManager {
             );
             return Err(err);
         }
-        provider.refresh().await
+        provider.refresh(ctx).await
     }
 }
 
@@ -274,9 +275,9 @@ mod tests {
         AppSettings, ProviderSettings, SettingsCapability, TokenEditMode, TokenInputCapability,
         TokenInputState,
     };
+    use crate::providers::{AiProvider, ProviderCapabilities};
     use async_trait::async_trait;
     use std::borrow::Cow;
-    use std::sync::Mutex;
 
     struct TestProvider {
         descriptor: crate::models::ProviderDescriptor,
@@ -288,7 +289,6 @@ mod tests {
 
     struct CredentialCaptureProvider {
         descriptor: crate::models::ProviderDescriptor,
-        synced_token: Mutex<Option<String>>,
     }
 
     #[async_trait]
@@ -297,6 +297,15 @@ mod tests {
             self.descriptor.clone()
         }
 
+        async fn refresh(
+            &self,
+            _ctx: &ProviderExecutionContext<'_>,
+        ) -> ProviderResult<crate::models::RefreshData> {
+            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
+        }
+    }
+
+    impl ProviderCapabilities for TestProvider {
         fn settings_capability(&self) -> SettingsCapability {
             SettingsCapability::TokenInput(TokenInputCapability {
                 credential_key: "test_token",
@@ -316,10 +325,6 @@ mod tests {
                 edit_mode: TokenEditMode::SetNew,
             })
         }
-
-        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
-            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
-        }
     }
 
     #[async_trait]
@@ -328,6 +333,15 @@ mod tests {
             self.descriptor.clone()
         }
 
+        async fn refresh(
+            &self,
+            _ctx: &ProviderExecutionContext<'_>,
+        ) -> ProviderResult<crate::models::RefreshData> {
+            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
+        }
+    }
+
+    impl ProviderCapabilities for DefaultTokenProvider {
         fn settings_capability(&self) -> SettingsCapability {
             SettingsCapability::TokenInput(TokenInputCapability {
                 credential_key: "test_token",
@@ -338,10 +352,6 @@ mod tests {
                 create_url: "https://example.com/token",
             })
         }
-
-        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
-            Ok(crate::models::RefreshData::quotas_only(Vec::new()))
-        }
     }
 
     #[async_trait]
@@ -350,23 +360,30 @@ mod tests {
             self.descriptor.clone()
         }
 
-        fn sync_provider_credentials(&self, credentials: &ProviderSettings) {
-            *self.synced_token.lock().unwrap() =
-                credentials.get_credential("test_token").map(str::to_string);
-        }
-
-        async fn check_availability(&self) -> ProviderResult<()> {
-            if self.synced_token.lock().unwrap().is_some() {
+        async fn check_availability(
+            &self,
+            ctx: &ProviderExecutionContext<'_>,
+        ) -> ProviderResult<()> {
+            if ctx
+                .provider_credentials
+                .get_credential("test_token")
+                .is_some()
+            {
                 Ok(())
             } else {
                 Err(ProviderError::config_missing("test_token"))
             }
         }
 
-        async fn refresh(&self) -> ProviderResult<crate::models::RefreshData> {
+        async fn refresh(
+            &self,
+            _ctx: &ProviderExecutionContext<'_>,
+        ) -> ProviderResult<crate::models::RefreshData> {
             Ok(crate::models::RefreshData::quotas_only(Vec::new()))
         }
     }
+
+    impl ProviderCapabilities for CredentialCaptureProvider {}
 
     #[test]
     fn test_all_provider_kinds_have_implementation() {
@@ -535,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_provider_credentials_updates_registered_providers() {
+    fn test_refresh_by_id_passes_provider_credentials() {
         let mut manager = ProviderManager::empty();
         manager.register(Arc::new(CredentialCaptureProvider {
             descriptor: crate::models::ProviderDescriptor {
@@ -550,14 +567,14 @@ mod tests {
                     source_label: String::new(),
                 },
             },
-            synced_token: Mutex::new(None),
         }));
 
         let mut credentials = ProviderSettings::default();
         credentials.set_credential("test_token", "configured-token".to_string());
 
-        manager.sync_provider_credentials(&credentials);
-        let result = smol::block_on(manager.refresh_by_id(&ProviderId::BuiltIn(ProviderKind::Amp)));
+        let result = smol::block_on(
+            manager.refresh_by_id(&ProviderId::BuiltIn(ProviderKind::Amp), &credentials),
+        );
 
         assert!(result.is_ok());
     }
@@ -575,7 +592,7 @@ mod tests {
         assert!(!Arc::ptr_eq(&current, &original));
     }
 
-    fn make_test_provider(id: &'static str, kind: ProviderKind) -> Arc<dyn AiProvider> {
+    fn make_test_provider(id: &'static str, kind: ProviderKind) -> Arc<dyn ProviderEntry> {
         Arc::new(TestProvider {
             descriptor: crate::models::ProviderDescriptor {
                 id: Cow::Borrowed(id),

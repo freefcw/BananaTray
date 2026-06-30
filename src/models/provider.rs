@@ -208,7 +208,7 @@ pub struct TokenInputCapability {
 
 /// Provider 设置 UI 的能力声明
 ///
-/// 由 `AiProvider::settings_capability()` 返回，UI 层据此直接渲染对应的交互面板。
+/// 由 `ProviderCapabilities::settings_capability()` 返回，UI 层据此直接渲染对应的交互面板。
 ///
 /// 新增支持交互设置的 Provider 只需返回合适的变体，无需修改 selector / UI 代码（OCP）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

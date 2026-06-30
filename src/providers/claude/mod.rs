@@ -16,7 +16,9 @@ use log::debug;
 
 use std::borrow::Cow;
 
-use super::{AiProvider, ProviderError, ProviderResult};
+use super::{
+    AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
+};
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData,
 };
@@ -160,7 +162,7 @@ impl AiProvider for ClaudeProvider {
         }
     }
 
-    async fn check_availability(&self) -> ProviderResult<()> {
+    async fn check_availability(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<()> {
         if self.cli_probe.is_available() || self.api_probe.is_available() {
             Ok(())
         } else {
@@ -168,7 +170,7 @@ impl AiProvider for ClaudeProvider {
         }
     }
 
-    async fn refresh(&self) -> ProviderResult<RefreshData> {
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
         match self.probe_mode {
             ProbeMode::Cli => {
                 debug!("Claude: forcing CLI mode");
@@ -182,6 +184,8 @@ impl AiProvider for ClaudeProvider {
         }
     }
 }
+
+impl ProviderCapabilities for ClaudeProvider {}
 
 #[cfg(test)]
 mod tests {
@@ -217,6 +221,14 @@ mod tests {
         probe_mode: ProbeMode,
     ) -> ClaudeProvider {
         ClaudeProvider::with_probes(Box::new(cli_probe), Box::new(api_probe), probe_mode)
+    }
+
+    fn test_context<'a>(
+        credentials: &'a crate::models::ProviderSettings,
+    ) -> ProviderExecutionContext<'a> {
+        ProviderExecutionContext {
+            provider_credentials: credentials,
+        }
     }
 
     #[test]
@@ -298,7 +310,9 @@ mod tests {
             ProbeMode::Auto,
         );
 
-        assert!(smol::block_on(provider.check_availability()).is_ok());
+        let credentials = crate::models::ProviderSettings::default();
+        let ctx = test_context(&credentials);
+        assert!(smol::block_on(provider.check_availability(&ctx)).is_ok());
     }
 
     #[test]
@@ -315,7 +329,9 @@ mod tests {
             ProbeMode::Auto,
         );
 
-        let err = smol::block_on(provider.check_availability()).unwrap_err();
+        let credentials = crate::models::ProviderSettings::default();
+        let ctx = test_context(&credentials);
+        let err = smol::block_on(provider.check_availability(&ctx)).unwrap_err();
         assert!(matches!(err, ProviderError::Unavailable { .. }));
     }
 
