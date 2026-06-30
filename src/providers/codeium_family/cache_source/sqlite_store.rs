@@ -164,15 +164,16 @@ mod tests {
     fn test_cache_db_path_candidates_includes_xdg_fallback() {
         let spec = windsurf_spec();
         let candidates = cache_db_path_candidates(&spec);
-        let xdg_fallback =
-            dirs::home_dir().map(|h| h.join(".config").join(spec.cache_db_config_relative_path));
-        if let Some(expected) = xdg_fallback {
-            assert!(
-                candidates.contains(&expected),
-                "candidates should include ~/.config/ XDG fallback, got: {:?}",
-                candidates
-            );
-        }
+        let relative_path = PathBuf::from(spec.cache_db_config_relative_path);
+
+        assert!(
+            candidates.iter().any(|path| path.ends_with(&relative_path)
+                && path
+                    .components()
+                    .any(|component| component.as_os_str() == ".config")),
+            "candidates should include ~/.config/ XDG fallback, got: {:?}",
+            candidates
+        );
     }
 
     #[test]
