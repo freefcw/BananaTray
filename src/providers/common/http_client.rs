@@ -10,6 +10,7 @@ use std::time::Duration;
 use ureq::Agent;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
+type HttpResponse = ureq::http::Response<ureq::Body>;
 
 static AGENT: LazyLock<Agent> = LazyLock::new(|| {
     Agent::new_with_config(
@@ -102,8 +103,8 @@ fn check_status(
     status: u16,
     url: &str,
     method: &str,
-    response: ureq::http::Response<ureq::Body>,
-) -> Result<ureq::http::Response<ureq::Body>> {
+    response: HttpResponse,
+) -> Result<HttpResponse> {
     if status >= 400 {
         let body = response
             .into_body()
@@ -113,6 +114,31 @@ fn check_status(
         return Err(HttpError::HttpStatus { code: status, body }.into());
     }
     Ok(response)
+}
+
+fn read_response_body(response: HttpResponse, context: impl FnOnce() -> String) -> Result<String> {
+    response
+        .into_body()
+        .read_to_string()
+        .map_err(|e| anyhow::Error::from(map_transport_error(e)))
+        .with_context(context)
+}
+
+fn send_and_read(
+    method: &str,
+    url: &str,
+    timeout: Option<Duration>,
+    send: impl FnOnce(&Agent) -> std::result::Result<HttpResponse, ureq::Error>,
+    body_context: impl FnOnce() -> String,
+) -> Result<String> {
+    let agent = agent_with_timeout(timeout);
+    let response = send(&agent).map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
+
+    let status = response.status().as_u16();
+    debug!(target: "http", "{} {} -> {}", method, url, status);
+
+    let response = check_status(status, url, method, response)?;
+    read_response_body(response, body_context)
 }
 
 /// Perform an HTTP GET and return the response body as a String.
@@ -129,21 +155,13 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
 pub fn get_with_timeout(url: &str, headers: &[&str], timeout: Option<Duration>) -> Result<String> {
     debug!(target: "http", "GET {}", url);
 
-    let agent = agent_with_timeout(timeout);
-    let response = set_headers!(agent.get(url), headers)
-        .call()
-        .map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
-
-    let status = response.status().as_u16();
-    debug!(target: "http", "GET {} -> {}", url, status);
-
-    let response = check_status(status, url, "GET", response)?;
-
-    response
-        .into_body()
-        .read_to_string()
-        .map_err(|e| anyhow::Error::from(map_transport_error(e)))
-        .with_context(|| format!("Failed to read response body from {url}"))
+    send_and_read(
+        "GET",
+        url,
+        timeout,
+        |agent| set_headers!(agent.get(url), headers).call(),
+        || format!("Failed to read response body from {url}"),
+    )
 }
 
 /// Perform an HTTP GET and return the full raw output (headers + body).
@@ -175,11 +193,9 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
     }
     raw.push_str("\r\n");
 
-    let body = response
-        .into_body()
-        .read_to_string()
-        .map_err(|e| anyhow::Error::from(map_transport_error(e)))
-        .with_context(|| format!("Failed to read response body from {url}"))?;
+    let body = read_response_body(response, || {
+        format!("Failed to read response body from {url}")
+    })?;
     raw.push_str(&body);
 
     Ok(raw)
@@ -201,24 +217,19 @@ pub fn post_json_with_timeout(
 ) -> Result<String> {
     debug!(target: "http", "POST {} ({} bytes)", url, body.len());
 
-    let agent = agent_with_timeout(timeout);
-    let response = set_headers!(
-        agent.post(url).header("Content-Type", "application/json"),
-        headers
+    send_and_read(
+        "POST",
+        url,
+        timeout,
+        |agent| {
+            set_headers!(
+                agent.post(url).header("Content-Type", "application/json"),
+                headers
+            )
+            .send(body.as_bytes())
+        },
+        || format!("Failed to read response body from POST {url}"),
     )
-    .send(body.as_bytes())
-    .map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
-
-    let status = response.status().as_u16();
-    debug!(target: "http", "POST {} -> {}", url, status);
-
-    let response = check_status(status, url, "POST", response)?;
-
-    response
-        .into_body()
-        .read_to_string()
-        .map_err(|e| anyhow::Error::from(map_transport_error(e)))
-        .with_context(|| format!("Failed to read response body from POST {url}"))
 }
 
 /// Perform an HTTP POST with a form-urlencoded body.
@@ -227,30 +238,118 @@ pub fn post_json_with_timeout(
 pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
     debug!(target: "http", "POST {} (form, {} bytes)", url, body.len());
 
-    let response = set_headers!(
-        AGENT
-            .post(url)
-            .header("Content-Type", "application/x-www-form-urlencoded"),
-        headers
+    send_and_read(
+        "POST",
+        url,
+        None,
+        |agent| {
+            set_headers!(
+                agent
+                    .post(url)
+                    .header("Content-Type", "application/x-www-form-urlencoded"),
+                headers
+            )
+            .send(body.as_bytes())
+        },
+        || format!("Failed to read response body from POST {url}"),
     )
-    .send(body.as_bytes())
-    .map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
-
-    let status = response.status().as_u16();
-    debug!(target: "http", "POST {} -> {}", url, status);
-
-    let response = check_status(status, url, "POST", response)?;
-
-    response
-        .into_body()
-        .read_to_string()
-        .map_err(|e| anyhow::Error::from(map_transport_error(e)))
-        .with_context(|| format!("Failed to read response body from POST {url}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::thread;
+
+    struct TestServer {
+        url: String,
+        request_rx: mpsc::Receiver<String>,
+        handle: thread::JoinHandle<()>,
+    }
+
+    impl TestServer {
+        fn responding(status: u16, body: &str) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}", listener.local_addr().unwrap());
+            let (request_tx, request_rx) = mpsc::channel();
+            let response_body = body.to_string();
+
+            let handle = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_http_request(&mut stream);
+                request_tx.send(request).unwrap();
+
+                let reason = if status < 400 { "OK" } else { "ERROR" };
+                let response = format!(
+                    "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                );
+                stream.write_all(response.as_bytes()).unwrap();
+            });
+
+            Self {
+                url,
+                request_rx,
+                handle,
+            }
+        }
+
+        fn take_request(self) -> String {
+            let request = self
+                .request_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap();
+            self.handle.join().unwrap();
+            request
+        }
+    }
+
+    fn read_http_request(stream: &mut TcpStream) -> String {
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+            .unwrap();
+
+        let mut buffer = Vec::new();
+        let mut chunk = [0; 512];
+        let header_end = loop {
+            let bytes_read = stream.read(&mut chunk).unwrap();
+            assert_ne!(bytes_read, 0, "client closed before request headers");
+            buffer.extend_from_slice(&chunk[..bytes_read]);
+
+            if let Some(header_end) = find_header_end(&buffer) {
+                break header_end;
+            }
+        };
+
+        let content_length = request_content_length(&buffer[..header_end]);
+        let request_len = header_end + 4 + content_length;
+        while buffer.len() < request_len {
+            let bytes_read = stream.read(&mut chunk).unwrap();
+            assert_ne!(bytes_read, 0, "client closed before request body");
+            buffer.extend_from_slice(&chunk[..bytes_read]);
+        }
+
+        String::from_utf8_lossy(&buffer).into_owned()
+    }
+
+    fn find_header_end(buffer: &[u8]) -> Option<usize> {
+        buffer.windows(4).position(|window| window == b"\r\n\r\n")
+    }
+
+    fn request_content_length(headers: &[u8]) -> usize {
+        let headers = String::from_utf8_lossy(headers);
+        headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse().unwrap())
+            })
+            .unwrap_or(0)
+    }
 
     #[test]
     fn test_parse_header_basic() {
@@ -281,5 +380,63 @@ mod tests {
     #[test]
     fn test_parse_header_empty() {
         assert!(parse_header("").is_none());
+    }
+
+    #[test]
+    fn get_reads_success_response_body() {
+        let server = TestServer::responding(200, "hello");
+
+        let body = get(&server.url, &["X-Test: yes"]).unwrap();
+        let request = server.take_request();
+
+        assert_eq!(body, "hello");
+        assert!(request.starts_with("GET / HTTP/1.1\r\n"));
+        assert!(request.to_ascii_lowercase().contains("x-test: yes"));
+    }
+
+    #[test]
+    fn post_json_sends_json_body_and_reads_response_body() {
+        let server = TestServer::responding(200, "created");
+
+        let body = post_json(&server.url, &["X-Test: yes"], r#"{"ok":true}"#).unwrap();
+        let request = server.take_request();
+        let request_lower = request.to_ascii_lowercase();
+
+        assert_eq!(body, "created");
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request_lower.contains("content-type: application/json"));
+        assert!(request_lower.contains("x-test: yes"));
+        assert!(request.ends_with("\r\n\r\n{\"ok\":true}"));
+    }
+
+    #[test]
+    fn post_form_sends_form_body_and_reads_response_body() {
+        let server = TestServer::responding(200, "accepted");
+
+        let body = post_form(&server.url, &[], "a=1&b=two").unwrap();
+        let request = server.take_request();
+        let request_lower = request.to_ascii_lowercase();
+
+        assert_eq!(body, "accepted");
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request_lower.contains("content-type: application/x-www-form-urlencoded"));
+        assert!(request.ends_with("\r\n\r\na=1&b=two"));
+    }
+
+    #[test]
+    fn http_status_error_includes_response_body() {
+        let server = TestServer::responding(429, "rate limited");
+
+        let error = get(&server.url, &[]).unwrap_err();
+        let request = server.take_request();
+
+        assert!(request.starts_with("GET / HTTP/1.1\r\n"));
+        match error.downcast_ref::<HttpError>().unwrap() {
+            HttpError::HttpStatus { code, body } => {
+                assert_eq!(*code, 429);
+                assert_eq!(body, "rate limited");
+            }
+            other => panic!("expected HTTP status error, got {other:?}"),
+        }
     }
 }
