@@ -69,7 +69,7 @@ Devin Desktop
 - `seat api`
 - `seat api + local cache`
 
-`spec.source_label` 只是静态兜底文案；Devin Desktop 当前使用 `"local/cloud fallback"` 作为默认说明。
+`spec.source_label` 只是静态兜底文案；Devin Desktop 当前使用 `"local/cloud fallback"` 作为默认说明。Seat API 的运行时来源展示为 Devin Cloud（或 Devin Cloud + Local cache）。
 
 ## `CodeiumFamilySpec`
 
@@ -80,9 +80,9 @@ Devin Desktop
 - `dashboard_url`
 - `ide_name`
 - `cache_db_config_relative_path`
-- `auth_status_key_candidates`
+- `auth_status_key_candidates`（Devin Desktop 当前仍优先使用 `windsurfAuthStatus`，并兼容未来 `devinAuthStatus`）
 - `process_markers`
-- `cached_plan_info_key_candidates`
+- `cached_plan_info_key_candidates`（Devin Desktop 当前仍优先使用 `windsurf.settings.cachedPlanInfo`，并兼容未来 `devin.settings.cachedPlanInfo`）
 - `cache_max_age_secs` — 缓存 SQLite 的 mtime 最大可信年龄（秒）
 
 `cache_db_config_relative_path` 是相对系统配置目录的路径：macOS 会解析到
@@ -131,7 +131,7 @@ availability 语义刻意拆成两层：
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试
 
-Devin Desktop seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。
+Devin Desktop seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。`debug-codeium-family devin` 是推荐诊断入口，`debug-codeium-family windsurf` 保留为兼容 alias。
 
 ## 维护规则
 

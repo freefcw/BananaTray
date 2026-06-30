@@ -38,15 +38,7 @@ pub(crate) fn descriptor(spec: &CodeiumFamilySpec) -> ProviderDescriptor {
 
 #[allow(dead_code)] // lib 目标不调用；bin 的 debug-codeium-family 子命令会使用
 pub(crate) fn debug_report(selector: Option<&str>) -> Result<String> {
-    let specs: Vec<CodeiumFamilySpec> = match selector {
-        None | Some("all") => vec![ANTIGRAVITY_SPEC, WINDSURF_SPEC],
-        Some("antigravity") => vec![ANTIGRAVITY_SPEC],
-        Some("windsurf") => vec![WINDSURF_SPEC],
-        Some(other) => anyhow::bail!(
-            "unknown provider '{}'; expected one of: antigravity, windsurf, all",
-            other
-        ),
-    };
+    let specs = debug_specs_for_selector(selector)?;
 
     let mut report = String::new();
     writeln!(&mut report, "# Codeium-family local diagnostics")?;
@@ -61,6 +53,19 @@ pub(crate) fn debug_report(selector: Option<&str>) -> Result<String> {
     }
 
     Ok(report)
+}
+
+fn debug_specs_for_selector(selector: Option<&str>) -> Result<Vec<CodeiumFamilySpec>> {
+    let specs = match selector {
+        None | Some("all") => vec![ANTIGRAVITY_SPEC, WINDSURF_SPEC],
+        Some("antigravity") => vec![ANTIGRAVITY_SPEC],
+        Some("devin" | "windsurf") => vec![WINDSURF_SPEC],
+        Some(other) => anyhow::bail!(
+            "unknown provider '{}'; expected one of: antigravity, devin, windsurf, all",
+            other
+        ),
+    };
+    Ok(specs)
 }
 
 #[allow(dead_code)]
@@ -328,5 +333,11 @@ mod tests {
     #[test]
     fn test_mask_secret_multibyte() {
         assert_eq!(mask_secret("测试abcdWXYZ"), "测试ab…WXYZ");
+    }
+
+    #[test]
+    fn debug_specs_for_selector_accepts_devin_alias() {
+        let specs = debug_specs_for_selector(Some("devin")).unwrap();
+        assert_eq!(specs, vec![WINDSURF_SPEC]);
     }
 }

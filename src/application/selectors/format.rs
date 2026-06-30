@@ -366,10 +366,10 @@ mod tests {
     fn display_source_label_maps_known_labels() {
         let _locale_guard = setup_locale();
         assert_eq!(display_source_label("github api"), "GitHub");
-        assert_eq!(display_source_label("seat api"), "Windsurf Cloud");
+        assert_eq!(display_source_label("seat api"), "Devin Cloud");
         assert_eq!(
             display_source_label("seat api + local cache"),
-            "Windsurf Cloud + Local cache"
+            "Devin Cloud + Local cache"
         );
         assert_eq!(display_source_label("local api"), "Local language server");
     }

@@ -126,7 +126,7 @@ fn try_run_codeium_family_debug_cli() -> bool {
         }
         Err(err) => {
             eprintln!("debug-codeium-family failed: {err:#}");
-            eprintln!("usage: bananatray debug-codeium-family [antigravity|windsurf|all]");
+            eprintln!("usage: bananatray debug-codeium-family [antigravity|devin|windsurf|all]");
             std::process::exit(2);
         }
     }

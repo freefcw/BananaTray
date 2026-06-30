@@ -11,25 +11,9 @@ use crate::models::QuotaDetailSpec;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::Connection;
 fn test_windsurf_spec() -> CodeiumFamilySpec {
-    CodeiumFamilySpec {
-        kind: crate::models::ProviderKind::Windsurf,
-        provider_id: "windsurf:api",
-        display_name: "Devin",
-        brand_name: "Cognition",
-        icon_asset: "src/icons/provider-devin-desktop.svg",
-        dashboard_url: "https://app.devin.ai",
-        account_hint: "Devin account",
-        source_label: "local api",
-        log_label: "Devin Desktop",
-        ide_name: "windsurf",
-        unavailable_message: "Devin Desktop live source and local cache are both unavailable",
-        cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
-        cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
-        auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
-        process_markers: &["--ide_name windsurf", "/devin.app/", "/devin/", ".devin/"],
-        cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
-        cache_max_age_secs: 0,
-    }
+    let mut spec = super::super::WINDSURF_SPEC;
+    spec.cache_max_age_secs = 0;
+    spec
 }
 
 #[test]
@@ -66,7 +50,26 @@ fn test_decode_user_status_payload_missing_field() {
 }
 
 #[test]
-fn test_query_auth_status_json_uses_fallback_keys() {
+fn test_query_auth_status_json_uses_devin_fallback_key() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+        ["devinAuthStatus", "payload-json"],
+    )
+    .unwrap();
+
+    let spec = test_windsurf_spec();
+    let value = query_auth_status_json(&conn, &spec).unwrap();
+    assert_eq!(value, "payload-json");
+}
+
+#[test]
+fn test_query_auth_status_json_uses_legacy_antigravity_fallback_key() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute(
         "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -148,6 +151,32 @@ fn test_read_via_cached_plan_info_fresh() {
         crate::models::QuotaLabelSpec::Weekly
     );
     assert!((data.quotas[1].used - 30.0).abs() < 0.01); // 100 - 70 = 30
+}
+
+#[test]
+fn test_read_via_cached_plan_info_uses_devin_fallback_key() {
+    let future_daily = chrono::Utc::now().timestamp() + 3600;
+    let json_value = format!(
+        r#"{{"planName":"Pro","quotaUsage":{{"dailyRemainingPercent":41,"dailyResetAtUnix":{}}}}}"#,
+        future_daily
+    );
+
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+        ["devin.settings.cachedPlanInfo", &json_value],
+    )
+    .unwrap();
+
+    let spec = test_windsurf_spec();
+    let data = read_via_cached_plan_info(&conn, &spec).unwrap();
+    assert_eq!(data.account_tier, Some("Pro".to_string()));
+    assert_eq!(data.quotas.len(), 1);
 }
 
 #[test]

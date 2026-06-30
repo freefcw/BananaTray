@@ -60,7 +60,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     kind: ProviderKind::Windsurf,
     provider_id: "windsurf:api",
-    display_name: "Devin",
+    display_name: "Devin Desktop",
     brand_name: "Cognition",
     icon_asset: "src/icons/provider-devin-desktop.svg",
     dashboard_url: "https://app.devin.ai",
@@ -71,7 +71,11 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     unavailable_message: "Devin Desktop live source and local cache are both unavailable",
     cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
     cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
-    auth_status_key_candidates: &["windsurfAuthStatus", "antigravityAuthStatus"],
+    auth_status_key_candidates: &[
+        "windsurfAuthStatus",
+        "devinAuthStatus",
+        "antigravityAuthStatus",
+    ],
     process_markers: &[
         "--ide_name windsurf",
         "/devin.app/",
@@ -81,7 +85,10 @@ pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
         "/windsurf/",
         ".windsurf/",
     ],
-    cached_plan_info_key_candidates: &["windsurf.settings.cachedPlanInfo"],
+    cached_plan_info_key_candidates: &[
+        "windsurf.settings.cachedPlanInfo",
+        "devin.settings.cachedPlanInfo",
+    ],
     // 3 小时：与 Antigravity 一致；仍有 seat_source 云端兜底
     cache_max_age_secs: 3 * 60 * 60,
 };
