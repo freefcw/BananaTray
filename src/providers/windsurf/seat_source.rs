@@ -157,17 +157,6 @@ fn get_api_key_from_candidates(
     spec: &CodeiumFamilySpec,
     candidates: impl IntoIterator<Item = std::path::PathBuf>,
 ) -> Result<String> {
-    use rusqlite::{Connection, OpenFlags};
-
-    /// 累积错误：保留之前的错误信息作为上下文，避免诊断信息丢失。
-    fn accumulate_error(slot: &mut Option<anyhow::Error>, new_err: anyhow::Error) {
-        if let Some(prev) = slot.take() {
-            *slot = Some(anyhow::anyhow!("{}; previously: {}", new_err, prev));
-        } else {
-            *slot = Some(new_err);
-        }
-    }
-
     let mut last_error: Option<anyhow::Error> = None;
 
     for db_path in candidates {
@@ -175,74 +164,98 @@ fn get_api_key_from_candidates(
             continue;
         }
 
-        let conn = match Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
-            Ok(conn) => conn,
-            Err(err) => {
-                accumulate_error(
-                    &mut last_error,
-                    anyhow::anyhow!(
-                        "cannot open {} cache DB at {}: {}",
-                        spec.log_label,
-                        db_path.display(),
-                        err
-                    ),
-                );
-                continue;
-            }
-        };
-
-        let auth_status_json = match codeium_family::query_auth_status_json(&conn, spec) {
-            Ok(value) => value,
-            Err(err) => {
-                accumulate_error(&mut last_error, err.into());
-                continue;
-            }
-        };
-
-        let auth_status: serde_json::Value = match serde_json::from_str(&auth_status_json) {
-            Ok(value) => value,
-            Err(err) => {
-                accumulate_error(
-                    &mut last_error,
-                    anyhow::anyhow!(
-                        "invalid auth status JSON while reading apiKey from {}: {}",
-                        db_path.display(),
-                        err
-                    ),
-                );
-                continue;
-            }
-        };
-
-        if let Some(api_key) = auth_status
-            .get("apiKey")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-        {
-            return Ok(api_key.to_string());
+        match read_api_key_from_cache_db(spec, &db_path) {
+            Ok(api_key) => return Ok(api_key),
+            Err(err) => accumulate_error(&mut last_error, err),
         }
-
-        accumulate_error(
-            &mut last_error,
-            ProviderError::parse_failed(&format!(
-                "cannot find apiKey in auth status from {}: {}",
-                db_path.display(),
-                spec.auth_status_key_candidates.join(", ")
-            ))
-            .into(),
-        );
     }
 
     if let Some(err) = last_error {
         return Err(err);
     }
 
-    // 所有 candidate 路径都不存在
-    Err(ProviderError::unavailable(&format!(
+    Err(cache_db_not_found_error(spec))
+}
+
+fn read_api_key_from_cache_db(
+    spec: &CodeiumFamilySpec,
+    db_path: &std::path::Path,
+) -> Result<String> {
+    let conn = open_auth_cache_db(spec, db_path)?;
+    let auth_status_json = read_auth_status_json_from_cache_db(&conn, spec)?;
+    let auth_status = parse_auth_status_json(db_path, &auth_status_json)?;
+
+    extract_api_key_from_auth_status(spec, db_path, &auth_status)
+}
+
+fn open_auth_cache_db(
+    spec: &CodeiumFamilySpec,
+    db_path: &std::path::Path,
+) -> Result<rusqlite::Connection> {
+    use rusqlite::OpenFlags;
+
+    rusqlite::Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(
+        |err| {
+            anyhow::anyhow!(
+                "cannot open {} cache DB at {}: {}",
+                spec.log_label,
+                db_path.display(),
+                err
+            )
+        },
+    )
+}
+
+fn read_auth_status_json_from_cache_db(
+    conn: &rusqlite::Connection,
+    spec: &CodeiumFamilySpec,
+) -> Result<String> {
+    Ok(codeium_family::query_auth_status_json(conn, spec)?)
+}
+
+fn parse_auth_status_json(db_path: &std::path::Path, auth_status_json: &str) -> Result<Value> {
+    serde_json::from_str(auth_status_json).map_err(|err| {
+        anyhow::anyhow!(
+            "invalid auth status JSON while reading apiKey from {}: {}",
+            db_path.display(),
+            err
+        )
+    })
+}
+
+fn extract_api_key_from_auth_status(
+    spec: &CodeiumFamilySpec,
+    db_path: &std::path::Path,
+    auth_status: &Value,
+) -> Result<String> {
+    auth_status
+        .get("apiKey")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            anyhow::Error::from(ProviderError::parse_failed(&format!(
+                "cannot find apiKey in auth status from {}: {}",
+                db_path.display(),
+                spec.auth_status_key_candidates.join(", ")
+            )))
+        })
+}
+
+/// 累积错误：保留之前的错误信息作为上下文，避免诊断信息丢失。
+fn accumulate_error(slot: &mut Option<anyhow::Error>, new_err: anyhow::Error) {
+    if let Some(prev) = slot.take() {
+        *slot = Some(anyhow::anyhow!("{}; previously: {}", new_err, prev));
+    } else {
+        *slot = Some(new_err);
+    }
+}
+
+fn cache_db_not_found_error(spec: &CodeiumFamilySpec) -> anyhow::Error {
+    anyhow::Error::from(ProviderError::unavailable(&format!(
         "{} local cache database not found",
         spec.log_label
-    ))
-    .into())
+    )))
 }
 
 fn build_request_body(
@@ -574,6 +587,44 @@ mod tests {
         .unwrap();
 
         assert_eq!(api_key, "legacy-key");
+    }
+
+    #[test]
+    fn test_get_api_key_skips_invalid_json_and_uses_next_candidate() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let fallback_dir = tempfile::tempdir().unwrap();
+        let primary_db = primary_dir.path().join("state.vscdb");
+        let fallback_db = fallback_dir.path().join("state.vscdb");
+
+        write_auth_status_db(&primary_db, "windsurfAuthStatus", "not-json");
+        write_auth_status_db(
+            &fallback_db,
+            "windsurfAuthStatus",
+            r#"{"apiKey":"fallback-key"}"#,
+        );
+
+        let api_key = get_api_key_from_candidates(
+            &codeium_family::WINDSURF_SPEC,
+            vec![primary_db, fallback_db],
+        )
+        .unwrap();
+
+        assert_eq!(api_key, "fallback-key");
+    }
+
+    #[test]
+    fn test_get_api_key_reports_unavailable_when_no_candidate_exists() {
+        let err = get_api_key_from_candidates(
+            &codeium_family::WINDSURF_SPEC,
+            Vec::<std::path::PathBuf>::new(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::Unavailable { .. })
+        ));
+        assert!(err.to_string().contains("local cache database not found"));
     }
 
     #[test]
