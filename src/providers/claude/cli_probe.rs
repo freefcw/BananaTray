@@ -106,23 +106,20 @@ impl ClaudeCliProbe {
             }
 
             // 提取百分比（非 Credit 类型或 Credit 类型没有金额时）
-            let (used_pct, _percent_left) = if let Some(caps) = PCT_RE.captures(&section_text) {
+            let quota = if let Some(caps) = PCT_RE.captures(&section_text) {
                 let value: f64 = caps[1].parse().unwrap_or(0.0);
                 let direction = &caps[2];
                 if direction == "used" {
-                    (value, 100.0 - value)
+                    QuotaInfo::from_used_percent(label, value, quota_type, reset_at)
                 } else {
                     // "left"
-                    (100.0 - value, value)
+                    QuotaInfo::from_remaining_percent(label, value, quota_type, reset_at)
                 }
             } else {
                 continue;
             };
 
-            // 基于百分比的配额
-            quotas.push(QuotaInfo::with_details(
-                label, used_pct, 100.0, quota_type, reset_at,
-            ));
+            quotas.push(quota);
         }
 
         Ok(quotas)

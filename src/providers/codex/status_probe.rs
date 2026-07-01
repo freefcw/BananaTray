@@ -157,8 +157,7 @@ pub(super) fn parse(raw: &str) -> ProviderResult<ParsedUsage> {
 
 /// `% left` → `% used` 的对称转换，clamp 到 [0, 100]。
 fn quota_from_left(label: QuotaLabelSpec, quota_type: QuotaType, left_percent: u32) -> QuotaInfo {
-    let used = (100.0 - left_percent as f64).clamp(0.0, 100.0);
-    QuotaInfo::with_details(label, used, 100.0, quota_type, None)
+    QuotaInfo::from_remaining_percent(label, left_percent.min(100) as f64, quota_type, None)
 }
 
 /// 在文本中找到包含 `lane_label` 的第一行，再从该行抽取 `N% left`。

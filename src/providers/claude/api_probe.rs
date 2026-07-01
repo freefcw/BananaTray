@@ -76,10 +76,9 @@ impl ClaudeApiProbe {
                     time_utils::parse_iso8601_to_epoch(s)
                         .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
                 });
-                quotas.push(QuotaInfo::with_details(
+                quotas.push(QuotaInfo::from_used_percent(
                     label,
                     utilization,
-                    100.0,
                     kind,
                     reset_at,
                 ));

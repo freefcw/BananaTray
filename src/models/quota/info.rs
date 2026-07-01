@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use super::{slugify_key, QuotaDetailSpec, QuotaLabelSpec, QuotaType, StatusLevel};
+use super::{
+    slugify_key,
+    units::{
+        used_percent_from_remaining_fraction, used_percent_from_remaining_percent,
+        FULL_REMAINING_FRACTION, PERCENT_SCALE,
+    },
+    QuotaDetailSpec, QuotaLabelSpec, QuotaType, StatusLevel,
+};
 
 /// 用量配额信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +94,106 @@ impl QuotaInfo {
         }
     }
 
+    /// 创建百分比模式配额。调用方传入的 `used_percent` 已经是 0-100 尺度。
+    pub fn from_used_percent(
+        label: impl Into<QuotaLabelSpec>,
+        used_percent: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::with_details(label, used_percent, PERCENT_SCALE, quota_type, detail_spec)
+    }
+
+    /// 创建百分比模式配额。调用方传入的 `remaining_percent` 已经是 0-100 尺度。
+    pub fn from_remaining_percent(
+        label: impl Into<QuotaLabelSpec>,
+        remaining_percent: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::from_used_percent(
+            label,
+            used_percent_from_remaining_percent(remaining_percent),
+            quota_type,
+            detail_spec,
+        )
+    }
+
+    /// 创建百分比模式配额。调用方传入的 `remaining_fraction` 是 0-1 尺度。
+    pub fn from_remaining_fraction(
+        label: impl Into<QuotaLabelSpec>,
+        remaining_fraction: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::from_used_percent(
+            label,
+            used_percent_from_remaining_fraction(remaining_fraction),
+            quota_type,
+            detail_spec,
+        )
+    }
+
+    /// 创建百分比模式配额，语义为“服务端已重置，当前剩余为满额”。
+    pub fn from_full_remaining(
+        label: impl Into<QuotaLabelSpec>,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::from_remaining_fraction(label, FULL_REMAINING_FRACTION, quota_type, detail_spec)
+    }
+
+    /// 创建带显式 key 的百分比模式配额。调用方传入的 `used_percent` 已经是 0-100 尺度。
+    pub fn with_key_from_used_percent(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        used_percent: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::with_key(
+            stable_key,
+            label,
+            used_percent,
+            PERCENT_SCALE,
+            quota_type,
+            detail_spec,
+        )
+    }
+
+    /// 创建带显式 key 的百分比模式配额。调用方传入的 `remaining_percent` 已经是 0-100 尺度。
+    pub fn with_key_from_remaining_percent(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        remaining_percent: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::with_key_from_used_percent(
+            stable_key,
+            label,
+            used_percent_from_remaining_percent(remaining_percent),
+            quota_type,
+            detail_spec,
+        )
+    }
+
+    /// 创建带显式 key 的百分比模式配额，语义为“服务端已重置，当前剩余为满额”。
+    pub fn with_key_from_full_remaining(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::with_key_from_remaining_percent(
+            stable_key,
+            label,
+            PERCENT_SCALE,
+            quota_type,
+            detail_spec,
+        )
+    }
+
     /// 创建余额模式的配额（无进度条，仅展示余额和已用）
     pub fn balance_only(
         label: impl Into<QuotaLabelSpec>,
@@ -153,7 +260,7 @@ impl QuotaInfo {
             return 0.0;
         }
         // 不 clamp，允许负数（超出配额的情况）
-        self.used / self.limit * 100.0
+        self.used / self.limit * PERCENT_SCALE
     }
 
     /// 剩余百分比 (可负数，当超出配额时)
@@ -162,7 +269,7 @@ impl QuotaInfo {
             return 0.0;
         }
         // 不 clamp，允许负数（超出配额的情况）
-        (self.limit - self.used) / self.limit * 100.0
+        (self.limit - self.used) / self.limit * PERCENT_SCALE
     }
 
     /// 是否是纯百分比模式（limit == 100.0，数据本身就是百分比）。
@@ -172,7 +279,7 @@ impl QuotaInfo {
     /// `limit` 恰好等于 100。
     #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
-        (self.limit - 100.0).abs() < 1e-9
+        (self.limit - PERCENT_SCALE).abs() < 1e-9
     }
 
     // ========================================================================

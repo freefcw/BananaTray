@@ -83,6 +83,79 @@ fn test_quota_percent_remaining_precision() {
     assert!((q.percent_remaining() - 66.667).abs() < 0.01);
 }
 
+#[test]
+fn quota_from_used_percent_sets_percentage_limit() {
+    let quota =
+        QuotaInfo::from_used_percent(QuotaLabelSpec::Session, 42.0, QuotaType::Session, None);
+
+    assert_eq!(quota.used, 42.0);
+    assert_eq!(quota.limit, 100.0);
+    assert!((quota.percent_remaining() - 58.0).abs() < 0.01);
+    assert_eq!(quota.stable_key, "session");
+}
+
+#[test]
+fn quota_from_remaining_percent_converts_to_used_percent() {
+    let quota =
+        QuotaInfo::from_remaining_percent(QuotaLabelSpec::Weekly, 25.0, QuotaType::Weekly, None);
+
+    assert_eq!(quota.used, 75.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.percent_remaining(), 25.0);
+}
+
+#[test]
+fn quota_from_remaining_fraction_converts_to_used_percent() {
+    let quota = QuotaInfo::from_remaining_fraction(
+        "Pro",
+        0.25,
+        QuotaType::ModelSpecific("Pro".to_string()),
+        None,
+    );
+
+    assert_eq!(quota.used, 75.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.percent_remaining(), 25.0);
+}
+
+#[test]
+fn quota_with_key_from_remaining_percent_preserves_explicit_key() {
+    let quota = QuotaInfo::with_key_from_remaining_percent(
+        "weekly-quota",
+        QuotaLabelSpec::Weekly,
+        0.0,
+        QuotaType::Weekly,
+        None,
+    );
+
+    assert_eq!(quota.used, 100.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.stable_key, "weekly-quota");
+}
+
+#[test]
+fn quota_from_full_remaining_sets_zero_used_percent() {
+    let quota = QuotaInfo::from_full_remaining(QuotaLabelSpec::Daily, QuotaType::General, None);
+
+    assert_eq!(quota.used, 0.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.percent_remaining(), 100.0);
+}
+
+#[test]
+fn quota_with_key_from_full_remaining_preserves_explicit_key() {
+    let quota = QuotaInfo::with_key_from_full_remaining(
+        "daily-quota",
+        QuotaLabelSpec::Daily,
+        QuotaType::General,
+        None,
+    );
+
+    assert_eq!(quota.used, 0.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.stable_key, "daily-quota");
+}
+
 // ========================================================================
 // 状态判断测试（基于 status_level 单一真理来源）
 // ========================================================================

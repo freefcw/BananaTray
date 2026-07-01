@@ -140,11 +140,10 @@ fn build_seat_quota(
         .and_then(|s| s.parse::<i64>().ok())
         .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
-    QuotaInfo::with_key(
+    QuotaInfo::with_key_from_remaining_percent(
         stable_key,
         label,
-        100.0 - remaining_percent as f64,
-        100.0,
+        remaining_percent as f64,
         quota_type,
         reset_detail,
     )

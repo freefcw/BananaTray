@@ -109,11 +109,10 @@ pub(super) fn read_via_cached_plan_info(
                     "{} weekly_remaining_percent is null but reset time is future; inferring 100% used (quota full)",
                     spec.log_label
                 );
-                quotas.push(QuotaInfo::with_key(
+                quotas.push(QuotaInfo::with_key_from_remaining_percent(
                     CachedQuotaKind::Weekly.stable_key(),
                     CachedQuotaKind::Weekly.label_spec(),
-                    100.0,
-                    100.0,
+                    0.0,
                     CachedQuotaKind::Weekly.quota_type(),
                     Some(QuotaDetailSpec::ResetAt {
                         epoch_secs: reset_ts,
@@ -148,10 +147,6 @@ pub(super) fn build_quota_from_cached(
     let now_ts = chrono::Utc::now().timestamp();
     let is_stale = reset_at_unix.is_some_and(|ts| ts <= now_ts);
 
-    // 过期 → 配额已重置，视为全部可用
-    let effective_remaining = if is_stale { 100.0 } else { pct };
-    let used = 100.0 - effective_remaining;
-
     let reset_detail = if is_stale {
         // 重置时间已过，不再展示倒计时
         None
@@ -159,11 +154,19 @@ pub(super) fn build_quota_from_cached(
         reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
     };
 
-    Some(QuotaInfo::with_key(
+    if is_stale {
+        return Some(QuotaInfo::with_key_from_full_remaining(
+            kind.stable_key(),
+            kind.label_spec(),
+            kind.quota_type(),
+            reset_detail,
+        ));
+    }
+
+    Some(QuotaInfo::with_key_from_remaining_percent(
         kind.stable_key(),
         kind.label_spec(),
-        used,
-        100.0,
+        pct,
         kind.quota_type(),
         reset_detail,
     ))

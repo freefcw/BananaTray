@@ -35,15 +35,13 @@ pub(super) fn parse_quota_response(response_str: &str) -> ProviderResult<Vec<Quo
 
     for bucket in response.buckets.unwrap_or_default() {
         if let (Some(model_id), Some(fraction)) = (bucket.model_id, bucket.remaining_fraction) {
-            let percent_left = fraction * 100.0;
-            let used_percent = 100.0 - percent_left;
             let label = simplify_model_name(&model_id);
 
             let entry = label_quotas
                 .entry(label)
-                .or_insert((used_percent, bucket.reset_time.clone()));
-            if used_percent > entry.0 {
-                entry.0 = used_percent;
+                .or_insert((fraction, bucket.reset_time.clone()));
+            if fraction < entry.0 {
+                entry.0 = fraction;
                 entry.1 = bucket.reset_time;
             }
         }
@@ -51,15 +49,14 @@ pub(super) fn parse_quota_response(response_str: &str) -> ProviderResult<Vec<Quo
 
     let mut quotas: Vec<QuotaInfo> = label_quotas
         .into_iter()
-        .map(|(label, (used_percent, reset))| {
+        .map(|(label, (remaining_fraction, reset))| {
             let reset_detail = reset
                 .as_deref()
                 .and_then(time_utils::parse_iso8601_to_epoch)
                 .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
-            QuotaInfo::with_details(
+            QuotaInfo::from_remaining_fraction(
                 label.clone(),
-                used_percent,
-                100.0,
+                remaining_fraction,
                 QuotaType::ModelSpecific(label),
                 reset_detail,
             )

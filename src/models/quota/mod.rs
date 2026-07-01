@@ -4,6 +4,7 @@ mod label;
 mod provider_status;
 mod refresh_data;
 mod types;
+mod units;
 
 pub use failure::{FailureAdvice, FailureReason, ProviderFailure};
 pub use info::QuotaInfo;

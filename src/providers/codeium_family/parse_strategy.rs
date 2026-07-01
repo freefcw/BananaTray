@@ -67,7 +67,6 @@ impl ParseStrategy for ApiParseStrategy {
                         .get("remainingFraction")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0);
-                    let used_percent = (1.0 - fraction) * 100.0;
 
                     let reset_detail = quota_info
                         .get("resetTime")
@@ -75,10 +74,9 @@ impl ParseStrategy for ApiParseStrategy {
                         .and_then(parse_iso8601_to_epoch)
                         .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
-                    quotas.push(QuotaInfo::with_details(
+                    quotas.push(QuotaInfo::from_remaining_fraction(
                         label,
-                        used_percent,
-                        100.0,
+                        fraction,
                         QuotaType::ModelSpecific(label.to_string()),
                         reset_detail,
                     ));
@@ -129,7 +127,7 @@ impl ParseStrategy for CacheParseStrategy {
                 let label = model_config.label.clone();
 
                 if let Some(quota_info) = model_config.quota_info {
-                    let remaining_fraction = quota_info.remaining_fraction.unwrap_or(0.0);
+                    let remaining_fraction = quota_info.remaining_fraction.unwrap_or(0.0) as f64;
                     let reset_at = quota_info
                         .reset_time_wrapper
                         .and_then(|wrapper| wrapper.reset_time);
@@ -137,21 +135,29 @@ impl ParseStrategy for CacheParseStrategy {
                     // reset 时间已过 → 服务端已重置配额，缓存中的 remaining_fraction
                     // 是过期数据；视为 100% 剩余，且不再显示倒计时（与 cached_plan 路径一致）。
                     let is_stale = reset_at.is_some_and(|ts| ts <= now_ts);
-                    let effective_remaining = if is_stale { 1.0 } else { remaining_fraction };
-                    let used_percent = (1.0 - effective_remaining) * 100.0;
+
                     let reset_detail = if is_stale {
                         None
                     } else {
                         reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
                     };
 
-                    quotas.push(QuotaInfo::with_details(
-                        label.clone(),
-                        used_percent as f64,
-                        100.0,
-                        QuotaType::ModelSpecific(label),
-                        reset_detail,
-                    ));
+                    let quota = if is_stale {
+                        QuotaInfo::from_full_remaining(
+                            label.clone(),
+                            QuotaType::ModelSpecific(label),
+                            reset_detail,
+                        )
+                    } else {
+                        QuotaInfo::from_remaining_fraction(
+                            label.clone(),
+                            remaining_fraction,
+                            QuotaType::ModelSpecific(label),
+                            reset_detail,
+                        )
+                    };
+
+                    quotas.push(quota);
                 }
             }
         }

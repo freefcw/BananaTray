@@ -117,6 +117,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 - quota 标题和详情也走稳定语义：
   - 标题使用 `QuotaLabelSpec`（如 `Daily`、`Weekly`、`MonthlyCredits`、`Credits`）
   - 第四行详情使用 `QuotaDetailSpec`
+- 百分比制配额通过 `QuotaInfo::from_used_percent()`、`from_remaining_percent()`、`from_remaining_fraction()` 或对应 `with_key_*` 构造器创建；provider parser 只负责读取原始字段，不应重新内联 `limit = 100`、`100.0 - remaining` 或 `fraction * 100.0`。
 
 这样做的直接结果是：
 
