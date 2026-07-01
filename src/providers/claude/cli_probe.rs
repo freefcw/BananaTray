@@ -71,24 +71,11 @@ impl ClaudeCliProbe {
 
             // 第一个非空行是段落标题
             let header = lines[0];
-            let header_lower = header.to_lowercase();
 
             // 确定配额类型和显示标签
-            let (quota_type, label) = if header_lower.contains("extra usage") {
-                (QuotaType::Credit, QuotaLabelSpec::ExtraUsage)
-            } else if header_lower.contains("session") {
-                (QuotaType::Session, QuotaLabelSpec::Session)
-            } else if header_lower.contains("week") {
-                if let Some(model) = Self::extract_model_name(header) {
-                    (
-                        QuotaType::ModelSpecific(model.clone()),
-                        QuotaLabelSpec::WeeklyModel { model },
-                    )
-                } else {
-                    (QuotaType::Weekly, QuotaLabelSpec::Weekly)
-                }
-            } else {
-                continue;
+            let (quota_type, label) = match Self::section_kind_from_header(header) {
+                Some(kind) => kind,
+                None => continue,
             };
 
             let section_text = lines.join("\n");
@@ -168,6 +155,26 @@ impl ClaudeCliProbe {
         sections
     }
 
+    /// 识别段落标题对应的配额类型；无法识别返回 None。
+    fn section_kind_from_header(header: &str) -> Option<(QuotaType, QuotaLabelSpec)> {
+        let header_lower = header.to_lowercase();
+        if header_lower.contains("extra usage") {
+            Some((QuotaType::Credit, QuotaLabelSpec::ExtraUsage))
+        } else if header_lower.contains("session") {
+            Some((QuotaType::Session, QuotaLabelSpec::Session))
+        } else if header_lower.contains("week") {
+            match Self::extract_model_name(header) {
+                Some(model) => Some((
+                    QuotaType::ModelSpecific(model.clone()),
+                    QuotaLabelSpec::WeeklyModel { model },
+                )),
+                None => Some((QuotaType::Weekly, QuotaLabelSpec::Weekly)),
+            }
+        } else {
+            None
+        }
+    }
+
     /// 从标题中提取模型名称（如 "Current week (Opus)"）
     fn extract_model_name(header: &str) -> Option<String> {
         let caps = MODEL_NAME_RE.captures(header)?;
@@ -179,6 +186,21 @@ impl ClaudeCliProbe {
         } else {
             Some(name)
         }
+    }
+
+    /// 将 CLI 输出中的 auth/update 错误信号归类为 ProviderError；无错误信号返回 None。
+    fn classify_cli_output_error(output_lower: &str) -> Option<ProviderError> {
+        if output_lower.contains("not logged in") || output_lower.contains("authentication") {
+            return Some(ProviderError::auth_required(Some(
+                FailureAdvice::LoginCli {
+                    cli: "claude".to_string(),
+                },
+            )));
+        }
+        if output_lower.contains("update") && output_lower.contains("required") {
+            return Some(ProviderError::update_required(None));
+        }
+        None
     }
 }
 
@@ -202,34 +224,14 @@ impl UsageProbe for ClaudeCliProbe {
 
         debug!(target: "providers", "claude command completed, output length: {} bytes", result.output.len());
 
-        // 检查错误条件
-        let output_lower = result.output.to_lowercase();
-
-        if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-            return Err(ProviderError::auth_required(Some(
-                FailureAdvice::LoginCli {
-                    cli: "claude".to_string(),
-                },
-            )));
-        }
-        if output_lower.contains("update") && output_lower.contains("required") {
-            return Err(ProviderError::update_required(None));
-        }
-
         // 解析配额
         let quotas = Self::parse_usage_output(&result.output)?;
 
         if quotas.is_empty() {
-            // 检查特定问题
-            if output_lower.contains("not logged in") || output_lower.contains("authentication") {
-                return Err(ProviderError::auth_required(Some(
-                    FailureAdvice::LoginCli {
-                        cli: "claude".to_string(),
-                    },
-                )));
-            }
-            if output_lower.contains("update") && output_lower.contains("required") {
-                return Err(ProviderError::update_required(None));
+            let output_lower = result.output.to_lowercase();
+            // 检查 CLI 错误信号
+            if let Some(err) = Self::classify_cli_output_error(&output_lower) {
+                return Err(err);
             }
             // 检查信任提示是否阻塞
             if output_lower.contains("trust the files") && !output_lower.contains("current session")
@@ -354,5 +356,68 @@ $5.00 / $20.00
         assert_eq!(quotas[0].used, 5.0);
         assert_eq!(quotas[0].limit, 20.0);
         assert_eq!(quotas[0].quota_type, QuotaType::Credit);
+    }
+
+    #[test]
+    fn test_section_kind_from_header() {
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Extra usage"),
+            Some((QuotaType::Credit, QuotaLabelSpec::ExtraUsage))
+        );
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Current session"),
+            Some((QuotaType::Session, QuotaLabelSpec::Session))
+        );
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Current week"),
+            Some((QuotaType::Weekly, QuotaLabelSpec::Weekly))
+        );
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Current week (Opus)"),
+            Some((
+                QuotaType::ModelSpecific("Opus".to_string()),
+                QuotaLabelSpec::WeeklyModel {
+                    model: "Opus".to_string()
+                }
+            ))
+        );
+        // "all models" 是汇总周配额，归为 Weekly
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Current week (all models)"),
+            Some((QuotaType::Weekly, QuotaLabelSpec::Weekly))
+        );
+        assert_eq!(
+            ClaudeCliProbe::section_kind_from_header("Unknown header"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_classify_cli_output_error_auth() {
+        let err = ClaudeCliProbe::classify_cli_output_error("not logged in, run claude login")
+            .expect("auth signal should classify");
+        assert!(matches!(err, ProviderError::AuthRequired { .. }));
+    }
+
+    #[test]
+    fn test_classify_cli_output_error_authentication() {
+        let err = ClaudeCliProbe::classify_cli_output_error("authentication failed")
+            .expect("authentication signal should classify");
+        assert!(matches!(err, ProviderError::AuthRequired { .. }));
+    }
+
+    #[test]
+    fn test_classify_cli_output_error_update() {
+        let err = ClaudeCliProbe::classify_cli_output_error("update required to continue")
+            .expect("update signal should classify");
+        assert!(matches!(err, ProviderError::UpdateRequired { .. }));
+    }
+
+    #[test]
+    fn test_classify_cli_output_error_none() {
+        // 仅含 update 但无 required 不算更新错误
+        assert!(ClaudeCliProbe::classify_cli_output_error("please update your plan").is_none());
+        // 正常配额输出不算错误
+        assert!(ClaudeCliProbe::classify_cli_output_error("extra usage\n$5 / $20").is_none());
     }
 }
