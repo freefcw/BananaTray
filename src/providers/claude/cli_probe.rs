@@ -60,69 +60,68 @@ impl ClaudeCliProbe {
     /// 解析 `claude /usage` 输出
     fn parse_usage_output(raw: &str) -> ProviderResult<Vec<QuotaInfo>> {
         let clean = text_utils::strip_ansi(raw);
-
-        // 按空行分割段落
-        let sections = Self::split_sections(&clean);
-
-        let mut quotas = Vec::new();
-
-        for section in &sections {
-            let lines: Vec<&str> = section.lines().map(|l| l.trim()).collect();
-            if lines.is_empty() {
-                continue;
-            }
-
-            // 第一个非空行是段落标题
-            let header = lines[0];
-
-            // 确定配额类型和显示标签
-            let (quota_type, label) = match Self::section_kind_from_header(header) {
-                Some(kind) => kind,
-                None => continue,
-            };
-
-            let section_text = lines.join("\n");
-
-            // 提取重置时间（CLI 直接输出，不经过 format_countdown，需手动加 ⏱ 前缀）
-            let reset_at = lines.iter().find_map(|line| {
-                RESET_RE
-                    .captures(line)
-                    .map(|caps| QuotaDetailSpec::ResetDate {
-                        date: caps[1].trim().to_string(),
-                    })
-            });
-
-            // 对于 Credit 类型，优先尝试提取美元金额（可能没有百分比）
-            if quota_type == QuotaType::Credit {
-                if let Some(caps) = COST_RE.captures(&section_text) {
-                    let spent: f64 = caps[1].replace(',', "").parse().unwrap_or(0.0);
-                    let budget: f64 = caps[2].replace(',', "").parse().unwrap_or(0.0);
-                    quotas.push(QuotaInfo::with_details(
-                        label, spent, budget, quota_type, reset_at,
-                    ));
-                    continue;
-                }
-                // 如果没有匹配到金额，继续尝试百分比解析
-            }
-
-            // 提取百分比（非 Credit 类型或 Credit 类型没有金额时）
-            let quota = if let Some(caps) = PCT_RE.captures(&section_text) {
-                let value: f64 = caps[1].parse().unwrap_or(0.0);
-                let direction = &caps[2];
-                if direction == "used" {
-                    QuotaInfo::from_used_percent(label, value, quota_type, reset_at)
-                } else {
-                    // "left"
-                    QuotaInfo::from_remaining_percent(label, value, quota_type, reset_at)
-                }
-            } else {
-                continue;
-            };
-
-            quotas.push(quota);
-        }
+        let quotas = Self::split_sections(&clean)
+            .iter()
+            .filter_map(|section| Self::parse_usage_section(section))
+            .collect();
 
         Ok(quotas)
+    }
+
+    /// 解析单个 `claude /usage` 段落；无法识别或无法读取用量时返回 None。
+    fn parse_usage_section(section: &str) -> Option<QuotaInfo> {
+        let lines: Vec<&str> = section.lines().map(|line| line.trim()).collect();
+        let header = lines.first()?;
+        let (quota_type, label) = Self::section_kind_from_header(header)?;
+        let reset_at = Self::reset_detail_from_lines(&lines);
+        let section_text = lines.join("\n");
+
+        if quota_type == QuotaType::Credit {
+            if let Some((spent, budget)) = Self::credit_amounts_from_section(&section_text) {
+                return Some(QuotaInfo::with_details(
+                    label, spent, budget, quota_type, reset_at,
+                ));
+            }
+        }
+
+        Self::parse_percent_quota(&section_text, quota_type, label, reset_at)
+    }
+
+    /// 提取重置时间（CLI 直接输出，不经过 format_countdown，需手动加 ⏱ 前缀）。
+    fn reset_detail_from_lines(lines: &[&str]) -> Option<QuotaDetailSpec> {
+        lines.iter().find_map(|line| {
+            RESET_RE
+                .captures(line)
+                .map(|caps| QuotaDetailSpec::ResetDate {
+                    date: caps[1].trim().to_string(),
+                })
+        })
+    }
+
+    /// 提取 Credit 段的美元金额；无金额时由调用方继续尝试百分比解析。
+    fn credit_amounts_from_section(section_text: &str) -> Option<(f64, f64)> {
+        let caps = COST_RE.captures(section_text)?;
+        let spent = caps[1].replace(',', "").parse().unwrap_or(0.0);
+        let budget = caps[2].replace(',', "").parse().unwrap_or(0.0);
+        Some((spent, budget))
+    }
+
+    /// 解析百分比用量；`left` 语义由 QuotaInfo 统一换算为 used%。
+    fn parse_percent_quota(
+        section_text: &str,
+        quota_type: QuotaType,
+        label: QuotaLabelSpec,
+        reset_at: Option<QuotaDetailSpec>,
+    ) -> Option<QuotaInfo> {
+        let caps = PCT_RE.captures(section_text)?;
+        let value: f64 = caps[1].parse().unwrap_or(0.0);
+        let quota = match &caps[2] {
+            "used" => QuotaInfo::from_used_percent(label, value, quota_type, reset_at),
+            "left" => QuotaInfo::from_remaining_percent(label, value, quota_type, reset_at),
+            _ => return None,
+        };
+
+        Some(quota)
     }
 
     /// 将清理后的文本按空行分割为段落，跳过版本标题行
@@ -302,6 +301,12 @@ Current week
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::Session);
         assert_eq!(quotas[0].used, 45.0);
         assert_eq!(quotas[0].quota_type, QuotaType::Session);
+        assert_eq!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetDate {
+                date: "in 2h 15m".to_string()
+            })
+        );
 
         // Weekly
         assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Weekly);
@@ -355,6 +360,21 @@ $5.00 / $20.00
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
         assert_eq!(quotas[0].used, 5.0);
         assert_eq!(quotas[0].limit, 20.0);
+        assert_eq!(quotas[0].quota_type, QuotaType::Credit);
+    }
+
+    #[test]
+    fn test_parse_credit_quota_without_cost_uses_percent() {
+        let output = r#"
+Extra usage
+25% used
+"#;
+        let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
+        assert_eq!(quotas.len(), 1);
+
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
+        assert_eq!(quotas[0].used, 25.0);
+        assert_eq!(quotas[0].limit, 100.0);
         assert_eq!(quotas[0].quota_type, QuotaType::Credit);
     }
 
