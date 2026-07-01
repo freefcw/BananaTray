@@ -1,77 +1,25 @@
-use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::{ProviderError, ProviderResult};
 
-/// 解析 Codex usage API 响应的结构化结果。
-///
-/// `plan_type` 对齐 CodexBar `CodexUsageResponse.planType`，由调用方与 JWT 中的
-/// `chatgpt_plan_type` 合并后填入 `RefreshData::account_tier`。
-#[derive(Debug, Clone, Default)]
-pub(super) struct ParsedUsage {
-    pub quotas: Vec<QuotaInfo>,
-    pub plan_type: Option<String>,
-}
+use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
 
-/// Codex rate-limit 窗口的语义角色。
-///
-/// 与 CodexBar 的 `CodexRateWindowNormalizer` 保持一致：
-/// 通过 `limit_window_seconds / 60` 得到 `window_minutes`，300 分钟 = 5h session，
-/// 10080 分钟 = weekly。免费套餐只有 weekly 窗口，API 可能把它返回在 `primary_window`
-/// 字段内，此时必须按 `window_minutes` 分类，而不是盲目按字段位置。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum WindowRole {
-    Session,
-    Weekly,
-}
-
-impl WindowRole {
-    pub(super) fn label_spec(self) -> QuotaLabelSpec {
-        match self {
-            WindowRole::Session => QuotaLabelSpec::Session,
-            WindowRole::Weekly => QuotaLabelSpec::Weekly,
-        }
-    }
-
-    pub(super) fn quota_type(self) -> QuotaType {
-        match self {
-            WindowRole::Session => QuotaType::Session,
-            WindowRole::Weekly => QuotaType::Weekly,
-        }
-    }
-}
-
-/// 根据窗口分钟数判断窗口角色；若缺失或异常则回退到给定的默认角色。
-pub(super) fn resolve_role_from_minutes(
-    window_minutes: Option<i64>,
-    default_role: WindowRole,
-) -> WindowRole {
-    match window_minutes {
-        Some(300) => WindowRole::Session,
-        Some(10080) => WindowRole::Weekly,
-        _ => default_role,
-    }
-}
-
-/// 根据 `limit_window_seconds` 判断窗口角色；若缺失或异常则回退到给定的默认角色。
-fn resolve_role(limit_window_seconds: Option<i64>, default_role: WindowRole) -> WindowRole {
-    resolve_role_from_minutes(limit_window_seconds.map(|s| s / 60), default_role)
-}
-
-fn build_window_quota(window: &serde_json::Value, default_role: WindowRole) -> QuotaInfo {
-    let used = window
+fn parse_window_quota(window: &serde_json::Value, default_role: WindowRole) -> QuotaInfo {
+    let used_percent = window
         .get("used_percent")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
     let reset_at = window.get("reset_at").and_then(|v| v.as_i64());
-    let limit_window_seconds = window.get("limit_window_seconds").and_then(|v| v.as_i64());
-    let role = resolve_role(limit_window_seconds, default_role);
+    let window_minutes = window
+        .get("limit_window_seconds")
+        .and_then(|v| v.as_i64())
+        .map(|seconds| seconds / 60);
 
-    QuotaInfo::with_details(
-        role.label_spec(),
-        used,
-        100.0,
-        role.quota_type(),
-        reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs }),
-    )
+    quota::build_window_quota(WindowQuotaInput {
+        default_role,
+        used_percent,
+        reset_at,
+        window_minutes,
+    })
 }
 
 /// 解析 Codex usage API 响应。根据响应形态分派到 header 路径或 JSON 路径。
@@ -179,27 +127,18 @@ fn parse_json_response(body: &str) -> ProviderResult<ParsedUsage> {
 
     if let Some(rate_limit) = json.get("rate_limit") {
         if let Some(primary) = rate_limit.get("primary_window") {
-            quotas.push(build_window_quota(primary, WindowRole::Session));
+            quotas.push(parse_window_quota(primary, WindowRole::Session));
         }
         if let Some(secondary) = rate_limit.get("secondary_window") {
-            quotas.push(build_window_quota(secondary, WindowRole::Weekly));
+            quotas.push(parse_window_quota(secondary, WindowRole::Weekly));
         }
 
-        // 去重：若两个窗口被识别为相同角色（异常服务端返回），只保留第一个。
-        if quotas.len() == 2 && quotas[0].quota_type == quotas[1].quota_type {
-            quotas.truncate(1);
-        }
+        quota::deduplicate_window_roles(&mut quotas);
     }
 
     if let Some(credits) = json.get("credits") {
-        if let Some(balance) = read_credits_balance(credits) {
-            quotas.push(QuotaInfo::balance_only(
-                QuotaLabelSpec::Credits,
-                balance,
-                None,
-                QuotaType::Credit,
-                None,
-            ));
+        if let Some(balance) = read_json_credits_balance(credits) {
+            quotas.push(quota::build_credit_balance_quota(balance));
         }
     }
 
@@ -217,11 +156,7 @@ fn parse_json_response(body: &str) -> ProviderResult<ParsedUsage> {
     Ok(ParsedUsage { quotas, plan_type })
 }
 
-/// 读取 credits 余额，对齐 CodexBar 的 `CreditDetails`：
-/// - `has_credits` 默认 false（保守，需要显式 true 才展示余额）
-/// - `unlimited == true` 跳过
-/// - `balance` 支持数字或字符串（与 CodexBar 的宽松解码一致）
-fn read_credits_balance(credits: &serde_json::Value) -> Option<f64> {
+fn read_json_credits_balance(credits: &serde_json::Value) -> Option<f64> {
     let has_credits = credits
         .get("has_credits")
         .and_then(|v| v.as_bool())
@@ -230,19 +165,26 @@ fn read_credits_balance(credits: &serde_json::Value) -> Option<f64> {
         .get("unlimited")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    if !has_credits || unlimited {
-        return None;
+    let balance = credits.get("balance").and_then(json_credit_balance);
+
+    quota::read_credits_balance(CreditsInput {
+        has_credits,
+        unlimited,
+        balance,
+    })
+}
+
+fn json_credit_balance(value: &serde_json::Value) -> Option<CreditBalance<'_>> {
+    if let Some(balance) = value.as_f64() {
+        return Some(CreditBalance::Number(balance));
     }
-    let balance_value = credits.get("balance")?;
-    if let Some(f) = balance_value.as_f64() {
-        return Some(f);
-    }
-    balance_value.as_str().and_then(|s| s.parse::<f64>().ok())
+    value.as_str().map(CreditBalance::Text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::QuotaDetailSpec;
 
     #[test]
     fn test_parse_headers_response() {
@@ -372,30 +314,6 @@ mod tests {
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
         assert!(quotas.iter().all(|q| !q.is_credit()));
-    }
-
-    #[test]
-    fn test_resolve_role_fallback_when_limit_unknown() {
-        // 无 limit_window_seconds：primary 默认 Session，secondary 默认 Weekly（向后兼容）。
-        assert_eq!(resolve_role(None, WindowRole::Session), WindowRole::Session);
-        assert_eq!(resolve_role(None, WindowRole::Weekly), WindowRole::Weekly);
-        assert_eq!(
-            resolve_role(Some(999_999), WindowRole::Session),
-            WindowRole::Session
-        );
-    }
-
-    #[test]
-    fn test_resolve_role_exact_matches() {
-        // 300 min = session；10080 min = weekly；即使 default 相反也应被覆盖。
-        assert_eq!(
-            resolve_role(Some(18_000), WindowRole::Weekly),
-            WindowRole::Session
-        );
-        assert_eq!(
-            resolve_role(Some(604_800), WindowRole::Session),
-            WindowRole::Weekly
-        );
     }
 
     #[test]

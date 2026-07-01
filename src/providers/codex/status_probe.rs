@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use super::parser::ParsedUsage;
+use super::quota::{self, ParsedUsage};
 
 const CODEX_BINARY: &str = "codex";
 const STATUS_INPUT: &str = "/status";
@@ -142,13 +142,7 @@ pub(super) fn parse(raw: &str) -> ProviderResult<ParsedUsage> {
         ));
     }
     if let Some(balance) = credits_balance {
-        quotas.push(QuotaInfo::balance_only(
-            QuotaLabelSpec::Credits,
-            balance,
-            None,
-            QuotaType::Credit,
-            None,
-        ));
+        quotas.push(quota::build_credit_balance_quota(balance));
     }
 
     if quotas.is_empty() {

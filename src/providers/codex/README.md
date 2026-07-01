@@ -10,8 +10,9 @@ OpenAI Codex（ChatGPT 后端）配额抓取实现。对应 `~/.codex/auth.json`
 | `auth.rs` | `~/.codex/auth.json` 解析、JWT `id_token` 提取 email/plan/account_id、access_token 主动 + 被动刷新 |
 | `config.rs` | `~/.codex/config.toml` 读取，`chatgpt_base_url` 解析与归一化（支持自托管 ChatGPT 网关） |
 | `client.rs` | usage API HTTP 请求构造（含 `ChatGPT-Account-Id` 头） |
-| `parser.rs` | OAuth `/wham/usage` JSON 响应解析；按窗口时长区分 session/weekly；credits / plan_type 抽取 |
-| `rpc_probe.rs` | OAuth 可恢复失败时优先启动 `codex app-server`，通过 JSON-RPC `account/rateLimits/read` 读取结构化配额；按 `windowDurationMins` 区分 session/weekly |
+| `parser.rs` | OAuth `/wham/usage` JSON 响应解析；把 snake_case HTTP 字段规范化后交给 `quota.rs`；抽取 `plan_type` |
+| `quota.rs` | Codex quota 共享规则：窗口角色解析、窗口 `QuotaInfo` 构建、重复角色去重、credits balance 读取 |
+| `rpc_probe.rs` | OAuth 可恢复失败时优先启动 `codex app-server`，通过 JSON-RPC `account/rateLimits/read` 读取结构化配额；把 camelCase RPC 字段规范化后交给 `quota.rs` |
 | `status_probe.rs` | RPC 也失败时通过 PTY 启动 `codex /status` 做最后兜底解析 |
 
 ## 数据流
@@ -58,7 +59,7 @@ CLI 兑底内部固定顺序为 `codex app-server` RPC → PTY `/status`。RPC �
 
 主要解析行为对齐 CodexBar `CodexOAuthUsageFetcher` / `CodexStatusProbe` / `CodexRateWindowNormalizer`：
 
-- `parser.rs::resolve_role` ↔ `CodexRateWindowNormalizer.swift`
+- `quota.rs::resolve_role_from_minutes` ↔ `CodexRateWindowNormalizer.swift`
 - `auth.rs::resolve_account` ↔ `CodexReconciledState.oauthIdentity`
 - `config.rs::resolve_usage_url` ↔ `CodexOAuthUsageFetcher.resolveUsageURL`
 - `rpc_probe.rs::parse_rate_limits` ↔ `CodexRPCClient.fetchRateLimits` / `account/rateLimits/read`

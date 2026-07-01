@@ -2,6 +2,7 @@ mod auth;
 mod client;
 mod config;
 mod parser;
+mod quota;
 mod rpc_probe;
 mod status_probe;
 
@@ -21,7 +22,8 @@ use auth::{
     CodexCredentials,
 };
 use client::call_usage_api;
-use parser::{parse_usage_response, ParsedUsage};
+use parser::parse_usage_response;
+use quota::ParsedUsage;
 
 super::define_unit_provider!(CodexProvider);
 

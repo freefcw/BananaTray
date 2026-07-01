@@ -5,7 +5,7 @@
 //! 不依赖 TUI 布局、ANSI 或输出文案；但它仍属于 Codex CLI 的 experimental 接口，
 //! 因此失败时继续保留 PTY `/status` 作为最后兜底。
 
-use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::models::QuotaInfo;
 use crate::providers::common::path_resolver;
 use crate::providers::{ProviderError, ProviderResult};
 use anyhow::Result;
@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use super::parser::{resolve_role_from_minutes, ParsedUsage, WindowRole};
+use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
 
 const CODEX_BINARY: &str = "codex";
 const RPC_TIMEOUT: Duration = Duration::from_secs(8);
@@ -227,9 +227,27 @@ struct RateLimitSnapshot {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreditsSnapshot {
-    balance: Option<String>,
+    balance: Option<RpcCreditBalance>,
+    #[serde(default)]
     has_credits: bool,
+    #[serde(default)]
     unlimited: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RpcCreditBalance {
+    Number(f64),
+    Text(String),
+}
+
+impl RpcCreditBalance {
+    fn as_credit_balance(&self) -> CreditBalance<'_> {
+        match self {
+            RpcCreditBalance::Number(balance) => CreditBalance::Number(*balance),
+            RpcCreditBalance::Text(balance) => CreditBalance::Text(balance),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -246,25 +264,16 @@ fn parse_rate_limits(value: Value) -> ProviderResult<ParsedUsage> {
 
     let mut quotas = Vec::new();
     if let Some(primary) = response.rate_limits.primary {
-        quotas.push(build_window_quota(WindowRole::Session, primary));
+        quotas.push(parse_window_quota(WindowRole::Session, primary));
     }
     if let Some(secondary) = response.rate_limits.secondary {
-        quotas.push(build_window_quota(WindowRole::Weekly, secondary));
+        quotas.push(parse_window_quota(WindowRole::Weekly, secondary));
     }
 
-    // 与 HTTP JSON 路径保持一致：服务端异常返回两个相同角色时，只保留第一个。
-    if quotas.len() == 2 && quotas[0].quota_type == quotas[1].quota_type {
-        quotas.truncate(1);
-    }
+    quota::deduplicate_window_roles(&mut quotas);
     if let Some(credits) = response.rate_limits.credits {
-        if let Some(balance) = read_credits_balance(&credits) {
-            quotas.push(QuotaInfo::balance_only(
-                QuotaLabelSpec::Credits,
-                balance,
-                None,
-                QuotaType::Credit,
-                None,
-            ));
+        if let Some(balance) = read_rpc_credits_balance(&credits) {
+            quotas.push(quota::build_credit_balance_quota(balance));
         }
     }
 
@@ -282,33 +291,30 @@ fn parse_rate_limits(value: Value) -> ProviderResult<ParsedUsage> {
     })
 }
 
-fn build_window_quota(default_role: WindowRole, window: RateLimitWindow) -> QuotaInfo {
-    let role = resolve_role_from_minutes(window.window_duration_mins, default_role);
-
-    QuotaInfo::with_details(
-        role.label_spec(),
-        window.used_percent,
-        100.0,
-        role.quota_type(),
-        window
-            .resets_at
-            .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs }),
-    )
+fn parse_window_quota(default_role: WindowRole, window: RateLimitWindow) -> QuotaInfo {
+    quota::build_window_quota(WindowQuotaInput {
+        default_role,
+        used_percent: window.used_percent,
+        reset_at: window.resets_at,
+        window_minutes: window.window_duration_mins,
+    })
 }
 
-fn read_credits_balance(credits: &CreditsSnapshot) -> Option<f64> {
-    if !credits.has_credits || credits.unlimited {
-        return None;
-    }
-    credits
-        .balance
-        .as_deref()
-        .and_then(|balance| balance.parse::<f64>().ok())
+fn read_rpc_credits_balance(credits: &CreditsSnapshot) -> Option<f64> {
+    quota::read_credits_balance(CreditsInput {
+        has_credits: credits.has_credits,
+        unlimited: credits.unlimited,
+        balance: credits
+            .balance
+            .as_ref()
+            .map(RpcCreditBalance::as_credit_balance),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{QuotaDetailSpec, QuotaLabelSpec, QuotaType};
 
     #[test]
     fn parse_rate_limits_maps_windows_credits_and_plan() {
@@ -353,6 +359,30 @@ mod tests {
     }
 
     #[test]
+    fn parse_rate_limits_accepts_numeric_credits_balance() {
+        let raw = json!({
+            "rateLimits": {
+                "primary": { "usedPercent": 10 },
+                "credits": {
+                    "balance": 7.25,
+                    "hasCredits": true,
+                    "unlimited": false
+                }
+            }
+        });
+
+        let parsed = parse_rate_limits(raw).unwrap();
+        let credit = parsed
+            .quotas
+            .iter()
+            .find(|quota| quota.is_credit())
+            .unwrap();
+
+        assert!(credit.is_balance_only());
+        assert_eq!(credit.remaining_balance, Some(7.25));
+    }
+
+    #[test]
     fn parse_rate_limits_uses_window_duration_for_primary_weekly() {
         let raw = json!({
             "rateLimits": {
@@ -372,6 +402,21 @@ mod tests {
         assert_eq!(parsed.quotas[0].label_spec, QuotaLabelSpec::Weekly);
         assert_eq!(parsed.quotas[0].quota_type, QuotaType::Weekly);
         assert_eq!(parsed.quotas[0].used, 72.0);
+    }
+
+    #[test]
+    fn parse_rate_limits_defaults_missing_credit_flags_to_hidden() {
+        let raw = json!({
+            "rateLimits": {
+                "primary": { "usedPercent": 10 },
+                "credits": { "balance": "999" }
+            }
+        });
+
+        let parsed = parse_rate_limits(raw).unwrap();
+
+        assert_eq!(parsed.quotas.len(), 1);
+        assert!(parsed.quotas.iter().all(|quota| !quota.is_credit()));
     }
 
     #[test]
