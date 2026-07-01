@@ -3,7 +3,7 @@ mod seat_source;
 use super::codeium_family::{self, WINDSURF_SPEC};
 use super::ProviderError;
 use super::{AiProvider, ProviderCapabilities, ProviderExecutionContext, ProviderResult};
-use crate::models::{QuotaType, RefreshData};
+use crate::models::{QuotaInfo, RefreshData};
 use anyhow::Result;
 use async_trait::async_trait;
 use log::{debug, warn};
@@ -44,55 +44,68 @@ fn refresh_windsurf_with_sources(
     fetch_live: impl FnOnce() -> Result<RefreshData>,
     fetch_cache: impl Fn() -> Result<RefreshData>,
 ) -> Result<RefreshData> {
-    match fetch_seat() {
+    let seat_err = match fetch_seat() {
         Ok(seat_data) => {
-            if seat_data.quotas.len() == 1 {
-                match fetch_cache() {
-                    Ok(cache_data) => {
-                        return Ok(merge_seat_and_cache_quotas(&seat_data, &cache_data));
-                    }
-                    Err(cache_err) => {
-                        debug!(
-                            target: "providers",
-                            "{} cache fallback for weekly quota failed: {}, returning seat data only",
-                            WINDSURF_SPEC.log_label,
-                            cache_err
-                        );
-                    }
-                }
-            }
-            Ok(seat_data)
+            return Ok(enrich_seat_data_with_cache_if_missing_weekly(
+                seat_data,
+                &fetch_cache,
+            ));
         }
-        Err(seat_err) => {
-            warn!(
+        Err(err) => err,
+    };
+
+    warn!(
+        target: "providers",
+        "{} seat management API failed: {}, trying local API",
+        WINDSURF_SPEC.log_label,
+        seat_err
+    );
+
+    let live_err = match fetch_live() {
+        Ok(data) => return Ok(data),
+        Err(err) => err,
+    };
+
+    warn!(
+        target: "providers",
+        "{} local API failed: {}, falling back to local cache",
+        WINDSURF_SPEC.log_label,
+        live_err
+    );
+
+    fetch_cache().map_err(|cache_err| {
+        ProviderError::fetch_failed(&format!(
+            "all sources failed: seat API error: {}; local API error: {}; cache error: {}",
+            seat_err, live_err, cache_err
+        ))
+        .into()
+    })
+}
+
+fn enrich_seat_data_with_cache_if_missing_weekly(
+    seat_data: RefreshData,
+    fetch_cache: &impl Fn() -> Result<RefreshData>,
+) -> RefreshData {
+    if has_weekly_quota(&seat_data) {
+        return seat_data;
+    }
+
+    match fetch_cache() {
+        Ok(cache_data) => merge_seat_and_cache_quotas(&seat_data, &cache_data),
+        Err(cache_err) => {
+            debug!(
                 target: "providers",
-                "{} seat management API failed: {}, trying local API",
+                "{} cache fallback for weekly quota failed: {}, returning seat data only",
                 WINDSURF_SPEC.log_label,
-                seat_err
+                cache_err
             );
-
-            match fetch_live() {
-                Ok(data) => Ok(data),
-                Err(live_err) => {
-                    warn!(
-                        target: "providers",
-                        "{} local API failed: {}, falling back to local cache",
-                        WINDSURF_SPEC.log_label,
-                        live_err
-                    );
-
-                    match fetch_cache() {
-                        Ok(data) => Ok(data),
-                        Err(cache_err) => Err(ProviderError::fetch_failed(&format!(
-                            "all sources failed: seat API error: {}; local API error: {}; cache error: {}",
-                            seat_err, live_err, cache_err
-                        ))
-                        .into()),
-                    }
-                }
-            }
+            seat_data
         }
     }
+}
+
+fn has_weekly_quota(data: &RefreshData) -> bool {
+    data.quotas.iter().any(QuotaInfo::is_weekly)
 }
 
 /// 合并 Seat API 和 Cache 数据：用 Seat 的实时日配额 + Cache 的周配额。
@@ -101,9 +114,7 @@ fn merge_seat_and_cache_quotas(seat_data: &RefreshData, cache_data: &RefreshData
     let mut cache_contributed = false;
 
     for quota in &cache_data.quotas {
-        let is_weekly =
-            quota.quota_type == QuotaType::Weekly || quota.stable_key.contains("weekly");
-        if is_weekly
+        if quota.is_weekly()
             && !merged_quotas
                 .iter()
                 .any(|q| q.stable_key == quota.stable_key)
@@ -168,6 +179,17 @@ mod tests {
             used,
             100.0,
             QuotaType::Weekly,
+            None,
+        )
+    }
+
+    fn session_quota(used: f64) -> QuotaInfo {
+        QuotaInfo::with_key(
+            "session-quota",
+            QuotaLabelSpec::Session,
+            used,
+            100.0,
+            QuotaType::Session,
             None,
         )
     }
@@ -268,6 +290,40 @@ mod tests {
     }
 
     #[test]
+    fn test_refresh_uses_cache_weekly_when_seat_has_multiple_non_weekly_quotas() {
+        let seat_data = RefreshData::with_account(
+            vec![daily_quota(50.0), session_quota(25.0)],
+            Some("seat@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label(SEAT_API_SOURCE_LABEL);
+
+        let cache_data = RefreshData::with_account(
+            vec![daily_quota(45.0), weekly_quota(80.0)],
+            Some("seat@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local cache");
+
+        let data = refresh_windsurf_with_sources(
+            || Ok(seat_data.clone()),
+            || -> Result<RefreshData> { panic!("live source should not run after seat success") },
+            || Ok(cache_data.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(data.quotas.len(), 3);
+        assert!(data
+            .quotas
+            .iter()
+            .any(|q| q.stable_key == "weekly-quota" && q.quota_type == QuotaType::Weekly));
+        assert_eq!(
+            data.source_label,
+            Some(SEAT_AND_CACHE_SOURCE_LABEL.to_string())
+        );
+    }
+
+    #[test]
     fn test_merge_seat_and_cache_quotas_adds_weekly() {
         let seat_data = RefreshData::with_account(
             vec![daily_quota(50.0)],
@@ -302,6 +358,36 @@ mod tests {
             merged.source_label,
             Some(SEAT_AND_CACHE_SOURCE_LABEL.to_string())
         );
+    }
+
+    #[test]
+    fn test_merge_ignores_key_text_without_weekly_semantics() {
+        let seat_data = RefreshData::with_account(
+            vec![daily_quota(20.0)],
+            Some("test@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label(SEAT_API_SOURCE_LABEL);
+
+        let cache_data = RefreshData::with_account(
+            vec![QuotaInfo::with_key(
+                "weekly-promo",
+                "Weekly promo",
+                10.0,
+                100.0,
+                QuotaType::General,
+                None,
+            )],
+            Some("test@example.com".to_string()),
+            Some("Pro".to_string()),
+        )
+        .with_source_label("local cache");
+
+        let merged = merge_seat_and_cache_quotas(&seat_data, &cache_data);
+
+        assert_eq!(merged.quotas.len(), 1);
+        assert!(!merged.quotas.iter().any(|q| q.stable_key == "weekly-promo"));
+        assert_eq!(merged.source_label, Some(SEAT_API_SOURCE_LABEL.to_string()));
     }
 
     #[test]
