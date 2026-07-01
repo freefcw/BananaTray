@@ -9,10 +9,8 @@ fn parse_window_quota(window: &serde_json::Value, default_role: WindowRole) -> Q
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
     let reset_at = window.get("reset_at").and_then(|v| v.as_i64());
-    let window_minutes = window
-        .get("limit_window_seconds")
-        .and_then(|v| v.as_i64())
-        .map(|seconds| seconds / 60);
+    let window_seconds = window.get("limit_window_seconds").and_then(|v| v.as_i64());
+    let window_minutes = quota::window_seconds_to_minutes(window_seconds);
 
     quota::build_window_quota(WindowQuotaInput {
         default_role,
@@ -84,19 +82,17 @@ fn parse_header_response(headers: &str) -> Option<Vec<QuotaInfo>> {
 
     let mut quotas = Vec::new();
     if let Some(primary) = primary_percent {
-        quotas.push(QuotaInfo::with_details(
+        quotas.push(QuotaInfo::from_used_percent(
             QuotaLabelSpec::Session,
             primary,
-            100.0,
             QuotaType::Session,
             None,
         ));
     }
     if let Some(secondary) = secondary_percent {
-        quotas.push(QuotaInfo::with_details(
+        quotas.push(QuotaInfo::from_used_percent(
             QuotaLabelSpec::Weekly,
             secondary,
-            100.0,
             QuotaType::Weekly,
             None,
         ));

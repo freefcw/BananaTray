@@ -1,5 +1,13 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 
+const SECONDS_PER_MINUTE: i64 = 60;
+const MINUTES_PER_HOUR: i64 = 60;
+const HOURS_PER_DAY: i64 = 24;
+const DAYS_PER_WEEK: i64 = 7;
+const SESSION_WINDOW_HOURS: i64 = 5;
+const SESSION_WINDOW_MINUTES: i64 = SESSION_WINDOW_HOURS * MINUTES_PER_HOUR;
+const WEEKLY_WINDOW_MINUTES: i64 = DAYS_PER_WEEK * HOURS_PER_DAY * MINUTES_PER_HOUR;
+
 /// 解析 Codex usage / RPC 响应后的结构化结果。
 ///
 /// `plan_type` 对齐 CodexBar `CodexUsageResponse.planType`，由调用方与 JWT 中的
@@ -46,14 +54,18 @@ pub(super) struct WindowQuotaInput {
     pub window_minutes: Option<i64>,
 }
 
+pub(super) fn window_seconds_to_minutes(window_seconds: Option<i64>) -> Option<i64> {
+    window_seconds.map(|seconds| seconds / SECONDS_PER_MINUTE)
+}
+
 /// 根据窗口分钟数判断窗口角色；若缺失或异常则回退到给定的默认角色。
 pub(super) fn resolve_role_from_minutes(
     window_minutes: Option<i64>,
     default_role: WindowRole,
 ) -> WindowRole {
     match window_minutes {
-        Some(300) => WindowRole::Session,
-        Some(10080) => WindowRole::Weekly,
+        Some(SESSION_WINDOW_MINUTES) => WindowRole::Session,
+        Some(WEEKLY_WINDOW_MINUTES) => WindowRole::Weekly,
         _ => default_role,
     }
 }
@@ -61,10 +73,9 @@ pub(super) fn resolve_role_from_minutes(
 pub(super) fn build_window_quota(input: WindowQuotaInput) -> QuotaInfo {
     let role = resolve_role_from_minutes(input.window_minutes, input.default_role);
 
-    QuotaInfo::with_details(
+    QuotaInfo::from_used_percent(
         role.label_spec(),
         input.used_percent,
-        100.0,
         role.quota_type(),
         input
             .reset_at
@@ -138,13 +149,26 @@ mod tests {
     }
 
     #[test]
+    fn window_seconds_to_minutes_converts_codex_api_window_unit() {
+        assert_eq!(
+            window_seconds_to_minutes(Some(SESSION_WINDOW_MINUTES * SECONDS_PER_MINUTE)),
+            Some(SESSION_WINDOW_MINUTES)
+        );
+        assert_eq!(
+            window_seconds_to_minutes(Some(WEEKLY_WINDOW_MINUTES * SECONDS_PER_MINUTE)),
+            Some(WEEKLY_WINDOW_MINUTES)
+        );
+        assert_eq!(window_seconds_to_minutes(None), None);
+    }
+
+    #[test]
     fn resolve_role_uses_exact_window_minutes() {
         assert_eq!(
-            resolve_role_from_minutes(Some(300), WindowRole::Weekly),
+            resolve_role_from_minutes(Some(SESSION_WINDOW_MINUTES), WindowRole::Weekly),
             WindowRole::Session
         );
         assert_eq!(
-            resolve_role_from_minutes(Some(10080), WindowRole::Session),
+            resolve_role_from_minutes(Some(WEEKLY_WINDOW_MINUTES), WindowRole::Session),
             WindowRole::Weekly
         );
     }
@@ -155,7 +179,7 @@ mod tests {
             default_role: WindowRole::Session,
             used_percent: 42.0,
             reset_at: Some(1_735_000_000),
-            window_minutes: Some(10080),
+            window_minutes: Some(WEEKLY_WINDOW_MINUTES),
         });
 
         assert_eq!(quota.label_spec, QuotaLabelSpec::Weekly);
@@ -176,13 +200,13 @@ mod tests {
                 default_role: WindowRole::Session,
                 used_percent: 10.0,
                 reset_at: None,
-                window_minutes: Some(10080),
+                window_minutes: Some(WEEKLY_WINDOW_MINUTES),
             }),
             build_window_quota(WindowQuotaInput {
                 default_role: WindowRole::Weekly,
                 used_percent: 20.0,
                 reset_at: None,
-                window_minutes: Some(10080),
+                window_minutes: Some(WEEKLY_WINDOW_MINUTES),
             }),
         ];
 

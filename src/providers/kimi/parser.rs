@@ -42,6 +42,8 @@ struct KimiWindow {
 const KIMI_TIER_ANDANTE: u64 = 1024;
 const KIMI_TIER_MODERATO: u64 = 2048;
 const KIMI_TIER_ALLEGRETTO: u64 = 7168;
+const KIMI_CODING_SESSION_WINDOW_MINUTES: u64 = 300;
+const KIMI_WINDOW_UNIT_MINUTE: &str = "TIME_UNIT_MINUTE";
 
 pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
     let resp: KimiUsageResponse = serde_json::from_str(response_str).with_context(|| {
@@ -89,9 +91,7 @@ pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>>
             let is_5h_window = lim
                 .window
                 .as_ref()
-                .map(|w| {
-                    w.duration == Some(300) && w.time_unit.as_deref() == Some("TIME_UNIT_MINUTE")
-                })
+                .map(is_coding_session_window)
                 .unwrap_or(false);
 
             if is_5h_window {
@@ -138,6 +138,11 @@ fn detect_tier(weekly_limit: f64) -> Option<&'static str> {
     }
 }
 
+fn is_coding_session_window(window: &KimiWindow) -> bool {
+    window.duration == Some(KIMI_CODING_SESSION_WINDOW_MINUTES)
+        && window.time_unit.as_deref() == Some(KIMI_WINDOW_UNIT_MINUTE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +169,23 @@ mod tests {
             }
         );
         assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Session);
+    }
+
+    #[test]
+    fn kimi_session_window_requires_expected_duration_and_unit() {
+        assert!(is_coding_session_window(&KimiWindow {
+            duration: Some(KIMI_CODING_SESSION_WINDOW_MINUTES),
+            time_unit: Some(KIMI_WINDOW_UNIT_MINUTE.to_string()),
+        }));
+
+        assert!(!is_coding_session_window(&KimiWindow {
+            duration: Some(KIMI_CODING_SESSION_WINDOW_MINUTES),
+            time_unit: Some("TIME_UNIT_HOUR".to_string()),
+        }));
+
+        assert!(!is_coding_session_window(&KimiWindow {
+            duration: Some(60),
+            time_unit: Some(KIMI_WINDOW_UNIT_MINUTE.to_string()),
+        }));
     }
 }
