@@ -21,6 +21,9 @@ static COST_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\$([0-9,]+\.?\d*)\s*/\s*\$([0-9,]+\.?\d*)").unwrap());
 static MODEL_NAME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([^)]+)\)").unwrap());
 
+/// Claude CLI 命令名，用于执行探测与错误建议
+const CLAUDE_CLI: &str = "claude";
+
 /// Claude CLI 获取方式
 pub struct ClaudeCliProbe;
 
@@ -193,7 +196,7 @@ impl ClaudeCliProbe {
         if output_lower.contains("not logged in") || output_lower.contains("authentication") {
             return Some(ProviderError::auth_required(Some(
                 FailureAdvice::LoginCli {
-                    cli: "claude".to_string(),
+                    cli: CLAUDE_CLI.to_string(),
                 },
             )));
         }
@@ -219,7 +222,7 @@ impl UsageProbe for ClaudeCliProbe {
         };
 
         let result = runner
-            .run("claude", "/usage", options)
+            .run(CLAUDE_CLI, "/usage", options)
             .map_err(|err| ProviderError::classify(&err))?;
 
         debug!(target: "providers", "claude command completed, output length: {} bytes", result.output.len());
@@ -238,7 +241,7 @@ impl UsageProbe for ClaudeCliProbe {
             {
                 return Err(ProviderError::unavailable_with_advice(
                     FailureAdvice::TrustFolder {
-                        cli: "claude".to_string(),
+                        cli: CLAUDE_CLI.to_string(),
                     },
                 ));
             }
