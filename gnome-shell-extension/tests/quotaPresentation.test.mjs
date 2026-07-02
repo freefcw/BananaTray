@@ -245,7 +245,7 @@ describe('sortedQuotas', () => {
         assert.deepEqual(sorted.map(q => q.label), ['B', 'C', 'A']);
     });
 
-    it('breaks ties by ratio ascending (lower ratio = more remaining = better)', () => {
+    it('breaks ties by remaining ratio ascending (less remaining = worse)', () => {
         const provider = makeProvider({
             quotas: [
                 makeQuota({label: 'high', status_level: 'Green', used: 80, limit: 100}),
@@ -253,7 +253,18 @@ describe('sortedQuotas', () => {
             ],
         });
         const sorted = sortedQuotas(provider);
-        assert.deepEqual(sorted.map(q => q.label), ['low', 'high']);
+        assert.deepEqual(sorted.map(q => q.label), ['high', 'low']);
+    });
+
+    it('does not use display bar_ratio for same-status risk ordering', () => {
+        const provider = makeProvider({
+            quotas: [
+                makeQuota({label: 'low-used', status_level: 'Green', used: 20, limit: 100, bar_ratio: 0.2}),
+                makeQuota({label: 'high-used', status_level: 'Green', used: 80, limit: 100, bar_ratio: 0.8}),
+            ],
+        });
+        const sorted = sortedQuotas(provider);
+        assert.deepEqual(sorted.map(q => q.label), ['high-used', 'low-used']);
     });
 
     it('does not mutate original', () => {

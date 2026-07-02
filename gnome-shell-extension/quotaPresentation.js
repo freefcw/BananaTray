@@ -105,6 +105,13 @@ export function quotaRatio(quota) {
     return 0;
 }
 
+function quotaRemainingRatio(quota) {
+    if (!Number.isFinite(quota.used) || !Number.isFinite(quota.limit) || quota.limit <= 0)
+        return 1;
+
+    return Math.max(0, Math.min(1, (quota.limit - quota.used) / quota.limit));
+}
+
 export function sortedQuotas(provider) {
     return [...(provider.quotas || [])].sort((a, b) => {
         const byStatus =
@@ -113,7 +120,7 @@ export function sortedQuotas(provider) {
         if (byStatus !== 0)
             return byStatus;
 
-        return quotaRatio(a) - quotaRatio(b);
+        return quotaRemainingRatio(a) - quotaRemainingRatio(b);
     });
 }
 
