@@ -157,7 +157,10 @@ class BananaTrayIndicator extends PanelMenu.Button {
             this._setSyncButtonState('syncing');
             this._setPanelState('yellow', _('Refreshing'));
             this._statusLabel.text = _('Refreshing');
-            this._client.refreshAll();
+            Promise.resolve(this._client.refreshAll()).then(started => {
+                if (!started && this._client)
+                    this._resetSyncState();
+            });
         });
         footer.add_child(this._syncButton);
 
@@ -226,10 +229,15 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
     _handleClientError(logMessage, uiMessage) {
         log(`BananaTray: ${logMessage}`);
-        this._isRefreshing = false;
-        this._syncLabel.text = _('Sync Data');
+        this._resetSyncState();
         if (uiMessage)
             this._showError(uiMessage);
+    }
+
+    _resetSyncState() {
+        this._isRefreshing = false;
+        if (this._syncLabel)
+            this._syncLabel.text = _('Sync Data');
     }
 
     _handleClientLog(message) {
@@ -240,8 +248,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
         if (!snapshot || !Array.isArray(snapshot.providers))
             return;
 
-        this._isRefreshing = false;
-        this._syncLabel.text = _('Sync Data');
+        this._resetSyncState();
 
         // 始终更新面板指示器（状态点 + 摘要文字），即使弹窗关闭
         const summary = summarizeProviders(snapshot.providers);
@@ -306,7 +313,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
     _showLoading(text, level = 'yellow', panelText = _('Waiting')) {
         // 进入 loading/offline 状态时，之前的刷新操作已不再有意义，重置标志避免 Sync 按钮短暂锁死。
-        this._isRefreshing = false;
+        this._pendingSnapshot = null;
+        this._resetSyncState();
         this._statusLabel.text = text || _('Loading');
         this._setPanelState(level, panelText);
         this._updateHeaderBadge(level === 'red' ? 'offline' : 'syncing', text || _('Loading'));
@@ -315,6 +323,8 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     _showError(text) {
+        this._pendingSnapshot = null;
+        this._resetSyncState();
         this._statusLabel.text = text || _('Error');
         this._setPanelState('red', _('Error'));
         this._updateHeaderBadge('offline', text || _('Error'));
