@@ -139,6 +139,7 @@ export class QuotaClient {
         this._activationInFlight = false;
         this._lastActivationRequestMs = 0;
         this._activationCancellable = null;
+        this._pendingProxyActions = new Set();
         this._destroyed = false;
     }
 
@@ -156,20 +157,20 @@ export class QuotaClient {
     async fetchQuotas() {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
-        if (!proxy) {
-            this._requestDaemonActivation('fetch quotas');
-            return;
-        }
+        if (!proxy)
+            return this._requestDaemonActivation('fetch quotas');
 
         try {
             const [jsonData] = await proxy.GetAllQuotasAsync();
             if (!this._isCurrentProxy(proxy, generation))
-                return;
+                return false;
             this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
+            return true;
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
-                return;
+                return false;
             this._emitError(`GetAllQuotas failed: ${e.message}`, _('Failed to fetch quota data'));
+            return false;
         }
     }
 
@@ -177,19 +178,28 @@ export class QuotaClient {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
         if (!proxy) {
-            this._requestDaemonActivation('manual refresh');
-            return;
+            this._queuePendingProxyAction('refreshAll');
+            const activationRequested = this._requestDaemonActivation('manual refresh');
+            if (!activationRequested) {
+                this._emitError(
+                    'D-Bus activation request skipped for manual refresh',
+                    _('BananaTray daemon not running')
+                );
+            }
+            return activationRequested;
         }
 
         try {
             const [jsonData] = await proxy.RefreshAllAsync();
             if (!this._isCurrentProxy(proxy, generation))
-                return;
+                return false;
             this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
+            return true;
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
-                return;
+                return false;
             this._emitError(`RefreshAll failed: ${e.message}`, _('Failed to refresh quota data'));
+            return false;
         }
     }
 
@@ -197,16 +207,25 @@ export class QuotaClient {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
         if (!proxy) {
-            this._requestDaemonActivation('open settings');
-            return;
+            this._queuePendingProxyAction('openSettings');
+            const activationRequested = this._requestDaemonActivation('open settings');
+            if (!activationRequested) {
+                this._emitError(
+                    'D-Bus activation request skipped for open settings',
+                    _('BananaTray daemon not running')
+                );
+            }
+            return activationRequested;
         }
 
         try {
             await proxy.OpenSettingsAsync();
+            return true;
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
-                return;
+                return false;
             this._emitError(`OpenSettings failed: ${e.message}`);
+            return false;
         }
     }
 
@@ -214,6 +233,7 @@ export class QuotaClient {
         this._destroyed = true;
         this._proxyGeneration++;
         this._activationGeneration++;
+        this._pendingProxyActions.clear();
         this._cancelActivationRequest();
         if (this._busWatchId) {
             Gio.bus_unwatch_name(this._busWatchId);
@@ -247,7 +267,9 @@ export class QuotaClient {
 
                     this._installProxy(proxy);
                     this._onReady?.();
-                    this.fetchQuotas();
+                    const ranRefresh = this._runPendingProxyActions();
+                    if (!ranRefresh)
+                        this.fetchQuotas();
                 },
                 null,
                 Gio.DBusProxyFlags.NONE,
@@ -265,12 +287,14 @@ export class QuotaClient {
     }
 
     _requestDaemonActivation(reason) {
-        if (this._destroyed || this._activationInFlight)
-            return;
+        if (this._destroyed)
+            return false;
+        if (this._activationInFlight)
+            return true;
 
         const now = monotonicNowMs();
         if (now - this._lastActivationRequestMs < START_SERVICE_RETRY_MS)
-            return;
+            return false;
 
         this._lastActivationRequestMs = now;
         this._activationInFlight = true;
@@ -317,7 +341,30 @@ export class QuotaClient {
             this._activationCancellable = null;
             this._lastActivationRequestMs = monotonicNowMs() - START_SERVICE_FAILURE_RETRY_MS;
             this._emitError(`D-Bus activation request failed: ${e.message}`);
+            return false;
         }
+
+        return true;
+    }
+
+    _queuePendingProxyAction(action) {
+        this._pendingProxyActions.add(action);
+    }
+
+    _runPendingProxyActions() {
+        if (!this._proxy || this._pendingProxyActions.size === 0)
+            return false;
+
+        const actions = [...this._pendingProxyActions];
+        this._pendingProxyActions.clear();
+        for (const action of actions) {
+            if (action === 'refreshAll')
+                this.refreshAll();
+            else if (action === 'openSettings')
+                this.openSettings();
+        }
+
+        return actions.includes('refreshAll');
     }
 
     _cancelActivationRequest() {

@@ -10,6 +10,7 @@ import {
     validateSnapshot,
     parseSnapshot,
     SUPPORTED_SCHEMA_VERSION,
+    QuotaClient,
 } from '../quotaClient.js';
 
 // -- Helpers --
@@ -50,6 +51,11 @@ function makeSnapshot(overrides = {}) {
         providers: [],
         ...overrides,
     };
+}
+
+async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
 }
 
 // ============================================================
@@ -382,5 +388,71 @@ describe('parseSnapshot', () => {
         });
         parseSnapshot(JSON.stringify(snapshot), msg => warnings.push(msg));
         assert.ok(warnings.length > 0);
+    });
+});
+
+// ============================================================
+// QuotaClient — pending proxy actions
+// ============================================================
+describe('QuotaClient — pending proxy actions', () => {
+    it('replays OpenSettings after activation creates a proxy', async () => {
+        const calls = [];
+        const client = new QuotaClient({
+            onError: (logMessage, uiMessage) => calls.push(['error', logMessage, uiMessage]),
+        });
+        client._requestDaemonActivation = () => true;
+
+        assert.equal(await client.openSettings(), true);
+        assert.ok(client._pendingProxyActions.has('openSettings'));
+
+        client._proxy = {
+            OpenSettingsAsync: async () => calls.push(['openSettings']),
+        };
+        const ranRefresh = client._runPendingProxyActions();
+        await flushPromises();
+
+        assert.equal(ranRefresh, false);
+
+        assert.deepEqual(calls, [['openSettings']]);
+        assert.equal(client._pendingProxyActions.size, 0);
+    });
+
+    it('replays RefreshAll after activation creates a proxy', async () => {
+        const snapshots = [];
+        const client = new QuotaClient({
+            onSnapshot: snapshot => snapshots.push(snapshot),
+        });
+        client._requestDaemonActivation = () => true;
+
+        assert.equal(await client.refreshAll(), true);
+        assert.ok(client._pendingProxyActions.has('refreshAll'));
+
+        client._proxy = {
+            RefreshAllAsync: async () => [JSON.stringify(makeSnapshot({providers: [makeProvider()]}))],
+        };
+        const ranRefresh = client._runPendingProxyActions();
+        await flushPromises();
+
+        assert.equal(ranRefresh, true);
+
+        assert.equal(snapshots.length, 1);
+        assert.equal(snapshots[0].providers.length, 1);
+        assert.equal(client._pendingProxyActions.size, 0);
+    });
+
+    it('reports offline when manual refresh activation is throttled', async () => {
+        const errors = [];
+        const client = new QuotaClient({
+            onError: (logMessage, uiMessage) => errors.push({logMessage, uiMessage}),
+        });
+        client._requestDaemonActivation = () => false;
+
+        assert.equal(await client.refreshAll(), false);
+
+        assert.ok(client._pendingProxyActions.has('refreshAll'));
+        assert.deepEqual(errors, [{
+            logMessage: 'D-Bus activation request skipped for manual refresh',
+            uiMessage: 'BananaTray daemon not running',
+        }]);
     });
 });
