@@ -396,48 +396,140 @@ describe('parseSnapshot', () => {
 // ============================================================
 describe('QuotaClient — pending proxy actions', () => {
     it('replays OpenSettings after activation creates a proxy', async () => {
-        const calls = [];
+        const proxyCalls = [];
+        const errors = [];
         const client = new QuotaClient({
-            onError: (logMessage, uiMessage) => calls.push(['error', logMessage, uiMessage]),
+            onError: (logMessage, uiMessage) => errors.push({logMessage, uiMessage}),
         });
         client._requestDaemonActivation = () => true;
 
         assert.equal(await client.openSettings(), true);
-        assert.ok(client._pendingProxyActions.has('openSettings'));
 
-        client._proxy = {
-            OpenSettingsAsync: async () => calls.push(['openSettings']),
-        };
-        const ranRefresh = client._runPendingProxyActions();
+        client._onProxyReady({
+            connectSignal: () => 1,
+            OpenSettingsAsync: async () => proxyCalls.push('openSettings'),
+            GetAllQuotasAsync: async () => [JSON.stringify(makeSnapshot())],
+        });
         await flushPromises();
 
-        assert.equal(ranRefresh, false);
-
-        assert.deepEqual(calls, [['openSettings']]);
-        assert.equal(client._pendingProxyActions.size, 0);
+        assert.deepEqual(proxyCalls, ['openSettings']);
+        assert.equal(errors.length, 0);
     });
 
     it('replays RefreshAll after activation creates a proxy', async () => {
         const snapshots = [];
+        const proxyCalls = [];
         const client = new QuotaClient({
             onSnapshot: snapshot => snapshots.push(snapshot),
         });
         client._requestDaemonActivation = () => true;
 
         assert.equal(await client.refreshAll(), true);
-        assert.ok(client._pendingProxyActions.has('refreshAll'));
 
-        client._proxy = {
-            RefreshAllAsync: async () => [JSON.stringify(makeSnapshot({providers: [makeProvider()]}))],
-        };
-        const ranRefresh = client._runPendingProxyActions();
+        client._onProxyReady({
+            connectSignal: () => 1,
+            RefreshAllAsync: async () => {
+                proxyCalls.push('refreshAll');
+                return [JSON.stringify(makeSnapshot({providers: [makeProvider()]}))];
+            },
+            GetAllQuotasAsync: async () => {
+                proxyCalls.push('getAllQuotas');
+                return [JSON.stringify(makeSnapshot())];
+            },
+        });
         await flushPromises();
 
-        assert.equal(ranRefresh, true);
-
+        // refresh 已在待办队列里 → 回放 refreshAll 拉取快照，跳过默认 fetch
+        assert.deepEqual(proxyCalls, ['refreshAll']);
         assert.equal(snapshots.length, 1);
         assert.equal(snapshots[0].providers.length, 1);
-        assert.equal(client._pendingProxyActions.size, 0);
+    });
+
+    it('auto-fetches when proxy becomes ready with no pending actions', async () => {
+        const snapshots = [];
+        const proxyCalls = [];
+        const client = new QuotaClient({
+            onSnapshot: snapshot => snapshots.push(snapshot),
+        });
+
+        client._onProxyReady({
+            connectSignal: () => 1,
+            GetAllQuotasAsync: async () => {
+                proxyCalls.push('getAllQuotas');
+                return [JSON.stringify(makeSnapshot({providers: [makeProvider()]}))];
+            },
+            RefreshAllAsync: async () => {
+                proxyCalls.push('refreshAll');
+                return [JSON.stringify(makeSnapshot())];
+            },
+        });
+        await flushPromises();
+
+        // 无待办动作 → 自动补一次 fetch 填充弹窗初始数据
+        assert.deepEqual(proxyCalls, ['getAllQuotas']);
+        assert.equal(snapshots.length, 1);
+    });
+
+    it('replays OpenSettings and still auto-fetches (no refresh pending)', async () => {
+        const snapshots = [];
+        const proxyCalls = [];
+        const client = new QuotaClient({
+            onSnapshot: snapshot => snapshots.push(snapshot),
+        });
+        client._requestDaemonActivation = () => true;
+
+        await client.openSettings();
+
+        client._onProxyReady({
+            connectSignal: () => 1,
+            OpenSettingsAsync: async () => proxyCalls.push('openSettings'),
+            GetAllQuotasAsync: async () => {
+                proxyCalls.push('getAllQuotas');
+                return [JSON.stringify(makeSnapshot())];
+            },
+            RefreshAllAsync: async () => {
+                proxyCalls.push('refreshAll');
+                return [JSON.stringify(makeSnapshot())];
+            },
+        });
+        await flushPromises();
+
+        // 待办只有 openSettings（非 refresh）→ 回放 openSettings + 补 fetch
+        assert.deepEqual(proxyCalls, ['openSettings', 'getAllQuotas']);
+        assert.equal(snapshots.length, 1);
+    });
+
+    it('replays both refresh and openSettings when both pending (no auto-fetch)', async () => {
+        const snapshots = [];
+        const proxyCalls = [];
+        const client = new QuotaClient({
+            onSnapshot: snapshot => snapshots.push(snapshot),
+        });
+        client._requestDaemonActivation = () => true;
+
+        await client.refreshAll();
+        await client.openSettings();
+
+        client._onProxyReady({
+            connectSignal: () => 1,
+            OpenSettingsAsync: async () => proxyCalls.push('openSettings'),
+            GetAllQuotasAsync: async () => {
+                proxyCalls.push('getAllQuotas');
+                return [JSON.stringify(makeSnapshot())];
+            },
+            RefreshAllAsync: async () => {
+                proxyCalls.push('refreshAll');
+                return [JSON.stringify(makeSnapshot({providers: [makeProvider()]}))];
+            },
+        });
+        await flushPromises();
+
+        // refresh + openSettings 都在待办队列 → 两个都回放，不补 fetch
+        assert.ok(proxyCalls.includes('refreshAll'));
+        assert.ok(proxyCalls.includes('openSettings'));
+        assert.ok(!proxyCalls.includes('getAllQuotas'));
+        // refresh 产生快照；openSettings 不产生快照
+        assert.equal(snapshots.length, 1);
     });
 
     it('reports offline when manual refresh activation is throttled', async () => {
@@ -449,7 +541,6 @@ describe('QuotaClient — pending proxy actions', () => {
 
         assert.equal(await client.refreshAll(), false);
 
-        assert.ok(client._pendingProxyActions.has('refreshAll'));
         assert.deepEqual(errors, [{
             logMessage: 'D-Bus activation request skipped for manual refresh',
             uiMessage: 'BananaTray daemon not running',

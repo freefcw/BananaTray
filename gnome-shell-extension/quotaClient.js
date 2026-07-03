@@ -178,7 +178,7 @@ export class QuotaClient {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
         if (!proxy) {
-            this._queuePendingProxyAction('refreshAll');
+            this._queuePendingProxyAction(this.refreshAll);
             const activationRequested = this._requestDaemonActivation('manual refresh');
             if (!activationRequested) {
                 this._emitError(
@@ -207,7 +207,7 @@ export class QuotaClient {
         const proxy = this._proxy;
         const generation = this._proxyGeneration;
         if (!proxy) {
-            this._queuePendingProxyAction('openSettings');
+            this._queuePendingProxyAction(this.openSettings);
             const activationRequested = this._requestDaemonActivation('open settings');
             if (!activationRequested) {
                 this._emitError(
@@ -265,11 +265,7 @@ export class QuotaClient {
                         return;
                     }
 
-                    this._installProxy(proxy);
-                    this._onReady?.();
-                    const ranRefresh = this._runPendingProxyActions();
-                    if (!ranRefresh)
-                        this.fetchQuotas();
+                    this._onProxyReady(proxy);
                 },
                 null,
                 Gio.DBusProxyFlags.NONE,
@@ -351,20 +347,25 @@ export class QuotaClient {
         this._pendingProxyActions.add(action);
     }
 
-    _runPendingProxyActions() {
+    _onProxyReady(proxy) {
+        this._installProxy(proxy);
+        this._onReady?.();
+        // 若待办动作里含 refresh，回放时 refreshAll 自会拉取快照；
+        // 否则补一次默认 fetch 以填充弹窗初始数据。
+        const hadPendingRefresh = this._pendingProxyActions.has(this.refreshAll);
+        this._replayPendingProxyActions();
+        if (!hadPendingRefresh)
+            this.fetchQuotas();
+    }
+
+    _replayPendingProxyActions() {
         if (!this._proxy || this._pendingProxyActions.size === 0)
-            return false;
+            return;
 
         const actions = [...this._pendingProxyActions];
         this._pendingProxyActions.clear();
-        for (const action of actions) {
-            if (action === 'refreshAll')
-                this.refreshAll();
-            else if (action === 'openSettings')
-                this.openSettings();
-        }
-
-        return actions.includes('refreshAll');
+        for (const action of actions)
+            action.call(this);
     }
 
     _cancelActivationRequest() {
