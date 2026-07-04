@@ -201,9 +201,11 @@ fn save_refreshed_tokens(
     new_id_token: Option<&str>,
     old_refresh_token: &str,
 ) -> ProviderResult<()> {
-    let content = std::fs::read_to_string(path).unwrap_or_default();
-    let mut json: serde_json::Value =
-        serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
+    let content = std::fs::read_to_string(path)
+        .map_err(|err| ProviderError::fetch_failed(&format!("read auth.json: {err}")))?;
+    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
+        ProviderError::parse_failed(&format!("auth.json is not valid JSON: {err}"))
+    })?;
 
     if let Some(tokens) = json.get_mut("tokens") {
         tokens["access_token"] = serde_json::json!(access_token);
@@ -250,7 +252,12 @@ pub(super) fn ensure_access_token(credentials: &mut CodexCredentials) {
     if !token_needs_refresh(&credentials.last_refresh) {
         return;
     }
-    if refresh_access_token(&credentials.refresh_token).is_err() {
+    if let Err(err) = refresh_access_token(&credentials.refresh_token) {
+        log::warn!(
+            target: "providers",
+            "codex access token refresh failed: {:?}; keeping existing credentials (server may still accept them)",
+            err
+        );
         return;
     }
     if let Ok(reloaded) = load_credentials() {
@@ -582,5 +589,25 @@ mod tests {
         assert_eq!(reloaded.access_token, "at");
         assert_eq!(reloaded.refresh_token, "rt");
         assert_eq!(reloaded.id_token.as_deref(), Some("id"));
+    }
+
+    #[test]
+    fn test_save_refreshed_tokens_corrupt_json_returns_parse_failed() {
+        // 损坏的 auth.json 不能被静默回退成 {} 丢字段，必须报 ParseFailed
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        std::fs::write(&path, "not valid json {{{").unwrap();
+
+        let err = save_refreshed_tokens(&path, "at", Some("rt"), None, "old_rt").unwrap_err();
+        assert!(matches!(err, ProviderError::ParseFailed { .. }));
+    }
+
+    #[test]
+    fn test_save_refreshed_tokens_missing_file_returns_fetch_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing.json");
+
+        let err = save_refreshed_tokens(&path, "at", Some("rt"), None, "old_rt").unwrap_err();
+        assert!(matches!(err, ProviderError::FetchFailed { .. }));
     }
 }
