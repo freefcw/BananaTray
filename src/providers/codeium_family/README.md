@@ -109,6 +109,10 @@ mtime 取 `state.vscdb`、`state.vscdb-wal`、`state.vscdb-journal` 三者中**�
 SQLite WAL 模式下新写入先到 `-wal`，主 DB 文件 mtime 在 checkpoint 之前可能远落后，
 只看主文件会把"还在活跃写入"的 cache 误判为 stale。
 
+**未来 mtime 容忍窗口**：mtime 在未来时（时钟漂移 / NTP 微调 / 文件被恢复），
+`FUTURE_MTIME_TOLERANCE_SECS`（当前 60s）以内按 fresh 处理避免断流；
+超过则视为异常，返回 `Unavailable` 拒绝使用可能过期的缓存。
+
 availability 语义刻意拆成两层：
 
 - `cache_source::is_available()` 表示本地 quota cache source 可用，要求 DB 存在且新鲜。

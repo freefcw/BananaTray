@@ -492,6 +492,37 @@ fn test_ensure_cache_fresh_rejects_stale_file() {
 }
 
 #[test]
+fn test_ensure_cache_fresh_accepts_small_future_mtime() {
+    // 小漂移（<= FUTURE_MTIME_TOLERANCE_SECS）按 fresh 处理
+    use std::time::{Duration, SystemTime};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.vscdb");
+    let file = std::fs::File::create(&path).unwrap();
+    // mtime 设为 30s 后（在 60s 容忍窗口内）
+    let near_future = SystemTime::now() + Duration::from_secs(30);
+    file.set_modified(near_future).unwrap();
+    drop(file);
+
+    assert!(ensure_cache_fresh(&path, &spec_with_max_age(3 * 3600)).is_ok());
+}
+
+#[test]
+fn test_ensure_cache_fresh_rejects_large_future_mtime() {
+    // 大漂移（> FUTURE_MTIME_TOLERANCE_SECS）拒绝，避免过期缓存冒充 fresh
+    use std::time::{Duration, SystemTime};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.vscdb");
+    let file = std::fs::File::create(&path).unwrap();
+    // mtime 设为 1 小时后（远超 60s 容忍窗口）
+    let far_future = SystemTime::now() + Duration::from_secs(3600);
+    file.set_modified(far_future).unwrap();
+    drop(file);
+
+    let err = ensure_cache_fresh(&path, &spec_with_max_age(3 * 3600)).unwrap_err();
+    assert!(matches!(err, ProviderError::Unavailable { .. }));
+}
+
+#[test]
 fn test_ensure_cache_fresh_missing_file_returns_unavailable() {
     let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("does-not-exist.vscdb");

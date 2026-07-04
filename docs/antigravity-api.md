@@ -68,6 +68,9 @@ source orchestration 目前明确分开：
   之所以要看 sidecar：VS Code/Electron 系 SQLite 走 WAL 模式，新写入先到 `-wal`，
   主 DB 文件 mtime 在 checkpoint 之前可能远落后；只看主文件会把"还在活跃写入"的
   cache 误判为 stale。
+  mtime 在未来时（时钟漂移 / NTP 微调 / 文件被恢复），`FUTURE_MTIME_TOLERANCE_SECS`
+  （当前 60s）以内按 fresh 处理避免断流；超过则视为异常返回 `Unavailable`，
+  拒绝使用可能过期的缓存。
 - **reset 闸**：单条 quota 的 `reset_at_unix` 已过 → 服务端已经重置，缓存的
   `remaining_fraction` 是过期数据，统一视为 100% 剩余并清除倒计时。
 

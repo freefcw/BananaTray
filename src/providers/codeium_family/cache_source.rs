@@ -19,6 +19,10 @@ pub(in crate::providers::codeium_family) use sqlite_store::{
     cache_db_path, cache_db_path_candidates, query_auth_status_json,
 };
 
+/// mtime 在未来时的容忍窗口（秒）。小漂移（NTP 微调、文件系统精度）
+/// 在此窗口内按 fresh 处理；超过则视为异常，拒绝使用可能过期的缓存。
+const FUTURE_MTIME_TOLERANCE_SECS: u64 = 60;
+
 /// 本地 quota cache source 是否可作为刷新来源。
 ///
 /// 注意：这不是“是否存在可读取 auth DB”。Windsurf seat API 只需要从 DB 中读取 apiKey，
@@ -149,16 +153,37 @@ pub(super) fn ensure_cache_fresh(db_path: &Path, spec: &CodeiumFamilySpec) -> Pr
     let now = SystemTime::now();
     let age_secs = match now.duration_since(latest_mtime) {
         Ok(dur) => dur.as_secs(),
-        Err(_) => {
+        Err(err) => {
             // mtime 在未来：时钟漂移 / 文件被恢复 / NTP 同步异常。
-            // 不静默吞掉——明确 warn，并按 0 处理（视为"刚写入"）以免长期被锁死为 fresh。
-            warn!(
-                target: "providers",
-                "{} cache mtime is in the future for {}; clock drift?",
-                spec.log_label,
-                source_path.display()
-            );
-            0
+            // 小漂移（<= FUTURE_MTIME_TOLERANCE_SECS）按 0 处理（视为刚写入），
+            // 避免正常 NTP 微调导致断流；大漂移说明 mtime 异常（如文件被恢复
+            // 到未来时间），放行会用过期缓存冒充 fresh，必须拒绝。
+            let future_secs = err.duration().as_secs();
+            if future_secs <= FUTURE_MTIME_TOLERANCE_SECS {
+                warn!(
+                    target: "providers",
+                    "{} cache mtime is {}s in the future for {}; within tolerance, treating as fresh",
+                    spec.log_label,
+                    future_secs,
+                    source_path.display()
+                );
+                0
+            } else {
+                warn!(
+                    target: "providers",
+                    "{} cache mtime is {}s in the future for {}; exceeds tolerance, refusing to use potentially stale cache",
+                    spec.log_label,
+                    future_secs,
+                    source_path.display()
+                );
+                return Err(ProviderError::unavailable(&format!(
+                    "{} cache mtime is {}s in the future ({}); clock drift or file restored with future timestamp. \
+                     Refusing to use potentially stale cache.",
+                    spec.log_label,
+                    future_secs,
+                    source_path.display()
+                )));
+            }
         }
     };
 
