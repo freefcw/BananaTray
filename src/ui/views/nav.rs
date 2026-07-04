@@ -4,8 +4,8 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
 use gpui::{
-    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, FontWeight,
-    Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
+    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, Entity,
+    FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
     ScrollHandle, StatefulInteractiveElement, StyleRefinement, Styled,
 };
 use std::time::Duration;
@@ -41,6 +41,51 @@ fn lerp(a: Pixels, b: Pixels, t: f32) -> Pixels {
     a + (b - a) * t
 }
 
+struct TopNavItem {
+    icon_path: String,
+    label: String,
+    tab: NavTab,
+}
+
+struct TopNavSnapshot {
+    items: Vec<TopNavItem>,
+    previous_tab: Option<NavTab>,
+    generation: u64,
+}
+
+impl TopNavSnapshot {
+    fn active_index(&self, active_tab: &NavTab) -> Option<usize> {
+        self.items.iter().position(|item| item.tab == *active_tab)
+    }
+
+    fn previous_index(&self) -> Option<usize> {
+        self.previous_tab
+            .as_ref()
+            .and_then(|tab| self.items.iter().position(|item| item.tab == *tab))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NavSliderRect {
+    left: Pixels,
+    width: Pixels,
+    height: Pixels,
+}
+
+#[derive(Clone, Copy)]
+struct NavSliderLayout {
+    target: NavSliderRect,
+    from: Option<NavSliderRect>,
+}
+
+struct NavScrollMetrics {
+    can_scroll_left: bool,
+    can_scroll_right: bool,
+    left_target: Option<usize>,
+    right_target: Option<usize>,
+    slider_layout: Option<NavSliderLayout>,
+}
+
 impl AppView {
     pub(crate) fn render_top_nav(
         &self,
@@ -48,123 +93,36 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
-        let state_ref = self.state.borrow();
-        let settings = state_ref.session.settings.clone();
-        let providers = state_ref.session.provider_store.providers.clone();
-        let generation = state_ref.session.nav.generation;
-        let prev_tab = state_ref.session.nav.prev_active_tab.clone();
-        let custom_ids = state_ref.session.provider_store.custom_provider_ids();
-        drop(state_ref);
-        let ordered_ids = settings.provider.ordered_provider_ids(&custom_ids);
-        let mut nav_items: Vec<_> = ordered_ids
-            .iter()
-            .filter(|id| settings.provider.is_enabled(id))
-            .filter_map(|id| {
-                providers.iter().find(|p| p.provider_id == *id).map(|p| {
-                    (
-                        p.icon_asset().to_string(),
-                        p.display_name().to_string(),
-                        NavTab::Provider(id.clone()),
-                    )
-                })
-            })
-            .collect();
-
-        // Overview pill 始终在所有 Provider 之前
-        if settings.display.show_overview {
-            nav_items.insert(
-                0,
-                (
-                    OVERVIEW_ICON.to_string(),
-                    "Overview".to_string(),
-                    NavTab::Overview,
-                ),
-            );
-        }
-
-        // 计算 active / prev pill 在 nav_items 中的索引
-        let active_index = nav_items.iter().position(|(_, _, tab)| *tab == active_tab);
-        let prev_index =
-            prev_tab.and_then(|pt| nav_items.iter().position(|(_, _, tab)| *tab == pt));
-
         let border_color = theme.border.subtle;
-
-        let offset = self.nav_scroll_handle.offset();
-        let max_offset = self.nav_scroll_handle.max_offset();
-        let threshold = px(SCROLL_THRESHOLD);
-        let can_scroll_left = offset.x < threshold.negate();
-        let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
-
         let indicator_color = theme.text.muted;
-
-        // 计算点击箭头后要滚动到的目标 item 索引
-        let scroll_handle = self.nav_scroll_handle.clone();
-        let scroll_handle_r = scroll_handle.clone();
-        let entity_l = cx.entity().clone();
-        let entity_r = cx.entity().clone();
-
-        // 找到左侧第一个被裁剪/隐藏的 item 索引
-        let left_target = Self::find_left_target(&self.nav_scroll_handle);
-        // 找到右侧第一个被裁剪/隐藏的 item 索引
-        let right_target = Self::find_right_target(&self.nav_scroll_handle);
-
-        // ── 滑块位置计算 ──
-        // bounds_for_item 返回的是 layout bounds（内容空间，不含 scroll offset）。
-        // 滑块放在 scroll 容器的外层 wrapper 中（overflow_hidden + relative），
-        // 需要：1) 减去 scroll 容器的 left 得到内容空间中的相对坐标
-        //       2) 加上 scroll offset.x 转换为视觉位置
-        let scroll_bounds = self.nav_scroll_handle.bounds();
-        let scroll_left = scroll_bounds.left();
-        let scroll_offset_x = offset.x; // 已在上面获取（负值=向左滚动过）
-
-        // 将 layout bounds 转换为滑块在 wrapper 中的视觉坐标 (left, width, height)
-        let to_visual = |b: Bounds<Pixels>| -> (Pixels, Pixels, Pixels) {
-            (
-                b.left() - scroll_left + scroll_offset_x,
-                b.size.width,
-                b.size.height,
-            )
-        };
-
-        // 滑块的目标位置（当前 active pill）
-        let target_rect = active_index
-            .and_then(|ix| self.nav_scroll_handle.bounds_for_item(ix))
-            .map(to_visual);
-
-        // 滑块的起始位置（上一个 active pill）
-        let from_rect = prev_index
-            .and_then(|ix| self.nav_scroll_handle.bounds_for_item(ix))
-            .map(to_visual);
-
         let slider_bg = theme.nav.pill_active_bg;
+        let snapshot = self.top_nav_snapshot();
+        let active_index = snapshot.active_index(&active_tab);
+        let previous_index = snapshot.previous_index();
+        let metrics =
+            Self::measure_nav_scroll(&self.nav_scroll_handle, active_index, previous_index);
 
-        // ── 构建滑块元素 ──
-        let slider =
-            target_rect.map(|tr| self.render_nav_slider(tr, from_rect, generation, slider_bg));
-
-        let mut left_arrow = div()
-            .id("nav-arrow-left")
-            .w(px(INDICATOR_WIDTH))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer();
-        if can_scroll_left {
-            left_arrow = left_arrow
-                .child(
-                    svg()
-                        .path("src/icons/chevron-left.svg")
-                        .size(px(10.0))
-                        .text_color(indicator_color),
-                )
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    if let Some(ix) = left_target {
-                        scroll_handle.scroll_to_item(ix);
-                    }
-                    entity_l.update(cx, |_, cx| cx.notify());
-                });
-        }
+        let left_arrow = Self::render_nav_scroll_arrow(
+            "nav-arrow-left",
+            "src/icons/chevron-left.svg",
+            metrics.can_scroll_left,
+            metrics.left_target,
+            self.nav_scroll_handle.clone(),
+            cx.entity().clone(),
+            indicator_color,
+        );
+        let right_arrow = Self::render_nav_scroll_arrow(
+            "nav-arrow-right",
+            "src/icons/chevron-right.svg",
+            metrics.can_scroll_right,
+            metrics.right_target,
+            self.nav_scroll_handle.clone(),
+            cx.entity().clone(),
+            indicator_color,
+        );
+        let slider = metrics
+            .slider_layout
+            .map(|layout| self.render_nav_slider(layout, snapshot.generation, slider_bg));
 
         let nav_scroll = div()
             .id("nav-provider-scroll")
@@ -174,8 +132,8 @@ impl AppView {
             .items_center()
             .gap(px(2.0))
             .track_scroll(&self.nav_scroll_handle)
-            .children(nav_items.into_iter().map(|(icon, label, tab)| {
-                self.render_nav_pill(icon, label, tab, active_tab.clone(), cx)
+            .children(snapshot.items.into_iter().map(|item| {
+                self.render_nav_pill(item.icon_path, item.label, item.tab, active_tab.clone(), cx)
             }));
 
         let mut center = div().flex_1().min_w_0().overflow_hidden().relative();
@@ -183,30 +141,6 @@ impl AppView {
             center = center.child(slider);
         }
         center = center.child(nav_scroll);
-
-        let mut right_arrow = div()
-            .id("nav-arrow-right")
-            .w(px(INDICATOR_WIDTH))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer();
-        if can_scroll_right {
-            right_arrow = right_arrow
-                .child(
-                    svg()
-                        .path("src/icons/chevron-right.svg")
-                        .size(px(10.0))
-                        .text_color(indicator_color),
-                )
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    if let Some(ix) = right_target {
-                        scroll_handle_r.scroll_to_item(ix);
-                    }
-                    entity_r.update(cx, |_, cx| cx.notify());
-                });
-        }
 
         div()
             .w_full()
@@ -220,20 +154,138 @@ impl AppView {
             .child(right_arrow)
     }
 
+    fn top_nav_snapshot(&self) -> TopNavSnapshot {
+        let state = self.state.borrow();
+        let session = &state.session;
+        let custom_ids = session.provider_store.custom_provider_ids();
+        let ordered_ids = session.settings.provider.ordered_provider_ids(&custom_ids);
+        let mut nav_items: Vec<_> = ordered_ids
+            .iter()
+            .filter(|id| session.settings.provider.is_enabled(id))
+            .filter_map(|id| {
+                session
+                    .provider_store
+                    .providers
+                    .iter()
+                    .find(|p| p.provider_id == *id)
+                    .map(|p| TopNavItem {
+                        icon_path: p.icon_asset().to_string(),
+                        label: p.display_name().to_string(),
+                        tab: NavTab::Provider(id.clone()),
+                    })
+            })
+            .collect();
+
+        if session.settings.display.show_overview {
+            nav_items.insert(
+                0,
+                TopNavItem {
+                    icon_path: OVERVIEW_ICON.to_string(),
+                    label: "Overview".to_string(),
+                    tab: NavTab::Overview,
+                },
+            );
+        }
+
+        TopNavSnapshot {
+            items: nav_items,
+            previous_tab: session.nav.prev_active_tab.clone(),
+            generation: session.nav.generation,
+        }
+    }
+
+    fn measure_nav_scroll(
+        handle: &ScrollHandle,
+        active_index: Option<usize>,
+        previous_index: Option<usize>,
+    ) -> NavScrollMetrics {
+        let offset = handle.offset();
+        let max_offset = handle.max_offset();
+        let threshold = px(SCROLL_THRESHOLD);
+        let can_scroll_left = offset.x < threshold.negate();
+        let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
+
+        let scroll_bounds = handle.bounds();
+        let scroll_left = scroll_bounds.left();
+        let scroll_offset_x = offset.x;
+
+        let to_visual = |bounds: Bounds<Pixels>| NavSliderRect {
+            left: bounds.left() - scroll_left + scroll_offset_x,
+            width: bounds.size.width,
+            height: bounds.size.height,
+        };
+        let target_rect = active_index
+            .and_then(|ix| handle.bounds_for_item(ix))
+            .map(to_visual);
+        let from_rect = previous_index
+            .and_then(|ix| handle.bounds_for_item(ix))
+            .map(to_visual);
+        let slider_layout = target_rect.map(|target| NavSliderLayout {
+            target,
+            from: from_rect,
+        });
+
+        NavScrollMetrics {
+            can_scroll_left,
+            can_scroll_right,
+            left_target: Self::find_left_target(handle),
+            right_target: Self::find_right_target(handle),
+            slider_layout,
+        }
+    }
+
+    fn render_nav_scroll_arrow(
+        element_id: &'static str,
+        icon_path: &'static str,
+        enabled: bool,
+        target: Option<usize>,
+        scroll_handle: ScrollHandle,
+        entity: Entity<Self>,
+        indicator_color: Hsla,
+    ) -> impl IntoElement {
+        let mut arrow = div()
+            .id(element_id)
+            .w(px(INDICATOR_WIDTH))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer();
+
+        if enabled {
+            arrow = arrow
+                .child(
+                    svg()
+                        .path(icon_path)
+                        .size(px(10.0))
+                        .text_color(indicator_color),
+                )
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    if let Some(ix) = target {
+                        scroll_handle.scroll_to_item(ix);
+                    }
+                    entity.update(cx, |_, cx| cx.notify());
+                });
+        }
+
+        arrow
+    }
+
     /// 渲染导航栏滑块背景（absolute 定位，带果冻动画）
     fn render_nav_slider(
         &self,
-        target_rect: (Pixels, Pixels, Pixels),
-        from_rect: Option<(Pixels, Pixels, Pixels)>,
+        layout: NavSliderLayout,
         generation: u64,
         bg: Hsla,
     ) -> impl IntoElement {
-        let (to_left, to_width, to_height) = target_rect;
+        let to_left = layout.target.left;
+        let to_width = layout.target.width;
+        let to_height = layout.target.height;
 
         // 如果有 from_rect 且和 target 不同 → 播放动画
         // 否则直接定位到 target（无动画）
-        let animation_start = from_rect.filter(|&(fl, fw, _)| {
-            (fl - to_left).abs() > px(1.0) || (fw - to_width).abs() > px(1.0)
+        let animation_start = layout.from.filter(|from| {
+            (from.left - to_left).abs() > px(1.0) || (from.width - to_width).abs() > px(1.0)
         });
 
         let base = div()
@@ -243,7 +295,9 @@ impl AppView {
             .rounded(px(8.0))
             .bg(bg);
 
-        if let Some((from_left, from_width, _)) = animation_start {
+        if let Some(from) = animation_start {
+            let from_left = from.left;
+            let from_width = from.width;
             base.with_animation(
                 ElementId::Name(format!("nav-slider-{}", generation).into()),
                 Animation::new(Duration::from_millis(SLIDER_ANIMATION_MS)),

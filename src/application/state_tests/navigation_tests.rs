@@ -45,6 +45,21 @@ fn nav_switch_between_providers() {
 }
 
 #[test]
+fn nav_switch_records_previous_tab_and_increments_generation() {
+    let mut nav = NavigationState {
+        active_tab: NavTab::Overview,
+        last_provider_id: pid(ProviderKind::Claude),
+        prev_active_tab: None,
+        generation: 7,
+    };
+
+    nav.switch_to(NavTab::Provider(pid(ProviderKind::Gemini)));
+
+    assert_eq!(nav.prev_active_tab, Some(NavTab::Overview));
+    assert_eq!(nav.generation, 8);
+}
+
+#[test]
 fn nav_fallback_when_current_disabled() {
     let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
     let mut nav = NavigationState {
