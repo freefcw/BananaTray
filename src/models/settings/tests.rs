@@ -560,6 +560,22 @@ fn sidebar_provider_ids_includes_custom() {
     assert_eq!(ids[1], ProviderId::Custom("myai:newapi".to_string()));
 }
 
+#[test]
+fn sidebar_provider_ids_hides_removed_provider_with_residual_order() {
+    // provider_order 残留已从 sidebar 移除的 key（排序记忆），
+    // sidebar_provider_ids 必须不暴露它。
+    let config = ProviderConfig {
+        sidebar_providers: vec!["gemini".into()],
+        provider_order: vec!["claude".into(), "gemini".into()], // claude 已移除但残留
+        ..Default::default()
+    };
+    let ids = config.sidebar_provider_ids(&[]);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
+    // claude 不在结果中
+    assert!(!ids.contains(&ProviderId::BuiltIn(ProviderKind::Claude)));
+}
+
 // ── addable_provider_kinds ────────────────────────────
 
 #[test]
@@ -642,6 +658,24 @@ fn remove_from_sidebar_success() {
     assert!(config.remove_from_sidebar(&id));
     assert!(!config.sidebar_providers.contains(&"claude".to_string()));
     assert_eq!(config.sidebar_providers.len(), 1);
+}
+
+#[test]
+fn remove_from_sidebar_preserves_provider_order_for_re_add() {
+    // provider_order 是排序记忆：从 sidebar 移除后保留 key，
+    // 用户重新加回时 add_to_sidebar 跳过追加，恢复原位置。
+    let mut config = ProviderConfig {
+        sidebar_providers: vec!["claude".into(), "gemini".into()],
+        provider_order: vec!["claude".into(), "gemini".into()],
+        ..Default::default()
+    };
+    let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+    assert!(config.remove_from_sidebar(&claude));
+    // provider_order 仍保留 claude（排序记忆）
+    assert!(config.provider_order.contains(&"claude".to_string()));
+    // 重新加回：claude 仍在原位置（order[0]），不被追加到末尾
+    assert!(config.add_to_sidebar(&claude));
+    assert_eq!(config.provider_order[0], "claude");
 }
 
 #[test]

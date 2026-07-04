@@ -77,6 +77,12 @@ impl ProviderConfig {
     }
 
     /// 从 sidebar 列表移除 Provider。返回 true 表示移除成功。
+    ///
+    /// 注意：不同步清理 `provider_order`。`provider_order` 是"用户自定义排序前缀"，
+    /// 缺失的 provider 会被 `ordered_provider_ids` 自动追加到末尾，因此残留 key 无害；
+    /// 保留它还能让用户重新加回 sidebar 时恢复原排序位置（`add_to_sidebar` 发现
+    /// key 已在 order 中即跳过追加）。内置 key 不会被 `prune_stale_custom_ids`
+    /// 清理，这是有意的——排序记忆比强一致更有价值。
     pub fn remove_from_sidebar(&mut self, id: &ProviderId) -> bool {
         let key = id.id_key();
         let before = self.sidebar_providers.len();

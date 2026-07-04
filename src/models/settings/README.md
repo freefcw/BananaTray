@@ -23,6 +23,7 @@ AppSettings
 - **`NotificationSettings`** — `session_quota_notifications` / `notification_sound`
 - **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`
+  - `provider_order` 是排序前缀，不是全量清单：可包含已从 sidebar 移除或已禁用的 provider key（作为排序记忆，重新加回时恢复原位置）；缺失项由 `ordered_provider_ids` 自动追加到末尾，`sidebar_provider_ids` 会过滤掉不在 sidebar 中的项
   - `is_enabled()` / `set_enabled()` / `remove_enabled_record()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()`
 - **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
   - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量

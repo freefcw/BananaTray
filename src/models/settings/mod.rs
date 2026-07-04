@@ -141,7 +141,10 @@ pub struct ProviderConfig {
     /// 各 Provider 启用状态（key = provider id_key, value = enabled）
     #[serde(default)]
     pub enabled_providers: HashMap<String, bool>,
-    /// Provider 在导航栏中的排列顺序（存储 id_key 列表）
+    /// Provider 排序前缀（id_key 列表）。只记录用户自定义顺序，
+    /// 不在其中的 provider 由 `ordered_provider_ids` 自动追加到末尾。
+    /// 可包含已从 sidebar 移除或已禁用的 provider key（作为排序记忆，
+    /// 重新加回时恢复原位置）；`prune_stale_custom_ids` 只清理不存在的 custom id。
     #[serde(default)]
     pub provider_order: Vec<String>,
     /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）
