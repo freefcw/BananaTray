@@ -192,7 +192,10 @@ bash scripts/bundle-gnome-extension.sh
 | `RefreshComplete(s)` | daemon → 扩展 | JSON `DBusQuotaSnapshot` |
 | `IsActive` (property) | 扩展 → daemon | `boolean` |
 
-完整 XML 接口定义见 `quotaClient.js` 中的 `DBUS_INTERFACE_XML`。
+完整 XML 接口定义见 `quotaClient.js` 中的 `DBUS_INTERFACE_XML`；mock daemon 中的
+同名 XML、Rust zbus iface 和 Rust DTO schema version 由
+`scripts/check-gnome-dbus-contract.mjs` 在扩展检查中做静态一致性校验，避免调试
+mock 与真实 daemon 契约漂移。
 
 ### Overview 同步
 
@@ -292,7 +295,8 @@ Footer 中 `Sync Data` 默认为次级按钮；仅当 Header 状态为 `Syncing`
 ./scripts/check-gnome-extension.sh
 ```
 
-该检查会确认扩展必需文件存在，禁止同步 D-Bus 调用回归，确认
+该检查会确认扩展必需文件存在，禁止同步 D-Bus 调用回归，确认 D-Bus client/mock/Rust
+接口和 JSON schema version 的静态契约一致性，确认
 入口通过 `panelButton.js` 装配 `QuotaClient`，并在本机有 `node` 时对所有扩展
 ES module 执行语法检查。若本机有 `msgfmt` / `xgettext` / `msgcmp`，还会校验
 `po/zh_CN.po` 语法、`bananatray.mo` 是否由最新 `.po` 编译而来，以及 `_()` / `ngettext()`

@@ -45,7 +45,8 @@ service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon �
 | `scripts/dev-gnome-extension-watch.sh` | 真实桌面会话热重载：监控文件变化，自动 cp + disable/enable。 |
 | `scripts/install-gnome-extension.sh` | 当前用户会话安装 / 诊断入口；递归复制扩展文件并检查 `State`。 |
 | `scripts/gnome-extension-mock-daemon.js` | mock `com.bananatray.Daemon`，用于 UI 状态调试。 |
-| `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard。 |
+| `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard 和 D-Bus contract parity。 |
+| `scripts/check-gnome-dbus-contract.mjs` | D-Bus 契约静态校验：比较 Extension client/mock 的 bus/path/XML/schema version，并确认 Rust iface/DTO 仍匹配。 |
 | `scripts/bundle-gnome-extension.sh` | e.g.o 提交用 zip 打包：白名单运行时文件、metadata 校验、版本信息输出。 |
 | `resources/linux/com.bananatray.Daemon.service` | Session D-Bus activation 文件，声明 `com.bananatray.Daemon` 如何启动。 |
 | `resources/linux/bananatray.service` | systemd user service，供 D-Bus activation 或用户手动 `systemctl --user start` 启动。 |
@@ -232,11 +233,15 @@ Extension 当前依赖的最小字段：
 `elapsed_secs` 是 v1 内的可选增强字段，仅在 `status_kind == Stale` 时由 daemon 填充。扩展会优先用它本地化 `Synced` / `Syncing` / `Offline` / `x minutes ago` / `x hours ago`；若缺失则回退到 daemon 提供的 `status_text`。
 
 Rust DTO 定义在 `src/application/selectors/dbus_dto.rs`，D-Bus 服务文档见 `src/dbus/README.md`。
+`scripts/check-gnome-dbus-contract.mjs` 会在扩展检查中确认 Extension client、mock daemon、
+Rust zbus iface 和 Rust DTO schema version 没有漂移。
 
 ## 开发约束
 
 - 只使用 GNOME 45+ ESM imports。
 - D-Bus 调用必须使用异步方法，禁止 `GetAllQuotasSync` / `RefreshAllSync` / `OpenSettingsSync`。
+- 修改 D-Bus bus name、object path、XML、method/signal/property 或 JSON schema version 时，必须同步
+  Extension client、mock daemon、Rust iface/DTO，并让 `scripts/check-gnome-dbus-contract.mjs` 通过。
 - `extension.js` 只保留扩展生命周期入口；PanelMenu 逻辑放在 `panelButton.js`。
 - `panelButton.js` 只通过 `QuotaClient` 访问 D-Bus，不直接定义 D-Bus XML，不直接创建 proxy；协议层放在 `quotaClient.js`。
 - 纯展示数据整理放在 `quotaPresentation.js`，可复用 UI 组件放在 `quotaWidgets.js`，避免后续图表和错误态继续挤回入口文件。

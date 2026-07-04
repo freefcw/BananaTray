@@ -108,6 +108,8 @@ zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满�
 ```
 
 DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨平台可测试），本模块仅做 re-export。
+GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静态一致性由
+`scripts/check-gnome-dbus-contract.mjs` 校验，并通过 `scripts/check-gnome-extension.sh` 执行。
 
 ### JSON 兼容规则
 

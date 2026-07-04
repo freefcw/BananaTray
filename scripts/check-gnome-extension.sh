@@ -57,6 +57,7 @@ else
   node --check "$tmp_dir/quotaPresentation.js"
   node --check "$tmp_dir/quotaWidgets.js"
   node --check "$tmp_dir/gnome-extension-mock-daemon.mjs"
+  node scripts/check-gnome-dbus-contract.mjs
 
   # Unit tests for pure presentation functions
   node --import ./gnome-shell-extension/tests/register.mjs \
