@@ -74,6 +74,7 @@ function buildSnapshot() {
         header: {
             status_text: `Mock refresh #${refreshCount}`,
             status_kind: 'Synced',
+            elapsed_secs: null,
         },
         providers: [
             provider('claude', 'Claude', status, [

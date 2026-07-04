@@ -163,6 +163,23 @@ for (const [label, regex] of [
 
 assertStructFields(rustDto, 'DBusQuotaSnapshot', ['schema_version', 'providers', 'header']);
 assertStructFields(rustDto, 'DBusHeaderInfo', ['status_text', 'status_kind', 'elapsed_secs']);
+
+// mock daemon 的 buildSnapshot 必须在 header payload 里实际发射 elapsed_secs，
+// 否则 mock 与真实 producer 的契约漂移不会被 CI 捕获。
+// 精确匹配 header: { ... } 块内容（到 header 闭合的 },），检查 elapsed_secs 在其中。
+// 避免字段出现在注释 / provider body / 别处时误过。
+const mockSnapshotBody = mock.match(/function\s+buildSnapshot\(\)\s*\{([\s\S]*?)\n\}/);
+if (!mockSnapshotBody) {
+    fail(`${paths.mock} must define buildSnapshot()`);
+} else {
+    // header 块：从 "header: {" 到行首 "}," 闭合（header 是 snapshot 的第一个字段）
+    const headerBlock = mockSnapshotBody[1].match(/header:\s*\{([\s\S]*?)\n\s*\},/);
+    if (!headerBlock) {
+        fail(`${paths.mock} buildSnapshot must define a header object`);
+    } else if (!/\belapsed_secs\s*:/.test(headerBlock[1])) {
+        fail(`${paths.mock} buildSnapshot header must include elapsed_secs to match DBusHeaderInfo`);
+    }
+}
 assertStructFields(rustDto, 'DBusProviderEntry', [
     'id',
     'display_name',
