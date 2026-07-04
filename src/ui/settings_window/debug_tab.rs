@@ -1,9 +1,10 @@
 use super::components::{render_dark_card, render_divider, render_section_header};
 use super::SettingsView;
 use crate::application::{
-    build_debug_info_text, debug_tab_view_state, AppAction, DebugNotificationKind,
-    DebugTabViewState, LogLevelColor,
+    build_debug_info_text, debug_tab_view_state, format_debug_console_logs, AppAction,
+    DebugNotificationKind, DebugTabViewState, EnvironmentRowKind, LogLevelColor,
 };
+use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
@@ -11,8 +12,8 @@ use crate::ui::widgets::{
     render_path_info_cell, render_segmented_control, ButtonVariant, SegmentedSize,
 };
 use gpui::{
-    div, px, rgb, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
-    StatefulInteractiveElement, Styled,
+    div, px, rgb, AnyElement, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, StatefulInteractiveElement, Styled,
 };
 use rust_i18n::t;
 
@@ -81,21 +82,21 @@ impl SettingsView {
                     .child(self.render_test_notification_button(
                         &t!("debug.test_low_quota"),
                         &t!("debug.test_low_quota.desc"),
-                        "low",
+                        DebugNotificationKind::Low,
                         theme,
                     ))
                     .child(render_divider(theme))
                     .child(self.render_test_notification_button(
                         &t!("debug.test_exhausted"),
                         &t!("debug.test_exhausted.desc"),
-                        "exhausted",
+                        DebugNotificationKind::Exhausted,
                         theme,
                     ))
                     .child(render_divider(theme))
                     .child(self.render_test_notification_button(
                         &t!("debug.test_recovered"),
                         &t!("debug.test_recovered.desc"),
-                        "recovered",
+                        DebugNotificationKind::Recovered,
                         theme,
                     )),
             )
@@ -242,27 +243,7 @@ impl SettingsView {
         theme: &Theme,
     ) -> Div {
         let env = &debug_state.environment;
-
-        // 可点击的路径行标签（用于区分特殊行）
-        let settings_path_label = t!("debug.env.settings_path").to_string();
-        let log_path_label = t!("debug.env.log_path").to_string();
-
-        let env_rows: Vec<(String, String)> = vec![
-            (t!("debug.env.version").to_string(), env.app_version.clone()),
-            (t!("debug.env.os").to_string(), env.os_info.clone()),
-            (t!("debug.env.log_level").to_string(), env.log_level.clone()),
-            (t!("debug.env.locale").to_string(), env.locale.clone()),
-            (settings_path_label.clone(), env.settings_path.clone()),
-            (log_path_label.clone(), env.log_path.clone()),
-            (
-                t!("debug.env.providers").to_string(),
-                env.providers_summary.clone(),
-            ),
-            (
-                t!("debug.env.refresh").to_string(),
-                env.refresh_interval.clone(),
-            ),
-        ];
+        let env_rows = env.rows();
 
         let mut card = render_dark_card(theme);
 
@@ -292,25 +273,23 @@ impl SettingsView {
         );
 
         // 键值对行 — 使用 render_info_cell，配置文件/日志路径行可点击打开所在目录
-        for (label, value) in &env_rows {
-            let is_clickable_path = *label == settings_path_label || *label == log_path_label;
-
-            if is_clickable_path {
-                let tooltip_id = if *label == settings_path_label {
-                    "env-settings-path-tooltip"
-                } else {
-                    "env-log-path-tooltip"
+        for row in &env_rows {
+            if matches!(
+                row.kind,
+                EnvironmentRowKind::SettingsPath | EnvironmentRowKind::LogPath
+            ) {
+                let tooltip_id = match row.kind {
+                    EnvironmentRowKind::SettingsPath => "env-settings-path-tooltip",
+                    EnvironmentRowKind::LogPath => "env-log-path-tooltip",
+                    _ => unreachable!("only path rows have tooltips"),
                 };
-                card = card.child(
-                    div()
-                        .px(px(14.0))
-                        .py(px(5.0))
-                        .child(render_path_info_cell(tooltip_id, label, value, theme)),
-                );
+                card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_path_info_cell(
+                    tooltip_id, &row.label, &row.value, theme,
+                )));
             } else {
                 card = card.child(div().px(px(14.0)).py(px(5.0)).child(render_info_cell(
-                    label,
-                    value,
+                    &row.label,
+                    &row.value,
                     theme.text.secondary,
                     theme,
                 )));
@@ -355,14 +334,9 @@ impl SettingsView {
         &self,
         title: &str,
         desc: &str,
-        alert_type: &str,
+        alert_kind: DebugNotificationKind,
         theme: &Theme,
     ) -> Div {
-        let alert_kind = match alert_type {
-            "low" => DebugNotificationKind::Low,
-            "exhausted" => DebugNotificationKind::Exhausted,
-            _ => DebugNotificationKind::Recovered,
-        };
         let state = self.state.clone();
 
         render_icon_row(
@@ -393,10 +367,22 @@ impl SettingsView {
     // ═══════ PROVIDER DEBUG CONSOLE ═══════
 
     fn render_debug_console(&self, debug_state: &DebugTabViewState, theme: &Theme) -> Div {
-        let console = &debug_state.console;
-        let mut card = render_dark_card(theme);
+        let mut card = render_dark_card(theme)
+            .child(self.render_debug_console_toolbar(debug_state, theme))
+            .child(render_divider(theme))
+            .child(Self::render_debug_console_log_body(debug_state, theme));
 
-        // ── Provider 选择 + Force Refresh 按钮 ──
+        if !debug_state.console.log_entries.is_empty() {
+            card = card
+                .child(render_divider(theme))
+                .child(self.render_debug_console_footer(debug_state, theme));
+        }
+
+        card
+    }
+
+    fn render_debug_console_toolbar(&self, debug_state: &DebugTabViewState, theme: &Theme) -> Div {
+        let console = &debug_state.console;
         let mut toolbar = div()
             .w_full()
             .flex()
@@ -405,286 +391,284 @@ impl SettingsView {
             .px(px(14.0))
             .py(px(10.0));
 
-        // Provider 选择器（水平按钮组）
         for (kind, name) in &console.available_providers {
-            let is_selected = console.selected_provider.as_ref() == Some(kind);
-            let kind_clone = kind.clone();
-            let state_select = self.state.clone();
+            toolbar = toolbar.child(self.render_debug_provider_chip(
+                kind,
+                name,
+                console.selected_provider.as_ref() == Some(kind),
+                theme,
+            ));
+        }
 
-            toolbar = toolbar.child(
+        toolbar = toolbar.child(div().flex_grow());
+
+        if console.selected_provider.is_some() {
+            toolbar =
+                toolbar.child(self.render_debug_refresh_button(console.refresh_active, theme));
+        }
+
+        toolbar
+    }
+
+    fn render_debug_provider_chip(
+        &self,
+        provider_id: &ProviderId,
+        name: &str,
+        is_selected: bool,
+        theme: &Theme,
+    ) -> Div {
+        let provider_id = provider_id.clone();
+        let state = self.state.clone();
+
+        div()
+            .px(px(10.0))
+            .py(px(4.0))
+            .rounded(px(6.0))
+            .bg(if is_selected {
+                theme.bg.card_inner
+            } else {
+                theme.bg.subtle
+            })
+            .border_1()
+            .border_color(if is_selected {
+                theme.text.accent_soft
+            } else {
+                theme.border.strong
+            })
+            .cursor_pointer()
+            .hover(|s| s.opacity(0.85))
+            .child(
                 div()
-                    .px(px(10.0))
-                    .py(px(4.0))
-                    .rounded(px(6.0))
-                    .bg(if is_selected {
-                        theme.bg.card_inner
+                    .text_size(px(11.0))
+                    .font_weight(if is_selected {
+                        FontWeight::SEMIBOLD
                     } else {
-                        theme.bg.subtle
+                        FontWeight::NORMAL
                     })
-                    .border_1()
-                    .border_color(if is_selected {
-                        theme.text.accent_soft
+                    .text_color(if is_selected {
+                        theme.text.accent
                     } else {
-                        theme.border.strong
+                        theme.text.secondary
                     })
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.85))
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .font_weight(if is_selected {
-                                FontWeight::SEMIBOLD
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .text_color(if is_selected {
-                                theme.text.accent
-                            } else {
-                                theme.text.secondary
-                            })
-                            .child(name.clone()),
-                    )
+                    .child(name.to_string()),
+            )
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::SelectDebugProvider(provider_id.clone()),
+                    window,
+                    cx,
+                );
+            })
+    }
+
+    fn render_debug_refresh_button(&self, is_active: bool, theme: &Theme) -> Div {
+        let label = if is_active {
+            t!("debug.console.refreshing").to_string()
+        } else {
+            t!("debug.console.force_refresh").to_string()
+        };
+
+        let button = div()
+            .px(px(12.0))
+            .py(px(5.0))
+            .rounded(px(6.0))
+            .bg(if is_active {
+                theme.bg.subtle
+            } else {
+                theme.button.action_bg
+            })
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(if is_active {
+                        theme.text.muted
+                    } else {
+                        theme.button.action_text
+                    })
+                    .child(label),
+            );
+
+        if is_active {
+            return button;
+        }
+
+        let state = self.state.clone();
+        button
+            .cursor_pointer()
+            .hover(|s| s.opacity(0.85))
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::DebugRefreshProvider,
+                    window,
+                    cx,
+                );
+            })
+    }
+
+    fn render_debug_console_log_body(debug_state: &DebugTabViewState, theme: &Theme) -> AnyElement {
+        let console = &debug_state.console;
+        if console.log_entries.is_empty() {
+            return div()
+                .w_full()
+                .py(px(20.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.text.muted)
+                        .child(t!("debug.console.empty").to_string()),
+                )
+                .into_any_element();
+        }
+
+        let mut log_panel = div()
+            .id("debug-log-panel")
+            .w_full()
+            .max_h(px(280.0))
+            .overflow_y_scroll()
+            .px(px(14.0))
+            .py(px(8.0));
+
+        for entry in &console.log_entries {
+            log_panel = log_panel.child(Self::render_debug_console_log_entry(
+                &entry.timestamp,
+                &entry.level,
+                entry.level_color,
+                &entry.target,
+                &entry.message,
+                theme,
+            ));
+        }
+
+        log_panel.into_any_element()
+    }
+
+    fn render_debug_console_log_entry(
+        timestamp: &str,
+        level: &str,
+        level_color: LogLevelColor,
+        target: &str,
+        message: &str,
+        theme: &Theme,
+    ) -> Div {
+        let level_color = match level_color {
+            LogLevelColor::Error => theme.log.error,
+            LogLevelColor::Warn => theme.log.warn,
+            LogLevelColor::Info => theme.log.info,
+            LogLevelColor::Debug => theme.log.debug,
+            LogLevelColor::Trace => theme.log.trace,
+        };
+
+        div()
+            .w_full()
+            .flex()
+            .gap(px(6.0))
+            .py(px(1.0))
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_family("SF Mono")
+                    .text_color(theme.text.muted)
+                    .flex_shrink_0()
+                    .child(timestamp.to_string()),
+            )
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_family("SF Mono")
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(level_color)
+                    .w(px(42.0))
+                    .flex_shrink_0()
+                    .child(format!("[{}]", level)),
+            )
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_family("SF Mono")
+                    .text_color(theme.text.secondary)
+                    .w(px(100.0))
+                    .flex_shrink_0()
+                    .child(target.to_string()),
+            )
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_family("SF Mono")
+                    .text_color(theme.text.primary)
+                    .flex_grow()
+                    .child(message.to_string()),
+            )
+    }
+
+    fn render_debug_console_footer(&self, debug_state: &DebugTabViewState, theme: &Theme) -> Div {
+        let console = &debug_state.console;
+        let log_text = format_debug_console_logs(&console.log_entries);
+        let state_copy = self.state.clone();
+        let state_clear = self.state.clone();
+
+        div()
+            .w_full()
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .px(px(14.0))
+            .py(px(8.0))
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .text_color(theme.text.muted)
+                    .child(format!(
+                        "{} {}",
+                        console.log_count,
+                        t!("debug.console.entries")
+                    )),
+            )
+            .child(div().flex_grow())
+            .child(
+                Self::render_debug_console_footer_button(&t!("debug.console.copy_logs"), theme)
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         crate::bootstrap::dispatch_in_window(
-                            &state_select,
-                            AppAction::SelectDebugProvider(kind_clone.clone()),
+                            &state_copy,
+                            AppAction::CopyToClipboard(log_text.clone()),
                             window,
                             cx,
                         );
                     }),
-            );
-        }
+            )
+            .child(
+                Self::render_debug_console_footer_button(&t!("debug.console.clear_logs"), theme)
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        crate::bootstrap::dispatch_in_window(
+                            &state_clear,
+                            AppAction::ClearDebugLogs,
+                            window,
+                            cx,
+                        );
+                    }),
+            )
+    }
 
-        // 弹性空白
-        toolbar = toolbar.child(div().flex_grow());
-
-        // Force Refresh 按钮
-        if console.selected_provider.is_some() {
-            let is_active = console.refresh_active;
-            let btn_label = if is_active {
-                t!("debug.console.refreshing").to_string()
-            } else {
-                t!("debug.console.force_refresh").to_string()
-            };
-
-            if is_active {
-                // 刷新中 — 禁用态
-                toolbar = toolbar.child(
-                    div()
-                        .px(px(12.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(theme.bg.subtle)
-                        .child(
-                            div()
-                                .text_size(px(11.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.text.muted)
-                                .child(btn_label),
-                        ),
-                );
-            } else {
-                // 可点击态
-                let state_refresh = self.state.clone();
-                toolbar = toolbar.child(
-                    div()
-                        .px(px(12.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(theme.button.action_bg)
-                        .cursor_pointer()
-                        .hover(|s| s.opacity(0.85))
-                        .child(
-                            div()
-                                .text_size(px(11.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.button.action_text)
-                                .child(btn_label),
-                        )
-                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &state_refresh,
-                                AppAction::DebugRefreshProvider,
-                                window,
-                                cx,
-                            );
-                        }),
-                );
-            }
-        }
-
-        card = card.child(toolbar);
-        card = card.child(render_divider(theme));
-
-        // ── 日志面板 ──
-        if console.log_entries.is_empty() {
-            card = card.child(
+    fn render_debug_console_footer_button(label: &str, theme: &Theme) -> Div {
+        div()
+            .px(px(8.0))
+            .py(px(3.0))
+            .rounded(px(4.0))
+            .bg(theme.bg.subtle)
+            .border_1()
+            .border_color(theme.border.strong)
+            .cursor_pointer()
+            .hover(|s| s.opacity(0.85))
+            .child(
                 div()
-                    .w_full()
-                    .py(px(20.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text.muted)
-                            .child(t!("debug.console.empty").to_string()),
-                    ),
-            );
-        } else {
-            let mut log_panel = div()
-                .id("debug-log-panel")
-                .w_full()
-                .max_h(px(280.0))
-                .overflow_y_scroll()
-                .px(px(14.0))
-                .py(px(8.0));
-
-            for entry in &console.log_entries {
-                let level_color = match entry.level_color {
-                    LogLevelColor::Error => theme.log.error,
-                    LogLevelColor::Warn => theme.log.warn,
-                    LogLevelColor::Info => theme.log.info,
-                    LogLevelColor::Debug => theme.log.debug,
-                    LogLevelColor::Trace => theme.log.trace,
-                };
-
-                log_panel = log_panel.child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .gap(px(6.0))
-                        .py(px(1.0))
-                        // timestamp
-                        .child(
-                            div()
-                                .text_size(px(10.0))
-                                .font_family("SF Mono")
-                                .text_color(theme.text.muted)
-                                .flex_shrink_0()
-                                .child(entry.timestamp.clone()),
-                        )
-                        // level badge
-                        .child(
-                            div()
-                                .text_size(px(10.0))
-                                .font_family("SF Mono")
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(level_color)
-                                .w(px(42.0))
-                                .flex_shrink_0()
-                                .child(format!("[{}]", entry.level)),
-                        )
-                        // target
-                        .child(
-                            div()
-                                .text_size(px(10.0))
-                                .font_family("SF Mono")
-                                .text_color(theme.text.secondary)
-                                .w(px(100.0))
-                                .flex_shrink_0()
-                                .child(entry.target.clone()),
-                        )
-                        // message
-                        .child(
-                            div()
-                                .text_size(px(10.0))
-                                .font_family("SF Mono")
-                                .text_color(theme.text.primary)
-                                .flex_grow()
-                                .child(entry.message.clone()),
-                        ),
-                );
-            }
-
-            card = card.child(log_panel);
-
-            // ── 底部工具栏：日志计数 + Copy/Clear 按钮 ──
-            card = card.child(render_divider(theme));
-
-            let log_text = console
-                .log_entries
-                .iter()
-                .map(|e| format!("{} [{}] {} {}", e.timestamp, e.level, e.target, e.message))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            let state_copy = self.state.clone();
-            let state_clear = self.state.clone();
-            let log_count = console.log_count;
-
-            card = card.child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .px(px(14.0))
-                    .py(px(8.0))
-                    // 日志计数
-                    .child(
-                        div()
-                            .text_size(px(10.0))
-                            .text_color(theme.text.muted)
-                            .child(format!("{} {}", log_count, t!("debug.console.entries"))),
-                    )
-                    .child(div().flex_grow())
-                    // Copy Logs
-                    .child(
-                        div()
-                            .px(px(8.0))
-                            .py(px(3.0))
-                            .rounded(px(4.0))
-                            .bg(theme.bg.subtle)
-                            .border_1()
-                            .border_color(theme.border.strong)
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.85))
-                            .child(
-                                div()
-                                    .text_size(px(10.0))
-                                    .text_color(theme.text.secondary)
-                                    .child(t!("debug.console.copy_logs").to_string()),
-                            )
-                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                crate::bootstrap::dispatch_in_window(
-                                    &state_copy,
-                                    AppAction::CopyToClipboard(log_text.clone()),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                    )
-                    // Clear Logs
-                    .child(
-                        div()
-                            .px(px(8.0))
-                            .py(px(3.0))
-                            .rounded(px(4.0))
-                            .bg(theme.bg.subtle)
-                            .border_1()
-                            .border_color(theme.border.strong)
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.85))
-                            .child(
-                                div()
-                                    .text_size(px(10.0))
-                                    .text_color(theme.text.secondary)
-                                    .child(t!("debug.console.clear_logs").to_string()),
-                            )
-                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                crate::bootstrap::dispatch_in_window(
-                                    &state_clear,
-                                    AppAction::ClearDebugLogs,
-                                    window,
-                                    cx,
-                                );
-                            }),
-                    ),
-            );
-        }
-
-        card
+                    .text_size(px(10.0))
+                    .text_color(theme.text.secondary)
+                    .child(label.to_string()),
+            )
     }
 }

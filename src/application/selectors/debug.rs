@@ -128,6 +128,75 @@ pub struct EnvironmentViewState {
     pub refresh_interval: String,
 }
 
+/// 环境信息行身份。
+///
+/// label 只负责展示；行为分支必须依赖 kind，避免翻译文案改变 UI 行为。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvironmentRowKind {
+    Version,
+    OperatingSystem,
+    LogLevel,
+    Locale,
+    SettingsPath,
+    LogPath,
+    Providers,
+    RefreshInterval,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvironmentRowViewState {
+    pub kind: EnvironmentRowKind,
+    pub label: String,
+    pub value: String,
+}
+
+impl EnvironmentViewState {
+    pub fn rows(&self) -> Vec<EnvironmentRowViewState> {
+        vec![
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::Version,
+                label: t!("debug.env.version").to_string(),
+                value: self.app_version.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::OperatingSystem,
+                label: t!("debug.env.os").to_string(),
+                value: self.os_info.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::LogLevel,
+                label: t!("debug.env.log_level").to_string(),
+                value: self.log_level.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::Locale,
+                label: t!("debug.env.locale").to_string(),
+                value: self.locale.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::SettingsPath,
+                label: t!("debug.env.settings_path").to_string(),
+                value: self.settings_path.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::LogPath,
+                label: t!("debug.env.log_path").to_string(),
+                value: self.log_path.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::Providers,
+                label: t!("debug.env.providers").to_string(),
+                value: self.providers_summary.clone(),
+            },
+            EnvironmentRowViewState {
+                kind: EnvironmentRowKind::RefreshInterval,
+                label: t!("debug.env.refresh").to_string(),
+                value: self.refresh_interval.clone(),
+            },
+        ]
+    }
+}
+
 // ============================================================================
 // Selector 函数（纯函数，无 I/O）
 // ============================================================================
@@ -307,6 +376,20 @@ pub fn build_debug_info_text(state: &DebugTabViewState) -> String {
     }
 
     lines.join("\n")
+}
+
+/// 将 Debug Console 日志格式化为复制到剪贴板的纯文本。
+pub fn format_debug_console_logs(entries: &[CapturedLogEntry]) -> String {
+    entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "{} [{}] {} {}",
+                entry.timestamp, entry.level, entry.target, entry.message
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugConsoleViewState {

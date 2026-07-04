@@ -287,6 +287,34 @@ fn environment_refresh_interval() {
     assert_eq!(env.refresh_interval, "5 min");
 }
 
+#[test]
+fn environment_rows_keep_identity_separate_from_labels() {
+    let _g = setup_locale();
+    let settings = AppSettings::default();
+    let session = make_session(settings);
+    let env = build_environment_view_state(&session, &test_context());
+    let rows = env.rows();
+
+    let kinds: Vec<EnvironmentRowKind> = rows.iter().map(|row| row.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            EnvironmentRowKind::Version,
+            EnvironmentRowKind::OperatingSystem,
+            EnvironmentRowKind::LogLevel,
+            EnvironmentRowKind::Locale,
+            EnvironmentRowKind::SettingsPath,
+            EnvironmentRowKind::LogPath,
+            EnvironmentRowKind::Providers,
+            EnvironmentRowKind::RefreshInterval,
+        ]
+    );
+    assert_eq!(rows[4].label, "Settings");
+    assert_eq!(rows[4].value, "/Users/test/.config/bananatray/config.toml");
+    assert_eq!(rows[5].label, "Log Path");
+    assert_eq!(rows[5].value, "/tmp/test.log");
+}
+
 // ── DebugConsoleViewState 测试 ─────────────────────
 
 #[test]
@@ -322,6 +350,31 @@ fn debug_console_hides_stale_non_monitorable_selection() {
 
     assert!(console.available_providers.is_empty());
     assert!(console.selected_provider.is_none());
+}
+
+#[test]
+fn debug_console_log_text_preserves_copy_format() {
+    let entries = vec![
+        CapturedLogEntry {
+            timestamp: "12:00:01".to_string(),
+            level: "INFO".to_string(),
+            level_color: LogLevelColor::Info,
+            target: "refresh".to_string(),
+            message: "sync complete".to_string(),
+        },
+        CapturedLogEntry {
+            timestamp: "12:00:02".to_string(),
+            level: "WARN".to_string(),
+            level_color: LogLevelColor::Warn,
+            target: "providers".to_string(),
+            message: "quota low".to_string(),
+        },
+    ];
+
+    assert_eq!(
+        format_debug_console_logs(&entries),
+        "12:00:01 [INFO] refresh sync complete\n12:00:02 [WARN] providers quota low"
+    );
 }
 
 // ── build_debug_info_text 测试 ──────────────────────

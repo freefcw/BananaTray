@@ -278,7 +278,8 @@ pub enum SettingsProviderUsageViewState {
 #[cfg(any(target_os = "linux", test))]
 pub use dbus_dto::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
 pub use debug::{
-    build_debug_info_text, debug_tab_view_state, DebugContext, DebugTabViewState, LogLevelColor,
+    build_debug_info_text, debug_tab_view_state, format_debug_console_logs, DebugContext,
+    DebugTabViewState, EnvironmentRowKind, LogLevelColor,
 };
 #[cfg(any(target_os = "linux", test))]
 pub(crate) use format::format_quota_label;
