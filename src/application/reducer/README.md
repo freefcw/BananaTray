@@ -10,8 +10,8 @@ Reducer 子模块目录。这里承载 `AppAction` 到 `AppSession` 状态变更
 | `settings.rs` | 导航、设置窗口通用 UI 状态、`SettingChange`、全局热键提交、弹窗可见性 |
 | `provider_sidebar.rs` | Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序 |
 | `refresh.rs` | 手动刷新、刷新事件处理、Provider 热重载、热重载后的悬空引用清理 |
-| `newapi.rs` | NewAPI 新增 / 编辑 / 删除表单流，以及对应 effect 发射 |
-| `script_provider.rs` | 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流，以及对应 effect 发射 |
+| `newapi.rs` | NewAPI 新增 / 编辑 / 删除表单流、runtime completion action 处理，以及对应 effect 发射 |
+| `script_provider.rs` | 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流、runtime completion action 处理，以及对应 effect 发射 |
 | `debug.rs` | Debug Tab 操作、调试刷新、日志目录 / 剪贴板 / 调试通知相关 action |
 | `shared.rs` | 跨子 reducer 共享的纯 helper，如配置同步请求、刷新能力判断、动态图标同步 |
 
@@ -26,7 +26,7 @@ AppAction
 ```
 
 子 reducer 不执行 I/O，不依赖 GPUI，也不直接调用 runtime。需要外部行为时只追加
-`CommonEffect` 或 `ContextEffect`，由 runtime 层统一执行。
+`CommonEffect` 或 `ContextEffect`，由 runtime 层统一执行；runtime I/O 结果通过 `*Finished` action 回到 reducer 后，再由 reducer 决定状态回滚、通知、render 和 reload。
 
 ## 约束
 

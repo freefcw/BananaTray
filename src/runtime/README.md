@@ -43,8 +43,8 @@
 | `NotificationEffect` | quota 通知、普通文本通知、Debug 测试通知 |
 | `RefreshEffect` | refresh 请求发送 |
 | `DebugEffect` | Debug 页日志目录 / 剪贴板动作、日志捕获、Debug 刷新 |
-| `NewApiEffect` | NewAPI 保存 / 删除 / 加载编排 |
-| `ScriptProviderEffect` | 脚本 Provider 测试请求、保存脚本 + YAML、删除和编辑加载编排 |
+| `NewApiEffect` | NewAPI 保存 / 删除 / 加载 I/O，完成后返回 `NewApi*Finished` action |
+| `ScriptProviderEffect` | 脚本 Provider 测试请求、保存脚本 + YAML、删除和编辑加载 I/O，完成后返回 `ScriptProvider*Finished` action |
 
 ### ContextCapabilities 模式
 
@@ -73,7 +73,7 @@
 2. 释放借用
 3. 将相应上下文包装进 Adapter
 4. 逐个执行 effects (通过 context effect runner 或 `effects::run_common_effect`)
-5. 若 CommonEffect 返回后续 `AppAction`（例如 refresh 请求入队失败），同一 dispatch 循环继续 reduce 并执行新 effects，避免 effect handler 直接重入 `dispatch_*()`
+5. 若 CommonEffect 返回后续 `AppAction`（例如 refresh 请求入队失败、自定义 provider I/O 完成或脚本测试排队失败），同一 dispatch 循环继续 reduce 并执行新 effects，避免 effect handler 直接重入 `dispatch_*()`
 
 ### 重入保护
 
@@ -140,7 +140,7 @@
 - `newapi.rs` — `NewApiEffect`
 - `script_provider.rs` — `ScriptProviderEffect`
 
-各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本、编辑态加载、删除都统一放在 `providers::custom::api`，纯状态回滚仍在 `application/newapi_ops.rs` / `application/script_provider_ops.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果再回到前台 reducer，避免阻塞设置窗口。
+各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本、编辑态加载、删除都统一放在 `providers::custom::api`，runtime 将 `CustomProviderLifecycleResult` 转成模型层失败语义并返回完成 action；纯状态回滚、通知选择、render 和 reload 声明位于 `application/reducer/newapi.rs` / `application/reducer/script_provider.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果或排队失败再回到前台 reducer，避免阻塞设置窗口。
 
 ### `global_hotkey.rs` — 全局热键解析与重绑
 
@@ -162,9 +162,9 @@
 - **`save_newapi_yaml(config, filename) → CustomProviderLifecycleResult<PathBuf>`** — YAML 生成 + 目录创建 + 同目录临时文件/备份替换写入
 - **`delete_newapi_yaml(provider_id) → CustomProviderLifecycleResult<PathBuf>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
 - **`save_script_provider(config, yaml_filename, script_filename) → CustomProviderLifecycleResult<(PathBuf, PathBuf)>`** — 生成 `source.type: cli` YAML，并以同目录临时文件/备份替换方式写入脚本 + YAML 双文件
-- **`delete_script_provider_files(provider_id) → CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
+- **`delete_script_provider_files(provider_id) → CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会被 runtime 转换成 `ScriptProviderDeleteSuccess::DeletedYamlOnly`
 
-文件级回滚由 `providers::custom::file_ops` 处理；UI 状态回滚位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）。runtime 在删除失败时负责记录日志并发送用户通知。
+文件级回滚由 `providers::custom::file_ops` 处理；UI 状态回滚位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）。runtime 记录 I/O 细节并返回完成 action，reducer 负责用户通知和后续 reload effect。
 
 ## 约束
 

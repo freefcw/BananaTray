@@ -31,6 +31,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`AppAction`** — 所有用户交互和系统事件的枚举（导航、设置变更、Provider 操作、调试等）
   - `SaveGlobalHotkey(String)` 将 General Tab 捕获到的候选热键提交给 runtime 做预检、重绑和持久化
+  - `*Finished` action（如 `NewApiSaveFinished` / `ScriptProviderDeleteFinished`）承接 runtime I/O 结果，reducer 统一决定状态回滚、通知、render 和 reload
 - **`SettingChange`** — 设置变更子枚举
 - **`DebugNotificationKind`** — 调试通知类型
 
@@ -46,9 +47,9 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
-- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename`，不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；`EditNewApi` 的磁盘读取委托给 `NewApiEffect::LoadConfig`
-- **NewAPI 删除流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除
-- **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成后由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行
+- **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID 并预注册到 `enabled_providers` + `sidebar_providers`；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename`，不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；runtime 回传 `NewApiSaveFinished` 后，reducer 再统一通知、reload 或回滚
+- **NewAPI 删除 / 加载流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除；`EditNewApi` 委托 `NewApiEffect::LoadConfig` 读取 YAML，runtime 通过 `NewApiLoadFinished` 回填编辑态或失败通知
+- **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成或排队失败都由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行，并通过 `ScriptProvider*Finished` action 回到 reducer
 
 测试文件：`reducer_tests.rs`
 
@@ -69,25 +70,26 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `newapi_ops.rs` — NewAPI 保存操作纯函数
 
-从 `runtime/effects/newapi.rs` 的 `NewApiEffect::SaveProvider` handler 中提取的状态操作逻辑：
+NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 
 - **`rollback_newapi_edit()`** — 编辑模式失败回滚：从 config 重建 `NewApiEditData` 回填表单
 - **`rollback_newapi_create()`** — 新增模式失败回滚：从 `enabled_providers` + `sidebar_providers` 中移除预注册 ID（而非写回 disabled）+ 恢复空表单 + 回退 `selected_provider`
 - **`newapi_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）
 - **`newapi_save_failed_notification_keys()`** — YAML 写入失败并回滚表单后使用的失败通知 key。
+- **`newapi_load_failed_notification_keys()`** — 编辑态 YAML 读取失败时使用的失败通知 key。
 
 本模块为纯函数，不包含 I/O 或 GPUI 依赖。生产构建中它只在 `app` feature 开启时参与编译；无 `app` 的 `lib` 本地测试场景仍会编译该模块以保留单元测试覆盖。
 
 ### `script_provider_ops.rs` — 脚本 Provider 保存操作纯函数
 
-脚本 Provider 保存失败时的状态回滚和通知 key 选择：
+脚本 Provider 保存完成后由 reducer 调用的状态回滚和通知 key 选择：
 
 - **`rollback_script_provider_edit()`** — 编辑模式失败时保留原表单数据和原文件名。
 - **`rollback_script_provider_create()`** — 新增模式失败时移除预注册 provider，并恢复添加表单。
 - **`script_provider_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）。
 - **`script_provider_save_failed_notification_keys()`** — 脚本 / YAML 写入失败并回滚表单后使用的失败通知 key。
 
-脚本执行、文件读写和 provider reload 都在 `runtime/effects/script_provider.rs` 中完成。
+脚本执行和文件读写在 `runtime/effects/script_provider.rs` 中完成；provider reload、用户通知、表单回滚由 runtime 回传完成 action 后在 reducer 中声明为 effects。
 
 ### `selectors/` — 视图状态选择器
 
@@ -113,6 +115,8 @@ User Event / Background Event
     → reduce(&mut AppSession, action)
       → Vec<AppEffect>
         → runtime/ 执行 effects
+          → 可选返回后续 AppAction（I/O completion / enqueue failure）
+          → reduce(...) 继续处理完成事件
 ```
 
 ## 约束
@@ -121,5 +125,5 @@ User Event / Background Event
 - **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`，脚本 Provider 纯数据类型位于 `models/script_provider.rs`。
 - **不可导入 `platform/notification` 承载业务规则** — quota 告警状态机留在 application，platform 只负责通知发送适配。
 - Reducer 必须是**纯函数**（给定 state + action → 确定的 effects），便于测试。
-- 部分 CommonEffect handler（如 `NewApiEffect::LoadConfig`、`DebugEffect::StartRefresh`）会直接修改 `AppSession` 状态，这是异步 I/O 回填的必要 tradeoff。
+- CommonEffect handler 需要同步回到状态机时应返回后续 `AppAction`，不要直接修改 `AppSession`；少数 runtime-only 临时状态（如 `DebugEffect::StartRefresh` 保存日志级别）是明确例外。
 - Effect handler 不得在执行期间再次调用 `dispatch_*()`（重入保护）。

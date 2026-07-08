@@ -27,13 +27,7 @@ pub(super) fn run_common_effect(
         }
         CommonEffect::Refresh(effect) => refresh::run(state, effect),
         CommonEffect::Debug(effect) => debug::run(state, effect),
-        CommonEffect::NewApi(effect) => {
-            newapi::run(state, effect);
-            Vec::new()
-        }
-        CommonEffect::ScriptProvider(effect) => {
-            script_provider::run(state, effect);
-            Vec::new()
-        }
+        CommonEffect::NewApi(effect) => newapi::run(state, effect),
+        CommonEffect::ScriptProvider(effect) => script_provider::run(state, effect),
     }
 }

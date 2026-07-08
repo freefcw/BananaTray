@@ -1,5 +1,8 @@
-use crate::application::{AppEffect, ContextEffect, NewApiEffect};
-use crate::models::{NewApiConfig, ProviderId};
+use crate::application::{newapi_ops, AppEffect, ContextEffect, NewApiEffect, RefreshEffect};
+use crate::models::{
+    CustomProviderLifecycleFailure, NewApiConfig, NewApiEditData, NewApiSaveSuccess, ProviderId,
+};
+use crate::refresh::RefreshRequest;
 
 use super::super::state::{AppSession, SettingsModalState};
 
@@ -67,11 +70,77 @@ pub(super) fn submit_newapi(
         }
         .into(),
     );
-    // SettingsEffect::PersistSettings 和通知由 effect handler
-    // 在确认写入成功后执行，避免 I/O 失败时产生幽灵 Provider 或虚假通知。
+    // 保存 I/O 完成后由 NewApiSaveFinished 统一处理成功通知、reload 或失败回滚，
+    // 避免写入失败时产生幽灵 Provider 或虚假成功通知。
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
+}
+
+pub(super) fn newapi_save_finished(
+    session: &mut AppSession,
+    config: NewApiConfig,
+    filename: String,
+    is_editing: bool,
+    result: Result<NewApiSaveSuccess, CustomProviderLifecycleFailure>,
+    effects: &mut Vec<AppEffect>,
+) {
+    match result {
+        Ok(success) => {
+            let (title_key, body_key) =
+                newapi_ops::newapi_save_notification_keys(is_editing, success.settings_saved);
+            super::shared::notify_plain_i18n(effects, title_key, body_key);
+            effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
+        }
+        Err(_failure) => {
+            if is_editing {
+                newapi_ops::rollback_newapi_edit(session, &config, &filename);
+            } else {
+                newapi_ops::rollback_newapi_create(session, &config);
+            }
+            let (title_key, body_key) = newapi_ops::newapi_save_failed_notification_keys();
+            super::shared::notify_plain_i18n(effects, title_key, body_key);
+            effects.push(ContextEffect::Render.into());
+        }
+    }
+}
+
+pub(super) fn newapi_load_finished(
+    session: &mut AppSession,
+    _provider_id: ProviderId,
+    result: Result<NewApiEditData, CustomProviderLifecycleFailure>,
+    effects: &mut Vec<AppEffect>,
+) {
+    match result {
+        Ok(edit_data) => {
+            session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data);
+        }
+        Err(_failure) => {
+            let (title_key, body_key) = newapi_ops::newapi_load_failed_notification_keys();
+            super::shared::notify_plain_i18n(effects, title_key, body_key);
+        }
+    }
+    effects.push(ContextEffect::Render.into());
+}
+
+pub(super) fn newapi_delete_finished(
+    _session: &mut AppSession,
+    _provider_id: ProviderId,
+    result: Result<std::path::PathBuf, CustomProviderLifecycleFailure>,
+    effects: &mut Vec<AppEffect>,
+) {
+    match result {
+        Ok(_path) => {
+            effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into())
+        }
+        Err(_failure) => {
+            super::shared::notify_plain_i18n(
+                effects,
+                "newapi.delete_failed_title",
+                "newapi.delete_failed_body",
+            );
+        }
+    }
 }
 
 pub(super) fn edit_newapi(

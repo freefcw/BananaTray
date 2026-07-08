@@ -68,6 +68,31 @@ fn make_state_with_full_refresh_queue() -> Rc<RefCell<AppState>> {
     )))
 }
 
+fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
+    let (tx, _rx) = smol::channel::bounded(1);
+    let (script_tx, _script_rx) = smol::channel::bounded(1);
+    script_tx
+        .try_send((
+            99,
+            ScriptProviderConfig {
+                display_name: "Filler".to_string(),
+                provider_id: "filler:script".to_string(),
+                interpreter: "sh".to_string(),
+                timeout_ms: 1_000,
+                script: "echo {}".to_string(),
+            },
+        ))
+        .expect("script queue should accept filler request");
+    let manager = ProviderManagerHandle::default();
+    Rc::new(RefCell::new(AppState::new(
+        tx,
+        script_tx,
+        manager,
+        AppSettings::default(),
+        None,
+    )))
+}
+
 #[test]
 fn run_context_effect_routes_render_to_capability() {
     let state = make_state();
@@ -209,6 +234,41 @@ fn dispatch_processes_debug_refresh_send_failure_follow_up_action() {
     assert_eq!(provider.connection, ConnectionStatus::Error);
     assert!(!state_ref.session.debug_ui.refresh_active);
     assert!(state_ref.session.debug_ui.prev_log_level.is_none());
+    assert!(caps.rendered);
+}
+
+#[test]
+fn dispatch_processes_script_test_queue_failure_follow_up_action() {
+    let state = make_state_with_full_script_queue();
+    let mut caps = FakeCaps::default();
+
+    dispatch_with_full_context(
+        &state,
+        AppAction::TestScriptProvider(ScriptProviderConfig {
+            display_name: "Script".to_string(),
+            provider_id: "script:script".to_string(),
+            interpreter: "sh".to_string(),
+            timeout_ms: 1_000,
+            script: "echo {}".to_string(),
+        }),
+        &mut caps,
+    );
+
+    let state_ref = state.borrow();
+    assert!(!state_ref.session.settings_ui.script_provider_testing);
+    assert!(state_ref
+        .session
+        .settings_ui
+        .script_provider_pending_test_request_id
+        .is_none());
+    let result = state_ref
+        .session
+        .settings_ui
+        .script_provider_test_result
+        .as_ref()
+        .expect("script test result");
+    assert!(!result.success);
+    assert!(result.message.contains("failed to queue script test"));
     assert!(caps.rendered);
 }
 

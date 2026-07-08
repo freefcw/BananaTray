@@ -62,6 +62,11 @@ pub enum NotificationEffect {
     AutoLaunchToggled {
         enabled: bool,
     },
+    /// 普通 i18n 文本通知，用于 reducer 集中选择用户可见结果。
+    PlainI18n {
+        title_key: &'static str,
+        body_key: &'static str,
+    },
     Quota {
         alert: QuotaAlert,
         with_sound: bool,
@@ -91,40 +96,38 @@ pub enum DebugEffect {
 
 #[derive(Debug)]
 pub enum NewApiEffect {
-    /// 保存 NewAPI Provider：runtime 负责 YAML 生成 + 文件写入 + 持久化 + 通知 + 热重载
-    ///
-    /// 只有写入成功时才执行 SettingsEffect::PersistSettings 和通知，
-    /// 确保失败时不会产生幽灵 Provider 或虚假成功通知。
+    /// 保存 NewAPI Provider：runtime 负责 YAML 生成、文件写入和同步持久化，
+    /// 然后通过 `NewApiSaveFinished` 把结果交回 reducer 处理通知、reload 或回滚。
     SaveProvider {
         config: NewApiConfig,
         original_filename: Option<String>,
         /// 编辑模式标志：失败时不回滚预注册（旧文件仍有效）
         is_editing: bool,
     },
-    /// 删除 NewAPI Provider：runtime 负责文件名推导 + 文件删除 + 热重载
+    /// 删除 NewAPI Provider：runtime 负责文件定位 + 文件删除，然后回传 `NewApiDeleteFinished`。
     DeleteProvider { provider_id: ProviderId },
-    /// 从磁盘加载 NewAPI 配置（填充编辑表单），由 runtime 执行 I/O
+    /// 从磁盘加载 NewAPI 配置，由 runtime 执行 I/O 后回传 `NewApiLoadFinished`。
     LoadConfig { provider_id: ProviderId },
 }
 
 #[derive(Debug)]
 pub enum ScriptProviderEffect {
-    /// Execute a script from the Settings UI and send the parsed test result
-    /// back through the foreground action pump.
+    /// Queue a script test request; queue failure returns `ScriptProviderTestFinished`
+    /// through the foreground action pump.
     TestProvider {
         request_id: u64,
         config: ScriptProviderConfig,
     },
-    /// Save script + generated YAML and reload custom providers on success.
+    /// Save script + generated YAML, then return `ScriptProviderSaveFinished`.
     SaveProvider {
         config: ScriptProviderConfig,
         original_yaml_filename: Option<String>,
         original_script_filename: Option<String>,
         is_editing: bool,
     },
-    /// Delete script-generated YAML and companion script file.
+    /// Delete script-generated YAML and companion script file, then return `ScriptProviderDeleteFinished`.
     DeleteProvider { provider_id: ProviderId },
-    /// Load script-generated config from disk for editing.
+    /// Load script-generated config from disk for editing, then return `ScriptProviderLoadFinished`.
     LoadConfig { provider_id: ProviderId },
 }
 

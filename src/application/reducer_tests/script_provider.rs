@@ -1,8 +1,13 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session};
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, ScriptProviderEffect, SettingsModalState,
+    reduce, AppAction, AppEffect, CommonEffect, NotificationEffect, RefreshEffect,
+    ScriptProviderEffect, SettingsModalState,
 };
-use crate::models::{ProviderId, ScriptProviderConfig, ScriptProviderTestResult};
+use crate::models::{
+    CustomProviderLifecycleFailure, ProviderId, ScriptProviderConfig, ScriptProviderDeleteSuccess,
+    ScriptProviderEditData, ScriptProviderSaveSuccess, ScriptProviderTestResult,
+};
+use crate::refresh::RefreshRequest;
 
 fn make_script_config() -> ScriptProviderConfig {
     ScriptProviderConfig {
@@ -154,6 +159,219 @@ fn submit_script_provider_edit_mode_does_not_duplicate_sidebar_entry() {
             .count(),
         1
     );
+}
+
+#[test]
+fn script_provider_save_finished_success_notifies_and_reloads_providers() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderSaveFinished {
+            config: make_script_config(),
+            yaml_filename: "script-ccswitch.yaml".to_string(),
+            script_filename: "script-ccswitch.py".to_string(),
+            is_editing: false,
+            result: Ok(ScriptProviderSaveSuccess {
+                yaml_path: std::path::PathBuf::from("script-ccswitch.yaml"),
+                script_path: std::path::PathBuf::from("script-ccswitch.py"),
+                settings_saved: true,
+            }),
+        },
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "script_provider.save_success_title",
+            body_key: "script_provider.save_success_body",
+        }))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::ReloadProviders
+        )))
+    )));
+}
+
+#[test]
+fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
+    let mut session = make_session();
+    let config = make_script_config();
+    let provider_id = ProviderId::Custom(config.provider_id.clone());
+    session.settings.provider.set_enabled(&provider_id, true);
+    session.settings.provider.add_to_sidebar(&provider_id);
+    session.settings_ui.selected_provider = provider_id.clone();
+
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderSaveFinished {
+            config,
+            yaml_filename: "script-ccswitch.yaml".to_string(),
+            script_filename: "script-ccswitch.py".to_string(),
+            is_editing: false,
+            result: Err(CustomProviderLifecycleFailure::file_operation(
+                "save script provider",
+                "permission denied",
+            )),
+        },
+    );
+
+    assert!(!session.settings.provider.is_enabled(&provider_id));
+    assert!(session.settings_ui.modal.is_script_provider_form());
+    assert!(has_render(&effects));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "script_provider.save_failed_title",
+            body_key: "script_provider.save_failed_body",
+        }))
+    )));
+}
+
+#[test]
+fn script_provider_delete_finished_deleted_all_reloads_providers() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderDeleteFinished {
+            provider_id: ProviderId::Custom("ccswitch:script".to_string()),
+            result: Ok(ScriptProviderDeleteSuccess::DeletedAll {
+                yaml_path: std::path::PathBuf::from("script-ccswitch.yaml"),
+                script_path: std::path::PathBuf::from("script-ccswitch.py"),
+            }),
+        },
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::ReloadProviders
+        )))
+    )));
+}
+
+#[test]
+fn script_provider_delete_finished_partial_notifies_and_reloads() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderDeleteFinished {
+            provider_id: ProviderId::Custom("ccswitch:script".to_string()),
+            result: Ok(ScriptProviderDeleteSuccess::DeletedYamlOnly {
+                yaml_path: std::path::PathBuf::from("script-ccswitch.yaml"),
+                script_failure: CustomProviderLifecycleFailure::file_operation(
+                    "delete script provider",
+                    "script locked",
+                ),
+            }),
+        },
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "script_provider.delete_partial_title",
+            body_key: "script_provider.delete_partial_body",
+        }))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::ReloadProviders
+        )))
+    )));
+}
+
+#[test]
+fn script_provider_delete_finished_failure_notifies_without_reload() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderDeleteFinished {
+            provider_id: ProviderId::Custom("missing:script".to_string()),
+            result: Err(CustomProviderLifecycleFailure::yaml_not_found(
+                "delete script provider",
+                "missing:script",
+                None,
+            )),
+        },
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "script_provider.delete_failed_title",
+            body_key: "script_provider.delete_failed_body",
+        }))
+    )));
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::ReloadProviders
+        )))
+    )));
+}
+
+#[test]
+fn script_provider_load_finished_success_sets_edit_modal_and_clears_test_result() {
+    let mut session = make_session();
+    session.settings_ui.script_provider_test_result = Some(ScriptProviderTestResult {
+        success: false,
+        message: "old".to_string(),
+        stdout: String::new(),
+        stderr: String::new(),
+        preview: None,
+    });
+    let edit_data = ScriptProviderEditData {
+        display_name: "Script".to_string(),
+        provider_id: "script:script".to_string(),
+        interpreter: "python3".to_string(),
+        timeout_ms: 20_000,
+        script: "print(1)".to_string(),
+        original_yaml_filename: "script.yaml".to_string(),
+        original_script_filename: "script.py".to_string(),
+    };
+
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderLoadFinished {
+            provider_id: ProviderId::Custom("script:script".to_string()),
+            result: Ok(edit_data.clone()),
+        },
+    );
+
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::EditingScriptProvider(edit_data)
+    );
+    assert!(session.settings_ui.script_provider_test_result.is_none());
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn script_provider_load_finished_failure_notifies_and_renders() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderLoadFinished {
+            provider_id: ProviderId::Custom("missing:script".to_string()),
+            result: Err(CustomProviderLifecycleFailure::yaml_not_found(
+                "load script provider",
+                "missing:script",
+                None,
+            )),
+        },
+    );
+
+    assert!(has_render(&effects));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "script_provider.load_failed_title",
+            body_key: "script_provider.load_failed_body",
+        }))
+    )));
 }
 
 #[test]

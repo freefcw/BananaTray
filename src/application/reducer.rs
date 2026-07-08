@@ -103,11 +103,36 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             divisor,
             &mut effects,
         ),
+        AppAction::NewApiSaveFinished {
+            config,
+            filename,
+            is_editing,
+            result,
+        } => newapi::newapi_save_finished(
+            session,
+            config,
+            filename,
+            is_editing,
+            result,
+            &mut effects,
+        ),
         AppAction::EditNewApi { provider_id } => {
             newapi::edit_newapi(session, provider_id, &mut effects);
         }
+        AppAction::NewApiLoadFinished {
+            provider_id,
+            result,
+        } => {
+            newapi::newapi_load_finished(session, provider_id, result, &mut effects);
+        }
         AppAction::DeleteNewApi { provider_id } => {
             newapi::delete_newapi(session, provider_id, &mut effects);
+        }
+        AppAction::NewApiDeleteFinished {
+            provider_id,
+            result,
+        } => {
+            newapi::newapi_delete_finished(session, provider_id, result, &mut effects);
         }
         AppAction::ConfirmDeleteNewApi => newapi::confirm_delete_newapi(session, &mut effects),
         AppAction::CancelDeleteNewApi => newapi::cancel_delete_newapi(session, &mut effects),
@@ -131,11 +156,48 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::SubmitScriptProvider(config) => {
             script_provider::submit_script_provider(session, config, &mut effects);
         }
+        AppAction::ScriptProviderSaveFinished {
+            config,
+            yaml_filename,
+            script_filename,
+            is_editing,
+            result,
+        } => script_provider::script_provider_save_finished(
+            session,
+            config,
+            yaml_filename,
+            script_filename,
+            is_editing,
+            result,
+            &mut effects,
+        ),
         AppAction::EditScriptProvider { provider_id } => {
             script_provider::edit_script_provider(session, provider_id, &mut effects);
         }
+        AppAction::ScriptProviderLoadFinished {
+            provider_id,
+            result,
+        } => {
+            script_provider::script_provider_load_finished(
+                session,
+                provider_id,
+                result,
+                &mut effects,
+            );
+        }
         AppAction::DeleteScriptProvider { provider_id } => {
             script_provider::delete_script_provider(session, provider_id, &mut effects);
+        }
+        AppAction::ScriptProviderDeleteFinished {
+            provider_id,
+            result,
+        } => {
+            script_provider::script_provider_delete_finished(
+                session,
+                provider_id,
+                result,
+                &mut effects,
+            );
         }
         AppAction::ConfirmDeleteScriptProvider => {
             script_provider::confirm_delete_script_provider(session, &mut effects);

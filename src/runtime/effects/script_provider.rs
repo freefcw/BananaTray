@@ -3,18 +3,18 @@ use std::rc::Rc;
 
 use log::{info, warn};
 
-use crate::application::{script_provider_ops, ScriptProviderEffect};
+use crate::application::{AppAction, ScriptProviderEffect};
 use crate::models::{
-    parse_script_stdout, ProviderId, ScriptProviderConfig, ScriptProviderTestResult,
+    parse_script_stdout, CustomProviderLifecycleFailure, ProviderId, ScriptProviderConfig,
+    ScriptProviderDeleteSuccess, ScriptProviderSaveSuccess, ScriptProviderTestResult,
 };
 use crate::providers::custom::api;
-use crate::refresh::RefreshRequest;
 use std::process::Command;
 use std::time::Duration;
 
 use super::super::AppState;
 
-pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: ScriptProviderEffect) {
+pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: ScriptProviderEffect) -> Vec<AppAction> {
     match effect {
         ScriptProviderEffect::TestProvider { request_id, config } => {
             test_provider(state, request_id, config)
@@ -24,43 +24,37 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: ScriptProviderEffect) {
             original_yaml_filename,
             original_script_filename,
             is_editing,
-        } => save_provider(
+        } => vec![save_provider(
             state,
             config,
             original_yaml_filename,
             original_script_filename,
             is_editing,
-        ),
-        ScriptProviderEffect::DeleteProvider { provider_id } => delete_provider(state, provider_id),
-        ScriptProviderEffect::LoadConfig { provider_id } => load_config(state, provider_id),
+        )],
+        ScriptProviderEffect::DeleteProvider { provider_id } => vec![delete_provider(provider_id)],
+        ScriptProviderEffect::LoadConfig { provider_id } => vec![load_config(provider_id)],
     }
 }
 
-fn test_provider(state: &Rc<RefCell<AppState>>, request_id: u64, config: ScriptProviderConfig) {
+fn test_provider(
+    state: &Rc<RefCell<AppState>>,
+    request_id: u64,
+    config: ScriptProviderConfig,
+) -> Vec<AppAction> {
     let send_result = state.borrow().script_test_tx.try_send((request_id, config));
     if let Err(err) = send_result {
-        let mut state = state.borrow_mut();
-        if state
-            .session
-            .settings_ui
-            .script_provider_pending_test_request_id
-            == Some(request_id)
-        {
-            state.session.settings_ui.script_provider_testing = false;
-            state
-                .session
-                .settings_ui
-                .script_provider_pending_test_request_id = None;
-            state.session.settings_ui.script_provider_test_result =
-                Some(ScriptProviderTestResult {
-                    success: false,
-                    message: format!("failed to queue script test: {err}"),
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    preview: None,
-                });
-        }
+        return vec![AppAction::ScriptProviderTestFinished {
+            request_id,
+            result: ScriptProviderTestResult {
+                success: false,
+                message: format!("failed to queue script test: {err}"),
+                stdout: String::new(),
+                stderr: String::new(),
+                preview: None,
+            },
+        }];
     }
+    Vec::new()
 }
 
 #[allow(dead_code)] // bin 启动线程通过 runtime::execute_script_provider_test 间接调用
@@ -177,106 +171,115 @@ fn save_provider(
     original_yaml_filename: Option<String>,
     original_script_filename: Option<String>,
     is_editing: bool,
-) {
+) -> AppAction {
     let yaml_filename =
         original_yaml_filename.unwrap_or_else(|| api::generate_script_yaml_filename(&config));
     let script_filename =
         original_script_filename.unwrap_or_else(|| api::generate_script_filename(&config));
 
-    match api::save_script_provider(&config, &yaml_filename, &script_filename, is_editing) {
-        Ok((yaml_path, script_path)) => {
-            info!(
-                target: "runtime",
-                "saved script provider YAML to {}, script to {}",
-                yaml_path.display(),
-                script_path.display()
-            );
-            let s = state.borrow();
-            let settings_saved = s.settings_writer.flush(s.session.settings.clone());
-            drop(s);
-            let (title_key, body_key) = script_provider_ops::script_provider_save_notification_keys(
-                is_editing,
-                settings_saved,
-            );
-            super::notification::notify_plain_i18n(title_key, body_key);
-            let _ = super::refresh::send_request(state, RefreshRequest::ReloadProviders);
-        }
-        Err(err) => {
-            warn!(target: "runtime", "failed to save script provider: {}", err);
-            let mut s = state.borrow_mut();
-            if is_editing {
-                script_provider_ops::rollback_script_provider_edit(
-                    &mut s.session,
-                    &config,
-                    &yaml_filename,
-                    &script_filename,
+    let result =
+        match api::save_script_provider(&config, &yaml_filename, &script_filename, is_editing) {
+            Ok((yaml_path, script_path)) => {
+                info!(
+                    target: "runtime",
+                    "saved script provider YAML to {}, script to {}",
+                    yaml_path.display(),
+                    script_path.display()
                 );
-            } else {
-                script_provider_ops::rollback_script_provider_create(&mut s.session, &config);
+                let s = state.borrow();
+                let settings_saved = s.settings_writer.flush(s.session.settings.clone());
+                Ok(ScriptProviderSaveSuccess {
+                    yaml_path,
+                    script_path,
+                    settings_saved,
+                })
             }
-            drop(s);
-            let (title_key, body_key) =
-                script_provider_ops::script_provider_save_failed_notification_keys();
-            super::notification::notify_plain_i18n(title_key, body_key);
-        }
+            Err(err) => {
+                warn!(target: "runtime", "failed to save script provider: {}", err);
+                Err(err)
+            }
+        };
+
+    AppAction::ScriptProviderSaveFinished {
+        config,
+        yaml_filename,
+        script_filename,
+        is_editing,
+        result,
     }
 }
 
-fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
-    match api::delete_script_provider_files(&provider_id) {
-        Ok((yaml_path, script_result)) => {
-            match script_result {
-                Ok(script_path) => {
-                    info!(
-                        target: "runtime",
-                        "deleted script provider files: {}, {}",
-                        yaml_path.display(),
-                        script_path.display()
-                    );
-                }
-                Err(err) => {
-                    warn!(
-                        target: "runtime",
-                        "deleted script provider YAML {}, but failed to delete companion script: {}",
-                        yaml_path.display(),
-                        err
-                    );
-                    super::notification::notify_plain_i18n(
-                        "script_provider.delete_partial_title",
-                        "script_provider.delete_partial_body",
-                    );
-                }
+fn delete_provider(provider_id: ProviderId) -> AppAction {
+    let result = match api::delete_script_provider_files(&provider_id) {
+        Ok((yaml_path, script_result)) => match script_result {
+            Ok(script_path) => {
+                info!(
+                    target: "runtime",
+                    "deleted script provider files: {}, {}",
+                    yaml_path.display(),
+                    script_path.display()
+                );
+                Ok(ScriptProviderDeleteSuccess::DeletedAll {
+                    yaml_path,
+                    script_path,
+                })
             }
-            let _ = super::refresh::send_request(state, RefreshRequest::ReloadProviders);
-        }
+            Err(err) => {
+                warn!(
+                    target: "runtime",
+                    "deleted script provider YAML {}, but failed to delete companion script: {}",
+                    yaml_path.display(),
+                    err
+                );
+                Ok(ScriptProviderDeleteSuccess::DeletedYamlOnly {
+                    yaml_path,
+                    script_failure: err,
+                })
+            }
+        },
         Err(err) => {
             warn!(target: "runtime", "{err}");
-            super::notification::notify_plain_i18n(
-                "script_provider.delete_failed_title",
-                "script_provider.delete_failed_body",
-            );
+            Err(err)
         }
+    };
+
+    AppAction::ScriptProviderDeleteFinished {
+        provider_id,
+        result,
     }
 }
 
-fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
-    if let ProviderId::Custom(ref custom_id) = provider_id {
-        if let Some(edit_data) = api::read_script_provider_config(custom_id) {
-            let mut s = state.borrow_mut();
-            s.session.settings_ui.modal =
-                crate::application::SettingsModalState::EditingScriptProvider(edit_data);
-            s.session.settings_ui.script_provider_test_result = None;
-        } else {
-            warn!(
-                target: "settings",
-                "ScriptProviderEffect::LoadConfig: failed to read config for {}",
-                custom_id
-            );
-            super::notification::notify_plain_i18n(
-                "script_provider.load_failed_title",
-                "script_provider.load_failed_body",
-            );
+fn load_config(provider_id: ProviderId) -> AppAction {
+    let result = match &provider_id {
+        ProviderId::Custom(custom_id) => {
+            api::read_script_provider_config(custom_id).ok_or_else(|| {
+                let failure = CustomProviderLifecycleFailure::yaml_not_found(
+                    "load script provider",
+                    custom_id,
+                    None,
+                );
+                warn!(
+                    target: "settings",
+                    "ScriptProviderEffect::LoadConfig: {}",
+                    failure
+                );
+                failure
+            })
         }
+        _ => {
+            let failure = CustomProviderLifecycleFailure::invalid_provider_id(
+                "load script provider",
+                "custom",
+                provider_id.to_string(),
+            );
+            warn!(target: "settings", "ScriptProviderEffect::LoadConfig: {}", failure);
+            Err(failure)
+        }
+    };
+
+    AppAction::ScriptProviderLoadFinished {
+        provider_id,
+        result,
     }
 }
 

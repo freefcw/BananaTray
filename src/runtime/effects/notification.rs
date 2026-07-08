@@ -22,6 +22,10 @@ pub(super) fn run(effect: NotificationEffect) {
             };
             send_plain_notification(&title, &body);
         }
+        NotificationEffect::PlainI18n {
+            title_key,
+            body_key,
+        } => notify_plain_i18n(title_key, body_key),
         NotificationEffect::Debug { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }

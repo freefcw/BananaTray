@@ -67,6 +67,10 @@ pub fn newapi_save_failed_notification_keys() -> (&'static str, &'static str) {
     ("newapi.save_failed_title", "newapi.save_failed_body")
 }
 
+pub fn newapi_load_failed_notification_keys() -> (&'static str, &'static str) {
+    ("newapi.load_failed_title", "newapi.load_failed_body")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +197,13 @@ mod tests {
 
         assert_eq!(title, "newapi.save_failed_title");
         assert_eq!(body, "newapi.save_failed_body");
+    }
+
+    #[test]
+    fn notification_keys_load_failed() {
+        let (title, body) = newapi_load_failed_notification_keys();
+
+        assert_eq!(title, "newapi.load_failed_title");
+        assert_eq!(body, "newapi.load_failed_body");
     }
 }

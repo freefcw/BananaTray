@@ -473,6 +473,8 @@ newapi.confirm_delete: "Confirm"
 newapi.cancel_delete: "Cancel"
 newapi.delete_failed_title: "⚠️ Delete Failed"
 newapi.delete_failed_body: "Failed to remove the relay config file. Check permissions and try again."
+newapi.load_failed_title: "⚠️ Load Failed"
+newapi.load_failed_body: "Failed to load the relay config file. Check the YAML file and try again."
 newapi.field.url.readonly_hint: "Site URL is an identity field and cannot be changed"
 
 # ── Provider dynamic list ─────────────────────────────────

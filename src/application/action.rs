@@ -1,9 +1,11 @@
 use super::state::SettingsTab;
 use crate::models::{
-    AppTheme, NavTab, ProviderId, QuotaDisplayMode, ScriptProviderConfig, ScriptProviderTestResult,
-    TrayIconStyle,
+    AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
+    ProviderId, QuotaDisplayMode, ScriptProviderConfig, ScriptProviderDeleteSuccess,
+    ScriptProviderEditData, ScriptProviderSaveSuccess, ScriptProviderTestResult, TrayIconStyle,
 };
 use crate::refresh::{RefreshEvent, RefreshReason};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum AppAction {
@@ -75,13 +77,30 @@ pub enum AppAction {
         user_id: Option<String>,
         divisor: Option<f64>,
     },
+    /// NewAPI 保存完成（由 runtime I/O 回传，reducer 统一处理状态和通知）
+    NewApiSaveFinished {
+        config: crate::models::NewApiConfig,
+        filename: String,
+        is_editing: bool,
+        result: Result<NewApiSaveSuccess, CustomProviderLifecycleFailure>,
+    },
     /// 进入 NewAPI 编辑模式（从磁盘读取已有配置回填表单）
     EditNewApi {
         provider_id: ProviderId,
     },
+    /// NewAPI 编辑数据加载完成（由 runtime I/O 回传）
+    NewApiLoadFinished {
+        provider_id: ProviderId,
+        result: Result<NewApiEditData, CustomProviderLifecycleFailure>,
+    },
     /// 删除 NewAPI 自定义 Provider（从磁盘删除 YAML 文件）
     DeleteNewApi {
         provider_id: ProviderId,
+    },
+    /// NewAPI 删除完成（由 runtime I/O 回传）
+    NewApiDeleteFinished {
+        provider_id: ProviderId,
+        result: Result<PathBuf, CustomProviderLifecycleFailure>,
     },
     /// 进入删除 NewAPI 的二次确认状态
     ConfirmDeleteNewApi,
@@ -100,13 +119,31 @@ pub enum AppAction {
     },
     /// 提交脚本 Provider 配置（生成脚本文件 + YAML）
     SubmitScriptProvider(ScriptProviderConfig),
+    /// 脚本 Provider 保存完成（由 runtime I/O 回传）
+    ScriptProviderSaveFinished {
+        config: ScriptProviderConfig,
+        yaml_filename: String,
+        script_filename: String,
+        is_editing: bool,
+        result: Result<ScriptProviderSaveSuccess, CustomProviderLifecycleFailure>,
+    },
     /// 进入脚本 Provider 编辑模式
     EditScriptProvider {
         provider_id: ProviderId,
     },
+    /// 脚本 Provider 编辑数据加载完成（由 runtime I/O 回传）
+    ScriptProviderLoadFinished {
+        provider_id: ProviderId,
+        result: Result<ScriptProviderEditData, CustomProviderLifecycleFailure>,
+    },
     /// 删除脚本 Provider
     DeleteScriptProvider {
         provider_id: ProviderId,
+    },
+    /// 脚本 Provider 删除完成（由 runtime I/O 回传）
+    ScriptProviderDeleteFinished {
+        provider_id: ProviderId,
+        result: Result<ScriptProviderDeleteSuccess, CustomProviderLifecycleFailure>,
     },
     /// 进入删除脚本 Provider 的二次确认状态
     ConfirmDeleteScriptProvider,

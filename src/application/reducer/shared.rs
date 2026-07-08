@@ -1,4 +1,4 @@
-use crate::application::{AppEffect, ContextEffect, TrayIconRequest};
+use crate::application::{AppEffect, ContextEffect, NotificationEffect, TrayIconRequest};
 use crate::models::{ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::RefreshRequest;
 
@@ -60,4 +60,19 @@ pub(super) fn sync_dynamic_icon_if_needed(
         effects
             .push(ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(new_status)).into());
     }
+}
+
+/// reducer 集中选择用户可见结果时，追加一条普通 i18n 文本通知。
+pub(super) fn notify_plain_i18n(
+    effects: &mut Vec<AppEffect>,
+    title_key: &'static str,
+    body_key: &'static str,
+) {
+    effects.push(
+        NotificationEffect::PlainI18n {
+            title_key,
+            body_key,
+        }
+        .into(),
+    );
 }

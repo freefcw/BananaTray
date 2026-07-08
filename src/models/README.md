@@ -65,6 +65,14 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - **`extract_domain_slug(base_url)`** — URL → slug 纯函数（如 `https://my-api.example.com` → `my-api-example-com`）
 - **`newapi_provider_id(base_url)`** — 从 URL 计算 Provider ID（`{slug}:newapi`），reducer 用于预注册
 
+### `custom_provider_lifecycle.rs` — Custom Provider Lifecycle Outcomes
+
+跨 `providers` / `runtime` / `application` 使用的自定义 provider 生命周期结果类型，保持 application 层不依赖 `providers/`：
+
+- **`CustomProviderLifecycleFailure`** — 保存、删除、加载过程中的结构化失败语义（非法 provider id、YAML 不存在、脚本 provider 非法、文件操作失败）
+- **`NewApiSaveSuccess`** / **`ScriptProviderSaveSuccess`** — 保存成功的文件路径和 settings 同步结果
+- **`ScriptProviderDeleteSuccess`** — 区分脚本 provider 完全删除与 YAML 已删但 companion script 删除失败的 partial success
+
 ### `script_provider.rs` — Script Provider Data Types
 
 设置页脚本向导使用的纯数据类型和 stdout 解析逻辑：
