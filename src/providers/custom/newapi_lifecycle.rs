@@ -7,6 +7,9 @@ use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
 use crate::models::ProviderId;
 use crate::providers::custom::file_ops;
 use crate::providers::custom::generator;
+use crate::providers::custom::lifecycle_error::{
+    CustomProviderLifecycleError, CustomProviderLifecycleResult,
+};
 use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
 use std::path::{Path, PathBuf};
 
@@ -22,26 +25,33 @@ pub(crate) fn read_config(provider_custom_id: &str) -> Option<NewApiEditData> {
 }
 
 /// 将 NewAPI 配置写入磁盘 YAML 文件。
-pub(crate) fn save_yaml(config: &NewApiConfig, filename: &str) -> Result<PathBuf, String> {
+pub(crate) fn save_yaml(
+    config: &NewApiConfig,
+    filename: &str,
+) -> CustomProviderLifecycleResult<PathBuf> {
     let yaml_content = generator::generate_newapi_yaml(config);
     let path = crate::platform::paths::custom_provider_path(filename);
 
     file_ops::write_newapi_yaml(&path, &yaml_content)
+        .map_err(|err| CustomProviderLifecycleError::file_operation("save NewAPI provider", err))
 }
 
 /// 删除 NewAPI 配置对应的 YAML 文件。
-pub(crate) fn delete_yaml(provider_id: &ProviderId) -> Result<PathBuf, String> {
+pub(crate) fn delete_yaml(provider_id: &ProviderId) -> CustomProviderLifecycleResult<PathBuf> {
     let custom_id = match provider_id {
         ProviderId::Custom(custom_id) => custom_id,
         _ => {
-            return Err(format!(
-                "NewApiEffect::DeleteProvider: not a custom provider id: {provider_id}"
+            return Err(CustomProviderLifecycleError::invalid_provider_id(
+                "delete NewAPI provider",
+                "custom",
+                provider_id.to_string(),
             ))
         }
     };
 
     let yaml_path = find_yaml_path(custom_id)?;
     file_ops::delete_yaml_file(&yaml_path)
+        .map_err(|err| CustomProviderLifecycleError::file_operation("delete NewAPI provider", err))
 }
 
 fn filename_for_id(custom_id: &str) -> Option<String> {
@@ -54,10 +64,12 @@ fn read_config_in_dir(provider_custom_id: &str, providers_dir: &Path) -> Option<
     generator::parse_newapi_edit_data(&yaml.def, yaml.filename)
 }
 
-fn find_yaml_path(custom_id: &str) -> Result<PathBuf, String> {
+fn find_yaml_path(custom_id: &str) -> CustomProviderLifecycleResult<PathBuf> {
     if !custom_id.ends_with(":newapi") {
-        return Err(format!(
-            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
+        return Err(CustomProviderLifecycleError::invalid_provider_id(
+            "delete NewAPI provider",
+            "newapi",
+            custom_id,
         ));
     }
 
@@ -68,23 +80,21 @@ fn find_yaml_path(custom_id: &str) -> Result<PathBuf, String> {
 
     let fallback_yaml = filename_for_id(custom_id)
         .map(|filename| crate::platform::paths::custom_provider_path(&filename));
-    match fallback_yaml {
-        Some(path) => Err(format!(
-            "NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {} (expected {} or matching .yml)",
-            custom_id,
-            path.display()
-        )),
-        None => Err(format!(
-            "NewApiEffect::DeleteProvider: not a newapi provider id: {custom_id}"
-        )),
-    }
+    Err(CustomProviderLifecycleError::yaml_not_found(
+        "delete NewAPI provider",
+        custom_id,
+        fallback_yaml,
+    ))
 }
 
-fn find_yaml_path_in_dir(custom_id: &str, providers_dir: &Path) -> Result<PathBuf, String> {
+fn find_yaml_path_in_dir(
+    custom_id: &str,
+    providers_dir: &Path,
+) -> CustomProviderLifecycleResult<PathBuf> {
     find_custom_provider_yaml_by_id(custom_id, providers_dir)
         .map(|yaml| yaml.path)
         .ok_or_else(|| {
-            format!("NewApiEffect::DeleteProvider: NewAPI provider YAML not found for {custom_id}")
+            CustomProviderLifecycleError::yaml_not_found("delete NewAPI provider", custom_id, None)
         })
 }
 
@@ -106,13 +116,13 @@ mod tests {
     #[test]
     fn delete_yaml_rejects_builtin_provider() {
         let err = delete_yaml(&ProviderId::BuiltIn(ProviderKind::Claude)).unwrap_err();
-        assert!(err.contains("not a custom provider id"));
+        assert!(err.to_string().contains("expected custom provider id"));
     }
 
     #[test]
     fn delete_yaml_rejects_non_newapi_custom_provider() {
         let err = delete_yaml(&ProviderId::Custom("custom:cli".to_string())).unwrap_err();
-        assert!(err.contains("not a newapi provider id"));
+        assert!(err.to_string().contains("expected newapi provider id"));
     }
 
     #[test]

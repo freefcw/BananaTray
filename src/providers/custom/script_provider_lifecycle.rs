@@ -9,6 +9,9 @@ use crate::models::{
 };
 use crate::providers::custom::file_ops;
 use crate::providers::custom::generator;
+use crate::providers::custom::lifecycle_error::{
+    CustomProviderLifecycleError, CustomProviderLifecycleResult,
+};
 use crate::providers::custom::locator::{find_custom_provider_yaml_by_id, is_yaml_path};
 use crate::providers::custom::schema::{CustomProviderDef, SourceDef};
 use std::path::{Path, PathBuf};
@@ -69,7 +72,7 @@ pub(crate) fn save(
     yaml_filename: &str,
     script_filename: &str,
     allow_overwrite: bool,
-) -> Result<(PathBuf, PathBuf), String> {
+) -> CustomProviderLifecycleResult<(PathBuf, PathBuf)> {
     let script_path = crate::platform::paths::custom_script_path(script_filename);
     let yaml_path = crate::platform::paths::custom_provider_path(yaml_filename);
 
@@ -79,12 +82,14 @@ pub(crate) fn save(
 /// 删除 script provider 的 YAML 文件与 companion script。
 pub(crate) fn delete_files(
     provider_id: &ProviderId,
-) -> Result<(PathBuf, Result<PathBuf, String>), String> {
+) -> CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)> {
     let custom_id = match provider_id {
         ProviderId::Custom(custom_id) => custom_id,
         _ => {
-            return Err(format!(
-                "ScriptProviderEffect::DeleteProvider: not a custom provider id: {provider_id}"
+            return Err(CustomProviderLifecycleError::invalid_provider_id(
+                "delete script provider",
+                "custom",
+                provider_id.to_string(),
             ))
         }
     };
@@ -108,14 +113,19 @@ fn save_at_paths(
     yaml_path: &Path,
     script_path: &Path,
     allow_overwrite: bool,
-) -> Result<(PathBuf, PathBuf), String> {
+) -> CustomProviderLifecycleResult<(PathBuf, PathBuf)> {
     if !allow_overwrite {
-        file_ops::ensure_new_file(yaml_path)?;
-        file_ops::ensure_new_file(script_path)?;
+        file_ops::ensure_new_file(yaml_path).map_err(|err| {
+            CustomProviderLifecycleError::file_operation("save script provider", err)
+        })?;
+        file_ops::ensure_new_file(script_path).map_err(|err| {
+            CustomProviderLifecycleError::file_operation("save script provider", err)
+        })?;
     }
 
     let yaml_content = generator::generate_script_provider_yaml(config, script_path);
-    file_ops::write_script_provider_files(script_path, yaml_path, &config.script, &yaml_content)?;
+    file_ops::write_script_provider_files(script_path, yaml_path, &config.script, &yaml_content)
+        .map_err(|err| CustomProviderLifecycleError::file_operation("save script provider", err))?;
 
     Ok((yaml_path.to_path_buf(), script_path.to_path_buf()))
 }
@@ -154,10 +164,12 @@ fn read_config_in_dir(
     })
 }
 
-fn find_paths(custom_id: &str) -> Result<(PathBuf, PathBuf), String> {
+fn find_paths(custom_id: &str) -> CustomProviderLifecycleResult<(PathBuf, PathBuf)> {
     if !custom_id.ends_with(":script") {
-        return Err(format!(
-            "ScriptProviderEffect::DeleteProvider: not a script provider id: {custom_id}"
+        return Err(CustomProviderLifecycleError::invalid_provider_id(
+            "delete script provider",
+            "script",
+            custom_id,
         ));
     }
 
@@ -172,12 +184,15 @@ fn find_paths_in_dir(
     custom_id: &str,
     providers_dir: &Path,
     scripts_dir: &Path,
-) -> Result<(PathBuf, PathBuf), String> {
+) -> CustomProviderLifecycleResult<(PathBuf, PathBuf)> {
     let entries = std::fs::read_dir(providers_dir).map_err(|e| {
-        format!(
-            "failed to read providers dir {}: {}",
-            providers_dir.display(),
-            e
+        CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "failed to read providers dir {}: {}",
+                providers_dir.display(),
+                e
+            ),
         )
     })?;
     for entry in entries.flatten() {
@@ -195,9 +210,10 @@ fn find_paths_in_dir(
             continue;
         }
         let script_path = script_path_from_def(&def).ok_or_else(|| {
-            format!(
-                "ScriptProviderEffect::DeleteProvider: script provider {} has no script path",
-                custom_id
+            CustomProviderLifecycleError::invalid_script_provider(
+                "delete script provider",
+                custom_id,
+                "missing companion script path",
             )
         })?;
         let script_path = script_path_allowed_for_delete(script_path, scripts_dir)?;
@@ -206,16 +222,11 @@ fn find_paths_in_dir(
 
     let fallback_yaml = yaml_filename_for_id(custom_id)
         .map(|filename| crate::platform::paths::custom_provider_path(&filename));
-    match fallback_yaml {
-        Some(path) => Err(format!(
-            "ScriptProviderEffect::DeleteProvider: script provider YAML not found for {} (expected {} or matching .yml)",
-            custom_id,
-            path.display()
-        )),
-        None => Err(format!(
-            "ScriptProviderEffect::DeleteProvider: not a script provider id: {custom_id}"
-        )),
-    }
+    Err(CustomProviderLifecycleError::yaml_not_found(
+        "delete script provider",
+        custom_id,
+        fallback_yaml,
+    ))
 }
 
 fn script_path_from_def(def: &CustomProviderDef) -> Option<PathBuf> {
@@ -226,12 +237,18 @@ fn script_path_from_def(def: &CustomProviderDef) -> Option<PathBuf> {
     }
 }
 
-fn script_path_allowed_for_delete(path: PathBuf, scripts_dir: &Path) -> Result<PathBuf, String> {
+fn script_path_allowed_for_delete(
+    path: PathBuf,
+    scripts_dir: &Path,
+) -> CustomProviderLifecycleResult<PathBuf> {
     let scripts_dir = std::fs::canonicalize(scripts_dir).map_err(|e| {
-        format!(
-            "failed to resolve BananaTray scripts dir {}: {}",
-            scripts_dir.display(),
-            e
+        CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "failed to resolve BananaTray scripts dir {}: {}",
+                scripts_dir.display(),
+                e
+            ),
         )
     })?;
     let resolved_path = path_for_delete_boundary(&path)?;
@@ -239,41 +256,56 @@ fn script_path_allowed_for_delete(path: PathBuf, scripts_dir: &Path) -> Result<P
     if resolved_path.starts_with(&scripts_dir) {
         Ok(path)
     } else {
-        Err(format!(
-            "refusing to delete companion script outside BananaTray scripts dir: {}",
-            path.display()
+        Err(CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "refusing to delete companion script outside BananaTray scripts dir: {}",
+                path.display()
+            ),
         ))
     }
 }
 
-fn path_for_delete_boundary(path: &Path) -> Result<PathBuf, String> {
+fn path_for_delete_boundary(path: &Path) -> CustomProviderLifecycleResult<PathBuf> {
     if path.exists() {
         return std::fs::canonicalize(path).map_err(|e| {
-            format!(
-                "failed to resolve companion script path {}: {}",
-                path.display(),
-                e
+            CustomProviderLifecycleError::file_operation(
+                "delete script provider",
+                format!(
+                    "failed to resolve companion script path {}: {}",
+                    path.display(),
+                    e
+                ),
             )
         });
     }
 
     let parent = path.parent().ok_or_else(|| {
-        format!(
-            "failed to resolve companion script parent for {}",
-            path.display()
+        CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "failed to resolve companion script parent for {}",
+                path.display()
+            ),
         )
     })?;
     let parent = std::fs::canonicalize(parent).map_err(|e| {
-        format!(
-            "failed to resolve companion script parent {}: {}",
-            parent.display(),
-            e
+        CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "failed to resolve companion script parent {}: {}",
+                parent.display(),
+                e
+            ),
         )
     })?;
     let filename = path.file_name().ok_or_else(|| {
-        format!(
-            "failed to resolve companion script filename for {}",
-            path.display()
+        CustomProviderLifecycleError::file_operation(
+            "delete script provider",
+            format!(
+                "failed to resolve companion script filename for {}",
+                path.display()
+            ),
         )
     })?;
     Ok(parent.join(filename))
@@ -282,9 +314,12 @@ fn path_for_delete_boundary(path: &Path) -> Result<PathBuf, String> {
 fn delete_paths(
     yaml_path: &Path,
     script_path: &Path,
-) -> Result<(PathBuf, Result<PathBuf, String>), String> {
-    let deleted_yaml = file_ops::delete_yaml_file(yaml_path)?;
-    let deleted_script = file_ops::delete_file_if_exists(script_path);
+) -> CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)> {
+    let deleted_yaml = file_ops::delete_yaml_file(yaml_path).map_err(|err| {
+        CustomProviderLifecycleError::file_operation("delete script provider", err)
+    })?;
+    let deleted_script = file_ops::delete_file_if_exists(script_path)
+        .map_err(|err| CustomProviderLifecycleError::file_operation("delete script provider", err));
     Ok((deleted_yaml, deleted_script))
 }
 
@@ -433,7 +468,7 @@ plan:
         )
         .unwrap_err();
 
-        assert!(err.contains("refusing to overwrite"));
+        assert!(err.to_string().contains("refusing to overwrite"));
         assert_eq!(std::fs::read_to_string(&yaml_path).unwrap(), "old yaml");
     }
 
@@ -485,7 +520,7 @@ plan:
 
         let err = find_paths_in_dir("custom:script", &providers_dir, &scripts_dir).unwrap_err();
 
-        assert!(err.contains("outside BananaTray scripts dir"));
+        assert!(err.to_string().contains("outside BananaTray scripts dir"));
     }
 
     #[test]
@@ -501,6 +536,6 @@ plan:
 
         let err = find_paths_in_dir("custom:script", &providers_dir, &scripts_dir).unwrap_err();
 
-        assert!(err.contains("outside BananaTray scripts dir"));
+        assert!(err.to_string().contains("outside BananaTray scripts dir"));
     }
 }
