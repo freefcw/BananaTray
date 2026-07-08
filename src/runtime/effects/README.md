@@ -8,7 +8,7 @@
 - `mod.rs` — `CommonEffect` 顶层穷尽分派。
 - `settings.rs` — 设置持久化、自启动同步、语言与日志级别应用。
 - `notification.rs` — quota、普通文本和 Debug 测试通知。
-- `refresh.rs` — refresh 请求发送，以及发送失败时的前台状态降级。
+- `refresh.rs` — refresh 请求发送；发送失败时返回后续 `RefreshEventReceived` action，由 reducer 统一应用失败状态和 render effect。
 - `debug.rs` — Debug 页的平台动作、日志捕获和 Debug 刷新编排。
 - `newapi.rs` — NewAPI 保存 / 删除 / 加载的运行时编排。
 - `script_provider.rs` — 自定义脚本 Provider 的 Run Test、脚本 + YAML 保存、删除和编辑加载编排。

@@ -41,7 +41,7 @@ pub(crate) fn dispatch_with_full_context(
     caps: &mut dyn FullContextCapabilities,
 ) {
     dispatch_effects(state, action, |effect| {
-        run_effect_with_full_context(state, effect, caps);
+        run_effect_with_full_context(state, effect, caps)
     });
 }
 
@@ -56,7 +56,7 @@ pub(crate) fn dispatch_with_full_context(
 fn dispatch_effects(
     state: &Rc<RefCell<AppState>>,
     action: AppAction,
-    mut run_effect: impl FnMut(AppEffect),
+    mut run_effect: impl FnMut(AppEffect) -> Vec<AppAction>,
 ) {
     use std::cell::Cell;
 
@@ -87,8 +87,16 @@ fn dispatch_effects(
         let mut state_ref = state.borrow_mut();
         reduce(&mut state_ref.session, action)
     };
-    for effect in effects {
-        run_effect(effect);
+    let mut pending_effects = std::collections::VecDeque::from(effects);
+    while let Some(effect) = pending_effects.pop_front() {
+        let follow_up_actions = run_effect(effect);
+        for action in follow_up_actions {
+            let effects = {
+                let mut state_ref = state.borrow_mut();
+                reduce(&mut state_ref.session, action)
+            };
+            pending_effects.extend(effects);
+        }
     }
 }
 
@@ -170,9 +178,12 @@ fn run_effect_in_context<V: 'static>(
     state: &Rc<RefCell<AppState>>,
     effect: AppEffect,
     cx: &mut Context<V>,
-) {
+) -> Vec<AppAction> {
     match effect {
-        AppEffect::Context(ctx) => run_view_context_effect(state, ctx, &mut ViewCaps(cx)),
+        AppEffect::Context(ctx) => {
+            run_view_context_effect(state, ctx, &mut ViewCaps(cx));
+            Vec::new()
+        }
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }
@@ -181,9 +192,12 @@ fn run_effect_with_full_context(
     state: &Rc<RefCell<AppState>>,
     effect: AppEffect,
     caps: &mut dyn FullContextCapabilities,
-) {
+) -> Vec<AppAction> {
     match effect {
-        AppEffect::Context(ctx) => run_full_context_effect(state, ctx, caps),
+        AppEffect::Context(ctx) => {
+            run_full_context_effect(state, ctx, caps);
+            Vec::new()
+        }
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }

@@ -1,7 +1,11 @@
 use super::*;
-use crate::application::TrayIconRequest;
-use crate::models::{AppSettings, ScriptProviderConfig, TrayIconStyle};
+use crate::application::{AppAction, TrayIconRequest};
+use crate::models::{
+    AppSettings, ConnectionStatus, ErrorKind, ProviderId, ProviderKind, ScriptProviderConfig,
+    TrayIconStyle,
+};
 use crate::providers::ProviderManagerHandle;
+use crate::refresh::{RefreshReason, RefreshRequest};
 
 #[derive(Default)]
 struct FakeCaps {
@@ -38,6 +42,21 @@ impl FullContextCapabilities for FakeCaps {
 
 fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
+    let (script_tx, _script_rx) = smol::channel::bounded(1);
+    let manager = ProviderManagerHandle::default();
+    Rc::new(RefCell::new(AppState::new(
+        tx,
+        script_tx,
+        manager,
+        AppSettings::default(),
+        None,
+    )))
+}
+
+fn make_state_with_full_refresh_queue() -> Rc<RefCell<AppState>> {
+    let (tx, _rx) = smol::channel::bounded(1);
+    tx.try_send(RefreshRequest::Shutdown)
+        .expect("refresh queue should accept filler request");
     let (script_tx, _script_rx) = smol::channel::bounded(1);
     let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
@@ -125,6 +144,72 @@ fn run_view_context_effect_rejects_quit_app() {
     let mut caps = FakeCaps::default();
 
     run_view_context_effect(&state, ContextEffect::QuitApp, &mut caps);
+}
+
+#[test]
+fn dispatch_processes_refresh_send_failure_follow_up_action() {
+    let state = make_state_with_full_refresh_queue();
+    let provider_id = ProviderId::BuiltIn(ProviderKind::Claude);
+    state
+        .borrow_mut()
+        .session
+        .settings
+        .provider
+        .set_enabled(&provider_id, true);
+    let mut caps = FakeCaps::default();
+
+    dispatch_with_full_context(
+        &state,
+        AppAction::RefreshProvider {
+            id: provider_id.clone(),
+            reason: RefreshReason::Manual,
+        },
+        &mut caps,
+    );
+
+    let state_ref = state.borrow();
+    let provider = state_ref
+        .session
+        .provider_store
+        .find_by_id(&provider_id)
+        .expect("provider status");
+    assert_eq!(provider.connection, ConnectionStatus::Error);
+    assert_eq!(provider.error_kind, ErrorKind::Unknown);
+    assert!(provider
+        .last_failure
+        .as_ref()
+        .and_then(|failure| failure.raw_detail.as_deref())
+        .is_some_and(|detail| detail.contains("failed to enqueue refresh request")));
+    assert!(caps.rendered);
+}
+
+#[test]
+fn dispatch_processes_debug_refresh_send_failure_follow_up_action() {
+    let state = make_state_with_full_refresh_queue();
+    let provider_id = ProviderId::BuiltIn(ProviderKind::Claude);
+    {
+        let mut state_ref = state.borrow_mut();
+        state_ref
+            .session
+            .settings
+            .provider
+            .set_enabled(&provider_id, true);
+        state_ref.session.debug_ui.selected_provider = Some(provider_id.clone());
+    }
+    let mut caps = FakeCaps::default();
+
+    dispatch_with_full_context(&state, AppAction::DebugRefreshProvider, &mut caps);
+
+    let state_ref = state.borrow();
+    let provider = state_ref
+        .session
+        .provider_store
+        .find_by_id(&provider_id)
+        .expect("provider status");
+    assert_eq!(provider.connection, ConnectionStatus::Error);
+    assert!(!state_ref.session.debug_ui.refresh_active);
+    assert!(state_ref.session.debug_ui.prev_log_level.is_none());
+    assert!(caps.rendered);
 }
 
 #[test]

@@ -3,21 +3,22 @@ use std::rc::Rc;
 
 use log::warn;
 
-use crate::application::RefreshEffect;
-use crate::models::ConnectionStatus;
-use crate::refresh::RefreshRequest;
+use crate::application::{AppAction, RefreshEffect};
+use crate::models::{ErrorKind, FailureReason, ProviderFailure, ProviderId};
+use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshRequest, RefreshResult};
 
 use super::super::AppState;
 
-pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: RefreshEffect) {
+pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: RefreshEffect) -> Vec<AppAction> {
     match effect {
-        RefreshEffect::SendRequest(request) => {
-            let _ = send_request(state, request);
-        }
+        RefreshEffect::SendRequest(request) => send_request(state, request),
     }
 }
 
-pub(super) fn send_request(state: &Rc<RefCell<AppState>>, request: RefreshRequest) -> bool {
+pub(super) fn send_request(
+    state: &Rc<RefCell<AppState>>,
+    request: RefreshRequest,
+) -> Vec<AppAction> {
     let failed_id = match &request {
         RefreshRequest::RefreshOne { id, .. } => Some(id.clone()),
         _ => None,
@@ -25,13 +26,24 @@ pub(super) fn send_request(state: &Rc<RefCell<AppState>>, request: RefreshReques
     let send_result = state.borrow().send_refresh(request);
     if let Err(err) = send_result {
         warn!(target: "refresh", "failed to send refresh request: {}", err);
-        if let Some(ref id) = failed_id {
-            if let Some(provider) = state.borrow_mut().session.provider_store.find_by_id_mut(id) {
-                provider.connection = ConnectionStatus::Disconnected;
-            }
-        }
-        false
+        failed_id
+            .map(|id| vec![refresh_request_send_failed_action(id, err.to_string())])
+            .unwrap_or_default()
     } else {
-        true
+        Vec::new()
     }
+}
+
+fn refresh_request_send_failed_action(id: ProviderId, detail: String) -> AppAction {
+    AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+        id,
+        result: RefreshResult::Failed {
+            failure: ProviderFailure {
+                reason: FailureReason::Unavailable,
+                advice: None,
+                raw_detail: Some(format!("failed to enqueue refresh request: {detail}")),
+            },
+            error_kind: ErrorKind::Unknown,
+        },
+    }))
 }
