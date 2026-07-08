@@ -181,8 +181,10 @@ impl ProviderManager {
             })
             .collect();
 
-        // 追加自定义 Provider 状态
-        for (id, provider) in &self.custom_providers_by_id {
+        // 追加自定义 Provider 状态；输出前按 ID 排序，避免 HashMap 迭代顺序泄漏到首次 sidebar/order。
+        let mut custom_entries: Vec<_> = self.custom_providers_by_id.iter().collect();
+        custom_entries.sort_by_key(|(id, _)| id.as_str());
+        for (id, provider) in custom_entries {
             let descriptor = provider.descriptor();
             let provider_id = ProviderId::Custom(id.clone());
             let mut status = ProviderStatus::new(provider_id, descriptor.metadata);
@@ -424,6 +426,43 @@ mod tests {
             ProviderKind::all().len(),
             "providers_by_kind count should match ProviderKind::all()"
         );
+    }
+
+    #[test]
+    fn test_initial_statuses_sort_custom_providers_by_id() {
+        fn custom_provider(id: &'static str) -> Arc<dyn ProviderEntry> {
+            Arc::new(DefaultTokenProvider {
+                descriptor: crate::models::ProviderDescriptor {
+                    id: Cow::Borrowed(id),
+                    metadata: ProviderMetadata {
+                        kind: ProviderKind::Custom,
+                        display_name: id.to_string(),
+                        brand_name: id.to_string(),
+                        icon_asset: String::new(),
+                        dashboard_url: String::new(),
+                        account_hint: String::new(),
+                        source_label: String::new(),
+                    },
+                },
+            })
+        }
+
+        let manager = ProviderManager::with_custom_providers([
+            custom_provider("zeta:newapi"),
+            custom_provider("alpha:newapi"),
+            custom_provider("middle:newapi"),
+        ]);
+
+        let custom_ids: Vec<_> = manager
+            .initial_statuses()
+            .into_iter()
+            .filter_map(|status| match status.provider_id {
+                ProviderId::Custom(id) => Some(id),
+                ProviderId::BuiltIn(_) => None,
+            })
+            .collect();
+
+        assert_eq!(custom_ids, ["alpha:newapi", "middle:newapi", "zeta:newapi"]);
     }
 
     #[test]

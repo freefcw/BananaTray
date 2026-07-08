@@ -166,8 +166,18 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
         },
     );
 
-    // 已存在的 enabled 状态不被覆盖
+    // 已存在的 enabled 状态不被覆盖，也不会重复加入 sidebar
     assert!(session.settings.provider.is_enabled(&custom_id));
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .sidebar_providers
+            .iter()
+            .filter(|key| **key == "old-site-com:newapi")
+            .count(),
+        1
+    );
 }
 
 #[test]

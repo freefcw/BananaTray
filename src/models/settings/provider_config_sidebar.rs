@@ -61,11 +61,10 @@ impl ProviderConfig {
 
     /// 将 Provider 添加到 sidebar 列表。
     ///
-    /// 内置 Provider 重复添加返回 false；Custom 类型始终允许。
+    /// `sidebar_providers` 表达集合语义：无论内置还是自定义 Provider，重复添加都返回 false。
     pub fn add_to_sidebar(&mut self, id: &ProviderId) -> bool {
         let key = id.id_key();
-        // 内置 Provider 去重
-        if id.is_builtin() && self.sidebar_providers.contains(&key) {
+        if self.sidebar_providers.contains(&key) {
             return false;
         }
         self.sidebar_providers.push(key.clone());

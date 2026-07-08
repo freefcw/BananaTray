@@ -91,14 +91,7 @@ pub(super) fn submit_script_provider(
     {
         session.settings.provider.set_enabled(&new_id, true);
     }
-    if !session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&new_id.id_key())
-    {
-        session.settings.provider.add_to_sidebar(&new_id);
-    }
+    session.settings.provider.add_to_sidebar(&new_id);
     session.settings_ui.selected_provider = new_id;
 
     effects.push(

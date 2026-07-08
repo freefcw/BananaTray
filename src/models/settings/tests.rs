@@ -629,20 +629,20 @@ fn add_to_sidebar_duplicate_builtin_rejected() {
 }
 
 #[test]
-fn add_to_sidebar_custom_allows_duplicate() {
+fn add_to_sidebar_duplicate_custom_rejected() {
     let mut config = ProviderConfig {
         sidebar_providers: vec!["myai:newapi".into()],
         ..Default::default()
     };
     let id = ProviderId::Custom("myai:newapi".to_string());
-    assert!(config.add_to_sidebar(&id));
+    assert!(!config.add_to_sidebar(&id));
     assert_eq!(
         config
             .sidebar_providers
             .iter()
             .filter(|k| *k == "myai:newapi")
             .count(),
-        2
+        1
     );
 }
 
