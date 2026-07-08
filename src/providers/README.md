@@ -20,6 +20,7 @@ Provider abstraction layer and all 14 AI provider implementations.
   - `None` — no extra settings UI
   - `TokenInput(TokenInputCapability)` — generic token panel driven by static i18n keys + `credential_key`
   - `NewApiEditable` — NewAPI custom-provider editor actions
+  - `ScriptEditable` — script custom-provider editor actions, including script/interpreter/test/delete controls
 - **`ProviderCapability`** — provider product capability tier:
   - `Monitorable` — participates in normal refresh flows
   - `Informational` — reference-only entry, no refresh/retry actions

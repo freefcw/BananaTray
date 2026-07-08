@@ -73,10 +73,11 @@
 2. 释放借用
 3. 将相应上下文包装进 Adapter
 4. 逐个执行 effects (通过 context effect runner 或 `effects::run_common_effect`)
+5. 若 CommonEffect 返回后续 `AppAction`（例如 refresh 请求入队失败），同一 dispatch 循环继续 reduce 并执行新 effects，避免 effect handler 直接重入 `dispatch_*()`
 
 ### 重入保护
 
-`dispatch_effects()` 使用 `thread_local!` RAII guard 检测重入，防止 effect handler 中再次 dispatch 导致 `RefCell` 重入 panic。需要延迟分派的场景使用 `schedule_*` 系列函数。
+`dispatch_effects()` 使用 `thread_local!` RAII guard 检测重入，防止 effect handler 中再次 dispatch 导致 `RefCell` 重入 panic。需要回到 reducer 的场景优先返回后续 `AppAction`；需要异步分派的场景使用 `schedule_*` 系列函数。
 
 ## 子模块
 
@@ -158,17 +159,17 @@
 - **`generate_filename()` / `generate_script_yaml_filename()` / `generate_script_filename()`** — 由 custom provider id / config 推导落盘文件名
 - **`default_script_template()`** — Settings 窗口脚本 provider 新增页的默认模板
 - **`read_newapi_config()` / `read_script_provider_config()`** — 按 YAML `id` 读取编辑态回填数据
-- **`save_newapi_yaml(config, filename) → Result<PathBuf, String>`** — YAML 生成 + 目录创建 + 同目录临时文件/备份替换写入
-- **`delete_newapi_yaml(provider_id) → Result<PathBuf, String>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
-- **`save_script_provider(config, yaml_filename, script_filename) → Result<(PathBuf, PathBuf), String>`** — 生成 `source.type: cli` YAML，并以同目录临时文件/备份替换方式写入脚本 + YAML 双文件
-- **`delete_script_provider_files(provider_id) → Result<(PathBuf, Result<PathBuf, String>), String>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
+- **`save_newapi_yaml(config, filename) → CustomProviderLifecycleResult<PathBuf>`** — YAML 生成 + 目录创建 + 同目录临时文件/备份替换写入
+- **`delete_newapi_yaml(provider_id) → CustomProviderLifecycleResult<PathBuf>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
+- **`save_script_provider(config, yaml_filename, script_filename) → CustomProviderLifecycleResult<(PathBuf, PathBuf)>`** — 生成 `source.type: cli` YAML，并以同目录临时文件/备份替换方式写入脚本 + YAML 双文件
+- **`delete_script_provider_files(provider_id) → CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会作为 partial 结果上报
 
 文件级回滚由 `providers::custom::file_ops` 处理；UI 状态回滚位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）。runtime 在删除失败时负责记录日志并发送用户通知。
 
 ## 约束
 
 - 本模块在 `cfg(feature = "app")` 下编译，依赖 GPUI
-- Effect handler 中**不得**调用 `dispatch_*()` — 使用 `schedule_*` 延迟到下一轮事件循环
+- Effect handler 中**不得**调用 `dispatch_*()` — 需要同步回到 reducer 时返回后续 `AppAction`，需要异步分派时使用 `schedule_*` 延迟到下一轮事件循环
 - 通知线程切换统一由 `platform::notification` 负责，runtime 只触发通知 effect，避免重复 `spawn`
 
 ## Data Flow
