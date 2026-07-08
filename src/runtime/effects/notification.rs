@@ -1,7 +1,7 @@
 use rust_i18n::t;
 
 use crate::application::{DebugNotificationKind, NotificationEffect, QuotaAlert};
-use crate::platform::notification::send_system_notification;
+use crate::platform::notification::{send_plain_notification, send_system_notification};
 
 pub(super) fn run(effect: NotificationEffect) {
     match effect {
@@ -20,12 +20,18 @@ pub(super) fn run(effect: NotificationEffect) {
                     t!("notification.auto_launch.disabled.body").to_string(),
                 )
             };
-            crate::platform::notification::send_plain_notification(&title, &body);
+            send_plain_notification(&title, &body);
         }
         NotificationEffect::Debug { kind, with_sound } => {
             send_system_notification(&build_debug_alert(kind), with_sound);
         }
     }
+}
+
+pub(super) fn notify_plain_i18n(title_key: &str, body_key: &str) {
+    let title = t!(title_key).to_string();
+    let body = t!(body_key).to_string();
+    send_plain_notification(&title, &body);
 }
 
 fn build_debug_alert(kind: DebugNotificationKind) -> QuotaAlert {

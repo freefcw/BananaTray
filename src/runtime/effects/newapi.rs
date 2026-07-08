@@ -38,9 +38,7 @@ fn save_provider(
             drop(s);
             let (title_key, body_key) =
                 newapi_ops::newapi_save_notification_keys(is_editing, settings_saved);
-            let title = rust_i18n::t!(title_key).to_string();
-            let body = rust_i18n::t!(body_key).to_string();
-            crate::platform::notification::send_plain_notification(&title, &body);
+            super::notification::notify_plain_i18n(title_key, body_key);
             let _ = super::refresh::send_request(state, RefreshRequest::ReloadProviders);
         }
         Err(e) => {
@@ -53,9 +51,7 @@ fn save_provider(
             }
             drop(s);
             let (title_key, body_key) = newapi_ops::newapi_save_failed_notification_keys();
-            let title = rust_i18n::t!(title_key).to_string();
-            let body = rust_i18n::t!(body_key).to_string();
-            crate::platform::notification::send_plain_notification(&title, &body);
+            super::notification::notify_plain_i18n(title_key, body_key);
         }
     }
 }
@@ -68,9 +64,10 @@ fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
         }
         Err(err) => {
             warn!(target: "runtime", "{err}");
-            let title = rust_i18n::t!("newapi.delete_failed_title").to_string();
-            let body = rust_i18n::t!("newapi.delete_failed_body").to_string();
-            crate::platform::notification::send_plain_notification(&title, &body);
+            super::notification::notify_plain_i18n(
+                "newapi.delete_failed_title",
+                "newapi.delete_failed_body",
+            );
         }
     }
 }

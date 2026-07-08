@@ -198,10 +198,7 @@ fn save_provider(
                 is_editing,
                 settings_saved,
             );
-            crate::platform::notification::send_plain_notification(
-                rust_i18n::t!(title_key).as_ref(),
-                rust_i18n::t!(body_key).as_ref(),
-            );
+            super::notification::notify_plain_i18n(title_key, body_key);
             let _ = super::refresh::send_request(state, RefreshRequest::ReloadProviders);
         }
         Err(err) => {
@@ -220,10 +217,7 @@ fn save_provider(
             drop(s);
             let (title_key, body_key) =
                 script_provider_ops::script_provider_save_failed_notification_keys();
-            crate::platform::notification::send_plain_notification(
-                rust_i18n::t!(title_key).as_ref(),
-                rust_i18n::t!(body_key).as_ref(),
-            );
+            super::notification::notify_plain_i18n(title_key, body_key);
         }
     }
 }
@@ -247,9 +241,9 @@ fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
                         yaml_path.display(),
                         err
                     );
-                    crate::platform::notification::send_plain_notification(
-                        rust_i18n::t!("script_provider.delete_partial_title").as_ref(),
-                        rust_i18n::t!("script_provider.delete_partial_body").as_ref(),
+                    super::notification::notify_plain_i18n(
+                        "script_provider.delete_partial_title",
+                        "script_provider.delete_partial_body",
                     );
                 }
             }
@@ -257,9 +251,9 @@ fn delete_provider(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
         }
         Err(err) => {
             warn!(target: "runtime", "{err}");
-            crate::platform::notification::send_plain_notification(
-                rust_i18n::t!("script_provider.delete_failed_title").as_ref(),
-                rust_i18n::t!("script_provider.delete_failed_body").as_ref(),
+            super::notification::notify_plain_i18n(
+                "script_provider.delete_failed_title",
+                "script_provider.delete_failed_body",
             );
         }
     }
@@ -278,9 +272,9 @@ fn load_config(state: &Rc<RefCell<AppState>>, provider_id: ProviderId) {
                 "ScriptProviderEffect::LoadConfig: failed to read config for {}",
                 custom_id
             );
-            crate::platform::notification::send_plain_notification(
-                rust_i18n::t!("script_provider.load_failed_title").as_ref(),
-                rust_i18n::t!("script_provider.load_failed_body").as_ref(),
+            super::notification::notify_plain_i18n(
+                "script_provider.load_failed_title",
+                "script_provider.load_failed_body",
             );
         }
     }
