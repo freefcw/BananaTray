@@ -53,14 +53,14 @@ impl AmpProvider {
 
             if account_email.is_none() {
                 if let Some(caps) = EMAIL_RE.captures(line) {
-                    account_email = Some(caps.get(1).unwrap().as_str().to_string());
+                    account_email = Some(caps[1].to_string());
                 }
             }
 
             if let Some(caps) = CREDIT_RE.captures(line) {
-                let label = caps.get(1).unwrap().as_str().trim();
-                let remaining: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
-                let total: f64 = caps.get(3).unwrap().as_str().parse().unwrap_or(0.0);
+                let label = caps[1].trim();
+                let remaining: f64 = caps[2].parse().unwrap_or(0.0);
+                let total: f64 = caps[3].parse().unwrap_or(0.0);
                 let used = total - remaining;
                 quotas.push(QuotaInfo::with_details(
                     Self::quota_label_spec(label),
@@ -70,8 +70,8 @@ impl AmpProvider {
                     Some(QuotaDetailSpec::CreditRemaining { remaining, total }),
                 ));
             } else if let Some(caps) = BALANCE_RE.captures(line) {
-                let label = caps.get(1).unwrap().as_str().trim();
-                let balance: f64 = caps.get(2).unwrap().as_str().parse().unwrap_or(0.0);
+                let label = caps[1].trim();
+                let balance: f64 = caps[2].parse().unwrap_or(0.0);
 
                 // $0 remaining 表示"未购买付费信用额度"，不等同于"额度耗尽"，
                 // 展示为 Red 会误导免费用户。跳过零余额条目。
