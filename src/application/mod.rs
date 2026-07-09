@@ -1,10 +1,8 @@
 mod action;
 pub(crate) mod effect;
-#[cfg(any(feature = "app", test))]
 pub(crate) mod newapi_ops;
 mod quota_alert;
 mod reducer;
-#[cfg(any(feature = "app", test))]
 pub(crate) mod script_provider_ops;
 mod selectors;
 pub(crate) mod state;
