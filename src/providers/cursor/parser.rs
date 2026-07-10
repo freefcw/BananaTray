@@ -43,95 +43,24 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     let individual_usage = json.get("individualUsage");
     let limit_type = json.get("limitType").and_then(|v| v.as_str()).unwrap_or("");
 
-    if let Some(plan) = individual_usage.and_then(|u| u.get("plan")) {
-        let enabled = plan
-            .get("enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if enabled {
-            let used = plan.get("used").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let limit = plan.get("limit").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let breakdown_total = plan
-                .get("breakdown")
-                .and_then(|b| b.get("total"))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            let effective_limit = if limit > 0.0 { limit } else { breakdown_total };
-
-            if effective_limit > 0.0 {
-                let effective_used = if limit == 0.0 {
-                    plan.get("totalPercentUsed")
-                        .and_then(|v| v.as_f64())
-                        .map(|pct| (pct * effective_limit / 100.0).round())
-                        .unwrap_or(used)
-                } else {
-                    used
-                };
-
-                quotas.push(QuotaInfo::with_details(
-                    QuotaLabelSpec::MonthlyTier {
-                        tier: tier_label.clone(),
-                    },
-                    effective_used,
-                    effective_limit,
-                    QuotaType::General,
-                    reset_at.clone(),
-                ));
-            }
-        }
+    if let Some(plan_quota) = parse_plan_quota(individual_usage, tier_label, reset_at.clone()) {
+        quotas.push(plan_quota);
     }
-
-    if let Some(on_demand) = individual_usage.and_then(|u| u.get("onDemand")) {
-        let enabled = on_demand
-            .get("enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if enabled {
-            let used = on_demand
-                .get("used")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            let limit = on_demand
-                .get("limit")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            if limit > 0.0 {
-                quotas.push(QuotaInfo::with_details(
-                    QuotaLabelSpec::OnDemand,
-                    used,
-                    limit,
-                    QuotaType::Credit,
-                    reset_at.clone(),
-                ));
-            }
-        }
+    if let Some(on_demand_quota) = parse_credit_quota(
+        individual_usage.and_then(|usage| usage.get("onDemand")),
+        QuotaLabelSpec::OnDemand,
+        reset_at.clone(),
+    ) {
+        quotas.push(on_demand_quota);
     }
-
     if limit_type == "team" {
-        if let Some(team_on_demand) = json.get("teamUsage").and_then(|t| t.get("onDemand")) {
-            let enabled = team_on_demand
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            if enabled {
-                let used = team_on_demand
-                    .get("used")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let limit = team_on_demand
-                    .get("limit")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                if limit > 0.0 {
-                    quotas.push(QuotaInfo::with_details(
-                        QuotaLabelSpec::Team,
-                        used,
-                        limit,
-                        QuotaType::Credit,
-                        reset_at.clone(),
-                    ));
-                }
-            }
+        if let Some(team_quota) = parse_credit_quota(
+            json.get("teamUsage")
+                .and_then(|usage| usage.get("onDemand")),
+            QuotaLabelSpec::Team,
+            reset_at,
+        ) {
+            quotas.push(team_quota);
         }
     }
 
@@ -140,6 +69,84 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     }
 
     Ok(quotas)
+}
+
+fn parse_plan_quota(
+    individual_usage: Option<&serde_json::Value>,
+    tier: String,
+    reset_at: Option<QuotaDetailSpec>,
+) -> Option<QuotaInfo> {
+    let plan = individual_usage?.get("plan")?;
+    if !plan
+        .get("enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let used = plan
+        .get("used")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let declared_limit = plan
+        .get("limit")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let breakdown_limit = plan
+        .get("breakdown")
+        .and_then(|breakdown| breakdown.get("total"))
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let limit = if declared_limit > 0.0 {
+        declared_limit
+    } else {
+        breakdown_limit
+    };
+    if limit <= 0.0 {
+        return None;
+    }
+
+    let used = if declared_limit == 0.0 {
+        plan.get("totalPercentUsed")
+            .and_then(serde_json::Value::as_f64)
+            .map(|percent| (percent * limit / 100.0).round())
+            .unwrap_or(used)
+    } else {
+        used
+    };
+    Some(QuotaInfo::with_details(
+        QuotaLabelSpec::MonthlyTier { tier },
+        used,
+        limit,
+        QuotaType::General,
+        reset_at,
+    ))
+}
+
+fn parse_credit_quota(
+    usage: Option<&serde_json::Value>,
+    label: QuotaLabelSpec,
+    reset_at: Option<QuotaDetailSpec>,
+) -> Option<QuotaInfo> {
+    let usage = usage?;
+    if !usage
+        .get("enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let used = usage
+        .get("used")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let limit = usage
+        .get("limit")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    (limit > 0.0).then(|| QuotaInfo::with_details(label, used, limit, QuotaType::Credit, reset_at))
 }
 
 #[cfg(test)]

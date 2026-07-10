@@ -207,9 +207,7 @@ plan:
     }
 }
 
-#[test]
-fn deserialize_auth_variants() {
-    let yaml = r#"
+const AUTH_VARIANTS_YAML: &str = r#"
 schema_version: 2
 id: "auth:api"
 metadata:
@@ -287,7 +285,10 @@ plan:
             used: "used"
             limit: "limit"
 "#;
-    let def: CustomProviderDef = serde_norway::from_str(yaml).unwrap();
+
+#[test]
+fn deserialize_auth_variants() {
+    let def: CustomProviderDef = serde_norway::from_str(AUTH_VARIANTS_YAML).unwrap();
     assert_eq!(def.plan.steps.len(), 5);
 
     let source_auth = |index: usize| match &def.plan.steps[index].source {
