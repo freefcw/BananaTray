@@ -265,11 +265,15 @@ pub(crate) struct SettingsView {
     pub(crate) newapi_inputs: Option<FormInputsCache<NewApiFormInputs>>,
     /// Script Provider 表单输入组（identity 变化时重建）
     pub(crate) script_provider_inputs: Option<FormInputsCache<ScriptProviderFormInputs>>,
+    /// Debug Tab 的阻塞式系统诊断缓存；渲染阶段只读取该快照。
+    pub(crate) debug_diagnostics: Option<runtime::DebugDiagnostics>,
+    pub(crate) debug_diagnostics_loading: bool,
+    pub(crate) _debug_diagnostics_task: Option<gpui::Task<()>>,
 }
 
 impl SettingsView {
     #[allow(dead_code)]
-    pub(crate) fn new(state: Rc<RefCell<AppState>>, _cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
         // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记
         state
@@ -277,7 +281,9 @@ impl SettingsView {
             .session
             .settings_ui
             .token_editing_provider = None;
-        Self {
+        let load_debug_diagnostics =
+            state.borrow().session.settings_ui.active_tab == SettingsTab::Debug;
+        let mut view = Self {
             state,
             token_input: None,
             global_hotkey_input: None,
@@ -285,7 +291,14 @@ impl SettingsView {
             _appearance_sub: None,
             newapi_inputs: None,
             script_provider_inputs: None,
+            debug_diagnostics: None,
+            debug_diagnostics_loading: false,
+            _debug_diagnostics_task: None,
+        };
+        if load_debug_diagnostics {
+            view.refresh_debug_diagnostics(cx);
         }
+        view
     }
 
     pub(super) fn ensure_global_hotkey_input(
@@ -543,7 +556,12 @@ impl SettingsView {
                     .child(label),
             )
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                tab_view_entity.update(cx, |view, _| view.clear_token_input());
+                tab_view_entity.update(cx, |view, cx| {
+                    view.clear_token_input();
+                    if tab == SettingsTab::Debug {
+                        view.refresh_debug_diagnostics(cx);
+                    }
+                });
                 crate::bootstrap::dispatch_in_window(
                     &state,
                     AppAction::SetSettingsTab(tab),
@@ -616,7 +634,7 @@ impl Render for SettingsView {
                     SettingsTab::General => self.render_general_tab(&settings, &theme, window, cx),
                     SettingsTab::Display => self.render_display_tab(&settings, &theme),
                     SettingsTab::About => self.render_about_tab(&theme),
-                    SettingsTab::Debug => self.render_debug_tab(&theme),
+                    SettingsTab::Debug => self.render_debug_tab(&theme, cx),
                     _ => div(),
                 })
         };

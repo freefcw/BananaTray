@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs` 与 `ScriptProviderFormInputs` 表单状态管理；表单缓存按 modal identity 驱动重建，shell hook 由 `bootstrap` 注册 |
+| `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，shell hook 由 `bootstrap` 注册 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 
 ### Tab 内容页
@@ -18,7 +18,7 @@
 | `general_tab.rs` | General | 系统行为与通知设置：自启动、全局热键、刷新间隔、配额通知、提示音 |
 | `display_tab.rs` | Display | 外观设置：主题、语言、托盘图标样式、配额显示模式、UI 开关 |
 | `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者、问题上报（GitHub Issue） |
-| `debug_tab.rs` | Debug | 调试控制台：日志捕获、单 Provider 刷新、通知测试、系统诊断文本 |
+| `debug_tab.rs` | Debug | 调试控制台：日志捕获、单 Provider 刷新、通知测试、后台采集并可手动刷新的系统诊断快照 |
 
 ### Provider 管理（双栏布局）
 
@@ -62,3 +62,4 @@ SettingsView::render()
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
 - `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）；右侧面板 selector 会显式传入当前 form identity，同一 identity 复用输入实体，不同 identity 重建，避免跨 provider 串用旧草稿
 - `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件；缓存重建规则与 NewAPI 表单一致
+- Debug 环境诊断在进入 Tab 或点击刷新按钮时由后台执行器采集；`render_debug_tab()` 只能读取缓存，不得执行文件 metadata、外部命令等阻塞操作

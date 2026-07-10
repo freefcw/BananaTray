@@ -8,12 +8,13 @@ use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
-    render_action_button, render_colored_icon_sized, render_icon_row, render_info_cell,
-    render_path_info_cell, render_segmented_control, ButtonVariant, SegmentedSize,
+    render_action_button, render_colored_icon_sized, render_icon_row, render_icon_tooltip_button,
+    render_info_cell, render_path_info_cell, render_segmented_control, ButtonVariant,
+    IconTooltipButtonOptions, SegmentedSize,
 };
 use gpui::{
-    div, px, rgb, AnyElement, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, StatefulInteractiveElement, Styled,
+    div, px, rgb, AnyElement, Context, Div, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, StatefulInteractiveElement, Styled,
 };
 use rust_i18n::t;
 
@@ -34,11 +35,35 @@ const LOG_LEVELS: &[(&str, &str)] = &[
 ];
 
 impl SettingsView {
-    /// Render Debug settings tab — 开发者诊断中心
-    pub(super) fn render_debug_tab(&self, theme: &Theme) -> Div {
-        // 先短暂读取日志路径，再由 runtime 收集副作用上下文，避免持有 AppState 借用执行 I/O。
+    /// 在后台刷新 Debug Tab 的阻塞式系统诊断快照。
+    pub(in crate::ui::settings_window) fn refresh_debug_diagnostics(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.debug_diagnostics_loading {
+            return;
+        }
+
+        self.debug_diagnostics_loading = true;
         let log_path = self.state.borrow().log_path.clone();
-        let ctx = runtime::collect_debug_context(log_path);
+        let collect_task = cx
+            .background_executor()
+            .spawn(async move { runtime::collect_debug_diagnostics(log_path) });
+        self._debug_diagnostics_task = Some(cx.spawn(async move |view, cx| {
+            let diagnostics = collect_task.await;
+            let _ = view.update(cx, |view, cx| {
+                view.debug_diagnostics = Some(diagnostics);
+                view.debug_diagnostics_loading = false;
+                cx.notify();
+            });
+        }));
+    }
+
+    /// Render Debug settings tab — 开发者诊断中心
+    pub(super) fn render_debug_tab(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let log_path = self.state.borrow().log_path.clone();
+        let ctx =
+            runtime::debug_context_from_diagnostics(log_path, self.debug_diagnostics.as_ref());
         let debug_state = {
             let state = self.state.borrow();
             debug_tab_view_state(&state.session, &ctx)
@@ -71,7 +96,7 @@ impl SettingsView {
                 &t!("debug.section.environment"),
                 theme,
             ))
-            .child(self.render_environment_card(&debug_state, theme))
+            .child(self.render_environment_card(&debug_state, theme, cx))
             // ═══════ TEST NOTIFICATIONS ═══════
             .child(render_section_header(
                 &t!("settings.section.debug_notifications"),
@@ -241,36 +266,11 @@ impl SettingsView {
         &self,
         debug_state: &crate::application::DebugTabViewState,
         theme: &Theme,
+        cx: &mut Context<Self>,
     ) -> Div {
         let env = &debug_state.environment;
         let env_rows = env.rows();
-
-        let mut card = render_dark_card(theme);
-
-        // 头部图标行 — 使用 render_colored_icon_sized (28px)
-        card = card.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(12.0))
-                .px(px(14.0))
-                .pt(px(12.0))
-                .pb(px(8.0))
-                .child(render_colored_icon_sized(
-                    "src/icons/about.svg",
-                    rgb(ICON_FG).into(),
-                    rgb(ICON_BG_ENV).into(),
-                    28.0,
-                    14.0,
-                ))
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text.primary)
-                        .child(t!("debug.section.environment").to_string()),
-                ),
-        );
+        let mut card = render_dark_card(theme).child(self.render_environment_header(theme, cx));
 
         // 键值对行 — 使用 render_info_cell，配置文件/日志路径行可点击打开所在目录
         for row in &env_rows {
@@ -323,6 +323,60 @@ impl SettingsView {
         );
 
         card
+    }
+
+    fn render_environment_header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let entity = cx.entity().clone();
+        let loading = self.debug_diagnostics_loading;
+
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px(px(14.0))
+            .pt(px(8.0))
+            .pb(px(4.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .child(render_colored_icon_sized(
+                        "src/icons/about.svg",
+                        rgb(ICON_FG).into(),
+                        rgb(ICON_BG_ENV).into(),
+                        28.0,
+                        14.0,
+                    ))
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.text.primary)
+                            .child(t!("debug.section.environment").to_string()),
+                    ),
+            )
+            .child(render_icon_tooltip_button(
+                "debug-environment-refresh".into(),
+                "src/icons/refresh.svg",
+                IconTooltipButtonOptions {
+                    tooltip_text: Some(if loading {
+                        t!("debug.console.refreshing").to_string()
+                    } else {
+                        t!("tooltip.refresh").to_string()
+                    }),
+                    enabled: !loading,
+                    icon_color: theme.text.secondary,
+                    disabled_icon_color: theme.text.muted,
+                    hover_bg: theme.bg.subtle,
+                },
+                theme,
+                move |_, _, cx| {
+                    entity.update(cx, |view, cx| {
+                        view.refresh_debug_diagnostics(cx);
+                    });
+                },
+            ))
     }
 
     // ========================================================================

@@ -128,7 +128,7 @@
 
 ### `diagnostics_context.rs` — 诊断上下文收集
 
-封装 Debug Tab 和 Issue Report 所需的运行时数据读取，包括日志文件元数据、日志捕获缓冲区、系统信息、locale、当前日志级别和构建信息。`application/selectors` 只接收已收集好的 `DebugContext` / `IssueReportContext` 并保持纯函数边界。
+封装 Debug Tab 和 Issue Report 所需的运行时数据读取，包括日志文件元数据、日志捕获缓冲区、系统信息、locale、当前日志级别和构建信息。Debug Tab 将文件 metadata 与系统版本探测作为阻塞诊断快照放到 GPUI 后台执行器采集，渲染阶段只用缓存快照和当前内存状态组装 `DebugContext`；macOS 系统版本探测在进程内缓存，避免重复启动 `sw_vers`。`application/selectors` 只接收已收集好的 `DebugContext` / `IssueReportContext` 并保持纯函数边界。
 
 ### `effects/` — CommonEffect 领域执行器
 

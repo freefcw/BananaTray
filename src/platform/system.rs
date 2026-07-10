@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::OnceLock;
 
 /// 使用系统默认浏览器打开外部 URL
 ///
@@ -81,11 +82,17 @@ pub fn copy_to_clipboard(text: &str) {
     }
 }
 
-/// 获取操作系统版本信息字符串
+/// 获取操作系统版本信息字符串。
 ///
+/// 系统版本在进程生命周期内不会变化，因此首次探测后复用缓存。
 /// macOS: `macOS 15.4 (aarch64)`
 /// Linux: `Linux (x86_64)`
 pub fn os_info() -> String {
+    static OS_INFO: OnceLock<String> = OnceLock::new();
+    OS_INFO.get_or_init(detect_os_info).clone()
+}
+
+fn detect_os_info() -> String {
     let arch = std::env::consts::ARCH;
 
     #[cfg(target_os = "macos")]

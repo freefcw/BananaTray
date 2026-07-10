@@ -12,7 +12,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use app_state::AppState;
-pub(crate) use diagnostics_context::{collect_debug_context, collect_issue_report_context};
+pub(crate) use diagnostics_context::{
+    collect_debug_diagnostics, collect_issue_report_context, debug_context_from_diagnostics,
+    DebugDiagnostics,
+};
 pub use gpu_cache::register_idle_gpu_cache_trim;
 pub(crate) use settings_writer::SettingsWriter;
 
