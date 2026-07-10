@@ -9,8 +9,8 @@ use crate::ui::widgets::{
 };
 use adabraka_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
-    div, prelude::FluentBuilder, px, relative, rgb, Context, Div, InteractiveElement, Keystroke,
-    MouseButton, ParentElement, Styled, Window,
+    div, prelude::FluentBuilder, px, relative, rgb, Context, Div, Entity, InteractiveElement,
+    Keystroke, MouseButton, ParentElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -153,8 +153,6 @@ impl SettingsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let state = self.state.clone();
-        let view_entity = cx.entity().clone();
         let input_entity = self.ensure_global_hotkey_input(&settings.system.global_hotkey, cx);
         let (captured_hotkey, is_recording) = {
             let input = input_entity.read(cx);
@@ -190,11 +188,46 @@ impl SettingsView {
             captured_persisted.as_deref(),
             is_dirty,
         );
-        let save_input = input_entity.clone();
+        let trailing =
+            self.render_global_hotkey_actions(&input_entity, show_save, theme, window, cx);
 
-        // ── 紧凑内联热键录入控件 ──
+        // ── 整体布局：icon_row + 可选的 inline note ──
+        div()
+            .flex_col()
+            .child(render_icon_row(
+                "src/icons/settings.svg",
+                rgb(ICON_FG).into(),
+                rgb(ICON_BG_HOTKEY).into(),
+                &t!("settings.global_hotkey"),
+                &t!("settings.global_hotkey.desc"),
+                theme,
+                trailing,
+            ))
+            .when_some(hotkey_error.as_ref(), |el, error| {
+                el.child(Self::render_inline_note(
+                    &Self::global_hotkey_error_text(error),
+                    theme.status.error,
+                ))
+            })
+            .when(is_recording, |el| {
+                el.child(Self::render_inline_note(
+                    &t!("settings.global_hotkey.hint"),
+                    theme.text.muted,
+                ))
+            })
+    }
+
+    fn render_global_hotkey_actions(
+        &self,
+        input_entity: &Entity<adabraka_ui::components::hotkey_input::HotkeyInputState>,
+        show_save: bool,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let view_entity = cx.entity().clone();
         let hotkey_chip = render_hotkey_field_inline(
-            &input_entity,
+            input_entity,
             t!("settings.global_hotkey.placeholder").to_string().into(),
             move |cx| {
                 view_entity.update(cx, |_, cx| cx.notify());
@@ -203,16 +236,17 @@ impl SettingsView {
             window,
             cx,
         );
+        let state = self.state.clone();
+        let save_input = input_entity.clone();
 
-        // ── trailing 组合：hotkey chip + 按需出现的 save 按钮 ──
-        let trailing = div()
+        div()
             .flex()
             .flex_shrink_0()
             .items_center()
             .gap(px(8.0))
             .child(hotkey_chip)
-            .when(show_save, |el| {
-                el.child(
+            .when(show_save, |actions| {
+                actions.child(
                     div()
                         .flex()
                         .items_center()
@@ -242,31 +276,6 @@ impl SettingsView {
                             );
                         }),
                 )
-            });
-
-        // ── 整体布局：icon_row + 可选的 inline note ──
-        div()
-            .flex_col()
-            .child(render_icon_row(
-                "src/icons/settings.svg",
-                rgb(ICON_FG).into(),
-                rgb(ICON_BG_HOTKEY).into(),
-                &t!("settings.global_hotkey"),
-                &t!("settings.global_hotkey.desc"),
-                theme,
-                trailing,
-            ))
-            .when_some(hotkey_error.as_ref(), |el, error| {
-                el.child(Self::render_inline_note(
-                    &Self::global_hotkey_error_text(error),
-                    theme.status.error,
-                ))
-            })
-            .when(is_recording, |el| {
-                el.child(Self::render_inline_note(
-                    &t!("settings.global_hotkey.hint"),
-                    theme.text.muted,
-                ))
             })
     }
 

@@ -12,8 +12,9 @@ use crate::models::{
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, prelude::FluentBuilder as _, px, App, Context, Div, FontWeight, InteractiveElement,
-    MouseButton, ParentElement, StatefulInteractiveElement, Styled, Window,
+    div, prelude::FluentBuilder as _, px, AnyElement, App, Context, Div, FontWeight, Hsla,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, StatefulInteractiveElement,
+    Styled, Window,
 };
 use rust_i18n::t;
 
@@ -148,6 +149,70 @@ fn compact_text(text: &str) -> String {
     }
 }
 
+fn render_script_provider_header(title: String, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(14.0))
+        .child(
+            div()
+                .w(px(48.0))
+                .h(px(48.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(14.0))
+                .bg(theme.bg.subtle)
+                .border_1()
+                .border_color(theme.border.subtle)
+                .child(render_svg_icon(
+                    "src/icons/advanced.svg",
+                    px(28.0),
+                    theme.text.accent,
+                )),
+        )
+        .child(
+            div()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_size(px(18.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme.text.primary)
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text.muted)
+                        .child(t!("script_provider.subtitle").to_string()),
+                ),
+        )
+}
+
+fn script_form_button(label: String, background: Hsla, border: Option<Hsla>, text: Hsla) -> Div {
+    let button = div()
+        .flex_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .px(px(14.0))
+        .py(px(10.0))
+        .rounded(px(8.0))
+        .bg(background)
+        .text_size(px(13.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(text)
+        .cursor_pointer()
+        .hover(|style| style.opacity(0.9))
+        .child(label);
+    match border {
+        Some(color) => button.border_1().border_color(color),
+        None => button,
+    }
+}
+
 impl SettingsView {
     fn ensure_script_provider_inputs(
         &mut self,
@@ -193,47 +258,7 @@ impl SettingsView {
             .px(px(24.0))
             .pt(px(20.0))
             .pb(px(60.0))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(14.0))
-                    .child(
-                        div()
-                            .w(px(48.0))
-                            .h(px(48.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(14.0))
-                            .bg(theme.bg.subtle)
-                            .border_1()
-                            .border_color(theme.border.subtle)
-                            .child(render_svg_icon(
-                                "src/icons/advanced.svg",
-                                px(28.0),
-                                theme.text.accent,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .text_size(px(18.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme.text.primary)
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(theme.text.muted)
-                                    .child(t!("script_provider.subtitle").to_string()),
-                            ),
-                    ),
-            )
+            .child(render_script_provider_header(title, theme))
             .child(render_input_field(
                 FormFieldSpec {
                     id: "script-provider-name",
@@ -366,113 +391,96 @@ impl SettingsView {
         is_testing: bool,
         cx: &mut Context<Self>,
     ) -> Div {
-        let state_cancel = self.state.clone();
-        let state_test = self.state.clone();
-        let state_save = self.state.clone();
-        let view = cx.entity().clone();
-        let view_test = view.clone();
-
         div()
             .flex()
             .gap(px(10.0))
             .mt(px(28.0))
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(px(14.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(theme.bg.subtle)
-                    .border_1()
-                    .border_color(theme.border.strong)
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text.primary)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .child(t!("script_provider.cancel").to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        crate::bootstrap::dispatch_in_window(
-                            &state_cancel,
-                            AppAction::CancelAddScriptProvider,
-                            window,
-                            cx,
-                        );
-                    }),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(px(14.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(theme.bg.subtle)
-                    .border_1()
-                    .border_color(theme.text.accent)
-                    .opacity(if is_testing { 0.55 } else { 1.0 })
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text.accent)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .child(if is_testing {
-                        t!("script_provider.testing").to_string()
-                    } else {
-                        t!("script_provider.test").to_string()
-                    })
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        if is_testing {
-                            return;
-                        }
-                        let config = view_test.update(cx, |view: &mut Self, cx| {
-                            view.collect_script_provider_config(cx)
-                        });
-                        if let Some(config) = config {
-                            crate::bootstrap::dispatch_in_window(
-                                &state_test,
-                                AppAction::TestScriptProvider(config),
-                                window,
-                                cx,
-                            );
-                        }
-                    }),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(px(14.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(theme.text.accent)
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.element.active)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .child(t!("script_provider.save").to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        let config = view.update(cx, |view: &mut Self, cx| {
-                            view.collect_script_provider_config(cx)
-                        });
-                        if let Some(config) = config {
-                            crate::bootstrap::dispatch_in_window(
-                                &state_save,
-                                AppAction::SubmitScriptProvider(config),
-                                window,
-                                cx,
-                            );
-                        }
-                    }),
-            )
+            .child(self.render_script_cancel_button(theme))
+            .child(self.render_script_test_button(theme, is_testing, cx))
+            .child(self.render_script_save_button(theme, cx))
+    }
+
+    fn render_script_cancel_button(&self, theme: &Theme) -> AnyElement {
+        let state = self.state.clone();
+        script_form_button(
+            t!("script_provider.cancel").to_string(),
+            theme.bg.subtle,
+            Some(theme.border.strong),
+            theme.text.primary,
+        )
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            crate::bootstrap::dispatch_in_window(
+                &state,
+                AppAction::CancelAddScriptProvider,
+                window,
+                cx,
+            );
+        })
+        .into_any_element()
+    }
+
+    fn render_script_test_button(
+        &self,
+        theme: &Theme,
+        is_testing: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let state = self.state.clone();
+        let view = cx.entity().clone();
+        let label = if is_testing {
+            t!("script_provider.testing").to_string()
+        } else {
+            t!("script_provider.test").to_string()
+        };
+        script_form_button(
+            label,
+            theme.bg.subtle,
+            Some(theme.text.accent),
+            theme.text.accent,
+        )
+        .opacity(if is_testing { 0.55 } else { 1.0 })
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            if is_testing {
+                return;
+            }
+            let config = view.update(cx, |view: &mut Self, cx| {
+                view.collect_script_provider_config(cx)
+            });
+            if let Some(config) = config {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::TestScriptProvider(config),
+                    window,
+                    cx,
+                );
+            }
+        })
+        .into_any_element()
+    }
+
+    fn render_script_save_button(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+        let state = self.state.clone();
+        let view = cx.entity().clone();
+        script_form_button(
+            t!("script_provider.save").to_string(),
+            theme.text.accent,
+            None,
+            theme.element.active,
+        )
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            let config = view.update(cx, |view: &mut Self, cx| {
+                view.collect_script_provider_config(cx)
+            });
+            if let Some(config) = config {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::SubmitScriptProvider(config),
+                    window,
+                    cx,
+                );
+            }
+        })
+        .into_any_element()
     }
 }
 

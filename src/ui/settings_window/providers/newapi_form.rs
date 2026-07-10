@@ -68,48 +68,7 @@ impl SettingsView {
             .px(px(24.0))
             .pt(px(20.0))
             .pb(px(60.0))
-            // ── Header ──
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(14.0))
-                    .child(
-                        div()
-                            .w(px(48.0))
-                            .h(px(48.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(14.0))
-                            .bg(theme.bg.subtle)
-                            .border_1()
-                            .border_color(theme.border.subtle)
-                            .child(render_svg_icon(
-                                "src/icons/provider-custom.svg",
-                                px(28.0),
-                                theme.text.accent,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex_col()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .text_size(px(18.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme.text.primary)
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(theme.text.muted)
-                                    .child("NewAPI / OneAPI"),
-                            ),
-                    ),
-            )
+            .child(render_newapi_header(title, theme))
             // ── 表单字段 ──
             .child(render_input_field(
                 FormFieldSpec {
@@ -306,6 +265,48 @@ impl SettingsView {
                     })
             })
     }
+}
+
+fn render_newapi_header(title: String, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(14.0))
+        .child(
+            div()
+                .w(px(48.0))
+                .h(px(48.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(14.0))
+                .bg(theme.bg.subtle)
+                .border_1()
+                .border_color(theme.border.subtle)
+                .child(render_svg_icon(
+                    "src/icons/provider-custom.svg",
+                    px(28.0),
+                    theme.text.accent,
+                )),
+        )
+        .child(
+            div()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_size(px(18.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme.text.primary)
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text.muted)
+                        .child("NewAPI / OneAPI"),
+                ),
+        )
 }
 
 pub(super) fn should_rebuild_form_inputs_cache<T>(

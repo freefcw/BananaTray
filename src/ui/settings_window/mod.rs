@@ -18,10 +18,10 @@ use adabraka_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black, App,
-    AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, Window,
-    WindowAppearance,
+    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black,
+    AnyElement, App, AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
+    Subscription, Window, WindowAppearance,
 };
 use log::info;
 use rust_i18n::t;
@@ -465,118 +465,127 @@ impl SettingsView {
     ) -> Div {
         let show_debug = self.state.borrow().session.settings.display.show_debug_tab;
         let view_entity = cx.entity().clone();
+        settings_tabs(show_debug).into_iter().fold(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(2.0))
+                .px(px(16.0))
+                .pb(px(10.0))
+                .overflow_hidden(),
+            |bar, (icon, label, tab)| {
+                bar.child(self.render_tab_button(
+                    icon,
+                    label,
+                    tab,
+                    active_tab == tab,
+                    &view_entity,
+                    theme,
+                ))
+            },
+        )
+    }
 
-        let mut tabs: Vec<(&str, String, SettingsTab)> = vec![
+    fn render_tab_button(
+        &self,
+        icon: &'static str,
+        label: String,
+        tab: SettingsTab,
+        is_active: bool,
+        view_entity: &Entity<Self>,
+        theme: &Theme,
+    ) -> AnyElement {
+        let state = self.state.clone();
+        let tab_view_entity = view_entity.clone();
+        let hover_background = theme.bg.subtle;
+        let (background, foreground, border) = if is_active {
             (
-                "src/icons/settings.svg",
-                t!("settings.tab.general").to_string(),
-                SettingsTab::General,
-            ),
-            (
-                "src/icons/overview.svg",
-                t!("settings.tab.providers").to_string(),
-                SettingsTab::Providers,
-            ),
-            (
-                "src/icons/display.svg",
-                t!("settings.tab.display").to_string(),
-                SettingsTab::Display,
-            ),
-            (
-                "src/icons/about.svg",
-                t!("settings.tab.about").to_string(),
-                SettingsTab::About,
-            ),
-        ];
+                theme.nav.pill_active_bg,
+                theme.nav.pill_active_text,
+                theme.nav.pill_active_bg,
+            )
+        } else {
+            (transparent_black(), theme.text.muted, transparent_black())
+        };
 
-        if show_debug {
-            tabs.push((
-                "src/icons/advanced.svg",
-                t!("settings.tab.debug").to_string(),
-                SettingsTab::Debug,
-            ));
-        }
-
-        let mut bar = div()
-            .w_full()
+        div()
             .flex()
             .items_center()
-            .gap(px(2.0))
-            .px(px(16.0))
-            .pb(px(10.0))
-            .overflow_hidden();
-
-        for (icon, label, tab) in tabs {
-            let is_active = active_tab == tab;
-            let state = self.state.clone();
-            let tab_view_entity = view_entity.clone();
-            let (bg, text_color, icon_color, border_color) = if is_active {
-                (
-                    theme.nav.pill_active_bg,
-                    theme.nav.pill_active_text,
-                    theme.nav.pill_active_text,
-                    theme.nav.pill_active_bg,
-                )
-            } else {
-                (
-                    transparent_black(),
-                    theme.text.muted,
-                    theme.text.muted,
-                    transparent_black(),
-                )
-            };
-
-            bar = bar.child(
+            .gap(px(5.0))
+            .px(px(10.0))
+            .py(px(6.0))
+            .rounded(px(8.0))
+            .bg(background)
+            .border_1()
+            .border_color(border)
+            .cursor_pointer()
+            .hover(move |style| {
+                if is_active {
+                    style
+                } else {
+                    style.bg(hover_background)
+                }
+            })
+            .child(
+                svg()
+                    .path(icon)
+                    .size(px(14.0))
+                    .text_color(foreground)
+                    .flex_shrink_0(),
+            )
+            .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.0))
-                    .px(px(10.0))
-                    .py(px(6.0))
-                    .rounded(px(8.0))
-                    .bg(bg)
-                    .border_1()
-                    .border_color(border_color)
-                    .cursor_pointer()
-                    .hover(|style| {
-                        if is_active {
-                            style
-                        } else {
-                            style.bg(theme.bg.subtle)
-                        }
-                    })
-                    .child(
-                        svg()
-                            .path(icon)
-                            .size(px(14.0))
-                            .text_color(icon_color)
-                            .flex_shrink_0(),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(13.0))
-                            // 保持字重恒定，避免顶部 tab 在切换选中态时发生宽度抖动。
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(text_color)
-                            .whitespace_nowrap()
-                            .child(label),
-                    )
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        tab_view_entity.update(cx, |view, _| {
-                            view.clear_token_input();
-                        });
-                        crate::bootstrap::dispatch_in_window(
-                            &state,
-                            AppAction::SetSettingsTab(tab),
-                            window,
-                            cx,
-                        );
-                    }),
-            );
-        }
-
-        bar
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(foreground)
+                    .whitespace_nowrap()
+                    .child(label),
+            )
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                tab_view_entity.update(cx, |view, _| view.clear_token_input());
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::SetSettingsTab(tab),
+                    window,
+                    cx,
+                );
+            })
+            .into_any_element()
     }
+}
+
+fn settings_tabs(show_debug: bool) -> Vec<(&'static str, String, SettingsTab)> {
+    let mut tabs = vec![
+        (
+            "src/icons/settings.svg",
+            t!("settings.tab.general").to_string(),
+            SettingsTab::General,
+        ),
+        (
+            "src/icons/overview.svg",
+            t!("settings.tab.providers").to_string(),
+            SettingsTab::Providers,
+        ),
+        (
+            "src/icons/display.svg",
+            t!("settings.tab.display").to_string(),
+            SettingsTab::Display,
+        ),
+        (
+            "src/icons/about.svg",
+            t!("settings.tab.about").to_string(),
+            SettingsTab::About,
+        ),
+    ];
+    if show_debug {
+        tabs.push((
+            "src/icons/advanced.svg",
+            t!("settings.tab.debug").to_string(),
+            SettingsTab::Debug,
+        ));
+    }
+    tabs
 }
 
 impl Render for SettingsView {
