@@ -13,7 +13,7 @@
 | Claude | `claude` | HTTP API + CLI fallback | `Monitorable` | 多 source 编排 |
 | Gemini | `gemini` | HTTP API | `Monitorable` | 读取 `~/.gemini/oauth_creds.json`；token 过期时调用 `gemini` CLI 刷新，若 CLI 后凭证文件未更新则返回 `SessionExpired` 并建议刷新 CLI 登录态，不再用旧 token 继续请求 |
 | Copilot | `copilot` | HTTP API | `Monitorable` | 支持 token 输入面板；保存的 `github_token` 会通过 refresh `UpdateConfig` 同步到后台运行时 |
-| Codex | `codex` | HTTP API + CLI fallback | `Monitorable` | 读取 `~/.codex/auth.json`，解析 OAuth `id_token` 填充 email/plan；刷新时自动轮转 `id_token` 并注入 `ChatGPT-Account-Id` 以支持多账号；`auth.json` 损坏时保留原文件并返回解析错误，不重建空文件，避免丢失 `OPENAI_API_KEY` 等其他字段；可通过 `~/.codex/config.toml` 的 `chatgpt_base_url` 切换自托管 ChatGPT 网关；OAuth 出现 timeout / 网络错误 / 5xx 时自动兑底到 CLI，顺序为 `codex app-server` JSON-RPC → PTY `/status`（429 限流不 fallback，因 CLI 共用同一 token 会撞同一限流） |
+| Codex | `codex` | HTTP API + CLI fallback | `Monitorable` | 读取 `~/.codex/auth.json`，解析 OAuth `id_token` 填充 email/plan；刷新时自动轮转 `id_token` 并注入 `ChatGPT-Account-Id` 以支持多账号，刷新结果通过 Unix `0600` 的 sibling-temp 原子替换写回；`auth.json` 损坏时保留原文件并返回解析错误，不重建空文件，避免丢失 `OPENAI_API_KEY` 等其他字段；可通过 `~/.codex/config.toml` 的 `chatgpt_base_url` 切换自托管 ChatGPT 网关；OAuth 出现 timeout / 网络错误 / 5xx 时自动兑底到 CLI，顺序为 `codex app-server` JSON-RPC → PTY `/status`（429 限流不 fallback，因 CLI 共用同一 token 会撞同一限流） |
 | Kimi | `kimi` | HTTP API | `Monitorable` | |
 | Amp | `amp` | CLI | `Monitorable` | |
 | Cursor | `cursor` | HTTP API + 本地数据 | `Monitorable` | |

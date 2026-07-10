@@ -1,3 +1,4 @@
+use crate::platform::atomic_file::write_private_file_atomically;
 use crate::providers::common::http_client;
 use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils;
@@ -231,8 +232,9 @@ fn save_refreshed_tokens(
 
     let serialized = serde_json::to_string_pretty(&json)
         .map_err(|_| ProviderError::parse_failed("updated auth.json"))?;
-    std::fs::write(path, serialized)
-        .map_err(|err| ProviderError::fetch_failed(&format!("write auth.json: {err}")))?;
+    write_private_file_atomically(path, serialized.as_bytes()).map_err(|err| {
+        ProviderError::fetch_failed(&format!("write auth.json atomically: {err}"))
+    })?;
 
     Ok(())
 }
@@ -609,5 +611,24 @@ mod tests {
 
         let err = save_refreshed_tokens(&path, "at", Some("rt"), None, "old_rt").unwrap_err();
         assert!(matches!(err, ProviderError::FetchFailed { .. }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_save_refreshed_tokens_replaces_wide_permissions_with_private_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_dir, path) = write_auth_json(serde_json::json!({
+            "tokens": {
+                "access_token": "old_at",
+                "refresh_token": "old_rt"
+            }
+        }));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        save_refreshed_tokens(&path, "new_at", Some("new_rt"), None, "old_rt").unwrap();
+
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }

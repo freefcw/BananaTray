@@ -10,6 +10,7 @@ use crate::models::AppSettings;
 use crate::settings_store;
 use log::{debug, warn};
 use std::sync::mpsc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// 默认 debounce 窗口
@@ -28,7 +29,8 @@ enum WriteCmd {
 /// 所有设置持久化都通过此句柄提交，后台线程串行化执行，
 /// 保证不会出现旧快照覆盖新快照的乱序问题。
 pub(crate) struct SettingsWriter {
-    tx: mpsc::Sender<WriteCmd>,
+    tx: Option<mpsc::Sender<WriteCmd>>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl SettingsWriter {
@@ -43,18 +45,25 @@ impl SettingsWriter {
     ) -> Self {
         let (tx, rx) = mpsc::channel::<WriteCmd>();
 
-        std::thread::Builder::new()
+        let worker = std::thread::Builder::new()
             .name("settings-writer".into())
             .spawn(move || run_loop(rx, debounce, &*persist_fn))
             .expect("failed to spawn settings-writer thread");
 
-        Self { tx }
+        Self {
+            tx: Some(tx),
+            worker: Some(worker),
+        }
     }
 
     /// 提交一份 settings 快照，后台线程会在 debounce 窗口结束后写盘。
     /// 多次快速调用只会写入最后一份。
     pub fn schedule(&self, settings: AppSettings) {
-        if let Err(e) = self.tx.send(WriteCmd::Schedule(settings)) {
+        let Some(tx) = &self.tx else {
+            warn!(target: "settings", "settings-writer already shut down, schedule ignored");
+            return;
+        };
+        if let Err(e) = tx.send(WriteCmd::Schedule(settings)) {
             warn!(target: "settings", "settings-writer channel closed: {e}");
         }
     }
@@ -63,11 +72,37 @@ impl SettingsWriter {
     /// 后台线程会先丢弃未落盘的 debounce 快照，确保此次写入是最终状态。
     pub fn flush(&self, settings: AppSettings) -> bool {
         let (reply_tx, reply_rx) = mpsc::channel();
-        if self.tx.send(WriteCmd::Flush(settings, reply_tx)).is_err() {
+        let Some(tx) = &self.tx else {
+            warn!(target: "settings", "settings-writer already shut down, flush failed");
+            return false;
+        };
+        if tx.send(WriteCmd::Flush(settings, reply_tx)).is_err() {
             warn!(target: "settings", "settings-writer channel closed, flush failed");
             return false;
         }
         reply_rx.recv().unwrap_or(false)
+    }
+
+    /// 关闭发送端并等待后台线程完成最终写入。
+    pub fn shutdown_and_join(&mut self) {
+        self.tx = None;
+        let Some(worker) = self.worker.take() else {
+            return;
+        };
+        if worker.join().is_err() {
+            warn!(target: "settings", "settings-writer thread panicked during shutdown");
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_shutdown(&self) -> bool {
+        self.tx.is_none() && self.worker.is_none()
+    }
+}
+
+impl Drop for SettingsWriter {
+    fn drop(&mut self) {
+        self.shutdown_and_join();
     }
 }
 
@@ -234,17 +269,37 @@ mod tests {
     }
 
     #[test]
-    fn channel_close_triggers_final_flush() {
+    fn drop_waits_for_final_flush() {
         let (writer, records) = test_writer(5000); // 很长的 debounce
 
         // schedule 一个值然后立即 drop writer（关闭 channel）
         writer.schedule(make_settings(77));
         drop(writer);
 
-        // 给后台线程时间完成 final flush
-        thread::sleep(Duration::from_millis(100));
-
         let r = records.lock().unwrap();
         assert_eq!(*r, vec![77], "should flush on channel close");
+    }
+
+    #[test]
+    fn shutdown_waits_for_final_flush() {
+        let (mut writer, records) = test_writer(5000); // 很长的 debounce
+
+        writer.schedule(make_settings(88));
+        writer.shutdown_and_join();
+
+        let r = records.lock().unwrap();
+        assert_eq!(*r, vec![88], "shutdown should wait for final flush");
+    }
+
+    #[test]
+    fn shutdown_is_idempotent() {
+        let (mut writer, records) = test_writer(5000);
+
+        writer.schedule(make_settings(99));
+        writer.shutdown_and_join();
+        writer.shutdown_and_join();
+
+        let r = records.lock().unwrap();
+        assert_eq!(*r, vec![99]);
     }
 }

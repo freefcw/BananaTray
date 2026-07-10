@@ -1,6 +1,7 @@
 //! 平台适配层
 //!
 //! 集中管理所有平台相关的代码：
+//! - `atomic_file` — 私有配置与凭证文件的同目录原子替换
 //! - `assets` — GPUI 资源加载（多平台路径解析）
 //! - `paths` — 配置目录与自定义 Provider 路径解析
 //! - `auto_launch` — 开机自启动（macOS SMAppService / Linux XDG autostart）
@@ -36,6 +37,7 @@ pub(crate) mod single_instance;
 
 // --- 始终编译的平台模块 ---
 // 供 bootstrap/runtime 和无 UI 场景复用；不承载 application 业务状态机
+pub(crate) mod atomic_file;
 // GNOME extension 检测属于 app-only 行为；仅在 Linux 且启用 `app` feature 时编译
 #[cfg(all(target_os = "linux", feature = "app"))]
 pub(crate) mod gnome_detect;

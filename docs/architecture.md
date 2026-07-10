@@ -29,7 +29,7 @@
 - `bootstrap.rs` + `bootstrap/`
   - shell composition root；`bootstrap.rs` 是薄入口，`bootstrap/` 按职责拆分 full-context dispatch facade、popup/settings hook registry、settings window 生命周期、UI 启动。
   - `bootstrap/workers/` 承担 refresh/script-test worker 到前台 reducer 的 bridge，以及 Linux D-Bus 快照发射。
-  - `bootstrap/event_sources/` 承担 tray events、startup hotkey、secondary instance bridge 的外部事件源注册。
+  - `bootstrap/event_sources/` 承担 app shutdown、tray events、startup hotkey、secondary instance bridge 的外部事件源注册。
   - 统一注册 UI hooks，并持有具体 tray / settings window / D-Bus 适配器入口；不引入 runtime-owned shell manager。
 - `ui/`
   - GPUI 视图、窗口内容、控件和 view-local 状态，以及向 `bootstrap` 提供 hooks factory。
@@ -173,8 +173,8 @@
 
 稳定事实：
 
-- 设置写入由后台 `settings_writer` 串行化并做 debounce。
-- `settings.json` 使用原子替换写入。
+- 设置写入由后台 `settings_writer` 串行化并做 debounce；正常应用退出会关闭 writer sender、执行 pending snapshot 的 final flush，并 join 后台线程后再结束进程。
+- `settings.json` 与 BananaTray 代写的外部 OAuth 凭证使用共享的私有文件原子替换：同目录唯一临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。
 - 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。
 
 ## Localization Boundary

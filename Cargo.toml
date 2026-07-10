@@ -73,6 +73,7 @@ sys-locale = "0.3"
 rusqlite = { version = "0.40", features = ["bundled"] }
 prost = "0.13"
 libc = "0.2.186"
+tempfile = "3"
 
 # -- macOS native deps --
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -101,9 +102,6 @@ strip = true          # 移除符号表，减小二进制体积
 lto = "fat"           # 全量 LTO，跨 crate 死代码消除
 codegen-units = 1     # 单 codegen unit，配合 LTO 最大化优化
 panic = "abort"       # 去掉 unwind 表，减小体积并改善优化
-
-[dev-dependencies]
-tempfile = "3"
 
 # portable-pty patched: nix 0.28 → 0.31，与 adabraka-gpui 对齐，消除 nix 双版本
 [patch.crates-io]

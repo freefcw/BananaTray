@@ -20,6 +20,8 @@ pub(crate) use event_sources::hotkey::register_global_hotkey;
 #[allow(unused_imports)]
 pub(crate) use event_sources::secondary_instance::listen_for_secondary_instance;
 #[allow(unused_imports)]
+pub(crate) use event_sources::shutdown::register_app_shutdown;
+#[allow(unused_imports)]
 pub(crate) use event_sources::tray::register_tray_events;
 pub(crate) use settings_window::{
     clear_popup_view, register_build_settings_view, register_clear_popup_view,

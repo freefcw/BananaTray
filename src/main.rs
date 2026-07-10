@@ -81,7 +81,10 @@ fn main() {
 
             let state = controller.borrow().state();
 
-            // 4. Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
+            // 4. 注册应用退出钩子（等待设置最终落盘）
+            bootstrap::register_app_shutdown(&state, cx);
+
+            // 5. Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
             #[cfg(target_os = "linux")]
             let dbus_handle = {
                 let handle = dbus::start_dbus_service(state.clone(), cx.to_async());
@@ -89,17 +92,17 @@ fn main() {
                 handle
             };
 
-            // 5. 事件泵
+            // 6. 事件泵
             #[cfg(target_os = "linux")]
             bootstrap::start_event_pump(&state, event_rx, dbus_handle, cx);
             #[cfg(not(target_os = "linux"))]
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
 
-            // 6. 初始刷新
+            // 7. 初始刷新
             bootstrap::trigger_initial_refresh(&state);
 
-            // 7. 注册事件处理器
+            // 8. 注册事件处理器
             bootstrap::register_tray_events(&controller, cx);
             bootstrap::register_global_hotkey(&controller, cx);
             bootstrap::listen_for_secondary_instance(&controller, show_rx, cx);

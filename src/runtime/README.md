@@ -105,7 +105,7 @@
 - 构造 settings window 的 view entity
 - 调度 settings window 打开与复用
 - 实现 `Window + App` / `App` 级 full-context dispatch facade
-- 通过 `bootstrap/event_sources/` 注册 tray / hotkey / secondary-instance 事件源
+- 通过 `bootstrap/event_sources/` 注册 app shutdown / tray / hotkey / secondary-instance 事件源
 - 通过 `bootstrap/workers/` 桥接 refresh 与 script provider test 后台 worker 到前台 reducer
 - 在 Linux 上把 `DBusServiceHandle` 作为 event pump 的局部输入，用于更新快照缓存并发射信号
 
@@ -122,7 +122,9 @@
 - **`SettingsWriter::spawn()`** — 启动后台写入线程，返回句柄（存放在 `AppState` 上）
 - **`schedule(settings)`** — 异步 debounce 写入，500ms 窗口内合并多次调用，只写最后一份
 - **`flush(settings)`** — 同步写入，立即落盘并返回结果，会打断未落盘的 debounce 窗口
+- **`shutdown_and_join()`** — 关闭发送端，触发 pending snapshot 的 final flush，并等待后台线程退出；重复调用安全
 - 所有写入（schedule 和 flush）通过同一个后台线程串行化，避免乱序覆盖
+- `bootstrap/event_sources/shutdown.rs` 在 GPUI 正常退出回调中显式调用 shutdown；`Drop` 只作为遗漏路径的兜底。强制杀进程或断电不在该保证范围内
 
 ### `diagnostics_context.rs` — 诊断上下文收集
 

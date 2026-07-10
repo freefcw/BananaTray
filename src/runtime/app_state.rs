@@ -69,6 +69,11 @@ impl AppState {
         self.refresh_tx.try_send(request)
     }
 
+    /// 关闭设置写入器，并等待最后一份待写设置完成持久化。
+    pub(crate) fn shutdown_settings_writer(&mut self) {
+        self.settings_writer.shutdown_and_join();
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn begin_linux_popup_drag(&mut self, duration: std::time::Duration) {
         self.suppress_linux_popup_auto_hide_for(duration);

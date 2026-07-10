@@ -13,7 +13,7 @@ the `app` feature and may depend on GPUI.
 | `settings_window.rs` | Holds the shell hook registry for popup/settings view factories and owns settings window open, reuse, display targeting, and activation workarounds. |
 | `ui_bootstrap.rs` | Initializes locale, UI toolkit, idle GPU cache trim, initial tray icon/tooltip, macOS tray panel mode, and notification authorization. |
 | `workers/` | Background worker bootstrap and foreground event pumps: refresh coordinator, script provider test pump, and Linux D-Bus snapshot emission. |
-| `event_sources/` | External app event registration: tray callbacks/menu fallback, startup global hotkey, and secondary instance SHOW bridge. |
+| `event_sources/` | External app event registration: app shutdown, tray callbacks/menu fallback, startup global hotkey, and secondary instance SHOW bridge. |
 
 ## Boundary
 
@@ -34,10 +34,11 @@ into lower-level modules just to shrink this package.
 1. load settings and initialize UI/tray shell
 2. start refresh/script-test channels and worker threads
 3. construct `TrayController` / `AppState`
-4. start Linux D-Bus service when applicable
-5. start foreground event pumps
-6. send initial refresh requests
-7. register external event sources: tray, hotkey, secondary instance
+4. register the app shutdown hook for owned runtime resources
+5. start Linux D-Bus service when applicable
+6. start foreground event pumps
+7. send initial refresh requests
+8. register the remaining external event sources: tray, hotkey, secondary instance
 
 Submodules own each step's implementation details. `main.rs` should not need to know callback
 registration internals, channel bridge loops, or settings window lifecycle workarounds.
@@ -47,5 +48,6 @@ registration internals, channel bridge loops, or settings window lifecycle worka
 - `settings_window.rs`: 10 ms delayed settings open after popup close, plus the `+1px` resize nudge
   after creating the settings window.
 - `ui_bootstrap.rs`: macOS `set_tray_panel_mode(true)` and idle GPU cache trim observer registration.
+- `event_sources/shutdown.rs`: synchronous settings-writer join before GPUI completes a normal app exit.
 - `event_sources/tray.rs`: Linux tray menu fallback for tray hosts that do not consistently forward click
   activation events.

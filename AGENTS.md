@@ -50,7 +50,7 @@ src/
   builtin_provider_manifest.rs — 内置 Provider 单一编译期清单，生成 ProviderKind 与 register_all
   main.rs / bootstrap.rs + bootstrap/ — App entry, shell composition root, startup wiring, background bridge/event-source setup (`main.rs` requires `app` feature)
                            workers/             — Refresh/script-test foreground bridges and Linux D-Bus snapshot emission
-                           event_sources/       — Tray, global hotkey, and secondary-instance event registration
+                           event_sources/       — App shutdown, tray, global hotkey, and secondary-instance event registration
   lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
                            selectors/           — GPUI-free ViewModel / D-Bus DTO / issue-report selectors

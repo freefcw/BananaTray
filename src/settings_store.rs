@@ -1,4 +1,5 @@
 use crate::models::AppSettings;
+use crate::platform::atomic_file::write_private_file_atomically;
 use anyhow::{Context, Result};
 use log::debug;
 use std::fs;
@@ -25,7 +26,7 @@ pub fn persist(settings: &AppSettings) -> bool {
 
 /// 原子写入设置文件。
 ///
-/// 策略：先写入同目录的临时文件，再 `rename` 到目标路径。
+/// 策略：先写入同目录的唯一私有临时文件，同步内容后再 `rename` 到目标路径。
 /// `rename` 在同一文件系统上是原子操作，即使进程在写入过程中崩溃，
 /// 目标文件也不会处于半写状态（要么是旧内容，要么是完整的新内容）。
 pub fn save(settings: &AppSettings) -> Result<PathBuf> {
@@ -67,23 +68,8 @@ fn save_to(settings: &AppSettings, path: &Path) -> Result<PathBuf> {
 
     let content = serde_json::to_string_pretty(settings)?;
 
-    // 写入同目录临时文件（确保与目标在同一文件系统，rename 才是原子的）
-    let tmp_path = parent.join("settings.json.tmp");
-    fs::write(&tmp_path, &content).with_context(|| {
-        format!(
-            "failed to write temp settings file at {}",
-            tmp_path.display()
-        )
-    })?;
-
-    // 原子替换：rename 在同一文件系统上是原子操作
-    fs::rename(&tmp_path, path).with_context(|| {
-        format!(
-            "failed to rename temp file {} -> {}",
-            tmp_path.display(),
-            path.display()
-        )
-    })?;
+    write_private_file_atomically(path, content.as_bytes())
+        .with_context(|| format!("failed to atomically save settings at {}", path.display()))?;
 
     debug!(target: "settings", "settings saved (atomic) to {}", path.display());
     Ok(path.to_path_buf())
@@ -129,16 +115,27 @@ mod tests {
     #[test]
     fn atomic_write_no_tmp_left_behind() {
         let (_dir, path) = temp_settings_path();
-        let parent = path.parent().unwrap();
-        let tmp_path = parent.join("settings.json.tmp");
-
         save_to(&AppSettings::default(), &path).unwrap();
 
         assert!(path.exists(), "target file should exist");
-        assert!(
-            !tmp_path.exists(),
-            "tmp file should be cleaned up after rename"
-        );
+        let entries = fs::read_dir(path.parent().unwrap()).unwrap().count();
+        assert_eq!(entries, 1, "temp file should be cleaned up after rename");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_replaces_wide_permissions_with_private_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_dir, path) = temp_settings_path();
+        let legacy_tmp = path.parent().unwrap().join("settings.json.tmp");
+        fs::write(&legacy_tmp, b"legacy temp").unwrap();
+        fs::set_permissions(&legacy_tmp, fs::Permissions::from_mode(0o644)).unwrap();
+
+        save_to(&AppSettings::default(), &path).unwrap();
+
+        let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]

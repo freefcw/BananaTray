@@ -7,7 +7,7 @@ OpenAI Codex（ChatGPT 后端）配额抓取实现。对应 `~/.codex/auth.json`
 | 文件 | 职责 |
 |------|------|
 | `mod.rs` | `AiProvider` 实现入口；`refresh()` 流水线、OAuth → RPC → PTY fallback 决策、`should_fallback_to_cli` |
-| `auth.rs` | `~/.codex/auth.json` 解析、JWT `id_token` 提取 email/plan/account_id、access_token 主动 + 被动刷新 |
+| `auth.rs` | `~/.codex/auth.json` 解析、JWT `id_token` 提取 email/plan/account_id、access_token 主动 + 被动刷新；刷新结果通过私有 sibling-temp 原子替换写回 |
 | `config.rs` | `~/.codex/config.toml` 读取，`chatgpt_base_url` 解析与归一化（支持自托管 ChatGPT 网关） |
 | `client.rs` | usage API HTTP 请求构造（含 `ChatGPT-Account-Id` 头） |
 | `parser.rs` | OAuth `/wham/usage` JSON 响应解析；把 snake_case HTTP 字段规范化后交给 `quota.rs`；抽取 `plan_type` |

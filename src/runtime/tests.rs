@@ -104,6 +104,16 @@ fn run_context_effect_routes_render_to_capability() {
 }
 
 #[test]
+fn app_state_shutdown_stops_settings_writer() {
+    let state = make_state();
+
+    assert!(!state.borrow().settings_writer.is_shutdown());
+    state.borrow_mut().shutdown_settings_writer();
+
+    assert!(state.borrow().settings_writer.is_shutdown());
+}
+
+#[test]
 fn run_context_effect_routes_full_context_capabilities() {
     let state = make_state();
     let mut caps = FakeCaps::default();

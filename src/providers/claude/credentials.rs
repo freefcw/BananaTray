@@ -2,6 +2,7 @@
 //!
 //! 从 ~/.claude/.credentials.json 加载凭证，支持 Token 刷新检查。
 
+use crate::platform::atomic_file::write_private_file_atomically;
 use crate::providers::{ProviderError, ProviderResult};
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -166,22 +167,9 @@ pub fn save_credentials_atomic(creds: &ClaudeOAuthCredentials) -> ProviderResult
     let serialized = serde_json::to_string_pretty(&json)
         .map_err(|_| ProviderError::parse_failed("Claude credentials JSON"))?;
 
-    // 原子写入：先写临时文件再 rename
-    let tmp_path = path.with_extension("json.tmp");
-    std::fs::write(&tmp_path, &serialized).map_err(|err| {
-        ProviderError::fetch_failed(&format!("write temp credentials file: {err}"))
+    write_private_file_atomically(&path, serialized.as_bytes()).map_err(|err| {
+        ProviderError::fetch_failed(&format!("replace credentials file atomically: {err}"))
     })?;
-
-    // 在 Unix 上设置权限 0600
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o600);
-        let _ = std::fs::set_permissions(&tmp_path, perms);
-    }
-
-    std::fs::rename(&tmp_path, &path)
-        .map_err(|err| ProviderError::fetch_failed(&format!("replace credentials file: {err}")))?;
 
     debug!("Claude: credentials file updated");
     Ok(())
