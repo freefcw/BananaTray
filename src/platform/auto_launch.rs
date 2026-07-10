@@ -28,12 +28,24 @@ pub fn is_enabled() -> bool {
 
 /// Apply the desired state: enable if `desired` is true, disable otherwise.
 pub fn sync(desired: bool) {
-    let current = is_enabled();
-    if current == desired {
+    sync_with(desired, is_enabled, |desired| {
+        if desired {
+            enable()
+        } else {
+            disable()
+        }
+    });
+}
+
+fn sync_with(
+    desired: bool,
+    current_state: impl FnOnce() -> bool,
+    update_state: impl FnOnce(bool) -> Result<()>,
+) {
+    if current_state() == desired {
         return;
     }
-    let result = if desired { enable() } else { disable() };
-    if let Err(err) = result {
+    if let Err(err) = update_state(desired) {
         warn!(target: "auto_launch", "failed to sync launch-at-login (desired={desired}): {err}");
     }
 }
@@ -79,24 +91,29 @@ mod platform {
     /// Remove the legacy LaunchAgent plist if it exists (migration from v0.1).
     pub(super) fn cleanup_legacy_plist() {
         if let Some(path) = legacy_plist_path() {
-            if path.exists() {
-                if let Err(e) = fs::remove_file(&path) {
-                    warn!(target: "auto_launch", "failed to remove legacy plist {}: {e}", path.display());
-                } else {
-                    debug!(target: "auto_launch", "removed legacy LaunchAgent plist at {}", path.display());
-                }
+            cleanup_legacy_plist_at(&path);
+        }
+    }
+
+    pub(super) fn cleanup_legacy_plist_at(path: &Path) {
+        if path.exists() {
+            if let Err(e) = fs::remove_file(path) {
+                warn!(target: "auto_launch", "failed to remove legacy plist {}: {e}", path.display());
+            } else {
+                debug!(target: "auto_launch", "removed legacy LaunchAgent plist at {}", path.display());
             }
         }
     }
 
     pub(super) fn legacy_plist_path() -> Option<PathBuf> {
         let home = std::env::var("HOME").ok()?;
-        Some(
-            Path::new(&home)
-                .join("Library")
-                .join("LaunchAgents")
-                .join(LEGACY_PLIST_NAME),
-        )
+        Some(legacy_plist_path_under(Path::new(&home)))
+    }
+
+    pub(super) fn legacy_plist_path_under(home: &Path) -> PathBuf {
+        home.join("Library")
+            .join("LaunchAgents")
+            .join(LEGACY_PLIST_NAME)
     }
 }
 
@@ -213,16 +230,17 @@ mod tests {
     #[cfg(target_os = "macos")]
     mod macos_tests {
         use std::fs;
-        use std::path::Path;
 
         #[test]
         fn legacy_plist_path_is_under_launch_agents() {
-            if let Ok(home) = std::env::var("HOME") {
-                let expected =
-                    Path::new(&home).join("Library/LaunchAgents/com.bananatray.app.plist");
-                let actual = super::super::platform::legacy_plist_path().unwrap();
-                assert_eq!(actual, expected);
-            }
+            let home = tempfile::tempdir().unwrap();
+            let expected = home
+                .path()
+                .join("Library/LaunchAgents/com.bananatray.app.plist");
+
+            let actual = super::super::platform::legacy_plist_path_under(home.path());
+
+            assert_eq!(actual, expected);
         }
 
         #[test]
@@ -232,18 +250,19 @@ mod tests {
             fs::write(&plist, "<?xml version=\"1.0\"?><plist/>").unwrap();
             assert!(plist.exists());
 
-            // Manually test the removal logic (can't call cleanup_legacy_plist
-            // directly because it reads HOME, so we inline the logic).
-            if plist.exists() {
-                fs::remove_file(&plist).unwrap();
-            }
+            super::super::platform::cleanup_legacy_plist_at(&plist);
+
             assert!(!plist.exists());
         }
 
         #[test]
         fn cleanup_legacy_plist_noop_when_absent() {
-            // Should not panic when file doesn't exist.
-            super::super::platform::cleanup_legacy_plist();
+            let dir = tempfile::tempdir().unwrap();
+            let plist = dir.path().join("missing.plist");
+
+            super::super::platform::cleanup_legacy_plist_at(&plist);
+
+            assert!(!plist.exists());
         }
     }
 
@@ -327,7 +346,34 @@ mod tests {
     // --- sync() ---
 
     #[test]
-    fn sync_disable_is_safe_when_not_enabled() {
-        sync(false);
+    fn sync_skips_platform_update_when_state_matches() {
+        let mut update_called = false;
+
+        sync_with(
+            false,
+            || false,
+            |_| {
+                update_called = true;
+                Ok(())
+            },
+        );
+
+        assert!(!update_called);
+    }
+
+    #[test]
+    fn sync_requests_platform_update_when_state_differs() {
+        let mut requested_state = None;
+
+        sync_with(
+            false,
+            || true,
+            |desired| {
+                requested_state = Some(desired);
+                Ok(())
+            },
+        );
+
+        assert_eq!(requested_state, Some(false));
     }
 }
