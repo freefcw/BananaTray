@@ -157,14 +157,6 @@ pub fn ensure_success(output: &Output) -> Result<()> {
     )
 }
 
-/// 适用于"成功执行且输出在 stdout"的常规 CLI。
-#[allow(dead_code)]
-pub fn run_checked_command(binary: &str, args: &[&str]) -> Result<Output> {
-    let output = run_command(binary, args)?;
-    ensure_success(&output)?;
-    Ok(output)
-}
-
 /// 适用于偶发非零退出码但仍有有效输出的 CLI（如 amp、kiro-cli）。
 /// 有输出时直接返回，仅在输出为空时才将非零退出码视为错误。
 pub fn run_lenient_command(binary: &str, args: &[&str]) -> Result<String> {

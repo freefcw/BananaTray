@@ -21,12 +21,9 @@ const CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(60);
 
 /// Result of running an interactive command
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct InteractiveResult {
     /// The captured output from the command
     pub output: String,
-    /// The command's exit code (None if still running or couldn't determine)
-    pub exit_code: Option<i32>,
 }
 
 /// Options for running an interactive command
@@ -68,7 +65,6 @@ impl Default for InteractiveOptions {
 
 /// Errors that can occur when running an interactive command
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum InteractiveError {
     /// CLI tool not found
     BinaryNotFound(String),
@@ -76,10 +72,6 @@ pub enum InteractiveError {
     PtyFailed(String),
     /// Failed to start command
     LaunchFailed(String),
-    /// Command timed out
-    TimedOut,
-    /// Process exited unexpectedly
-    ProcessExited,
 }
 
 impl std::fmt::Display for InteractiveError {
@@ -94,8 +86,6 @@ impl std::fmt::Display for InteractiveError {
             }
             Self::PtyFailed(msg) => write!(f, "Failed to create terminal session: {}", msg),
             Self::LaunchFailed(msg) => write!(f, "Failed to start command: {}", msg),
-            Self::TimedOut => write!(f, "Command did not complete within the timeout."),
-            Self::ProcessExited => write!(f, "Process exited unexpectedly."),
         }
     }
 }
@@ -106,7 +96,6 @@ impl From<InteractiveError> for crate::providers::ProviderError {
     fn from(err: InteractiveError) -> Self {
         match err {
             InteractiveError::BinaryNotFound(cli) => Self::cli_not_found(&cli),
-            InteractiveError::TimedOut => Self::Timeout,
             other => Self::fetch_failed(&other.to_string()),
         }
     }
@@ -139,7 +128,7 @@ impl InteractiveRunner {
     /// * `options` - Configuration for timeout, arguments, and auto-responses
     ///
     /// # Returns
-    /// The captured output and exit code
+    /// The captured output
     pub fn run(
         &self,
         binary: &str,
@@ -195,20 +184,15 @@ impl InteractiveRunner {
             buffer.len()
         );
 
-        // Get exit status
-        let exit_code = match child.try_wait()? {
-            Some(status) => Some(status.exit_code() as i32),
-            None => {
-                // Process still running, kill it
-                let _ = child.kill();
-                child.wait().map(|s| s.exit_code() as i32).ok()
-            }
-        };
+        if child.try_wait()?.is_none() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
 
         // Strip ANSI codes from output
         let output = text_utils::strip_ansi(&String::from_utf8_lossy(&buffer));
 
-        Ok(InteractiveResult { output, exit_code })
+        Ok(InteractiveResult { output })
     }
 
     /// Create a pseudo-terminal
@@ -600,12 +584,9 @@ mod tests {
     }
 
     #[test]
-    fn test_interactive_error_display() {
+    fn binary_not_found_error_mentions_binary() {
         let err = InteractiveError::BinaryNotFound("claude".to_string());
         assert!(err.to_string().contains("claude"));
-
-        let err = InteractiveError::TimedOut;
-        assert!(err.to_string().contains("timeout"));
     }
 
     #[test]
@@ -700,16 +681,6 @@ mod tests {
             }
             other => panic!("expected CliNotFound, got {:?}", other),
         }
-    }
-
-    #[test]
-    fn timed_out_maps_to_timeout() {
-        use crate::providers::ProviderError;
-        let err: ProviderError = InteractiveError::TimedOut.into();
-        assert!(
-            matches!(err, ProviderError::Timeout),
-            "expected Timeout variant"
-        );
     }
 
     #[test]

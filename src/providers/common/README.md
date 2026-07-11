@@ -10,7 +10,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 
 - **`command_exists(binary)`** — 检查 CLI 是否可用
 - **`run_command(binary, args)`** — 执行命令，`NotFound` 错误统一映射为 `ProviderError::CliNotFound`
-- **`run_checked_command()`** — 严格模式，非零退出码即报错
+- **`ensure_success(output)`** — 对 `run_command()` 结果执行严格退出码校验
 - **`run_lenient_command()`** — 宽容模式，有输出就返回 Ok（适用于 amp/kiro-cli 偶发非零退出码）
 - **`stdout_or_stderr_text()`** — 某些 CLI 把业务输出写到 stderr 的兜底方案
 - 非交互式 CLI 统一带超时，超时映射为 `ProviderError::Timeout`
