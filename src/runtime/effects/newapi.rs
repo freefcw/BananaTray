@@ -32,7 +32,7 @@ fn save_provider(
     let filename = original_filename.unwrap_or_else(|| api::generate_filename(&config));
     let result = match api::save_newapi_yaml(&config, &filename) {
         Ok(path) => {
-            info!(target: "runtime", "saved custom provider YAML to {}", path.display());
+            info!(target: "settings", "saved custom provider YAML to {}", path.display());
             let s = state.borrow();
             let settings_saved = s.settings_writer.flush(s.session.settings.clone());
             Ok(NewApiSaveSuccess {
@@ -41,7 +41,7 @@ fn save_provider(
             })
         }
         Err(err) => {
-            warn!(target: "runtime", "failed to save newapi: {}", err);
+            warn!(target: "settings", "failed to save newapi: {}", err);
             Err(err)
         }
     };
@@ -56,12 +56,12 @@ fn save_provider(
 
 fn delete_provider(provider_id: ProviderId) -> AppAction {
     let result = api::delete_newapi_yaml(&provider_id).map_err(|err| {
-        warn!(target: "runtime", "{err}");
+        warn!(target: "settings", "{err}");
         err
     });
 
     if let Ok(path) = &result {
-        info!(target: "runtime", "deleted custom provider YAML: {}", path.display());
+        info!(target: "settings", "deleted custom provider YAML: {}", path.display());
     }
 
     AppAction::NewApiDeleteFinished {

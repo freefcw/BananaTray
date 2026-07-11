@@ -181,7 +181,7 @@ fn save_provider(
         match api::save_script_provider(&config, &yaml_filename, &script_filename, is_editing) {
             Ok((yaml_path, script_path)) => {
                 info!(
-                    target: "runtime",
+                    target: "settings",
                     "saved script provider YAML to {}, script to {}",
                     yaml_path.display(),
                     script_path.display()
@@ -195,7 +195,7 @@ fn save_provider(
                 })
             }
             Err(err) => {
-                warn!(target: "runtime", "failed to save script provider: {}", err);
+                warn!(target: "settings", "failed to save script provider: {}", err);
                 Err(err)
             }
         };
@@ -214,7 +214,7 @@ fn delete_provider(provider_id: ProviderId) -> AppAction {
         Ok((yaml_path, script_result)) => match script_result {
             Ok(script_path) => {
                 info!(
-                    target: "runtime",
+                    target: "settings",
                     "deleted script provider files: {}, {}",
                     yaml_path.display(),
                     script_path.display()
@@ -226,7 +226,7 @@ fn delete_provider(provider_id: ProviderId) -> AppAction {
             }
             Err(err) => {
                 warn!(
-                    target: "runtime",
+                    target: "settings",
                     "deleted script provider YAML {}, but failed to delete companion script: {}",
                     yaml_path.display(),
                     err
@@ -238,7 +238,7 @@ fn delete_provider(provider_id: ProviderId) -> AppAction {
             }
         },
         Err(err) => {
-            warn!(target: "runtime", "{err}");
+            warn!(target: "settings", "{err}");
             Err(err)
         }
     };
