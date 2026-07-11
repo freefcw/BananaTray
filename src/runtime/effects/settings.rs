@@ -14,7 +14,7 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: SettingsEffect) {
             s.settings_writer.schedule(s.session.settings.clone());
         }
         SettingsEffect::SyncAutoLaunch(enabled) => {
-            sync_auto_launch(enabled);
+            crate::platform::auto_launch::schedule_sync(enabled);
         }
         SettingsEffect::ApplyLocale(language) => {
             crate::i18n::apply_locale(&language);
@@ -23,12 +23,6 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: SettingsEffect) {
             update_log_level(&level);
         }
     }
-}
-
-fn sync_auto_launch(enabled: bool) {
-    std::thread::spawn(move || {
-        crate::platform::auto_launch::sync(enabled);
-    });
 }
 
 fn update_log_level(level: &str) {

@@ -8,6 +8,31 @@
 
 use anyhow::Result;
 use log::{debug, warn};
+use std::sync::{mpsc, Mutex, OnceLock};
+
+static SYNC_WORKER: OnceLock<Mutex<Option<mpsc::Sender<SyncRequest>>>> = OnceLock::new();
+
+#[derive(Debug)]
+struct SyncRequest {
+    desired: bool,
+    completion: Option<mpsc::Sender<()>>,
+}
+
+impl SyncRequest {
+    fn background(desired: bool) -> Self {
+        Self {
+            desired,
+            completion: None,
+        }
+    }
+
+    fn with_completion(desired: bool, completion: mpsc::Sender<()>) -> Self {
+        Self {
+            desired,
+            completion: Some(completion),
+        }
+    }
+}
 
 /// Register the current application to launch at login.
 pub fn enable() -> Result<()> {
@@ -35,6 +60,78 @@ pub fn sync(desired: bool) {
             disable()
         }
     });
+}
+
+/// 在单一后台 worker 上应用 launch-at-login 状态。
+///
+/// worker 会在每次执行前合并排队请求，只应用当时最新的目标状态；如果执行期间又有
+/// 新请求，则当前操作完成后继续应用最新状态，保证最终状态不会被较早的慢操作覆盖。
+pub fn schedule_sync(desired: bool) {
+    if let Err(err) = submit_sync_request(SyncRequest::background(desired)) {
+        warn!(target: "auto_launch", "failed to schedule launch-at-login sync: {err}");
+    }
+}
+
+/// 提交最终目标状态，并等待同一个后台 worker 完成应用。
+///
+/// 正常退出时用它建立屏障，避免进程在最后一次 launch-at-login 操作完成前结束。
+pub fn sync_and_wait(desired: bool) {
+    let (completion_tx, completion_rx) = mpsc::channel();
+    if let Err(err) = submit_sync_request(SyncRequest::with_completion(desired, completion_tx)) {
+        warn!(target: "auto_launch", "failed to schedule final launch-at-login sync: {err}");
+        return;
+    }
+
+    if completion_rx.recv().is_err() {
+        warn!(target: "auto_launch", "auto-launch worker stopped before completing final sync");
+    }
+}
+
+fn submit_sync_request(mut request: SyncRequest) -> Result<()> {
+    let worker = SYNC_WORKER.get_or_init(|| Mutex::new(None));
+    let mut sender_slot = worker
+        .lock()
+        .map_err(|_| anyhow::anyhow!("auto-launch worker lock poisoned"))?;
+
+    if let Some(sender) = sender_slot.as_ref() {
+        match sender.send(request) {
+            Ok(()) => return Ok(()),
+            Err(err) => request = err.0,
+        }
+    }
+
+    let sender = spawn_sync_worker(sync)?;
+    sender
+        .send(request)
+        .map_err(|_| anyhow::anyhow!("auto-launch worker stopped before accepting a request"))?;
+    *sender_slot = Some(sender);
+    Ok(())
+}
+
+fn spawn_sync_worker(
+    apply: impl Fn(bool) + Send + 'static,
+) -> std::io::Result<mpsc::Sender<SyncRequest>> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("auto-launch-sync".into())
+        .spawn(move || run_sync_worker(receiver, apply))?;
+    Ok(sender)
+}
+
+fn run_sync_worker(receiver: mpsc::Receiver<SyncRequest>, apply: impl Fn(bool)) {
+    while let Ok(request) = receiver.recv() {
+        let mut desired = request.desired;
+        let mut completions: Vec<_> = request.completion.into_iter().collect();
+        while let Ok(next) = receiver.try_recv() {
+            desired = next.desired;
+            completions.extend(next.completion);
+        }
+
+        apply(desired);
+        for completion in completions {
+            let _ = completion.send(());
+        }
+    }
 }
 
 fn sync_with(
@@ -375,5 +472,101 @@ mod tests {
         );
 
         assert_eq!(requested_state, Some(false));
+    }
+
+    #[test]
+    fn sync_worker_serializes_updates_and_applies_latest_queued_state() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Barrier};
+
+        let (sender, receiver) = mpsc::channel();
+        let first_started = Arc::new(Barrier::new(2));
+        let release_first = Arc::new(Barrier::new(2));
+        let active = Arc::new(AtomicUsize::new(0));
+        let max_active = Arc::new(AtomicUsize::new(0));
+        let applied = Arc::new(Mutex::new(Vec::new()));
+
+        let worker = {
+            let first_started = first_started.clone();
+            let release_first = release_first.clone();
+            let active = active.clone();
+            let max_active = max_active.clone();
+            let applied = applied.clone();
+            std::thread::spawn(move || {
+                run_sync_worker(receiver, move |desired| {
+                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_active.fetch_max(current, Ordering::SeqCst);
+
+                    let is_first = {
+                        let mut states = applied.lock().unwrap();
+                        states.push(desired);
+                        states.len() == 1
+                    };
+                    if is_first {
+                        first_started.wait();
+                        release_first.wait();
+                    }
+
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
+            })
+        };
+
+        sender.send(SyncRequest::background(true)).unwrap();
+        first_started.wait();
+        sender.send(SyncRequest::background(false)).unwrap();
+        sender.send(SyncRequest::background(true)).unwrap();
+        sender.send(SyncRequest::background(false)).unwrap();
+        release_first.wait();
+        drop(sender);
+        worker.join().unwrap();
+
+        assert_eq!(*applied.lock().unwrap(), vec![true, false]);
+        assert_eq!(max_active.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn sync_worker_acknowledges_waiter_only_after_latest_state_is_applied() {
+        use std::sync::{Arc, Barrier};
+
+        let (sender, receiver) = mpsc::channel();
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let first_started = Arc::new(Barrier::new(2));
+        let release_first = Arc::new(Barrier::new(2));
+        let applied = Arc::new(Mutex::new(Vec::new()));
+
+        let worker = {
+            let first_started = first_started.clone();
+            let release_first = release_first.clone();
+            let applied = applied.clone();
+            std::thread::spawn(move || {
+                run_sync_worker(receiver, move |desired| {
+                    let is_first = {
+                        let mut states = applied.lock().unwrap();
+                        states.push(desired);
+                        states.len() == 1
+                    };
+                    if is_first {
+                        first_started.wait();
+                        release_first.wait();
+                    }
+                });
+            })
+        };
+
+        sender.send(SyncRequest::background(true)).unwrap();
+        first_started.wait();
+        sender
+            .send(SyncRequest::with_completion(false, completion_tx))
+            .unwrap();
+
+        assert_eq!(completion_rx.try_recv(), Err(mpsc::TryRecvError::Empty));
+
+        release_first.wait();
+        completion_rx.recv().unwrap();
+        drop(sender);
+        worker.join().unwrap();
+
+        assert_eq!(*applied.lock().unwrap(), vec![true, false]);
     }
 }
