@@ -36,7 +36,6 @@ badge:
   healthy: "#22c55e"
   degraded: "#f59e0b"
   offline: "#ef4444"
-  text: "#0a0a0c"
   synced_bg: "#22c55e1a"
   syncing_bg: "#3b82f61a"
 

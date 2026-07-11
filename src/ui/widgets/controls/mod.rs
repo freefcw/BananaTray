@@ -4,7 +4,6 @@ mod hotkey_field;
 mod icon_button;
 mod input_actions;
 mod segmented_control;
-mod tab;
 
 pub(crate) use action_button::{render_action_button, ButtonVariant};
 pub(crate) use cadence_dropdown::render_cadence_trigger;

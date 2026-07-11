@@ -12,10 +12,7 @@ use gpui::{
 type DivStyleFn = Box<dyn Fn(Div) -> Div>;
 
 /// 分段选择器尺寸风格
-#[allow(dead_code)]
 pub(crate) enum SegmentedSize {
-    /// 全宽等分（用于纵向堆叠布局）
-    Full,
     /// 紧凑自适应宽度（用于 Log Level 选择器）
     Compact,
     /// 行内自适应宽度（用于水平行布局，如 Display Tab 的 Theme/Language 选择器）
@@ -27,7 +24,7 @@ pub(crate) enum SegmentedSize {
 /// # 参数
 /// - `options` — 选项列表 (显示文字, 值)
 /// - `current` — 当前选中的值
-/// - `size` — 尺寸风格 (Full / Compact)
+/// - `size` — 尺寸风格 (Compact / Inline)
 /// - `theme` — 主题
 /// - `on_select` — 选中回调，接收 (值, &mut Window, &mut App)
 ///
@@ -46,17 +43,6 @@ where
     F: Fn(T, &mut Window, &mut App) + Clone + 'static,
 {
     let (text_size_val, container_style, pill_style): (f32, DivStyleFn, DivStyleFn) = match size {
-        SegmentedSize::Full => (
-            12.0,
-            Box::new(|d: Div| d.w_full()),
-            Box::new(|d: Div| {
-                d.flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(8.0))
-            }),
-        ),
         SegmentedSize::Compact => (
             11.0,
             Box::new(|d: Div| d.flex_shrink_0()),

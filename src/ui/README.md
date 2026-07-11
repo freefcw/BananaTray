@@ -46,8 +46,8 @@ Separate desktop window with tabbed settings UI:
 
 Organized into three sub-modules (see [widgets/README.md](widgets/README.md) for full details):
 
-- `primitives/` — Atomic visual building blocks: icon, colored_icon, toggle, checkbox, tooltip
-- `controls/` — Interactive controls: action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions, tab
+- `primitives/` — Atomic visual building blocks: icon, colored_icon, toggle, tooltip
+- `controls/` — Interactive controls: action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions
 - `display/` — Data display components: quota_bar, info_row, icon_row, card, provider_icon
 
 All components are re-exported through `widgets/mod.rs` — callers use `crate::ui::widgets::X` without knowing the sub-directory.

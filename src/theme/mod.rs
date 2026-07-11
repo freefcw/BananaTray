@@ -70,8 +70,6 @@ pub struct ThemeBadge {
     pub healthy: Hsla,
     pub degraded: Hsla,
     pub offline: Hsla,
-    #[allow(dead_code)]
-    pub text: Hsla,
     pub synced_bg: Hsla,
     /// "正在同步" 状态的徽章背景色
     pub syncing_bg: Hsla,
@@ -201,7 +199,6 @@ fn load_theme(yaml: &str) -> Theme {
             healthy: color(&v, "badge", "healthy"),
             degraded: color(&v, "badge", "degraded"),
             offline: color(&v, "badge", "offline"),
-            text: color(&v, "badge", "text"),
             synced_bg: color(&v, "badge", "synced_bg"),
             syncing_bg: color(&v, "badge", "syncing_bg"),
         },
