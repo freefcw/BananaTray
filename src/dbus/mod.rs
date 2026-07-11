@@ -9,7 +9,7 @@
 //! 主线程 (GPUI)                          D-Bus 线程
 //!   |                                       |
 //!   +-- snapshot_cache.update(json) ---->   +-- GetAllQuotas 读取 snapshot_cache
-//!   +-- signal_tx.send(json) ---------->   +-- RefreshAll 读取 snapshot_cache + 通知 GPUI
+//!   +-- signal_tx.send(()) ------------>   +-- RefreshAll 读取 snapshot_cache + 通知 GPUI
 //!   |                                       +-- ObjectServer 处理方法调用
 //!   |  <-- action_rx.recv() -------------  |
 //!   +-- bootstrap::dispatch_in_app() 处理   +-- iface_ref.refresh_complete(json)
@@ -49,20 +49,28 @@ pub struct DBusServiceHandle {
     /// 快照 JSON 缓存（与 iface 共享）
     snapshot_cache: Arc<Mutex<String>>,
     /// 信号发射通道
-    signal_tx: smol::channel::Sender<String>,
+    signal_tx: smol::channel::Sender<()>,
 }
 
 impl DBusServiceHandle {
     /// 更新快照缓存并发射 RefreshComplete 信号
     pub fn emit_refresh_complete(&self, json_data: String) -> Result<()> {
         // 1. 更新缓存（供 GetAllQuotas / RefreshAll 读取）
-        if let Ok(mut cache) = self.snapshot_cache.lock() {
-            *cache = json_data.clone();
+        let mut cache = self
+            .snapshot_cache
+            .lock()
+            .map_err(|e| anyhow::anyhow!("D-Bus snapshot cache lock failed: {e}"))?;
+        *cache = json_data;
+        drop(cache);
+
+        // 2. 通知 D-Bus 线程读取最新缓存并发射信号。队列已满表示已有唤醒待处理，
+        // 最新快照已经写入缓存，因此无需再排一个重复唤醒。
+        match self.signal_tx.try_send(()) {
+            Ok(()) | Err(smol::channel::TrySendError::Full(())) => Ok(()),
+            Err(smol::channel::TrySendError::Closed(())) => {
+                Err(anyhow::anyhow!("D-Bus signal channel closed"))
+            }
         }
-        // 2. 通知 D-Bus 线程发射信号
-        self.signal_tx
-            .try_send(json_data)
-            .map_err(|e| anyhow::anyhow!("D-Bus signal channel closed: {e}"))
     }
 }
 
@@ -80,7 +88,7 @@ pub fn start_dbus_service(
     async_cx: gpui::AsyncApp,
 ) -> Option<DBusServiceHandle> {
     let snapshot_cache = Arc::new(Mutex::new(String::from("{}")));
-    let (signal_tx, signal_rx) = smol::channel::bounded::<String>(64);
+    let (signal_tx, signal_rx) = smol::channel::bounded::<()>(1);
     let (action_tx, action_rx) = smol::channel::bounded::<DBusActionRequest>(8);
 
     let handle = DBusServiceHandle {
@@ -155,10 +163,10 @@ fn spawn_action_bridge(
 fn run_dbus_server(
     snapshot_cache: Arc<Mutex<String>>,
     action_tx: smol::channel::Sender<DBusActionRequest>,
-    signal_rx: smol::channel::Receiver<String>,
+    signal_rx: smol::channel::Receiver<()>,
 ) {
     if let Err(e) = smol::block_on(async {
-        let iface = BananaTrayIface::new(snapshot_cache, action_tx);
+        let iface = BananaTrayIface::new(snapshot_cache.clone(), action_tx);
 
         // 连接 Session Bus
         let conn = zbus::connection::Builder::session()?
@@ -176,7 +184,14 @@ fn run_dbus_server(
             .await?;
 
         // 等待信号请求并发射
-        while let Ok(json_data) = signal_rx.recv().await {
+        while signal_rx.recv().await.is_ok() {
+            let json_data = match snapshot_cache.lock() {
+                Ok(cache) => cache.clone(),
+                Err(err) => {
+                    warn!(target: "dbus", "failed to read snapshot for RefreshComplete: {err}");
+                    continue;
+                }
+            };
             if let Err(e) = iface_ref.refresh_complete(&json_data).await {
                 warn!(target: "dbus", "failed to emit RefreshComplete signal: {e}");
             }
@@ -185,5 +200,59 @@ fn run_dbus_server(
         Ok::<(), zbus::Error>(())
     }) {
         warn!(target: "dbus", "D-Bus service error: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handle_with_capacity(capacity: usize) -> (DBusServiceHandle, smol::channel::Receiver<()>) {
+        let snapshot_cache = Arc::new(Mutex::new(String::from("{}")));
+        let (signal_tx, signal_rx) = smol::channel::bounded(capacity);
+        (
+            DBusServiceHandle {
+                snapshot_cache,
+                signal_tx,
+            },
+            signal_rx,
+        )
+    }
+
+    #[test]
+    fn refresh_signal_coalesces_when_wakeup_is_already_queued() {
+        let (handle, signal_rx) = handle_with_capacity(1);
+
+        handle.emit_refresh_complete("first".into()).unwrap();
+        handle.emit_refresh_complete("latest".into()).unwrap();
+
+        assert_eq!(*handle.snapshot_cache.lock().unwrap(), "latest");
+        assert_eq!(signal_rx.len(), 1);
+    }
+
+    #[test]
+    fn refresh_signal_reports_closed_channel() {
+        let (handle, signal_rx) = handle_with_capacity(1);
+        drop(signal_rx);
+
+        let err = handle.emit_refresh_complete("latest".into()).unwrap_err();
+
+        assert!(err.to_string().contains("channel closed"));
+    }
+
+    #[test]
+    fn poisoned_cache_does_not_queue_refresh_signal() {
+        let (handle, signal_rx) = handle_with_capacity(1);
+        let cache = handle.snapshot_cache.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = cache.lock().unwrap();
+            panic!("poison snapshot cache");
+        })
+        .join();
+
+        let err = handle.emit_refresh_complete("latest".into()).unwrap_err();
+
+        assert!(err.to_string().contains("cache lock failed"));
+        assert!(signal_rx.is_empty());
     }
 }

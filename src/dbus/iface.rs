@@ -43,6 +43,22 @@ impl BananaTrayIface {
             action_tx,
         }
     }
+
+    fn schedule_action(
+        &self,
+        action: DBusActionRequest,
+        action_name: &str,
+    ) -> zbus::fdo::Result<()> {
+        match self.action_tx.try_send(action) {
+            Ok(()) => Ok(()),
+            Err(smol::channel::TrySendError::Full(_)) => Err(zbus::fdo::Error::LimitsExceeded(
+                format!("{action_name} queue is full"),
+            )),
+            Err(smol::channel::TrySendError::Closed(_)) => Err(zbus::fdo::Error::Failed(format!(
+                "{action_name} bridge is closed"
+            ))),
+        }
+    }
 }
 
 #[zbus::interface(name = "com.bananatray.Daemon")]
@@ -58,9 +74,7 @@ impl BananaTrayIface {
     /// 触发刷新所有 Provider，并返回当前快照（JSON）
     fn refresh_all(&self) -> zbus::fdo::Result<String> {
         // 通知 GPUI 主线程发起刷新（实际刷新是异步的）
-        if let Err(e) = self.action_tx.try_send(DBusActionRequest::RefreshAll) {
-            log::warn!(target: "dbus", "failed to send RefreshAll request: {e}");
-        }
+        self.schedule_action(DBusActionRequest::RefreshAll, "RefreshAll")?;
         // 返回当前快照（刷新结果将通过 RefreshComplete 信号推送）
         self.snapshot_cache
             .lock()
@@ -70,9 +84,7 @@ impl BananaTrayIface {
 
     /// 打开设置窗口（异步，在 GPUI 主线程执行）
     fn open_settings(&self) -> zbus::fdo::Result<()> {
-        self.action_tx
-            .try_send(DBusActionRequest::OpenSettings)
-            .map_err(|e| zbus::fdo::Error::Failed(format!("failed to schedule OpenSettings: {e}")))
+        self.schedule_action(DBusActionRequest::OpenSettings, "OpenSettings")
     }
 
     /// 刷新完成信号
@@ -83,5 +95,46 @@ impl BananaTrayIface {
     #[zbus(property)]
     fn is_active(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn iface_with_action_capacity(
+        capacity: usize,
+    ) -> (BananaTrayIface, smol::channel::Receiver<DBusActionRequest>) {
+        let (action_tx, action_rx) = smol::channel::bounded(capacity);
+        (
+            BananaTrayIface::new(Arc::new(Mutex::new("{}".into())), action_tx),
+            action_rx,
+        )
+    }
+
+    #[test]
+    fn full_action_queue_maps_to_limits_exceeded() {
+        let (iface, _action_rx) = iface_with_action_capacity(1);
+        iface
+            .schedule_action(DBusActionRequest::RefreshAll, "first")
+            .unwrap();
+
+        let err = iface
+            .schedule_action(DBusActionRequest::OpenSettings, "second")
+            .unwrap_err();
+
+        assert!(matches!(err, zbus::fdo::Error::LimitsExceeded(_)));
+    }
+
+    #[test]
+    fn closed_action_queue_maps_to_failed() {
+        let (iface, action_rx) = iface_with_action_capacity(1);
+        drop(action_rx);
+
+        let err = iface
+            .schedule_action(DBusActionRequest::RefreshAll, "RefreshAll")
+            .unwrap_err();
+
+        assert!(matches!(err, zbus::fdo::Error::Failed(_)));
     }
 }
