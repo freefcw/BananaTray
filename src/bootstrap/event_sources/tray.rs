@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayCommand {
-    ToggleProvider,
+    TogglePopup,
     ShowSettings,
     #[cfg(target_os = "linux")]
     Quit,
@@ -54,7 +54,7 @@ pub(crate) fn register_tray_events(controller: &Rc<RefCell<TrayController>>, cx:
 fn command_for_tray_icon_event(event: &TrayIconClickEvent) -> Option<TrayCommand> {
     use gpui::TrayIconEvent;
     match &event.kind {
-        TrayIconEvent::LeftClick => Some(TrayCommand::ToggleProvider),
+        TrayIconEvent::LeftClick => Some(TrayCommand::TogglePopup),
         TrayIconEvent::RightClick => Some(TrayCommand::ShowSettings),
         _ => None,
     }
@@ -62,7 +62,7 @@ fn command_for_tray_icon_event(event: &TrayIconClickEvent) -> Option<TrayCommand
 
 fn run_tray_command(command: TrayCommand, controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
     match command {
-        TrayCommand::ToggleProvider => controller.borrow_mut().toggle_provider(cx),
+        TrayCommand::TogglePopup => controller.borrow_mut().toggle_popup(cx),
         TrayCommand::ShowSettings => controller.borrow_mut().show_settings(cx),
         #[cfg(target_os = "linux")]
         TrayCommand::Quit => cx.quit(),
@@ -100,7 +100,7 @@ fn install_linux_tray_menu(cx: &mut App) {
 #[cfg(target_os = "linux")]
 fn command_for_tray_menu_action(id: &str) -> Option<TrayCommand> {
     match id {
-        TRAY_ACTION_OPEN => Some(TrayCommand::ToggleProvider),
+        TRAY_ACTION_OPEN => Some(TrayCommand::TogglePopup),
         TRAY_ACTION_SETTINGS => Some(TrayCommand::ShowSettings),
         TRAY_ACTION_QUIT => Some(TrayCommand::Quit),
         _ => None,

@@ -30,7 +30,7 @@ pub(crate) fn listen_for_secondary_instance(
             while show_async_rx.recv().await.is_ok() {
                 info!(target: "app", "secondary instance requested SHOW");
                 let _ = show_async_cx.update(|cx| {
-                    ctrl.borrow_mut().toggle_provider(cx);
+                    ctrl.borrow_mut().toggle_popup(cx);
                 });
             }
         })

@@ -70,16 +70,15 @@ fn main() {
 
             bootstrap::sync_initial_auto_launch(&settings);
 
-            // 3. 窗口控制器
-            let controller = Rc::new(RefCell::new(tray::TrayController::new(
+            // 3. 组合共享运行时状态与窗口控制器
+            let state = Rc::new(RefCell::new(runtime::AppState::new(
                 refresh_tx,
                 script_test_tx,
                 manager.clone(),
                 settings,
                 log_path.clone(),
             )));
-
-            let state = controller.borrow().state();
+            let controller = Rc::new(RefCell::new(tray::TrayController::new(state.clone())));
 
             // 4. 注册应用退出钩子（等待设置最终落盘）
             bootstrap::register_app_shutdown(&state, cx);
@@ -104,7 +103,7 @@ fn main() {
 
             // 8. 注册事件处理器
             bootstrap::register_tray_events(&controller, cx);
-            bootstrap::register_global_hotkey(&controller, cx);
+            bootstrap::register_global_hotkey(&state, &controller, cx);
             bootstrap::listen_for_secondary_instance(&controller, show_rx, cx);
 
             info!(target: "app", "BananaTray is running - look for the tray icon");

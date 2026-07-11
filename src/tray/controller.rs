@@ -4,11 +4,11 @@
 
 use crate::application::AppAction;
 use crate::bootstrap::schedule_open_settings_window;
-use crate::models::{AppSettings, NavTab};
+use crate::models::NavTab;
 use crate::runtime::AppState;
 #[cfg(target_os = "linux")]
 use crate::tray::activation::GRACE_PERIOD;
-use crate::tray::command::ProviderToggleTarget;
+use crate::tray::command::PopupToggleTarget;
 use gpui::{
     px, size, App, AppContext, DisplayId, Pixels, Point, WindowBounds, WindowHandle, WindowKind,
     WindowOptions,
@@ -29,30 +29,13 @@ pub(crate) struct TrayController {
 /// lib target 不直接调用这些方法，但 bin 启动路径与托盘事件会完整覆盖。
 #[allow(dead_code)]
 impl TrayController {
-    pub(crate) fn new(
-        refresh_tx: smol::channel::Sender<crate::refresh::RefreshRequest>,
-        script_test_tx: smol::channel::Sender<(u64, crate::models::ScriptProviderConfig)>,
-        manager: crate::providers::ProviderManagerHandle,
-        settings: AppSettings,
-        log_path: Option<std::path::PathBuf>,
-    ) -> Self {
+    pub(crate) fn new(state: Rc<RefCell<AppState>>) -> Self {
         info!(target: "tray", "initializing tray controller");
-        let state = Rc::new(RefCell::new(AppState::new(
-            refresh_tx,
-            script_test_tx,
-            manager,
-            settings,
-            log_path,
-        )));
         Self {
             window: Rc::new(Cell::new(None)),
             state,
             last_click_position: Cell::new(None),
         }
-    }
-
-    pub(crate) fn state(&self) -> Rc<RefCell<AppState>> {
-        self.state.clone()
     }
 
     /// Hide or close the tray popup window.
@@ -124,36 +107,36 @@ impl TrayController {
         self.last_click_position.set(position);
     }
 
-    pub(crate) fn toggle_provider(&mut self, cx: &mut App) {
+    pub(crate) fn toggle_popup(&mut self, cx: &mut App) {
         let target = {
             let mut state = self.state.borrow_mut();
-            crate::tray::command::provider_toggle_target(&mut state.session)
+            crate::tray::command::popup_toggle_target(&mut state.session)
         };
 
         let target_tab = match target {
-            ProviderToggleTarget::Show(tab) => tab,
-            ProviderToggleTarget::OpenSettings => {
+            PopupToggleTarget::Show(tab) => tab,
+            PopupToggleTarget::OpenSettings => {
                 info!(target: "tray", "no providers enabled, opening settings directly");
                 self.show_settings(cx);
                 return;
             }
         };
-        info!(target: "tray", "toggle provider panel for {:?}", target_tab);
+        info!(target: "tray", "toggle tray popup for {:?}", target_tab);
 
         // Check if window is actually alive, not just if handle exists
         if self.is_window_alive(cx) {
             let popup_visible = self.is_popup_visible(cx);
             let active_tab = self.state.borrow().session.nav.active_tab.clone();
             if popup_visible && matches!(active_tab, NavTab::Provider(_) | NavTab::Overview) {
-                info!(target: "tray", "provider panel already open, closing existing panel");
+                info!(target: "tray", "tray popup already open, closing it");
                 self.close_popup(cx);
             } else {
-                info!(target: "tray", "reusing existing window handle for provider panel");
+                info!(target: "tray", "reusing existing window handle for tray popup");
                 self.show(target_tab, cx);
             }
         } else {
             // Handle is stale, clear it
-            info!(target: "tray", "window handle is stale, clearing and opening fresh panel");
+            info!(target: "tray", "window handle is stale, clearing and opening fresh tray popup");
             self.window.set(None);
             self.show(target_tab, cx);
         }

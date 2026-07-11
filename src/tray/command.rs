@@ -4,21 +4,21 @@ use crate::application::AppSession;
 use crate::models::NavTab;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum ProviderToggleTarget {
+pub(super) enum PopupToggleTarget {
     Show(NavTab),
     OpenSettings,
 }
 
-pub(super) fn provider_toggle_target(session: &mut AppSession) -> ProviderToggleTarget {
+pub(super) fn popup_toggle_target(session: &mut AppSession) -> PopupToggleTarget {
     let provider_tab = session.default_provider_tab();
 
     // Overview 启用时优先展示 Overview tab
     if session.settings.display.show_overview {
-        ProviderToggleTarget::Show(NavTab::Overview)
+        PopupToggleTarget::Show(NavTab::Overview)
     } else if let Some(tab) = provider_tab {
-        ProviderToggleTarget::Show(tab)
+        PopupToggleTarget::Show(tab)
     } else {
-        ProviderToggleTarget::OpenSettings
+        PopupToggleTarget::OpenSettings
     }
 }
 
@@ -48,8 +48,8 @@ mod tests {
         session.settings.display.show_overview = true;
 
         assert_eq!(
-            provider_toggle_target(&mut session),
-            ProviderToggleTarget::Show(NavTab::Overview)
+            popup_toggle_target(&mut session),
+            PopupToggleTarget::Show(NavTab::Overview)
         );
     }
 
@@ -58,10 +58,10 @@ mod tests {
         let mut session = make_session(&[ProviderKind::Claude], &[ProviderKind::Claude]);
         session.settings.display.show_overview = false;
 
-        let result = provider_toggle_target(&mut session);
+        let result = popup_toggle_target(&mut session);
         assert!(matches!(
             result,
-            ProviderToggleTarget::Show(NavTab::Provider(_))
+            PopupToggleTarget::Show(NavTab::Provider(_))
         ));
     }
 
@@ -71,8 +71,8 @@ mod tests {
         session.settings.display.show_overview = false;
 
         assert_eq!(
-            provider_toggle_target(&mut session),
-            ProviderToggleTarget::OpenSettings
+            popup_toggle_target(&mut session),
+            PopupToggleTarget::OpenSettings
         );
     }
 
@@ -86,8 +86,8 @@ mod tests {
         session.settings.display.show_overview = true;
 
         assert_eq!(
-            provider_toggle_target(&mut session),
-            ProviderToggleTarget::Show(NavTab::Overview)
+            popup_toggle_target(&mut session),
+            PopupToggleTarget::Show(NavTab::Overview)
         );
     }
 }

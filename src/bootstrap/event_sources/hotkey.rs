@@ -18,8 +18,11 @@ enum StartupHotkeyRegistration {
 }
 
 /// 注册全局热键（从 settings 读取，可在运行时重新绑定）。
-pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, cx: &mut App) {
-    let state = controller.borrow().state();
+pub(crate) fn register_global_hotkey(
+    state: &Rc<RefCell<AppState>>,
+    controller: &Rc<RefCell<TrayController>>,
+    cx: &mut App,
+) {
     let configured_hotkey = state.borrow().session.settings.system.global_hotkey.clone();
 
     match classify_startup_hotkey_registration(
@@ -30,10 +33,10 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
             persisted,
             canonicalized,
         } => {
-            clear_global_hotkey_error(&state);
+            clear_global_hotkey_error(state);
 
             if canonicalized {
-                persist_hotkey_value(&state, persisted, "startup canonicalization");
+                persist_hotkey_value(state, persisted, "startup canonicalization");
             }
         }
         StartupHotkeyRegistration::RecoverWithDefault => {
@@ -45,7 +48,7 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
             );
 
             let fallback_hotkey = SystemSettings::DEFAULT_GLOBAL_HOTKEY.to_string();
-            persist_hotkey_value(&state, fallback_hotkey.clone(), "startup recovery");
+            persist_hotkey_value(state, fallback_hotkey.clone(), "startup recovery");
 
             match crate::runtime::global_hotkey::register_hotkey_string(
                 SystemSettings::DEFAULT_GLOBAL_HOTKEY,
@@ -53,7 +56,7 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
                 cx,
             ) {
                 Ok(_) => {
-                    clear_global_hotkey_error(&state);
+                    clear_global_hotkey_error(state);
                 }
                 Err(fallback_err) => {
                     warn!(
@@ -62,7 +65,7 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
                         SystemSettings::DEFAULT_GLOBAL_HOTKEY,
                         fallback_err
                     );
-                    set_global_hotkey_error(&state, fallback_hotkey, fallback_err);
+                    set_global_hotkey_error(state, fallback_hotkey, fallback_err);
                 }
             }
         }
@@ -75,7 +78,7 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
                 configured_hotkey,
                 err
             );
-            set_global_hotkey_error(&state, error_hotkey, err);
+            set_global_hotkey_error(state, error_hotkey, err);
         }
     }
 
@@ -85,7 +88,7 @@ pub(crate) fn register_global_hotkey(controller: &Rc<RefCell<TrayController>>, c
         if id == crate::runtime::global_hotkey::GLOBAL_HOTKEY_ID {
             info!(target: "app", "received global hotkey {}", id);
             let _ = async_cx.update(|cx| {
-                ctrl.borrow_mut().toggle_provider(cx);
+                ctrl.borrow_mut().toggle_popup(cx);
             });
         }
     });
