@@ -6,6 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::platform::atomic_file::{
+    restrict_private_file_permissions, write_private_file_exclusively,
+};
+
 pub(super) fn write_newapi_yaml(path: &Path, yaml_content: &str) -> Result<PathBuf, String> {
     let providers_dir = path
         .parent()
@@ -90,8 +94,7 @@ fn replace_file_atomically_with_temp(
     content: &str,
     label: &str,
 ) -> Result<(), String> {
-    if let Err(err) = std::fs::write(tmp, content) {
-        cleanup_temp_file(tmp);
+    if let Err(err) = write_private_file_exclusively(tmp, content.as_bytes()) {
         return Err(format!(
             "failed to write {} to {}: {}",
             label,
@@ -126,18 +129,15 @@ fn write_script_provider_files_with_temps(
     script_content: &str,
     yaml_content: &str,
 ) -> Result<(), String> {
-    if let Err(err) = std::fs::write(script_tmp, script_content) {
-        cleanup_temp_file(script_tmp);
-        cleanup_temp_file(yaml_tmp);
+    if let Err(err) = write_private_file_exclusively(script_tmp, script_content.as_bytes()) {
         return Err(format!(
             "failed to write script to {}: {}",
             script_tmp.display(),
             err
         ));
     }
-    if let Err(err) = std::fs::write(yaml_tmp, yaml_content) {
+    if let Err(err) = write_private_file_exclusively(yaml_tmp, yaml_content.as_bytes()) {
         cleanup_temp_file(script_tmp);
-        cleanup_temp_file(yaml_tmp);
         return Err(format!(
             "failed to write YAML to {}: {}",
             yaml_tmp.display(),
@@ -212,6 +212,13 @@ fn backup_existing_file(path: &Path) -> Result<Option<PathBuf>, String> {
     if !path.exists() {
         return Ok(None);
     }
+    restrict_private_file_permissions(path).map_err(|e| {
+        format!(
+            "failed to restrict permissions for {} before backup: {}",
+            path.display(),
+            e
+        )
+    })?;
     let backup = backup_sibling_path(path);
     std::fs::rename(path, &backup).map_err(|e| {
         format!(
@@ -281,6 +288,22 @@ mod tests {
         assert_no_backup_files(path.parent().unwrap());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn write_newapi_yaml_restricts_existing_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("providers").join("relay.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "old yaml").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_newapi_yaml(&path, "new yaml").unwrap();
+
+        assert_eq!(file_mode(&path), 0o600);
+    }
+
     #[test]
     fn write_newapi_yaml_keeps_old_file_when_temp_write_fails() {
         let dir = tempfile::tempdir().unwrap();
@@ -341,11 +364,16 @@ mod tests {
 
     #[test]
     fn write_script_provider_files_rolls_back_existing_script_when_yaml_rename_fails() {
+        #[cfg(unix)]
+        use std::os::unix::fs::PermissionsExt;
+
         let dir = tempfile::tempdir().unwrap();
         let script_dir = dir.path().join("scripts");
         std::fs::create_dir_all(&script_dir).unwrap();
         let script_path = script_dir.join("test.py");
         std::fs::write(&script_path, "old script").unwrap();
+        #[cfg(unix)]
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let script_tmp = script_dir.join("test.py.tmp");
         let yaml_tmp = dir.path().join("test.yaml.tmp");
         let yaml_path = dir.path().join("nonexistent_dir").join("test.yaml");
@@ -362,6 +390,8 @@ mod tests {
 
         assert!(err.contains("failed to replace"));
         assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "old script");
+        #[cfg(unix)]
+        assert_eq!(file_mode(&script_path), 0o600);
         assert!(!script_tmp.exists());
         assert!(!yaml_tmp.exists());
         assert!(!yaml_path.exists());
@@ -411,6 +441,20 @@ mod tests {
         assert_no_backup_files(yaml_path.parent().unwrap());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn write_script_provider_files_create_owner_only_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml_path = dir.path().join("providers").join("script.yaml");
+        let script_path = dir.path().join("scripts").join("script.py");
+
+        write_script_provider_files(&script_path, &yaml_path, "secret script", "secret yaml")
+            .unwrap();
+
+        assert_eq!(file_mode(&script_path), 0o600);
+        assert_eq!(file_mode(&yaml_path), 0o600);
+    }
+
     #[test]
     fn delete_file_if_exists_reports_delete_failure() {
         let dir = tempfile::tempdir().unwrap();
@@ -431,5 +475,12 @@ mod tests {
                 filename.to_string_lossy()
             );
         }
+    }
+
+    #[cfg(unix)]
+    fn file_mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
     }
 }

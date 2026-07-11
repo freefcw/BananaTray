@@ -3,6 +3,13 @@
 use std::io::{self, Write};
 use std::path::Path;
 
+#[cfg(any(feature = "app", test))]
+use std::fs::OpenOptions;
+#[cfg(all(unix, any(feature = "app", test)))]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(all(unix, feature = "app"))]
+use std::os::unix::fs::PermissionsExt;
+
 /// 将私有内容写入目标文件，并通过同目录 `rename` 原子替换旧内容。
 ///
 /// 临时文件使用唯一名称且在 Unix 上以 `0600` 创建。写入或同步失败时旧文件保持不变，
@@ -40,6 +47,48 @@ pub(crate) fn write_private_file_atomically(path: &Path, contents: &[u8]) -> io:
         .map_err(|error| contextualize("replace private file", path, error.error))
 }
 
+/// 创建新的私密文件并同步内容，拒绝覆盖已有路径。
+///
+/// 供需要自行编排多文件提交/回滚的调用方写入 sibling temp。调用方在成功后拥有该
+/// 临时文件，并负责 rename 或清理；本函数会清理由写入或同步失败产生的半成品。
+#[cfg(any(feature = "app", test))]
+pub(crate) fn write_private_file_exclusively(path: &Path, contents: &[u8]) -> io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+
+    let mut file = options
+        .open(path)
+        .map_err(|error| contextualize("create private file", path, error))?;
+
+    let result = file
+        .write_all(contents)
+        .and_then(|()| file.sync_all())
+        .map_err(|error| contextualize("write private file", path, error));
+    if result.is_err() {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+    }
+    result
+}
+
+/// 收紧已有私密文件权限，避免备份/回滚窗口继续暴露旧凭证。
+#[cfg(feature = "app")]
+pub(crate) fn restrict_private_file_permissions(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let metadata = std::fs::symlink_metadata(path)?;
+        if metadata.file_type().is_file() {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+
+    Ok(())
+}
+
 fn contextualize(operation: &str, path: &Path, error: io::Error) -> io::Error {
     io::Error::new(
         error.kind(),
@@ -49,7 +98,7 @@ fn contextualize(operation: &str, path: &Path, error: io::Error) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::write_private_file_atomically;
+    use super::{write_private_file_atomically, write_private_file_exclusively};
     use std::sync::{Arc, Barrier};
 
     #[test]
@@ -132,5 +181,31 @@ mod tests {
 
         let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exclusive_private_file_uses_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("provider.yaml.tmp");
+
+        write_private_file_exclusively(&path, b"secret").unwrap();
+
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn exclusive_private_file_refuses_to_overwrite_existing_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("provider.yaml.tmp");
+        std::fs::write(&path, b"existing secret").unwrap();
+
+        let error = write_private_file_exclusively(&path, b"replacement").unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(path).unwrap(), b"existing secret");
     }
 }
