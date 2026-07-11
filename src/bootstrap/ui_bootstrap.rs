@@ -11,7 +11,7 @@ pub(crate) fn load_settings() -> AppSettings {
 }
 
 pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
-    crate::platform::auto_launch::sync(settings.system.start_at_login);
+    crate::platform::auto_launch::schedule_sync(settings.system.start_at_login);
 }
 
 /// 初始化 i18n、UI 工具包、托盘图标（在 GPUI run 闭包内调用）
