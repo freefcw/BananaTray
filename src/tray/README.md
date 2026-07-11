@@ -8,7 +8,7 @@
 
 弹窗窗口的生命周期管理：
 
-- **`TrayController`** — 持有 `AppState`（`Rc<RefCell<...>>`）、refresh channel、log path
+- **`TrayController`** — 接收并持有由组合根创建的共享 `AppState`（`Rc<RefCell<...>>`），不自行构造运行时依赖
 - 管理弹窗的创建、显示/隐藏、复用和 stale handle 清理
 - 处理托盘点击事件和全局快捷键触发后的窗口调度
 - 弹窗句柄通过共享 `Cell<Option<WindowHandle<_>>>` 保存，失焦 auto-hide 依靠 `lifecycle.rs` 的幂等守卫清理当前窗口，避免 stale handle 和误关新窗口

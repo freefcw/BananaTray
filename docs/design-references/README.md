@@ -17,4 +17,5 @@
 
 如果某个 PNG / 草图只是作为参考保存，**不要**放在 `src/icons/`：
 打包脚本 `scripts/common.sh` 的 `copy_runtime_resources()` 用 `cp src/icons/*.png`
-通配复制，会把所有 PNG 塞进发行包。请放在本目录或 `docs/` 下其他子目录。
+通配复制，会把所有 PNG 塞进发行包；其中 `app_logo.png` 是必需运行时资源，
+缺失会直接中止打包。请放在本目录或 `docs/` 下其他子目录。

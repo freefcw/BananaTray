@@ -66,9 +66,8 @@ providers/
 优先复用：
 - `common::cli::command_exists()`
 - `common::cli::run_command()`
-- `common::cli::run_checked_command()`
+- `common::cli::ensure_success()` — 与 `run_command()` 组合为严格退出码模式
 - `common::cli::run_lenient_command()` — 容忍非零退出码（如 amp、kiro-cli）
-- `common::cli::ensure_success()`
 - `common::cli::stdout_text()` / `stdout_or_stderr_text()`
 
 当前参考：

@@ -47,6 +47,7 @@ service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon �
 | `scripts/gnome-extension-mock-daemon.js` | mock `com.bananatray.Daemon`，用于 UI 状态调试。 |
 | `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard 和 D-Bus contract parity。 |
 | `scripts/check-gnome-dbus-contract.mjs` | D-Bus 契约静态校验：比较 Extension client/mock 的 bus/path/XML/schema version，并确认 Rust iface/DTO 仍匹配。 |
+| `scripts/test-gnome-packaging-contracts.sh` | 打包契约负例：逐个移除 schema version、activation placeholder 和 daemon-reload 标记，确认每个文件的漂移都会被门禁拦截。 |
 | `scripts/bundle-gnome-extension.sh` | e.g.o 提交用 zip 打包：白名单运行时文件、metadata 校验、版本信息输出。 |
 | `resources/linux/com.bananatray.Daemon.service` | Session D-Bus activation 文件，声明 `com.bananatray.Daemon` 如何启动。 |
 | `resources/linux/bananatray.service` | systemd user service，供 D-Bus activation 或用户手动 `systemctl --user start` 启动。 |
@@ -295,6 +296,7 @@ ZIP 只包含运行时文件（`metadata.json`、JS 模块、`stylesheet.css`、
 
 ```bash
 bash scripts/check-gnome-extension.sh
+bash scripts/test-gnome-packaging-contracts.sh
 bash scripts/install-gnome-extension.sh --dry-run
 cargo fmt --check
 cargo test --lib

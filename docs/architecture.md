@@ -173,8 +173,8 @@
 
 稳定事实：
 
-- 设置写入由后台 `settings_writer` 串行化并做 debounce；正常应用退出会关闭 writer sender、执行 pending snapshot 的 final flush，并 join 后台线程后再结束进程。
-- `settings.json` 与 BananaTray 代写的外部 OAuth 凭证使用共享的私有文件原子替换：同目录唯一临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。
+- 设置写入由后台 `settings_writer` 串行化并做 debounce；正常应用退出会关闭 writer sender、执行 pending snapshot 的 final flush，并 join 后台线程。随后，退出钩子把内存中的最终 `start_at_login` 状态提交给同一个 auto-launch worker，等待应用完成后再结束进程。
+- `settings.json`、BananaTray 代写的外部 OAuth 凭证、自定义 provider YAML 与向导脚本复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 的脚本 + YAML 由 custom lifecycle 额外编排双文件备份与回滚。
 - 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。
 
 ## Localization Boundary
@@ -210,7 +210,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 
 - 标准测试命令是 `cargo test --lib`。
 - `cargo test --lib --no-default-features` 应保持可用，用于验证 lib 层不会回流 app-only 依赖。
-- 主路径 CI 使用 `cargo clippy --lib --no-default-features -- -D warnings` 和 `cargo test --lib --no-default-features` 作为快速门禁；完整默认 feature clippy、`cargo test --lib` 与 `cargo check --bin bananatray` 仅在 App CI 的手动触发和定时检查中运行。
+- 主路径 CI 使用 `cargo clippy --lib --no-default-features -- -D warnings` 和 `cargo test --lib --no-default-features` 作为快速门禁；完整默认 feature clippy、`cargo test --lib` 与 `cargo check --bin bananatray` 在 Rust/依赖/主题相关 PR、App CI 手动触发和定时检查中运行。
 - Provider secret/token 预览必须复用 `providers::common::secret::mask_secret_preview`；`scripts/check-provider-secret-slicing.sh` 在 CI / pre-commit 中禁止 `src/providers` 重新出现直接字节切片式预览。
 - `application/` 和 `models/` 是主要单元测试面。
 - provider parser、scheduler、settings store、selector 也有独立测试。

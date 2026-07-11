@@ -16,7 +16,7 @@ BananaTray 的 GitHub Release 采用“自动构建草稿，人工最终发布�
 Release workflow 只负责“构建可下载产物 + 写入 draft release”，不负责替代 CI：
 
 - PR / branch push 仍由 `ci.yml` 跑低成本 GPUI-free 门禁。
-- 完整 app 检查仍由 `app-ci.yml` 手动或定时运行。
+- Rust、依赖、主题或 App CI workflow 相关 PR 还会触发 `app-ci.yml`；完整 app 检查也保留手动和定时运行入口。
 - tag release 不再额外跑 clippy / test，避免在已经构建 release 二进制的基础上重复占用 runner 时间。
 - Linux 和 macOS release job 并行执行；各自完成后直接上传本平台产物到同一个 draft release，不再额外开汇总发布 job。
 
@@ -45,6 +45,9 @@ cargo fmt --check
 ./scripts/check-gpui-imports.sh
 ./scripts/check-provider-secret-slicing.sh
 ./scripts/check-gnome-extension.sh
+./scripts/test-gnome-packaging-contracts.sh
+./scripts/test-packaging-scripts.sh
+python3 -m unittest scripts/test_migrate_custom_provider_yaml.py
 cargo clippy --lib --no-default-features -- -D warnings
 cargo test --lib --no-default-features
 cargo clippy --lib -- -D warnings
@@ -52,6 +55,9 @@ cargo test --lib
 ```
 
 3. 如本次发布涉及 app-only、托盘、平台集成、打包或 GNOME 扩展行为，额外运行对应 app 检查；Linux 需要系统依赖，macOS 至少运行 `cargo check --bin bananatray`。
+
+打包脚本会拒绝未知参数和缺少值的参数。macOS release job 先用 `bundle.sh --skip-build` 组装并签名 `.app`，再用 `bundle-dmg.sh --skip-build` 生成、可选签名并挂载验证 DMG；本地只想跳过外层 DMG 签名时使用 `bundle-dmg.sh --skip-build --no-sign`。
+
 4. 提交版本号和对应变更。
 5. 创建并推送 tag：
 

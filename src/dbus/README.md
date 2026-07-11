@@ -16,7 +16,7 @@ AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 activation。
 主线程 (GPUI)                          D-Bus 线程 (dbus-service)
   │                                       │
   ├─ snapshot_cache.update(json) ──────>  ├─ GetAllQuotas 读取 snapshot_cache
-  ├─ signal_tx.send(json) ─────────────>  ├─ RefreshAll 读取 snapshot_cache + 通知 GPUI
+  ├─ signal_tx.send(()) ───────────────>  ├─ RefreshAll 读取 snapshot_cache + 通知 GPUI
   │                                       ├─ ObjectServer 处理方法调用
   │ <── action_rx.recv() ────────────── │
   └─ bootstrap::dispatch_in_app() 处理    └─ iface_ref.refresh_complete(json)
@@ -33,7 +33,8 @@ AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 activation。
 zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满足。因此 `BananaTrayIface` 不持有 `AppState`，而是持有：
 
 - `Arc<Mutex<String>>` — 缓存的快照 JSON（GPUI 主线程写入，D-Bus 线程读取）
-- `smol::channel::Sender` — 动作请求通道（D-Bus → GPUI 主线程）
+- `smol::channel::Sender` — 动作请求通道（D-Bus → GPUI 主线程）；满队列返回
+  `LimitsExceeded`，bridge 已关闭返回 `Failed`，避免把暂时背压误报为永久关闭
 
 `Rc<RefCell<AppState>>` 仍由 `spawn_action_bridge` 持有，但只在 GPUI 主线程上使用（通过 `async_cx.update()`），不会 move 到 D-Bus 线程。
 
@@ -148,8 +149,9 @@ GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静�
 1. 后台 `RefreshCoordinator` 完成刷新 → 发送 `RefreshEvent`
 2. 事件泵收到 `RefreshEventReceived` → reducer 更新 `AppState`
 3. `bootstrap::emit_current_dbus_snapshot()` 构建 `DBusQuotaSnapshot` → `DBusServiceHandle::emit_refresh_complete()`
-4. `emit_refresh_complete()` 更新 `Arc<Mutex<String>>` 缓存 + 通过 `signal_tx` 通知 D-Bus 线程
-5. D-Bus 线程通过 `InterfaceRef::refresh_complete()` 发射 zbus 信号
+4. `emit_refresh_complete()` 必须先成功更新 `Arc<Mutex<String>>` 缓存，再通过容量为 1 的
+   `signal_tx` 发送唤醒；已有唤醒排队时直接合并，channel 已关闭则返回错误
+5. D-Bus 线程收到唤醒后读取最新缓存，通过 `InterfaceRef::refresh_complete()` 发射 zbus 信号
 
 ## 关键设计决策
 
@@ -157,4 +159,6 @@ GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静�
 - **信号发射通过 InterfaceRef**：zbus 5 的 signal 方法生成 `<Name>Signals` trait，为 `InterfaceRef<Name>` 和 `SignalEmitter` 实现。通过 `conn.object_server().interface()` 获取 `InterfaceRef`，调用其 signal 方法。
 - **DTO 放在 `application/selectors/` 而非 `dbus/`**：DTO 类型和格式化逻辑不依赖 GPUI/zbus，可在任何平台编译和测试。
 - **action bridge 复用 GPUI foreground executor**：避免为转发 `action_rx` 创建额外线程。`Rc<RefCell<AppState>>` 只在 GPUI 主线程上使用。
-- **信号通道用 `smol::channel::bounded`**：与 zbus 的 async-io 运行时兼容，避免跨运行时桥接。
+- **信号通道用容量为 1 的 `smol::channel::bounded` 唤醒队列**：与 zbus 的 async-io
+  运行时兼容；JSON 只保存在共享缓存中，因此连续刷新会合并为一次携带最新快照的信号，
+  不会因队列满而保留旧快照。

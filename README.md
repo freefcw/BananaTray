@@ -76,7 +76,7 @@ cargo test --lib --no-default-features
 # Fast lint for the GPUI-free lib surface, matching the PR CI gate
 cargo clippy --lib --no-default-features -- -D warnings
 
-# Full app lint, matching the App CI manual/scheduled gate
+# Full app lint, matching the App CI gate
 cargo clippy --lib -- -D warnings
 
 # Format
@@ -88,7 +88,7 @@ Feature contract:
 - Default build enables `app` and is the supported application path for `cargo run` / `cargo build`.
 - `--no-default-features` is **not** a supported app build mode. It is kept only for GPUI-free `lib` checks/tests.
 - The `bananatray` binary target explicitly requires the `app` feature.
-- CI uses fast lib clippy and GPUI-free tests for PRs and branch pushes; App CI runs full app clippy, standard app-feature tests, and app compile checks by manual dispatch and nightly schedule.
+- CI uses fast lib clippy and GPUI-free tests for PRs and branch pushes. App CI additionally runs full app clippy, standard app-feature tests, and app compile checks for Rust/dependency/theme PRs, by manual dispatch, and on a nightly schedule.
 
 ## macOS Bundle & DMG
 
@@ -112,15 +112,18 @@ bash scripts/bundle.sh --dmg
 # Use existing .app to create DMG
 bash scripts/bundle.sh --dmg --skip-build
 
+# Create a DMG from the existing .app without signing the DMG itself
+bash scripts/bundle-dmg.sh --skip-build --no-sign
+
 # Install create-dmg for better DMG styling
 brew install create-dmg
 ```
 
 **DMG Features**:
-- Unified script interface - one script for all packaging needs
+- `bundle.sh --dmg` for one-step local packaging, plus `bundle-dmg.sh` for release pipelines that already assembled the `.app`
 - Custom window size and icon layout
 - Applications symlink for drag-and-drop installation
-- Default background image (auto-generated)
+- Bundled default background image
 - Optional custom background (`resources/macos/dmg-background.png`)
 - Optional license display (`LICENSE`)
 - Code signing support (with `CODESIGN_IDENTITY`)
@@ -129,6 +132,8 @@ brew install create-dmg
 **Notes**:
 
 - If `CODESIGN_IDENTITY` is unset, scripts fall back to ad-hoc signing (`-`) for local testing.
+- `bundle-dmg.sh --no-sign` skips only the outer DMG signature. It does not remove the signature from an existing `.app`.
+- Packaging scripts reject unknown options and options with missing values instead of silently ignoring them.
 - Before using an Apple Developer certificate, verify that macOS recognizes it as a valid signing identity:
 
 ```bash
@@ -171,7 +176,8 @@ High-level module boundaries:
 
 - `application/` — Action-Reducer-Effect pipeline and selectors
 - `models/` — core data types and persisted settings (GPUI-free)
-- `runtime/` — shared foreground state, effect execution, settings-window orchestration
+- `runtime/` — shared foreground state, effect execution, and context capabilities
+- `bootstrap/` — app composition root and concrete shell orchestration
 - `ui/` — GPUI views and widgets
 - `refresh/` — background scheduling and refresh execution
 - `providers/` — built-in/custom providers and `ProviderManager`

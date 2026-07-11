@@ -46,7 +46,8 @@ custom/
 - **DIP**: CustomProvider 依赖 descriptor / plan 的窄接口，不直接依赖 availability / fetch / extractor 的执行细节
 - **Identity over filename**: 自定义 provider 的真实身份来自 YAML `id`，不是文件名；编辑/删除等流程必须通过 `locator.rs` 按 `id` 定位真实文件
 - **Single façade**: runtime / UI 只允许依赖 `api.rs`，不要直接碰 `generator.rs` / `locator.rs` / `schema.rs`
-- **Per-type lifecycle vs file ops**: `newapi_lifecycle.rs` / `script_provider_lifecycle.rs` 分别持有各自 provider 类型、身份和用户可见语义；`file_ops.rs` 只处理文件事务。保存 NewAPI YAML 和脚本 provider 双文件时都使用同目录临时文件 + 备份/替换，失败后尽量恢复旧文件或清理已创建的新文件。
+- **Per-type lifecycle vs file ops**: `newapi_lifecycle.rs` / `script_provider_lifecycle.rs` 分别持有各自 provider 类型、身份和用户可见语义；`file_ops.rs` 只处理文件事务。保存 NewAPI YAML 和脚本 provider 双文件时都使用已同步的私密同目录临时文件 + 备份/替换，Unix 上最终权限为 `0600`；失败后恢复旧文件或清理已创建的新文件，旧文件在进入备份窗口前也会收紧权限。
+- **Fail-fast HTTP headers**: loader 使用 HTTP 库自身的 name/value 规则校验自定义 header，并校验 `header_env` 的静态 header 名称；非法配置不会进入执行计划。
 - **Enforced information hiding**: `generator.rs` / `locator.rs` / `schema.rs` 的模块可见性限制在 `providers::custom` 内部，不只是调用约定
 
 ## 支持的数据获取方式
@@ -72,7 +73,7 @@ YAML 顶层固定使用 `schema_version: 2` 和 `plan.steps`。
 | `first_success` | 按顺序执行 step，首个成功结果作为刷新结果 |
 | `merge` | 执行多个 step，合并成功 step 的 quotas；`required: false` 的失败不阻断刷新 |
 
-旧版顶层 `availability/source/parser/preprocess` 不再是运行时兼容路径；一次性迁移脚本为 `scripts/migrate_custom_provider_yaml.py`。
+旧版顶层 `availability/source/parser/preprocess` 不再是运行时兼容路径；一次性迁移脚本为 `scripts/migrate_custom_provider_yaml.py`。迁移器会整批预检并拒绝未知/重复顶层字段或 legacy/v2 混合结构，避免猜测性迁移。
 
 ## 支持的认证方式
 

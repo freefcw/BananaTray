@@ -33,6 +33,8 @@
 - 当前运行时只支持 `schema_version: 2`。
 - 所有 step 都是 `source.type: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
 - 设置页 NewAPI 与自定义脚本向导都会生成普通 YAML；应用内保存 / 删除会显式触发 reload。
+- BananaTray 生成的自定义 provider YAML 与脚本使用私密临时文件替换，Unix 上权限为 `0600`；脚本 + YAML 双文件保存失败时会回滚旧文件。
+- HTTP `headers` 在 YAML 加载阶段校验 name/value，非法请求头不会延迟到 refresh 时静默失败。
 - 手工编辑 YAML 后通常需重启应用。
 
 ## Stable Provider Contract

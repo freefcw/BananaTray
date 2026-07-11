@@ -76,7 +76,7 @@ cargo test --lib --no-default-features
 # 快速 Lint（无 GPUI 的 lib 层，匹配 PR CI 门禁）
 cargo clippy --lib --no-default-features -- -D warnings
 
-# 完整应用 Lint（匹配 App CI 手动/定时门禁）
+# 完整应用 Lint（匹配 App CI 门禁）
 cargo clippy --lib -- -D warnings
 
 # 格式化
@@ -88,7 +88,7 @@ cargo fmt
 - 默认构建启用 `app` 功能，是 `cargo run` / `cargo build` 支持的应用程序构建路径。
 - `--no-default-features` **不是**受支持的应用程序构建模式。仅保留用于无 GPUI 的 `lib` 检查/测试。
 - `bananatray` 二进制目标明确需要 `app` 功能。
-- CI 对 PR 和分支推送使用快速 lib clippy 和无 GPUI 测试作为门禁；App CI 在手动触发和定时检查中运行完整 app clippy、标准 app-feature 测试和 app 编译检查。
+- CI 对 PR 和分支推送使用快速 lib clippy 和无 GPUI 测试作为门禁；App CI 还会针对 Rust、依赖和主题相关 PR，以及手动触发和每日定时任务，运行完整 app clippy、标准 app-feature 测试和 app 编译检查。
 
 ## macOS Bundle 与 DMG
 
@@ -112,15 +112,18 @@ bash scripts/bundle.sh --dmg
 # 使用现有 .app 创建 DMG
 bash scripts/bundle.sh --dmg --skip-build
 
+# 使用现有 .app 创建 DMG，但不签名 DMG 文件本身
+bash scripts/bundle-dmg.sh --skip-build --no-sign
+
 # 安装 create-dmg 以获得更好的 DMG 样式
 brew install create-dmg
 ```
 
 **DMG 特性**：
-- 统一脚本接口 — 一个脚本满足所有打包需求
+- `bundle.sh --dmg` 提供本地一步打包；已组装 `.app` 的发布流程可直接调用 `bundle-dmg.sh`
 - 自定义窗口大小和图标布局
 - Applications 符号链接，支持拖拽安装
-- 默认背景图片（自动生成）
+- 内置默认背景图片
 - 可选自定义背景（`resources/macos/dmg-background.png`）
 - 可选许可证显示（`LICENSE`）
 - 代码签名支持（使用 `CODESIGN_IDENTITY`）
@@ -129,6 +132,8 @@ brew install create-dmg
 **注意事项**：
 
 - 如果未设置 `CODESIGN_IDENTITY`，脚本会回退到临时签名（`-`）用于本地测试。
+- `bundle-dmg.sh --no-sign` 只跳过外层 DMG 签名，不会移除现有 `.app` 的签名。
+- 打包脚本会拒绝未知参数和缺少值的参数，不再静默忽略。
 - 在使用 Apple Developer 证书之前，请确认 macOS 将其识别为有效的签名身份：
 
 ```bash
@@ -171,7 +176,8 @@ git push origin v0.1.0
 
 - `application/` — Action-Reducer-Effect 管道及选择器
 - `models/` — 核心数据类型和持久化设置（无 GPUI 依赖）
-- `runtime/` — 共享前台状态、Effect 执行、设置窗口编排
+- `runtime/` — 共享前台状态、Effect 执行和上下文能力
+- `bootstrap/` — 应用组合根和具体 shell 编排
 - `ui/` — GPUI 视图和组件
 - `refresh/` — 后台调度和刷新执行
 - `providers/` — 内置/自定义提供商和 `ProviderManager`

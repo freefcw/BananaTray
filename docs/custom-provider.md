@@ -24,6 +24,8 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 - macOS: `~/Library/Application Support/BananaTray/scripts/`
 - Linux: `$XDG_CONFIG_HOME/bananatray/scripts/`
 
+设置页生成或更新的 NewAPI YAML、脚本 YAML 与脚本源码可能包含凭证。BananaTray 会先写入同目录私密临时文件并同步，再替换目标；Unix 上最终文件权限固定为 `0600`。脚本向导保存脚本和 YAML 时保持双文件事务语义，任一替换失败都会恢复旧文件或清理本次新建文件。
+
 ## 快速开始
 
 1. 选一个最接近的示例文件。
@@ -227,6 +229,13 @@ source:
 - `method` 支持 `get` / `post`，默认是 `get`。
 - `timeout_ms` 可选，不配置时使用全局默认超时。
 - `post` 当前发送 JSON body。
+- `headers` 可配置额外请求头；加载 YAML 时会按 HTTP 规范校验 header name/value，非法名称或包含 CR/LF 等非法字节的值会让该 provider 拒绝加载。
+
+```yaml
+headers:
+  - name: "X-Account-Id"
+    value: "${MY_ACCOUNT_ID}"
+```
 
 ### 2. `cli`
 
@@ -383,6 +392,10 @@ python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/B
 - 顶层 `source` / `parser` 移到 `plan.steps[0]`。
 - 顶层 `availability` 移到同一个 step。
 - `http_get` / `http_post` 转成 `source.type: http` + `method: get/post`。
+- 只转换块式 `source` 映射的直接 `type` 字段；块标量或嵌套内容中的同名文本保持原样。
+- 已有 `schema_version` 会原位更新为 `2`，不会再生成重复键。
+
+迁移器采用 fail-closed：开始写入前会预检本次输入的全部文件。发现未知/重复顶层字段、缺少 `id`/`metadata`/`source`/非空 `plan.steps` 等必要结构、非 placeholder legacy source 缺少 `parser`、已有 `plan` 又混入旧字段、不受支持的 `schema_version`、无法唯一识别或可靠转换 `source.type`，或已有 `.bak` 可能被覆盖时，整批退出且不修改任何文件。写入使用同目录临时文件原子替换，并保留原文件权限；默认备份也保留原文件元数据。
 
 ## 当前会做的校验
 
@@ -395,6 +408,7 @@ python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/B
 - step `name` 不能为空
 - `source.command` / `source.url` 不能为空
 - HTTP POST 必须有 `body`
+- 自定义 HTTP header name/value 必须符合 HTTP 语法；`header_env.header` 的名称也会在加载时校验
 - 非 `placeholder` source 必须配置 `parser`
 - `placeholder.reason` 不能为空
 - `parser.quotas` 不能为空

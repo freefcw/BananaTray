@@ -33,7 +33,7 @@ into lower-level modules just to shrink this package.
 
 1. load settings and initialize UI/tray shell
 2. start refresh/script-test channels and worker threads
-3. construct `TrayController` / `AppState`
+3. construct the shared `AppState`, then inject it into `TrayController`
 4. register the app shutdown hook for owned runtime resources
 5. start Linux D-Bus service when applicable
 6. start foreground event pumps
@@ -48,6 +48,6 @@ registration internals, channel bridge loops, or settings window lifecycle worka
 - `settings_window.rs`: 10 ms delayed settings open after popup close, plus the `+1px` resize nudge
   after creating the settings window.
 - `ui_bootstrap.rs`: macOS `set_tray_panel_mode(true)` and idle GPU cache trim observer registration.
-- `event_sources/shutdown.rs`: synchronous settings-writer join before GPUI completes a normal app exit.
+- `event_sources/shutdown.rs`: synchronous settings-writer join followed by a final launch-at-login worker barrier before GPUI completes a normal app exit.
 - `event_sources/tray.rs`: Linux tray menu fallback for tray hosts that do not consistently forward click
   activation events.
