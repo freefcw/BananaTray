@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 init_project_vars
-parse_args "$@"
+parse_args "skip-build dmg" "$@"
 ensure_build
 
 APP_DIR="$BUNDLE_DIR/BananaTray.app"
@@ -124,9 +124,9 @@ echo "   │       └── src/icons/ ($(ls "$RESOURCES_DIR/src/icons/" | wc -
 # ------------------------------------------------------------------
 # 4. DMG 创建（可选）
 # ------------------------------------------------------------------
-if [[ "$*" == *"--dmg"* ]]; then
+if [ "$CREATE_DMG" = true ]; then
     echo ""
-    echo "� 创建 DMG..."
+    echo "💿 创建 DMG..."
 
     # 检查依赖
     if ! command -v create-dmg >/dev/null 2>&1 && ! command -v hdiutil >/dev/null 2>&1; then
@@ -199,8 +199,8 @@ if [[ "$*" == *"--dmg"* ]]; then
 fi
 
 echo ""
-echo "�� 运行: open \"$APP_DIR\""
-if [[ "$*" != *"--dmg"* ]]; then
+echo "🚀 运行: open \"$APP_DIR\""
+if [ "$CREATE_DMG" = false ]; then
     echo ""
     echo "💿 创建 DMG: bash scripts/bundle.sh --dmg"
 fi

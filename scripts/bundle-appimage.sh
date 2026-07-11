@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 init_project_vars
-parse_args "$@"
+parse_args "skip-build" "$@"
 ensure_build
 
 APP_DISPLAY_NAME="BananaTray"

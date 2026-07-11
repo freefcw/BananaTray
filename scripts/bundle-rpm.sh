@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 init_project_vars
-parse_args "$@"
+parse_args "skip-build arch" "$@"
 
 # RPM 使用的架构名与 deb 不同
 RPM_ARCH="${ARCH}"

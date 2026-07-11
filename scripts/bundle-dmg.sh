@@ -4,8 +4,8 @@
 #
 # 使用方法:
 #   bash scripts/bundle-dmg.sh              # 默认 release 构建 + DMG
-#   bash scripts/bundle-dmg.sh --skip-build  # 跳过编译（使用已有 .app）
-#   bash scripts/bundle-dmg.sh --no-sign     # 跳过代码签名
+#   bash scripts/bundle-dmg.sh --skip-build  # 使用已有 .app（缺失时从已有二进制组装）
+#   bash scripts/bundle-dmg.sh --no-sign     # 跳过外层 DMG 签名
 #
 # 依赖:
 #   - create-dmg (推荐): brew install create-dmg
@@ -15,8 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 init_project_vars
-parse_args "$@"
-ensure_build
+parse_args "skip-build no-sign" "$@"
 
 APP_DIR="$BUNDLE_DIR/BananaTray.app"
 DMG_DIR="$BUNDLE_DIR/dmg"
@@ -24,11 +23,14 @@ DMG_NAME="$APP_NAME"
 DMG_PATH="$BUNDLE_DIR/$DMG_NAME.dmg"
 
 # ------------------------------------------------------------------
-# 1. 确保 .app 已构建
+# 1. 确保 .app 与构建选项一致
 # ------------------------------------------------------------------
-if [ ! -d "$APP_DIR" ]; then
+if [ "$SKIP_BUILD" = false ]; then
+    echo "📦 正在构建最新的 .app bundle..."
+    "$SCRIPT_DIR/bundle.sh"
+elif [ ! -d "$APP_DIR" ]; then
     echo "📦 未找到 .app bundle，正在构建..."
-    "$SCRIPT_DIR/bundle.sh" "$@"
+    "$SCRIPT_DIR/bundle.sh" --skip-build
 fi
 
 if [ ! -d "$APP_DIR" ]; then
@@ -69,6 +71,7 @@ echo "✅ DMG 内容准备完成"
 # 3. 创建 DMG
 # ------------------------------------------------------------------
 echo "💿 创建 DMG..."
+rm -f "$DMG_PATH"
 
 # 检查是否有 create-dmg
 if command -v create-dmg >/dev/null 2>&1; then
@@ -120,6 +123,7 @@ elif command -v hdiutil >/dev/null 2>&1; then
 
     # 创建临时 DMG
     TEMP_DMG="$BUNDLE_DIR/temp.dmg"
+    rm -f "$TEMP_DMG"
     hdiutil create -srcfolder "$DMG_DIR" -volname "$APP_NAME" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -size 200m "$TEMP_DMG"
 
     # 挂载临时 DMG
@@ -167,10 +171,12 @@ echo "✅ DMG 创建完成: $DMG_PATH"
 # ------------------------------------------------------------------
 # 4. 代码签名（可选）
 # ------------------------------------------------------------------
-if [ "$1" != "--no-sign" ] && [ "${CODESIGN_IDENTITY:-}" != "" ]; then
+if [ "$SIGN_DMG" = true ] && [ -n "${CODESIGN_IDENTITY:-}" ]; then
     echo "🔏 为 DMG 签名..."
     codesign --force --sign "$CODESIGN_IDENTITY" "$DMG_PATH"
     echo "✅ DMG 签名完成"
+elif [ "$SIGN_DMG" = false ]; then
+    echo "⏭️  已按 --no-sign 跳过 DMG 签名"
 fi
 
 echo ""
@@ -179,12 +185,21 @@ echo "   文件: $DMG_PATH"
 echo "   大小: $(du -h "$DMG_PATH" | cut -f1)"
 echo ""
 
-# 验证 DMG
-if hdiutil attach -quiet -readonly -noautoopen "$DMG_PATH" 2>/dev/null; then
-    echo "✅ DMG 验证通过"
-    hdiutil detach "$(hdiutil info | grep "$DMG_NAME" | grep '/dev/disk' | head -1 | awk '{print $1}')" >/dev/null 2>&1
-else
-    echo "⚠️  DMG 验证失败，但文件已生成"
+# 验证 DMG 可挂载，并卸载本次验证实际挂载的设备。
+if ! VERIFY_OUTPUT=$(hdiutil attach -readonly -noautoopen "$DMG_PATH" 2>/dev/null); then
+    echo "❌ DMG 验证失败: 无法挂载 $DMG_PATH" >&2
+    exit 1
 fi
+
+VERIFY_DEVICE=$(printf '%s\n' "$VERIFY_OUTPUT" | awk '$1 ~ /^\/dev\// { print $1; exit }')
+if [ -z "$VERIFY_DEVICE" ]; then
+    echo "❌ DMG 验证失败: hdiutil 未返回挂载设备" >&2
+    exit 1
+fi
+if ! hdiutil detach "$VERIFY_DEVICE" >/dev/null 2>&1; then
+    echo "❌ DMG 验证失败: 无法卸载 $VERIFY_DEVICE" >&2
+    exit 1
+fi
+echo "✅ DMG 验证通过"
 
 echo "🚀 安装: open \"$DMG_PATH\""

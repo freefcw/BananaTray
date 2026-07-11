@@ -6,7 +6,7 @@
 #
 # 提供:
 #   - init_project_vars        初始化项目路径 + 版本号（RELEASE_TAG 优先，回退 Cargo.toml）
-#   - parse_args               解析公共参数 (--skip-build, --arch)
+#   - parse_args               按调用方声明解析打包参数
 #   - ensure_build             编译 release 并校验二进制存在
 #   - copy_runtime_resources   复制 SVG/PNG 运行时资源到目标目录
 #   - install_icons            安装多尺寸 hicolor 图标
@@ -80,25 +80,73 @@ init_project_vars() {
     fi
 }
 
-# 解析公共命令行参数
-# 设置: SKIP_BUILD, ARCH
-# 用法: parse_args "$@"
+# 解析打包命令行参数
+# 设置: SKIP_BUILD, ARCH, CREATE_DMG, SIGN_DMG
+# 用法: parse_args "skip-build arch" "$@"
 SKIP_BUILD=false
 ARCH="amd64"
+CREATE_DMG=false
+SIGN_DMG=true
+
+argument_is_allowed() {
+    local allowed_args="$1"
+    local argument="$2"
+
+    [[ " $allowed_args " == *" $argument "* ]]
+}
+
+reject_unsupported_argument() {
+    local argument="$1"
+
+    echo "❌ 不支持的参数: $argument" >&2
+    return 2
+}
 
 parse_args() {
+    local allowed_args="${1:-}"
+    shift || true
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --skip-build)
+                if ! argument_is_allowed "$allowed_args" "skip-build"; then
+                    reject_unsupported_argument "$1"
+                    return 2
+                fi
                 SKIP_BUILD=true
                 shift
                 ;;
             --arch)
-                ARCH="${2:-amd64}"
+                if ! argument_is_allowed "$allowed_args" "arch"; then
+                    reject_unsupported_argument "$1"
+                    return 2
+                fi
+                if [[ $# -lt 2 || "$2" == -* ]]; then
+                    echo "❌ 参数 --arch 需要一个架构值" >&2
+                    return 2
+                fi
+                ARCH="$2"
                 shift 2
                 ;;
-            *)
+            --dmg)
+                if ! argument_is_allowed "$allowed_args" "dmg"; then
+                    reject_unsupported_argument "$1"
+                    return 2
+                fi
+                CREATE_DMG=true
                 shift
+                ;;
+            --no-sign)
+                if ! argument_is_allowed "$allowed_args" "no-sign"; then
+                    reject_unsupported_argument "$1"
+                    return 2
+                fi
+                SIGN_DMG=false
+                shift
+                ;;
+            *)
+                reject_unsupported_argument "$1"
+                return 2
                 ;;
         esac
     done
@@ -125,12 +173,18 @@ ensure_build() {
 #   target_dir 下会创建 src/icons/ 和 src/tray/tray_icon.png
 copy_runtime_resources() {
     local target_dir="$1"
+
+    # app_logo.png 是设置窗口运行时必需资源；缺失时不要留下部分组装的资源树。
+    if [ ! -f "$PROJECT_DIR/src/icons/app_logo.png" ]; then
+        echo "❌ 未找到必需资源: $PROJECT_DIR/src/icons/app_logo.png" >&2
+        return 1
+    fi
+
     mkdir -p "$target_dir/src/icons"
     mkdir -p "$target_dir/src/tray"
+    cp "$PROJECT_DIR"/src/icons/*.png "$target_dir/src/icons/"
     cp "$PROJECT_DIR/src/tray/tray_icon.png" "$target_dir/src/tray/tray_icon.png"
     cp "$PROJECT_DIR"/src/icons/*.svg "$target_dir/src/icons/"
-    # PNG 图标（app_logo 等）供 GPUI img() 加载
-    cp "$PROJECT_DIR"/src/icons/*.png "$target_dir/src/icons/" 2>/dev/null || true
 }
 
 # 安装多尺寸应用图标到 hicolor 图标主题目录
