@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use super::provider::CustomProvider;
 use super::schema::{
-    CustomProviderDef, HttpMethodDef, ParserDef, PlanStepDef, RegexQuotaRule, SourceDef,
+    AuthDef, CustomProviderDef, HeaderDef, HttpMethodDef, ParserDef, PlanStepDef, RegexQuotaRule,
+    SourceDef,
 };
 
 /// 自定义 Provider YAML 文件的搜索目录
@@ -162,7 +163,12 @@ fn validate_source(source: &SourceDef) -> Result<()> {
             }
         }
         SourceDef::Http {
-            method, url, body, ..
+            method,
+            url,
+            auth,
+            headers,
+            body,
+            ..
         } => {
             if url.is_empty() {
                 anyhow::bail!("'source.url' cannot be empty");
@@ -170,6 +176,8 @@ fn validate_source(source: &SourceDef) -> Result<()> {
             if *method == HttpMethodDef::Post && body.as_ref().is_none_or(|body| body.is_empty()) {
                 anyhow::bail!("'source.body' cannot be empty for HTTP POST");
             }
+            validate_auth_header(auth)?;
+            validate_headers(headers)?;
         }
         SourceDef::Placeholder { reason } => {
             if reason.is_empty() {
@@ -178,6 +186,29 @@ fn validate_source(source: &SourceDef) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn validate_auth_header(auth: &Option<AuthDef>) -> Result<()> {
+    if let Some(AuthDef::HeaderEnv { header, .. }) = auth {
+        validate_header_name(header, "source.auth.header")?;
+    }
+    Ok(())
+}
+
+fn validate_headers(headers: &[HeaderDef]) -> Result<()> {
+    for header in headers {
+        validate_header_name(&header.name, "source.headers[].name")?;
+        ureq::http::HeaderValue::try_from(header.value.as_str()).map_err(|err| {
+            anyhow::anyhow!("invalid header value for '{}': {}", header.name, err)
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_header_name(name: &str, field: &str) -> Result<()> {
+    ureq::http::HeaderName::try_from(name)
+        .map(|_| ())
+        .map_err(|err| anyhow::anyhow!("invalid header name '{}' in {}: {}", name, field, err))
 }
 
 fn validate_parser(parser: &Option<ParserDef>) -> Result<()> {
@@ -412,6 +443,87 @@ mod tests {
         };
         let err = validate(&def).unwrap_err();
         assert!(err.to_string().contains("source.body"));
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_custom_headers() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Get,
+            url: "https://example.com/api".to_string(),
+            timeout_ms: None,
+            auth: None,
+            headers: vec![HeaderDef {
+                name: "X-Account-Id".to_string(),
+                value: "tenant:primary ${CUSTOM_SUFFIX}".to_string(),
+            }],
+            body: None,
+        };
+
+        assert!(validate(&def).is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_custom_header_name() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Get,
+            url: "https://example.com/api".to_string(),
+            timeout_ms: None,
+            auth: None,
+            headers: vec![HeaderDef {
+                name: "X Account".to_string(),
+                value: "primary".to_string(),
+            }],
+            body: None,
+        };
+
+        let err = validate(&def).unwrap_err();
+
+        assert!(err.to_string().contains("header name"));
+        assert!(err.to_string().contains("X Account"));
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_auth_header_name() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Get,
+            url: "https://example.com/api".to_string(),
+            timeout_ms: None,
+            auth: Some(AuthDef::HeaderEnv {
+                header: "X Account".to_string(),
+                env_var: "CUSTOM_TOKEN".to_string(),
+            }),
+            headers: vec![],
+            body: None,
+        };
+
+        let err = validate(&def).unwrap_err();
+
+        assert!(err.to_string().contains("source.auth.header"));
+        assert!(err.to_string().contains("X Account"));
+    }
+
+    #[test]
+    fn test_validate_rejects_custom_header_value_with_newline() {
+        let mut def = make_minimal_def();
+        step_mut(&mut def).source = SourceDef::Http {
+            method: HttpMethodDef::Get,
+            url: "https://example.com/api".to_string(),
+            timeout_ms: None,
+            auth: None,
+            headers: vec![HeaderDef {
+                name: "X-Account".to_string(),
+                value: "primary\r\nX-Injected: true".to_string(),
+            }],
+            body: None,
+        };
+
+        let err = validate(&def).unwrap_err();
+
+        assert!(err.to_string().contains("header value"));
+        assert!(err.to_string().contains("X-Account"));
     }
 
     #[test]
