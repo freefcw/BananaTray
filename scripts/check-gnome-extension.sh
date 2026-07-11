@@ -1,7 +1,73 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+file_contains_pattern() {
+  local file="$1"
+  local pattern="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -q -- "$pattern" "$file"
+  else
+    grep -Eq -- "$pattern" "$file"
+  fi
+}
+
+require_file_pattern() {
+  local root_dir="$1"
+  local relative_path="$2"
+  local pattern="$3"
+  local contract="$4"
+
+  if ! file_contains_pattern "$root_dir/$relative_path" "$pattern"; then
+    echo "error: $relative_path must contain $contract" >&2
+    return 1
+  fi
+}
+
+check_gnome_packaging_contracts() {
+  local root_dir="${1:?project root is required}"
+
+  require_file_pattern "$root_dir" \
+    "gnome-shell-extension/quotaClient.js" \
+    'schema_version' \
+    "the schema_version contract" || return 1
+  require_file_pattern "$root_dir" \
+    "scripts/gnome-extension-mock-daemon.js" \
+    'schema_version' \
+    "the schema_version contract" || return 1
+  require_file_pattern "$root_dir" \
+    "src/application/selectors/dbus_dto.rs" \
+    'schema_version' \
+    "the schema_version contract" || return 1
+
+  require_file_pattern "$root_dir" \
+    "resources/linux/com.bananatray.Daemon.service" \
+    '@BANANATRAY_EXEC@' \
+    "the @BANANATRAY_EXEC@ install-time placeholder" || return 1
+  require_file_pattern "$root_dir" \
+    "resources/linux/bananatray.service" \
+    '@BANANATRAY_EXEC@' \
+    "the @BANANATRAY_EXEC@ install-time placeholder" || return 1
+
+  require_file_pattern "$root_dir" \
+    "scripts/bundle-deb.sh" \
+    'systemctl[[:space:]]+--user[[:space:]]+daemon-reload' \
+    "systemctl --user daemon-reload" || return 1
+  require_file_pattern "$root_dir" \
+    "scripts/bundle-rpm.sh" \
+    'systemctl[[:space:]]+--user[[:space:]]+daemon-reload' \
+    "systemctl --user daemon-reload" || return 1
+}
+
+# 允许负例测试复用上面的逐文件契约检查，而不执行完整 GNOME 门禁。
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+
+cd "$PROJECT_DIR"
 
 EXT_DIR="gnome-shell-extension"
 required_files=(
@@ -107,21 +173,15 @@ if command -v rg >/dev/null 2>&1; then
   entry_import_matches=$(rg -n "from './panelButton\\.js';" "$EXT_DIR/extension.js" || true)
   i18n_matches=$(rg -n '"gettext-domain": "bananatray"' "$EXT_DIR/metadata.json" || true)
   client_import_matches=$(rg -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
-  schema_matches=$(rg -n 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
   activation_matches=$(rg -n 'StartServiceByName' "$EXT_DIR/quotaClient.js" || true)
-  activation_template_matches=$(rg -n '@BANANATRAY_EXEC@' resources/linux/com.bananatray.Daemon.service resources/linux/bananatray.service || true)
   appimage_removal_matches=$(rg -nF 'remove_activation_files "$APPDIR/usr"' scripts/bundle-appimage.sh || true)
-  daemon_reload_matches=$(rg -n 'systemctl --user daemon-reload' scripts/bundle-deb.sh scripts/bundle-rpm.sh || true)
 else
   sync_matches=$(grep -RInE 'RemoteSync|GetAllQuotasSync|RefreshAllSync|OpenSettingsSync' "$EXT_DIR" scripts/gnome-extension-mock-daemon.js || true)
   entry_import_matches=$(grep -n "from './panelButton\\.js';" "$EXT_DIR/extension.js" || true)
   i18n_matches=$(grep -n '"gettext-domain": "bananatray"' "$EXT_DIR/metadata.json" || true)
   client_import_matches=$(grep -n "from './quotaClient\\.js';" "$EXT_DIR/panelButton.js" || true)
-  schema_matches=$(grep -RIn 'schema_version' "$EXT_DIR/quotaClient.js" scripts/gnome-extension-mock-daemon.js src/application/selectors/dbus_dto.rs || true)
   activation_matches=$(grep -n 'StartServiceByName' "$EXT_DIR/quotaClient.js" || true)
-  activation_template_matches=$(grep -RIn '@BANANATRAY_EXEC@' resources/linux/com.bananatray.Daemon.service resources/linux/bananatray.service || true)
   appimage_removal_matches=$(grep -nF 'remove_activation_files "$APPDIR/usr"' scripts/bundle-appimage.sh || true)
-  daemon_reload_matches=$(grep -RIn 'systemctl --user daemon-reload' scripts/bundle-deb.sh scripts/bundle-rpm.sh || true)
 fi
 
 if [[ -n "$sync_matches" ]]; then
@@ -146,18 +206,8 @@ if [[ -z "$client_import_matches" ]]; then
   exit 1
 fi
 
-if [[ -z "$schema_matches" ]]; then
-  echo "error: schema_version must be present in Rust DTO, quotaClient.js, and mock daemon" >&2
-  exit 1
-fi
-
 if [[ -z "$activation_matches" ]]; then
   echo "error: quotaClient.js must request D-Bus activation with StartServiceByName" >&2
-  exit 1
-fi
-
-if [[ -z "$activation_template_matches" ]]; then
-  echo "error: activation templates must contain @BANANATRAY_EXEC@ for install-time path substitution" >&2
   exit 1
 fi
 
@@ -166,9 +216,6 @@ if [[ -z "$appimage_removal_matches" ]]; then
   exit 1
 fi
 
-if [[ -z "$daemon_reload_matches" ]]; then
-  echo "error: deb/rpm packaging scripts must run systemctl --user daemon-reload after systemd user unit changes" >&2
-  exit 1
-fi
+check_gnome_packaging_contracts "$PROJECT_DIR"
 
 echo "GNOME Shell Extension check passed"
