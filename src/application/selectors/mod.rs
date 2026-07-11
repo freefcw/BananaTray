@@ -286,7 +286,7 @@ pub(crate) use format::format_quota_label;
 #[allow(unused_imports)] // app feature 下 ui/widgets 使用
 pub(crate) use format::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_card_mode_label,
+    format_quota_card_mode_label, format_quota_status_label,
 };
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};

@@ -8,7 +8,7 @@ use super::QuotaDisplayViewState;
 use crate::models::{
     ConnectionStatus, FailureAdvice, FailureReason, ProviderCapability, ProviderFailure,
     ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec,
-    QuotaType, UpdateStatus,
+    QuotaType, StatusLevel, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -193,6 +193,19 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
     }
 }
 
+/// 将用量严重程度转换为稳定、可本地化的短标签。
+///
+/// `StatusLevel` 描述的是配额余量，不是连接状态；因此 Red 必须显示为余量偏低，
+/// 不能复用 Offline/Out 等连接或耗尽语义。
+#[allow(dead_code)] // 仅 app feature 下的托盘和设置 UI 调用
+pub fn format_quota_status_label(level: StatusLevel) -> String {
+    match level {
+        StatusLevel::Green => t!("quota.status.ok").to_string(),
+        StatusLevel::Yellow => t!("quota.status.warn").to_string(),
+        StatusLevel::Red => t!("quota.status.low").to_string(),
+    }
+}
+
 /// 格式化配额详情（卡片第四行）。
 pub fn format_quota_detail(quota: &QuotaInfo) -> String {
     match &quota.detail_spec {
@@ -349,7 +362,8 @@ mod tests {
     };
     use crate::models::{
         ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderKind,
-        QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec, QuotaType, UpdateStatus,
+        QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec, QuotaType, StatusLevel,
+        UpdateStatus,
     };
 
     // ── display_source_label ─────────────────────────────────
@@ -461,6 +475,22 @@ mod tests {
     }
 
     // ── quota label/detail ─────────────────────────────────
+
+    #[test]
+    fn quota_status_labels_describe_usage_severity_not_connectivity() {
+        let _locale_guard = setup_locale();
+        assert_eq!(format_quota_status_label(StatusLevel::Green), "OK");
+        assert_eq!(format_quota_status_label(StatusLevel::Yellow), "WARN");
+        assert_eq!(format_quota_status_label(StatusLevel::Red), "LOW");
+    }
+
+    #[test]
+    fn quota_status_labels_are_localized() {
+        let _locale_guard = crate::i18n::test_locale_guard("zh-CN");
+        assert_eq!(format_quota_status_label(StatusLevel::Green), "充足");
+        assert_eq!(format_quota_status_label(StatusLevel::Yellow), "注意");
+        assert_eq!(format_quota_status_label(StatusLevel::Red), "偏低");
+    }
 
     #[test]
     fn format_quota_label_weekly_tier() {

@@ -8,6 +8,7 @@ use gpui::{
     FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
     ScrollHandle, StatefulInteractiveElement, StyleRefinement, Styled,
 };
+use rust_i18n::t;
 use std::time::Duration;
 
 /// Overview 导航图标路径（与 tray_settings.rs 保持一致）
@@ -181,7 +182,7 @@ impl AppView {
                 0,
                 TopNavItem {
                     icon_path: OVERVIEW_ICON.to_string(),
-                    label: "Overview".to_string(),
+                    label: t!("nav.overview").to_string(),
                     tab: NavTab::Overview,
                 },
             );

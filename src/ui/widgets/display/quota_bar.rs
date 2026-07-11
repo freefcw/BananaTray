@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::application::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_card_mode_label, QuotaDisplayViewState,
+    format_quota_card_mode_label, format_quota_status_label, QuotaDisplayViewState,
 };
 use crate::models::{QuotaDisplayMode, QuotaInfo, StatusLevel};
 use crate::theme::Theme;
@@ -12,15 +12,6 @@ use gpui::{
     AnimationExt, Div, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement,
     Stateful, StyleRefinement, Styled,
 };
-
-/// 状态徽章文本
-fn status_badge_label(level: StatusLevel) -> &'static str {
-    match level {
-        StatusLevel::Green => "HEALTHY",
-        StatusLevel::Yellow => "DEGRADED",
-        StatusLevel::Red => "OFFLINE",
-    }
-}
 
 /// 状态徽章颜色
 fn status_badge_color(level: StatusLevel, theme: &Theme) -> Hsla {
@@ -64,7 +55,7 @@ fn render_quota_card_frame(
 fn render_quota_header_row(
     quota_view: &QuotaDisplayViewState,
     badge_color: Hsla,
-    badge_label: &'static str,
+    badge_label: String,
     theme: &Theme,
 ) -> Div {
     div()
@@ -218,7 +209,7 @@ pub(crate) fn render_quota_bar(
     let q = &quota_view.quota;
     let status = q.status_level();
     let badge_color = status_badge_color(status, theme);
-    let badge_label = status_badge_label(status);
+    let badge_label = format_quota_status_label(status);
     let fill_color = bar_color(status, theme);
     let is_balance = q.is_balance_only();
     let display_text = format_quota_card_display_text(q, display_mode);

@@ -1,5 +1,6 @@
 use crate::application::{
-    overview_view_state, AppAction, OverviewItemStatus, OverviewItemViewState, OverviewQuotaItem,
+    format_quota_status_label, overview_view_state, AppAction, OverviewItemStatus,
+    OverviewItemViewState, OverviewQuotaItem,
 };
 use crate::models::{NavTab, PopupLayout, StatusLevel};
 use crate::runtime;
@@ -17,15 +18,6 @@ fn dot_color(level: StatusLevel, theme: &Theme) -> Hsla {
         StatusLevel::Green => theme.badge.healthy,
         StatusLevel::Yellow => theme.badge.degraded,
         StatusLevel::Red => theme.badge.offline,
-    }
-}
-
-/// 状态徽章文本（紧凑版，缩写）
-fn compact_badge_label(level: StatusLevel) -> &'static str {
-    match level {
-        StatusLevel::Green => "OK",
-        StatusLevel::Yellow => "LOW",
-        StatusLevel::Red => "OUT",
     }
 }
 
@@ -477,7 +469,7 @@ impl AppView {
             .font_weight(FontWeight::BOLD)
             .text_color(color)
             .text_align(TextAlign::Right)
-            .child(compact_badge_label(level))
+            .child(format_quota_status_label(level))
     }
 
     /// 固定宽度进度条

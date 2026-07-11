@@ -6,6 +6,12 @@ tray.menu.open: "打开 BananaTray"
 tray.menu.settings: "设置"
 tray.menu.quit: "退出"
 app.subtitle: "AI 用量监控"
+nav.overview: "总览"
+
+# 配额严重程度
+quota.status.ok: "充足"
+quota.status.warn: "注意"
+quota.status.low: "偏低"
 
 # ── 头部状态 ──────────────────────────────────────────────
 header.synced: "已同步"

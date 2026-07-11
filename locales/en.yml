@@ -6,6 +6,12 @@ tray.menu.open: "Open BananaTray"
 tray.menu.settings: "Settings"
 tray.menu.quit: "Quit"
 app.subtitle: "AI USAGE MONITOR"
+nav.overview: "Overview"
+
+# Quota severity
+quota.status.ok: "OK"
+quota.status.warn: "WARN"
+quota.status.low: "LOW"
 
 # ── Header status ─────────────────────────────────────────
 header.synced: "Synced"
