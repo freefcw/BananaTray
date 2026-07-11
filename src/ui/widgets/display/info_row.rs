@@ -9,6 +9,7 @@ use gpui::{
     div, px, Div, ElementId, FontWeight, Hsla, InteractiveElement, MouseButton, ParentElement,
     Stateful, Styled,
 };
+use log::warn;
 use rust_i18n::t;
 
 /// 渲染信息行（左标签 + 右值），支持可选链接
@@ -47,7 +48,9 @@ pub(crate) fn render_kv_info_row(
             .child(value_str)
             .child(div().text_size(px(10.0)).text_color(value_color).child("↗"))
             .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                open_url(&link_owned);
+                if let Err(err) = open_url(&link_owned) {
+                    warn!(target: "settings", "failed to open URL {}: {err:#}", link_owned);
+                }
             });
     } else {
         value_el = value_el.child(value_str);
@@ -117,7 +120,9 @@ pub(crate) fn render_path_info_cell(
         .hover(|s| s.opacity(0.75))
         .child(render_info_cell(label, path, theme.text.accent, theme))
         .on_mouse_down(MouseButton::Left, move |_, _, _| {
-            open_path_in_finder(&path_buf);
+            if let Err(err) = open_path_in_finder(&path_buf) {
+                warn!(target: "settings", "failed to open path {}: {err:#}", path_buf.display());
+            }
         });
 
     with_tooltip(id, &t!("debug.env.open_in_finder"), theme, row)

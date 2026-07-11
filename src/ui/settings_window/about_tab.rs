@@ -8,6 +8,7 @@ use gpui::{
     div, hsla, img, px, relative, svg, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
     ParentElement, Styled, TextAlign,
 };
+use log::warn;
 use rust_i18n::t;
 
 // ============================================================================
@@ -25,6 +26,12 @@ const GIT_HASH: &str = match option_env!("BANANATRAY_GIT_HASH") {
     Some(h) => h,
     None => "unknown",
 };
+
+fn open_external_url(url: &str) {
+    if let Err(err) = open_url(url) {
+        warn!(target: "settings", "failed to open URL {url}: {err:#}");
+    }
+}
 
 impl SettingsView {
     /// About Tab 入口
@@ -197,7 +204,7 @@ impl SettingsView {
                     .child(label.to_string()),
             )
             .on_mouse_down(MouseButton::Left, move |_, _, _| {
-                open_url(&url_owned);
+                open_external_url(&url_owned);
             })
     }
 
@@ -222,7 +229,7 @@ impl SettingsView {
                 true,
                 theme,
                 move |_, _, _| {
-                    open_url(&repo);
+                    open_external_url(&repo);
                 },
             )))
             // 上报问题：复制诊断信息到剪贴板 + 打开 GitHub Issue 页
@@ -240,7 +247,7 @@ impl SettingsView {
                         build_issue_report(&borrowed.session, &ctx)
                     };
                     let url = build_issue_url(&report);
-                    open_url(&url);
+                    open_external_url(&url);
                 },
             )))
     }

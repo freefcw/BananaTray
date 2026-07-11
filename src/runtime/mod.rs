@@ -120,7 +120,9 @@ fn dispatch_effects(
 pub(crate) trait ContextCapabilities {
     fn render(&mut self, state: &Rc<RefCell<AppState>>);
     fn open_url(&mut self, url: &str) {
-        crate::platform::system::open_url(url);
+        if let Err(err) = crate::platform::system::open_url(url) {
+            log::warn!(target: "app", "failed to open URL {url}: {err:#}");
+        }
     }
 }
 

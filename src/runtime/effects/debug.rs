@@ -14,18 +14,23 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: DebugEffect) -> Vec<App
         DebugEffect::OpenLogDirectory => {
             let log_path = state.borrow().log_path.clone();
             if let Some(path) = log_path {
-                crate::platform::system::open_path_in_finder(&path);
+                if let Err(err) = crate::platform::system::open_path_in_finder(&path) {
+                    warn!(target: "settings", "failed to open log directory: {err:#}");
+                }
             } else {
-                warn!(target: "runtime", "OpenLogDirectory: log_path not available");
+                warn!(target: "settings", "OpenLogDirectory: log_path not available");
             }
             Vec::new()
         }
         DebugEffect::CopyToClipboard(text) => {
-            crate::platform::system::copy_to_clipboard(&text);
+            match crate::platform::system::copy_to_clipboard(&text) {
+                Ok(()) => info!(target: "settings", "copied {} bytes to clipboard", text.len()),
+                Err(err) => warn!(target: "settings", "failed to copy to clipboard: {err:#}"),
+            }
             Vec::new()
         }
         DebugEffect::StartRefresh(kind) => {
-            info!(target: "runtime", "starting debug refresh for {:?}", kind);
+            info!(target: "settings", "starting debug refresh for {:?}", kind);
             // 保存当前日志级别到 state，供 RestoreLogLevel 使用。
             state.borrow_mut().session.debug_ui.prev_log_level = Some(log::max_level());
             LogCapture::global().clear();
@@ -38,7 +43,7 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: DebugEffect) -> Vec<App
             super::refresh::send_request(state, request)
         }
         DebugEffect::RestoreLogLevel(level) => {
-            info!(target: "runtime", "debug refresh complete, restoring log level to {:?}", level);
+            info!(target: "settings", "debug refresh complete, restoring log level to {:?}", level);
             LogCapture::global().disable();
             log::set_max_level(level);
             Vec::new()
