@@ -76,13 +76,13 @@ fn submit_newapi_produces_save_and_notification_effects() {
 
     let effects = reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Test Site".to_string(),
             base_url: "https://api.example.com".to_string(),
             cookie: "session=tok_123".to_string(),
             user_id: Some("42".to_string()),
             divisor: Some(1_000_000.0),
-        },
+        }),
     );
 
     // 状态：表单已关闭
@@ -284,13 +284,13 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
 
     let effects = reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "My Relay".to_string(),
             base_url: "https://relay.example.com".to_string(),
             cookie: "c=1".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
 
     let expected_id = ProviderId::Custom("relay-example-com:newapi".to_string());
@@ -336,13 +336,13 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
 
     reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Updated Name".to_string(),
             base_url: "https://old-site.com".to_string(), // URL 不变
             cookie: "c=new".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
 
     // 已存在的 enabled 状态不被覆盖，也不会重复加入 sidebar
@@ -369,13 +369,13 @@ fn submit_newapi_reenables_same_provider_after_create_rollback() {
 
     reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Retry Relay".to_string(),
             base_url: base_url.to_string(),
             cookie: "c=1".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
     assert!(session.settings.provider.is_enabled(&retry_id));
 
@@ -397,13 +397,13 @@ fn submit_newapi_reenables_same_provider_after_create_rollback() {
 
     reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Retry Relay".to_string(),
             base_url: base_url.to_string(),
             cookie: "c=2".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
 
     assert!(session.settings.provider.is_enabled(&retry_id));
@@ -493,13 +493,13 @@ fn submit_newapi_without_optional_fields_uses_defaults() {
 
     let effects = reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Minimal".to_string(),
             base_url: "https://minimal.io".to_string(),
             cookie: "session=abc".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
 
     assert!(has_effect(&effects, |e| {
@@ -592,13 +592,13 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
 
     let effects = reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Updated Name".to_string(),
             base_url: "https://old-site.com".to_string(),
             cookie: "new_cookie".to_string(),
             user_id: Some("99".to_string()),
             divisor: Some(1_000_000.0),
-        },
+        }),
     );
 
     // 状态：编辑模式已清除（modal 回到 Idle）
@@ -640,13 +640,13 @@ fn submit_newapi_in_edit_mode_keeps_original_base_url_identity() {
 
     let effects = reduce(
         &mut session,
-        AppAction::SubmitNewApi {
+        AppAction::SubmitNewApi(NewApiConfig {
             display_name: "Updated Name".to_string(),
             base_url: "https://changed-site.com".to_string(),
             cookie: "new_cookie".to_string(),
             user_id: None,
             divisor: None,
-        },
+        }),
     );
 
     assert!(session.settings.provider.is_enabled(&original_id));

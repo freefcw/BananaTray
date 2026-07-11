@@ -70,13 +70,7 @@ pub enum AppAction {
     /// 取消 NewAPI 添加（关闭表单）
     CancelAddNewApi,
     /// 提交 NewAPI 配置（生成 YAML + 保存 + 通知重启）
-    SubmitNewApi {
-        display_name: String,
-        base_url: String,
-        cookie: String,
-        user_id: Option<String>,
-        divisor: Option<f64>,
-    },
+    SubmitNewApi(crate::models::NewApiConfig),
     /// NewAPI 保存完成（由 runtime I/O 回传，reducer 统一处理状态和通知）
     NewApiSaveFinished {
         config: crate::models::NewApiConfig,

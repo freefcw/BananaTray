@@ -14,7 +14,7 @@ use super::shared::{
 };
 use crate::application::AppAction;
 use crate::application::FormIdentity;
-use crate::models::{parse_divisor_input, NewApiEditData};
+use crate::models::{parse_divisor_input, NewApiConfig, NewApiEditData};
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
@@ -188,7 +188,7 @@ impl SettingsView {
             }
         };
 
-        Some(AppAction::SubmitNewApi {
+        Some(AppAction::SubmitNewApi(NewApiConfig {
             display_name: name_val,
             base_url: url_val,
             cookie: cookie_val,
@@ -198,7 +198,7 @@ impl SettingsView {
                 Some(user_id_val)
             },
             divisor,
-        })
+        }))
     }
 
     /// 渲染取消 + 保存按钮

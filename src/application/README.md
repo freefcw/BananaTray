@@ -30,6 +30,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 ### `action.rs` — 动作定义
 
 - **`AppAction`** — 所有用户交互和系统事件的枚举（导航、设置变更、Provider 操作、调试等）
+  - `SubmitNewApi(NewApiConfig)` 以领域配置对象承载完整表单提交；新增 NewAPI 字段只需扩展 `NewApiConfig`，不再同步修改 action 字段列表
   - `SaveGlobalHotkey(String)` 将 General Tab 捕获到的候选热键提交给 runtime 做预检、重绑和持久化
   - `*Finished` action（如 `NewApiSaveFinished` / `ScriptProviderDeleteFinished`）承接 runtime I/O 结果，reducer 统一决定状态回滚、通知、render 和 reload
 - **`SettingChange`** — 设置变更子枚举

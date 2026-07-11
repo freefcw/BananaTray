@@ -23,11 +23,7 @@ pub(super) fn cancel_add_newapi(session: &mut AppSession, effects: &mut Vec<AppE
 
 pub(super) fn submit_newapi(
     session: &mut AppSession,
-    display_name: String,
-    base_url: String,
-    cookie: String,
-    user_id: Option<String>,
-    divisor: Option<f64>,
+    mut config: NewApiConfig,
     effects: &mut Vec<AppEffect>,
 ) {
     let (base_url, original_filename, is_editing) =
@@ -37,16 +33,9 @@ pub(super) fn submit_newapi(
                 Some(edit_data.original_filename.clone()),
                 true,
             ),
-            None => (base_url, None, false),
+            None => (config.base_url.clone(), None, false),
         };
-
-    let config = NewApiConfig {
-        display_name,
-        base_url: base_url.clone(),
-        cookie,
-        user_id,
-        divisor,
-    };
+    config.base_url = base_url.clone();
 
     // ── 预注册 Provider ID：确保热重载后 Provider 立即可见 ──
     // 编辑模式使用 EditingNewApi 中的原始 URL，Provider 身份不受 action payload 影响。

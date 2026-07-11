@@ -52,7 +52,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         action @ (AppAction::EnterAddNewApi
         | AppAction::CancelAddNewApi
-        | AppAction::SubmitNewApi { .. }
+        | AppAction::SubmitNewApi(_)
         | AppAction::NewApiSaveFinished { .. }
         | AppAction::EditNewApi { .. }
         | AppAction::NewApiLoadFinished { .. }
@@ -183,21 +183,7 @@ fn reduce_newapi_action(session: &mut AppSession, action: AppAction, effects: &m
     match action {
         AppAction::EnterAddNewApi => newapi::enter_add_newapi(session, effects),
         AppAction::CancelAddNewApi => newapi::cancel_add_newapi(session, effects),
-        AppAction::SubmitNewApi {
-            display_name,
-            base_url,
-            cookie,
-            user_id,
-            divisor,
-        } => newapi::submit_newapi(
-            session,
-            display_name,
-            base_url,
-            cookie,
-            user_id,
-            divisor,
-            effects,
-        ),
+        AppAction::SubmitNewApi(config) => newapi::submit_newapi(session, config, effects),
         AppAction::NewApiSaveFinished {
             config,
             filename,
