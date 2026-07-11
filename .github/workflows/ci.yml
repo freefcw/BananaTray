@@ -43,6 +43,15 @@ jobs:
       - name: Check GNOME Shell Extension
         run: ./scripts/check-gnome-extension.sh
 
+      - name: Test GNOME packaging contracts
+        run: ./scripts/test-gnome-packaging-contracts.sh
+
+      - name: Test packaging scripts
+        run: ./scripts/test-packaging-scripts.sh
+
+      - name: Test custom provider YAML migration
+        run: python3 -m unittest scripts/test_migrate_custom_provider_yaml.py
+
       - name: Run fast lib clippy
         run: cargo clippy --lib --no-default-features -- -D warnings
 

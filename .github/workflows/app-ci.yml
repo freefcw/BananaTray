@@ -1,6 +1,15 @@
 name: App CI
 
 on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - ".cargo/**"
+      - "themes/**"
+      - ".github/workflows/app-ci.yml"
   workflow_dispatch:
   schedule:
     - cron: "0 18 * * *"

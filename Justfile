@@ -24,13 +24,22 @@ check-provider-secret-slicing:
 check-gnome-extension:
     ./scripts/check-gnome-extension.sh
 
+test-gnome-packaging-contracts:
+    ./scripts/test-gnome-packaging-contracts.sh
+
+test-packaging-scripts:
+    ./scripts/test-packaging-scripts.sh
+
+test-custom-provider-migration:
+    python3 -m unittest scripts/test_migrate_custom_provider_yaml.py
+
 clippy-lib-fast:
     cargo clippy --lib --no-default-features -- -D warnings
 
 test-lib-fast:
     cargo test --lib --no-default-features
 
-ci-fast: fmt-check check-gpui-imports check-provider-secret-slicing check-gnome-extension clippy-lib-fast test-lib-fast
+ci-fast: fmt-check check-gpui-imports check-provider-secret-slicing check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
     @true
 
 clippy-lib:
