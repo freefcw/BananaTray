@@ -26,6 +26,14 @@ static CREDIT_RE: LazyLock<Regex> = LazyLock::new(|| {
 // 后面可能跟 url 或其他文本（如 "- https://..."），用 \s 终止金额匹配。
 static BALANCE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^(.+?):\s*\$([0-9]+(?:\.[0-9]+)?)\s+remaining").unwrap());
+// 百分比配额 — amp CLI 上游将 Free 档从信用额度改为每日百分比重置：
+// "Amp Free: 100% remaining today (resets daily) - https://..."
+// 不硬依赖 "today"，以兼容上游改变重置周期措辞（如 "remaining this week"）。
+// 必须放在 CREDIT_RE / BALANCE_RE 之前，因为三者都以 "<label>:" 开头，但只有此格式用 `%` 而非 `$`。
+static PERCENT_REMAINING_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(.+?):\s*([0-9]+(?:\.[0-9]+)?)%\s+remaining\b").unwrap());
+// 百分比行中括号内的重置说明，如 "(resets daily)"，原文透传到卡片详情行。
+static RESET_NOTE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([^)]+)\)").unwrap());
 
 super::define_unit_provider!(AmpProvider);
 
@@ -57,7 +65,23 @@ impl AmpProvider {
                 }
             }
 
-            if let Some(caps) = CREDIT_RE.captures(line) {
+            if let Some(caps) = PERCENT_REMAINING_RE.captures(line) {
+                // amp Free 档现为每日百分比重置配额（非信用额度）。
+                // label 保留原文（如 "Amp Free"），stable_key 与历史 Credit 模式一致，
+                // 设置持久化（hidden_quotas）不受影响。
+                let label = caps[1].trim();
+                let remaining_percent: f64 = caps[2].parse().unwrap_or(0.0);
+                // 括号内的重置说明（如 "resets daily"）原文透传到详情行
+                let detail = RESET_NOTE_RE
+                    .captures(line)
+                    .map(|c| QuotaDetailSpec::Raw(c[1].trim().to_string()));
+                quotas.push(QuotaInfo::from_remaining_percent(
+                    Self::quota_label_spec(label),
+                    remaining_percent,
+                    QuotaType::General,
+                    detail,
+                ));
+            } else if let Some(caps) = CREDIT_RE.captures(line) {
                 let label = caps[1].trim();
                 let remaining: f64 = caps[2].parse().unwrap_or(0.0);
                 let total: f64 = caps[3].parse().unwrap_or(0.0);
@@ -187,12 +211,12 @@ mod tests {
         assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
     }
 
-    /// 实际 amp CLI 输出：$10/$10 格式 + 零余额次要额度
+    /// 实际 amp CLI 输出（2026-07 上游变更后）：Free 档改为每日百分比重置 + 零余额次要额度
     #[test]
     fn test_parse_real_world_free_tier() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let output = "Signed in as user@example.com (user)\n\
-            Amp Free: $10/$10 remaining (replenishes +$0.42/hour) - https://ampcode.com/settings#amp-free\n\
+            Amp Free: 100% remaining today (resets daily) - https://ampcode.com/settings#amp-free\n\
             Individual credits: $0 remaining - https://ampcode.com/settings\n";
         let data = AmpProvider::parse_usage_output(output).unwrap();
 
@@ -204,9 +228,50 @@ mod tests {
             q.label_spec,
             crate::models::QuotaLabelSpec::Raw("Amp Free".to_string())
         );
+        // 百分比模式：limit=100, used=0（100% remaining）
         assert_eq!(q.used, 0.0);
-        assert_eq!(q.limit, 10.0);
+        assert_eq!(q.limit, 100.0);
+        assert_eq!(q.quota_type, QuotaType::General);
         assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
+        // 括号内的重置说明透传到详情行
+        assert_eq!(
+            q.detail_spec,
+            Some(QuotaDetailSpec::Raw("resets daily".to_string()))
+        );
+    }
+
+    /// 每日百分比部分消耗：38% remaining → used=62%, Yellow
+    #[test]
+    fn test_parse_daily_percent_partial() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output =
+            "Amp Free: 38% remaining today (resets daily) - https://ampcode.com/settings\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        let q = &data.quotas[0];
+        assert!((q.used - 62.0).abs() < f64::EPSILON);
+        assert_eq!(q.limit, 100.0);
+        assert_eq!(q.quota_type, QuotaType::General);
+        assert_eq!(q.status_level(), crate::models::StatusLevel::Yellow);
+        assert_eq!(
+            q.detail_spec,
+            Some(QuotaDetailSpec::Raw("resets daily".to_string()))
+        );
+    }
+
+    /// 不硬依赖 "today"：上游若改变重置周期措辞仍可解析；无括号说明时详情为空
+    #[test]
+    fn test_parse_percent_without_today_or_reset_note() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Amp Free: 75% remaining - https://ampcode.com/settings\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        let q = &data.quotas[0];
+        assert!((q.used - 25.0).abs() < f64::EPSILON);
+        assert_eq!(q.limit, 100.0);
+        assert_eq!(q.detail_spec, None);
     }
 
     /// 零余额纯信用额度行应被跳过

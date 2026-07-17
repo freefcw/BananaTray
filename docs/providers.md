@@ -15,7 +15,7 @@
 | Copilot | `copilot` | HTTP API | `Monitorable` | 支持 token 输入面板；保存的 `github_token` 会通过 refresh `UpdateConfig` 同步到后台运行时 |
 | Codex | `codex` | HTTP API + CLI fallback | `Monitorable` | 读取 `~/.codex/auth.json`，解析 OAuth `id_token` 填充 email/plan；刷新时自动轮转 `id_token` 并注入 `ChatGPT-Account-Id` 以支持多账号，刷新结果通过 Unix `0600` 的 sibling-temp 原子替换写回；`auth.json` 损坏时保留原文件并返回解析错误，不重建空文件，避免丢失 `OPENAI_API_KEY` 等其他字段；可通过 `~/.codex/config.toml` 的 `chatgpt_base_url` 切换自托管 ChatGPT 网关；OAuth 出现 timeout / 网络错误 / 5xx 时自动兑底到 CLI，顺序为 `codex app-server` JSON-RPC → PTY `/status`（429 限流不 fallback，因 CLI 共用同一 token 会撞同一限流） |
 | Kimi | `kimi` | HTTP API | `Monitorable` | |
-| Amp | `amp` | CLI | `Monitorable` | |
+| Amp | `amp` | CLI | `Monitorable` | 解析 `amp usage` 输出。Free 档现为每日百分比重置配额（`Amp Free: <N>% remaining today (resets daily)`），映射为 `QuotaType::General` 百分比模式，label 保留原文 `Amp Free`，括号内的重置说明（如 `resets daily`）原文透传到卡片详情行；匹配不硬依赖 `today` 措辞。付费档仍按 `Monthly credits: $X / $Y remaining` 解析为 `QuotaType::Credit`。零余额的 `Individual credits: $0 remaining` 跳过展示 |
 | Cursor | `cursor` | HTTP API + 本地数据 | `Monitorable` | |
 | MiniMax | `minimax` | HTTP API | `Monitorable` | |
 | Kiro | `kiro` | CLI | `Monitorable` | Credits / Bonus Credits 显示为积分（`X.XX / Y.YY`），不带 `$` 前缀；底层 `QuotaType::Points` |
