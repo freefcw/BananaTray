@@ -53,9 +53,6 @@ pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> 
 
 /// 应用预处理管道。
 pub(super) fn apply_preprocess(raw: &str, steps: &[PreprocessStep]) -> String {
-    if steps.is_empty() {
-        return raw.to_string();
-    }
     let mut result = raw.to_string();
     for step in steps {
         match step {

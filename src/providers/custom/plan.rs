@@ -187,7 +187,7 @@ impl CompiledPlan {
                 provider_id, step.name, e, super::log_utils::truncate_for_log(&raw, 300)
             ),
         }
-        Ok(result?)
+        result.map_err(ProviderError::from)
     }
 }
 
