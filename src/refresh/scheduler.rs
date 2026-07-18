@@ -86,11 +86,9 @@ impl RefreshScheduler {
 
     /// 检查 Provider 是否在 cooldown 期内（距上次成功刷新未超过 cooldown 时长）
     pub fn is_on_cooldown(&self, id: &ProviderId) -> bool {
-        if let Some(instant) = self.last_refreshed.get(id) {
-            instant.elapsed() < self.cooldown()
-        } else {
-            false
-        }
+        self.last_refreshed
+            .get(id)
+            .is_some_and(|instant| instant.elapsed() < self.cooldown())
     }
 
     /// 检查 Provider 是否正在刷新
