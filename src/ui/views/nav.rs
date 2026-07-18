@@ -158,22 +158,13 @@ impl AppView {
     fn top_nav_snapshot(&self) -> TopNavSnapshot {
         let state = self.state.borrow();
         let session = &state.session;
-        let custom_ids = session.provider_store.custom_provider_ids();
-        let ordered_ids = session.settings.provider.ordered_provider_ids(&custom_ids);
-        let mut nav_items: Vec<_> = ordered_ids
-            .iter()
-            .filter(|id| session.settings.provider.is_enabled(id))
-            .filter_map(|id| {
-                session
-                    .provider_store
-                    .providers
-                    .iter()
-                    .find(|p| p.provider_id == *id)
-                    .map(|p| TopNavItem {
-                        icon_path: p.icon_asset().to_string(),
-                        label: p.display_name().to_string(),
-                        tab: NavTab::Provider(id.clone()),
-                    })
+        let mut nav_items: Vec<_> = session
+            .provider_store
+            .enabled_providers(&session.settings)
+            .map(|provider| TopNavItem {
+                icon_path: provider.icon_asset().to_string(),
+                label: provider.display_name().to_string(),
+                tab: NavTab::Provider(provider.provider_id.clone()),
             })
             .collect();
 

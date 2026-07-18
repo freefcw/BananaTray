@@ -151,11 +151,14 @@ fn settings_provider_detail_view_state(
             p.quotas
                 .iter()
                 .map(|q| {
-                    let quota_key = q.stable_key.clone();
+                    let visible = session
+                        .settings
+                        .provider
+                        .is_quota_visible(id, &q.stable_key);
                     QuotaVisibilityItem {
                         label: format_quota_label(q),
-                        quota_key: quota_key.clone(),
-                        visible: session.settings.provider.is_quota_visible(id, &quota_key),
+                        quota_key: q.stable_key.clone(),
+                        visible,
                     }
                 })
                 .collect()
