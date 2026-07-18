@@ -105,11 +105,57 @@ mod tests {
     fn iface_with_action_capacity(
         capacity: usize,
     ) -> (BananaTrayIface, smol::channel::Receiver<DBusActionRequest>) {
+        iface_with_snapshot_and_action_capacity("{}", capacity)
+    }
+
+    fn iface_with_snapshot_and_action_capacity(
+        snapshot: &str,
+        capacity: usize,
+    ) -> (BananaTrayIface, smol::channel::Receiver<DBusActionRequest>) {
         let (action_tx, action_rx) = smol::channel::bounded(capacity);
         (
-            BananaTrayIface::new(Arc::new(Mutex::new("{}".into())), action_tx),
+            BananaTrayIface::new(Arc::new(Mutex::new(snapshot.into())), action_tx),
             action_rx,
         )
+    }
+
+    #[test]
+    fn get_all_quotas_returns_cached_snapshot_json() {
+        let snapshot = r#"{"schema_version":1,"providers":[]}"#;
+        let (iface, _action_rx) = iface_with_snapshot_and_action_capacity(snapshot, 1);
+
+        let result = iface.get_all_quotas().unwrap();
+
+        assert_eq!(result, snapshot);
+    }
+
+    #[test]
+    fn refresh_all_returns_current_snapshot_and_requests_refresh_all() {
+        let snapshot_cache = Arc::new(Mutex::new("initial snapshot".into()));
+        let (action_tx, action_rx) = smol::channel::bounded(1);
+        let iface = BananaTrayIface::new(snapshot_cache.clone(), action_tx);
+        let snapshot = r#"{"schema_version":1,"providers":[{"id":"claude"}]}"#;
+        *snapshot_cache.lock().unwrap() = snapshot.into();
+
+        let result = iface.refresh_all().unwrap();
+
+        assert_eq!(result, snapshot);
+        assert!(matches!(
+            action_rx.try_recv().unwrap(),
+            DBusActionRequest::RefreshAll
+        ));
+    }
+
+    #[test]
+    fn open_settings_requests_open_settings() {
+        let (iface, action_rx) = iface_with_action_capacity(1);
+
+        iface.open_settings().unwrap();
+
+        assert!(matches!(
+            action_rx.try_recv().unwrap(),
+            DBusActionRequest::OpenSettings
+        ));
     }
 
     #[test]
