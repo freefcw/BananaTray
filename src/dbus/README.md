@@ -44,7 +44,7 @@ zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满�
 |------|------|
 | `mod.rs` | 模块入口，公开 `DBusServiceHandle` 和 DTO re-export；`start_dbus_service()` 启动服务；`spawn_action_bridge()` 桥接 action 到 GPUI 主线程；`run_dbus_server()` 在独立线程运行 zbus 服务 |
 | `iface.rs` | zbus `#[interface]` 实现，定义 D-Bus 方法/信号/属性；`DBusActionRequest` 枚举表示 D-Bus → GPUI 的动作请求（含 `OpenSettings` 和 `RefreshAll`） |
-| `serde_types.rs` | 纯 re-export 文件，从 `application::selectors::dbus_dto` 导出 DTO 类型和格式化函数 |
+| `serde_types.rs` | 纯 re-export 文件，仅从 `application::selectors::dbus_dto` 重导出 DTO 类型 |
 
 ## D-Bus 接口契约
 
@@ -108,7 +108,8 @@ zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满�
 }
 ```
 
-DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨平台可测试），本模块仅做 re-export。
+DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨平台可测试），
+`serde_types.rs` 仅重导出 DTO 类型。
 GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静态一致性由
 `scripts/check-gnome-dbus-contract.mjs` 校验，并通过 `scripts/check-gnome-extension.sh` 执行。
 
