@@ -118,8 +118,7 @@ fn normalize_hotkey_error_candidate(hotkey: &str) -> Option<String> {
 // If bootstrap state operations grow beyond 5 call sites, migrate to dispatch pipeline.
 fn clear_global_hotkey_error(state: &Rc<RefCell<AppState>>) {
     let mut s = state.borrow_mut();
-    s.session.settings_ui.global_hotkey_error = None;
-    s.session.settings_ui.global_hotkey_error_candidate = None;
+    s.session.settings_ui.clear_global_hotkey_error();
 }
 
 // BYPASS: bootstrap-only direct state mutation (see clear_global_hotkey_error).
@@ -129,8 +128,9 @@ fn set_global_hotkey_error(
     error: GlobalHotkeyError,
 ) {
     let mut s = state.borrow_mut();
-    s.session.settings_ui.global_hotkey_error = Some(error);
-    s.session.settings_ui.global_hotkey_error_candidate = Some(hotkey);
+    s.session
+        .settings_ui
+        .record_global_hotkey_error(hotkey, error);
 }
 
 // BYPASS: bootstrap-only direct state mutation (see clear_global_hotkey_error).

@@ -37,8 +37,7 @@ pub(super) fn save_global_hotkey(
     hotkey: String,
     effects: &mut Vec<AppEffect>,
 ) {
-    session.settings_ui.global_hotkey_error = None;
-    session.settings_ui.global_hotkey_error_candidate = None;
+    session.settings_ui.clear_global_hotkey_error();
     effects.push(ContextEffect::ApplyGlobalHotkey(hotkey).into());
     effects.push(ContextEffect::Render.into());
 }

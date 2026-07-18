@@ -449,6 +449,27 @@ pub struct SettingsUiState {
     pub global_hotkey_error_candidate: Option<String>,
 }
 
+impl SettingsUiState {
+    /// 清理脚本 Provider 测试流程的瞬时状态，不重置请求序号或其他设置页状态。
+    pub fn clear_script_provider_transient_state(&mut self) {
+        self.script_provider_testing = false;
+        self.script_provider_pending_test_request_id = None;
+        self.script_provider_test_result = None;
+    }
+
+    /// 清理全局热键错误及其对应候选值。
+    pub fn clear_global_hotkey_error(&mut self) {
+        self.global_hotkey_error = None;
+        self.global_hotkey_error_candidate = None;
+    }
+
+    /// 成对记录全局热键错误及其对应候选值。
+    pub fn record_global_hotkey_error(&mut self, candidate: String, error: GlobalHotkeyError) {
+        self.global_hotkey_error = Some(error);
+        self.global_hotkey_error_candidate = Some(candidate);
+    }
+}
+
 /// 设置窗口右侧面板的互斥模态状态。
 ///
 /// `Idle` 是稳态：显示当前 `selected_provider` 的详情面板。其他变体表示用户

@@ -12,9 +12,7 @@ use super::super::state::{AppSession, SettingsModalState};
 
 pub(super) fn enter_add_script_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
-    session.settings_ui.script_provider_testing = false;
-    session.settings_ui.script_provider_pending_test_request_id = None;
-    session.settings_ui.script_provider_test_result = None;
+    session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
@@ -23,9 +21,7 @@ pub(super) fn cancel_add_script_provider(session: &mut AppSession, effects: &mut
     if session.settings_ui.modal.is_script_provider_form() {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
-    session.settings_ui.script_provider_testing = false;
-    session.settings_ui.script_provider_pending_test_request_id = None;
-    session.settings_ui.script_provider_test_result = None;
+    session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
@@ -67,21 +63,18 @@ pub(super) fn submit_script_provider(
     mut config: ScriptProviderConfig,
     effects: &mut Vec<AppEffect>,
 ) {
-    let is_editing = session
+    let (is_editing, original_yaml_filename, original_script_filename) = session
         .settings_ui
         .modal
         .script_provider_edit_data()
-        .is_some();
-    let original_yaml_filename = session
-        .settings_ui
-        .modal
-        .script_provider_edit_data()
-        .map(|data| data.original_yaml_filename.clone());
-    let original_script_filename = session
-        .settings_ui
-        .modal
-        .script_provider_edit_data()
-        .map(|data| data.original_script_filename.clone());
+        .map(|data| {
+            (
+                true,
+                Some(data.original_yaml_filename.clone()),
+                Some(data.original_script_filename.clone()),
+            )
+        })
+        .unwrap_or((false, None, None));
 
     if !is_editing {
         config.provider_id = unique_script_provider_id_for_session(session, &config.display_name);
@@ -109,9 +102,7 @@ pub(super) fn submit_script_provider(
     );
 
     session.settings_ui.modal = SettingsModalState::Idle;
-    session.settings_ui.script_provider_testing = false;
-    session.settings_ui.script_provider_pending_test_request_id = None;
-    session.settings_ui.script_provider_test_result = None;
+    session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
@@ -164,9 +155,7 @@ pub(super) fn edit_script_provider(
     provider_id: ProviderId,
     effects: &mut Vec<AppEffect>,
 ) {
-    session.settings_ui.script_provider_testing = false;
-    session.settings_ui.script_provider_pending_test_request_id = None;
-    session.settings_ui.script_provider_test_result = None;
+    session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
     effects.push(ScriptProviderEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());

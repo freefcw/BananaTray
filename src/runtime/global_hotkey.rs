@@ -95,8 +95,7 @@ pub(crate) fn rebind_global_hotkey(
             {
                 let mut s = state.borrow_mut();
                 s.session.settings.system.global_hotkey = persisted;
-                s.session.settings_ui.global_hotkey_error = None;
-                s.session.settings_ui.global_hotkey_error_candidate = None;
+                s.session.settings_ui.clear_global_hotkey_error();
             }
 
             let settings_saved = {
@@ -113,9 +112,9 @@ pub(crate) fn rebind_global_hotkey(
         Err(error) => {
             warn!(target: "settings", "failed to update global hotkey: {:?}", error);
             let mut s = state.borrow_mut();
-            s.session.settings_ui.global_hotkey_error = Some(error);
-            s.session.settings_ui.global_hotkey_error_candidate =
-                Some(requested_hotkey.to_string());
+            s.session
+                .settings_ui
+                .record_global_hotkey_error(requested_hotkey.to_string(), error);
         }
     }
 }

@@ -144,7 +144,7 @@ fn submit_script_provider_edit_mode_does_not_duplicate_sidebar_entry() {
         .sidebar_providers
         .push("script:script".to_string());
 
-    reduce(
+    let effects = reduce(
         &mut session,
         AppAction::SubmitScriptProvider(make_script_config()),
     );
@@ -159,6 +159,18 @@ fn submit_script_provider_edit_mode_does_not_duplicate_sidebar_entry() {
             .count(),
         1
     );
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::ScriptProvider(
+            ScriptProviderEffect::SaveProvider {
+                original_yaml_filename,
+                original_script_filename,
+                is_editing: true,
+                ..
+            }
+        )) if original_yaml_filename.as_deref() == Some("script-script.yaml")
+            && original_script_filename.as_deref() == Some("script-script.py")
+    )));
 }
 
 #[test]
