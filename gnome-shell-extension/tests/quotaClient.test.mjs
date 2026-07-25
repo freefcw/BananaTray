@@ -395,6 +395,26 @@ describe('parseSnapshot', () => {
 // QuotaClient — pending proxy actions
 // ============================================================
 describe('QuotaClient — pending proxy actions', () => {
+    it('waits for RefreshComplete instead of publishing the cached RefreshAll response', async () => {
+        const snapshots = [];
+        const client = new QuotaClient({
+            onSnapshot: snapshot => snapshots.push(snapshot),
+        });
+        client._proxy = {
+            RefreshAllAsync: async () => [JSON.stringify(makeSnapshot({
+                providers: [makeProvider({connection: 'Connected'})],
+            }))],
+        };
+
+        assert.equal(await client.refreshAll(), true);
+        assert.equal(snapshots.length, 0);
+
+        client._onRefreshComplete(JSON.stringify(makeSnapshot({
+            providers: [makeProvider({connection: 'Connected'})],
+        })));
+        assert.equal(snapshots.length, 1);
+    });
+
     it('replays OpenSettings after activation creates a proxy', async () => {
         const proxyCalls = [];
         const errors = [];
@@ -439,10 +459,9 @@ describe('QuotaClient — pending proxy actions', () => {
         });
         await flushPromises();
 
-        // refresh 已在待办队列里 → 回放 refreshAll 拉取快照，跳过默认 fetch
+        // refresh 已在待办队列里 → 回放 refreshAll，等待 RefreshComplete 推送新快照
         assert.deepEqual(proxyCalls, ['refreshAll']);
-        assert.equal(snapshots.length, 1);
-        assert.equal(snapshots[0].providers.length, 1);
+        assert.equal(snapshots.length, 0);
     });
 
     it('auto-fetches when proxy becomes ready with no pending actions', async () => {
@@ -528,8 +547,8 @@ describe('QuotaClient — pending proxy actions', () => {
         assert.ok(proxyCalls.includes('refreshAll'));
         assert.ok(proxyCalls.includes('openSettings'));
         assert.ok(!proxyCalls.includes('getAllQuotas'));
-        // refresh 产生快照；openSettings 不产生快照
-        assert.equal(snapshots.length, 1);
+        // RefreshAll 返回缓存但不发布；新快照只由 RefreshComplete 推送
+        assert.equal(snapshots.length, 0);
     });
 
     it('reports offline when manual refresh activation is throttled', async () => {

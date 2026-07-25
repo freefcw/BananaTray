@@ -2,6 +2,7 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -11,11 +12,14 @@ import {_} from './i18n.js';
 import {QuotaClient} from './quotaClient.js';
 import {
     headerStatusText,
+    manualRefreshIsComplete,
     normalizeStatusKind,
     normalizeStatusLevel,
     summarizeProviders,
 } from './quotaPresentation.js';
 import {BananaTrayProviderRow, createLabel, createStatusDot} from './quotaWidgets.js';
+
+const MANUAL_REFRESH_START_TIMEOUT_MS = 5000;
 
 export const BananaTrayIndicator = GObject.registerClass(
 class BananaTrayIndicator extends PanelMenu.Button {
@@ -24,6 +28,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
 
         this._extension = extension;
         this._isRefreshing = false;
+        this._refreshStartTimeoutId = 0;
         this._pendingSnapshot = null;
         this._panelBox = new St.BoxLayout({
             style_class: 'bananatray-panel-indicator',
@@ -153,6 +158,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
             if (this._isRefreshing)
                 return;
             this._isRefreshing = true;
+            this._scheduleRefreshStartTimeout();
             this._syncLabel.text = _('Refreshing');
             this._setSyncButtonState('syncing');
             this._setPanelState('yellow', _('Refreshing'));
@@ -235,9 +241,32 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     _resetSyncState() {
+        this._clearRefreshStartTimeout();
         this._isRefreshing = false;
         if (this._syncLabel)
             this._syncLabel.text = _('Sync Data');
+    }
+
+    _scheduleRefreshStartTimeout() {
+        this._clearRefreshStartTimeout();
+        this._refreshStartTimeoutId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            MANUAL_REFRESH_START_TIMEOUT_MS,
+            () => {
+                this._refreshStartTimeoutId = 0;
+                this._resetSyncState();
+                this._client?.fetchQuotas();
+                return GLib.SOURCE_REMOVE;
+            }
+        );
+    }
+
+    _clearRefreshStartTimeout() {
+        if (!this._refreshStartTimeoutId)
+            return;
+
+        GLib.Source.remove(this._refreshStartTimeoutId);
+        this._refreshStartTimeoutId = 0;
     }
 
     _handleClientLog(message) {
@@ -248,7 +277,12 @@ class BananaTrayIndicator extends PanelMenu.Button {
         if (!snapshot || !Array.isArray(snapshot.providers))
             return;
 
-        this._resetSyncState();
+        if (this._isRefreshing) {
+            if (manualRefreshIsComplete(snapshot))
+                this._resetSyncState();
+            else
+                this._clearRefreshStartTimeout();
+        }
 
         // 始终更新面板指示器（状态点 + 摘要文字），即使弹窗关闭
         const summary = summarizeProviders(snapshot.providers);
@@ -340,6 +374,7 @@ class BananaTrayIndicator extends PanelMenu.Button {
     }
 
     destroy() {
+        this._clearRefreshStartTimeout();
         this._client?.destroy();
         this._client = null;
         this._extension = null;

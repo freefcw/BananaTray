@@ -26,8 +26,9 @@ Provider，在主应用的 Provider 设置页拖拽调整排序即可。
 - `Sync Data` 调用 daemon 刷新缓存，`Settings` 会通过 D-Bus 调用 BananaTray daemon，
   在主应用中打开设置窗口。
 
-刷新按钮调用 daemon 的 `RefreshAll`。按钮会立即返回当前缓存快照，真实刷新完成后 daemon 会通过
-`RefreshComplete` 信号推送新快照，扩展收到后自动更新。
+刷新按钮调用 daemon 的 `RefreshAll`。方法返回的是请求入队前的缓存快照，Extension 只校验该响应，
+不会把它当作本轮刷新结果。按钮会保持 `Refreshing`；后续信号快照中只要仍有 Provider 处于
+`Refreshing` 就继续等待，全部退出该状态后立即恢复。若 5 秒内没有收到任何刷新状态，则自动恢复按钮。
 
 ### 数据来源
 
@@ -177,9 +178,10 @@ bash scripts/bundle-gnome-extension.sh
          → daemon 出现 → 异步创建 DBusProxy → GetAllQuotasAsync() 获取初始数据
          → daemon 消失 → 显示 "daemon not running" 提示
 
-刷新按钮 → RefreshAllAsync()（返回当前缓存快照 + 通知 GPUI 主线程异步刷新）
+刷新按钮 → RefreshAllAsync()（返回当前缓存快照，仅校验协议并通知 GPUI 主线程异步刷新）
 设置按钮 → OpenSettingsAsync()
-刷新完成 → RefreshComplete 信号（携带新快照）→ 自动更新界面
+刷新事件 → RefreshComplete 信号（携带最新快照）→ 更新界面
+手动刷新 → 信号快照仍含 Refreshing Provider 时保持锁定，全部退出 Refreshing 后解锁按钮
 ```
 
 ### 接口定义
@@ -225,7 +227,7 @@ mock 与真实 daemon 契约漂移。
 | `i18n.js` | Extension gettext 包装：所有 GNOME Shell UI 文案统一通过 `_()` 翻译 |
 | `panelButton.js` | `BananaTrayIndicator`：PanelMenu.Button、弹窗装配、`QuotaClient` 回调和整体 UI 状态切换 |
 | `quotaClient.js` | D-Bus client：接口 XML、proxy 生命周期、异步方法调用、`RefreshComplete` 监听、JSON schema guard |
-| `quotaPresentation.js` | 展示层纯函数：状态归一化、Provider/quota 排序、顶栏摘要聚合 |
+| `quotaPresentation.js` | 展示层纯函数：状态归一化、手动刷新进度判定、Provider/quota 排序、顶栏摘要聚合 |
 | `quotaWidgets.js` | 可复用 UI 组件：Provider 行、Quota 行、quota bar、状态点和文本 label helper |
 | `metadata.json` | GNOME Shell 扩展元数据：UUID、名称、Shell 版本兼容性和 `gettext-domain` |
 | `po/zh_CN.po` | 简体中文翻译源文件 |
@@ -258,8 +260,8 @@ BananaTrayExtension (入口)
 
 1. 扩展启动时 watch `com.bananatray.Daemon` bus name
 2. daemon 出现 → 异步创建 `Gio.DBusProxy` → 调用 `GetAllQuotasAsync` 获取初始数据
-3. 连接 `RefreshComplete` 信号 → daemon 每次刷新完成后自动推送数据
-4. 刷新按钮 → 调用 `RefreshAllAsync`（触发刷新 + 返回当前快照）
+3. 连接 `RefreshComplete` 信号 → daemon 刷新事件携带最新快照并自动更新数据
+4. 刷新按钮 → 调用 `RefreshAllAsync`；返回缓存只做协议校验，信号快照中没有 `Refreshing` Provider 时解锁按钮
 5. 设置按钮 → 调用 `OpenSettingsAsync`（daemon 侧在 GPUI 主线程打开设置窗口）
 
 ### 状态与摘要规则

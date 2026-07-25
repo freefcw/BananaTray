@@ -143,11 +143,12 @@ GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静�
 1. GNOME Shell Extension 调用 `RefreshAll`
 2. `BananaTrayIface::refresh_all()` 通过 `action_tx` 发送 `RefreshAll` 请求 + 返回缓存快照
 3. GPUI 主线程 `spawn_action_bridge` 收到请求 → `bootstrap::dispatch_in_app(AppAction::RefreshAll)`
-4. 刷新完成后，事件泵更新缓存并发射 `RefreshComplete` 信号
+4. 每个 `RefreshEvent` 到达前台后，事件泵更新缓存并发射名为 `RefreshComplete` 的快照信号；
+   GNOME Shell Extension 根据 Provider 的 `Refreshing` 状态判断手动刷新是否真正结束
 
 ### RefreshComplete 信号（缓存更新 + 信号发射）
 
-1. 后台 `RefreshCoordinator` 完成刷新 → 发送 `RefreshEvent`
+1. 后台 `RefreshCoordinator` 发送 `Started`、`Finished` 或 `ProvidersReloaded` 等 `RefreshEvent`
 2. 事件泵收到 `RefreshEventReceived` → reducer 更新 `AppState`
 3. `bootstrap::emit_current_dbus_snapshot()` 构建 `DBusQuotaSnapshot` → `DBusServiceHandle::emit_refresh_complete()`
 4. `emit_refresh_complete()` 必须先成功更新 `Arc<Mutex<String>>` 缓存，再通过容量为 1 的

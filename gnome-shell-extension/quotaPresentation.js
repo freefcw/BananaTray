@@ -27,6 +27,13 @@ export function normalizeStatusKind(value) {
     return STATUS_KIND_KEYS.has(kind) ? kind : 'stale';
 }
 
+export function manualRefreshIsComplete(snapshot) {
+    const providers = Array.isArray(snapshot?.providers) ? snapshot.providers : [];
+    return !providers.some(
+        provider => normalizeConnection(provider.connection) === 'refreshing'
+    );
+}
+
 export function headerStatusText(statusKind, elapsedSecs) {
     switch (normalizeStatusKind(statusKind)) {
     case 'synced':

@@ -22,7 +22,10 @@ GNOME Shell Extension
 ```
 
 扩展不直接读取配置文件、不执行 provider 刷新，也不保存业务状态。它只渲染 daemon 推送的
-`DBusQuotaSnapshot`。正式 Linux 安装包还会安装 Session D-Bus activation 文件和 systemd user
+`DBusQuotaSnapshot`。`RefreshAll()` 返回的是调用前缓存，`QuotaClient` 只校验该响应；手动刷新状态
+由后续信号快照中的 Provider `Refreshing` 状态驱动，没有 Provider 仍在刷新时立即恢复；若 5 秒内
+没有收到刷新状态，也会自动恢复。
+正式 Linux 安装包还会安装 Session D-Bus activation 文件和 systemd user
 service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon 未运行时不再只能被动等待。
 如果用户主动停止 daemon，扩展不会在 `NameOwnerChanged` 下线事件里立即拉起，只会在扩展启动或用户点击刷新/设置时请求 activation。
 
@@ -34,7 +37,7 @@ service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon �
 | `gnome-shell-extension/i18n.js` | Extension gettext 包装，所有 GNOME Shell UI 文案统一通过 `_()` 翻译。 |
 | `gnome-shell-extension/panelButton.js` | `BananaTrayIndicator`，负责 PanelMenu.Button、弹窗装配、`QuotaClient` 回调和整体 UI 状态切换。 |
 | `gnome-shell-extension/quotaClient.js` | D-Bus proxy、异步调用、`RefreshComplete` 监听和 JSON schema guard。 |
-| `gnome-shell-extension/quotaPresentation.js` | 展示层纯函数：状态归一化、Provider/quota 排序、顶栏摘要聚合。 |
+| `gnome-shell-extension/quotaPresentation.js` | 展示层纯函数：状态归一化、手动刷新进度判定、Provider/quota 排序、顶栏摘要聚合。 |
 | `gnome-shell-extension/quotaWidgets.js` | 可复用 UI 组件：Provider 行、Quota 行、quota bar、状态点和文本 label helper。 |
 | `gnome-shell-extension/po/zh_CN.po` | 简体中文翻译源文件。 |
 | `gnome-shell-extension/locale/zh_CN/LC_MESSAGES/bananatray.mo` | GNOME Shell 运行时加载的简体中文 gettext 编译文件。 |

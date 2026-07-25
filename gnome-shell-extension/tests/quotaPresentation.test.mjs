@@ -10,6 +10,7 @@ import {
     normalizeStatusLevel,
     normalizeConnection,
     normalizeStatusKind,
+    manualRefreshIsComplete,
     headerStatusText,
     providerVisualLevel,
     statusBadgeLabel,
@@ -105,6 +106,35 @@ describe('normalizeStatusKind', () => {
         assert.equal(normalizeStatusKind(''), 'stale');
         assert.equal(normalizeStatusKind(null), 'stale');
         assert.equal(normalizeStatusKind(undefined), 'stale');
+    });
+});
+
+// ============================================================
+// manualRefreshIsComplete
+// ============================================================
+describe('manualRefreshIsComplete', () => {
+    it('completes when the first signal is already a terminal snapshot', () => {
+        assert.equal(manualRefreshIsComplete({
+            providers: [makeProvider({connection: 'Connected'})],
+        }), true);
+    });
+
+    it('waits while any provider is still refreshing', () => {
+        assert.equal(manualRefreshIsComplete({
+            providers: [
+                makeProvider({connection: 'Connected'}),
+                makeProvider({connection: 'Refreshing'}),
+            ],
+        }), false);
+    });
+
+    it('completes after every provider leaves refreshing state', () => {
+        assert.equal(manualRefreshIsComplete({
+            providers: [
+                makeProvider({connection: 'Connected'}),
+                makeProvider({connection: 'Error'}),
+            ],
+        }), true);
     });
 });
 

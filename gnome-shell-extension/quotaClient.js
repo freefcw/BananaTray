@@ -193,7 +193,9 @@ export class QuotaClient {
             const [jsonData] = await proxy.RefreshAllAsync();
             if (!this._isCurrentProxy(proxy, generation))
                 return false;
-            this._emitSnapshot(parseSnapshot(jsonData, message => this._emitLog(message)));
+            // RefreshAll 返回的是请求入队前的缓存，只校验协议；新状态由
+            // RefreshComplete 推送，避免旧快照被误认为本轮刷新已完成。
+            parseSnapshot(jsonData, message => this._emitLog(message));
             return true;
         } catch (e) {
             if (!this._isCurrentProxy(proxy, generation))
@@ -350,7 +352,7 @@ export class QuotaClient {
     _onProxyReady(proxy) {
         this._installProxy(proxy);
         this._onReady?.();
-        // 若待办动作里含 refresh，回放时 refreshAll 自会拉取快照；
+        // 若待办动作里含 refresh，回放后等待 RefreshComplete 推送新快照；
         // 否则补一次默认 fetch 以填充弹窗初始数据。
         const hadPendingRefresh = this._pendingProxyActions.has(this.refreshAll);
         this._replayPendingProxyActions();
