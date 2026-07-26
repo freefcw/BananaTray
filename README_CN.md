@@ -168,6 +168,7 @@ git push origin v0.1.0
 - **Linux**: `$XDG_STATE_HOME/bananatray/bananatray.log`（默认 `~/.local/state/bananatray/bananatray.log`）
 - **覆盖**: 设置 `BANANATRAY_LOG_DIR=/path/to/dir` 可将日志写入自定义目录
 - **日志级别**: 由 `RUST_LOG` 控制（默认：`info`）
+- **轮转**: 按大小轮转，磁盘有硬上限（默认约 25 MiB）；通过 settings.json 的 `logging.{max_bytes,max_files}` 配置。详见 `docs/logging.md`。
 - **格式**: `timestamp [LEVEL] target     message`
 
 ## 架构

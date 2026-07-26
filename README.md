@@ -168,6 +168,7 @@ Runtime logs use `fern` with dual output (stdout + file):
 - **Linux**: `$XDG_STATE_HOME/bananatray/bananatray.log` (default `~/.local/state/bananatray/bananatray.log`)
 - **Override**: set `BANANATRAY_LOG_DIR=/path/to/dir` to write logs to a custom directory
 - **Log level**: controlled by `RUST_LOG` (default: `info`)
+- **Rotation**: size-based with a hard disk cap (default ~25 MiB); configured via `logging.{max_bytes,max_files}` in settings.json. See `docs/logging.md`.
 - **Format**: `timestamp [LEVEL] target     message`
 
 ## Architecture
