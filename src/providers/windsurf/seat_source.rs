@@ -117,6 +117,24 @@ fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
             weekly_pct,
             plan_status.weekly_quota_reset_at_unix,
         ));
+    } else if let Some(reset_at) =
+        parse_reset_at_unix(plan_status.weekly_quota_reset_at_unix.as_deref())
+            .filter(|reset_at| *reset_at > chrono::Utc::now().timestamp())
+    {
+        // Devin seat API 以缺失 Weekly percentage 表示当前周期已耗尽。
+        debug!(
+            target: "providers",
+            "Devin Desktop seat API omitted active weekly remaining percent; treating quota as exhausted"
+        );
+        quotas.push(QuotaInfo::with_key_from_remaining_percent(
+            "weekly-quota",
+            QuotaLabelSpec::Weekly,
+            0.0,
+            QuotaType::Weekly,
+            Some(QuotaDetailSpec::ResetAt {
+                epoch_secs: reset_at,
+            }),
+        ));
     }
 
     if quotas.is_empty() {
@@ -136,8 +154,7 @@ fn build_seat_quota(
     remaining_percent: i64,
     reset_at_unix: Option<String>,
 ) -> QuotaInfo {
-    let reset_detail = reset_at_unix
-        .and_then(|s| s.parse::<i64>().ok())
+    let reset_detail = parse_reset_at_unix(reset_at_unix.as_deref())
         .map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
     QuotaInfo::with_key_from_remaining_percent(
@@ -147,6 +164,10 @@ fn build_seat_quota(
         quota_type,
         reset_detail,
     )
+}
+
+fn parse_reset_at_unix(reset_at_unix: Option<&str>) -> Option<i64> {
+    reset_at_unix.and_then(|value| value.parse::<i64>().ok())
 }
 
 fn get_api_key(spec: &CodeiumFamilySpec) -> Result<String> {
@@ -467,6 +488,59 @@ mod tests {
                 epoch_secs: 1777795200
             })
         ));
+    }
+
+    #[test]
+    fn test_parse_seat_response_missing_weekly_remaining_marks_active_weekly_quota_exhausted() {
+        let future_reset = chrono::Utc::now().timestamp() + 3600;
+        let json = format!(
+            r#"{{
+                "userStatus": {{
+                    "planStatus": {{
+                        "dailyQuotaRemainingPercent": 78,
+                        "dailyQuotaResetAtUnix": "{}",
+                        "weeklyQuotaResetAtUnix": "{}"
+                    }}
+                }}
+            }}"#,
+            future_reset, future_reset
+        );
+
+        let response: SeatResponse = serde_json::from_str(&json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+
+        let weekly = data
+            .quotas
+            .iter()
+            .find(|quota| quota.stable_key == "weekly-quota")
+            .unwrap();
+        assert!((weekly.used - 100.0).abs() < 0.01);
+        assert!(matches!(
+            weekly.detail_spec,
+            Some(QuotaDetailSpec::ResetAt { epoch_secs }) if epoch_secs == future_reset
+        ));
+    }
+
+    #[test]
+    fn test_parse_seat_response_missing_weekly_remaining_with_expired_reset_omits_weekly() {
+        let past_reset = chrono::Utc::now().timestamp() - 3600;
+        let json = format!(
+            r#"{{
+                "userStatus": {{
+                    "planStatus": {{
+                        "dailyQuotaRemainingPercent": 78,
+                        "weeklyQuotaResetAtUnix": "{}"
+                    }}
+                }}
+            }}"#,
+            past_reset
+        );
+
+        let response: SeatResponse = serde_json::from_str(&json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        assert_eq!(data.quotas[0].stable_key, "daily-quota");
     }
 
     #[test]
