@@ -129,7 +129,7 @@ cargo run -- debug-codeium-family windsurf  # legacy alias
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
 - Devin Desktop seat API 依赖本地 auth status 中的 `apiKey`，当前优先读取 `windsurfAuthStatus`，并兼容未来可能出现的 `devinAuthStatus`；请求体里的版本号使用本机安装版本的最佳努力探测，探测不到时不发送版本字段。
-- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；Devin Desktop 周配额应优先采用 seat API 的实时 `weeklyQuotaRemainingPercent`。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；单条额度的 reset 时间已过时，不会据此推断“100% 剩余”，而是视为不可用。Devin Desktop 周配额应优先采用 seat API 的实时 `weeklyQuotaRemainingPercent`。
 
 ## Maintenance Rule
 

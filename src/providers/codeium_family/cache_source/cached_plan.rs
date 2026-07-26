@@ -135,8 +135,7 @@ pub(super) fn read_via_cached_plan_info(
 
 /// 根据 cachedPlanInfo 的 remaining_percent 和 reset_at_unix 构建配额项。
 ///
-/// 关键逻辑：如果 reset 时间已过期，说明配额已被重置，
-/// 缓存中的 remaining_percent 是旧数据，应视为 100% remaining。
+/// reset 时间已过时，缓存没有新周期的实际用量，不能把未知状态显示为满额。
 pub(super) fn build_quota_from_cached(
     kind: CachedQuotaKind,
     remaining_percent: Option<f64>,
@@ -144,24 +143,11 @@ pub(super) fn build_quota_from_cached(
 ) -> Option<QuotaInfo> {
     let pct = remaining_percent?;
 
-    let now_ts = chrono::Utc::now().timestamp();
-    let is_stale = reset_at_unix.is_some_and(|ts| ts <= now_ts);
-
-    let reset_detail = if is_stale {
-        // 重置时间已过，不再展示倒计时
-        None
-    } else {
-        reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
-    };
-
-    if is_stale {
-        return Some(QuotaInfo::with_key_from_full_remaining(
-            kind.stable_key(),
-            kind.label_spec(),
-            kind.quota_type(),
-            reset_detail,
-        ));
+    if reset_at_unix.is_some_and(|ts| ts <= chrono::Utc::now().timestamp()) {
+        return None;
     }
+
+    let reset_detail = reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
     Some(QuotaInfo::with_key_from_remaining_percent(
         kind.stable_key(),

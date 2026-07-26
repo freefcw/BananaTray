@@ -154,6 +154,38 @@ fn test_read_via_cached_plan_info_fresh() {
 }
 
 #[test]
+fn test_read_via_cached_plan_info_ignores_expired_weekly_quota() {
+    let future_daily = chrono::Utc::now().timestamp() + 3600;
+    let expired_weekly = chrono::Utc::now().timestamp() - 3600;
+    let json_value = format!(
+        r#"{{"planName":"Pro","quotaUsage":{{"dailyRemainingPercent":41,"weeklyRemainingPercent":70,"dailyResetAtUnix":{},"weeklyResetAtUnix":{}}}}}"#,
+        future_daily, expired_weekly
+    );
+
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+        ["windsurf.settings.cachedPlanInfo", &json_value],
+    )
+    .unwrap();
+
+    let spec = test_windsurf_spec();
+    let data = read_via_cached_plan_info(&conn, &spec).unwrap();
+
+    assert_eq!(data.quotas.len(), 1);
+    assert_eq!(
+        data.quotas[0].label_spec,
+        crate::models::QuotaLabelSpec::Daily
+    );
+    assert!((data.quotas[0].used - 59.0).abs() < 0.01);
+}
+
+#[test]
 fn test_read_via_cached_plan_info_uses_devin_fallback_key() {
     let future_daily = chrono::Utc::now().timestamp() + 3600;
     let json_value = format!(
@@ -193,13 +225,13 @@ fn test_build_quota_from_cached_fresh() {
 }
 
 #[test]
-fn test_build_quota_from_cached_stale_resets_to_full() {
-    // reset 时间已过期 → 配额已重置，应视为 0% used
+fn test_build_quota_from_cached_expired_reset_returns_no_quota() {
+    // 缓存的 reset 时间已过，旧 remaining 无法反映新周期的实际额度。
     let past_ts = chrono::Utc::now().timestamp() - 3600;
-    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(past_ts)).unwrap();
-    assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::Daily);
-    assert!((q.used - 0.0).abs() < 0.01); // 过期后重置为 0% used
-    assert!(q.detail_spec.is_none()); // 不展示过期的倒计时
+
+    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(past_ts));
+
+    assert!(q.is_none());
 }
 
 #[test]

@@ -132,32 +132,20 @@ impl ParseStrategy for CacheParseStrategy {
                         .reset_time_wrapper
                         .and_then(|wrapper| wrapper.reset_time);
 
-                    // reset 时间已过 → 服务端已重置配额，缓存中的 remaining_fraction
-                    // 是过期数据；视为 100% 剩余，且不再显示倒计时（与 cached_plan 路径一致）。
-                    let is_stale = reset_at.is_some_and(|ts| ts <= now_ts);
+                    // reset 时间已过时，缓存没有新周期的实际用量，不能推断为满额。
+                    if reset_at.is_some_and(|ts| ts <= now_ts) {
+                        continue;
+                    }
 
-                    let reset_detail = if is_stale {
-                        None
-                    } else {
-                        reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs })
-                    };
+                    let reset_detail =
+                        reset_at.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });
 
-                    let quota = if is_stale {
-                        QuotaInfo::from_full_remaining(
-                            label.clone(),
-                            QuotaType::ModelSpecific(label),
-                            reset_detail,
-                        )
-                    } else {
-                        QuotaInfo::from_remaining_fraction(
-                            label.clone(),
-                            remaining_fraction,
-                            QuotaType::ModelSpecific(label),
-                            reset_detail,
-                        )
-                    };
-
-                    quotas.push(quota);
+                    quotas.push(QuotaInfo::from_remaining_fraction(
+                        label.clone(),
+                        remaining_fraction,
+                        QuotaType::ModelSpecific(label),
+                        reset_detail,
+                    ));
                 }
             }
         }
@@ -299,14 +287,13 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_parse_strategy_stale_reset_treated_as_full() {
-        // reset 时间已过 → 服务端已重置，缓存的 0.4 是陈旧数据，应视为 100% 剩余
+    fn test_cache_parse_strategy_expired_reset_returns_no_data() {
+        // reset 时间已过，缓存的 remaining 无法反映新周期的实际额度。
         let past = chrono::Utc::now().timestamp() - 3600;
         let bytes = build_proto_payload(0.4, past);
 
-        let (quotas, _, _) = CacheParseStrategy.parse(&bytes).unwrap();
-        assert_eq!(quotas.len(), 1);
-        assert!(quotas[0].used.abs() < 0.01); // 0% used = 100% remaining
-        assert!(quotas[0].detail_spec.is_none()); // 不再展示已过期的倒计时
+        let result = CacheParseStrategy.parse(&bytes);
+
+        assert!(matches!(result, Err(ProviderError::NoData)));
     }
 }

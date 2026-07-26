@@ -124,9 +124,10 @@ availability 语义刻意拆成两层：
 - `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Devin Desktop）
 - `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Devin Desktop）
 
-两条路径都对单条 quota 的 `reset_at_unix` 做 `<= now` 判断：reset 时间已过 →
-服务端已经重置配额，缓存的 `remaining_fraction` 是过期数据，统一视为 100% 剩余
-并清除倒计时。两道闸的语义互补：mtime 闸防"整体快照过老"，reset 闸防"个别配额到期"。
+两条路径都对单条 quota 的 `reset_at_unix` 做 `<= now` 判断。reset 时间已过时，
+缓存没有新周期的实际用量，必须丢弃该额度，不能推断为 100% 剩余；所有额度都被
+丢弃时返回 `ProviderError::NoData`。两道闸的语义互补：mtime 闸防"整体快照过老"，
+reset 闸防"数据库仍有其他状态写入、但个别额度快照已经失效"。
 
 ## 测试
 
