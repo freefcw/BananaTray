@@ -10,7 +10,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | `atomic_file.rs` | lib-safe | Atomically replaces private settings/credential files and prepares exclusive private temp files for caller-owned multi-file transactions, with Unix `0600`, flush-before-rename, permission hardening, and error cleanup. |
 | `paths.rs` | lib-safe | Resolves settings, custom provider, and custom script directories. |
 | `system.rs` | lib-safe | Small system helpers: open URL/path without blocking the UI while a background monitor checks exit status, clipboard fallback, OS info, file-size formatting, dark-mode detection. |
-| `logging.rs` | mixed | App logger initialization behind `feature = "app"` plus test/lib-safe log-tail helpers. |
+| `logging.rs` | mixed | App logger initialization (size-based rotation + startup cleanup) behind `feature = "app"`, plus test/lib-safe log-tail helpers. |
 | `assets.rs` | app-only | GPUI `AssetSource`; resolves resources from `BANANATRAY_RESOURCES`, app bundles, Linux system install paths, then dev root. |
 | `notification.rs` | app-only | OS notification adapter. Domain alert decisions stay in `application/quota_alert.rs`. |
 | `auto_launch.rs` | app-only | Launch-at-login integration: macOS `SMAppService`, Linux XDG autostart desktop entry; requests run on one background worker, coalesce to the latest desired state, and expose an exit-time completion barrier. |

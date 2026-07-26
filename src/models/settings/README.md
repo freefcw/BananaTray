@@ -1,15 +1,16 @@
 # src/models/settings/
 
-应用配置系统，按语义职责将设置分组为四个子结构体。
+应用配置系统，按语义职责将设置分组为五个子结构体。
 
 ## 顶层结构
 
 ```
 AppSettings
-├── system: SystemSettings        — 系统行为
-├── notification: NotificationSettings — 通知
-├── display: DisplaySettings      — 显示/外观
-└── provider: ProviderConfig      — Provider 管理（含 app-managed credentials）
+├── system: SystemSettings        - 系统行为
+├── notification: NotificationSettings - 通知
+├── display: DisplaySettings      - 显示/外观
+├── logging: LoggingSettings      - 日志轮转/清理阈值（不在 UI 暴露）
+└── provider: ProviderConfig      - Provider 管理（含 app-managed credentials）
 ```
 
 ## 文件说明
@@ -21,7 +22,8 @@ AppSettings
   - 关联常量 `DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5`，供 `RefreshScheduler` 等模块引用，保持默认值单一来源
   - 关联常量 `DEFAULT_GLOBAL_HOTKEY`，作为首次启动和无效配置回退时的默认全局热键；值使用 GPUI 可回读的持久化格式
 - **`NotificationSettings`** — `session_quota_notifications` / `notification_sound`
-- **`DisplaySettings`** — `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
+- **`DisplaySettings`** - `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
+- **`LoggingSettings`** - `max_bytes` / `max_files`；日志轮转与启动清理阈值，默认 5 MiB × 4 份（磁盘硬上限约 25 MiB）。不在 UI 暴露，仅在 settings.json 持久化；`#[serde(default)]` 保证旧配置无需迁移。详见 `docs/logging.md`
 - **`ProviderConfig`** — `credentials` / `enabled_providers` / `provider_order` / `hidden_quotas` / `sidebar_providers`
   - `provider_order` 是排序前缀，不是全量清单：可包含已从 sidebar 移除或已禁用的 provider key（作为排序记忆，重新加回时恢复原位置）；缺失项由 `ordered_provider_ids` 自动追加到末尾，`sidebar_provider_ids` 会过滤掉不在 sidebar 中的项
   - `is_enabled()` / `set_enabled()` / `remove_enabled_record()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()`

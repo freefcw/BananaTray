@@ -1,14 +1,7 @@
 use crate::models::AppSettings;
 use gpui::App;
-use log::{info, warn};
+use log::info;
 use rust_i18n::t;
-
-pub(crate) fn load_settings() -> AppSettings {
-    crate::settings_store::load().unwrap_or_else(|err| {
-        warn!(target: "settings", "failed to load saved settings: {err}");
-        AppSettings::default()
-    })
-}
 
 pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
     crate::platform::auto_launch::schedule_sync(settings.system.start_at_login);

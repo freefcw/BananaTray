@@ -28,7 +28,7 @@ pub(crate) use settings_window::{
     register_notify_view, schedule_open_settings_window,
 };
 #[allow(unused_imports)]
-pub(crate) use ui_bootstrap::{bootstrap_ui, load_settings, sync_initial_auto_launch};
+pub(crate) use ui_bootstrap::{bootstrap_ui, sync_initial_auto_launch};
 #[allow(unused_imports)]
 #[cfg(target_os = "linux")]
 pub(crate) use workers::linux_dbus::emit_current_dbus_snapshot;

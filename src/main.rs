@@ -34,7 +34,13 @@ fn main() {
         return;
     }
 
-    let log_path = match platform::logging::init() {
+    // 启动早期加载设置：日志轮转/清理阈值依赖 logging 子配置，
+    // 必须在 platform::logging::init 之前读取；同一份 settings 移入 GPUI run 闭包复用。
+    let settings = crate::settings_store::load().unwrap_or_else(|err| {
+        eprintln!("failed to load settings: {err:#}");
+        Default::default()
+    });
+    let log_path = match platform::logging::init(&settings.logging) {
         Ok(init) => {
             log::info!(target: "app", "logging initialized at {}", init.log_path.display());
             Some(init.log_path)
@@ -59,8 +65,6 @@ fn main() {
         .with_resource_profile(AppProfile::Minimal)
         .with_assets(Assets::new())
         .run(move |cx: &mut App| {
-            let settings = bootstrap::load_settings();
-
             // 1. UI + 托盘初始化
             bootstrap::bootstrap_ui(cx, &settings);
 

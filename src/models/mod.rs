@@ -36,6 +36,7 @@ pub use script_provider::{
     DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 pub use settings::{
-    AppSettings, AppTheme, DisplaySettings, NotificationSettings, ProviderConfig, ProviderSettings,
-    QuotaDisplayMode, SavedWindowPosition, SystemSettings, TrayIconStyle, TrayPopupSettings,
+    AppSettings, AppTheme, DisplaySettings, LoggingSettings, NotificationSettings, ProviderConfig,
+    ProviderSettings, QuotaDisplayMode, SavedWindowPosition, SystemSettings, TrayIconStyle,
+    TrayPopupSettings,
 };

@@ -43,6 +43,42 @@ impl SystemSettings {
     pub const DEFAULT_GLOBAL_HOTKEY: &'static str = "win-shift-s";
 }
 
+/// 日志轮转 / 清理配置（不在 UI 中暴露，仅 settings.json 持久化）。
+///
+/// 阈值默认值与 `platform::logging` 中的常量保持一致；缺失字段通过
+/// `#[serde(default)]` 回填，保证旧 settings.json 无需迁移即可加载。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LoggingSettings {
+    /// 单个日志文件大小上限（字节），超过即轮转。0 表示禁用轮转。
+    #[serde(default = "default_log_max_bytes")]
+    pub max_bytes: u64,
+    /// 保留的轮转文件份数（不含当前活跃文件）。
+    #[serde(default = "default_log_max_files")]
+    pub max_files: usize,
+}
+
+impl Default for LoggingSettings {
+    fn default() -> Self {
+        Self {
+            max_bytes: default_log_max_bytes(),
+            max_files: default_log_max_files(),
+        }
+    }
+}
+
+/// 默认单个日志文件上限：5 MiB。
+const DEFAULT_LOG_MAX_BYTES: u64 = 5 * 1024 * 1024;
+/// 默认保留轮转份数（1 活跃 + 4 轮转 = 5 文件）。
+const DEFAULT_LOG_MAX_FILES: usize = 4;
+
+fn default_log_max_bytes() -> u64 {
+    DEFAULT_LOG_MAX_BYTES
+}
+
+fn default_log_max_files() -> usize {
+    DEFAULT_LOG_MAX_FILES
+}
+
 /// 通知设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationSettings {
@@ -356,6 +392,9 @@ pub struct AppSettings {
     pub notification: NotificationSettings,
     /// 显示/外观：主题、语言、托盘图标、各 UI 开关
     pub display: DisplaySettings,
+    /// 日志：轮转 / 清理阈值（不在 UI 中暴露）
+    #[serde(default)]
+    pub logging: LoggingSettings,
     /// Provider 管理：启用状态、排序、隐藏配额、sidebar、以及 app-managed credentials
     pub provider: ProviderConfig,
 }
