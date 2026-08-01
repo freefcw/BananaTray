@@ -214,7 +214,8 @@ fn test_read_via_cached_plan_info_uses_devin_fallback_key() {
 #[test]
 fn test_build_quota_from_cached_fresh() {
     let future_ts = chrono::Utc::now().timestamp() + 3600;
-    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(future_ts)).unwrap();
+    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(future_ts), "test")
+        .unwrap();
     assert_eq!(q.label_spec, crate::models::QuotaLabelSpec::Daily);
     assert_eq!(q.stable_key, "daily-quota");
     assert!((q.used - 59.0).abs() < 0.01);
@@ -229,7 +230,7 @@ fn test_build_quota_from_cached_expired_reset_returns_no_quota() {
     // 缓存的 reset 时间已过，旧 remaining 无法反映新周期的实际额度。
     let past_ts = chrono::Utc::now().timestamp() - 3600;
 
-    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(past_ts));
+    let q = build_quota_from_cached(CachedQuotaKind::Daily, Some(41.0), Some(past_ts), "test");
 
     assert!(q.is_none());
 }
@@ -237,14 +238,14 @@ fn test_build_quota_from_cached_expired_reset_returns_no_quota() {
 #[test]
 fn test_build_quota_from_cached_no_reset_time() {
     // 没有 reset 时间 → 按原始数据展示
-    let q = build_quota_from_cached(CachedQuotaKind::Weekly, Some(70.0), None).unwrap();
+    let q = build_quota_from_cached(CachedQuotaKind::Weekly, Some(70.0), None, "test").unwrap();
     assert!((q.used - 30.0).abs() < 0.01);
 }
 
 #[test]
 fn test_build_quota_from_cached_no_percent() {
     // 没有百分比数据 → 返回 None
-    let q = build_quota_from_cached(CachedQuotaKind::Daily, None, Some(9999999999));
+    let q = build_quota_from_cached(CachedQuotaKind::Daily, None, Some(9999999999), "test");
     assert!(q.is_none());
 }
 
@@ -723,4 +724,59 @@ fn test_read_refresh_data_short_circuits_on_stale_cache() {
     // freshness 闸应在更前面拦下。
     let err = ensure_cache_fresh(&db, &spec).unwrap_err();
     assert!(matches!(err, ProviderError::Unavailable { .. }));
+}
+
+#[test]
+fn test_read_refresh_data_from_conn_merges_both_path_errors() {
+    // protobuf 路径失败（auth status 存在但 payload 不是合法 protobuf）+
+    // cachedPlanInfo 路径失败（quota reset 时间已过期 → NoData）时，
+    // 返回的合并错误应同时包含两条路径的真实失败原因，而非只提及 protobuf。
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        [],
+    )
+    .unwrap();
+
+    // auth status：payload 不是合法 protobuf，触发 protobuf 路径 ParseFailed
+    conn.execute(
+        "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+        [
+            "windsurfAuthStatus",
+            r#"{"userStatusProtoBinaryBase64":"!!not-valid-base64!!"}"#,
+        ],
+    )
+    .unwrap();
+
+    // cachedPlanInfo：reset 时间在过去，触发 cachedPlanInfo 路径 NoData
+    let past_ts = chrono::Utc::now().timestamp() - 3600;
+    let plan_json = format!(
+        r#"{{"planName":"Pro","quotaUsage":{{"dailyRemainingPercent":88,"dailyResetAtUnix":{}}}}}"#,
+        past_ts
+    );
+    conn.execute(
+        "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+        ["windsurf.settings.cachedPlanInfo", &plan_json],
+    )
+    .unwrap();
+
+    let spec = test_windsurf_spec();
+    let err = read_refresh_data_from_conn(&conn, &spec).unwrap_err();
+
+    let ProviderError::ParseFailed { raw_detail, .. } = err else {
+        panic!("expected ParseFailed, got {err:?}");
+    };
+    let detail = raw_detail.expect("merged error should carry raw_detail");
+    assert!(
+        detail.contains("protobuf:"),
+        "merged error should mention protobuf path: {detail}"
+    );
+    assert!(
+        detail.contains("cachedPlanInfo:"),
+        "merged error should mention cachedPlanInfo path: {detail}"
+    );
+    assert!(
+        detail.contains("no quota data"),
+        "merged error should surface cachedPlanInfo's NoData reason: {detail}"
+    );
 }

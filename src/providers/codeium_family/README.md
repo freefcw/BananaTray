@@ -95,6 +95,22 @@ language server 进程发现同时支持 macOS 的 `language_server_macos*`
 候选路径，避免不同发行版把 `lsof` 放在 `/usr/bin` 或 `/usr/sbin`
 时漏检。
 
+进程参数提取依赖 `pgrep` 的列表模式，但平台参数不同：macOS 用
+`pgrep -lf`（仅输出进程名，受内核 15 字符截断限制），Linux 用
+`pgrep -af`（输出完整命令行，可提取 `--windsurf_version` 等长参数）。
+该差异通过 `live_source::PGREP_LIST_ARGS` 常量按 `cfg` 切换。
+
+`ProcessInfo.windsurf_version` 从进程参数 `--windsurf_version` 提取，
+仅 Linux `pgrep -af` 输出可获取；macOS 版本检测走 Info.plist 路径，
+该字段恒为 `None`。
+
+Windsurf app 版本检测（`seat_source::detect_windsurf_app_version`）
+采用三级回退策略：
+1. 从运行中进程参数提取（`--windsurf_version`，最可靠，直接来自运行实例）
+2. 从 language server binary 路径推导 `product.json`（Electron 应用
+   `resources/app/product.json`），读取 `windsurfVersion` 字段
+3. 已知安装路径的 `product.json` → CLI `--version` 兜底
+
 如果未来出现新的稳定产品差异，优先考虑继续加到 spec。
 只有当差异本质上属于 provider 自己的 orchestration 或云端 source 时，才应放回 facade。
 
@@ -128,6 +144,15 @@ availability 语义刻意拆成两层：
 缓存没有新周期的实际用量，必须丢弃该额度，不能推断为 100% 剩余；所有额度都被
 丢弃时返回 `ProviderError::NoData`。两道闸的语义互补：mtime 闸防"整体快照过老"，
 reset 闸防"数据库仍有其他状态写入、但个别额度快照已经失效"。
+
+当额度因 reset 过期被丢弃时，`build_quota_from_cached` 会输出 debug 日志说明
+丢弃原因（含 `stable_key` 和过期的 `reset_at_unix`），让刷新日志能自洽地解释
+"解析出了 `remaining_percent` 却没有产生 quota"的情况。
+
+两条解析路径都失败时，`read_refresh_data` 返回合并了 protobuf 和 cachedPlanInfo
+各自真实失败原因的 `ParseFailed` 错误（如 `"protobuf: ...; cachedPlanInfo: ..."`），
+避免最终错误只提及 protobuf 路径而掩盖 cachedPlanInfo 的实际失败原因（如 reset
+过期导致的 `NoData`）。
 
 ## 测试
 

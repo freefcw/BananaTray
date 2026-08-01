@@ -87,6 +87,7 @@ pub(super) fn read_via_cached_plan_info(
             CachedQuotaKind::Daily,
             usage.daily_remaining_percent,
             usage.daily_reset_at_unix,
+            spec.log_label,
         ) {
             quotas.push(q);
         }
@@ -95,6 +96,7 @@ pub(super) fn read_via_cached_plan_info(
             CachedQuotaKind::Weekly,
             usage.weekly_remaining_percent,
             usage.weekly_reset_at_unix,
+            spec.log_label,
         ) {
             quotas.push(q);
         } else if let (None, Some(reset_ts)) =
@@ -136,15 +138,28 @@ pub(super) fn read_via_cached_plan_info(
 /// 根据 cachedPlanInfo 的 remaining_percent 和 reset_at_unix 构建配额项。
 ///
 /// reset 时间已过时，缓存没有新周期的实际用量，不能把未知状态显示为满额。
+///
+/// `log_label` 用于在额度因 reset 过期而被丢弃时输出 debug 日志，让刷新日志
+/// 能自洽地解释"解析出了 remaining_percent 却没有产生 quota"的原因。
 pub(super) fn build_quota_from_cached(
     kind: CachedQuotaKind,
     remaining_percent: Option<f64>,
     reset_at_unix: Option<i64>,
+    log_label: &str,
 ) -> Option<QuotaInfo> {
     let pct = remaining_percent?;
 
-    if reset_at_unix.is_some_and(|ts| ts <= chrono::Utc::now().timestamp()) {
-        return None;
+    if let Some(ts) = reset_at_unix {
+        if ts <= chrono::Utc::now().timestamp() {
+            debug!(
+                target: "providers",
+                "{} {} discarded: reset_at_unix={} is in the past (cache snapshot expired for this quota period)",
+                log_label,
+                kind.stable_key(),
+                ts
+            );
+            return None;
+        }
     }
 
     let reset_detail = reset_at_unix.map(|epoch_secs| QuotaDetailSpec::ResetAt { epoch_secs });

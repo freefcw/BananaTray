@@ -50,8 +50,18 @@ pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData
             ))
         })?;
 
+    read_refresh_data_from_conn(&conn, spec)
+}
+
+/// 从已打开的 SQLite 连接读取刷新数据，依次尝试 protobuf 和 cachedPlanInfo 两条解析路径。
+///
+/// 提取为独立函数以便用 in-memory `Connection` 直接测试两条路径都失败时的合并错误。
+fn read_refresh_data_from_conn(
+    conn: &Connection,
+    spec: &CodeiumFamilySpec,
+) -> ProviderResult<RefreshData> {
     // 策略 1: 传统 protobuf 解析
-    let proto_result = read_via_protobuf(&conn, spec);
+    let proto_result = read_via_protobuf(conn, spec);
     if proto_result.is_ok() {
         return proto_result;
     }
@@ -65,7 +75,7 @@ pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData
             spec.log_label,
             proto_err
         );
-        match read_via_cached_plan_info(&conn, spec) {
+        match read_via_cached_plan_info(conn, spec) {
             Ok(data) => return Ok(data),
             Err(plan_err) => {
                 warn!(
@@ -74,6 +84,13 @@ pub fn read_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshData
                     spec.log_label,
                     plan_err
                 );
+
+                // 两条路径都失败：合并真实失败原因，避免最终错误只提及 protobuf
+                // 路径而掩盖 cachedPlanInfo 的实际失败（如 reset 过期导致的 NoData）。
+                return Err(ProviderError::parse_failed(&format!(
+                    "protobuf: {}; cachedPlanInfo: {}",
+                    proto_err, plan_err
+                )));
             }
         }
     }
