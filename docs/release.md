@@ -35,6 +35,16 @@ Release workflow 只负责“构建可下载产物 + 写入 draft release”，�
 
 Linux deb/rpm 使用仓库里的 `scripts/bundle-deb.sh` 和 `scripts/bundle-rpm.sh`，会包含 D-Bus activation 与 systemd user service。AppImage 会移除这些宿主级 activation 文件。GNOME Shell Extension 作为独立 zip 产物发布，不随 deb/rpm 自动写入系统扩展目录。
 
+## Linux 升级与冲突处理约定
+
+deb/rpm 的 `Conflicts` / `Replaces` / `Breaks` 字段只在**存在真实冲突对象**时才需要声明：
+
+- 首次发布（v0.1.0）无历史包、无路径迁移，不要声明这些字段——空声明既不产生作用，错误的 `Conflicts` 反而可能阻止合法安装（例如用户同时用 AppImage 与 deb）。
+- 只有出现以下任一情况时，才需要在对应打包脚本中补充：
+  - **包名 / 安装路径变更**：用 `Replaces` + `Breaks` 声明旧包名或旧路径，让 dpkg/rpm 平滑迁移并清理旧文件。
+  - **与第三方包占用相同路径**：用 `Conflicts` 声明，避免文件重复安装冲突。
+- 任何版本新增或移除 `usr/share/dbus-1/services`、`usr/lib/systemd/user` 下的文件时，记得在 `postinst`/`%post` 触发 `systemctl --user daemon-reload`（deb 已具备，rpm 见 `%post`），并在卸载脚本中保持对称处理。
+
 ## 发布步骤
 
 1. 确认工作树干净，并把 `Cargo.toml` 的版本号更新到目标版本。

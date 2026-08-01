@@ -29,6 +29,10 @@
   <url type="homepage">@APP_HOMEPAGE_URL@</url>
   <url type="bugtracker">@APP_BUGTRACKER_URL@</url>
 
+  <developer id="com.bananatray">
+    <name>BananaTray</name>
+  </developer>
+
   <provides>
     <binary>bananatray</binary>
   </provides>
@@ -53,7 +57,7 @@
   <content_rating type="oars-1.1" />
 
   <releases>
-    <release version="@APP_VERSION@" date="2025-01-01">
+    <release version="@APP_VERSION@" date="@APP_RELEASE_DATE@">
       <description>
         <p>Initial release with support for 14 AI providers.</p>
       </description>

@@ -213,6 +213,22 @@ install_icons() {
     done
 }
 
+# 解析 AppStream release date（ISO 8601 YYYY-MM-DD）。
+# 优先使用最近一次提交日期（release workflow 按 tag checkout，即该版本发布日期）；
+# git 不可用或非工作树时回退到当前日期。
+# 用法: meta_release_date
+meta_release_date() {
+    if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        local date
+        date="$(git -C "$PROJECT_DIR" log -1 --format=%cd --date=short 2>/dev/null || true)"
+        if [ -n "$date" ]; then
+            printf '%s\n' "$date"
+            return
+        fi
+    fi
+    date +%F
+}
+
 # 安装 AppStream metainfo 文件
 # 用法: install_metainfo <prefix_dir>
 #   安装到 $prefix_dir/share/metainfo/com.bananatray.app.metainfo.xml
@@ -220,6 +236,8 @@ install_metainfo() {
     local prefix_dir="$1"
     local metainfo_template="$PROJECT_DIR/resources/linux/com.bananatray.app.metainfo.xml.in"
     local metainfo_dest="$prefix_dir/share/metainfo/com.bananatray.app.metainfo.xml"
+    local meta_date
+    meta_date="$(meta_release_date)"
 
     if [ ! -f "$metainfo_template" ]; then
         echo "⚠️  未找到 metainfo 模板 ${metainfo_template}，跳过"
@@ -231,6 +249,7 @@ install_metainfo() {
         -e "s|@APP_HOMEPAGE_URL@|$HOMEPAGE_URL|g" \
         -e "s|@APP_BUGTRACKER_URL@|$BUGTRACKER_URL|g" \
         -e "s|@APP_VERSION@|$VERSION|g" \
+        -e "s|@APP_RELEASE_DATE@|$meta_date|g" \
         "$metainfo_template" > "$metainfo_dest"
 }
 

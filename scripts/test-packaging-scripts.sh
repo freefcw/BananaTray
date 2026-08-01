@@ -264,6 +264,59 @@ test_required_app_logo
 test_dmg_workflow
 test_hdiutil_fallback
 
+# 解析 AppStream release date：无论走 git 提交日期还是当前日期回退，
+# 返回结果必须始终是 ISO 8601 的 YYYY-MM-DD。
+test_meta_release_date_format() {
+    local d
+    d="$(bash -c 'source "$1"; PROJECT_DIR="$2"; meta_release_date' \
+        _ "$ROOT_DIR/scripts/common.sh" "$ROOT_DIR")" \
+        || fail "meta_release_date should succeed"
+    if [[ ! "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        fail "meta_release_date must return an ISO 8601 YYYY-MM-DD date, got: $d"
+    fi
+}
+
+# install_metainfo 必须：替换所有 @PLACEHOLDER@（无残留）、
+# 生成合法 release date、保留 <developer> 块。
+# 直接对仓库内真实模板做渲染验证（自身打包资源自检）。
+test_metainfo_render() {
+    local fixture out
+    fixture="$(make_temp_dir bananatray-metainfo-test)"
+    TEMP_DIRS+=("$fixture")
+
+    bash -c '
+        source "$1"
+        PROJECT_DIR="$2"
+        HOMEPAGE_URL="https://example.com/BananaTray"
+        REPOSITORY_URL="https://example.com/BananaTray"
+        BUGTRACKER_URL="https://example.com/BananaTray/issues"
+        VERSION="0.1.0"
+        install_metainfo "$3"
+    ' _ "$ROOT_DIR/scripts/common.sh" "$ROOT_DIR" "$fixture/out" \
+        || fail "install_metainfo failed"
+
+    out="$fixture/out/share/metainfo/com.bananatray.app.metainfo.xml"
+    [[ -f "$out" ]] || fail "install_metainfo did not produce the metainfo file"
+
+    # 不应残留任何 @PLACEHOLDER@
+    if grep -Eq '@[A-Za-z_]+@' "$out"; then
+        local leftovers
+        leftovers="$(grep -oE '@[A-Za-z_]+@' "$out" | sort -u | tr '\n' ' ')"
+        fail "metainfo still contains unresolved placeholders: $leftovers"
+    fi
+
+    # release date 必须是 YYYY-MM-DD
+    if ! grep -Eq '<release version="[^"]*" date="[0-9]{4}-[0-9]{2}-[0-9]{2}"' "$out"; then
+        fail "metainfo release date is not a valid YYYY-MM-DD"
+    fi
+
+    # <developer> 块必须保留（AppStream pedantic 校验所需）
+    grep -q '<developer' "$out" || fail "metainfo is missing the <developer> block"
+}
+
+test_meta_release_date_format
+test_metainfo_render
+
 if LC_ALL=C grep -n $'\357\277\275' "$ROOT_DIR/scripts/bundle.sh" >/dev/null; then
     fail "scripts/bundle.sh contains a Unicode replacement character"
 fi
