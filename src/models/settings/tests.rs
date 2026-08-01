@@ -176,6 +176,52 @@ fn system_settings_missing_global_hotkey_uses_default() {
     );
 }
 
+// ── 容器级 serde(default) 回归测试 ────────────────────
+
+/// 空 JSON 对象必须能反序列化为完整默认设置。
+/// 这是 schema 演进的兜底：未来新增字段忘加属性时，旧配置仍可加载，
+/// 不会在上层 fallback 中丢失全部用户配置。
+#[test]
+fn app_settings_empty_object_deserializes_to_defaults() {
+    let restored: AppSettings = serde_json::from_str("{}").unwrap();
+
+    assert!(restored.system.auto_hide_window);
+    assert_eq!(
+        restored.system.refresh_interval_mins,
+        SystemSettings::DEFAULT_REFRESH_INTERVAL_MINS
+    );
+    assert_eq!(
+        restored.system.global_hotkey,
+        SystemSettings::DEFAULT_GLOBAL_HOTKEY
+    );
+    assert!(restored.notification.session_quota_notifications);
+    assert_eq!(restored.display.theme, AppTheme::Dark);
+    assert!(restored.display.show_overview);
+    assert_eq!(
+        restored.logging.max_bytes,
+        LoggingSettings::default().max_bytes
+    );
+}
+
+/// 部分字段缺失时从结构体的 `Default` 回填（而非字段类型零值）：
+/// `auto_hide_window` 的语义默认是 true，若用字段级 bool::default() 会是 false。
+#[test]
+fn app_settings_partial_json_fills_from_struct_defaults() {
+    let restored: AppSettings =
+        serde_json::from_str(r#"{"system": {"refresh_interval_mins": 42}}"#).unwrap();
+
+    assert_eq!(restored.system.refresh_interval_mins, 42);
+    assert!(
+        restored.system.auto_hide_window,
+        "缺失字段应从 Default 回填 true，而非 bool 零值"
+    );
+    assert_eq!(
+        restored.display.theme,
+        AppTheme::Dark,
+        "缺失的整个 section 应回填默认"
+    );
+}
+
 #[test]
 fn display_settings_missing_tray_popup_uses_default() {
     let json = serde_json::json!({

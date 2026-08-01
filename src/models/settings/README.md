@@ -51,7 +51,9 @@ AppSettings
 - macOS: `~/Library/Application Support/BananaTray/settings.json`
 - Linux: `~/.config/bananatray/settings.json`
 
-serde 的 `#[serde(default)]` 保证新字段向前兼容。
+serde 的容器级 `#[serde(default)]` 保证新字段向前兼容：`AppSettings` 及各子结构均在容器上标注，
+缺失字段（或缺失的整个 section）从对应结构的 `Default` 回填——而非字段类型零值（例如
+`auto_hide_window` 的语义默认是 `true`）。回归测试锁定该契约：空 JSON 对象可完整反序列化为默认设置。
 
 `system.global_hotkey` 持久化为 GPUI 可直接回读的字符串格式（如 macOS 上的 `cmd-shift-s`），
 设置页中则通过键捕获控件展示为用户友好的快捷键标签。runtime 仍兼容读取旧版展示格式

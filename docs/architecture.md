@@ -175,6 +175,7 @@
 
 - 设置写入由后台 `settings_writer` 串行化并做 debounce；正常应用退出会关闭 writer sender、执行 pending snapshot 的 final flush，并 join 后台线程。随后，退出钩子把内存中的最终 `start_at_login` 状态提交给同一个 auto-launch worker，等待应用完成后再结束进程。
 - `settings.json`、BananaTray 代写的外部 OAuth 凭证、自定义 provider YAML 与向导脚本复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 的脚本 + YAML 由 custom lifecycle 额外编排双文件备份与回滚。
+- `settings.json` 加载失败（JSON 损坏等）时，启动路径会先把原文件 rename 备份为 `settings.json.corrupt-<epoch>` 再回退默认值，避免后续 persist 覆盖后原始内容不可恢复；备份成功时启动后发送系统通知告知备份位置。
 - 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。
 
 ## Localization Boundary

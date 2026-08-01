@@ -9,6 +9,45 @@ pub fn load() -> Result<AppSettings> {
     load_from(&config_path())
 }
 
+/// 加载失败时备份疑似损坏的设置文件，返回备份文件路径。
+///
+/// 使用 `rename` 将原文件移出加载路径：既保留现场供人工恢复，
+/// 又避免后续 `persist` 把默认值写回时彻底覆盖原始内容。
+/// 文件不存在或备份失败时返回 `None`（已记录日志）。
+pub fn backup_corrupt_file() -> Option<PathBuf> {
+    backup_corrupt_file_at(&config_path())
+}
+
+fn backup_corrupt_file_at(path: &Path) -> Option<PathBuf> {
+    if !path.exists() {
+        return None;
+    }
+    let file_name = path.file_name()?.to_str()?;
+    let epoch_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let backup_path = path.with_file_name(format!("{file_name}.corrupt-{epoch_secs}"));
+    match fs::rename(path, &backup_path) {
+        Ok(()) => {
+            log::warn!(
+                target: "settings",
+                "backed up corrupt settings file to {}",
+                backup_path.display()
+            );
+            Some(backup_path)
+        }
+        Err(err) => {
+            log::warn!(
+                target: "settings",
+                "failed to back up corrupt settings file {}: {err}",
+                path.display()
+            );
+            None
+        }
+    }
+}
+
 /// 将 AppSettings 持久化到磁盘。
 ///
 /// 返回 `true` 表示成功，`false` 表示失败（已记录日志）。
@@ -170,6 +209,30 @@ mod tests {
         let result = load_from(&path);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn backup_corrupt_file_renames_and_preserves_content() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(&path, "not valid json {{{").unwrap();
+
+        let backup = backup_corrupt_file_at(&path).expect("backup should succeed");
+
+        assert!(!path.exists(), "original file should be moved away");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "not valid json {{{");
+        let backup_name = backup.file_name().unwrap().to_str().unwrap();
+        assert!(
+            backup_name.starts_with("settings.json.corrupt-"),
+            "unexpected backup name: {backup_name}"
+        );
+    }
+
+    #[test]
+    fn backup_corrupt_file_missing_returns_none() {
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("nonexistent.json");
+
+        assert!(backup_corrupt_file_at(&path).is_none());
     }
 
     #[test]

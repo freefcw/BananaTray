@@ -8,7 +8,12 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // ============================================================================
 
 /// 系统行为设置
+///
+/// 容器级 `#[serde(default)]`：缺失字段从 `SystemSettings::default()` 回填（而非
+/// 字段类型零值——`auto_hide_window` 的语义默认是 true）。旧配置无需迁移，
+/// 未来新增字段即使忘加字段级属性也不会导致整个文件反序列化失败。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SystemSettings {
     pub auto_hide_window: bool,
     /// 开机自启动
@@ -46,8 +51,9 @@ impl SystemSettings {
 /// 日志轮转 / 清理配置（不在 UI 中暴露，仅 settings.json 持久化）。
 ///
 /// 阈值默认值与 `platform::logging` 中的常量保持一致；缺失字段通过
-/// `#[serde(default)]` 回填，保证旧 settings.json 无需迁移即可加载。
+/// 容器级 `#[serde(default)]` 回填，保证旧 settings.json 无需迁移即可加载。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
 pub struct LoggingSettings {
     /// 单个日志文件大小上限（字节），超过即轮转。0 表示禁用轮转。
     #[serde(default = "default_log_max_bytes")]
@@ -79,8 +85,9 @@ fn default_log_max_files() -> usize {
     DEFAULT_LOG_MAX_FILES
 }
 
-/// 通知设置
+/// 通知设置（容器级 `#[serde(default)]` 语义见 `SystemSettings`）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct NotificationSettings {
     /// Session 配额变更通知
     #[serde(default = "default_true")]
@@ -99,8 +106,9 @@ impl Default for NotificationSettings {
     }
 }
 
-/// 显示/外观设置
+/// 显示/外观设置（容器级 `#[serde(default)]` 语义见 `SystemSettings`）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DisplaySettings {
     pub theme: AppTheme,
     /// 界面语言（"system" 表示跟随系统，"en" / "zh-CN" 等为具体语言）
@@ -149,6 +157,7 @@ impl Default for DisplaySettings {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct TrayPopupSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub linux_last_position: Option<SavedWindowPosition>,
@@ -166,8 +175,9 @@ pub struct SavedWindowPosition {
     pub y: f32,
 }
 
-/// Provider 管理配置
+/// Provider 管理配置（容器级 `#[serde(default)]` 语义见 `SystemSettings`）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ProviderConfig {
     /// BananaTray 自己管理的 Provider 凭证覆盖值（如 github_token / custom_token）。
     ///
@@ -383,8 +393,12 @@ impl ProviderSettings {
 // 应用设置（顶层）
 // ============================================================================
 
-/// 应用配置 — 按职责分为四组子设置
+/// 应用配置 — 按职责分为五组子设置
+///
+/// 容器级 `#[serde(default)]`：缺失的整个 section 从对应子结构的 `Default` 回填，
+/// 配合各子结构自身的容器级 default，空 JSON 对象也可完整加载。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppSettings {
     /// 系统行为：自动隐藏、开机自启、刷新间隔、全局热键
     pub system: SystemSettings,

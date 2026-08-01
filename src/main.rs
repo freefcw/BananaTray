@@ -22,6 +22,7 @@ mod utils;
 use gpui::{App, AppProfile, Application};
 use log::info;
 use platform::assets::Assets;
+use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -36,8 +37,12 @@ fn main() {
 
     // 启动早期加载设置：日志轮转/清理阈值依赖 logging 子配置，
     // 必须在 platform::logging::init 之前读取；同一份 settings 移入 GPUI run 闭包复用。
+    // 加载失败（文件损坏等）时先备份原文件再回退默认值，
+    // 避免后续 persist 把默认值写回后原始内容不可恢复。
+    let mut corrupt_backup: Option<std::path::PathBuf> = None;
     let settings = crate::settings_store::load().unwrap_or_else(|err| {
         eprintln!("failed to load settings: {err:#}");
+        corrupt_backup = crate::settings_store::backup_corrupt_file();
         Default::default()
     });
     let log_path = match platform::logging::init(&settings.logging) {
@@ -67,6 +72,17 @@ fn main() {
         .run(move |cx: &mut App| {
             // 1. UI + 托盘初始化
             bootstrap::bootstrap_ui(cx, &settings);
+
+            // 设置文件损坏恢复提示：备份成功时告知用户备份位置与默认值回退
+            if let Some(backup_path) = &corrupt_backup {
+                let title = t!("settings.corrupt_backup.title").to_string();
+                let body = t!(
+                    "settings.corrupt_backup.body",
+                    path = backup_path.display().to_string()
+                )
+                .to_string();
+                platform::notification::send_plain_notification(&title, &body);
+            }
 
             // 2. 后台刷新系统
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
