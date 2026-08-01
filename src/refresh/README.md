@@ -53,6 +53,7 @@ RefreshRequest ──(channel)──→ RefreshCoordinator
 ## 约束
 
 - 协调器运行在独立线程，通过 `smol::channel` 与 UI 通信
+- 请求通道为 unbounded：请求体小、产生速率受 UI 交互自然约束，有界队列的"满"状态只会制造瞬态发送失败（甚至静默丢弃 `UpdateConfig`）；发送失败仅意味着协调器线程已终止
 - Provider 刷新通过 `smol::block_on` + `smol::unblock` 执行异步代码
 - Cooldown 机制防止短时间内对同一 Provider 重复刷新
 - Provider panic 会被转换为 `RefreshResult::Failed`；timeout 则由协调器兜底清理 in-flight 状态

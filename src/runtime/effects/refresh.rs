@@ -25,7 +25,10 @@ pub(super) fn send_request(
     };
     let send_result = state.borrow().send_refresh(request);
     if let Err(err) = send_result {
-        warn!(target: "refresh", "failed to send refresh request: {}", err);
+        // 请求通道为 unbounded：发送失败仅发生在协调器线程终止（channel 关闭）后，
+        // 不存在"队列满"的瞬态失败。RefreshAll / UpdateConfig 等只记录日志；
+        // RefreshOne 额外收敛 provider 状态，避免前台乐观标记的 Refreshing 永久卡住。
+        warn!(target: "refresh", "refresh coordinator unavailable, request dropped: {}", err);
         failed_id
             .map(|id| vec![refresh_request_send_failed_action(id, err.to_string())])
             .unwrap_or_default()
@@ -41,7 +44,7 @@ fn refresh_request_send_failed_action(id: ProviderId, detail: String) -> AppActi
             failure: ProviderFailure {
                 reason: FailureReason::Unavailable,
                 advice: None,
-                raw_detail: Some(format!("failed to enqueue refresh request: {detail}")),
+                raw_detail: Some(format!("refresh coordinator unavailable: {detail}")),
             },
             error_kind: ErrorKind::Unknown,
         },

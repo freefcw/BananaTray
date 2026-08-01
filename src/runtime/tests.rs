@@ -214,7 +214,7 @@ fn dispatch_processes_refresh_send_failure_follow_up_action() {
         .last_failure
         .as_ref()
         .and_then(|failure| failure.raw_detail.as_deref())
-        .is_some_and(|detail| detail.contains("failed to enqueue refresh request")));
+        .is_some_and(|detail| detail.contains("refresh coordinator unavailable")));
     assert!(caps.rendered);
 }
 

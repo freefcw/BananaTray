@@ -128,7 +128,7 @@ impl RefreshScheduler {
 
     /// 标记 Provider 刷新完成（清除 in-flight 标志）
     pub fn clear_in_flight(&mut self, id: &ProviderId) {
-        self.in_flight.insert(id.clone(), false);
+        self.in_flight.remove(id);
     }
 
     /// 记录一次成功刷新（更新 last_refreshed）

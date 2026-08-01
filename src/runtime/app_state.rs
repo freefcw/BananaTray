@@ -61,7 +61,9 @@ impl AppState {
         }
     }
 
-    /// 向 RefreshCoordinator 发送请求（非阻塞）
+    /// 向 RefreshCoordinator 发送请求（非阻塞）。
+    ///
+    /// 通道为 unbounded：失败仅发生在协调器线程终止（channel 关闭）后。
     pub fn send_refresh(
         &self,
         request: RefreshRequest,

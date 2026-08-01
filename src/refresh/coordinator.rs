@@ -37,7 +37,9 @@ impl RefreshCoordinator {
     }
 
     pub fn new(manager: ProviderManagerHandle, event_tx: Sender<RefreshEvent>) -> Self {
-        let (request_tx, request_rx) = smol::channel::bounded(32);
+        // 请求通道不设容量上限：请求体小、产生速率受 UI 交互自然约束，
+        // 有界队列的"满"状态只会制造无意义的瞬态发送失败（并可能丢弃 UpdateConfig）。
+        let (request_tx, request_rx) = smol::channel::unbounded();
         Self {
             manager,
             request_tx,
@@ -154,8 +156,21 @@ impl RefreshCoordinator {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 smol::block_on(mgr.refresh_by_id(&id, &provider_credentials))
             }))
-            .unwrap_or_else(|_| {
-                log::error!(target: "refresh", "provider {} panicked during refresh", id);
+            .unwrap_or_else(|payload| {
+                // panic hook 只在 app 外壳安装（platform 是 app-only），lib 环境下消息只能靠这里保留
+                let message = if let Some(s) = payload.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic payload".to_string()
+                };
+                log::error!(
+                    target: "refresh",
+                    "provider {} panicked during refresh: {}",
+                    id,
+                    message
+                );
                 Err(ProviderError::fetch_failed("provider panicked"))
             });
             RefreshCoordinator::build_outcome(id, result)
