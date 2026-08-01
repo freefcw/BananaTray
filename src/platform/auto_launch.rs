@@ -261,12 +261,29 @@ mod platform {
              Type=Application\n\
              Name={APP_NAME}\n\
              Comment=AI Coding Assistant Quota Monitor\n\
-             Exec={exe}\n\
+             Exec={exec}\n\
              Terminal=false\n\
              StartupNotify=false\n\
              X-GNOME-Autostart-enabled=true\n",
-            exe = exe.display()
+            exec = escape_exec_path(&exe.to_string_lossy())
         )
+    }
+
+    /// 按 freedesktop Desktop Entry 规范转义 Exec 字段中的路径参数。
+    ///
+    /// 结果整体以双引号包裹，路径中的空格等保留字符因此安全。解析要过三层，
+    /// 转义按逆序构造：
+    /// - key file string 层与 Exec quoting 层都会消耗反斜杠：字面反斜杠写成四连；
+    ///   字面双引号 / 美元符 / 反引号写成两个反斜杠加字符本身。
+    /// - 字段代码层：字面百分号写成两个百分号，避免被当作 %f / %u 等 field code 展开。
+    pub(super) fn escape_exec_path(raw: &str) -> String {
+        let escaped = raw
+            .replace('\\', r"\\\\")
+            .replace('"', r#"\\""#)
+            .replace('$', r#"\\$"#)
+            .replace('\u{60}', r#"\\`"#)
+            .replace('%', "%%");
+        format!("\"{escaped}\"")
     }
 
     /// Write the autostart desktop entry — exposed for testing.
@@ -374,10 +391,82 @@ mod tests {
         fn desktop_content_contains_exe_path() {
             let exe = Path::new("/usr/bin/bananatray");
             let content = platform::entry_content(exe);
-            assert!(content.contains("Exec=/usr/bin/bananatray"));
+            assert!(content.contains("Exec=\"/usr/bin/bananatray\""));
             assert!(content.contains("Name=BananaTray"));
             assert!(content.contains("Type=Application"));
             assert!(content.contains("Terminal=false"));
+        }
+
+        #[test]
+        fn exec_path_escapes_special_characters() {
+            // 空格：整体双引号包裹保护
+            assert_eq!(
+                platform::escape_exec_path("/home/u/My Apps/bananatray"),
+                "\"/home/u/My Apps/bananatray\""
+            );
+            // 百分号写成两个（防止被当作 %f / %u 字段代码展开）
+            assert_eq!(
+                platform::escape_exec_path("/opt/100%/bt"),
+                "\"/opt/100%%/bt\""
+            );
+            // 反斜杠写成四连（string 层与 quoting 层各消耗一半）
+            assert_eq!(platform::escape_exec_path("/a\\b"), r#""/a\\\\b""#);
+            // 双引号写成两个反斜杠加引号
+            assert_eq!(platform::escape_exec_path("/a\"b"), r#""/a\\"b""#);
+            // 美元符同理
+            assert_eq!(platform::escape_exec_path("/a$b"), r#""/a\\$b""#);
+        }
+
+        /// 模拟 desktop entry 解析链路（string 层 → quoting 层 → 字段代码层），
+        /// 验证转义结果能被真实解析器还原为原始路径。
+        fn simulate_desktop_entry_parse(escaped: &str) -> String {
+            // key file string 层：成对反斜杠折叠为单个
+            let mut layer1 = String::with_capacity(escaped.len());
+            let mut chars = escaped.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\' && chars.peek() == Some(&'\\') {
+                    chars.next();
+                }
+                layer1.push(c);
+            }
+            // Exec quoting 层：剥离外层双引号，反斜杠加字符还原为字符本身
+            let inner = layer1
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .expect("escaped Exec path must be quoted");
+            let mut layer2 = String::with_capacity(inner.len());
+            let mut chars = inner.chars();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    match chars.next() {
+                        Some(next) => layer2.push(next),
+                        None => layer2.push('\\'),
+                    }
+                } else {
+                    layer2.push(c);
+                }
+            }
+            // 字段代码层：两个百分号还原为一个
+            layer2.replace("%%", "%")
+        }
+
+        #[test]
+        fn exec_path_round_trips_through_desktop_entry_parsing() {
+            for raw in [
+                "/usr/bin/bananatray",
+                "/home/u/My Apps/bananatray",
+                "/opt/100%/bt",
+                "/a\\b/c",
+                "/a\"b/c",
+                "/a$b/c",
+            ] {
+                let escaped = platform::escape_exec_path(raw);
+                assert_eq!(
+                    simulate_desktop_entry_parse(&escaped),
+                    raw,
+                    "Exec 转义往返失败：{raw}"
+                );
+            }
         }
 
         #[test]
