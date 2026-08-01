@@ -101,7 +101,6 @@ opt-level = "z"       # 优先优化体积
 strip = true          # 移除符号表，减小二进制体积
 lto = "fat"           # 全量 LTO，跨 crate 死代码消除
 codegen-units = 1     # 单 codegen unit，配合 LTO 最大化优化
-panic = "abort"       # 去掉 unwind 表，减小体积并改善优化
 
 # portable-pty patched: nix 0.28 → 0.31，与 adabraka-gpui 对齐，消除 nix 双版本
 [patch.crates-io]

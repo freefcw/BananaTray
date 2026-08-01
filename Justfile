@@ -21,6 +21,9 @@ check-gpui-imports:
 check-provider-secret-slicing:
     ./scripts/check-provider-secret-slicing.sh
 
+check-release-panic-profile:
+    ./scripts/check-release-panic-profile.sh
+
 check-gnome-extension:
     ./scripts/check-gnome-extension.sh
 
@@ -39,7 +42,7 @@ clippy-lib-fast:
 test-lib-fast:
     cargo test --lib --no-default-features
 
-ci-fast: fmt-check check-gpui-imports check-provider-secret-slicing check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
+ci-fast: fmt-check check-gpui-imports check-provider-secret-slicing check-release-panic-profile check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
     @true
 
 clippy-lib:

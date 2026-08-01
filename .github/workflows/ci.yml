@@ -40,6 +40,9 @@ jobs:
       - name: Forbid provider secret byte slicing
         run: ./scripts/check-provider-secret-slicing.sh
 
+      - name: Keep release panic profile on unwind
+        run: ./scripts/check-release-panic-profile.sh
+
       - name: Check GNOME Shell Extension
         run: ./scripts/check-gnome-extension.sh
 

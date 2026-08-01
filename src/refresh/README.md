@@ -56,3 +56,4 @@ RefreshRequest ──(channel)──→ RefreshCoordinator
 - Provider 刷新通过 `smol::block_on` + `smol::unblock` 执行异步代码
 - Cooldown 机制防止短时间内对同一 Provider 重复刷新
 - Provider panic 会被转换为 `RefreshResult::Failed`；timeout 则由协调器兜底清理 in-flight 状态
+- panic 兜底依赖 panic 策略保持 `unwind`（Cargo 默认）：`panic = "abort"` 会让 provider 的 panic 直接终止整个托盘进程，且该行为只在 release 构建出现、dev 测试无法发现。该契约由 `scripts/check-release-panic-profile.sh` 在 CI 守护，勿在 Cargo.toml 引入 `panic = "abort"`
