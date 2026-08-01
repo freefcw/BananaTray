@@ -64,8 +64,42 @@ fn is_gnome_desktop() -> bool {
 ///
 /// `gnome-extensions list --enabled` 只能证明用户打开了开关；
 /// `info` 的 `State: ACTIVE` 才能证明 Shell 已成功加载扩展。
+///
+/// 结果带 TTL 缓存：该函数会在每次托盘图标更新时被调用（UI 线程），
+/// 实时 spawn `gnome-extensions` 子进程代价过高；代价是扩展状态变化
+/// （启用/禁用/重载）最长延迟 `EXTENSION_STATE_CACHE_TTL` 才被感知。
 fn is_extension_active() -> bool {
-    is_extension_active_via_cli()
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Option<(std::time::Instant, bool)>>> =
+        std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(|| std::sync::Mutex::new(None));
+    let now = std::time::Instant::now();
+
+    match cache.lock() {
+        Ok(mut guard) => {
+            if let Some(value) = cached_extension_state(*guard, now, EXTENSION_STATE_CACHE_TTL) {
+                return value;
+            }
+            let value = is_extension_active_via_cli();
+            *guard = Some((now, value));
+            value
+        }
+        // Mutex 中毒时退化为实时检测，不因缓存故障影响功能
+        Err(_) => is_extension_active_via_cli(),
+    }
+}
+
+/// CLI 检测结果缓存 TTL：每次托盘图标更新都会触发检测，
+/// 缓存避免在 UI 线程上频繁 spawn 子进程。
+const EXTENSION_STATE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// 纯函数：缓存存在且未过期时返回缓存值，否则返回 `None`。
+fn cached_extension_state(
+    stored: Option<(std::time::Instant, bool)>,
+    now: std::time::Instant,
+    ttl: std::time::Duration,
+) -> Option<bool> {
+    let (ts, value) = stored?;
+    (now.duration_since(ts) < ttl).then_some(value)
 }
 
 /// 通过 gnome-extensions CLI 检查扩展是否处于 ACTIVE 状态
@@ -167,5 +201,51 @@ bananatray@bananatray.github.io
 ";
 
         assert!(!extension_info_is_active(info));
+    }
+
+    #[test]
+    fn extension_state_cache_returns_value_within_ttl() {
+        let ts = std::time::Instant::now();
+        let ttl = std::time::Duration::from_secs(30);
+
+        assert_eq!(
+            cached_extension_state(
+                Some((ts, true)),
+                ts + std::time::Duration::from_secs(5),
+                ttl
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            cached_extension_state(
+                Some((ts, false)),
+                ts + std::time::Duration::from_secs(29),
+                ttl
+            ),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn extension_state_cache_expires_after_ttl() {
+        let ts = std::time::Instant::now();
+        let ttl = std::time::Duration::from_secs(30);
+
+        assert_eq!(
+            cached_extension_state(Some((ts, true)), ts + ttl, ttl),
+            None
+        );
+    }
+
+    #[test]
+    fn extension_state_cache_empty_returns_none() {
+        assert_eq!(
+            cached_extension_state(
+                None,
+                std::time::Instant::now(),
+                std::time::Duration::from_secs(30)
+            ),
+            None
+        );
     }
 }
