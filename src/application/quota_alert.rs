@@ -5,6 +5,11 @@ use log::info;
 use std::collections::HashMap;
 
 /// Provider 配额的告警状态
+///
+/// 阈值有意与托盘图标状态阈值错开（`QuotaInfo::status_level`：剩余 >50% Green、
+/// 20~50% Yellow、<20% Red）：图标是"瞟一眼"的早预警，通知是打断用户的晚警报——
+/// 图标变红（<20%）时先不打扰，剩余 ≤10% 才发第一条 Low 通知，耗尽才发 Exhausted。
+/// 若产品决策要求对齐两套阈值，调整 `AlertState::from_remaining` 即可。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AlertState {
     /// 余量充足（> 10%）

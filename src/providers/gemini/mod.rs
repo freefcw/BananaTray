@@ -228,5 +228,7 @@ mod tests {
             err,
             crate::providers::ProviderError::ConfigMissing { .. }
         ));
+        // vertex-ai 模式是有意的用户选择，文案应指向 Vertex AI provider 而非要求改用 OAuth
+        assert!(err.to_string().contains("Vertex AI provider"));
     }
 }

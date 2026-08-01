@@ -70,8 +70,10 @@ pub(super) fn check_auth_type_from_content(content: &str) -> ProviderResult<()> 
         "api-key" => Err(ProviderError::config_missing(
             "Gemini API key is not supported, please use Google account (OAuth) login",
         )),
+        // selectedType 单值互斥：vertex-ai 模式下配额由 Vertex AI provider 跟踪，
+        // 文案引导用户查看对应页签，而不是误导为"不支持请改用 OAuth"
         "vertex-ai" => Err(ProviderError::config_missing(
-            "Gemini Vertex AI is not supported, please use Google account (OAuth) login",
+            "Gemini CLI is using Vertex AI auth; quota is tracked by the Vertex AI provider",
         )),
         _ => Ok(()),
     }

@@ -25,6 +25,16 @@
 | OpenCode | `opencode` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |
 | Vertex AI | `vertexai` | Gemini CLI 配置检测 | `Informational` | 说明 Gemini CLI 的 Vertex AI 认证路径，本身不直接抓取配额 |
 
+### Gemini 与 Vertex AI 的互斥契约
+
+两者都读取 `~/.gemini/settings.json` 的 `security.auth.selectedType`（单值），因此**任一时刻至多一个可用**，另一个必然处于 `config_missing`：
+
+- `oauth-personal` / `unknown` / 其他未识别值 → Gemini 放行（对未知值宽容，默认按 OAuth 处理），Vertex AI 报 `config_missing`（`Informational` 能力，UI 仅显示说明性面板，非错误态）。
+- `vertex-ai` → Vertex AI 放行；Gemini 报 `config_missing`，文案指向 Vertex AI provider（用户是有意使用 Vertex AI，不引导其改用 OAuth）。
+- `api-key` → Gemini 报 `config_missing`（不支持 API key，引导改用 OAuth 登录）。
+
+这是有意设计而非缺陷：两个 provider 描述的是同一 CLI 的两种互斥认证模式。
+
 ## Custom Providers
 
 自定义 provider 通过 YAML 声明，不需要新增 Rust 代码。

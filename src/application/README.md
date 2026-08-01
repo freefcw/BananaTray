@@ -65,7 +65,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `quota_alert.rs` — 配额告警领域状态机
 
-- **`QuotaAlertTracker`** — 追踪各 Provider 的 quota 状态转换，产出告警事件
+- **`QuotaAlertTracker`** — 追踪各 Provider 的 quota 状态转换，产出告警事件；通知阈值（剩余 ≤10% Low / =0% Exhausted）有意低于托盘图标状态阈值（50%/20%），早预警靠图标、晚警报靠通知，详见 `quota_alert.rs` 顶部注释
 - **`QuotaAlert`** — 告警领域事件（LowQuota / Exhausted / Recovered）
 - 该模块只表达“应该发什么告警”，不关心 OS 通知如何发送
 
