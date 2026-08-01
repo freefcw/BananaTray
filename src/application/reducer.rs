@@ -187,9 +187,18 @@ fn reduce_newapi_action(session: &mut AppSession, action: AppAction, effects: &m
         AppAction::NewApiSaveFinished {
             config,
             filename,
+            original_id,
             is_editing,
             result,
-        } => newapi::newapi_save_finished(session, config, filename, is_editing, result, effects),
+        } => newapi::newapi_save_finished(
+            session,
+            config,
+            filename,
+            original_id,
+            is_editing,
+            result,
+            effects,
+        ),
         AppAction::EditNewApi { provider_id } => {
             newapi::edit_newapi(session, provider_id, effects);
         }

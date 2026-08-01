@@ -131,6 +131,7 @@ fn modal_state_helpers_match_variants() {
         user_id: None,
         divisor: None,
         original_filename: "x.yaml".into(),
+        original_id: "example-com:newapi".into(),
     });
     assert!(edit.is_newapi_form());
     assert_eq!(edit.newapi_edit_data().unwrap().display_name, "x");

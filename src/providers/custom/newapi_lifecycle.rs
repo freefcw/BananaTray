@@ -3,7 +3,7 @@
 //! 本模块只持有 NewAPI provider 的身份、文件名、编辑态加载、保存和删除语义。
 //! 低层文件替换与回滚由 `file_ops.rs` 负责。
 
-use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::newapi::{newapi_provider_id, NewApiConfig, NewApiEditData};
 use crate::models::ProviderId;
 use crate::providers::custom::file_ops;
 use crate::providers::custom::generator;
@@ -14,7 +14,10 @@ use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn generate_filename(config: &NewApiConfig) -> String {
-    format!("newapi-{}.yaml", extract_domain_slug(&config.base_url))
+    // 与 filename_for_id 保持一致：文件名由身份 ID 推导（含 user_id 维度）
+    let id = newapi_provider_id(&config.base_url, config.user_id.as_deref());
+    let stem = id.strip_suffix(":newapi").unwrap_or(id.as_str());
+    format!("newapi-{stem}.yaml")
 }
 
 pub(crate) fn read_config(provider_custom_id: &str) -> Option<NewApiEditData> {
@@ -25,11 +28,15 @@ pub(crate) fn read_config(provider_custom_id: &str) -> Option<NewApiEditData> {
 }
 
 /// 将 NewAPI 配置写入磁盘 YAML 文件。
+///
+/// `id_override` 用于编辑保存时保持 Provider 身份（原始 YAML 的 `id`）不变；
+/// 新增时传 `None`，按 base_url + user_id 计算身份。
 pub(crate) fn save_yaml(
     config: &NewApiConfig,
     filename: &str,
+    id_override: Option<&str>,
 ) -> CustomProviderLifecycleResult<PathBuf> {
-    let yaml_content = generator::generate_newapi_yaml(config);
+    let yaml_content = generator::generate_newapi_yaml(config, id_override);
     let path = crate::platform::paths::custom_provider_path(filename);
 
     file_ops::write_newapi_yaml(&path, &yaml_content)
@@ -160,9 +167,15 @@ plan:
     }
 
     #[test]
-    fn generate_filename_uses_newapi_slug() {
+    fn generate_filename_includes_user_id_dimension() {
         let filename = generate_filename(&make_newapi_config());
-        assert_eq!(filename, "newapi-example-com.yaml");
+        assert_eq!(filename, "newapi-example-com-42.yaml");
+
+        let no_user = NewApiConfig {
+            user_id: None,
+            ..make_newapi_config()
+        };
+        assert_eq!(generate_filename(&no_user), "newapi-example-com.yaml");
     }
 
     #[test]
@@ -171,16 +184,18 @@ plan:
         let providers_dir = dir.path().join("providers");
         std::fs::create_dir_all(&providers_dir).unwrap();
         let config = make_newapi_config();
-        let yaml = generator::generate_newapi_yaml(&config);
+        let yaml = generator::generate_newapi_yaml(&config, None);
         let yaml_path = providers_dir.join("renamed-provider.yaml");
         std::fs::write(&yaml_path, yaml).unwrap();
 
-        let edit = read_config_in_dir("example-com:newapi", &providers_dir).unwrap();
+        let edit = read_config_in_dir("example-com-42:newapi", &providers_dir).unwrap();
 
         assert_eq!(edit.display_name, "Example");
         assert_eq!(edit.base_url, "https://example.com");
         assert_eq!(edit.cookie, "session=abc");
         assert_eq!(edit.user_id.as_deref(), Some("42"));
         assert_eq!(edit.original_filename, "renamed-provider.yaml");
+        // 身份来自 YAML 的 id 字段，编辑保存时保持不变
+        assert_eq!(edit.original_id, "example-com-42:newapi");
     }
 }

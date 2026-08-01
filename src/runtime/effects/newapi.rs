@@ -14,8 +14,15 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: NewApiEffect) -> Vec<Ap
         NewApiEffect::SaveProvider {
             config,
             original_filename,
+            original_id,
             is_editing,
-        } => vec![save_provider(state, config, original_filename, is_editing)],
+        } => vec![save_provider(
+            state,
+            config,
+            original_filename,
+            original_id,
+            is_editing,
+        )],
         NewApiEffect::DeleteProvider { provider_id } => {
             vec![delete_provider(provider_id)]
         }
@@ -27,10 +34,12 @@ fn save_provider(
     state: &Rc<RefCell<AppState>>,
     config: NewApiConfig,
     original_filename: Option<String>,
+    original_id: Option<String>,
     is_editing: bool,
 ) -> AppAction {
     let filename = original_filename.unwrap_or_else(|| api::generate_filename(&config));
-    let result = match api::save_newapi_yaml(&config, &filename) {
+    // 编辑保存时保持原始身份（original_id），新增时按 base_url + user_id 计算
+    let result = match api::save_newapi_yaml(&config, &filename, original_id.as_deref()) {
         Ok(path) => {
             info!(target: "settings", "saved custom provider YAML to {}", path.display());
             let s = state.borrow();
@@ -49,6 +58,7 @@ fn save_provider(
     AppAction::NewApiSaveFinished {
         config,
         filename,
+        original_id,
         is_editing,
         result,
     }

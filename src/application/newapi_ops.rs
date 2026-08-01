@@ -11,8 +11,14 @@ use crate::models::{NewApiConfig, NewApiEditData, ProviderId};
 /// 编辑模式下的回滚：恢复表单编辑状态，让用户可以重试。
 ///
 /// 编辑模式时旧 YAML 文件仍在磁盘上，不需要回滚 enabled/sidebar 预注册。
-/// 仅需从 config 重建 `NewApiEditData` 回填表单。
-pub fn rollback_newapi_edit(session: &mut AppSession, config: &NewApiConfig, filename: &str) {
+/// 仅需从 config 重建 `NewApiEditData` 回填表单；`original_id` 随保存链路
+/// 透传回来，兜底时按 base_url + user_id 重算（与磁盘 YAML 的 `id` 一致）。
+pub fn rollback_newapi_edit(
+    session: &mut AppSession,
+    config: &NewApiConfig,
+    filename: &str,
+    original_id: Option<&str>,
+) {
     session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: config.display_name.clone(),
         base_url: config.base_url.clone(),
@@ -20,6 +26,9 @@ pub fn rollback_newapi_edit(session: &mut AppSession, config: &NewApiConfig, fil
         user_id: config.user_id.clone(),
         divisor: config.divisor,
         original_filename: filename.to_string(),
+        original_id: original_id.map(str::to_owned).unwrap_or_else(|| {
+            crate::models::newapi_provider_id(&config.base_url, config.user_id.as_deref())
+        }),
     });
 }
 
@@ -30,7 +39,10 @@ pub fn rollback_newapi_edit(session: &mut AppSession, config: &NewApiConfig, fil
 /// 2. 重新打开空的添加表单
 /// 3. 恢复 `selected_provider` 到 sidebar 的第一项
 pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
-    let rollback_id = ProviderId::Custom(crate::models::newapi_provider_id(&config.base_url));
+    let rollback_id = ProviderId::Custom(crate::models::newapi_provider_id(
+        &config.base_url,
+        config.user_id.as_deref(),
+    ));
     session
         .settings
         .provider
@@ -67,6 +79,11 @@ pub fn newapi_save_failed_notification_keys() -> (&'static str, &'static str) {
     ("newapi.save_failed_title", "newapi.save_failed_body")
 }
 
+/// 新增时身份（站点 + 账号）冲突的通知 key 对。
+pub fn newapi_duplicate_notification_keys() -> (&'static str, &'static str) {
+    ("newapi.duplicate_title", "newapi.duplicate_body")
+}
+
 pub fn newapi_load_failed_notification_keys() -> (&'static str, &'static str) {
     ("newapi.load_failed_title", "newapi.load_failed_body")
 }
@@ -97,7 +114,7 @@ mod tests {
         let mut session = make_session();
         let config = make_config();
 
-        rollback_newapi_edit(&mut session, &config, "newapi-test.yaml");
+        rollback_newapi_edit(&mut session, &config, "newapi-test.yaml", None);
 
         assert!(session.settings_ui.modal.is_newapi_form());
         let edit = session.settings_ui.modal.newapi_edit_data().unwrap();
@@ -107,6 +124,24 @@ mod tests {
         assert_eq!(edit.user_id.as_deref(), Some("42"));
         assert_eq!(edit.divisor, Some(500_000.0));
         assert_eq!(edit.original_filename, "newapi-test.yaml");
+        // 未透传 original_id 时按 base_url + user_id 重算（含 user_id 维度）
+        assert_eq!(edit.original_id, "my-api-example-com-42:newapi");
+    }
+
+    #[test]
+    fn rollback_edit_preserves_passed_original_id() {
+        let mut session = make_session();
+        let config = make_config();
+
+        rollback_newapi_edit(
+            &mut session,
+            &config,
+            "newapi-test.yaml",
+            Some("legacy-id:newapi"),
+        );
+
+        let edit = session.settings_ui.modal.newapi_edit_data().unwrap();
+        assert_eq!(edit.original_id, "legacy-id:newapi");
     }
 
     // ── rollback_newapi_create ────────────────────────
@@ -117,7 +152,10 @@ mod tests {
         let config = make_config();
 
         // 模拟 reducer 预注册
-        let pre_id = ProviderId::Custom(crate::models::newapi_provider_id(&config.base_url));
+        let pre_id = ProviderId::Custom(crate::models::newapi_provider_id(
+            &config.base_url,
+            config.user_id.as_deref(),
+        ));
         session.settings.provider.set_enabled(&pre_id, true);
         session.settings.provider.add_to_sidebar(&pre_id);
         session.settings_ui.selected_provider = pre_id.clone();
@@ -152,7 +190,10 @@ mod tests {
         session.settings.provider.set_enabled(&existing_id, true);
 
         // 模拟 reducer 预注册
-        let pre_id = ProviderId::Custom(crate::models::newapi_provider_id(&config.base_url));
+        let pre_id = ProviderId::Custom(crate::models::newapi_provider_id(
+            &config.base_url,
+            config.user_id.as_deref(),
+        ));
         session.settings.provider.set_enabled(&pre_id, true);
         session.settings.provider.add_to_sidebar(&pre_id);
         session.settings_ui.selected_provider = pre_id.clone();
@@ -197,6 +238,14 @@ mod tests {
 
         assert_eq!(title, "newapi.save_failed_title");
         assert_eq!(body, "newapi.save_failed_body");
+    }
+
+    #[test]
+    fn notification_keys_duplicate() {
+        let (title, body) = newapi_duplicate_notification_keys();
+
+        assert_eq!(title, "newapi.duplicate_title");
+        assert_eq!(body, "newapi.duplicate_body");
     }
 
     #[test]

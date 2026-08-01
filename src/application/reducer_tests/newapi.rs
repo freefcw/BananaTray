@@ -110,6 +110,99 @@ fn submit_newapi_produces_save_and_notification_effects() {
 }
 
 #[test]
+fn submit_newapi_duplicate_identity_is_rejected() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+
+    // 同站点同账号已有启用记录（即使被禁用也视为占用，防止静默覆盖 YAML）
+    let existing = ProviderId::Custom("api-example-com:newapi".to_string());
+    session.settings.provider.set_enabled(&existing, false);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SubmitNewApi(NewApiConfig {
+            display_name: "Dup".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            cookie: "session=x".to_string(),
+            user_id: None,
+            divisor: None,
+        }),
+    );
+
+    // 不发起保存；表单保持打开；提示冲突
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { .. }))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
+            title_key: "newapi.duplicate_title",
+            body_key: "newapi.duplicate_body",
+        }))
+    )));
+    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
+}
+
+#[test]
+fn submit_newapi_duplicate_identity_from_loaded_provider_is_rejected() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+
+    // 磁盘已加载的 provider（settings 中无记录）同样视为占用
+    session
+        .provider_store
+        .providers
+        .push(make_custom_provider_status("api-example-com-7:newapi"));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SubmitNewApi(NewApiConfig {
+            display_name: "Dup".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            cookie: "session=x".to_string(),
+            user_id: Some("7".to_string()),
+            divisor: None,
+        }),
+    );
+
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { .. }))
+    )));
+    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
+}
+
+#[test]
+fn submit_newapi_same_site_different_user_id_allowed() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+
+    // 已占用的是无 user_id 身份；带 user_id 的提交是同站多账号，应放行
+    let existing = ProviderId::Custom("api-example-com:newapi".to_string());
+    session.settings.provider.set_enabled(&existing, true);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::SubmitNewApi(NewApiConfig {
+            display_name: "Second Account".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            cookie: "session=y".to_string(),
+            user_id: Some("7".to_string()),
+            divisor: None,
+        }),
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { .. }))
+    )));
+    let new_id = ProviderId::Custom("api-example-com-7:newapi".to_string());
+    assert!(session.settings.provider.is_enabled(&new_id));
+    assert_eq!(session.settings_ui.selected_provider, new_id);
+}
+
+#[test]
 fn newapi_save_finished_success_notifies_and_reloads_providers() {
     let mut session = make_session();
     let effects = reduce(
@@ -117,6 +210,7 @@ fn newapi_save_finished_success_notifies_and_reloads_providers() {
         AppAction::NewApiSaveFinished {
             config: make_newapi_config(),
             filename: "newapi-relay.yaml".to_string(),
+            original_id: None,
             is_editing: false,
             result: Ok(NewApiSaveSuccess {
                 path: std::path::PathBuf::from("newapi-relay.yaml"),
@@ -144,7 +238,10 @@ fn newapi_save_finished_success_notifies_and_reloads_providers() {
 fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
     let mut session = make_session();
     let config = make_newapi_config();
-    let provider_id = ProviderId::Custom(crate::models::newapi_provider_id(&config.base_url));
+    let provider_id = ProviderId::Custom(crate::models::newapi_provider_id(
+        &config.base_url,
+        config.user_id.as_deref(),
+    ));
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
     session.settings_ui.selected_provider = provider_id.clone();
@@ -154,6 +251,7 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
         AppAction::NewApiSaveFinished {
             config,
             filename: "newapi-relay.yaml".to_string(),
+            original_id: None,
             is_editing: false,
             result: Err(CustomProviderLifecycleFailure::file_operation(
                 "save NewAPI provider",
@@ -258,6 +356,7 @@ fn newapi_load_finished_success_sets_edit_modal() {
         user_id: None,
         divisor: None,
         original_filename: "newapi-relay.yaml".to_string(),
+        original_id: "relay-example-com:newapi".to_string(),
     };
 
     let effects = reduce(
@@ -332,6 +431,7 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
         user_id: None,
         divisor: None,
         original_filename: "original.yaml".to_string(),
+        original_id: "old-site-com:newapi".to_string(),
     });
 
     reduce(
@@ -588,6 +688,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
         user_id: None,
         divisor: None,
         original_filename: "original-file.yaml".to_string(),
+        original_id: "old-site-com:newapi".to_string(),
     });
 
     let effects = reduce(
@@ -604,10 +705,12 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     // 状态：编辑模式已清除（modal 回到 Idle）
     assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
 
-    // Effect: 使用原始文件名 + 编辑模式标志
+    // Effect: 使用原始文件名 + 原始身份 + 编辑模式标志
+    // （user_id 从 None 改为 Some("99")，身份仍保持 original_id 不变）
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, is_editing }))
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, original_id, is_editing }))
             if *original_filename == Some("original-file.yaml".to_string())
+            && *original_id == Some("old-site-com:newapi".to_string())
             && config.display_name == "Updated Name"
             && config.cookie == "new_cookie"
             && *is_editing
@@ -636,6 +739,7 @@ fn submit_newapi_in_edit_mode_keeps_original_base_url_identity() {
         user_id: None,
         divisor: None,
         original_filename: "original-file.yaml".to_string(),
+        original_id: "old-site-com:newapi".to_string(),
     });
 
     let effects = reduce(
@@ -653,7 +757,7 @@ fn submit_newapi_in_edit_mode_keeps_original_base_url_identity() {
     assert!(!session.settings.provider.is_enabled(&payload_id));
     assert_eq!(session.settings_ui.selected_provider, original_id);
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, is_editing }))
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, is_editing, .. }))
             if config.base_url == "https://old-site.com"
             && *original_filename == Some("original-file.yaml".to_string())
             && *is_editing
@@ -673,6 +777,7 @@ fn cancel_add_newapi_clears_editing_state() {
         user_id: None,
         divisor: None,
         original_filename: "test.yaml".to_string(),
+        original_id: "test-com:newapi".to_string(),
     });
 
     let effects = reduce(&mut session, AppAction::CancelAddNewApi);
@@ -694,6 +799,7 @@ fn enter_add_newapi_clears_stale_editing_state() {
         user_id: None,
         divisor: None,
         original_filename: "stale.yaml".to_string(),
+        original_id: "stale-com:newapi".to_string(),
     });
 
     let effects = reduce(&mut session, AppAction::EnterAddNewApi);

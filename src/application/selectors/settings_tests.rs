@@ -146,6 +146,7 @@ fn settings_providers_tab_right_pane_reports_newapi_form() {
         user_id: None,
         divisor: None,
         original_filename: "relay.yaml".to_string(),
+        original_id: "relay-example-com:newapi".to_string(),
     };
     session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data.clone());
 

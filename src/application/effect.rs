@@ -101,6 +101,9 @@ pub enum NewApiEffect {
     SaveProvider {
         config: NewApiConfig,
         original_filename: Option<String>,
+        /// 编辑模式下原始 YAML 的 Provider ID：保存时保持身份不变，
+        /// 不随 user_id 修改而重新计算；新增模式为 `None`。
+        original_id: Option<String>,
         /// 编辑模式标志：失败时不回滚预注册（旧文件仍有效）
         is_editing: bool,
     },

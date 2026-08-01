@@ -6,7 +6,7 @@
 //! 纯数据类型（`NewApiConfig`、`NewApiEditData`）和 ID 计算函数
 //! 已迁移至 `models/newapi.rs`，本模块仅保留 YAML 文本生成和纯解析辅助。
 
-use crate::models::newapi::{extract_domain_slug, NewApiConfig, NewApiEditData};
+use crate::models::newapi::{newapi_provider_id, NewApiConfig, NewApiEditData};
 use crate::models::{format_divisor_value, ScriptProviderConfig};
 
 /// 转义 YAML 双引号字符串中的特殊字符
@@ -19,9 +19,14 @@ fn escape_yaml_double_quoted(s: &str) -> String {
 }
 
 /// 根据输入生成完整的 NewAPI YAML 配置
-pub(crate) fn generate_newapi_yaml(config: &NewApiConfig) -> String {
-    let slug = extract_domain_slug(&config.base_url);
-    let id = format!("{}:newapi", slug);
+///
+/// `id_override` 用于编辑保存时保持 Provider 身份不变（原始 YAML 的 `id`）；
+/// 新增时传 `None`，按 base_url + user_id 计算身份（同站多账号见
+/// `models::newapi::newapi_provider_id`）。
+pub(crate) fn generate_newapi_yaml(config: &NewApiConfig, id_override: Option<&str>) -> String {
+    let id = id_override
+        .map(str::to_owned)
+        .unwrap_or_else(|| newapi_provider_id(&config.base_url, config.user_id.as_deref()));
     let base_url = config.base_url.trim_end_matches('/');
     let divisor = config.divisor.unwrap_or(500_000.0);
     let divisor_text = format_divisor_value(divisor);
@@ -202,12 +207,14 @@ pub(in crate::providers::custom) fn parse_newapi_edit_data(
         user_id,
         divisor,
         original_filename,
+        original_id: def.id.clone(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::newapi::extract_domain_slug;
 
     fn make_config() -> NewApiConfig {
         NewApiConfig {
@@ -235,7 +242,7 @@ mod tests {
     #[test]
     fn test_generate_yaml_contains_essential_fields() {
         let config = make_config();
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("id: \"my-api-example-com:newapi\""));
         assert!(yaml.contains("base_url: \"https://my-api.example.com\""));
@@ -253,7 +260,7 @@ mod tests {
             cookie: "session=eyJ123; cf_clearance=abc456; _ga=xxx".to_string(),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("type: cookie"));
         assert!(yaml.contains("session=eyJ123; cf_clearance=abc456; _ga=xxx"));
@@ -265,7 +272,7 @@ mod tests {
             user_id: Some("12345".to_string()),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         // URL 始终为 /api/user/self
         assert!(yaml.contains("url: \"/api/user/self\""));
@@ -280,7 +287,7 @@ mod tests {
             user_id: Some("  ".to_string()),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("url: \"/api/user/self\""));
     }
@@ -291,7 +298,7 @@ mod tests {
             divisor: Some(1_000_000.0),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("divisor: 1000000"));
     }
@@ -302,7 +309,7 @@ mod tests {
             divisor: Some(0.5),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("divisor: 0.5"));
     }
@@ -313,7 +320,7 @@ mod tests {
             base_url: "https://my-api.example.com/".to_string(),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains("base_url: \"https://my-api.example.com\""));
     }
@@ -321,7 +328,7 @@ mod tests {
     #[test]
     fn test_generate_yaml_is_valid_custom_provider_def() {
         let config = make_config();
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         let def: crate::providers::custom::schema::CustomProviderDef =
             serde_norway::from_str(&yaml).expect("Generated YAML should be valid");
@@ -349,10 +356,13 @@ mod tests {
             user_id: Some("42".to_string()),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         let def: crate::providers::custom::schema::CustomProviderDef =
             serde_norway::from_str(&yaml).expect("Generated YAML with user_id should be valid");
+
+        // user_id 参与身份：同站多账号通过 ID 区分
+        assert_eq!(def.id, "my-api-example-com-42:newapi");
 
         // URL 始终为 /api/user/self，user_id 仅用于 header
         let step = def.plan.steps.first().expect("should have one step");
@@ -366,6 +376,18 @@ mod tests {
         } else {
             panic!("Expected HTTP source");
         }
+    }
+
+    #[test]
+    fn test_generate_yaml_id_override_preserves_identity() {
+        // 编辑保存：user_id 变化不改变身份，YAML 写回原始 ID
+        let config = NewApiConfig {
+            user_id: Some("42".to_string()),
+            ..make_config()
+        };
+        let yaml = generate_newapi_yaml(&config, Some("my-api-example-com:newapi"));
+
+        assert!(yaml.contains("id: \"my-api-example-com:newapi\""));
     }
 
     #[test]
@@ -386,7 +408,7 @@ mod tests {
             cookie: r#"session=tok"with\special"#.to_string(),
             ..make_config()
         };
-        let yaml = generate_newapi_yaml(&config);
+        let yaml = generate_newapi_yaml(&config, None);
 
         assert!(yaml.contains(r#"display_name: "My \"API\" Site""#));
 
@@ -432,7 +454,7 @@ mod tests {
 
     /// 辅助：生成 YAML → 解析为 CustomProviderDef → 提取 NewApiEditData
     fn roundtrip(config: &NewApiConfig) -> NewApiEditData {
-        let yaml = generate_newapi_yaml(config);
+        let yaml = generate_newapi_yaml(config, None);
         let filename = format!("newapi-{}.yaml", extract_domain_slug(&config.base_url));
         let def: crate::providers::custom::schema::CustomProviderDef =
             serde_norway::from_str(&yaml).expect("Generated YAML must be parseable");

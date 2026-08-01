@@ -41,6 +41,10 @@ pub struct NewApiEditData {
     pub divisor: Option<f64>,
     /// 原始 YAML 文件名（编辑保存时复用，避免身份变更导致文件残留）
     pub original_filename: String,
+    /// 原始 Provider ID（YAML 中的 `id` 字段）。
+    /// 编辑保存时保持身份不变：即使 `user_id` 被修改，YAML 仍写回该 ID，
+    /// 避免与其他同站点账号的 Provider 发生碰撞。
+    pub original_id: String,
 }
 
 /// 将 divisor 格式化为适合 UI / YAML 的稳定文本。
@@ -82,6 +86,17 @@ pub fn parse_divisor_input(input: &str) -> Result<Option<f64>, NewApiDivisorErro
     Ok(Some(divisor))
 }
 
+/// 将任意字符串规范化为 slug 片段：非字母数字字符折叠为单个连字符。
+fn slugify(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
 /// 从 base_url 中提取域名部分，用于生成 id 和文件名
 ///
 /// 例如：
@@ -93,23 +108,28 @@ pub fn extract_domain_slug(base_url: &str) -> String {
         .replace("https://", "")
         .replace("http://", "");
 
-    // 替换非字母数字字符为连字符，去除多余连字符
-    url.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
+    slugify(&url)
 }
 
-/// 根据 base_url 计算 NewAPI Provider 的 ID（`{slug}:newapi`）。
+/// 根据 base_url（+ 可选 user_id）计算 NewAPI Provider 的 ID。
+///
+/// 身份 = 站点 + 账号：
+/// - 无 user_id → `{slug}:newapi`（与历史行为一致，已有配置不受影响）
+/// - 有 user_id → `{slug}-{user-slug}:newapi`，允许同一站点添加多个账号
 ///
 /// 用于在保存 YAML 之前提前将 ID 注册到 settings（sidebar/enabled），
 /// 避免热重载后 Provider 已存在但未启用的问题。
-pub fn newapi_provider_id(base_url: &str) -> String {
-    let slug = extract_domain_slug(base_url);
-    format!("{}:newapi", slug)
+pub fn newapi_provider_id(base_url: &str, user_id: Option<&str>) -> String {
+    let mut stem = extract_domain_slug(base_url);
+    if let Some(uid_slug) = user_id
+        .map(str::trim)
+        .filter(|uid| !uid.is_empty())
+        .map(slugify)
+        .filter(|slug| !slug.is_empty())
+    {
+        stem = format!("{stem}-{uid_slug}");
+    }
+    format!("{stem}:newapi")
 }
 
 #[cfg(test)]
@@ -130,10 +150,40 @@ mod tests {
     }
 
     #[test]
-    fn newapi_provider_id_basic() {
+    fn newapi_provider_id_without_user_id_keeps_legacy_format() {
         assert_eq!(
-            newapi_provider_id("https://my-api.example.com"),
+            newapi_provider_id("https://my-api.example.com", None),
             "my-api-example-com:newapi"
+        );
+    }
+
+    #[test]
+    fn newapi_provider_id_with_user_id_distinguishes_accounts() {
+        assert_eq!(
+            newapi_provider_id("https://my-api.example.com", Some("42")),
+            "my-api-example-com-42:newapi"
+        );
+        // 同站不同账号 → 不同 ID（多账号并存）
+        assert_ne!(
+            newapi_provider_id("https://my-api.example.com", Some("1")),
+            newapi_provider_id("https://my-api.example.com", Some("2"))
+        );
+    }
+
+    #[test]
+    fn newapi_provider_id_normalizes_user_id() {
+        // 空白 / 纯特殊字符的 user_id 视为未提供；首尾空格先裁剪
+        assert_eq!(
+            newapi_provider_id("https://a.com", Some("  ")),
+            "a-com:newapi"
+        );
+        assert_eq!(
+            newapi_provider_id("https://a.com", Some("-.-")),
+            "a-com:newapi"
+        );
+        assert_eq!(
+            newapi_provider_id("https://a.com", Some(" user@x.com ")),
+            "a-com-user-x-com:newapi"
         );
     }
 

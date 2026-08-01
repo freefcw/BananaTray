@@ -75,6 +75,8 @@ pub enum AppAction {
     NewApiSaveFinished {
         config: crate::models::NewApiConfig,
         filename: String,
+        /// 编辑模式下原始 YAML 的 Provider ID（随 `SaveProvider` 透传，供失败回滚重建表单）
+        original_id: Option<String>,
         is_editing: bool,
         result: Result<NewApiSaveSuccess, CustomProviderLifecycleFailure>,
     },
