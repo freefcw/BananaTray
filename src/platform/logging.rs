@@ -10,8 +10,10 @@ use std::backtrace::Backtrace;
 use std::env;
 #[cfg(any(feature = "app", test))]
 use std::fs;
+#[cfg(feature = "app")]
+use std::io::Write;
 #[cfg(any(feature = "app", test))]
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 #[cfg(feature = "app")]
 use std::path::{Path, PathBuf};
 #[cfg(feature = "app")]
