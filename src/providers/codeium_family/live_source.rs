@@ -31,6 +31,8 @@ const API_PATH: &str = "exa.language_server_pb.LanguageServerService/GetUserStat
 static CSRF_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--csrf_token\s+(\S+)").unwrap());
 static EXT_PORT_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"--extension_server_port\s+(\d+)").unwrap());
+static WINDSURF_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"--windsurf_version\s+(\S+)").unwrap());
 static LISTEN_PORT_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":(\d+)\s+\(LISTEN\)").unwrap());
 static ARG_START_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s--[A-Za-z0-9]").unwrap());
@@ -62,6 +64,8 @@ pub struct ProcessInfo {
     /// 新版 Windsurf 不再通过进程参数传递 csrf_token，改用 stdin_initial_metadata
     pub csrf_token: Option<String>,
     pub extension_port: Option<u16>,
+    /// 从进程参数 `--windsurf_version` 提取的 app 版本号
+    pub windsurf_version: Option<String>,
 }
 
 pub fn is_available(spec: &CodeiumFamilySpec) -> bool {
@@ -186,6 +190,11 @@ pub(super) fn parse_process_line(line: &str) -> Result<ProcessInfo, ProviderErro
         .and_then(|c| c.get(1))
         .and_then(|m| m.as_str().parse::<u16>().ok());
 
+    let windsurf_version = WINDSURF_VERSION_RE
+        .captures(line)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string());
+
     debug!(
         target: "providers",
         "Codeium-family process found: pid={}, extension_port={:?}",
@@ -198,6 +207,7 @@ pub(super) fn parse_process_line(line: &str) -> Result<ProcessInfo, ProviderErro
         binary_path,
         csrf_token,
         extension_port,
+        windsurf_version,
     })
 }
 
@@ -410,6 +420,7 @@ mod tests {
         );
         assert_eq!(process.csrf_token, Some("abc123".to_string()));
         assert_eq!(process.extension_port, Some(4242));
+        assert_eq!(process.windsurf_version, None);
     }
 
     #[test]
@@ -425,6 +436,7 @@ mod tests {
         );
         assert_eq!(process.csrf_token, None);
         assert_eq!(process.extension_port, Some(59012));
+        assert_eq!(process.windsurf_version, None);
     }
 
     #[test]
@@ -441,6 +453,16 @@ mod tests {
             )
         );
         assert_eq!(process.extension_port, Some(59012));
+    }
+
+    #[test]
+    fn test_parse_process_line_with_windsurf_version() {
+        let line = "693654 /usr/share/devin-desktop/resources/app/extensions/windsurf/bin/language_server_linux_x64 --api_server_url https://server.self-serve.windsurf.com --extension_server_port 37383 --ide_name windsurf --windsurf_version 3.6.22 --stdin_initial_metadata";
+        let process = parse_process_line(line).unwrap();
+
+        assert_eq!(process.pid, "693654");
+        assert_eq!(process.extension_port, Some(37383));
+        assert_eq!(process.windsurf_version, Some("3.6.22".to_string()));
     }
 
     #[test]

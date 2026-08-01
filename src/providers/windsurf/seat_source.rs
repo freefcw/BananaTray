@@ -328,8 +328,79 @@ fn detect_windsurf_app_version_platform(spec: &CodeiumFamilySpec) -> Option<Stri
 }
 
 #[cfg(not(target_os = "macos"))]
-fn detect_windsurf_app_version_platform(_spec: &CodeiumFamilySpec) -> Option<String> {
-    read_cli_version()
+fn detect_windsurf_app_version_platform(spec: &CodeiumFamilySpec) -> Option<String> {
+    // 1. 从运行中进程的 --windsurf_version 参数提取（最可靠，直接来自运行实例）
+    let from_process = codeium_family::detect_process(spec)
+        .ok()
+        .and_then(|process| {
+            // 1a. 优先从 --windsurf_version 参数提取
+            if let Some(v) = process.windsurf_version {
+                return Some(v);
+            }
+            // 1b. 从 binary_path 推导 product.json 路径
+            process
+                .binary_path
+                .as_deref()
+                .and_then(product_json_from_binary_path)
+                .and_then(|path| read_windsurf_version_from_product_json(&path))
+        });
+    if from_process.is_some() {
+        return from_process;
+    }
+
+    // 2. 尝试从已知安装路径的 product.json 读取
+    product_json_candidates()
+        .into_iter()
+        .find_map(|path| read_windsurf_version_from_product_json(&path))
+        // 3. CLI fallback
+        .or_else(read_cli_version)
+}
+
+/// 从 language server binary 路径推导 product.json 位置。
+///
+/// 典型路径: `/usr/share/devin-desktop/resources/app/extensions/windsurf/bin/language_server_linux_x64`
+/// 推导结果: `/usr/share/devin-desktop/resources/app/product.json`
+#[cfg(not(target_os = "macos"))]
+fn product_json_from_binary_path(binary_path: &str) -> Option<std::path::PathBuf> {
+    // 查找 `resources/app/` 段，product.json 就在该目录下
+    let marker = "resources/app/";
+    let pos = binary_path.find(marker)?;
+    Some(std::path::PathBuf::from(&binary_path[..pos + marker.len()]).join("product.json"))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn product_json_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+
+    // 系统安装路径（devin-desktop 为当前品牌，devin 为历史布局）
+    candidates.push(std::path::PathBuf::from(
+        "/usr/share/devin-desktop/resources/app/product.json",
+    ));
+    candidates.push(std::path::PathBuf::from(
+        "/usr/share/devin/resources/app/product.json",
+    ));
+    candidates.push(std::path::PathBuf::from(
+        "/usr/share/windsurf/resources/app/product.json",
+    ));
+
+    // 用户安装路径
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join(".local/share/devin-desktop/resources/app/product.json"));
+        candidates.push(home.join(".local/share/devin/resources/app/product.json"));
+        candidates.push(home.join(".local/share/windsurf/resources/app/product.json"));
+    }
+
+    candidates
+}
+
+#[cfg(not(target_os = "macos"))]
+fn read_windsurf_version_from_product_json(path: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    json.get("windsurfVersion")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
 }
 
 #[cfg(target_os = "macos")]
@@ -712,6 +783,48 @@ mod tests {
             path,
             Some(PathBuf::from("/Applications/Devin.app/Contents/Info.plist"))
         );
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_product_json_from_binary_path_devin_desktop() {
+        let path = product_json_from_binary_path(
+            "/usr/share/devin-desktop/resources/app/extensions/windsurf/bin/language_server_linux_x64",
+        );
+        assert_eq!(
+            path,
+            Some(std::path::PathBuf::from(
+                "/usr/share/devin-desktop/resources/app/product.json"
+            ))
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_product_json_from_binary_path_no_match() {
+        let path = product_json_from_binary_path("/usr/bin/some_other_binary");
+        assert!(path.is_none());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_read_windsurf_version_from_product_json_reads_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("product.json");
+        std::fs::write(&path, r#"{"windsurfVersion":"3.6.22"}"#).unwrap();
+        assert_eq!(
+            read_windsurf_version_from_product_json(&path),
+            Some("3.6.22".to_string())
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_read_windsurf_version_from_product_json_missing_field_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("product.json");
+        std::fs::write(&path, r#"{"other":"value"}"#).unwrap();
+        assert!(read_windsurf_version_from_product_json(&path).is_none());
     }
 
     fn write_auth_status_db(path: &std::path::Path, key: &str, value: &str) {

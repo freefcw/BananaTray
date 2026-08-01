@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 pub(crate) use live_source::matches_process_line;
-#[cfg(target_os = "macos")]
 pub(crate) use live_source::ProcessInfo;
 pub(crate) use spec::{CodeiumFamilySpec, ANTIGRAVITY_SPEC, WINDSURF_SPEC};
 
@@ -279,7 +278,6 @@ pub(crate) fn has_cache_db(spec: &CodeiumFamilySpec) -> bool {
     cache_source::has_cache_db(spec)
 }
 
-#[cfg(target_os = "macos")]
 pub(crate) fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
     live_source::detect_process(spec)
 }
