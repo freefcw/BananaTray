@@ -1,7 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session, pid};
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, ContextEffect, RefreshEffect, SettingsEffect,
-    TrayIconRequest,
+    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, RefreshEffect,
+    SettingsEffect, TrayIconRequest,
 };
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{ConnectionStatus, NavTab, ProviderId, ProviderKind, RefreshData};
@@ -408,4 +408,138 @@ fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
+}
+
+// ── Skipped* 收敛 ─────────────────────────────────────
+
+fn dispatch_skipped(session: &mut AppSession, result: RefreshResult) {
+    reduce(
+        session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: pid(ProviderKind::Claude),
+            result,
+        })),
+    );
+}
+
+#[test]
+fn skipped_cooldown_converges_refreshing_without_data_to_disconnected() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    session
+        .provider_store
+        .mark_refreshing_by_id(&pid(ProviderKind::Claude));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: pid(ProviderKind::Claude),
+            result: RefreshResult::SkippedCooldown,
+        })),
+    );
+
+    let claude = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Claude))
+        .unwrap();
+    assert_eq!(claude.connection, ConnectionStatus::Disconnected);
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn skipped_result_converges_refreshing_with_stale_data_to_connected() {
+    use crate::models::QuotaInfo;
+
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    {
+        let claude = session
+            .provider_store
+            .find_by_id_mut(&pid(ProviderKind::Claude))
+            .unwrap();
+        claude.quotas.push(QuotaInfo::new("session", 50.0, 100.0));
+    }
+    session
+        .provider_store
+        .mark_refreshing_by_id(&pid(ProviderKind::Claude));
+
+    dispatch_skipped(&mut session, RefreshResult::SkippedCooldown);
+
+    let claude = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Claude))
+        .unwrap();
+    // 有旧数据 → 收敛回 Connected（展示陈旧数据），而不是停留在 Refreshing
+    assert_eq!(claude.connection, ConnectionStatus::Connected);
+}
+
+#[test]
+fn skipped_in_flight_and_disabled_also_converge() {
+    for result in [
+        RefreshResult::SkippedInFlight,
+        RefreshResult::SkippedDisabled,
+    ] {
+        let mut s = make_session();
+        s.settings
+            .provider
+            .set_enabled(&pid(ProviderKind::Claude), true);
+        s.provider_store
+            .mark_refreshing_by_id(&pid(ProviderKind::Claude));
+
+        let effects = reduce(
+            &mut s,
+            AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                id: pid(ProviderKind::Claude),
+                result,
+            })),
+        );
+
+        let claude = s
+            .provider_store
+            .find_by_id(&pid(ProviderKind::Claude))
+            .unwrap();
+        assert_eq!(claude.connection, ConnectionStatus::Disconnected);
+        assert!(has_render(&effects));
+    }
+}
+
+#[test]
+fn skipped_does_not_touch_non_refreshing_provider() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    session
+        .provider_store
+        .find_by_id_mut(&pid(ProviderKind::Claude))
+        .unwrap()
+        .mark_refresh_succeeded(crate::models::RefreshData {
+            quotas: vec![],
+            account_email: None,
+            account_tier: None,
+            source_label: None,
+        });
+
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: pid(ProviderKind::Claude),
+            result: RefreshResult::SkippedCooldown,
+        })),
+    );
+
+    let claude = session
+        .provider_store
+        .find_by_id(&pid(ProviderKind::Claude))
+        .unwrap();
+    // 非 Refreshing 状态不受影响
+    assert_eq!(claude.connection, ConnectionStatus::Connected);
+    assert!(!has_render(&effects));
 }

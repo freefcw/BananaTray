@@ -122,7 +122,15 @@ fn process_refresh_outcome(
         }
         RefreshResult::SkippedCooldown
         | RefreshResult::SkippedInFlight
-        | RefreshResult::SkippedDisabled => {}
+        | RefreshResult::SkippedDisabled => {
+            // coordinator 判定跳过（未实际刷新）：若前台乐观标记了 Refreshing，
+            // 由 ProviderStatus::mark_skipped 收敛回可展示状态，避免 UI 永久卡住。
+            if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
+                if provider.mark_skipped() {
+                    effects.push(ContextEffect::Render.into());
+                }
+            }
+        }
     }
 }
 

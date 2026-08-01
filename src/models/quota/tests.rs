@@ -457,3 +457,60 @@ fn provider_status_prefers_runtime_source_label_after_success() {
 
     assert_eq!(p.source_label(), "seat api");
 }
+
+// ========================================================================
+// mark_skipped 状态转换测试
+// ========================================================================
+
+#[test]
+fn mark_skipped_with_existing_quotas_converges_to_connected() {
+    let mut p = make_provider(ConnectionStatus::Refreshing);
+    p.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+    assert!(p.mark_skipped());
+    // 有旧配额数据 → 收敛回 Connected（展示陈旧数据），不停留在 Refreshing
+    assert_eq!(p.connection, ConnectionStatus::Connected);
+}
+
+#[test]
+fn mark_skipped_without_quotas_converges_to_disconnected() {
+    let mut p = make_provider(ConnectionStatus::Refreshing);
+
+    assert!(p.mark_skipped());
+    assert_eq!(p.connection, ConnectionStatus::Disconnected);
+}
+
+#[test]
+fn mark_skipped_on_non_refreshing_is_noop() {
+    for initial in [
+        ConnectionStatus::Connected,
+        ConnectionStatus::Disconnected,
+        ConnectionStatus::Error,
+    ] {
+        let mut p = make_provider(initial);
+        assert!(!p.mark_skipped(), "initial {:?} 不应变化", initial);
+        assert_eq!(p.connection, initial);
+    }
+}
+
+#[test]
+fn mark_skipped_preserves_historical_failure_info() {
+    let mut p = make_provider(ConnectionStatus::Refreshing);
+    p.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+    let failure = ProviderFailure {
+        reason: FailureReason::Timeout,
+        advice: None,
+        raw_detail: None,
+    };
+    p.last_failure = Some(failure.clone());
+    p.update_status = Some(UpdateStatus::Failed);
+    p.error_kind = ErrorKind::NetworkError;
+
+    assert!(p.mark_skipped());
+
+    // 跳过不是一次失败，不应清空历史失败信息；仅收敛连接状态
+    assert_eq!(p.connection, ConnectionStatus::Connected);
+    assert_eq!(p.last_failure, Some(failure));
+    assert_eq!(p.update_status, Some(UpdateStatus::Failed));
+    assert_eq!(p.error_kind, ErrorKind::NetworkError);
+}

@@ -52,16 +52,18 @@ pub enum UpdateStatus {
 /// ┌──────────────┐
 /// │ Disconnected │──mark_refreshing()──→ Refreshing
 /// └──────────────┘                          │
-///       ↑                              ┌────┴────┐
-///  mark_unavailable()            succeeded()   failed()
-///  (非 Connected 时)                 │      ┌───┴───┐
-///                              Connected  有旧数据？ 无旧数据？
-///                                         Connected  Error
+///       ↑                              ┌────┴──────────┐
+///  mark_unavailable()            succeeded()   failed()   mark_skipped()
+///  (非 Connected 时)                 │      ┌───┴───┐          │
+///                              Connected  有旧数据？无旧数据？  有旧数据？无旧数据？
+///                                         Connected Error     Connected Disconnected
 /// ```
 ///
 /// - `mark_refresh_failed`: 有旧配额数据 → 保持 Connected（展示陈旧数据）；
 ///   无旧数据 → Error（触发 UI 空状态/错误提示）
 /// - `mark_unavailable`: 仅在非 Connected 时回退到 Disconnected
+/// - `mark_skipped`: 刷新被协调器跳过（未实际执行）时，从 Refreshing 收敛回
+///   可展示状态（有旧数据 → Connected 展示陈旧数据；无旧数据 → Disconnected）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
     /// 统一标识符（内置 = BuiltIn(kind)，自定义 = Custom(id)）
@@ -192,6 +194,24 @@ impl ProviderStatus {
         self.update_status = Some(UpdateStatus::Failed);
         self.last_failure = Some(failure);
         self.error_kind = error_kind;
+    }
+
+    /// 刷新被协调器跳过（未实际执行）时的状态收敛。
+    ///
+    /// 前台为立即反馈会乐观标记 Refreshing，但与协调器的最终判定（cooldown /
+    /// in-flight / disabled）可能不一致。此方法把"跳过"收敛回可展示状态，
+    /// 避免 UI 永久停留在 Refreshing。保留 quotas / update_status / last_failure
+    /// 等历史信息，仅收敛连接状态。返回 true 表示发生了状态变化。
+    pub fn mark_skipped(&mut self) -> bool {
+        if self.connection != ConnectionStatus::Refreshing {
+            return false;
+        }
+        self.connection = if self.quotas.is_empty() {
+            ConnectionStatus::Disconnected
+        } else {
+            ConnectionStatus::Connected
+        };
+        true
     }
 
     // 元数据代理方法（由宏生成，保持 30+ 处调用点兼容）
