@@ -96,3 +96,24 @@ fn popup_height_account_info_hides_dashboard_row() {
     let expected = crate::models::compute_popup_height_detailed(1, false, true);
     assert_eq!(h, expected);
 }
+
+#[test]
+fn popup_height_overview_single_provider_has_no_dead_space() {
+    let store = make_store(&[ProviderKind::Claude]);
+    let nav = NavigationState {
+        active_tab: NavTab::Overview,
+        last_provider_id: pid(ProviderKind::Claude),
+        prev_active_tab: None,
+        generation: 0,
+    };
+    // Overview 分支只统计已启用 Provider
+    let settings = make_settings(&[ProviderKind::Claude]);
+
+    let h = compute_popup_height(&nav, &store, &settings);
+
+    assert_eq!(h, crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT);
+    assert_eq!(
+        h,
+        crate::models::PopupLayout::FIXED_HEIGHT + crate::models::PopupLayout::OVERVIEW_ITEM_HEIGHT
+    );
+}

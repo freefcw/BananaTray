@@ -100,6 +100,11 @@ impl PopupLayout {
 
     /// 最小窗口高度：1张卡片（不含 dashboard）
     pub const MIN_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::CARD_HEIGHT;
+    /// Overview 面板的最小窗口高度：固定区域 + 1 张紧凑卡片。
+    ///
+    /// 不复用 `MIN_HEIGHT`（含一张 129px 详情大卡）：单 Provider 的 Overview
+    /// 内容只有一张 42px 紧凑卡，套用 `MIN_HEIGHT` 会产生 ~87px 死空白。
+    pub const MIN_OVERVIEW_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::OVERVIEW_ITEM_HEIGHT;
     /// 最大窗口高度
     pub const MAX_HEIGHT: f32 = 720.0;
 }
@@ -123,7 +128,7 @@ pub fn compute_popup_height_for_overview(provider_count: usize) -> f32 {
         0.0
     };
     let raw = PopupLayout::FIXED_HEIGHT + cards + spacers;
-    raw.clamp(PopupLayout::MIN_HEIGHT, PopupLayout::MAX_HEIGHT)
+    raw.clamp(PopupLayout::MIN_OVERVIEW_HEIGHT, PopupLayout::MAX_HEIGHT)
 }
 
 impl PopupLayout {
@@ -268,8 +273,10 @@ mod tests {
     fn overview_height_single_provider() {
         let h = compute_popup_height_for_overview(1);
         let raw = PopupLayout::FIXED_HEIGHT + PopupLayout::OVERVIEW_ITEM_HEIGHT;
-        let expected = raw.clamp(PopupLayout::MIN_HEIGHT, PopupLayout::MAX_HEIGHT);
+        let expected = raw.clamp(PopupLayout::MIN_OVERVIEW_HEIGHT, PopupLayout::MAX_HEIGHT);
         assert!((h - expected).abs() < f32::EPSILON);
+        // 单 Provider 时窗口紧贴内容，不应多出死空白
+        assert!((h - raw).abs() < f32::EPSILON);
     }
 
     #[test]
