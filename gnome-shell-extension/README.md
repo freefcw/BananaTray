@@ -302,7 +302,9 @@ Footer 中 `Sync Data` 默认为次级按钮；仅当 Header 状态为 `Syncing`
 入口通过 `panelButton.js` 装配 `QuotaClient`，并在本机有 `node` 时对所有扩展
 ES module 执行语法检查。若本机有 `msgfmt` / `xgettext` / `msgcmp`，还会校验
 `po/zh_CN.po` 语法、`bananatray.mo` 是否由最新 `.po` 编译而来，以及 `_()` / `ngettext()`
-文案是否都已进入翻译源。
+文案是否都已进入翻译源。若本机有 `gjs` + `dbus-run-session`，还会在隔离 D-Bus 会话里
+跑 `tests/gjs-quota-client-integration.test.js`，用真实 `Gio.DBusProxy` 验证
+`quotaClient.js` 的方法调用、信号订阅和 schema 校验。
 
 ### i18n
 

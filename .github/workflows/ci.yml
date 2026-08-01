@@ -43,7 +43,24 @@ jobs:
       - name: Keep release panic profile on unwind
         run: ./scripts/check-release-panic-profile.sh
 
-      - name: Check GNOME Shell Extension
+      - name: Install GJS integration test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gjs dbus gettext
+
+      # node 是扩展语法/D-Bus 契约/单元测试校验的硬依赖，显式安装形成契约
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # check-gnome-extension.sh 在 gjs + dbus-run-session 可用时自动附带
+      # GJS 真实 D-Bus 集成测试（scripts/test-gnome-extension-gjs.sh）。
+      # GNOME_CHECK_STRICT=1：node/gettext/gjs 任一缺失即失败，
+      # 避免工具缺失导致校验被跳过后仍 "passed" 的假阳性。
+      - name: Check GNOME Shell Extension (incl. GJS D-Bus integration test)
+        env:
+          GNOME_CHECK_STRICT: "1"
         run: ./scripts/check-gnome-extension.sh
 
       - name: Test GNOME packaging contracts

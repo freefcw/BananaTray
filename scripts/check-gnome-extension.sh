@@ -27,6 +27,27 @@ require_file_pattern() {
   fi
 }
 
+SKIPPED_CHECKS=()
+
+# 工具缺失处理：GNOME_CHECK_STRICT=1 时报错退出（CI 门禁），
+# 否则记录到 SKIPPED_CHECKS 并在结尾汇总提示，
+# 避免工具缺失导致核心校验被跳过后仍输出 "passed" 的假阳性。
+tool_available_or_skip() {
+  local tool="$1"
+  local check_name="$2"
+
+  if command -v "$tool" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ "${GNOME_CHECK_STRICT:-0}" == "1" ]]; then
+    echo "error: $tool not found; required for: $check_name (GNOME_CHECK_STRICT=1)" >&2
+    exit 1
+  fi
+  echo "warning: $tool not found; skipping $check_name" >&2
+  SKIPPED_CHECKS+=("$check_name")
+  return 1
+}
+
 check_gnome_packaging_contracts() {
   local root_dir="${1:?project root is required}"
 
@@ -102,9 +123,7 @@ for file in "${required_activation_files[@]}"; do
   fi
 done
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "node not found; skipping GNOME Shell Extension syntax check"
-else
+if tool_available_or_skip node "GNOME Shell Extension syntax/contract/unit checks (node)"; then
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bananatray-gjs-check.XXXXXX")"
   trap 'rm -rf "$tmp_dir"' EXIT
 
@@ -130,9 +149,7 @@ else
        --test ./gnome-shell-extension/tests/*.test.mjs
 fi
 
-if ! command -v msgfmt >/dev/null 2>&1; then
-  echo "msgfmt not found; skipping GNOME Shell Extension translation check"
-else
+if tool_available_or_skip msgfmt "GNOME Shell Extension translation check (msgfmt)"; then
   tmp_mo="$(mktemp "${TMPDIR:-/tmp}/bananatray-i18n.XXXXXX.mo")"
   msgfmt --check --output-file="$tmp_mo" "$EXT_DIR/po/zh_CN.po"
   if ! cmp -s "$tmp_mo" "$EXT_DIR/locale/zh_CN/LC_MESSAGES/bananatray.mo"; then
@@ -142,11 +159,8 @@ else
   rm -f "$tmp_mo"
 fi
 
-if ! command -v xgettext >/dev/null 2>&1; then
-  echo "xgettext not found; skipping GNOME Shell Extension gettext coverage check"
-elif ! command -v msgcmp >/dev/null 2>&1; then
-  echo "msgcmp not found; skipping GNOME Shell Extension gettext coverage check"
-else
+if tool_available_or_skip xgettext "GNOME Shell Extension gettext coverage check (xgettext+msgcmp)" \
+  && tool_available_or_skip msgcmp "GNOME Shell Extension gettext coverage check (xgettext+msgcmp)"; then
   tmp_pot="$(mktemp "${TMPDIR:-/tmp}/bananatray-i18n.XXXXXX.pot")"
   tmp_metadata_js="$(mktemp "${TMPDIR:-/tmp}/bananatray-i18n-metadata.XXXXXX.js")"
   description="$(sed -n 's/^  "description": "\(.*\)",$/\1/p' "$EXT_DIR/metadata.json")"
@@ -218,4 +232,18 @@ fi
 
 check_gnome_packaging_contracts "$PROJECT_DIR"
 
-echo "GNOME Shell Extension check passed"
+# GJS 真实 D-Bus 集成测试（需要 gjs + dbus-run-session）。
+# 环境未安装 gjs 时默认 skip 并记录（GNOME_CHECK_STRICT=1 时转为失败）。
+# ci.yml 会安装 gjs + dbus 并开启 STRICT，使本步骤在 CI 上总是执行该集成测试。
+if tool_available_or_skip gjs "GJS D-Bus integration test (gjs+dbus-run-session)" \
+  && tool_available_or_skip dbus-run-session "GJS D-Bus integration test (gjs+dbus-run-session)"; then
+  bash "$SCRIPT_DIR/test-gnome-extension-gjs.sh"
+fi
+
+if ((${#SKIPPED_CHECKS[@]})); then
+  echo "warning: the following checks were skipped (missing tools):" >&2
+  printf '  - %s\n' "${SKIPPED_CHECKS[@]}" >&2
+  echo "GNOME Shell Extension check passed (${#SKIPPED_CHECKS[@]} check(s) skipped)"
+else
+  echo "GNOME Shell Extension check passed"
+fi

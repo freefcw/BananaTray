@@ -48,9 +48,13 @@ service；`QuotaClient` 启动时会异步请求 `StartServiceByName`，daemon �
 | `scripts/dev-gnome-extension-watch.sh` | 真实桌面会话热重载：监控文件变化，自动 cp + disable/enable。 |
 | `scripts/install-gnome-extension.sh` | 当前用户会话安装 / 诊断入口；递归复制扩展文件并检查 `State`。 |
 | `scripts/gnome-extension-mock-daemon.js` | mock `com.bananatray.Daemon`，用于 UI 状态调试。 |
-| `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard 和 D-Bus contract parity。 |
+| `scripts/check-gnome-extension.sh` | 静态检查：必需文件、GJS/Node 语法、禁止同步 D-Bus 调用、schema guard 和 D-Bus contract parity。工具缺失（node/gettext/gjs 等）默认跳过对应检查并在结尾汇总列出；`GNOME_CHECK_STRICT=1` 时缺失即失败（CI 已开启，避免"跳过仍 passed"的假阳性）。 |
 | `scripts/check-gnome-dbus-contract.mjs` | D-Bus 契约静态校验：比较 Extension client/mock 的 bus/path/XML/schema version，并确认 Rust iface/DTO 仍匹配。 |
 | `scripts/test-gnome-packaging-contracts.sh` | 打包契约负例：逐个移除 schema version、activation placeholder 和 daemon-reload 标记，确认每个文件的漂移都会被门禁拦截。 |
+| `scripts/test-gnome-extension-gjs.sh` | GJS 真实 D-Bus 集成测试：在 `dbus-run-session` 下用真实 `Gio.DBusProxy` 验证 `quotaClient.js` 全链路。需要 `gjs` + `dbus-run-session`，缺失时 skip。 |
+| `gnome-shell-extension/tests/gjs-quota-client-integration.test.js` | GJS 集成测试驱动：启动 mock daemon → 真实 `QuotaClient` 端到端断言（proxy ready、`RefreshComplete` 信号、daemon 重连、schema 拒绝、`openSettings`、`destroy` 后无回调）。 |
+| `gnome-shell-extension/tests/gjs-mock-daemon.js` | GJS 集成测试专用 mock D-Bus daemon（ESM）：复用 `quotaClient.js` 常量，支持注入自定义快照生成器。 |
+| `gnome-shell-extension/tests/gjs-i18n-stub.js` | GJS 集成测试的 `i18n.js` 替身（passthrough），避免引入 `resource:///org/gnome/shell/...` 依赖。 |
 | `scripts/bundle-gnome-extension.sh` | e.g.o 提交用 zip 打包：白名单运行时文件、metadata 校验、版本信息输出。 |
 | `resources/linux/com.bananatray.Daemon.service` | Session D-Bus activation 文件，声明 `com.bananatray.Daemon` 如何启动。 |
 | `resources/linux/bananatray.service` | systemd user service，供 D-Bus activation 或用户手动 `systemctl --user start` 启动。 |
@@ -306,6 +310,12 @@ cargo test --lib
 cargo clippy
 ```
 
+`check-gnome-extension.sh` 会在 `gjs` 可用时自动跑 GJS 真实 D-Bus 集成测试。也可单独运行：
+
+```bash
+bash scripts/test-gnome-extension-gjs.sh
+```
+
 更新翻译时额外运行：
 
 ```bash
@@ -349,6 +359,6 @@ bash scripts/dev-gnome-extension.sh --app-daemon
 以下增强项来自原始预研计划（已归档为 `archive/gnome-shell-extension-plan.md`），当前实现不阻塞使用但值得后续完善：
 
 - ~~**UI 表达增强**~~：已实现多配额 Provider 展开/折叠交互、header 状态徽章颜色编码（Synced/Syncing/Stale/Offline）、账户 tier 彩色 badge、footer 双按钮（Sync Data + Settings）、全宽进度条。仍可增强：趋势图、更细的错误恢复提示。
-- **GNOME Shell 集成测试**：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入，但还没有真正启动 GNOME Shell 的自动化测试路径。
+- ~~**GNOME Shell 集成测试**~~：Extension 已有运行时 schema guard、静态检查脚本和 CI 接入。`scripts/test-gnome-extension-gjs.sh` 在 `dbus-run-session` + GJS 里用真实 `Gio.DBusProxy` 验证 `quotaClient.js` 的 D-Bus 方法调用、`RefreshComplete` 信号订阅和 schema 校验（覆盖 Node mock 单测无法触及的真实 GJS + D-Bus 路径）。`check-gnome-extension.sh` 在 `gjs` 可用时自动调起，`ci.yml` 显式安装 gjs + dbus 跑该 测试。UI 层（`panelButton.js`/`quotaWidgets.js`）的 nested GNOME Shell 端到端测试仍是后续增强项。
 - ~~**发布流程闭环**~~：已实现 `scripts/bundle-gnome-extension.sh` zip 打包和 e.g.o 发布元数据；版本矩阵验证仍需手动。
 - **i18n 语言覆盖**：当前只有简体中文翻译，后续发布前可按目标用户补充更多 locale。
