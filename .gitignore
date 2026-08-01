@@ -1,6 +1,9 @@
 /target
 AGENTS_local.md
 CLAUDE.local.md
+CLAUDE_local.md
+Cargo.toml.debug
+todo
 .env
 .env.*
 !.env.example
