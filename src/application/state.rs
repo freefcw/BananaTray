@@ -266,16 +266,20 @@ impl AppSession {
         Some(NavTab::Provider(id))
     }
 
-    /// 获取当前选中 Provider 的状态等级。
+    /// 获取所有已启用 Provider 的综合状态等级（取最坏值）。
     /// 仅在 Dynamic 模式下使用，用于决定托盘图标颜色。
     ///
-    /// 基于 `nav.last_provider_id`（当前/最后选中的 Provider）。
-    /// 若该 Provider 未连接或不存在，返回 Green（安全默认值）。
-    pub fn current_provider_status(&self) -> StatusLevel {
+    /// 只统计已启用且已连接（Connected）的 Provider，与刷新链路
+    /// （`refreshable_provider_ids`）的启用语义一致；
+    /// 无符合条件的 Provider 时返回 Green（安全默认值）。
+    pub fn worst_enabled_provider_status(&self) -> StatusLevel {
         self.provider_store
-            .find_by_id(&self.nav.last_provider_id)
+            .providers
+            .iter()
+            .filter(|p| self.settings.provider.is_enabled(&p.provider_id))
             .filter(|p| p.connection == ConnectionStatus::Connected)
             .map(|p| p.worst_status())
+            .max()
             .unwrap_or(StatusLevel::Green)
     }
 }

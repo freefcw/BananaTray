@@ -24,23 +24,22 @@ pub(super) fn provider_supports_refresh(session: &AppSession, id: &ProviderId) -
 }
 
 /// 将用户选择的 TrayIconStyle 解析为具体的 TrayIconRequest。
-/// Dynamic 模式时根据当前 Provider 状态计算颜色，其余模式直接映射为静态请求。
+/// Dynamic 模式时根据所有已启用 Provider 的综合状态计算颜色，其余模式直接映射为静态请求。
 pub(super) fn resolve_tray_icon_request(
     session: &AppSession,
     style: TrayIconStyle,
 ) -> TrayIconRequest {
     if style == TrayIconStyle::Dynamic {
-        TrayIconRequest::DynamicStatus(session.current_provider_status())
+        TrayIconRequest::DynamicStatus(session.worst_enabled_provider_status())
     } else {
         TrayIconRequest::Static(style)
     }
 }
 
-/// 若处于 Dynamic 模式，且刷新的是当前 Provider，且弹窗不可见，且状态发生变化时，
-/// 追加 ApplyTrayIcon effect。
+/// 若处于 Dynamic 模式、弹窗不可见、且已启用 Provider 的综合状态发生变化时，
+/// 追加 ApplyTrayIcon effect。任一 Provider 刷新完成都可能改变综合状态。
 pub(super) fn sync_dynamic_icon_if_needed(
     session: &AppSession,
-    refreshed_id: &ProviderId,
     prev_status: StatusLevel,
     effects: &mut Vec<AppEffect>,
 ) {
@@ -51,11 +50,7 @@ pub(super) fn sync_dynamic_icon_if_needed(
     if session.popup_visible {
         return;
     }
-    // 只响应当前 Provider 的刷新事件
-    if *refreshed_id != session.nav.last_provider_id {
-        return;
-    }
-    let new_status = session.current_provider_status();
+    let new_status = session.worst_enabled_provider_status();
     if new_status != prev_status {
         effects
             .push(ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(new_status)).into());

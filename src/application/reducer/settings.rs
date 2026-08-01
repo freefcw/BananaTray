@@ -153,11 +153,11 @@ pub(super) fn popup_visibility_changed(
 ) {
     session.popup_visible = visible;
     if !visible {
-        // 弹窗关闭时同步图标为当前 Provider 的状态
+        // 弹窗关闭时同步图标为已启用 Provider 的综合状态
         if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
             effects.push(
                 ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(
-                    session.current_provider_status(),
+                    session.worst_enabled_provider_status(),
                 ))
                 .into(),
             );

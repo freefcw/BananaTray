@@ -329,6 +329,11 @@ fn popup_closed_syncs_dynamic_icon() {
     let mut session = make_session();
     session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
     session.popup_visible = true;
+    // Claude 需处于启用状态才会计入综合状态
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
 
     // 先让 Claude 有 Red 数据（在弹窗打开期间刷新，图标未更新）
     reduce(

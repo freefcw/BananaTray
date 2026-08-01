@@ -148,14 +148,14 @@ pub(super) fn apply_refresh_event(
             let is_debug_target = session.debug_ui.refresh_active
                 && session.debug_ui.selected_provider.as_ref() == Some(&outcome.id);
 
-            // 快照刷新前的状态等级，用于判断刷新后是否需要更新图标
-            let prev_status = session.current_provider_status();
+            // 快照刷新前的综合状态等级，用于判断刷新后是否需要更新图标
+            let prev_status = session.worst_enabled_provider_status();
             let outcome_id = outcome.id.clone();
 
             process_refresh_outcome(session, &outcome_id, outcome.result, effects);
 
-            // 动态图标：仅当刷新的是当前 Provider 时才检查状态变化
-            sync_dynamic_icon_if_needed(session, &outcome_id, prev_status, effects);
+            // 动态图标：任一已启用 Provider 的综合状态变化都会反映到图标
+            sync_dynamic_icon_if_needed(session, prev_status, effects);
 
             if is_debug_target {
                 session.debug_ui.refresh_active = false;

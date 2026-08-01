@@ -126,12 +126,17 @@ fn refresh_success_in_dynamic_mode_no_effect_when_status_unchanged() {
 }
 
 #[test]
-fn refresh_non_current_provider_does_not_produce_tray_icon_effect() {
-    use crate::models::{QuotaInfo, TrayIconStyle};
+fn refresh_non_selected_enabled_provider_produces_tray_icon_effect() {
+    use crate::models::{QuotaInfo, StatusLevel, TrayIconStyle};
 
     let mut session = make_session();
     session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
-    // 当前 Provider 是 Claude（默认），但刷新的是 Gemini
+    // 当前选中 Claude（默认），但刷新的是已启用的 Gemini：
+    // 聚合语义下未选中的 Provider 同样决定图标颜色
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Gemini), true);
 
     let effects = reduce(
         &mut session,
@@ -148,7 +153,37 @@ fn refresh_non_current_provider_does_not_produce_tray_icon_effect() {
         })),
     );
 
-    // 非当前 Provider 的刷新不影响图标
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(
+            TrayIconRequest::DynamicStatus(StatusLevel::Red)
+        ))
+    )));
+}
+
+#[test]
+fn refresh_disabled_provider_does_not_produce_tray_icon_effect() {
+    use crate::models::{QuotaInfo, TrayIconStyle};
+
+    let mut session = make_session();
+    session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+    // Gemini 未启用（无 enabled 记录）→ 不参与综合状态，即使刷新变红也不影响图标
+
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: pid(ProviderKind::Gemini),
+            result: RefreshResult::Success {
+                data: RefreshData {
+                    quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
+                    account_email: None,
+                    account_tier: None,
+                    source_label: None,
+                },
+            },
+        })),
+    );
+
     assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Context(ContextEffect::ApplyTrayIcon(_))

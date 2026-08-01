@@ -119,11 +119,11 @@ pub(super) fn toggle_provider(
             effects.push(ContextEffect::Render.into());
         }
     } else {
-        // Provider 被禁用后需重新计算动态图标
+        // Provider 被禁用后需重新计算动态图标（禁用项退出综合状态）
         if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic
             && !session.popup_visible
         {
-            let status = session.current_provider_status();
+            let status = session.worst_enabled_provider_status();
             effects
                 .push(ContextEffect::ApplyTrayIcon(TrayIconRequest::DynamicStatus(status)).into());
         }
