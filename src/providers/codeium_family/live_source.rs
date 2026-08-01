@@ -17,7 +17,14 @@ const PROCESS_NAMES: &[&str] = &[
     "language_server_linux_x64",
     "language_server_linux_arm64",
 ];
-const PGREP_CANDIDATES: &[&str] = &["/usr/bin/pgrep", "/bin/pgrep", "pgrep"];
+
+#[cfg(target_os = "macos")]
+pub(super) const PGREP_LIST_ARGS: &[&str] = &["-lf"];
+
+#[cfg(not(target_os = "macos"))]
+pub(super) const PGREP_LIST_ARGS: &[&str] = &["-af"];
+
+pub(super) const PGREP_CANDIDATES: &[&str] = &["/usr/bin/pgrep", "/bin/pgrep", "pgrep"];
 const LSOF_CANDIDATES: &[&str] = &["/usr/sbin/lsof", "/usr/bin/lsof", "lsof"];
 const API_PATH: &str = "exa.language_server_pb.LanguageServerService/GetUserStatus";
 
@@ -89,7 +96,11 @@ pub fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
     let mut last_error = None;
 
     for pgrep in PGREP_CANDIDATES {
-        let output = match Command::new(pgrep).args(["-lf", PROCESS_QUERY]).output() {
+        let output = match Command::new(pgrep)
+            .args(PGREP_LIST_ARGS)
+            .arg(PROCESS_QUERY)
+            .output()
+        {
             Ok(output) => output,
             Err(err) => {
                 last_error = Some(err);
@@ -448,6 +459,16 @@ mod tests {
     fn test_matches_process_line_accepts_linux_language_server() {
         let line = "12345 /usr/share/antigravity/resources/app/extensions/antigravity/bin/language_server_linux_x64 --enable_lsp --app_data_dir antigravity";
         assert!(matches_process_line(line, &antigravity_spec()));
+    }
+
+    #[test]
+    fn test_matches_process_line_accepts_linux_af_full_command_line() {
+        // Linux `pgrep -af` 输出完整命令行，进程名不会被截断为 15 字符
+        let line = "693654 /usr/share/devin-desktop/resources/app/extensions/windsurf/bin/language_server_linux_x64 --api_server_url https://server.self-serve.windsurf.com --extension_server_port 37383 --ide_name windsurf --windsurf_version 3.6.22 --stdin_initial_metadata";
+        assert!(matches_process_line(
+            line,
+            &super::super::spec::WINDSURF_SPEC
+        ));
     }
 
     #[test]
