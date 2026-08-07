@@ -190,6 +190,20 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
         }
         QuotaLabelSpec::OnDemand => t!("quota.label.on_demand").to_string(),
         QuotaLabelSpec::Team => t!("quota.label.team").to_string(),
+        QuotaLabelSpec::SubscriptionUsage { plan, pool } => {
+            let pool_label = match pool.as_str() {
+                "orb" => t!("quota.label.subscription_pool_orb").to_string(),
+                "other" => t!("quota.label.subscription_pool_other").to_string(),
+                // 未知池名原文透传，避免丢失上游信息
+                other => other.to_string(),
+            };
+            t!(
+                "quota.label.subscription_usage",
+                plan = plan,
+                pool = pool_label
+            )
+            .to_string()
+        }
     }
 }
 
