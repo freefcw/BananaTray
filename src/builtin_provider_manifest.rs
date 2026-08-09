@@ -8,6 +8,7 @@ macro_rules! builtin_provider_manifest {
             Claude => "claude" => claude::ClaudeProvider,
             Gemini => "gemini" => gemini::GeminiProvider,
             Copilot => "copilot" => copilot::CopilotProvider,
+            ClinePass => "cline-pass" => cline_pass::ClinePassProvider,
             Codex => "codex" => codex::CodexProvider,
             Kimi => "kimi" => kimi::KimiProvider,
             Amp => "amp" => amp::AmpProvider,

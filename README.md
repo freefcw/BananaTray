@@ -5,7 +5,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover; Linux offers dual-mode: native GNOME Shell Extension popup (GNOME + extension installed) or ksni SNI fallback with right-click menu
-- **14 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
+- **15 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — system notifications when usage drops below 10% or is exhausted
@@ -24,6 +24,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Claude** | HTTP API (`api.anthropic.com`) + CLI fallback | Monitorable | Full quota refresh |
 | **Gemini** | HTTP API (`googleapis.com`) | Monitorable | Full quota refresh |
 | **Copilot** | HTTP API (`api.github.com`) | Monitorable | Full quota refresh |
+| **ClinePass** | Cline usage API + local/API Key credentials | Monitorable | 5h rolling, weekly, and monthly limits |
 | **Codex** | HTTP API (`chatgpt.com`) + CLI fallback | Monitorable | Full quota refresh |
 | **Kimi** | HTTP API (`kimi.com`) | Monitorable | Full quota refresh |
 | **Amp** | CLI (`amp usage`) | Monitorable | Full quota refresh |

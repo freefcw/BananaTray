@@ -365,6 +365,16 @@ copilot.source.copilot_oauth: "Copilot 扩展自动检测"
 copilot.source.copilot_cli: "Copilot CLI (Keychain)"
 copilot.token_sources_tip: "Token 获取优先级：\n① 配置文件（点击「设置 Token」配置）\n② 环境变量 GITHUB_TOKEN\n③ Copilot 扩展（~/.config/github-copilot/）\n④ Copilot CLI（macOS 钥匙串）"
 
+# ── ClinePass 设置 UI ────────────────────────────────────
+cline_pass.api_key: "Cline API Key"
+cline_pass.requires_auth: "需要 Cline API Key 或有效的 Cline 登录态。"
+cline_pass.token_placeholder: "粘贴 Cline API Key"
+cline_pass.source.config_file: "BananaTray 设置"
+cline_pass.source.env_var: "环境变量 CLINE_API_KEY"
+cline_pass.source.local_api_key: "自动检测的 Cline API Key"
+cline_pass.source.cline_login: "自动检测的 Cline 登录态"
+cline_pass.token_sources_tip: "凭据获取优先级：\n① BananaTray 中的 Cline API Key\n② 环境变量 CLINE_API_KEY\n③ providers.json 中的 Cline API Key\n④ providers.json 中有效的 Cline 登录态"
+
 # ── 语言名称 ─────────────────────────────────────────────
 lang.system: "跟随系统"
 lang.en: "English"

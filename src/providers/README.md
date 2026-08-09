@@ -1,6 +1,6 @@
 # src/providers/
 
-Provider abstraction layer and all 14 AI provider implementations.
+Provider abstraction layer and all 15 AI provider implementations.
 
 ## Core Abstractions
 
@@ -71,6 +71,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `claude/` | Claude | `claude` | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources; `credentials.rs` handles OAuth credential loading/refresh/save; `probe.rs` defines `UsageProbe` trait + `ProbeMode` |
 | `gemini/` | Gemini | `gemini` | `gemini:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
 | `copilot/` | Copilot | `copilot` | `copilot:api` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, uses the shared Unicode-safe secret preview helper, and reads app-managed `github_token` from `ProviderExecutionContext` during refresh |
+| `cline_pass/` | ClinePass | `cline-pass` | `cline-pass:api` | `Monitorable` | Cline usage API | Reads BananaTray `cline_api_key`, `CLINE_API_KEY`, or Cline's `providers.json` in that order; local OAuth is read-only and never refreshed or written by BananaTray. Maps `five_hour`, `weekly`, and `monthly` limits to stable quota semantics. See `cline_pass/README.md` for paths and response contracts |
 | `codex/` | Codex | `codex` | `codex:api` | `Monitorable` | ChatGPT API + CLI fallback | Split into `auth.rs`, `client.rs`, `config.rs`, `parser.rs`, `rpc_probe.rs`, `status_probe.rs`, `mod.rs`. `refresh(ctx)` uses HTTP first; recoverable HTTP failures fall back to `codex app-server` JSON-RPC before PTY `/status`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; credentials are reloaded after token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` reflect the latest state. `config.rs` reads `~/.codex/config.toml` for `chatgpt_base_url` to support self-hosted ChatGPT gateways |
 | `kimi/` | Kimi | `kimi` | `kimi:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
