@@ -689,6 +689,7 @@ dependencies = [
  "portable-pty",
  "prost",
  "regex",
+ "resvg",
  "rusqlite",
  "rust-i18n",
  "serde",

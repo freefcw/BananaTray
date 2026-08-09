@@ -53,6 +53,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-provider-icons
+        name: Validate provider icons
+        entry: python3 scripts/check_provider_icons.py --check-preview
+        language: system
+        pass_filenames: false
+        files: ^(src/icons/provider-.*\.svg|scripts/check_provider_icons\.py|docs/design-references/provider-icons\.svg)$
+
       - id: forbid-gpui-glob-imports
         name: Forbid GPUI glob imports
         entry: ./scripts/check-gpui-imports.sh

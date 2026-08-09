@@ -15,6 +15,17 @@ fmt:
 fmt-check:
     cargo fmt --check
 
+audit-provider-icons:
+    cargo test --quiet --example provider_icon_metrics --no-default-features
+    cargo run --quiet --example provider_icon_metrics --no-default-features -- src/icons/provider-*.svg
+
+check-provider-icons: audit-provider-icons
+    python3 -m unittest scripts/test_check_provider_icons.py
+    python3 scripts/check_provider_icons.py --check-preview
+
+render-provider-icons:
+    python3 scripts/check_provider_icons.py --write-preview
+
 check-gpui-imports:
     ./scripts/check-gpui-imports.sh
 
@@ -42,7 +53,7 @@ clippy-lib-fast:
 test-lib-fast:
     cargo test --lib --no-default-features
 
-ci-fast: fmt-check check-gpui-imports check-provider-secret-slicing check-release-panic-profile check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
+ci-fast: fmt-check check-provider-icons check-gpui-imports check-provider-secret-slicing check-release-panic-profile check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
     @true
 
 clippy-lib:

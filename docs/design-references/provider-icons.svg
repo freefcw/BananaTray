@@ -1,0 +1,898 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1258" viewBox="0 0 800 1258">
+  <rect x="0" y="0" width="800" height="1258" fill="#eef0f3" />
+  <text x="24" y="27" fill="#20242a" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="600">BananaTray provider icon optical review</text>
+  <text x="180" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">LIGHT</text>
+  <text x="452" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">DARK</text>
+  <text x="724" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">MUTED</text>
+  <text x="202" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">15</text>
+  <text x="246" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">16</text>
+  <text x="290" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">20</text>
+  <text x="338" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">32</text>
+  <text x="398" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">BOX</text>
+  <text x="474" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">15</text>
+  <text x="518" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">16</text>
+  <text x="562" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">20</text>
+  <text x="610" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">32</text>
+  <text x="670" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">BOX</text>
+  <text x="752" y="73" fill="#737983" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" text-anchor="middle">16</text>
+  <text x="24" y="122" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">amp</text>
+  <rect x="180" y="90" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 110.5) scale(0.625)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(238 110) scale(0.666667)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(280 108) scale(0.833333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(322 102) scale(1.33333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <rect x="370" y="90" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 102) scale(1.33333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <rect x="452" y="90" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 110.5) scale(0.625)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 110) scale(0.666667)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 108) scale(0.833333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 102) scale(1.33333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <rect x="642" y="90" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 102) scale(1.33333)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <rect x="724" y="90" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 110) scale(0.666667)">
+    <path d="M4.8 15.3L9.84 4.5L13.44 9.9H19.2L14.52 19.5L10.8 14.1H4.8Z" fill="currentColor" />
+  </g>
+  <rect x="12" y="152" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="190" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">antigravity</text>
+  <rect x="180" y="158" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 178.5) scale(0.625)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 178) scale(0.666667)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 176) scale(0.833333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 170) scale(1.33333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="370" y="158" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 170) scale(1.33333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="452" y="158" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 178.5) scale(0.625)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 178) scale(0.666667)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 176) scale(0.833333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 170) scale(1.33333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="642" y="158" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 170) scale(1.33333)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="724" y="158" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 178) scale(0.666667)">
+    <path d="M12 4L5 14H10V20H14V14H19L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <text x="24" y="258" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">claude</text>
+  <rect x="180" y="226" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 246.5) scale(0.625)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(238 246) scale(0.666667)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(280 244) scale(0.833333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(322 238) scale(1.33333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <rect x="370" y="226" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 238) scale(1.33333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <rect x="452" y="226" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 246.5) scale(0.625)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 246) scale(0.666667)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 244) scale(0.833333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 238) scale(1.33333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <rect x="642" y="226" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 238) scale(1.33333)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <rect x="724" y="226" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 246) scale(0.666667)">
+    <path d="M12 5.22L14.52 9.66L19.2 10.62L15.84 13.98L16.56 18.78L12 16.62L7.44 18.78L8.16 13.98L4.8 10.62L9.48 9.66L12 5.22Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="14.22" r="2.04" fill="currentColor" />
+  </g>
+  <rect x="12" y="288" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="326" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">cline-pass</text>
+  <rect x="180" y="294" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 314.5) scale(0.625)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#30343b" transform="translate(238 314) scale(0.666667)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#30343b" transform="translate(280 312) scale(0.833333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#30343b" transform="translate(322 306) scale(1.33333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <rect x="370" y="294" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 306) scale(1.33333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <rect x="452" y="294" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 314.5) scale(0.625)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 314) scale(0.666667)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 312) scale(0.833333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 306) scale(1.33333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <rect x="642" y="294" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 306) scale(1.33333)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <rect x="724" y="294" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 314) scale(0.666667)">
+    <path transform="translate(3.85 3.5) scale(0.034904)" fill="currentColor" d="M463.6 275.08l-29.26-58.75V182.5c0-56.08-45.01-101.5-100.53-101.5H283.8a56.14 56.14 0 0 0 5.61-24.61C289.41 25.22 264.33 0 233.34 0s-56.07 25.22-56.07 56.39c0 8.82 1.99 17.17 5.61 24.61h-50.01C77.36 81 32.35 126.42 32.35 182.5v33.83L2.48 274.92a20.77 20.77 0 0 0 0 18.81l29.87 57.93v33.83c0 56.08 45.01 101.5 100.52 101.5h200.95c55.51 0 100.53-45.42 100.53-101.5v-33.83l29.21-58.13a20.78 20.78 0 0 0 .04-18.45ZM202.75 322.96c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Zm147.83 0c0 25.48-20.54 46.14-45.88 46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48 20.54-46.14 45.88-46.14s45.88 20.66 45.88 46.14v82.02Z" />
+  </g>
+  <text x="24" y="394" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">codex</text>
+  <rect x="180" y="362" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 382.5) scale(0.625)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 382) scale(0.666667)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 380) scale(0.833333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 374) scale(1.33333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="370" y="362" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 374) scale(1.33333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="452" y="362" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 382.5) scale(0.625)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 382) scale(0.666667)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 380) scale(0.833333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 374) scale(1.33333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="642" y="362" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 374) scale(1.33333)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="724" y="362" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 382) scale(0.666667)">
+    <path d="M9.5 6L5.5 12L9.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14.5 6L18.5 12L14.5 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="12" y="424" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="462" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">copilot</text>
+  <rect x="180" y="430" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 450.5) scale(0.625)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 450) scale(0.666667)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 448) scale(0.833333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 442) scale(1.33333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="430" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 442) scale(1.33333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="430" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 450.5) scale(0.625)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 450) scale(0.666667)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 448) scale(0.833333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 442) scale(1.33333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="430" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 442) scale(1.33333)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="430" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 450) scale(0.666667)">
+    <rect x="4" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <rect x="13" y="8" width="7" height="8" rx="3.5" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="530" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">cursor</text>
+  <rect x="180" y="498" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 518.5) scale(0.625)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 518) scale(0.666667)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 516) scale(0.833333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 510) scale(1.33333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="370" y="498" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 510) scale(1.33333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="452" y="498" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 518.5) scale(0.625)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 518) scale(0.666667)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 516) scale(0.833333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 510) scale(1.33333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="642" y="498" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 510) scale(1.33333)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="724" y="498" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 518) scale(0.666667)">
+    <path d="M5 3L19 12L13 13L10 20L5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+  </g>
+  <rect x="12" y="560" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="598" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">custom</text>
+  <rect x="180" y="566" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 586.5) scale(0.625)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 586) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 584) scale(0.833333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 578) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="566" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 578) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="566" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 586.5) scale(0.625)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 586) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 584) scale(0.833333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 578) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="566" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 578) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="566" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 586) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+    <path d="M12 8V16M8 12H16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="666" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">devin-desktop</text>
+  <rect x="180" y="634" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 654.5) scale(0.625)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#30343b" transform="translate(238 654) scale(0.666667)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#30343b" transform="translate(280 652) scale(0.833333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#30343b" transform="translate(322 646) scale(1.33333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <rect x="370" y="634" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 646) scale(1.33333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <rect x="452" y="634" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 654.5) scale(0.625)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 654) scale(0.666667)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 652) scale(0.833333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 646) scale(1.33333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <rect x="642" y="634" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 646) scale(1.33333)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <rect x="724" y="634" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 654) scale(0.666667)">
+    <path d="M6 4.5L14.5 4.5C17.5 4.5 20 7.5 20 12C20 16.5 17.5 19.5 14.5 19.5L6 19.5L6 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path fill="currentColor" fill-rule="evenodd" d="M16.2 12A2.2 2.2 0 1 1 11.8 12A2.2 2.2 0 0 1 16.2 12ZM15.5 11.2A0.7 0.7 0 1 0 14.1 11.2A0.7 0.7 0 0 0 15.5 11.2Z" />
+  </g>
+  <rect x="12" y="696" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="734" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">gemini</text>
+  <rect x="180" y="702" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 722.5) scale(0.625)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#30343b" transform="translate(238 722) scale(0.666667)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#30343b" transform="translate(280 720) scale(0.833333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#30343b" transform="translate(322 714) scale(1.33333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <rect x="370" y="702" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 714) scale(1.33333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <rect x="452" y="702" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 722.5) scale(0.625)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 722) scale(0.666667)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 720) scale(0.833333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 714) scale(1.33333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <rect x="642" y="702" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 714) scale(1.33333)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <rect x="724" y="702" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 722) scale(0.666667)">
+    <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
+    <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
+  </g>
+  <text x="24" y="802" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kilo</text>
+  <rect x="180" y="770" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 790.5) scale(0.625)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 790) scale(0.666667)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 788) scale(0.833333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 782) scale(1.33333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="770" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 782) scale(1.33333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="770" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 790.5) scale(0.625)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 790) scale(0.666667)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 788) scale(0.833333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 782) scale(1.33333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="770" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 782) scale(1.33333)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="770" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 790) scale(0.666667)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="12" y="832" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="870" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kimi</text>
+  <rect x="180" y="838" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 858.5) scale(0.625)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(238 858) scale(0.666667)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(280 856) scale(0.833333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(322 850) scale(1.33333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <rect x="370" y="838" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 850) scale(1.33333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <rect x="452" y="838" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 858.5) scale(0.625)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 858) scale(0.666667)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 856) scale(0.833333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 850) scale(1.33333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <rect x="642" y="838" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 850) scale(1.33333)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <rect x="724" y="838" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 858) scale(0.666667)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <text x="24" y="938" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kiro</text>
+  <rect x="180" y="906" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 926.5) scale(0.625)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 926) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 924) scale(0.833333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 918) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="906" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 918) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="906" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 926.5) scale(0.625)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 926) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 924) scale(0.833333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 918) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="906" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 918) scale(1.33333)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="906" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 926) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="12" y="968" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="1006" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">minimax</text>
+  <rect x="180" y="974" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 994.5) scale(0.625)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 994) scale(0.666667)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 992) scale(0.833333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 986) scale(1.33333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="974" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 986) scale(1.33333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="974" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 994.5) scale(0.625)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 994) scale(0.666667)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 992) scale(0.833333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 986) scale(1.33333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="974" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 986) scale(1.33333)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="974" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 994) scale(0.666667)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="1074" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">opencode</text>
+  <rect x="180" y="1042" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1062.5) scale(0.625)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 1062) scale(0.666667)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 1060) scale(0.833333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 1054) scale(1.33333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="370" y="1042" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 1054) scale(1.33333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="452" y="1042" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 1062.5) scale(0.625)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 1062) scale(0.666667)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 1060) scale(0.833333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 1054) scale(1.33333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="642" y="1042" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 1054) scale(1.33333)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="724" y="1042" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 1062) scale(0.666667)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="12" y="1104" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="1142" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">unknown</text>
+  <rect x="180" y="1110" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1130.5) scale(0.625)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(238 1130) scale(0.666667)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(280 1128) scale(0.833333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#30343b" transform="translate(322 1122) scale(1.33333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <rect x="370" y="1110" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 1122) scale(1.33333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <rect x="452" y="1110" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 1130.5) scale(0.625)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 1130) scale(0.666667)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 1128) scale(0.833333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 1122) scale(1.33333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <rect x="642" y="1110" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 1122) scale(1.33333)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <rect x="724" y="1110" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 1130) scale(0.666667)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <text x="24" y="1210" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">vertexai</text>
+  <rect x="180" y="1178" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1198.5) scale(0.625)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(238 1198) scale(0.666667)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(280 1196) scale(0.833333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(322 1190) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="370" y="1178" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 1190) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="452" y="1178" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 1198.5) scale(0.625)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 1198) scale(0.666667)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 1196) scale(0.833333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 1190) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="642" y="1178" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 1190) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="724" y="1178" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 1198) scale(0.666667)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+</svg>

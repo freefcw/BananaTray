@@ -34,6 +34,13 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Validate provider icons
+        run: |
+          python3 -m unittest scripts/test_check_provider_icons.py
+          python3 scripts/check_provider_icons.py --check-preview
+          cargo test --quiet --example provider_icon_metrics --no-default-features
+          cargo run --quiet --example provider_icon_metrics --no-default-features -- src/icons/provider-*.svg
+
       - name: Forbid GPUI glob imports
         run: ./scripts/check-gpui-imports.sh
 
