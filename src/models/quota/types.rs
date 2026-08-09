@@ -7,6 +7,8 @@ pub enum QuotaType {
     Session,
     /// 周配额（所有模型合计）
     Weekly,
+    /// 月配额
+    Monthly,
     /// 按模型的周配额（如 Opus / Sonnet）
     ModelSpecific(String),
     /// 基于金额的信用额度（显示带 `$` 前缀）
@@ -29,6 +31,7 @@ impl QuotaType {
         match self {
             QuotaType::Session => "session".into(),
             QuotaType::Weekly => "weekly".into(),
+            QuotaType::Monthly => "monthly".into(),
             QuotaType::ModelSpecific(model) => format!("model:{model}"),
             QuotaType::Credit => "credit".into(),
             QuotaType::Points => "points".into(),

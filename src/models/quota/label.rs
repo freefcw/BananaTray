@@ -12,6 +12,7 @@ pub enum QuotaLabelSpec {
     Daily,
     Session,
     Weekly,
+    Monthly,
     WeeklyModel {
         model: String,
     },
@@ -53,6 +54,7 @@ impl QuotaLabelSpec {
             Self::Daily => "daily".into(),
             Self::Session => "session".into(),
             Self::Weekly | Self::WeeklyTier { .. } => "weekly".into(),
+            Self::Monthly => "monthly".into(),
             Self::WeeklyModel { model } => format!("model:{model}"),
             Self::MonthlyCredits => "monthly-credits".into(),
             Self::Credits => {

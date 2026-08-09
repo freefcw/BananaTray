@@ -169,6 +169,7 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
         QuotaLabelSpec::Daily => t!("quota.label.daily").to_string(),
         QuotaLabelSpec::Session => t!("quota.label.session").to_string(),
         QuotaLabelSpec::Weekly => t!("quota.label.weekly").to_string(),
+        QuotaLabelSpec::Monthly => t!("quota.label.monthly").to_string(),
         QuotaLabelSpec::WeeklyModel { model } => {
             t!("quota.label.weekly_model", model = model).to_string()
         }
@@ -527,6 +528,23 @@ mod tests {
         let quota =
             QuotaInfo::with_details(QuotaLabelSpec::Daily, 25.0, 100.0, QuotaType::General, None);
         assert_eq!(format_quota_label(&quota), "Daily");
+    }
+
+    #[test]
+    fn format_quota_label_monthly_is_localized() {
+        let _locale_guard = setup_locale();
+        let quota = QuotaInfo::with_details(
+            QuotaLabelSpec::Monthly,
+            42.0,
+            100.0,
+            QuotaType::Monthly,
+            None,
+        );
+
+        assert_eq!(format_quota_label(&quota), "Monthly");
+        rust_i18n::set_locale("zh-CN");
+        assert_eq!(format_quota_label(&quota), "月配额");
+        rust_i18n::set_locale("en");
     }
 
     #[test]

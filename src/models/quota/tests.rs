@@ -19,6 +19,19 @@ fn quota_type_stable_key_is_language_independent() {
     assert_eq!(QuotaType::General.stable_key(), "general");
 }
 
+#[test]
+fn monthly_quota_has_stable_domain_identity() {
+    assert_eq!(QuotaType::Monthly.stable_key(), "monthly");
+    assert_eq!(
+        QuotaLabelSpec::Monthly.stable_key(&QuotaType::Monthly),
+        "monthly"
+    );
+
+    let quota =
+        QuotaInfo::from_used_percent(QuotaLabelSpec::Monthly, 42.0, QuotaType::Monthly, None);
+    assert_eq!(quota.stable_key, "monthly");
+}
+
 // 兼容性：Kiro 历史上 Regular Credits 用 (Credits + General)，stable_key = "general"。
 // 后续修正为 (Credits + Points)，必须保留 "general" 以避免老用户的 hidden_quotas 失效。
 #[test]
