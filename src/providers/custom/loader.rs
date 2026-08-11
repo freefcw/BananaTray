@@ -1,6 +1,8 @@
 use anyhow::Result;
 use log::{info, warn};
 use regex::Regex;
+
+use crate::models::ProviderKind;
 use std::path::{Path, PathBuf};
 
 use super::provider::CustomProvider;
@@ -123,8 +125,14 @@ fn validate(def: &CustomProviderDef) -> Result<()> {
             def.schema_version
         );
     }
-    if def.id.is_empty() {
+    if def.id.trim().is_empty() {
         anyhow::bail!("'id' cannot be empty");
+    }
+    if ProviderKind::from_id_key(&def.id).is_some() {
+        anyhow::bail!(
+            "custom provider id '{}' is reserved by a built-in provider; choose a unique id",
+            def.id
+        );
     }
     if def.metadata.display_name.is_empty() {
         anyhow::bail!("'metadata.display_name' cannot be empty");
@@ -382,6 +390,17 @@ mod tests {
         let mut def = make_minimal_def();
         def.id = String::new();
         assert!(validate(&def).is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_builtin_provider_id() {
+        for reserved in ["claude", "codex", "gemini"] {
+            let mut def = make_minimal_def();
+            def.id = reserved.to_string();
+            let error = validate(&def).unwrap_err().to_string();
+            assert!(error.contains("reserved"), "unexpected error: {error}");
+            assert!(error.contains(reserved));
+        }
     }
 
     #[test]

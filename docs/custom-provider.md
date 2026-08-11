@@ -126,7 +126,7 @@ plan:
 - `schema_version`
   - 固定为 `2`。
 - `id`
-  - 自定义 provider 的稳定标识，必须唯一。
+  - 自定义 provider 的稳定标识，必须唯一，且不能等于任何内置 provider 的稳定 key（如 `claude`、`codex`、`gemini`）；冲突配置会在加载时被拒绝。
   - NewAPI 表单生成的 provider 使用 `{domain-slug}:newapi`；填写 User ID 时为 `{domain-slug}-{user-slug}:newapi`，同一站点因此可添加多个账号。这类 provider 会在设置页显示“编辑配置”入口；编辑保存保持原 `id` 不变（不随 User ID 修改而迁移身份）。新增时若身份（站点 + 账号）已存在会被拒绝并提示改用编辑，不会静默覆盖已有 YAML。
 - `base_url`
   - 可选前缀；step 中的 URL 若以 `/` 开头，会自动拼接该前缀。

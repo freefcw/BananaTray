@@ -49,7 +49,7 @@ impl ProviderManagerHandle {
 
 impl Default for ProviderManagerHandle {
     fn default() -> Self {
-        Self::new(ProviderManager::new())
+        Self::new(ProviderManager::load_default())
     }
 }
 
@@ -77,7 +77,13 @@ impl ProviderManager {
         }
     }
 
+    /// 构造只包含内置 Provider 的纯注册表，不执行文件系统 I/O。
     pub fn new() -> Self {
+        Self::with_custom_providers(std::iter::empty::<Arc<dyn ProviderEntry>>())
+    }
+
+    /// 从默认配置目录加载 custom Provider，并与内置 Provider 合并。
+    pub fn load_default() -> Self {
         let custom_providers = super::custom::load_custom_providers()
             .into_iter()
             .map(|provider| Arc::new(provider) as Arc<dyn ProviderEntry>);
@@ -103,6 +109,15 @@ impl ProviderManager {
             warn!(
                 target: "providers",
                 "provider id already registered, skipping duplicate: {}",
+                provider_id
+            );
+            return;
+        }
+        if kind == ProviderKind::Custom && ProviderKind::from_id_key(provider_id.as_ref()).is_some()
+        {
+            warn!(
+                target: "providers",
+                "custom provider id is reserved by a built-in provider, skipping: {}",
                 provider_id
             );
             return;
@@ -463,6 +478,28 @@ mod tests {
             .collect();
 
         assert_eq!(custom_ids, ["alpha:newapi", "middle:newapi", "zeta:newapi"]);
+    }
+
+    #[test]
+    fn test_registration_rejects_custom_id_reserved_by_builtin_provider() {
+        let provider: Arc<dyn ProviderEntry> = Arc::new(DefaultTokenProvider {
+            descriptor: crate::models::ProviderDescriptor {
+                id: Cow::Borrowed("gemini"),
+                metadata: ProviderMetadata {
+                    kind: ProviderKind::Custom,
+                    display_name: "Conflicting Gemini".to_string(),
+                    brand_name: "Conflicting Gemini".to_string(),
+                    icon_asset: String::new(),
+                    dashboard_url: String::new(),
+                    account_hint: String::new(),
+                    source_label: String::new(),
+                },
+            },
+        });
+
+        let manager = ProviderManager::with_custom_providers([provider]);
+
+        assert!(manager.custom_provider_by_id("gemini").is_none());
     }
 
     #[test]

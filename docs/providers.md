@@ -63,7 +63,7 @@
 
 - **设置 / 状态稳定 key**：内置 provider 使用 `ProviderKind::id_key()`，并通过 `ProviderId::BuiltIn(kind)` 进入 settings、refresh、sidebar、quota visibility 等状态；例如 `codex`、`windsurf`、`vertexai`。Devin Desktop 的稳定 key 仍是 `windsurf`，不要迁移为 `devin`。
 - **Descriptor ID**：`AiProvider::descriptor().id` 用于 provider 注册去重和 source 描述，内置 provider 可能包含来源后缀，如 `codex:api`、`amp:cli`、`windsurf:api`。不要把它当成内置 provider 的 settings key。
-- **自定义 provider ID**：YAML 的 `id` 会作为 `ProviderId::Custom(String)` 持久化，既是 descriptor ID，也是自定义 provider 的 settings/sidebar/order key。
+- **自定义 provider ID**：YAML 的 `id` 会作为 `ProviderId::Custom(String)` 持久化，既是 descriptor ID，也是自定义 provider 的 settings/sidebar/order key。它必须全局唯一，且不得等于任何内置 `ProviderKind::id_key()`（如 `claude`、`codex`、`gemini`）；loader 和 manager 注册边界都会拒绝这些保留 ID。
 
 修改设置、排序、刷新请求或 D-Bus / selector 状态时，优先传递 `ProviderId`，不要在调用点手拼字符串。
 

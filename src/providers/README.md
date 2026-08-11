@@ -46,7 +46,9 @@ Provider abstraction layer and all 15 AI provider implementations.
 
 Aggregation registry holding all provider implementations. Maintains exactly two indexes matching `ProviderId`'s two variants: `providers_by_kind` (built-in) and `custom_providers_by_id` (custom).
 
-- `register()` — adds a provider (deduplicates by id and kind)
+- `new()` — builds a pure built-in registry without filesystem I/O
+- `load_default()` — explicitly scans the default custom-provider directory and merges valid YAML providers with built-ins
+- `register()` — adds a provider (deduplicates by id and kind, and rejects custom IDs reserved by built-in stable keys)
 - `provider_for_id(id)` — unified lookup by `ProviderId`
 - `metadata_for(kind)` — returns metadata (derived from provider) with fallback
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
