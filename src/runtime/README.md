@@ -161,9 +161,9 @@
 - **`generate_filename()` / `generate_script_yaml_filename()` / `generate_script_filename()`** — 由 custom provider id / config 推导落盘文件名
 - **`default_script_template()`** — Settings 窗口脚本 provider 新增页的默认模板
 - **`read_newapi_config()` / `read_script_provider_config()`** — 按 YAML `id` 读取编辑态回填数据
-- **`save_newapi_yaml(config, filename) → CustomProviderLifecycleResult<PathBuf>`** — YAML 生成 + 目录创建 + 同目录临时文件/备份替换写入
+- **`save_newapi_yaml(config, filename) → CustomProviderLifecycleResult<PathBuf>`** — YAML 生成 + 目录创建 + 同目录私密临时文件原子替换；提交前旧 YAML 始终保持可见
 - **`delete_newapi_yaml(provider_id) → CustomProviderLifecycleResult<PathBuf>`** — 校验 NewAPI provider id + 复用 `providers/custom/locator.rs` 按 YAML `id` 定位真实文件 + 删除 YAML 文件
-- **`save_script_provider(config, yaml_filename, script_filename) → CustomProviderLifecycleResult<(PathBuf, PathBuf)>`** — 生成 `source.type: cli` YAML，并以同目录临时文件/备份替换方式写入脚本 + YAML 双文件
+- **`save_script_provider(config, yaml_filename, script_filename) → CustomProviderLifecycleResult<(PathBuf, PathBuf)>`** — 先提交新的不可变版本化脚本，再以 YAML 原子替换作为最终提交点；成功后 best-effort 清理旧脚本，避免崩溃时出现 YAML 与脚本跨版本错配
 - **`delete_script_provider_files(provider_id) → CustomProviderLifecycleResult<(PathBuf, CustomProviderLifecycleResult<PathBuf>)>`** — 校验 `{slug}:script` provider id；YAML 删除成功即移除 provider，companion script 删除失败会被 runtime 转换成 `ScriptProviderDeleteSuccess::DeletedYamlOnly`
 
 文件级回滚由 `providers::custom::file_ops` 处理；UI 状态回滚位于 `application/newapi_ops.rs` / `application/script_provider_ops.rs`（纯函数，可测试）。runtime 记录 I/O 细节并返回完成 action，reducer 负责用户通知和后续 reload effect。

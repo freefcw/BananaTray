@@ -52,10 +52,10 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
   - 标准 `schema_version: 2` 自定义 provider。
   - 使用 `source.type: cli`，命令为表单里的解释器，参数为脚本文件路径。
   - provider id 形如 `{slug}:script`，设置页会把这类 provider 识别为可继续编辑的脚本 provider。若同名或非 ASCII 名称产生相同 slug，向导会自动追加 `-2`、`-3` 等后缀。
-- `scripts/script-{slug}.py`
-  - 表单中的脚本源码。
+- `scripts/script-{slug}.{version}.py`
+  - 表单中的脚本源码；每次保存生成新的不可变版本。
 
-脚本向导不新增 runtime schema，也不绕过 provider manager；保存后的刷新仍走 `plan.steps`、availability、parser、fallback 和 hot reload 这套自定义 provider 机制。
+保存时先完整写入新脚本，再原子替换引用它的 YAML；YAML 是最终提交点，因此进程意外退出时，生效配置仍会引用一个完整脚本。提交成功后旧脚本会被 best-effort 清理。脚本向导不新增 runtime schema，也不绕过 provider manager；保存后的刷新仍走 `plan.steps`、availability、parser、fallback 和 hot reload 这套自定义 provider 机制。
 
 删除脚本向导生成的 provider 时，BananaTray 会按 YAML 中记录的实际脚本路径删除 companion script，但只会删除配置树 `scripts/` 目录内的脚本文件；手写 YAML 指向外部脚本时不会删除该外部文件。
 

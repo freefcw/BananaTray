@@ -35,7 +35,7 @@ custom/
   generator.rs    — NewAPI / Script Provider YAML 生成 + 纯解析辅助（由各 lifecycle 持有外部契约）
   newapi_lifecycle.rs          — NewAPI 生命周期：filename、加载、保存、删除
   script_provider_lifecycle.rs — Script Provider 生命周期：filename、默认模板、加载、保存、删除
-  file_ops.rs     — 低层文件事务：目录创建、临时文件、备份/替换、删除
+  file_ops.rs     — 低层文件事务：目录创建、私密临时文件、原子提交、版本化脚本、删除
   api.rs          — runtime / settings window 唯一稳定门面，re-export 两条 lifecycle 入口
 ```
 
@@ -46,7 +46,7 @@ custom/
 - **DIP**: CustomProvider 依赖 descriptor / plan 的窄接口，不直接依赖 availability / fetch / extractor 的执行细节
 - **Identity over filename**: 自定义 provider 的真实身份来自 YAML `id`，不是文件名；编辑/删除等流程必须通过 `locator.rs` 按 `id` 定位真实文件
 - **Single façade**: runtime / UI 只允许依赖 `api.rs`，不要直接碰 `generator.rs` / `locator.rs` / `schema.rs`
-- **Per-type lifecycle vs file ops**: `newapi_lifecycle.rs` / `script_provider_lifecycle.rs` 分别持有各自 provider 类型、身份和用户可见语义；`file_ops.rs` 只处理文件事务。保存 NewAPI YAML 和脚本 provider 双文件时都使用已同步的私密同目录临时文件 + 备份/替换，Unix 上最终权限为 `0600`；失败后恢复旧文件或清理已创建的新文件，旧文件在进入备份窗口前也会收紧权限。
+- **Per-type lifecycle vs file ops**: `newapi_lifecycle.rs` / `script_provider_lifecycle.rs` 分别持有各自 provider 类型、身份和用户可见语义；`file_ops.rs` 只处理文件事务。NewAPI YAML 使用已同步的私密同目录临时文件直接原子替换，提交前旧文件始终可见。脚本 provider 先写入新的不可变版本化脚本，再以 YAML rename 作为最终提交点；YAML 成功后再 best-effort 删除旧脚本。这样进程在任一步退出时，生效 YAML 始终引用一个完整脚本。Unix 文件最终权限为 `0600`。
 - **Fail-fast HTTP headers**: loader 使用 HTTP 库自身的 name/value 规则校验自定义 header，并校验 `header_env` 的静态 header 名称；非法配置不会进入执行计划。
 - **Enforced information hiding**: `generator.rs` / `locator.rs` / `schema.rs` 的模块可见性限制在 `providers::custom` 内部，不只是调用约定
 

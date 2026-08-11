@@ -7,7 +7,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | File | Feature Boundary | Responsibility |
 |------|------------------|----------------|
 | `mod.rs` | mixed | Defines app identity constants and gates app-only adapters behind `feature = "app"`. |
-| `atomic_file.rs` | lib-safe | Atomically replaces private settings/credential files and prepares exclusive private temp files for caller-owned multi-file transactions, with Unix `0600`, flush-before-rename, permission hardening, and error cleanup. |
+| `atomic_file.rs` | lib-safe | Atomically replaces private settings/credential files and creates exclusive private files for caller-owned multi-file transactions, with Unix `0600` at creation, flush-before-rename, and error cleanup. |
 | `paths.rs` | lib-safe | Resolves settings, custom provider, and custom script directories. |
 | `system.rs` | lib-safe | Small system helpers: open URL/path without blocking the UI while a background monitor checks exit status, clipboard fallback, OS info, file-size formatting, dark-mode detection. |
 | `logging.rs` | mixed | App logger initialization (size-based rotation + startup cleanup) behind `feature = "app"`, plus test/lib-safe log-tail helpers. |
@@ -35,7 +35,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 ## Key Constraints
 
 - Keep `paths`, `system`, and log-reading helpers usable from lib/no-default-feature checks.
-- Route private settings/credential writes through `atomic_file`; multi-file callers may own commit/rollback orchestration but must reuse its exclusive private temp-file and permission-hardening primitives.
+- Route private settings/credential writes through `atomic_file`; multi-file callers may own commit/rollback orchestration but must reuse its exclusive private-file creation primitive (`write_private_file_exclusively`).
 - Keep GPUI, notification, single-instance, auto-launch, and asset loading dependencies behind `feature = "app"`.
 - Do not put quota alert policy in `notification.rs`; platform code only sends already-decided notifications.
 - Do not add `notify-rust` back to the macOS dependency path. macOS uses `UNUserNotificationCenter` in app bundles and `osascript` for development fallback to avoid `mac-notification-sys` Launch Services side effects.

@@ -6,9 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::platform::atomic_file::{
-    restrict_private_file_permissions, write_private_file_exclusively,
-};
+use crate::platform::atomic_file::write_private_file_exclusively;
 
 pub(super) fn write_newapi_yaml(path: &Path, yaml_content: &str) -> Result<PathBuf, String> {
     let providers_dir = path
@@ -21,6 +19,10 @@ pub(super) fn write_newapi_yaml(path: &Path, yaml_content: &str) -> Result<PathB
     Ok(path.to_path_buf())
 }
 
+/// 提交一个新的不可变脚本版本，再以 YAML rename 作为最终提交点。
+///
+/// `script_path` 必须是尚不存在的版本化路径。进程在 YAML 提交前退出时旧 YAML
+/// 仍然可见；在 YAML 提交后退出时，新 YAML 引用的脚本已经完整落盘。
 pub(super) fn write_script_provider_files(
     script_path: &Path,
     yaml_path: &Path,
@@ -45,6 +47,7 @@ pub(super) fn write_script_provider_files(
     std::fs::create_dir_all(providers_dir)
         .map_err(|e| format!("failed to create providers dir: {}", e))?;
 
+    ensure_new_file(script_path)?;
     let script_tmp = temp_sibling_path(script_path);
     let yaml_tmp = temp_sibling_path(yaml_path);
     write_script_provider_files_with_temps(
@@ -103,21 +106,13 @@ fn replace_file_atomically_with_temp(
         ));
     }
 
-    let backup = match backup_existing_file(path) {
-        Ok(backup) => backup,
-        Err(err) => {
-            cleanup_temp_file(tmp);
-            return Err(err);
-        }
-    };
-
+    // macOS/Linux 的同目录 rename 会原子替换目标；提交前保持旧文件可见，
+    // 进程在写临时文件与 rename 之间退出时，下一次启动仍能加载旧配置。
     if let Err(err) = try_rename(tmp, path) {
-        rollback_replacement(path, backup.as_deref());
         cleanup_temp_file(tmp);
         return Err(err);
     }
 
-    cleanup_backup(backup.as_deref());
     Ok(())
 }
 
@@ -129,6 +124,12 @@ fn write_script_provider_files_with_temps(
     script_content: &str,
     yaml_content: &str,
 ) -> Result<(), String> {
+    if script_path.exists() {
+        return Err(format!(
+            "refusing to overwrite immutable script version {}",
+            script_path.display()
+        ));
+    }
     if let Err(err) = write_private_file_exclusively(script_tmp, script_content.as_bytes()) {
         return Err(format!(
             "failed to write script to {}: {}",
@@ -145,42 +146,19 @@ fn write_script_provider_files_with_temps(
         ));
     }
 
-    let script_backup = match backup_existing_file(script_path) {
-        Ok(backup) => backup,
-        Err(err) => {
-            cleanup_temp_file(script_tmp);
-            cleanup_temp_file(yaml_tmp);
-            return Err(err);
-        }
-    };
-    let yaml_backup = match backup_existing_file(yaml_path) {
-        Ok(backup) => backup,
-        Err(err) => {
-            rollback_replacement(script_path, script_backup.as_deref());
-            cleanup_temp_file(script_tmp);
-            cleanup_temp_file(yaml_tmp);
-            return Err(err);
-        }
-    };
-
     if let Err(err) = try_rename(script_tmp, script_path) {
-        rollback_replacement(script_path, script_backup.as_deref());
-        rollback_replacement(yaml_path, yaml_backup.as_deref());
         cleanup_temp_file(script_tmp);
         cleanup_temp_file(yaml_tmp);
         return Err(err);
     }
 
+    // YAML 是提交点；失败时删除尚未被任何生效配置引用的新脚本。
     if let Err(err) = try_rename(yaml_tmp, yaml_path) {
-        rollback_replacement(script_path, script_backup.as_deref());
-        rollback_replacement(yaml_path, yaml_backup.as_deref());
-        cleanup_temp_file(script_tmp);
+        cleanup_temp_file(script_path);
         cleanup_temp_file(yaml_tmp);
         return Err(err);
     }
 
-    cleanup_backup(script_backup.as_deref());
-    cleanup_backup(yaml_backup.as_deref());
     Ok(())
 }
 
@@ -196,39 +174,26 @@ fn temp_sibling_path(path: &Path) -> PathBuf {
     ))
 }
 
-fn backup_sibling_path(path: &Path) -> PathBuf {
-    let filename = path
-        .file_name()
+pub(super) fn versioned_script_path(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
         .and_then(|name| name.to_str())
-        .unwrap_or("backup");
+        .unwrap_or("script");
+    let stable_stem = stem
+        .rsplit_once('.')
+        .filter(|(_, suffix)| suffix.chars().all(|ch| ch.is_ascii_digit()))
+        .map(|(base, _)| base)
+        .unwrap_or(stem);
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("py");
     path.with_file_name(format!(
-        ".{}.{}.bak",
-        filename,
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        "{}.{}.{}",
+        stable_stem,
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default(),
+        extension
     ))
-}
-
-fn backup_existing_file(path: &Path) -> Result<Option<PathBuf>, String> {
-    if !path.exists() {
-        return Ok(None);
-    }
-    restrict_private_file_permissions(path).map_err(|e| {
-        format!(
-            "failed to restrict permissions for {} before backup: {}",
-            path.display(),
-            e
-        )
-    })?;
-    let backup = backup_sibling_path(path);
-    std::fs::rename(path, &backup).map_err(|e| {
-        format!(
-            "failed to back up {} to {}: {}",
-            path.display(),
-            backup.display(),
-            e
-        )
-    })?;
-    Ok(Some(backup))
 }
 
 fn try_rename(tmp: &Path, dest: &Path) -> Result<(), String> {
@@ -240,19 +205,6 @@ fn try_rename(tmp: &Path, dest: &Path) -> Result<(), String> {
             e
         )
     })
-}
-
-fn rollback_replacement(path: &Path, backup: Option<&Path>) {
-    let _ = std::fs::remove_file(path);
-    if let Some(backup) = backup {
-        let _ = std::fs::rename(backup, path);
-    }
-}
-
-fn cleanup_backup(backup: Option<&Path>) {
-    if let Some(backup) = backup {
-        let _ = std::fs::remove_file(backup);
-    }
 }
 
 fn cleanup_temp_file(path: &Path) {
@@ -332,24 +284,25 @@ mod tests {
     }
 
     #[test]
-    fn write_script_provider_files_leaves_old_files_when_yaml_temp_write_fails() {
+    fn write_script_provider_files_leaves_active_files_when_yaml_temp_write_fails() {
         let dir = tempfile::tempdir().unwrap();
         let yaml_dir = dir.path().join("providers");
         let script_dir = dir.path().join("scripts");
         std::fs::create_dir_all(&yaml_dir).unwrap();
         std::fs::create_dir_all(&script_dir).unwrap();
         let yaml_path = yaml_dir.join("script-test.yaml");
-        let script_path = script_dir.join("script-test.py");
+        let old_script_path = script_dir.join("script-test.1.py");
+        let new_script_path = script_dir.join("script-test.2.py");
         std::fs::write(&yaml_path, "old yaml").unwrap();
-        std::fs::write(&script_path, "old script").unwrap();
-        let script_tmp = script_dir.join("script-test.py.tmp");
+        std::fs::write(&old_script_path, "old script").unwrap();
+        let script_tmp = script_dir.join("script-test.2.py.tmp");
         let yaml_tmp = yaml_dir.join("script-test.yaml.tmp");
         std::fs::create_dir(&yaml_tmp).unwrap();
 
         let err = write_script_provider_files_with_temps(
             &script_tmp,
             &yaml_tmp,
-            &script_path,
+            &new_script_path,
             &yaml_path,
             "new script",
             "new yaml",
@@ -358,47 +311,30 @@ mod tests {
 
         assert!(err.contains("failed to write YAML"));
         assert_eq!(std::fs::read_to_string(&yaml_path).unwrap(), "old yaml");
-        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "old script");
+        assert_eq!(
+            std::fs::read_to_string(&old_script_path).unwrap(),
+            "old script"
+        );
+        assert!(!new_script_path.exists());
         assert!(!script_tmp.exists());
     }
 
     #[test]
-    fn write_script_provider_files_rolls_back_existing_script_when_yaml_rename_fails() {
-        #[cfg(unix)]
-        use std::os::unix::fs::PermissionsExt;
-
+    fn write_script_provider_files_refuses_existing_immutable_version() {
         let dir = tempfile::tempdir().unwrap();
-        let script_dir = dir.path().join("scripts");
-        std::fs::create_dir_all(&script_dir).unwrap();
-        let script_path = script_dir.join("test.py");
+        let script_path = dir.path().join("test.1.py");
+        let yaml_path = dir.path().join("test.yaml");
         std::fs::write(&script_path, "old script").unwrap();
-        #[cfg(unix)]
-        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o644)).unwrap();
-        let script_tmp = script_dir.join("test.py.tmp");
-        let yaml_tmp = dir.path().join("test.yaml.tmp");
-        let yaml_path = dir.path().join("nonexistent_dir").join("test.yaml");
 
-        let err = write_script_provider_files_with_temps(
-            &script_tmp,
-            &yaml_tmp,
-            &script_path,
-            &yaml_path,
-            "new script",
-            "new yaml",
-        )
-        .unwrap_err();
+        let error = write_script_provider_files(&script_path, &yaml_path, "new script", "new yaml")
+            .unwrap_err();
 
-        assert!(err.contains("failed to replace"));
-        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "old script");
-        #[cfg(unix)]
-        assert_eq!(file_mode(&script_path), 0o600);
-        assert!(!script_tmp.exists());
-        assert!(!yaml_tmp.exists());
-        assert!(!yaml_path.exists());
+        assert!(error.contains("refusing to overwrite"));
+        assert_eq!(std::fs::read_to_string(script_path).unwrap(), "old script");
     }
 
     #[test]
-    fn write_script_provider_files_removes_created_script_when_yaml_rename_fails() {
+    fn write_script_provider_files_removes_new_version_when_yaml_rename_fails() {
         let dir = tempfile::tempdir().unwrap();
         let script_dir = dir.path().join("scripts");
         std::fs::create_dir_all(&script_dir).unwrap();
@@ -424,21 +360,55 @@ mod tests {
     }
 
     #[test]
-    fn write_script_provider_files_replaces_both_files_and_cleans_backups() {
+    fn write_script_provider_files_commits_new_script_before_yaml() {
         let dir = tempfile::tempdir().unwrap();
         let yaml_path = dir.path().join("providers").join("script.yaml");
-        let script_path = dir.path().join("scripts").join("script.py");
+        let old_script_path = dir.path().join("scripts").join("script.1.py");
+        let new_script_path = dir.path().join("scripts").join("script.2.py");
         std::fs::create_dir_all(yaml_path.parent().unwrap()).unwrap();
-        std::fs::create_dir_all(script_path.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(new_script_path.parent().unwrap()).unwrap();
         std::fs::write(&yaml_path, "old yaml").unwrap();
-        std::fs::write(&script_path, "old script").unwrap();
+        std::fs::write(&old_script_path, "old script").unwrap();
 
-        write_script_provider_files(&script_path, &yaml_path, "new script", "new yaml").unwrap();
+        write_script_provider_files(&new_script_path, &yaml_path, "new script", "new yaml")
+            .unwrap();
 
-        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "new script");
+        assert_eq!(
+            std::fs::read_to_string(&new_script_path).unwrap(),
+            "new script"
+        );
         assert_eq!(std::fs::read_to_string(&yaml_path).unwrap(), "new yaml");
-        assert_no_backup_files(script_path.parent().unwrap());
+        assert_eq!(
+            std::fs::read_to_string(&old_script_path).unwrap(),
+            "old script"
+        );
+        assert_no_backup_files(new_script_path.parent().unwrap());
         assert_no_backup_files(yaml_path.parent().unwrap());
+    }
+
+    #[test]
+    fn versioned_script_path_reuses_stable_stem() {
+        let first = Path::new("/tmp/script-demo.py");
+        let second = Path::new("/tmp/script-demo.123456.py");
+
+        let first_version = versioned_script_path(first);
+        let second_version = versioned_script_path(second);
+
+        assert!(first_version
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("script-demo."));
+        assert!(second_version
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("script-demo."));
+        assert!(!second_version
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("script-demo.123456."));
     }
 
     #[cfg(unix)]

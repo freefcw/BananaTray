@@ -7,8 +7,6 @@ use std::path::Path;
 use std::fs::OpenOptions;
 #[cfg(all(unix, any(feature = "app", test)))]
 use std::os::unix::fs::OpenOptionsExt;
-#[cfg(all(unix, feature = "app"))]
-use std::os::unix::fs::PermissionsExt;
 
 /// 将私有内容写入目标文件，并通过同目录 `rename` 原子替换旧内容。
 ///
@@ -71,22 +69,6 @@ pub(crate) fn write_private_file_exclusively(path: &Path, contents: &[u8]) -> io
         let _ = std::fs::remove_file(path);
     }
     result
-}
-
-/// 收紧已有私密文件权限，避免备份/回滚窗口继续暴露旧凭证。
-#[cfg(feature = "app")]
-pub(crate) fn restrict_private_file_permissions(path: &Path) -> io::Result<()> {
-    #[cfg(unix)]
-    {
-        let metadata = std::fs::symlink_metadata(path)?;
-        if metadata.file_type().is_file() {
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = path;
-
-    Ok(())
 }
 
 fn contextualize(operation: &str, path: &Path, error: io::Error) -> io::Error {

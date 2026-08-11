@@ -123,11 +123,28 @@ fn save_at_paths(
         })?;
     }
 
-    let yaml_content = generator::generate_script_provider_yaml(config, script_path);
-    file_ops::write_script_provider_files(script_path, yaml_path, &config.script, &yaml_content)
-        .map_err(|err| CustomProviderLifecycleError::file_operation("save script provider", err))?;
+    let committed_script_path = file_ops::versioned_script_path(script_path);
+    let yaml_content = generator::generate_script_provider_yaml(config, &committed_script_path);
+    file_ops::write_script_provider_files(
+        &committed_script_path,
+        yaml_path,
+        &config.script,
+        &yaml_content,
+    )
+    .map_err(|err| CustomProviderLifecycleError::file_operation("save script provider", err))?;
 
-    Ok((yaml_path.to_path_buf(), script_path.to_path_buf()))
+    // YAML 已经原子指向新版本；旧脚本清理失败只留下无害孤儿文件，不回滚生效配置。
+    if script_path != committed_script_path && script_path.exists() {
+        if let Err(error) = file_ops::delete_file_if_exists(script_path) {
+            log::warn!(
+                target: "providers::custom",
+                "saved script provider but failed to remove old script version: {}",
+                error
+            );
+        }
+    }
+
+    Ok((yaml_path.to_path_buf(), committed_script_path))
 }
 
 fn read_config_in_dir(
@@ -414,8 +431,13 @@ plan:
         .unwrap();
 
         assert_eq!(saved_yaml, yaml_path);
-        assert_eq!(saved_script, script_path);
-        assert_eq!(std::fs::read_to_string(&script_path).unwrap(), "print(1)");
+        assert_ne!(saved_script, script_path);
+        assert_eq!(
+            saved_script.parent(),
+            script_path.parent(),
+            "versioned script stays in the configured scripts directory"
+        );
+        assert_eq!(std::fs::read_to_string(&saved_script).unwrap(), "print(1)");
         let yaml = std::fs::read_to_string(&yaml_path).unwrap();
         assert!(yaml.contains("timeout_ms: 12000"));
         let def: crate::providers::custom::schema::CustomProviderDef =
@@ -436,7 +458,7 @@ plan:
             script: "print(1)".to_string(),
         };
 
-        save_at_paths(&config, &yaml_path, &script_path, false).unwrap();
+        let (_, saved_script) = save_at_paths(&config, &yaml_path, &script_path, false).unwrap();
 
         let yaml = std::fs::read_to_string(&yaml_path).unwrap();
         assert!(yaml.contains(r#"display_name: "Script \"Quoted\"""#));
@@ -448,7 +470,7 @@ plan:
         };
         assert_eq!(
             args.first().map(String::as_str),
-            Some(script_path.to_str().unwrap())
+            Some(saved_script.to_str().unwrap())
         );
     }
 
