@@ -76,5 +76,8 @@ jobs:
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
 
+      - name: Run macOS app tests
+        run: cargo test --lib
+
       - name: Check macOS app compiles
         run: cargo check --bin bananatray
