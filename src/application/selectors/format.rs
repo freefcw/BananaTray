@@ -25,6 +25,7 @@ pub fn display_source_label(raw: &str) -> String {
         "gemini api" => t!("provider.source_label.gemini_api").to_string(),
         "openai api" => t!("provider.source_label.openai_api").to_string(),
         "claude" => t!("provider.source_label.claude").to_string(),
+        "cline api" => t!("provider.source_label.cline_api").to_string(),
         "vertex ai api" => t!("provider.source_label.vertex_ai_api").to_string(),
         "kiro cli" => t!("provider.source_label.kiro_cli").to_string(),
         "amp cli" => t!("provider.source_label.amp_cli").to_string(),
@@ -401,6 +402,7 @@ mod tests {
             "Devin Cloud + Local cache"
         );
         assert_eq!(display_source_label("local api"), "Local language server");
+        assert_eq!(display_source_label("cline api"), "Cline API");
     }
 
     #[test]

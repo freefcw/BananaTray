@@ -4,8 +4,9 @@
 
 use super::super::state::{provider_panel_flags, AppSession};
 use super::format::{
-    format_failure_message, format_non_monitoring_message, format_quota_label,
-    format_refresh_status, format_relative_refresh_age, quota_display_view_state,
+    format_failure_message, format_non_monitoring_message, format_quota_card_display_text,
+    format_quota_card_has_unit, format_quota_label, format_refresh_status,
+    format_relative_refresh_age, quota_display_view_state,
 };
 use super::*;
 use crate::models::{
@@ -361,32 +362,11 @@ pub(crate) fn compact_quota_display_text(
     quota: &crate::models::QuotaInfo,
     display_mode: crate::models::QuotaDisplayMode,
 ) -> String {
-    use crate::models::{QuotaDisplayMode, QuotaType};
-
-    if quota.is_balance_only() {
-        let balance = quota.remaining_balance.unwrap_or(0.0);
-        return if matches!(quota.quota_type, QuotaType::Credit) {
-            format!("${:.2}", balance)
-        } else {
-            format!("{:.2}", balance)
-        };
-    }
-
-    match (&quota.quota_type, display_mode) {
-        (QuotaType::Credit, QuotaDisplayMode::Remaining) => quota.format_remaining_signed("$"),
-        (QuotaType::Credit, QuotaDisplayMode::Used) => {
-            format!("${:.2}", quota.used)
-        }
-        (QuotaType::Points, QuotaDisplayMode::Remaining) => quota.format_remaining_signed(""),
-        (QuotaType::Points, QuotaDisplayMode::Used) => {
-            format!("{:.2}", quota.used)
-        }
-        (_, QuotaDisplayMode::Remaining) => {
-            format!("{:.0}%", quota.percent_remaining().max(0.0))
-        }
-        (_, QuotaDisplayMode::Used) => {
-            format!("{:.0}%", quota.percentage().clamp(0.0, 100.0))
-        }
+    let value = format_quota_card_display_text(quota, display_mode);
+    if format_quota_card_has_unit(quota) {
+        format!("{value}%")
+    } else {
+        value
     }
 }
 
