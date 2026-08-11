@@ -57,7 +57,7 @@ jobs:
 
       # node 是扩展语法/D-Bus 契约/单元测试校验的硬依赖，显式安装形成契约
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
