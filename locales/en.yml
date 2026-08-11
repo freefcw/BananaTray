@@ -59,6 +59,7 @@ settings.global_hotkey.error.modifier_required: "Global hotkeys must include at 
 settings.global_hotkey.error.key_required: "A modifier key by itself cannot be used as the global hotkey."
 settings.global_hotkey.error.conflict: "That hotkey failed the precheck and may already be in use by the system or another app. %{detail}"
 settings.global_hotkey.error.register: "BananaTray could not register that hotkey. %{detail}"
+settings.global_hotkey.error.persist: "The hotkey could not be saved. The previous hotkey is still active."
 settings.show_cost_summary: "Show cost summary"
 settings.show_cost_summary.desc: "Reads local usage logs. Shows today + last 30 days cost in the menu."
 settings.refresh_cadence: "Refresh cadence"

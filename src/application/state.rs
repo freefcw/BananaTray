@@ -414,6 +414,7 @@ pub enum GlobalHotkeyError {
     ModifierOnly,
     Conflict(String),
     RegistrationFailed(String),
+    PersistenceFailed,
 }
 
 impl GlobalHotkeyError {

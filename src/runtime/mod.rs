@@ -129,7 +129,7 @@ pub(crate) trait ContextCapabilities {
 pub(crate) trait FullContextCapabilities: ContextCapabilities {
     fn open_settings_window(&mut self, state: &Rc<RefCell<AppState>>);
     fn apply_tray_icon(&mut self, request: crate::application::TrayIconRequest);
-    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str);
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) -> AppAction;
     fn quit(&mut self);
 }
 
@@ -151,15 +151,18 @@ fn run_full_context_effect(
     state: &Rc<RefCell<AppState>>,
     effect: ContextEffect,
     caps: &mut dyn FullContextCapabilities,
-) {
+) -> Vec<AppAction> {
     match effect {
         ContextEffect::Render => caps.render(state),
         ContextEffect::OpenSettingsWindow => caps.open_settings_window(state),
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
         ContextEffect::ApplyTrayIcon(request) => caps.apply_tray_icon(request),
-        ContextEffect::ApplyGlobalHotkey(hotkey) => caps.apply_global_hotkey(state, &hotkey),
+        ContextEffect::ApplyGlobalHotkey(hotkey) => {
+            return vec![caps.apply_global_hotkey(state, &hotkey)];
+        }
         ContextEffect::QuitApp => caps.quit(),
     }
+    Vec::new()
 }
 
 fn run_view_context_effect(
@@ -199,10 +202,7 @@ fn run_effect_with_full_context(
     caps: &mut dyn FullContextCapabilities,
 ) -> Vec<AppAction> {
     match effect {
-        AppEffect::Context(ctx) => {
-            run_full_context_effect(state, ctx, caps);
-            Vec::new()
-        }
+        AppEffect::Context(ctx) => run_full_context_effect(state, ctx, caps),
         AppEffect::Common(common) => effects::run_common_effect(state, common),
     }
 }

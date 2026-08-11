@@ -42,6 +42,36 @@ pub(super) fn save_global_hotkey(
     effects.push(ContextEffect::Render.into());
 }
 
+pub(super) fn save_tray_popup_position(
+    session: &mut AppSession,
+    position: crate::models::SavedWindowPosition,
+    effects: &mut Vec<AppEffect>,
+) {
+    if session.settings.display.tray_popup.linux_last_position == Some(position) {
+        return;
+    }
+    session.settings.display.tray_popup.linux_last_position = Some(position);
+    effects.push(SettingsEffect::PersistSettings.into());
+}
+
+pub(super) fn finish_global_hotkey_apply(
+    session: &mut AppSession,
+    requested: String,
+    result: Result<String, super::super::state::GlobalHotkeyError>,
+    effects: &mut Vec<AppEffect>,
+) {
+    match result {
+        Ok(persisted) => {
+            session.settings.system.global_hotkey = persisted;
+            session.settings_ui.clear_global_hotkey_error();
+        }
+        Err(error) => session
+            .settings_ui
+            .record_global_hotkey_error(requested, error),
+    }
+    effects.push(ContextEffect::Render.into());
+}
+
 pub(super) fn apply_setting_change(
     session: &mut AppSession,
     change: SettingChange,

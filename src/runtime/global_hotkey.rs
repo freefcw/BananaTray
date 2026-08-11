@@ -1,4 +1,4 @@
-use crate::application::GlobalHotkeyError;
+use crate::application::{AppAction, GlobalHotkeyError};
 use gpui::{App, Keystroke, Modifiers};
 use log::{info, warn};
 use std::cell::RefCell;
@@ -87,35 +87,45 @@ pub(crate) fn rebind_global_hotkey(
     state: &Rc<RefCell<AppState>>,
     requested_hotkey: &str,
     cx: &mut App,
-) {
-    let previous_hotkey = state.borrow().session.settings.system.global_hotkey.clone();
+) -> AppAction {
+    let (previous_hotkey, mut next_settings) = {
+        let state_ref = state.borrow();
+        (
+            state_ref.session.settings.system.global_hotkey.clone(),
+            state_ref.session.settings.clone(),
+        )
+    };
 
-    match register_hotkey_string(requested_hotkey, Some(&previous_hotkey), cx) {
+    let result = match register_hotkey_string(requested_hotkey, Some(&previous_hotkey), cx) {
         Ok(persisted) => {
-            {
-                let mut s = state.borrow_mut();
-                s.session.settings.system.global_hotkey = persisted;
-                s.session.settings_ui.clear_global_hotkey_error();
-            }
-
-            let settings_saved = {
-                let s = state.borrow();
-                s.settings_writer.flush(s.session.settings.clone())
-            };
-            if !settings_saved {
+            next_settings.system.global_hotkey = persisted.clone();
+            let settings_saved = state.borrow().settings_writer.flush(next_settings);
+            if settings_saved {
+                Ok(persisted)
+            } else {
                 warn!(
                     target: "settings",
-                    "global hotkey updated in memory but failed to persist settings"
+                    "failed to persist global hotkey; restoring previous registration"
                 );
+                if let Err(error) = register_hotkey_string(&previous_hotkey, Some(&persisted), cx) {
+                    warn!(
+                        target: "settings",
+                        "failed to restore previous global hotkey after persistence failure: {:?}",
+                        error
+                    );
+                }
+                Err(GlobalHotkeyError::PersistenceFailed)
             }
         }
         Err(error) => {
             warn!(target: "settings", "failed to update global hotkey: {:?}", error);
-            let mut s = state.borrow_mut();
-            s.session
-                .settings_ui
-                .record_global_hotkey_error(requested_hotkey.to_string(), error);
+            Err(error)
         }
+    };
+
+    AppAction::GlobalHotkeyApplyFinished {
+        requested: requested_hotkey.to_string(),
+        result,
     }
 }
 

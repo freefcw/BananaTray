@@ -31,8 +31,12 @@ impl FullContextCapabilities for FakeCaps {
         self.tray_icon_applied = true;
     }
 
-    fn apply_global_hotkey(&mut self, _state: &Rc<RefCell<AppState>>, _hotkey: &str) {
+    fn apply_global_hotkey(&mut self, _state: &Rc<RefCell<AppState>>, hotkey: &str) -> AppAction {
         self.hotkey_applied = true;
+        AppAction::GlobalHotkeyApplyFinished {
+            requested: hotkey.to_string(),
+            result: Ok(hotkey.to_string()),
+        }
     }
 
     fn quit(&mut self) {
@@ -98,7 +102,7 @@ fn run_context_effect_routes_render_to_capability() {
     let state = make_state();
     let mut caps = FakeCaps::default();
 
-    run_full_context_effect(&state, ContextEffect::Render, &mut caps);
+    let _ = run_full_context_effect(&state, ContextEffect::Render, &mut caps);
 
     assert!(caps.rendered);
 }
@@ -118,18 +122,23 @@ fn run_context_effect_routes_full_context_capabilities() {
     let state = make_state();
     let mut caps = FakeCaps::default();
 
-    run_full_context_effect(&state, ContextEffect::OpenSettingsWindow, &mut caps);
-    run_full_context_effect(
+    let _ = run_full_context_effect(&state, ContextEffect::OpenSettingsWindow, &mut caps);
+    let _ = run_full_context_effect(
         &state,
         ContextEffect::ApplyTrayIcon(TrayIconRequest::Static(TrayIconStyle::Yellow)),
         &mut caps,
     );
-    run_full_context_effect(
+    let actions = run_full_context_effect(
         &state,
         ContextEffect::ApplyGlobalHotkey("Cmd+Shift+B".to_string()),
         &mut caps,
     );
-    run_full_context_effect(&state, ContextEffect::QuitApp, &mut caps);
+    let _ = run_full_context_effect(&state, ContextEffect::QuitApp, &mut caps);
+
+    assert!(matches!(
+        actions.as_slice(),
+        [AppAction::GlobalHotkeyApplyFinished { result: Ok(value), .. }] if value == "Cmd+Shift+B"
+    ));
 
     assert!(caps.settings_opened);
     assert!(caps.tray_icon_applied);

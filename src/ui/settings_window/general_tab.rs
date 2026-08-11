@@ -307,6 +307,9 @@ impl SettingsView {
             GlobalHotkeyError::RegistrationFailed(detail) => {
                 t!("settings.global_hotkey.error.register", detail = detail).to_string()
             }
+            GlobalHotkeyError::PersistenceFailed => {
+                t!("settings.global_hotkey.error.persist").to_string()
+            }
         }
     }
 

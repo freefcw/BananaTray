@@ -29,8 +29,8 @@ impl crate::runtime::FullContextCapabilities for WindowShellCaps<'_> {
         crate::tray::apply_tray_icon(self.cx, request);
     }
 
-    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
-        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx);
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) -> AppAction {
+        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx)
     }
 
     fn quit(&mut self) {
@@ -57,8 +57,8 @@ impl crate::runtime::FullContextCapabilities for AppShellCaps<'_> {
         crate::tray::apply_tray_icon(self.cx, request);
     }
 
-    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) {
-        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx);
+    fn apply_global_hotkey(&mut self, state: &Rc<RefCell<AppState>>, hotkey: &str) -> AppAction {
+        crate::runtime::global_hotkey::rebind_global_hotkey(state, hotkey, self.cx)
     }
 
     fn quit(&mut self) {

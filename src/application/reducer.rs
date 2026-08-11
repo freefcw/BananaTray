@@ -19,6 +19,8 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         | AppAction::SetSettingsTab(_)
         | AppAction::ToggleCadenceDropdown
         | AppAction::SaveGlobalHotkey(_)
+        | AppAction::SaveTrayPopupPosition(_)
+        | AppAction::GlobalHotkeyApplyFinished { .. }
         | AppAction::UpdateSetting(_)
         | AppAction::OpenSettings { .. }
         | AppAction::OpenUrl(_)
@@ -92,6 +94,12 @@ fn reduce_settings_action(
         AppAction::ToggleCadenceDropdown => settings::toggle_cadence_dropdown(session, effects),
         AppAction::SaveGlobalHotkey(hotkey) => {
             settings::save_global_hotkey(session, hotkey, effects);
+        }
+        AppAction::SaveTrayPopupPosition(position) => {
+            settings::save_tray_popup_position(session, position, effects);
+        }
+        AppAction::GlobalHotkeyApplyFinished { requested, result } => {
+            settings::finish_global_hotkey_apply(session, requested, result, effects);
         }
         AppAction::UpdateSetting(change) => {
             settings::apply_setting_change(session, change, effects);

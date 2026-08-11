@@ -23,7 +23,7 @@
 - 计算弹窗的首选 `Bounds` 和目标 `DisplayId`
 - 聚合 GPUI 的 `tray_icon_anchor()`、`tray_anchor_for_position()`、`compute_window_bounds()` 和 display fallback
 - 通过 `PopupPositionContext` trait 隔离 GPUI 查询接口，避免定位函数签名随平台参数继续分叉
-- Linux 下验证并读取 `settings.display.tray_popup.linux_last_position`；保存位置的 settings 写入由 `linux_popup.rs` 负责
+- Linux 下验证并读取 `settings.display.tray_popup.linux_last_position`；`linux_popup.rs` 只计算新位置并派发 `SaveTrayPopupPosition`，reducer 更新 settings，runtime 统一持久化
 
 ### `observers.rs` — 弹窗窗口观察者
 

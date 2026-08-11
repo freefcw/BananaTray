@@ -7,7 +7,7 @@
 use crate::application::AppAction;
 use crate::runtime::AppState;
 use crate::tray::activation::{PopupActivationDecision, PopupActivationTracker};
-use gpui::{App, Bounds, Pixels, WindowHandle};
+use gpui::{App, WindowHandle};
 use log::{debug, info};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -33,7 +33,7 @@ pub(super) fn hide_popup_window(
     window: &mut gpui::Window,
     cx: &mut gpui::Context<crate::ui::AppView>,
 ) {
-    save_position_if_needed(state, window.bounds(), cx);
+    save_position_if_needed(state, window, cx);
     let preserve_mapping = {
         let state = state.borrow();
         should_preserve_popup_mapping(&state)
@@ -56,19 +56,19 @@ pub(super) fn hide_popup_window(
 
 pub(super) fn save_position_if_needed(
     state: &Rc<RefCell<AppState>>,
-    bounds: Bounds<Pixels>,
-    cx: &App,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<crate::ui::AppView>,
 ) {
     if !state.borrow().should_save_linux_popup_position() {
         return;
     }
 
-    let Some(position) = crate::tray::positioning::saved_position_from_bounds(bounds, cx) else {
+    let Some(position) = crate::tray::positioning::saved_position_from_bounds(window.bounds(), cx)
+    else {
         return;
     };
-
-    let mut state_ref = state.borrow_mut();
-    if state_ref
+    if state
+        .borrow()
         .session
         .settings
         .display
@@ -79,15 +79,12 @@ pub(super) fn save_position_if_needed(
         return;
     }
 
-    state_ref
-        .session
-        .settings
-        .display
-        .tray_popup
-        .linux_last_position = Some(position);
-    state_ref
-        .settings_writer
-        .schedule(state_ref.session.settings.clone());
+    crate::bootstrap::dispatch_in_window(
+        state,
+        AppAction::SaveTrayPopupPosition(position),
+        window,
+        cx,
+    );
     debug!(
         target: "tray",
         "saved linux popup position: ({:.1},{:.1})",

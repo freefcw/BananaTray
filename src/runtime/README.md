@@ -150,7 +150,7 @@
 
 - **`parse_hotkey_string()` / `format_hotkey_for_settings()`** — 兼容旧版展示格式输入（如 `Cmd+S`），但持久化统一写成可回读格式（如 `cmd-s`），避免单字符 key round-trip 时被误加 `Shift`
 - **`register_hotkey_string()`** — 正式替换前先用 probe id 做一次预检；若 probe 失败则返回冲突错误且保持当前热键不动，若正式替换失败则尽力恢复旧热键
-- **`rebind_global_hotkey()`** — settings save 路径的入口：成功时更新 `AppSettings` 并同步写盘，失败时把错误回填到 `SettingsUiState.global_hotkey_error`
+- **`rebind_global_hotkey()`** — settings save 路径的入口：先完成平台注册，再用新 settings 快照同步写盘并返回 `GlobalHotkeyApplyFinished`；只有 reducer 会提交最终内存状态。写盘失败时恢复旧平台热键，并以 `PersistenceFailed` 回填设置页。
 - 启动阶段也复用同一套规则；若磁盘配置无效，`bootstrap` 会先把配置修正为默认热键再尝试注册，因此即便默认热键本身也注册失败，磁盘里也不会继续残留不可解析的坏值；若配置合法但注册失败，则保留用户原值并回填错误
 - macOS 底层注册现改为系统级 `RegisterEventHotKey`，并使用 exclusive 选项注册，避免继续依赖 `NSEvent` monitor 的监听式实现；Windows / X11 仍沿用各自平台 API
 

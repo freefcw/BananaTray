@@ -116,7 +116,7 @@ fn attach_bounds_observer(handle: PopupHandle, cx: &mut App) {
     let _ = handle.update(cx, |view, window, cx| {
         let position_state = view.state.clone();
         let bounds_sub = cx.observe_window_bounds(window, move |_view, window, cx| {
-            crate::tray::linux_popup::save_position_if_needed(&position_state, window.bounds(), cx);
+            crate::tray::linux_popup::save_position_if_needed(&position_state, window, cx);
         });
         view._bounds_sub = Some(bounds_sub);
     });

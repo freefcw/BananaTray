@@ -66,6 +66,73 @@ fn save_global_hotkey_emits_runtime_effect_and_clears_error() {
     assert!(has_render(&effects));
 }
 
+#[test]
+fn global_hotkey_completion_commits_persisted_value() {
+    let mut session = make_session();
+    let previous = session.settings.system.global_hotkey.clone();
+
+    let effects = reduce(
+        &mut session,
+        AppAction::GlobalHotkeyApplyFinished {
+            requested: "Cmd+Shift+K".to_string(),
+            result: Ok("cmd-shift-k".to_string()),
+        },
+    );
+
+    assert_ne!(session.settings.system.global_hotkey, previous);
+    assert_eq!(session.settings.system.global_hotkey, "cmd-shift-k");
+    assert!(session.settings_ui.global_hotkey_error.is_none());
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn global_hotkey_completion_failure_preserves_previous_value() {
+    let mut session = make_session();
+    let previous = session.settings.system.global_hotkey.clone();
+
+    let effects = reduce(
+        &mut session,
+        AppAction::GlobalHotkeyApplyFinished {
+            requested: "cmd-shift-k".to_string(),
+            result: Err(GlobalHotkeyError::PersistenceFailed),
+        },
+    );
+
+    assert_eq!(session.settings.system.global_hotkey, previous);
+    assert_eq!(
+        session.settings_ui.global_hotkey_error,
+        Some(GlobalHotkeyError::PersistenceFailed)
+    );
+    assert_eq!(
+        session.settings_ui.global_hotkey_error_candidate.as_deref(),
+        Some("cmd-shift-k")
+    );
+    assert!(has_render(&effects));
+}
+
+#[test]
+fn save_tray_popup_position_updates_settings_once() {
+    let mut session = make_session();
+    let position = crate::models::SavedWindowPosition { x: 120.0, y: 80.0 };
+
+    let effects = reduce(&mut session, AppAction::SaveTrayPopupPosition(position));
+
+    assert_eq!(
+        session.settings.display.tray_popup.linux_last_position,
+        Some(position)
+    );
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    let effects = reduce(&mut session, AppAction::SaveTrayPopupPosition(position));
+    assert!(
+        effects.is_empty(),
+        "unchanged position should not rewrite settings"
+    );
+}
+
 // ── ToggleStartAtLogin ───────────────────────────────
 
 #[test]

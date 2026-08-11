@@ -59,6 +59,7 @@ settings.global_hotkey.error.modifier_required: "全局热键至少需要包含�
 settings.global_hotkey.error.key_required: "不能把单独的修饰键保存为全局热键。"
 settings.global_hotkey.error.conflict: "该热键当前无法通过预检，可能已被系统或其他应用占用。%{detail}"
 settings.global_hotkey.error.register: "BananaTray 无法注册该热键。%{detail}"
+settings.global_hotkey.error.persist: "热键保存失败，已继续使用原来的热键。"
 settings.show_cost_summary: "显示消费概览"
 settings.show_cost_summary.desc: "读取本地使用日志，在菜单中显示今日及近 30 天的消费。"
 settings.refresh_cadence: "刷新频率"

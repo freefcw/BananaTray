@@ -1,4 +1,4 @@
-use super::state::SettingsTab;
+use super::state::{GlobalHotkeyError, SettingsTab};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
     ProviderId, QuotaDisplayMode, ScriptProviderConfig, ScriptProviderDeleteSuccess,
@@ -27,6 +27,13 @@ pub enum AppAction {
         target_index: usize,
     },
     SaveGlobalHotkey(String),
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    SaveTrayPopupPosition(crate::models::SavedWindowPosition),
+    /// 平台注册与设置持久化完成后，由 reducer 唯一提交最终状态。
+    GlobalHotkeyApplyFinished {
+        requested: String,
+        result: Result<String, GlobalHotkeyError>,
+    },
     UpdateSetting(SettingChange),
     RefreshProvider {
         id: ProviderId,
