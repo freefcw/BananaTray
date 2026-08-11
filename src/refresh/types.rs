@@ -15,6 +15,7 @@ pub enum RefreshReason {
 #[derive(Debug)]
 pub enum RefreshRequest {
     RefreshAll {
+        ids: Vec<ProviderId>,
         reason: RefreshReason,
     },
     RefreshOne {
@@ -69,4 +70,6 @@ pub enum RefreshResult {
     SkippedCooldown,
     SkippedInFlight,
     SkippedDisabled,
+    /// 刷新启动后配置或 Provider registry 已变化，旧结果不再提交。
+    SkippedStale,
 }

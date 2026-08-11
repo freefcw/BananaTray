@@ -153,8 +153,9 @@
   - 对 `Startup` / `Periodic` 应用 cooldown
   - `Manual` 和 `ProviderToggled` 可跳过 cooldown
 - `Informational` / `Placeholder` provider 只保留展示入口，不进入启动、周期、手动、Debug 或 reload 后即时刷新链路。
-- refresh 结果通过 `RefreshEvent` 回到前台，再进入 reducer。
-- `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。后台协调器保存最新 credentials，执行刷新时通过 `ProviderExecutionContext` 显式传给 provider，让 Copilot 这类 token 面板 provider 读取设置页保存的 override，而不在 provider 内维护凭证快照。
+- refresh 结果通过 `RefreshEvent` 回到前台，再进入 reducer。主循环不等待 Provider I/O，活跃刷新期间仍可处理配置、reload 和 shutdown。
+- 同一 Provider 始终保持 single-flight：timeout 只结束前台等待，底层阻塞任务真实完成前不会释放执行占用。
+- `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。凭证、启用列表或 registry 变化会推进 generation；旧 generation 的迟到结果不会更新 quota 或触发通知。后台执行时仍通过 `ProviderExecutionContext` 显式传递当前凭证快照。
 
 自定义 provider reload 的稳定语义：
 
@@ -205,7 +206,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 | `src/tray/controller.rs` + `src/tray/activation.rs`：Linux 打开 popup 后显式 `show_window()`/`activate_window()`（via `linux_popup::ensure_popup_visible`），activation 状态机只在 popup 至少成功激活过一次后才允许关闭 | 避免 Ubuntu / Linux 托盘点击后 popup 没被 WM/compositor 浮到前台，或在尚未真正获得焦点时被失焦观察器立即关掉，表现成“点击托盘没反应” | Linux 上 tray click 触发的建窗与焦点事件顺序不稳定，vendored GPUI 的 Linux `open_window` 也不消费 `WindowOptions.show/focus`，需要应用层补一次显式显示/激活，并把 auto-hide 收紧为“先激活过再允许失焦关闭” | 当 GPUI Linux 建窗对 tray-triggered popup 已能稳定映射并发出一致的激活状态变化，且移除这些保护后 Ubuntu / Wayland / X11 实测无回归 | 2026-05 | adabraka-gpui Linux `open_window` + WM 焦点时序 | P1 |
 | Linux popup 复用窗口；拖动或已有保存位置后隐藏优先使用透明渲染 + 鼠标穿透，头部拖动时短暂抑制 auto-hide 并在抑制期后复查失焦，同时持久化 `settings.display.tray_popup.linux_last_position` | 让 Linux 用户在 Wayland 无法精确初始定位时仍可拖动 popup，并在同一进程内尽量保留窗口管理器放置结果；X11 下可跨重启恢复上次拖动位置 | Wayland `xdg_toplevel` 不允许客户端指定窗口位置，`hide_window()`/`show_window()` 可能重新映射到屏幕中央，且 `start_window_move()` 期间可能产生失焦事件；普通 `remove_window()`/重建会丢失 compositor 已放置的位置 | 当 GPUI Linux 支持 layer-shell / ext-layer-shell 等可控定位协议且可满足托盘弹窗交互，或确认所有目标桌面环境的普通窗口定位与拖动恢复稳定可控 | 2026-05 | adabraka-gpui Linux 窗口定位 + Wayland 协议 | P3 |
 | `src/platform/notification.rs` 中每条通知单独线程发送 | 避免通知发送路径阻塞或重入前台 GPUI 事件循环 | macOS 通知发送和系统事件回调可能与前台 UI 生命周期交错，历史上有 `RefCell` 重入风险 | 当通知发送链路被验证为可安全地在统一异步执行器/主线程桥接中运行，且不会引入重入或卡顿 | 2026-04 | macOS `UNUserNotificationCenter` 回调时序 | P3 |
-| `src/refresh/coordinator.rs` 的 timeout guard 仅停止等待 | 保证单个卡死 provider 不会把整轮刷新和 in-flight 状态永久卡住 | Rust 线程池上的阻塞任务无法被协调器强制取消；CLI/HTTP 卡死时只能放弃等待结果 | 当底层刷新执行具备可传播的取消机制，或 provider 执行模型改成真正可中断的任务 | 2026-04 | Rust std 线程不可取消 | P3 |
+| `src/refresh/coordinator.rs` 的 timeout guard 只报告前台超时，不能取消底层任务 | 让 UI 及时结束等待，同时继续持有 per-provider single-flight，防止同一 Provider 重叠执行 | Rust 线程池上的阻塞任务无法被协调器强制取消；CLI/HTTP 卡死时只能忽略其迟到结果并等待真实结束后释放 lease | 当底层刷新执行具备可传播的取消机制，或 provider 执行模型改成真正可中断的任务 | 2026-04 | Rust std 线程不可取消 | P3 |
 
 ## Testing Contract
 

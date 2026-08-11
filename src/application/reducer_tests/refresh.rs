@@ -162,17 +162,16 @@ fn refresh_non_selected_enabled_provider_produces_tray_icon_effect() {
 }
 
 #[test]
-fn refresh_disabled_provider_does_not_produce_tray_icon_effect() {
+fn refresh_disabled_provider_ignores_late_result() {
     use crate::models::{QuotaInfo, TrayIconStyle};
 
     let mut session = make_session();
     session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
-    // Gemini 未启用（无 enabled 记录）→ 不参与综合状态，即使刷新变红也不影响图标
-
+    let provider_id = pid(ProviderKind::Gemini);
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
-            id: pid(ProviderKind::Gemini),
+            id: provider_id.clone(),
             result: RefreshResult::Success {
                 data: RefreshData {
                     quotas: vec![QuotaInfo::new("session", 95.0, 100.0)],
@@ -188,6 +187,13 @@ fn refresh_disabled_provider_does_not_produce_tray_icon_effect() {
         e,
         AppEffect::Context(ContextEffect::ApplyTrayIcon(_))
     )));
+    assert!(!session
+        .provider_store
+        .find_by_id(&provider_id)
+        .unwrap()
+        .quotas
+        .iter()
+        .any(|quota| quota.used == 95.0 && quota.limit == 100.0));
 }
 
 #[test]

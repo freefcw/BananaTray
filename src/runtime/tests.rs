@@ -219,6 +219,40 @@ fn dispatch_processes_refresh_send_failure_follow_up_action() {
 }
 
 #[test]
+fn dispatch_processes_refresh_all_send_failure_for_every_target() {
+    let state = make_state_with_full_refresh_queue();
+    let provider_ids = [
+        ProviderId::BuiltIn(ProviderKind::Claude),
+        ProviderId::BuiltIn(ProviderKind::Gemini),
+    ];
+    {
+        let mut state_ref = state.borrow_mut();
+        for id in &provider_ids {
+            state_ref.session.settings.provider.set_enabled(id, true);
+        }
+    }
+    let mut caps = FakeCaps::default();
+
+    dispatch_with_full_context(&state, AppAction::RefreshAll, &mut caps);
+
+    let state_ref = state.borrow();
+    for id in &provider_ids {
+        let provider = state_ref
+            .session
+            .provider_store
+            .find_by_id(id)
+            .expect("provider status");
+        assert_eq!(provider.connection, ConnectionStatus::Error);
+        assert!(provider
+            .last_failure
+            .as_ref()
+            .and_then(|failure| failure.raw_detail.as_deref())
+            .is_some_and(|detail| detail.contains("refresh coordinator unavailable")));
+    }
+    assert!(caps.rendered);
+}
+
+#[test]
 fn dispatch_processes_debug_refresh_send_failure_follow_up_action() {
     let state = make_state_with_full_refresh_queue();
     let provider_id = ProviderId::BuiltIn(ProviderKind::Claude);

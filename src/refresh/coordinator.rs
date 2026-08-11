@@ -1,12 +1,15 @@
-//! 刷新协调器 — 事件循环 + 并发执行。
+//! 刷新协调器 — 控制事件循环 + Provider 单飞执行。
 //!
 //! `RefreshCoordinator` 负责：
-//! 1. 主事件循环：监听请求通道和周期定时器
-//! 2. 并发刷新执行：线程池 + 结果收集
-//! 3. 结果转换：ProviderError → RefreshOutcome
+//! 1. 持续处理配置、刷新、reload 与 shutdown 请求
+//! 2. 在后台线程池并发执行不同 Provider，同时保证同一 Provider single-flight
+//! 3. 将 UI timeout 与底层任务完成分开，避免超时后启动重叠任务
+//! 4. 配置或 registry 变化后丢弃旧 generation 的结果
+//! 5. 将 ProviderError 转换为稳定的 RefreshOutcome
 //!
-//! 所有调度决策（cooldown、eligibility、deadline）委托给 `RefreshScheduler`。
+//! 所有 cooldown、eligibility 与周期 deadline 决策委托给 `RefreshScheduler`。
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,13 +21,46 @@ use crate::providers::{ProviderError, ProviderManager, ProviderManagerHandle, Pr
 use super::scheduler::RefreshScheduler;
 use super::types::*;
 
+#[derive(Debug)]
+enum TaskMessage {
+    Completed {
+        id: ProviderId,
+        task_id: u64,
+        outcome: RefreshOutcome,
+    },
+    TimedOut {
+        id: ProviderId,
+        task_id: u64,
+        reason: RefreshReason,
+    },
+}
+
+#[derive(Debug)]
+struct ActiveRefresh {
+    task_id: u64,
+    generation: u64,
+    /// timeout 或配置失效已经向前台发送了终态；底层完成时只释放 single-flight。
+    result_reported: bool,
+}
+
+enum LoopEvent {
+    Request(Result<RefreshRequest, smol::channel::RecvError>),
+    Task(Result<TaskMessage, smol::channel::RecvError>),
+    Periodic,
+}
+
 pub struct RefreshCoordinator {
     manager: ProviderManagerHandle,
     request_tx: Sender<RefreshRequest>,
     request_rx: Receiver<RefreshRequest>,
     event_tx: Sender<RefreshEvent>,
+    task_tx: Sender<TaskMessage>,
+    task_rx: Receiver<TaskMessage>,
     scheduler: RefreshScheduler,
     provider_credentials: ProviderSettings,
+    active_refreshes: HashMap<ProviderId, ActiveRefresh>,
+    next_task_id: u64,
+    config_generation: u64,
 }
 
 impl RefreshCoordinator {
@@ -37,20 +73,25 @@ impl RefreshCoordinator {
     }
 
     pub fn new(manager: ProviderManagerHandle, event_tx: Sender<RefreshEvent>) -> Self {
-        // 请求通道不设容量上限：请求体小、产生速率受 UI 交互自然约束，
-        // 有界队列的"满"状态只会制造无意义的瞬态发送失败（并可能丢弃 UpdateConfig）。
+        // 请求通道不设容量上限：请求体小、产生速率受 UI 交互自然约束。
         let (request_tx, request_rx) = smol::channel::unbounded();
+        let (task_tx, task_rx) = smol::channel::unbounded();
         Self {
             manager,
             request_tx,
             request_rx,
             event_tx,
+            task_tx,
+            task_rx,
             scheduler: RefreshScheduler::new(),
             provider_credentials: ProviderSettings::default(),
+            active_refreshes: HashMap::new(),
+            next_task_id: 0,
+            config_generation: 0,
         }
     }
 
-    /// Get a sender to send requests to this coordinator
+    /// Get a sender to send requests to this coordinator.
     pub fn sender(&self) -> Sender<RefreshRequest> {
         self.request_tx.clone()
     }
@@ -75,9 +116,9 @@ impl RefreshCoordinator {
                 }
                 log::debug!(
                     target: "refresh",
-                    "{}: account={:?}, tier={:?}",
+                    "{}: account metadata present={}, tier={:?}",
                     id,
-                    data.account_email,
+                    data.account_email.is_some(),
                     data.account_tier,
                 );
                 RefreshOutcome {
@@ -114,27 +155,27 @@ impl RefreshCoordinator {
     // 事件发送
     // ========================================================================
 
-    /// Send a skip event for an ineligible provider.
-    async fn send_skip(&self, id: ProviderId, result: RefreshResult) {
+    async fn emit_finished(&self, id: ProviderId, result: RefreshResult) {
         let _ = self
             .event_tx
             .send(RefreshEvent::Finished(RefreshOutcome { id, result }))
             .await;
     }
 
-    /// Record a completed outcome: clear in-flight, update last_refreshed, emit event.
-    async fn record_outcome(&mut self, outcome: RefreshOutcome) {
-        let id = outcome.id.clone();
-        self.scheduler.clear_in_flight(&id);
-        if matches!(outcome.result, RefreshResult::Success { .. }) {
-            self.scheduler.record_success(&id);
-        }
-        let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+    async fn send_skip(&self, id: ProviderId, result: RefreshResult) {
+        self.emit_finished(id, result).await;
     }
 
-    /// Mark a provider as in-flight and notify UI.
-    async fn begin_refresh(&mut self, id: &ProviderId) {
+    async fn begin_refresh(&mut self, id: &ProviderId, task_id: u64) {
         self.scheduler.mark_in_flight(id);
+        self.active_refreshes.insert(
+            id.clone(),
+            ActiveRefresh {
+                task_id,
+                generation: self.config_generation,
+                result_reported: false,
+            },
+        );
         let _ = self
             .event_tx
             .send(RefreshEvent::Started { id: id.clone() })
@@ -146,7 +187,6 @@ impl RefreshCoordinator {
     // ========================================================================
 
     /// Run a single provider refresh on the blocking thread pool, catching panics.
-    /// Panics are converted to `RefreshResult::Failed` so in-flight state is always cleared.
     async fn run_refresh(
         mgr: Arc<ProviderManager>,
         id: ProviderId,
@@ -157,7 +197,6 @@ impl RefreshCoordinator {
                 smol::block_on(mgr.refresh_by_id(&id, &provider_credentials))
             }))
             .unwrap_or_else(|payload| {
-                // panic hook 只在 app 外壳安装（platform 是 app-only），lib 环境下消息只能靠这里保留
                 let message = if let Some(s) = payload.downcast_ref::<&str>() {
                     s.to_string()
                 } else if let Some(s) = payload.downcast_ref::<String>() {
@@ -178,182 +217,256 @@ impl RefreshCoordinator {
         .await
     }
 
-    /// Run a refresh with a coordinator-side timeout guard.
-    ///
-    /// This is the last-resort protection when a provider blocks inside CLI / HTTP / parser code.
-    /// The underlying blocking task may continue running until its own I/O timeout fires, but the
-    /// coordinator will stop waiting and clear in-flight state so future refreshes are not wedged.
-    async fn run_refresh_with_timeout(
-        mgr: Arc<ProviderManager>,
-        id: ProviderId,
-        reason: RefreshReason,
-        provider_credentials: ProviderSettings,
-    ) -> RefreshOutcome {
-        let timeout = Self::provider_refresh_timeout();
-        let timeout_id = id.clone();
-        smol::future::or(
-            Self::run_refresh(mgr, id, provider_credentials),
-            async move {
-                smol::Timer::after(timeout).await;
-                log::warn!(
-                    target: "refresh",
-                    "provider {} refresh timed out after {:?} ({:?})",
-                    timeout_id,
-                    timeout,
-                    reason
-                );
-                Self::build_outcome(timeout_id, Err(ProviderError::Timeout))
-            },
-        )
-        .await
+    fn allocate_task_id(&mut self) -> u64 {
+        self.next_task_id = self.next_task_id.wrapping_add(1);
+        self.next_task_id
     }
 
-    /// Refresh a single provider (used by RefreshOne).
-    async fn execute_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
+    /// 启动刷新但不等待结果；主循环继续处理配置、reload 和 shutdown。
+    async fn start_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
         if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
             self.send_skip(id, skip).await;
             return;
         }
 
-        self.begin_refresh(&id).await;
-        let outcome = Self::run_refresh_with_timeout(
-            self.manager.snapshot(),
-            id,
-            reason,
-            self.provider_credentials.clone(),
-        )
-        .await;
-        self.record_outcome(outcome).await;
+        let task_id = self.allocate_task_id();
+        self.begin_refresh(&id, task_id).await;
+
+        let completion_tx = self.task_tx.clone();
+        let completion_id = id.clone();
+        let manager = self.manager.snapshot();
+        let provider_credentials = self.provider_credentials.clone();
+        smol::spawn(async move {
+            let outcome =
+                Self::run_refresh(manager, completion_id.clone(), provider_credentials).await;
+            let _ = completion_tx
+                .send(TaskMessage::Completed {
+                    id: completion_id,
+                    task_id,
+                    outcome,
+                })
+                .await;
+        })
+        .detach();
+
+        let timeout_tx = self.task_tx.clone();
+        let timeout = Self::provider_refresh_timeout();
+        smol::spawn(async move {
+            smol::Timer::after(timeout).await;
+            let _ = timeout_tx
+                .send(TaskMessage::TimedOut {
+                    id,
+                    task_id,
+                    reason,
+                })
+                .await;
+        })
+        .detach();
     }
 
-    /// Refresh multiple providers concurrently.
-    /// Sends Started events for all eligible providers upfront, then executes
-    /// network requests on the smol blocking pool, collecting results in
-    /// completion order via a channel.
-    async fn execute_refresh_concurrent(&mut self, ids: Vec<ProviderId>, reason: RefreshReason) {
-        // Phase 1: Filter eligible providers, send Started events
-        let mut to_refresh = Vec::new();
+    async fn start_refreshes(&mut self, ids: Vec<ProviderId>, reason: RefreshReason) {
         for id in ids {
-            if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
-                self.send_skip(id, skip).await;
+            self.start_refresh(id, reason).await;
+        }
+    }
+
+    async fn handle_task_message(&mut self, message: TaskMessage) {
+        match message {
+            TaskMessage::TimedOut {
+                id,
+                task_id,
+                reason,
+            } => {
+                let should_report = self
+                    .active_refreshes
+                    .get_mut(&id)
+                    .filter(|active| active.task_id == task_id)
+                    .is_some_and(|active| {
+                        if active.result_reported {
+                            false
+                        } else {
+                            active.result_reported = true;
+                            true
+                        }
+                    });
+                if !should_report {
+                    return;
+                }
+
+                log::warn!(
+                    target: "refresh",
+                    "provider {} refresh timed out after {:?} ({:?}); underlying task remains single-flight",
+                    id,
+                    Self::provider_refresh_timeout(),
+                    reason
+                );
+                let outcome = Self::build_outcome(id, Err(ProviderError::Timeout));
+                let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+            }
+            TaskMessage::Completed {
+                id,
+                task_id,
+                outcome,
+            } => {
+                let Some(active) = self.active_refreshes.get(&id) else {
+                    return;
+                };
+                if active.task_id != task_id {
+                    return;
+                }
+                let active = self
+                    .active_refreshes
+                    .remove(&id)
+                    .expect("active refresh checked above");
+                self.scheduler.clear_in_flight(&id);
+
+                if active.result_reported {
+                    return;
+                }
+                if active.generation != self.config_generation
+                    || !self.scheduler.enabled_providers().contains(&id)
+                {
+                    self.emit_finished(id, RefreshResult::SkippedStale).await;
+                    return;
+                }
+                if matches!(outcome.result, RefreshResult::Success { .. }) {
+                    self.scheduler.record_success(&id);
+                }
+                let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+            }
+        }
+    }
+
+    /// 配置或 registry 变化时立即让前台退出 Refreshing；底层任务仍保持 single-flight。
+    async fn invalidate_active_refreshes(&mut self, enabled: Option<&[ProviderId]>) {
+        let mut invalidated = Vec::new();
+        for (id, active) in &mut self.active_refreshes {
+            if active.result_reported {
                 continue;
             }
-            self.begin_refresh(&id).await;
-            to_refresh.push(id);
+            active.result_reported = true;
+            let result = if enabled.is_some_and(|ids| !ids.contains(id)) {
+                RefreshResult::SkippedDisabled
+            } else {
+                RefreshResult::SkippedStale
+            };
+            invalidated.push((id.clone(), result));
         }
+        for (id, result) in invalidated {
+            self.emit_finished(id, result).await;
+        }
+    }
 
-        if to_refresh.is_empty() {
+    // ========================================================================
+    // 控制请求
+    // ========================================================================
+
+    async fn handle_request(&mut self, request: RefreshRequest) -> bool {
+        match request {
+            RefreshRequest::RefreshAll { ids, reason } => {
+                log::info!(target: "refresh", "refresh all requested ({:?})", reason);
+                self.start_refreshes(ids, reason).await;
+                if matches!(reason, RefreshReason::Manual) {
+                    self.scheduler.advance_periodic_deadline();
+                }
+            }
+            RefreshRequest::RefreshOne { id, reason } => {
+                log::info!(target: "refresh", "refresh one requested: {} ({:?})", id, reason);
+                self.start_refresh(id, reason).await;
+            }
+            RefreshRequest::UpdateConfig {
+                interval_mins,
+                enabled,
+                provider_credentials,
+            } => {
+                let refresh_inputs_changed = self.provider_credentials != provider_credentials
+                    || self.scheduler.enabled_providers() != enabled.as_slice();
+                self.provider_credentials = provider_credentials;
+                self.scheduler.update_config(interval_mins, enabled.clone());
+                if refresh_inputs_changed {
+                    self.config_generation = self.config_generation.wrapping_add(1);
+                    self.invalidate_active_refreshes(Some(&enabled)).await;
+                }
+            }
+            RefreshRequest::ReloadProviders => {
+                log::info!(target: "refresh", "reloading custom providers");
+                self.config_generation = self.config_generation.wrapping_add(1);
+                self.invalidate_active_refreshes(None).await;
+
+                let new_manager = Arc::new(crate::providers::ProviderManager::load_default());
+                let statuses = new_manager.initial_statuses();
+                let new_ids: std::collections::HashSet<_> =
+                    statuses.iter().map(|status| &status.provider_id).collect();
+                self.scheduler.cleanup_stale(&new_ids);
+                self.manager.replace(new_manager);
+
+                let _ = self
+                    .event_tx
+                    .send(RefreshEvent::ProvidersReloaded { statuses })
+                    .await;
+                log::info!(target: "refresh", "custom providers reloaded");
+            }
+            RefreshRequest::Shutdown => {
+                log::info!(target: "refresh", "coordinator shutting down");
+                return false;
+            }
+        }
+        true
+    }
+
+    async fn handle_periodic(&mut self) {
+        if self.scheduler.is_auto_refresh_disabled() {
+            self.scheduler.advance_disabled_deadline();
             return;
         }
-
-        // Phase 2: Spawn concurrent refresh tasks via smol thread pool.
-        // 内部结果仍按完成顺序回传，避免慢 provider 阻塞已完成 provider 的状态清理/事件上报。
-        let (result_tx, result_rx) = smol::channel::bounded::<RefreshOutcome>(to_refresh.len());
-        for id in to_refresh {
-            let mgr = self.manager.snapshot();
-            let tx = result_tx.clone();
-            let provider_credentials = self.provider_credentials.clone();
-            smol::spawn(async move {
-                let _ = tx
-                    .send(
-                        Self::run_refresh_with_timeout(mgr, id, reason, provider_credentials).await,
-                    )
-                    .await;
-            })
-            .detach();
-        }
-        drop(result_tx);
-
-        // Phase 3: Collect results as they arrive
-        while let Ok(outcome) = result_rx.recv().await {
-            self.record_outcome(outcome).await;
-        }
+        log::info!(
+            target: "refresh",
+            "periodic refresh triggered (every {} min)",
+            self.scheduler.interval_mins()
+        );
+        let ids = self.scheduler.enabled_providers().to_vec();
+        self.start_refreshes(ids, RefreshReason::Periodic).await;
+        self.scheduler.advance_periodic_deadline();
     }
 
     // ========================================================================
     // 事件循环
     // ========================================================================
 
-    /// Run the coordinator event loop. This is the main entry point.
-    /// It processes requests and runs periodic refresh in a single loop.
+    /// 主循环不等待 Provider 完成，因此刷新期间仍可处理配置、reload 和 shutdown。
     pub async fn run(mut self) {
         log::info!(target: "refresh", "coordinator started");
 
         loop {
-            // 使用绝对 deadline 计算剩余等待时间，避免收到请求时定时器被重置
             let wait = self.scheduler.time_until_next_periodic();
-
-            // Wait for either a request or the periodic timer
-            let request = smol::future::or(async { Some(self.request_rx.recv().await) }, async {
-                smol::Timer::after(wait).await;
-                None
-            })
+            let event = smol::future::or(
+                async { LoopEvent::Request(self.request_rx.recv().await) },
+                smol::future::or(
+                    async { LoopEvent::Task(self.task_rx.recv().await) },
+                    async {
+                        smol::Timer::after(wait).await;
+                        LoopEvent::Periodic
+                    },
+                ),
+            )
             .await;
 
-            match request {
-                // Timer fired — periodic refresh
-                None => {
-                    if self.scheduler.is_auto_refresh_disabled() {
-                        self.scheduler.advance_disabled_deadline();
-                        continue;
-                    }
-                    log::info!(target: "refresh", "periodic refresh triggered (every {} min)", self.scheduler.interval_mins());
-                    let kinds: Vec<_> = self.scheduler.enabled_providers().to_vec();
-                    self.execute_refresh_concurrent(kinds, RefreshReason::Periodic)
-                        .await;
-                    self.scheduler.advance_periodic_deadline();
-                }
-                // Request received
-                Some(Ok(req)) => match req {
-                    RefreshRequest::RefreshAll { reason } => {
-                        log::info!(target: "refresh", "refresh all requested ({:?})", reason);
-                        let kinds: Vec<_> = self.scheduler.enabled_providers().to_vec();
-                        self.execute_refresh_concurrent(kinds, reason).await;
-                        // 手动触发全部刷新后重置周期定时器，避免短时间内重复刷新
-                        if matches!(reason, RefreshReason::Manual) {
-                            self.scheduler.advance_periodic_deadline();
-                        }
-                    }
-                    RefreshRequest::RefreshOne { id, reason } => {
-                        log::info!(target: "refresh", "refresh one requested: {} ({:?})", id, reason);
-                        self.execute_refresh(id, reason).await;
-                    }
-                    RefreshRequest::UpdateConfig {
-                        interval_mins,
-                        enabled,
-                        provider_credentials,
-                    } => {
-                        self.provider_credentials = provider_credentials;
-                        self.scheduler.update_config(interval_mins, enabled);
-                    }
-                    RefreshRequest::ReloadProviders => {
-                        log::info!(target: "refresh", "reloading custom providers");
-                        let new_manager = Arc::new(crate::providers::ProviderManager::new());
-                        let statuses = new_manager.initial_statuses();
-
-                        // 清理已不存在的 provider 的残留状态
-                        let new_ids: std::collections::HashSet<_> =
-                            statuses.iter().map(|s| &s.provider_id).collect();
-                        self.scheduler.cleanup_stale(&new_ids);
-
-                        self.manager.replace(new_manager);
-
-                        let _ = self
-                            .event_tx
-                            .send(RefreshEvent::ProvidersReloaded { statuses })
-                            .await;
-                        log::info!(target: "refresh", "custom providers reloaded");
-                    }
-                    RefreshRequest::Shutdown => {
-                        log::info!(target: "refresh", "coordinator shutting down");
+            match event {
+                LoopEvent::Request(Ok(request)) => {
+                    if !self.handle_request(request).await {
                         break;
                     }
-                },
-                // Channel closed
-                Some(Err(_)) => {
+                }
+                LoopEvent::Request(Err(_)) => {
                     log::info!(target: "refresh", "request channel closed, shutting down");
                     break;
                 }
+                LoopEvent::Task(Ok(message)) => self.handle_task_message(message).await,
+                LoopEvent::Task(Err(_)) => {
+                    log::error!(target: "refresh", "internal task channel closed");
+                    break;
+                }
+                LoopEvent::Periodic => self.handle_periodic().await,
             }
         }
     }

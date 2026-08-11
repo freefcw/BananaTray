@@ -361,7 +361,7 @@ impl AppTheme {
 }
 
 /// Provider 设置中由 BananaTray 自己持久化的凭证存储
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ProviderSettings {
     /// Provider-specific credentials, flattened for backward-compatible JSON shape.
     #[serde(flatten)]

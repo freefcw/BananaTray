@@ -26,6 +26,7 @@ pub(super) fn refresh_all_providers(session: &mut AppSession, effects: &mut Vec<
 
     effects.push(
         RefreshEffect::SendRequest(RefreshRequest::RefreshAll {
+            ids: enabled_ids,
             reason: RefreshReason::Manual,
         })
         .into(),
@@ -69,6 +70,15 @@ fn process_refresh_outcome(
     effects: &mut Vec<AppEffect>,
 ) {
     if session.provider_store.find_by_id(outcome_id).is_none() {
+        return;
+    }
+    if !session.settings.provider.is_enabled(outcome_id) {
+        // 用户禁用后到达的旧结果不再更新 quota、错误或通知。
+        if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
+            if provider.mark_skipped() {
+                effects.push(ContextEffect::Render.into());
+            }
+        }
         return;
     }
 
@@ -122,7 +132,8 @@ fn process_refresh_outcome(
         }
         RefreshResult::SkippedCooldown
         | RefreshResult::SkippedInFlight
-        | RefreshResult::SkippedDisabled => {
+        | RefreshResult::SkippedDisabled
+        | RefreshResult::SkippedStale => {
             // coordinator 判定跳过（未实际刷新）：若前台乐观标记了 Refreshing，
             // 由 ProviderStatus::mark_skipped 收敛回可展示状态，避免 UI 永久卡住。
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
@@ -141,8 +152,10 @@ pub(super) fn apply_refresh_event(
 ) {
     match event {
         RefreshEvent::Started { id } => {
-            session.provider_store.mark_refreshing_by_id(&id);
-            effects.push(ContextEffect::Render.into());
+            if session.settings.provider.is_enabled(&id) {
+                session.provider_store.mark_refreshing_by_id(&id);
+                effects.push(ContextEffect::Render.into());
+            }
         }
         RefreshEvent::Finished(outcome) => {
             let is_debug_target = session.debug_ui.refresh_active

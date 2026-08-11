@@ -162,10 +162,11 @@ impl RefreshScheduler {
         self.next_periodic = Instant::now() + Duration::from_secs(DISABLED_CHECK_INTERVAL_SECS);
     }
 
-    /// 清理已不存在的 Provider 的残留状态
+    /// 清理已不存在 Provider 的刷新历史。
+    ///
+    /// in-flight 必须等底层任务真实完成后再释放；reload 时提前删除会允许同 ID 重叠执行。
     pub fn cleanup_stale(&mut self, valid_ids: &std::collections::HashSet<&ProviderId>) {
         self.last_refreshed.retain(|id, _| valid_ids.contains(id));
-        self.in_flight.retain(|id, _| valid_ids.contains(id));
     }
 }
 
@@ -350,7 +351,10 @@ mod tests {
         assert!(s.last_refreshed.contains_key(&keep));
         assert!(!s.last_refreshed.contains_key(&remove));
         assert!(s.in_flight.contains_key(&keep));
-        assert!(!s.in_flight.contains_key(&remove));
+        assert!(
+            s.in_flight.contains_key(&remove),
+            "active tasks keep their single-flight lease until physical completion"
+        );
     }
 
     // -- advance_periodic_deadline --
