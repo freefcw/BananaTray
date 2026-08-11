@@ -33,12 +33,13 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 
 为 API 类 Provider（Gemini, Custom YAML 等）提供统一的 HTTP 请求层：
 
-- **`HttpError`** — 结构化 HTTP 错误枚举（`Timeout` / `Transport` / `HttpStatus { code, body }`），
+- **`HttpError`** — 结构化 HTTP 错误枚举（`Timeout` / `Transport` / `HttpStatus { code }`），
   provider 可通过 `downcast_ref::<HttpError>()` 精确分类，`ProviderError::classify()` 自动将
   401/403 映射为 `AuthRequired`、超时映射为 `Timeout`、传输错误映射为 `NetworkFailed`
 - **`get()` / `get_with_headers()`** — GET 请求变体（4xx/5xx 返回 `HttpError::HttpStatus`）
 - **`post_json()` / `post_form()`** — POST 请求（JSON / form-urlencoded）
-- 全局共享 `LazyLock<Agent>`，`http_status_as_error(false)` 确保非 2xx 也能读取 body
+- 全局共享 `LazyLock<Agent>`；`http_status_as_error(false)` 让 `check_status` 统一接管非 2xx，
+  且错误正文**不读取、不记录、不传播**（可能含 token / 邮箱等敏感信息），`HttpStatus` 只携带状态码
 - `set_headers!` 宏统一处理 `"Key: Value"` 格式的 header 注入
 
 ### `jwt.rs` — JWT 解码

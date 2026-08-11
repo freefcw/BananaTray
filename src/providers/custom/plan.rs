@@ -162,7 +162,13 @@ impl CompiledPlan {
         }
 
         let raw = super::fetch::fetch(provider_id, base_url, &step.source)?;
-        debug!(target: "providers::custom", "[{}] step '{}' raw response ({} bytes): {}", provider_id, step.name, raw.len(), super::log_utils::truncate_for_log(&raw, 500));
+        debug!(
+            target: "providers::custom",
+            "[{}] step '{}' response received ({} bytes; body omitted)",
+            provider_id,
+            step.name,
+            raw.len()
+        );
 
         let raw = super::fetch::apply_preprocess(&raw, &step.preprocess);
         let parser = step.parser.as_ref().ok_or_else(|| {
@@ -178,13 +184,15 @@ impl CompiledPlan {
         match &result {
             Ok(data) => info!(
                 target: "providers::custom",
-                "[{}] step '{}' parsed {} quotas, email={:?}",
-                provider_id, step.name, data.quotas.len(), data.account_email
+                "[{}] step '{}' parsed {} quotas",
+                provider_id,
+                step.name,
+                data.quotas.len()
             ),
             Err(e) => warn!(
                 target: "providers::custom",
-                "[{}] step '{}' parse failed: {}\n  raw response: {}",
-                provider_id, step.name, e, super::log_utils::truncate_for_log(&raw, 300)
+                "[{}] step '{}' parse failed: {} (response omitted)",
+                provider_id, step.name, e
             ),
         }
         result.map_err(ProviderError::from)

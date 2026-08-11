@@ -158,19 +158,14 @@ impl ProviderError {
                 HttpError::Transport(reason) => Self::NetworkFailed {
                     reason: reason.clone(),
                 },
-                HttpError::HttpStatus { code, body } => match *code {
+                HttpError::HttpStatus { code } => match *code {
                     401 | 403 => Self::AuthRequired { advice: None },
-                    429 => Self::FetchFailed {
-                        advice: Some(FailureAdvice::ApiHttpError {
-                            status: code.to_string(),
-                        }),
-                        raw_detail: Some(format!("rate limited (HTTP 429): {}", body)),
-                    },
                     _ => Self::FetchFailed {
                         advice: Some(FailureAdvice::ApiHttpError {
                             status: code.to_string(),
                         }),
-                        raw_detail: Some(format!("HTTP {}: {}", code, body)),
+                        // 上游正文不跨越 provider 边界，避免进入日志或用户界面。
+                        raw_detail: Some(format!("HTTP {}", code)),
                     },
                 },
             };

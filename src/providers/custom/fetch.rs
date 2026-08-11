@@ -17,7 +17,13 @@ pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> 
             args,
             timeout_ms,
         } => {
-            debug!(target: "providers::custom", "[{}] fetching via CLI: {} {:?}", id, command, args);
+            debug!(
+                target: "providers::custom",
+                "[{}] fetching via CLI command '{}' ({} args omitted)",
+                id,
+                command,
+                args.len()
+            );
             fetch_cli(command, args, *timeout_ms)
         }
         SourceDef::Http {
@@ -29,7 +35,12 @@ pub(super) fn fetch(id: &str, base_url: &Option<String>, source: &SourceDef) -> 
             body,
         } => {
             let resolved = resolve_url(base_url, url);
-            debug!(target: "providers::custom", "[{}] fetching via HTTP {:?}: {}", id, method, resolved);
+            debug!(
+                target: "providers::custom",
+                "[{}] fetching via HTTP {:?} (URL omitted)",
+                id,
+                method
+            );
             let result = fetch_http(
                 base_url,
                 *method,

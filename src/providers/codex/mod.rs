@@ -199,7 +199,7 @@ fn should_fallback_to_cli(err: &anyhow::Error) -> bool {
         return match http {
             HttpError::Timeout => true,
             HttpError::Transport(_) => true,
-            HttpError::HttpStatus { code, .. } => (500..=599).contains(code),
+            HttpError::HttpStatus { code } => (500..=599).contains(code),
         };
     }
     matches!(
@@ -216,21 +216,9 @@ mod tests {
 
     #[test]
     fn codex_auth_error_detection_only_matches_401_and_403() {
-        let auth_401: anyhow::Error = HttpError::HttpStatus {
-            code: 401,
-            body: "Unauthorized".into(),
-        }
-        .into();
-        let auth_403: anyhow::Error = HttpError::HttpStatus {
-            code: 403,
-            body: "Forbidden".into(),
-        }
-        .into();
-        let other_status: anyhow::Error = HttpError::HttpStatus {
-            code: 500,
-            body: "Server Error".into(),
-        }
-        .into();
+        let auth_401: anyhow::Error = HttpError::HttpStatus { code: 401 }.into();
+        let auth_403: anyhow::Error = HttpError::HttpStatus { code: 403 }.into();
+        let other_status: anyhow::Error = HttpError::HttpStatus { code: 500 }.into();
 
         assert!(is_auth_api_error(&auth_401));
         assert!(is_auth_api_error(&auth_403));
@@ -239,11 +227,7 @@ mod tests {
 
     #[test]
     fn codex_refresh_failure_returns_structured_auth_error() {
-        let usage_error: anyhow::Error = HttpError::HttpStatus {
-            code: 401,
-            body: "Unauthorized".into(),
-        }
-        .into();
+        let usage_error: anyhow::Error = HttpError::HttpStatus { code: 401 }.into();
         let refresh_error = ProviderError::fetch_failed("refresh token rejected");
 
         let provider_error = auth_refresh_failed_error(&usage_error, &refresh_error);
@@ -274,38 +258,22 @@ mod tests {
 
     #[test]
     fn fallback_eligible_for_5xx() {
-        let err: anyhow::Error = HttpError::HttpStatus {
-            code: 503,
-            body: "Service Unavailable".into(),
-        }
-        .into();
+        let err: anyhow::Error = HttpError::HttpStatus { code: 503 }.into();
         assert!(should_fallback_to_cli(&err));
     }
 
     #[test]
     fn fallback_not_eligible_for_429_rate_limited() {
         // 429 不兑底：CLI 同 token 同域名，服务端还会返回 429，白费一次 PTY spawn。
-        let err: anyhow::Error = HttpError::HttpStatus {
-            code: 429,
-            body: "rate limited".into(),
-        }
-        .into();
+        let err: anyhow::Error = HttpError::HttpStatus { code: 429 }.into();
         assert!(!should_fallback_to_cli(&err));
     }
 
     #[test]
     fn fallback_not_eligible_for_4xx_other_than_auth_or_429() {
         // 400 / 404 等请求问题不会被 CLI 修正。
-        let err_400: anyhow::Error = HttpError::HttpStatus {
-            code: 400,
-            body: "Bad Request".into(),
-        }
-        .into();
-        let err_404: anyhow::Error = HttpError::HttpStatus {
-            code: 404,
-            body: "Not Found".into(),
-        }
-        .into();
+        let err_400: anyhow::Error = HttpError::HttpStatus { code: 400 }.into();
+        let err_404: anyhow::Error = HttpError::HttpStatus { code: 404 }.into();
         assert!(!should_fallback_to_cli(&err_400));
         assert!(!should_fallback_to_cli(&err_404));
     }
@@ -314,11 +282,7 @@ mod tests {
     fn fallback_eligible_for_502_503_504() {
         // 全部 5xx 都兑底，不仅是 503。
         for code in [500, 502, 503, 504, 599] {
-            let err: anyhow::Error = HttpError::HttpStatus {
-                code,
-                body: format!("server error {code}"),
-            }
-            .into();
+            let err: anyhow::Error = HttpError::HttpStatus { code }.into();
             assert!(
                 should_fallback_to_cli(&err),
                 "expected fallback for HTTP {code}"
@@ -328,16 +292,8 @@ mod tests {
 
     #[test]
     fn fallback_not_eligible_for_auth_errors() {
-        let err_401: anyhow::Error = HttpError::HttpStatus {
-            code: 401,
-            body: "Unauthorized".into(),
-        }
-        .into();
-        let err_403: anyhow::Error = HttpError::HttpStatus {
-            code: 403,
-            body: "Forbidden".into(),
-        }
-        .into();
+        let err_401: anyhow::Error = HttpError::HttpStatus { code: 401 }.into();
+        let err_403: anyhow::Error = HttpError::HttpStatus { code: 403 }.into();
         assert!(!should_fallback_to_cli(&err_401));
         assert!(!should_fallback_to_cli(&err_403));
     }

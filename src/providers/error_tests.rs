@@ -111,11 +111,7 @@ fn test_error_chain() {
 #[test]
 fn test_classify_http_401_as_auth_required() {
     use crate::providers::common::http_client::HttpError;
-    let err: anyhow::Error = HttpError::HttpStatus {
-        code: 401,
-        body: "Unauthorized".into(),
-    }
-    .into();
+    let err: anyhow::Error = HttpError::HttpStatus { code: 401 }.into();
     let classified = ProviderError::classify(&err);
     assert!(matches!(classified, ProviderError::AuthRequired { .. }));
 }
@@ -123,11 +119,7 @@ fn test_classify_http_401_as_auth_required() {
 #[test]
 fn test_classify_http_403_as_auth_required() {
     use crate::providers::common::http_client::HttpError;
-    let err: anyhow::Error = HttpError::HttpStatus {
-        code: 403,
-        body: "Forbidden".into(),
-    }
-    .into();
+    let err: anyhow::Error = HttpError::HttpStatus { code: 403 }.into();
     let classified = ProviderError::classify(&err);
     assert!(matches!(classified, ProviderError::AuthRequired { .. }));
 }
@@ -135,11 +127,7 @@ fn test_classify_http_403_as_auth_required() {
 #[test]
 fn test_classify_http_429_as_fetch_failed() {
     use crate::providers::common::http_client::HttpError;
-    let err: anyhow::Error = HttpError::HttpStatus {
-        code: 429,
-        body: "Too Many Requests".into(),
-    }
-    .into();
+    let err: anyhow::Error = HttpError::HttpStatus { code: 429 }.into();
     let classified = ProviderError::classify(&err);
     assert!(matches!(
         classified,
@@ -153,11 +141,7 @@ fn test_classify_http_429_as_fetch_failed() {
 #[test]
 fn test_classify_http_500_as_fetch_failed() {
     use crate::providers::common::http_client::HttpError;
-    let err: anyhow::Error = HttpError::HttpStatus {
-        code: 500,
-        body: "Internal Server Error".into(),
-    }
-    .into();
+    let err: anyhow::Error = HttpError::HttpStatus { code: 500 }.into();
     let classified = ProviderError::classify(&err);
     assert!(matches!(
         classified,
@@ -166,6 +150,22 @@ fn test_classify_http_500_as_fetch_failed() {
             raw_detail: Some(ref raw_detail),
         } if status == "500" && raw_detail.contains("500")
     ));
+}
+
+#[test]
+fn test_classify_http_status_does_not_expose_response_body() {
+    use crate::providers::common::http_client::HttpError;
+    let secret = "token=secret-123 user@example.com 中文🍌";
+    let err: anyhow::Error = HttpError::HttpStatus { code: 500 }.into();
+
+    let classified = ProviderError::classify(&err);
+    let failure = classified.to_failure();
+
+    assert!(!classified.to_string().contains(secret));
+    assert!(!failure
+        .raw_detail
+        .as_deref()
+        .is_some_and(|detail| detail.contains(secret)));
 }
 
 #[test]

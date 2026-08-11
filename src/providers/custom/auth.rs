@@ -1,12 +1,11 @@
 use anyhow::Result;
-use log::{debug, info, warn};
+use log::{info, warn};
 
 use crate::providers::common::http_client;
 use crate::providers::ProviderError;
 
 use super::extractor;
 use super::json_file::read_json_file;
-use super::log_utils::truncate_for_log;
 use super::schema::{AuthDef, HeaderDef};
 use super::url::{expand_env_vars, resolve_url};
 
@@ -82,29 +81,23 @@ fn login_for_token(
     .to_string();
 
     let login_url = resolve_url(base_url, login_url);
-    info!(target: "providers::custom", "login: POST {} (user={})", login_url, username);
+    // 用户名、URL query 和响应正文都可能包含凭证，仅记录操作阶段。
+    info!(target: "providers::custom", "custom provider login request started");
 
-    let response = http_client::post_json(&login_url, &[], &body);
-    match &response {
-        Ok(body) => debug!(
-            target: "providers::custom",
-            "login response ({} bytes): {}",
-            body.len(),
-            truncate_for_log(body, 300)
-        ),
-        Err(e) => warn!(target: "providers::custom", "login request failed: {}", e),
-    }
-    let response = response?;
+    let response = http_client::post_json(&login_url, &[], &body).map_err(|error| {
+        warn!(target: "providers::custom", "login request failed: {}", error);
+        error
+    })?;
 
-    let result = parse_login_response(&response, token_path);
-    if let Err(ref e) = result {
+    parse_login_response(&response, token_path).map_err(|error| {
         warn!(
             target: "providers::custom",
-            "login token extraction failed: {} (token_path='{}', response: {})",
-            e, token_path, truncate_for_log(&response, 200)
+            "login token extraction failed: {} (token_path='{}', response omitted)",
+            error,
+            token_path
         );
-    }
-    result
+        error
+    })
 }
 
 /// 从登录响应 JSON 中提取 token（纯逻辑，无 I/O，可单元测试）。
@@ -113,11 +106,7 @@ fn parse_login_response(response: &str, token_path: &str) -> Result<String> {
         .map_err(|_| ProviderError::parse_failed("login response is not valid JSON"))?;
 
     if let Some(false) = json.get("success").and_then(|v| v.as_bool()) {
-        let msg = json
-            .get("message")
-            .and_then(|v| v.as_str())
-            .unwrap_or("login failed");
-        anyhow::bail!("login failed: {}", msg);
+        return Err(ProviderError::auth_required(None).into());
     }
 
     extractor::json_string(&json, token_path).ok_or_else(|| {
@@ -241,17 +230,20 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_login_response_failure_with_message() {
-        let response = r#"{"success": false, "message": "invalid password"}"#;
+    fn test_parse_login_response_failure_does_not_expose_server_message() {
+        let response = r#"{"success": false, "message": "token=secret-123 user@example.com"}"#;
         let err = parse_login_response(response, "data").unwrap_err();
-        assert!(err.to_string().contains("invalid password"));
+        let detail = err.to_string();
+        assert!(detail.contains("auth required"));
+        assert!(!detail.contains("secret-123"));
+        assert!(!detail.contains("user@example.com"));
     }
 
     #[test]
     fn test_parse_login_response_failure_without_message() {
         let response = r#"{"success": false}"#;
         let err = parse_login_response(response, "data").unwrap_err();
-        assert!(err.to_string().contains("login failed"));
+        assert!(err.to_string().contains("auth required"));
     }
 
     #[test]

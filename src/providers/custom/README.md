@@ -29,7 +29,7 @@ custom/
   auth.rs         — auth/header 解析、环境变量凭证、file token、login token
   fetch.rs        — source 解释执行（CLI / HTTP / placeholder）与 preprocess
   url.rs          — base_url 拼接、${ENV_VAR} 展开、~ 路径展开
-  log_utils.rs    — 日志截断与认证 header 脱敏
+  log_utils.rs    — 认证 header 脱敏（响应正文禁止写日志）
   json_file.rs    — 本地 JSON 文件读取公共基础设施
   loader.rs       — 文件扫描 + 加载 + 校验
   generator.rs    — NewAPI / Script Provider YAML 生成 + 纯解析辅助（由各 lifecycle 持有外部契约）

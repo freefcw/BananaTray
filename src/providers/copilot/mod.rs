@@ -132,21 +132,21 @@ impl AiProvider for CopilotProvider {
                 // 将 HTTP 状态码映射为用户可操作的提示
                 if let Some(http_err) = e.downcast_ref::<HttpError>() {
                     match http_err {
-                        HttpError::HttpStatus { code: 401, .. } => {
+                        HttpError::HttpStatus { code: 401 } => {
                             return Err(ProviderError::session_expired(Some(
                                 crate::models::FailureAdvice::LoginApp {
                                     app: "GitHub".to_string(),
                                 },
                             )));
                         }
-                        HttpError::HttpStatus { code: 403, .. } => {
+                        HttpError::HttpStatus { code: 403 } => {
                             return Err(ProviderError::auth_required(Some(
                                 crate::models::FailureAdvice::ApiError {
                                     message: "GitHub token lacks required Copilot permissions; use a Classic PAT with 'copilot' scope.".to_string(),
                                 },
                             )));
                         }
-                        HttpError::HttpStatus { code: 404, .. } => {
+                        HttpError::HttpStatus { code: 404 } => {
                             return Err(ProviderError::fetch_failed_with_advice(
                                 crate::models::FailureAdvice::ApiError {
                                     message: "GitHub Copilot is not enabled for this account."

@@ -26,12 +26,8 @@ struct ModelRemain {
 }
 
 pub(super) fn parse_remains_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
-    let resp: MiniMaxRemainsResponse = serde_json::from_str(response_str).with_context(|| {
-        format!(
-            "Failed to parse MiniMax API response: {}",
-            response_str.chars().take(200).collect::<String>()
-        )
-    })?;
+    let resp: MiniMaxRemainsResponse = serde_json::from_str(response_str)
+        .context("Failed to parse MiniMax API response (body omitted)")?;
 
     if resp.base_resp.status_code != 0 {
         let msg = resp

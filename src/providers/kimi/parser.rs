@@ -46,12 +46,8 @@ const KIMI_CODING_SESSION_WINDOW_MINUTES: u64 = 300;
 const KIMI_WINDOW_UNIT_MINUTE: &str = "TIME_UNIT_MINUTE";
 
 pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
-    let resp: KimiUsageResponse = serde_json::from_str(response_str).with_context(|| {
-        format!(
-            "Failed to parse Kimi API response: {}",
-            response_str.chars().take(200).collect::<String>()
-        )
-    })?;
+    let resp: KimiUsageResponse = serde_json::from_str(response_str)
+        .context("Failed to parse Kimi API response (body omitted)")?;
 
     let usages = resp.usages.unwrap_or_default();
     let coding_usage = usages

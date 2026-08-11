@@ -42,8 +42,8 @@ pub enum HttpError {
     Timeout,
     /// 传输层错误（DNS / 连接 / TLS 等）
     Transport(String),
-    /// 服务端返回了 HTTP 错误状态码
-    HttpStatus { code: u16, body: String },
+    /// 服务端返回了 HTTP 错误状态码；正文有意丢弃，避免跨层泄漏敏感信息。
+    HttpStatus { code: u16 },
 }
 
 impl fmt::Display for HttpError {
@@ -51,9 +51,7 @@ impl fmt::Display for HttpError {
         match self {
             Self::Timeout => write!(f, "request timeout"),
             Self::Transport(reason) => write!(f, "transport error: {}", reason),
-            Self::HttpStatus { code, body } => {
-                write!(f, "HTTP status {}: {}", code, body)
-            }
+            Self::HttpStatus { code } => write!(f, "HTTP status {}", code),
         }
     }
 }
@@ -63,7 +61,7 @@ impl std::error::Error for HttpError {}
 impl HttpError {
     /// 是否为认证类错误（401 / 403）
     pub fn is_auth_error(&self) -> bool {
-        matches!(self, Self::HttpStatus { code, .. } if *code == 401 || *code == 403)
+        matches!(self, Self::HttpStatus { code } if *code == 401 || *code == 403)
     }
 }
 
@@ -99,19 +97,12 @@ fn map_transport_error(err: ureq::Error) -> HttpError {
 }
 
 /// 检查 HTTP 响应状态码，4xx/5xx 返回 HttpError::HttpStatus
-fn check_status(
-    status: u16,
-    url: &str,
-    method: &str,
-    response: HttpResponse,
-) -> Result<HttpResponse> {
+fn check_status(status: u16, method: &str, response: HttpResponse) -> Result<HttpResponse> {
     if status >= 400 {
-        let body = response
-            .into_body()
-            .read_to_string()
-            .unwrap_or_else(|_| "<unable to read body>".to_string());
-        warn!(target: "http", "{} {} failed with status {}, body: {}", method, url, status, body);
-        return Err(HttpError::HttpStatus { code: status, body }.into());
+        // 上游错误正文可能包含 token、cookie、邮箱等敏感信息。
+        // HTTP 公共层只传播状态码，不读取、记录或展示原始正文。
+        warn!(target: "http", "{} request failed with status {}", method, status);
+        return Err(HttpError::HttpStatus { code: status }.into());
     }
     Ok(response)
 }
@@ -126,7 +117,6 @@ fn read_response_body(response: HttpResponse, context: impl FnOnce() -> String) 
 
 fn send_and_read(
     method: &str,
-    url: &str,
     timeout: Option<Duration>,
     send: impl FnOnce(&Agent) -> std::result::Result<HttpResponse, ureq::Error>,
     body_context: impl FnOnce() -> String,
@@ -135,9 +125,9 @@ fn send_and_read(
     let response = send(&agent).map_err(|e| anyhow::Error::from(map_transport_error(e)))?;
 
     let status = response.status().as_u16();
-    debug!(target: "http", "{} {} -> {}", method, url, status);
+    debug!(target: "http", "{} request completed with status {}", method, status);
 
-    let response = check_status(status, url, method, response)?;
+    let response = check_status(status, method, response)?;
     read_response_body(response, body_context)
 }
 
@@ -153,14 +143,13 @@ pub fn get(url: &str, headers: &[&str]) -> Result<String> {
 
 /// Perform an HTTP GET with an optional per-request timeout.
 pub fn get_with_timeout(url: &str, headers: &[&str], timeout: Option<Duration>) -> Result<String> {
-    debug!(target: "http", "GET {}", url);
+    debug!(target: "http", "GET request started");
 
     send_and_read(
         "GET",
-        url,
         timeout,
         |agent| set_headers!(agent.get(url), headers).call(),
-        || format!("Failed to read response body from {url}"),
+        || "Failed to read HTTP response body".to_string(),
     )
 }
 
@@ -171,7 +160,7 @@ pub fn get_with_timeout(url: &str, headers: &[&str], timeout: Option<Duration>) 
 ///
 /// 4xx/5xx → `HttpError::HttpStatus`，超时 → `HttpError::Timeout`
 pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
-    debug!(target: "http", "GET {} (with headers)", url);
+    debug!(target: "http", "GET request with headers started");
 
     let response = set_headers!(AGENT.get(url), headers)
         .call()
@@ -179,7 +168,7 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
 
     let status = response.status().as_u16();
 
-    let response = check_status(status, url, "GET", response)?;
+    let response = check_status(status, "GET", response)?;
 
     let mut raw = format!("HTTP/1.1 {status}\r\n");
     for name in response.headers().keys() {
@@ -193,9 +182,7 @@ pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
     }
     raw.push_str("\r\n");
 
-    let body = read_response_body(response, || {
-        format!("Failed to read response body from {url}")
-    })?;
+    let body = read_response_body(response, || "Failed to read HTTP response body".to_string())?;
     raw.push_str(&body);
 
     Ok(raw)
@@ -215,11 +202,10 @@ pub fn post_json_with_timeout(
     body: &str,
     timeout: Option<Duration>,
 ) -> Result<String> {
-    debug!(target: "http", "POST {} ({} bytes)", url, body.len());
+    debug!(target: "http", "POST request started ({} bytes)", body.len());
 
     send_and_read(
         "POST",
-        url,
         timeout,
         |agent| {
             set_headers!(
@@ -228,7 +214,7 @@ pub fn post_json_with_timeout(
             )
             .send(body.as_bytes())
         },
-        || format!("Failed to read response body from POST {url}"),
+        || "Failed to read HTTP POST response body".to_string(),
     )
 }
 
@@ -236,11 +222,10 @@ pub fn post_json_with_timeout(
 ///
 /// 4xx/5xx → `HttpError::HttpStatus`，超时 → `HttpError::Timeout`
 pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
-    debug!(target: "http", "POST {} (form, {} bytes)", url, body.len());
+    debug!(target: "http", "POST form request started ({} bytes)", body.len());
 
     send_and_read(
         "POST",
-        url,
         None,
         |agent| {
             set_headers!(
@@ -251,7 +236,7 @@ pub fn post_form(url: &str, headers: &[&str], body: &str) -> Result<String> {
             )
             .send(body.as_bytes())
         },
-        || format!("Failed to read response body from POST {url}"),
+        || "Failed to read HTTP POST response body".to_string(),
     )
 }
 
@@ -424,17 +409,18 @@ mod tests {
     }
 
     #[test]
-    fn http_status_error_includes_response_body() {
-        let server = TestServer::responding(429, "rate limited");
+    fn http_status_error_omits_sensitive_response_body() {
+        let secret = "token=secret-123; email=user@example.com; 中文🍌";
+        let server = TestServer::responding(429, secret);
 
         let error = get(&server.url, &[]).unwrap_err();
         let request = server.take_request();
 
         assert!(request.starts_with("GET / HTTP/1.1\r\n"));
+        assert!(!error.to_string().contains(secret));
         match error.downcast_ref::<HttpError>().unwrap() {
-            HttpError::HttpStatus { code, body } => {
+            HttpError::HttpStatus { code } => {
                 assert_eq!(*code, 429);
-                assert_eq!(body, "rate limited");
             }
             other => panic!("expected HTTP status error, got {other:?}"),
         }
