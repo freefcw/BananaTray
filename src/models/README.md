@@ -63,7 +63,7 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
 - **`NewApiConfig`** — 用户通过表单提交的 NewAPI 配置（display_name, base_url, cookie, user_id, divisor）
 - **`NewApiEditData`** — 从 YAML 解析出的编辑回填数据（含 `original_filename`）
 - **`extract_domain_slug(base_url)`** — URL → slug 纯函数（如 `https://my-api.example.com` → `my-api-example-com`）
-- **`newapi_provider_id(base_url)`** — 从 URL 计算 Provider ID（`{slug}:newapi`），reducer 用于预注册
+- **`newapi_provider_id(base_url, user_id)`** — 从 URL 与可选账号维度计算 Provider ID（`{slug}:newapi` 或 `{slug}-{user}:newapi`），reducer 用于预注册
 
 ### `custom_provider_lifecycle.rs` — Custom Provider Lifecycle Outcomes
 

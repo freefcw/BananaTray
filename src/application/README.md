@@ -47,12 +47,12 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/script_provider.rs` — 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流与对应 effect 发射
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
-- **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 只清空旧错误并发出 `ContextEffect::ApplyGlobalHotkey`，由 runtime 先做平台级冲突 probe，再在确认注册成功后写回 settings；其中 macOS 现改为走 `RegisterEventHotKey` 的系统级注册路径
+- **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 发出 `ContextEffect::ApplyGlobalHotkey`，runtime 完成平台冲突 probe、注册和同步持久化后返回 `GlobalHotkeyApplyFinished`。只有保存成功时 reducer 才提交新值；持久化失败会恢复旧平台热键并保留旧设置。其中 macOS 使用 `RegisterEventHotKey` 的系统级注册路径。
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID（含 user_id 维度，同站多账号为 `{slug}-{user}:newapi`）并预注册到 `enabled_providers` + `sidebar_providers`；新增模式下身份（站点 + 账号）已被占用时拒绝保存并通知用户改用编辑，不静默覆盖 YAML；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename` / `original_id`（编辑保持身份不变，不随 user_id 修改迁移），不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；runtime 回传 `NewApiSaveFinished` 后，reducer 再统一通知、reload 或回滚
 - **NewAPI 删除 / 加载流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除；`EditNewApi` 委托 `NewApiEffect::LoadConfig` 读取 YAML，runtime 通过 `NewApiLoadFinished` 回填编辑态或失败通知
 - **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成或排队失败都由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行，并通过 `ScriptProvider*Finished` action 回到 reducer
 
-测试文件：`reducer_tests.rs`
+测试目录：`reducer_tests/`（按 settings / refresh / provider_sidebar / newapi / script_provider / debug 拆分）
 
 ### `effect.rs` — 副作用声明
 

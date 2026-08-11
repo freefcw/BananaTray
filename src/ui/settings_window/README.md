@@ -29,7 +29,7 @@
 | `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换），右侧表单 identity 由 selector 显式下发 |
 | `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮） |
 | `providers/sidebar.rs` | 左侧 Sidebar — Provider 列表（拖拽排序、添加/删除按钮） |
-| `providers/detail.rs` | 右侧详情 — Provider 信息/状态/配额/配额可见性/启用开关/Copilot Token 输入 |
+| `providers/detail/` | 右侧详情模块 — shell、section renderer、配额可见性和 editable-provider actions；模块契约见 `providers/detail/README.md` |
 | `providers/picker.rs` | 添加面板 — 可选 Provider 列表（从 sidebar 中排除已添加的） |
 | `providers/token_input_panel.rs` | Token 输入面板 — 通用 Provider token 设置 UI；编辑草稿由 `SettingsView::begin_token_input()` 创建并在会话内复用 |
 | `providers/newapi_form.rs` | NewAPI 表单 — 自定义 Provider 快速添加/编辑表单（name, url, cookie, user_id, divisor） |

@@ -71,8 +71,7 @@ source orchestration 目前明确分开：
   mtime 在未来时（时钟漂移 / NTP 微调 / 文件被恢复），`FUTURE_MTIME_TOLERANCE_SECS`
   （当前 60s）以内按 fresh 处理避免断流；超过则视为异常返回 `Unavailable`，
   拒绝使用可能过期的缓存。
-- **reset 闸**：单条 quota 的 `reset_at_unix` 已过 → 服务端已经重置，缓存的
-  `remaining_fraction` 是过期数据，统一视为 100% 剩余并清除倒计时。
+- **reset 闸**：单条 quota 的 `reset_at_unix` 已过 → 说明缓存为上一重置周期的旧数据，该条配额被过滤（不误报 100% 剩余）；若全部配额均已过期，则整体视为缓存失效返回 Unavailable / `no_data()`。
 
 `cache_source::is_available()` 与 `read_refresh_data()` 共用同一道 mtime 闸，避免本地
 quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Devin Desktop 的
