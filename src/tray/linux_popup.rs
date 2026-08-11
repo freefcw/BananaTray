@@ -63,7 +63,9 @@ pub(super) fn save_position_if_needed(
         return;
     }
 
-    let Some(position) = crate::tray::positioning::saved_position_from_bounds(window.bounds(), cx)
+    // PopupPositionContext 只实现在 App 上；Context 通过 Deref 得到 App
+    let app: &App = cx;
+    let Some(position) = crate::tray::positioning::saved_position_from_bounds(window.bounds(), app)
     else {
         return;
     };
