@@ -70,6 +70,7 @@ providers/kiro.rs         → cli.rs
 providers/copilot/        → config_paths.rs + http_client.rs + jwt.rs
 providers/gemini/         → http_client.rs
 providers/kimi/           → http_client.rs
+providers/opencode/       → http_client.rs
 providers/cursor/         → config_paths.rs + http_client.rs
 providers/minimax/        → http_client.rs
 providers/codeium_family/ → config_paths.rs + http_client.rs

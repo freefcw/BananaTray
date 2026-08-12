@@ -83,7 +83,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro` | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
 | `kilo.rs` | Kilo | `kilo` | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
-| `opencode.rs` | OpenCode | `opencode` | `opencode:cli` | `Placeholder` | CLI detection | Discoverable entry only; no normal refresh |
+| `opencode/` | OpenCode Go | `opencode` | `opencode:api` | `Monitorable` | OpenCode Go usage API | Display name is OpenCode Go; stable settings key remains `opencode`. Reads `auth.json` (`opencode-go` / `opencode`); maps rolling / weekly / monthly used percent |
 | `vertex_ai.rs` | Vertex AI | `vertexai` | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
 
 ## Design Notes
@@ -150,7 +150,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 
 ### 单文件 vs 多文件 Provider — 升级阈值
 
-新 provider **默认应该从单文件 `my_provider.rs` 开始**（如 `amp.rs` / `kiro.rs` / `kilo.rs` / `opencode.rs` / `vertex_ai.rs`）。强行套用 `auth.rs / client.rs / parser.rs / mod.rs` 的多文件骨架在小 provider 上只会制造无意义的跳转成本。
+新 provider **默认应该从单文件 `my_provider.rs` 开始**（如 `amp.rs` / `kiro.rs` / `kilo.rs` / `vertex_ai.rs`）。强行套用 `auth.rs / client.rs / parser.rs / mod.rs` 的多文件骨架在小 provider 上只会制造无意义的跳转成本。
 
 当 provider 出现 **以下任意一条** 时，再升级到多文件结构：
 

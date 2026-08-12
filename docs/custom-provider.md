@@ -38,7 +38,7 @@ BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 
 - `docs/examples/custom-provider-newapi.yaml`
 - `docs/examples/custom-provider-http.yaml`
 - `docs/examples/custom-provider-cli.yaml`
-- `docs/examples/opencode.yaml`
+- `docs/examples/opencode.yaml`（placeholder 能力演示；内置 OpenCode 已改为 Go usage API）
 - `docs/examples/kilo.yaml`
 - `docs/examples/vertex-ai.yaml`
 

@@ -73,7 +73,6 @@ providers/
 当前参考：
 - `amp.rs`
 - `kiro.rs`
-- `opencode.rs`
 
 边界说明：
 - 通用层只处理“命令存在、执行、退出码”
@@ -206,7 +205,6 @@ providers/my_placeholder.rs
 当前参考：
 - `kilo.rs`
 - `vertex_ai.rs`
-- `opencode.rs`
 
 ## 何时应该新增公共模块
 

@@ -160,7 +160,8 @@ pub enum SourceDef {
     },
     /// 占位 Provider：不获取数据，直接返回不可用错误
     ///
-    /// 覆盖场景：OpenCode / Kilo / VertexAI 等只需检测安装但无法监控的 Provider
+    /// 覆盖场景：Kilo 等只需检测安装但无法监控的 Provider
+    /// （内置 OpenCode 已改为 Monitorable；自定义 YAML 仍可用 placeholder）
     Placeholder {
         /// 不可用的原因说明
         reason: String,

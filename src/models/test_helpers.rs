@@ -32,7 +32,7 @@ pub fn make_test_provider(kind: ProviderKind, connection: ConnectionStatus) -> P
     }
     status.provider_capability = match kind {
         ProviderKind::VertexAi => ProviderCapability::Informational,
-        ProviderKind::Kilo | ProviderKind::OpenCode => ProviderCapability::Placeholder,
+        ProviderKind::Kilo => ProviderCapability::Placeholder,
         _ => ProviderCapability::Monitorable,
     };
     status

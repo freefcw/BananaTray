@@ -1,6 +1,6 @@
-# OpenCode Provider (等价于 src/providers/opencode.rs)
+# OpenCode Provider（自定义 YAML 的 placeholder 示例）
 #
-# 演示 placeholder source 能力：
+# 演示 placeholder source 能力；内置 OpenCode 已升级为 Monitorable（见 src/providers/opencode/）。
 # - check_availability 只检测 CLI 是否存在
 # - refresh 直接返回 unavailable 错误
 # - 无需 parser 配置
@@ -23,4 +23,4 @@ plan:
         value: "opencode"
       source:
         type: placeholder
-        reason: "OpenCode CLI does not provide usage/quota data yet"
+        reason: "Example placeholder only; built-in OpenCode uses the Go usage API"

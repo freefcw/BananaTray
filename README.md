@@ -33,6 +33,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Devin Desktop** | Seat API + local language server API + local cache | Monitorable | Full quota refresh |
 | **MiniMax** | HTTP API (`api.minimax.io`) | Monitorable | Full quota refresh |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | Monitorable | Full quota refresh |
+| **OpenCode Go** | HTTP API (`opencode.ai/zen/go/v1/usage`) + local `auth.json` | Monitorable | OpenCode Go 5h / weekly / monthly；设置稳定 key 仍为 `opencode` |
 | **Custom YAML** | HTTP / CLI | Monitorable | Depends on the YAML plan |
 
 ### Reference / TODO Entries
@@ -40,7 +41,6 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | Provider | Current Source | Capability | Status |
 |----------|----------------|------------|--------|
 | **Kilo** | Extension detection only | Placeholder | TODO: direct quota monitoring is not implemented |
-| **OpenCode** | CLI detection only | Placeholder | TODO: direct quota monitoring is not implemented |
 | **Vertex AI** | Gemini CLI config detection | Informational | Reference-only entry; TODO if direct Vertex AI quota monitoring is added |
 | **Custom YAML (`source: placeholder`)** | Placeholder availability check | Placeholder | Reference-only until the YAML plan uses HTTP or CLI data sources |
 

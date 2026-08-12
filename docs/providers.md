@@ -23,7 +23,7 @@
 | Antigravity | `antigravity` | 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `live -> cache`，见 `antigravity-api.md` |
 | Devin Desktop | `windsurf` | seat API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `seat -> live -> cache`；seat API 的日 / 周配额优先，若 seat 缺周配额才用本地缓存补周配额。用户可见来源显示为 Devin Cloud；`windsurf` 仍是兼容稳定 key。见 `antigravity-api.md` |
 | Kilo | `kilo` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |
-| OpenCode | `opencode` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |
+| OpenCode Go | `opencode` | HTTP API + 本地凭据 | `Monitorable` | UI 展示名为 OpenCode Go；设置 / 状态稳定 key 仍为 `opencode`。读取 `~/.local/share/opencode/auth.json` 的 `opencode-go` / `opencode` API key，请求 `GET https://opencode.ai/zen/go/v1/usage`；展示滚动 5 小时 / 周 / 月已用百分比；仅监控 Go 订阅配额，不汇总壳内其它 BYO provider |
 | Vertex AI | `vertexai` | Gemini CLI 配置检测 | `Informational` | 说明 Gemini CLI 的 Vertex AI 认证路径，本身不直接抓取配额 |
 
 ### Gemini 与 Vertex AI 的互斥契约
