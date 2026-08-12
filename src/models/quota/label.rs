@@ -35,11 +35,11 @@ pub enum QuotaLabelSpec {
     },
     OnDemand,
     Team,
-    /// 订阅制的用量池（如 Amp Megawatt/Gigawatt 的 agent / orb 额度）。
+    /// 订阅制的用量池（如 Amp 的 agent / orb，或 Cursor 的 auto / api）。
     ///
-    /// `plan` 为套餐名（如 `Megawatt`），`pool` 为语言无关的池标识
-    /// （amp CLI 原文 `other` / `orb`）；selector 再按 locale 渲染池文案。
-    /// 两个池独立计费、独立耗尽，分别展示为独立 quota。
+    /// `plan` 为套餐名（如 `Megawatt` / `PRO`），`pool` 为语言无关的池标识
+    /// （Amp：`other` / `orb`；Cursor：`auto` / `api`）；selector 再按 locale 渲染池文案。
+    /// 各池独立展示为独立 quota。
     SubscriptionUsage {
         plan: String,
         pool: String,

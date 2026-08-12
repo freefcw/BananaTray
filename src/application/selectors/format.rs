@@ -196,6 +196,8 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
             let pool_label = match pool.as_str() {
                 "orb" => t!("quota.label.subscription_pool_orb").to_string(),
                 "other" => t!("quota.label.subscription_pool_other").to_string(),
+                "auto" => t!("quota.label.subscription_pool_auto").to_string(),
+                "api" => t!("quota.label.subscription_pool_api").to_string(),
                 // 未知池名原文透传，避免丢失上游信息
                 other => other.to_string(),
             };
@@ -560,6 +562,36 @@ mod tests {
             None,
         );
         assert_eq!(format_quota_label(&quota), "Monthly Credits");
+    }
+
+    #[test]
+    fn format_quota_label_cursor_subscription_pools() {
+        let _locale_guard = setup_locale();
+        let auto = QuotaInfo::from_used_percent(
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "PRO".into(),
+                pool: "auto".into(),
+            },
+            12.5,
+            QuotaType::General,
+            None,
+        );
+        let api = QuotaInfo::from_used_percent(
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "PRO".into(),
+                pool: "api".into(),
+            },
+            80.0,
+            QuotaType::General,
+            None,
+        );
+        assert_eq!(format_quota_label(&auto), "PRO · Auto");
+        assert_eq!(format_quota_label(&api), "PRO · API");
+
+        rust_i18n::set_locale("zh-CN");
+        assert_eq!(format_quota_label(&auto), "PRO · 自由模型");
+        assert_eq!(format_quota_label(&api), "PRO · 三方模型");
+        rust_i18n::set_locale("en");
     }
 
     #[test]
