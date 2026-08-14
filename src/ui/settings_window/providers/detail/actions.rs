@@ -3,11 +3,8 @@ use crate::application::AppAction;
 use crate::models::ProviderId;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
-use crate::ui::widgets::render_svg_icon;
-use gpui::{
-    div, px, App, Div, FontWeight, Hsla, InteractiveElement, MouseButton, MouseDownEvent,
-    ParentElement, Styled, Window,
-};
+use crate::ui::widgets::{render_action_button, ButtonVariant};
+use gpui::{div, px, App, Div, MouseDownEvent, ParentElement, Styled, Window};
 use rust_i18n::t;
 
 pub(super) struct EditableProviderActions {
@@ -106,8 +103,9 @@ pub(super) fn render_editable_provider_actions(
         .gap(px(10.0))
         .child(render_action_button(
             &actions.edit_label,
-            "src/icons/settings.svg",
-            theme.text.accent,
+            Some(("src/icons/settings.svg", theme.text.accent)),
+            ButtonVariant::Subtle,
+            false,
             theme,
             {
                 let action = actions.edit_action_factory();
@@ -133,8 +131,9 @@ pub(super) fn render_editable_provider_actions(
 
     row.child(render_action_button(
         &actions.delete_label,
-        "src/icons/trash.svg",
-        theme.status.error,
+        Some(("src/icons/trash.svg", theme.status.error)),
+        ButtonVariant::Subtle,
+        false,
         theme,
         {
             let action = actions.confirm_delete_action_factory();
@@ -151,32 +150,4 @@ pub(super) fn render_confirm_cancel_buttons(
     theme: &Theme,
 ) -> Div {
     shared::render_confirm_cancel_buttons(confirm_label, cancel_label, on_confirm, on_cancel, theme)
-}
-
-fn render_action_button(
-    label: &str,
-    icon: &'static str,
-    color: Hsla,
-    theme: &Theme,
-    on_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(px(5.0))
-        .px(px(12.0))
-        .py(px(6.0))
-        .rounded(px(6.0))
-        .bg(theme.bg.subtle)
-        .border_1()
-        .border_color(theme.border.strong)
-        .text_size(px(12.0))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(color)
-        .cursor_pointer()
-        .hover(|s| s.opacity(0.85))
-        .child(render_svg_icon(icon, px(14.0), color))
-        .child(label.to_string())
-        .on_mouse_down(MouseButton::Left, on_click)
 }

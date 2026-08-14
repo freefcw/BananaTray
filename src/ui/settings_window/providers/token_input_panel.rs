@@ -35,6 +35,7 @@ impl RenderOnce for TokenInputBox {
         let input_entity = self.input_entity;
         let is_focused = self.focus_handle.is_focused(window);
 
+        let success = theme.status.success;
         let input_div = div()
             .id(ElementId::Name(
                 format!("token_input_box_{}", self.provider_id.id_key()).into(),
@@ -49,14 +50,14 @@ impl RenderOnce for TokenInputBox {
             .py(px(10.0))
             .h(px(40.0))
             .rounded(px(8.0))
-            .bg(hsla(145.0 / 360.0, 0.6, 0.3, 0.15))
+            .bg(hsla(success.h, success.s, success.l, 0.15))
             .border_1()
             .border_color(if is_focused {
-                theme.status.success
+                success
             } else {
-                hsla(145.0 / 360.0, 0.6, 0.4, 0.35)
+                hsla(success.h, success.s, success.l, 0.35)
             })
-            .text_color(theme.status.success)
+            .text_color(success)
             .on_mouse_down(MouseButton::Left, {
                 let handle = self.focus_handle.clone();
                 move |_, window, _| handle.focus(window)
