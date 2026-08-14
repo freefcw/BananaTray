@@ -88,11 +88,11 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
 fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
     let user_status = seat_response
         .user_status
-        .ok_or_else(|| anyhow::anyhow!("no user_status in seat API response"))?;
+        .ok_or_else(|| ProviderError::parse_failed("no user_status in seat API response"))?;
 
     let plan_status = user_status
         .plan_status
-        .ok_or_else(|| anyhow::anyhow!("no plan_status in seat API response"))?;
+        .ok_or_else(|| ProviderError::parse_failed("no plan_status in seat API response"))?;
 
     let email = user_status.email;
     let plan_name = plan_status.plan_info.and_then(|p| p.plan_name);
@@ -117,28 +117,23 @@ fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
             weekly_pct,
             plan_status.weekly_quota_reset_at_unix,
         ));
-    } else if let Some(reset_at) =
-        parse_reset_at_unix(plan_status.weekly_quota_reset_at_unix.as_deref())
-            .filter(|reset_at| *reset_at > chrono::Utc::now().timestamp())
-    {
+    } else if let Some(quota) = codeium_family::infer_exhausted_weekly_quota(
+        plan_status
+            .weekly_quota_remaining_percent
+            .map(|percent| percent as f64),
+        parse_reset_at_unix(plan_status.weekly_quota_reset_at_unix.as_deref()),
+        chrono::Utc::now().timestamp(),
+    ) {
         // Devin seat API 以缺失 Weekly percentage 表示当前周期已耗尽。
         debug!(
             target: "providers",
             "Devin Desktop seat API omitted active weekly remaining percent; treating quota as exhausted"
         );
-        quotas.push(QuotaInfo::with_key_from_remaining_percent(
-            "weekly-quota",
-            QuotaLabelSpec::Weekly,
-            0.0,
-            QuotaType::Weekly,
-            Some(QuotaDetailSpec::ResetAt {
-                epoch_secs: reset_at,
-            }),
-        ));
+        quotas.push(quota);
     }
 
     if quotas.is_empty() {
-        anyhow::bail!("no quota data in seat API response");
+        return Err(ProviderError::no_data().into());
     }
 
     Ok(
@@ -647,6 +642,30 @@ mod tests {
             .find(|quota| quota.stable_key == "weekly-quota")
             .unwrap();
         assert!((weekly.used - 17.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_seat_response_classifies_missing_status_as_parse_failed() {
+        for json in [r#"{}"#, r#"{"userStatus": {}}"#] {
+            let response: SeatResponse = serde_json::from_str(json).unwrap();
+            let err = parse_seat_response(response).unwrap_err();
+            assert!(matches!(
+                err.downcast_ref::<ProviderError>(),
+                Some(ProviderError::ParseFailed { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn test_parse_seat_response_classifies_empty_quota_as_no_data() {
+        let response: SeatResponse =
+            serde_json::from_str(r#"{"userStatus": {"planStatus": {}}}"#).unwrap();
+        let err = parse_seat_response(response).unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::NoData)
+        ));
     }
 
     #[test]

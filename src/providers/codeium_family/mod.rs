@@ -1,6 +1,7 @@
 mod cache_source;
 mod live_source;
 mod parse_strategy;
+mod quota_semantics;
 mod spec;
 
 use super::{ProviderError, ProviderResult};
@@ -15,6 +16,7 @@ use std::process::Command;
 
 pub(crate) use live_source::matches_process_line;
 pub(crate) use live_source::ProcessInfo;
+pub(crate) use quota_semantics::infer_exhausted_weekly_quota;
 pub(crate) use spec::{CodeiumFamilySpec, ANTIGRAVITY_SPEC, WINDSURF_SPEC};
 
 pub(crate) const LOCAL_API_SOURCE_LABEL: &str = "local api";

@@ -99,28 +99,19 @@ pub(super) fn read_via_cached_plan_info(
             spec.log_label,
         ) {
             quotas.push(q);
-        } else if let (None, Some(reset_ts)) =
-            (usage.weekly_remaining_percent, usage.weekly_reset_at_unix)
-        {
+        } else if let Some(quota) = super::super::infer_exhausted_weekly_quota(
+            usage.weekly_remaining_percent,
+            usage.weekly_reset_at_unix,
+            chrono::Utc::now().timestamp(),
+        ) {
             // 新版 Windsurf：weekly_remaining_percent 可能为 null（限额已满时）
             // 此时从 reset 时间推断配额状态：只要 reset 时间未过期，视为已满（0% remaining）
-            let now_ts = chrono::Utc::now().timestamp();
-            if reset_ts > now_ts {
-                warn!(
-                    target: "providers",
-                    "{} weekly_remaining_percent is null but reset time is future; inferring 100% used (quota full)",
-                    spec.log_label
-                );
-                quotas.push(QuotaInfo::with_key_from_remaining_percent(
-                    CachedQuotaKind::Weekly.stable_key(),
-                    CachedQuotaKind::Weekly.label_spec(),
-                    0.0,
-                    CachedQuotaKind::Weekly.quota_type(),
-                    Some(QuotaDetailSpec::ResetAt {
-                        epoch_secs: reset_ts,
-                    }),
-                ));
-            }
+            warn!(
+                target: "providers",
+                "{} weekly_remaining_percent is null but reset time is future; inferring 100% used (quota full)",
+                spec.log_label
+            );
+            quotas.push(quota);
         }
     }
 
