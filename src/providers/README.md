@@ -77,7 +77,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `codex/` | Codex | `codex` | `codex:api` | `Monitorable` | ChatGPT API + CLI fallback | Split into `auth.rs`, `client.rs`, `config.rs`, `parser.rs`, `rpc_probe.rs`, `status_probe.rs`, `mod.rs`. `refresh(ctx)` uses HTTP first; recoverable HTTP failures fall back to `codex app-server` JSON-RPC before PTY `/status`. `auth.rs` decodes the OAuth `id_token` JWT for email / plan / `chatgpt_account_id`; credentials are reloaded after token rotation so the `ChatGPT-Account-Id` header and `RefreshData.account_*` reflect the latest state. `config.rs` reads `~/.codex/config.toml` for `chatgpt_base_url` to support self-hosted ChatGPT gateways |
 | `kimi/` | Kimi | `kimi` | `kimi:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
-| `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token from local SQLite (`state.vscdb`); parses Auto / API usage pools from `usage-summary`. Free tier (`membershipType = free`) hides the API pool while `apiPercentUsed` stays 0 and skips the `breakdown.total` limit fallback; a non-zero free API percentage is still shown — see [docs/providers.md](../../docs/providers.md) |
+| `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token directly from local SQLite (`state.vscdb`) through bundled `rusqlite` without requiring an external `sqlite3` executable; parses Auto / API usage pools from `usage-summary`. Free tier (`membershipType = free`) hides the API pool while `apiPercentUsed` stays 0 and skips the `breakdown.total` limit fallback; a non-zero free API percentage is still shown — see [docs/providers.md](../../docs/providers.md) |
 | `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
 | `windsurf/` | Devin Desktop | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf/mod.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
 | `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
@@ -105,6 +105,8 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   facade/source boundaries.
 - Shared HTTP transport failures should surface as `common::http_client::HttpError`; provider code
   upgrades them to `ProviderError` only when it knows a clearer remediation.
+- Provider CLI/HTTP raw output may contain account identifiers or secrets. Do not log raw bodies
+  unless they have an explicit sanitizer; log byte counts and stable parse diagnostics instead.
 - Multi-file providers should split along stable responsibilities first: `auth`, `client/source`, `parser`, `mod`.
 - Only introduce extra traits when there are real multiple implementations (for example Claude probe strategies).
 - `Claude::UsageProbe` and Codeium-family `ParseStrategy` are intentionally separate:
@@ -118,6 +120,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 - Codeium-family providers keep orchestration in the provider facade instead of in the shared module:
   - `codeium_family/live_source.rs` handles process discovery + local API transport
   - `codeium_family/cache_source.rs` handles SQLite/local cache fallback
+  - `codeium_family/quota_semantics.rs` holds the pure Devin weekly exhaustion rule shared by seat/cache parsing; orchestration remains provider-owned
   - `antigravity/mod.rs` owns `live -> cache`
   - `windsurf/mod.rs` owns `seat -> live -> cache`
   - `windsurf/seat_source.rs` contains the Devin Desktop-only cloud source

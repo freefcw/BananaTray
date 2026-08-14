@@ -87,7 +87,7 @@
 
 1. UI 交互或后台事件产生 `AppAction`
 2. `runtime::dispatch_in_context()` 或 `bootstrap::dispatch_in_app()` / `bootstrap::dispatch_in_window()` 调用 reducer
-3. reducer 返回 `Vec<AppEffect>`
+3. reducer 通过单个穷尽 match 将 action 分派到领域函数并返回 `Vec<AppEffect>`；不使用家族二次 match 的 `unreachable!` 兜底
 4. runtime 执行 effect
 5. 必要时请求 UI 重绘、打开窗口、发送 refresh 请求、预检并重绑全局热键，或写入设置
 

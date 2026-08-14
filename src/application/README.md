@@ -38,8 +38,8 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `reducer.rs` / `reducer/` — 纯函数状态变换
 
-- **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer，将 action 转换为状态变更 + side effects
-- **顶层 `reducer.rs` 只做 action 分发**，具体状态变换按领域拆到子 reducer：
+- **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer；顶层使用单个穷尽 match 直接解构 action 并调用对应领域函数，不再通过家族 dispatcher 的 `_ => unreachable!` 二次分派。新增 `AppAction` 变体时，编译器会要求补齐唯一分派入口
+- **顶层 `reducer.rs` 只做单层穷尽 action 分发**，具体状态变换按领域拆到子 reducer：
   - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性
   - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
   - `reducer/refresh.rs` — 手动刷新、刷新事件、Provider 热重载，以及热重载后的悬空引用清理

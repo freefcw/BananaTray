@@ -8,12 +8,13 @@ Cognition 系 Provider 的共享底层实现。
 
 ```text
 codeium_family/
-├── spec.rs           — Provider 规格定义（静态常量）
-├── mod.rs            — 共享入口：descriptor() / classify_unavailable() / refresh_live() / refresh_cache()
-├── cache_source.rs   — 本地 cache source 入口与 protobuf / cachedPlanInfo 回退编排
-├── cache_source/     — cache DB 查询、auth status 解码、cachedPlanInfo 解析与 quota 构造
-├── live_source.rs    — 本地 language_server 进程发现 + API 调用
-└── parse_strategy.rs — 同一领域数据的多种载荷解析（protobuf / JSON）
+├── spec.rs             — Provider 规格定义（静态常量）
+├── mod.rs              — 共享入口：descriptor() / classify_unavailable() / refresh_live() / refresh_cache()
+├── cache_source.rs     — 本地 cache source 入口与 protobuf / cachedPlanInfo 回退编排
+├── cache_source/       — cache DB 查询、auth status 解码、cachedPlanInfo 解析与 quota 构造
+├── live_source.rs      — 本地 language_server 进程发现 + API 调用
+├── parse_strategy.rs   — 同一领域数据的多种载荷解析（protobuf / JSON）
+└── quota_semantics.rs  — Devin seat/cache 共用的 active weekly 耗尽推断
 ```
 
 Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `src/providers/windsurf/seat_source.rs`。
@@ -30,6 +31,8 @@ Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `s
 - diagnostics/debug CLI 需要的本地探测能力
 - provider refresh/source/parser 边界返回 `ProviderResult<T>`，把本地缺失、解析失败、
   无数据等情况收敛成 `ProviderError`
+- `quota_semantics` 只共享 Devin seat/cache 对同一 payload 语义的解释：weekly percentage
+  缺失且 reset 仍在未来时，当前周期视为 0% remaining
 
 这里**不负责**：
 
@@ -59,6 +62,9 @@ Devin Desktop
 - Antigravity 和 Devin Desktop 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
 - Devin Desktop 的 seat API 是产品特有实时数据源，不应反向污染共享层
 - 共享层保留为“本地 source primitive”，未来更容易继续复用或替换
+
+这里的 weekly helper 共享的是两条 Devin source 对同一上游字段的纯解释，不负责选择
+source、fallback 或合并结果，因此不改变 provider-owned orchestration 边界。
 
 ## Runtime Source Labels
 
@@ -157,6 +163,7 @@ reset 闸防"数据库仍有其他状态写入、但个别额度快照已经失�
 ## 测试
 
 - `mod.rs`：共享 helper / diagnostics 工具测试
+- `quota_semantics.rs`：active weekly 耗尽推断的纯函数测试
 - `cache_source_tests.rs`：cache key / JSON fallback / quota 推断测试
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试

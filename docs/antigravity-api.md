@@ -25,6 +25,8 @@ BananaTray 把 **Antigravity** 和 **Devin Desktop** 视为两个独立的 built
 
 Devin Desktop 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Devin Desktop facade 自己决定何时插入 seat API。
 
+唯一跨 seat/cache 共享的 Devin 专属规则是纯 payload 语义：当 weekly percentage 缺失且 reset 仍在未来时，`quota_semantics.rs` 将其解释为本周期已耗尽。该 helper 不选择 source、不执行 fallback，也不合并结果。
+
 provider facade 负责两类东西：
 
 - 产品身份与静态差异
@@ -55,7 +57,7 @@ source orchestration 目前明确分开：
 
 1. Antigravity：优先尝试 live source，失败时回退本地 cache
 2. Devin Desktop：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
-3. Devin Desktop 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota
+3. Devin Desktop 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining
 4. 所有来源都失败时返回结构化错误
 
 本地 cache 回退之前会做两道陈旧检查：
