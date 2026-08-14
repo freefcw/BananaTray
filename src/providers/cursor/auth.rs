@@ -3,8 +3,8 @@ use crate::providers::common::config_paths;
 use crate::providers::common::jwt;
 use crate::providers::ProviderError;
 use anyhow::Result;
-use std::path::PathBuf;
-use std::process::Command;
+use rusqlite::{Connection, OpenFlags};
+use std::path::{Path, PathBuf};
 
 const CURSOR_DB_SUFFIX: &str = "Cursor/User/globalStorage/state.vscdb";
 
@@ -42,47 +42,48 @@ pub(super) fn read_access_token() -> Result<String> {
 
     let mut last_error = None;
     for db_path in &existing {
-        let db_str = db_path.to_string_lossy();
-
-        let output = match Command::new("sqlite3")
-            .args([
-                &*db_str,
-                "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'",
-            ])
-            .output()
-        {
-            Ok(o) => o,
-            Err(_) => {
-                last_error = Some(ProviderError::cli_not_found("sqlite3").into());
-                break; // sqlite3 本身不可用，换候选也无意义
+        match read_access_token_from_db(db_path) {
+            Ok(Some(token)) => return Ok(token),
+            Ok(None) => {
+                last_error = Some(
+                    ProviderError::auth_required(Some(FailureAdvice::LoginApp {
+                        app: "Cursor".to_string(),
+                    }))
+                    .into(),
+                );
             }
-        };
-
-        if !output.status.success() {
-            last_error = Some(
-                ProviderError::fetch_failed_with_advice(FailureAdvice::CliExitFailed {
-                    code: output.status.code().unwrap_or(-1),
-                })
-                .into(),
-            );
-            continue;
+            Err(err) => last_error = Some(err),
         }
-
-        let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !token.is_empty() {
-            return Ok(token);
-        }
-        // token 为空，尝试下一个候选
-        last_error = Some(
-            ProviderError::auth_required(Some(FailureAdvice::LoginApp {
-                app: "Cursor".to_string(),
-            }))
-            .into(),
-        );
     }
 
     // 所有候选都失败，返回最后一个有意义的错误
     Err(last_error.unwrap_or_else(|| ProviderError::config_missing(db_path_display()).into()))
+}
+
+fn read_access_token_from_db(db_path: &Path) -> Result<Option<String>> {
+    let conn =
+        Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|err| {
+            ProviderError::fetch_failed(&format!(
+                "cannot open Cursor state database at {}: {}",
+                db_path.display(),
+                err
+            ))
+        })?;
+
+    match conn.query_row(
+        "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'",
+        [],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(token) => Ok((!token.trim().is_empty()).then(|| token.trim().to_string())),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(err) => Err(ProviderError::parse_failed(&format!(
+            "cannot query Cursor access token from {}: {}",
+            db_path.display(),
+            err
+        ))
+        .into()),
+    }
 }
 
 pub(super) fn extract_user_id_from_jwt(token: &str) -> Result<String> {
@@ -100,6 +101,15 @@ pub(super) fn extract_user_id_from_jwt(token: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn create_cursor_db() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("state.vscdb");
+        let conn = Connection::open(path).unwrap();
+        conn.execute("CREATE TABLE ItemTable (key TEXT UNIQUE, value BLOB)", [])
+            .unwrap();
+        dir
+    }
 
     // ── db_path_candidates 集成测试 ──
 
@@ -169,6 +179,45 @@ mod tests {
             "db_path_display should contain Cursor suffix, got: {}",
             db_path_display()
         );
+    }
+
+    #[test]
+    fn read_access_token_from_db_returns_stored_token() {
+        let dir = create_cursor_db();
+        let path = dir.path().join("state.vscdb");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
+            ("cursorAuth/accessToken", "cursor-token"),
+        )
+        .unwrap();
+        drop(conn);
+
+        assert_eq!(
+            read_access_token_from_db(&path).unwrap().as_deref(),
+            Some("cursor-token")
+        );
+    }
+
+    #[test]
+    fn read_access_token_from_db_returns_none_when_token_is_missing() {
+        let dir = create_cursor_db();
+        let path = dir.path().join("state.vscdb");
+
+        assert_eq!(read_access_token_from_db(&path).unwrap(), None);
+    }
+
+    #[test]
+    fn read_access_token_from_db_classifies_invalid_schema_as_parse_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("state.vscdb");
+        Connection::open(&path).unwrap();
+
+        let err = read_access_token_from_db(&path).unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::ParseFailed { .. })
+        ));
     }
 
     // ── extract_user_id_from_jwt 测试 ──
