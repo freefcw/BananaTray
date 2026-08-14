@@ -9,6 +9,7 @@
 use serde::Serialize;
 
 use super::super::state::{AppSession, HeaderStatusKind};
+use super::format::{split_stale_age, StaleAgeUnit};
 use crate::models::{ConnectionStatus, ProviderId, ProviderStatus, QuotaInfo, StatusLevel};
 
 // ============================================================================
@@ -197,14 +198,10 @@ fn dbus_header_status_text(session: &AppSession) -> String {
         HeaderStatusKind::Synced => "Synced".to_string(),
         HeaderStatusKind::Syncing => "Syncing".to_string(),
         HeaderStatusKind::Offline => "Offline".to_string(),
-        HeaderStatusKind::Stale => {
-            let secs = elapsed.unwrap_or(0);
-            if secs < 3600 {
-                format!("{} min ago", secs / 60)
-            } else {
-                format!("{} hr ago", secs / 3600)
-            }
-        }
+        HeaderStatusKind::Stale => match split_stale_age(elapsed.unwrap_or(0)) {
+            (value, StaleAgeUnit::Minutes) => format!("{} min ago", value),
+            (value, StaleAgeUnit::Hours) => format!("{} hr ago", value),
+        },
     }
 }
 
@@ -369,6 +366,7 @@ mod tests {
         let snapshot = DBusQuotaSnapshot::from_session(&session);
 
         assert_eq!(snapshot.header.status_kind, "Stale");
+        assert_eq!(snapshot.header.status_text, "1 min ago");
         let elapsed = snapshot
             .header
             .elapsed_secs

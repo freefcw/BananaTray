@@ -46,14 +46,30 @@ pub fn provider_source_label(provider: &ProviderStatus) -> String {
     display_source_label(provider.source_label())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StaleAgeUnit {
+    Minutes,
+    Hours,
+}
+
+/// 将 stale 秒数拆成稳定的数值和单位；文案由各消费端自行决定。
+pub(super) fn split_stale_age(secs: u64) -> (u64, StaleAgeUnit) {
+    if secs < 3600 {
+        (secs / 60, StaleAgeUnit::Minutes)
+    } else {
+        (secs / 3600, StaleAgeUnit::Hours)
+    }
+}
+
 /// 相对刷新时间（仅在有 `last_refreshed_instant` 时使用）。
 pub fn format_relative_refresh_age(secs: u64) -> String {
     if secs < 60 {
-        t!("provider.time.just_now").to_string()
-    } else if secs < 3600 {
-        t!("provider.time.min_ago", n = secs / 60).to_string()
-    } else {
-        t!("provider.time.hr_ago", n = secs / 3600).to_string()
+        return t!("provider.time.just_now").to_string();
+    }
+
+    match split_stale_age(secs) {
+        (value, StaleAgeUnit::Minutes) => t!("provider.time.min_ago", n = value).to_string(),
+        (value, StaleAgeUnit::Hours) => t!("provider.time.hr_ago", n = value).to_string(),
     }
 }
 
@@ -416,6 +432,12 @@ mod tests {
     }
 
     // ── format_relative_refresh_age / format_refresh_status ──
+
+    #[test]
+    fn split_stale_age_uses_the_shared_minute_hour_boundary() {
+        assert_eq!(split_stale_age(3_599), (59, StaleAgeUnit::Minutes));
+        assert_eq!(split_stale_age(3_600), (1, StaleAgeUnit::Hours));
+    }
 
     #[test]
     fn format_relative_refresh_age_formats_compact_time() {

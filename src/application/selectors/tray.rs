@@ -6,7 +6,7 @@ use super::super::state::{provider_panel_flags, AppSession};
 use super::format::{
     format_failure_message, format_non_monitoring_message, format_quota_card_display_text,
     format_quota_card_has_unit, format_quota_label, format_refresh_status,
-    format_relative_refresh_age, quota_display_view_state,
+    format_relative_refresh_age, quota_display_view_state, split_stale_age, StaleAgeUnit,
 };
 use super::*;
 use crate::models::{
@@ -21,14 +21,10 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
         HeaderStatusKind::Synced => t!("header.synced").to_string(),
         HeaderStatusKind::Syncing => t!("header.syncing").to_string(),
         HeaderStatusKind::Offline => t!("header.offline").to_string(),
-        HeaderStatusKind::Stale => {
-            let secs = elapsed.unwrap_or(0);
-            if secs < 3600 {
-                t!("header.minutes_ago", n = secs / 60).to_string()
-            } else {
-                t!("header.hours_ago", n = secs / 3600).to_string()
-            }
-        }
+        HeaderStatusKind::Stale => match split_stale_age(elapsed.unwrap_or(0)) {
+            (value, StaleAgeUnit::Minutes) => t!("header.minutes_ago", n = value).to_string(),
+            (value, StaleAgeUnit::Hours) => t!("header.hours_ago", n = value).to_string(),
+        },
     };
     HeaderViewState {
         status_text,
