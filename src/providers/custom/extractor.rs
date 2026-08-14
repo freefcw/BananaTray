@@ -1,6 +1,6 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaType, RefreshData};
 use crate::providers::ProviderError;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use regex::Regex;
 
 use super::schema::{JsonQuotaRule, ParserDef, QuotaTypeDef, RegexQuotaRule};
@@ -300,7 +300,7 @@ fn extract_regex_compiled(raw: &str, compiled: &CompiledPatterns) -> Result<Refr
     }
 
     if quotas.is_empty() {
-        bail!("no quota data matched by regex rules");
+        return Err(ProviderError::no_data().into());
     }
 
     Ok(RefreshData::with_account(quotas, account_email, None))
@@ -569,7 +569,11 @@ mod tests {
             quota_type: QuotaTypeDef::General,
             divisor: None,
         }];
-        assert!(extract_regex(raw, &None, &rules).is_err());
+        let err = extract_regex(raw, &None, &rules).unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::NoData)
+        ));
     }
 
     #[test]
