@@ -153,8 +153,8 @@ impl AmpProvider {
 
         if quotas.is_empty() {
             return Err(ProviderError::parse_failed(&format!(
-                "cannot parse amp usage output:\n{}",
-                output_str.trim()
+                "cannot parse amp usage output ({} bytes)",
+                output_str.len()
             ))
             .into());
         }
@@ -193,7 +193,12 @@ impl AiProvider for AmpProvider {
         log::debug!(target: "providers", "amp: running `amp usage --no-color`");
 
         let output = Self::run_usage()?;
-        log::debug!(target: "providers", "amp: cli completed in {:.2}s, output:\n{}", start.elapsed().as_secs_f64(), output.trim());
+        log::debug!(
+            target: "providers",
+            "amp: cli completed in {:.2}s, output_bytes={}",
+            start.elapsed().as_secs_f64(),
+            output.len()
+        );
 
         Ok(Self::parse_usage_output(&output)?)
     }
@@ -344,8 +349,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_empty_output_returns_error() {
-        assert!(AmpProvider::parse_usage_output("no match here").is_err());
+    fn test_parse_error_does_not_expose_cli_output() {
+        let output = "Signed in as private@example.com (user)\nno quota data\n";
+        let error = AmpProvider::parse_usage_output(output)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("cannot parse amp usage output"));
+        assert!(!error.contains("private@example.com"));
+        assert!(!error.contains("no quota data"));
     }
 
     /// 实际 amp CLI 输出（订阅制）：Megawatt 套餐含 other / orb 两个独立月度池。
