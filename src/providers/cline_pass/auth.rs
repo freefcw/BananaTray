@@ -167,11 +167,14 @@ fn parse_providers_json_status(body: &str, now_ms: u64) -> ProviderResult<ClineT
         .expires_at
         .filter(|expires_at| *expires_at > 0)
         .or_else(|| jwt_expiry_ms(&normalized_token));
+    // OAuth 凭证归 Cline 所有且 refresh token 会轮转，BananaTray 不代刷；
+    // VS Code 扩展和 Cline CLI 都会在运行时刷新 providers.json，
+    // 提示用户打开任一 Cline 触发刷新，或改用不过期的 API Key
     if expires_at
         .is_none_or(|expires_at| expires_at <= now_ms.saturating_add(OAUTH_EXPIRY_BUFFER_MS))
     {
         return Err(ProviderError::session_expired(Some(
-            FailureAdvice::LoginApp {
+            FailureAdvice::OpenAppToRefresh {
                 app: "Cline".to_string(),
             },
         )));

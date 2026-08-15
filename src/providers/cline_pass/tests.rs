@@ -206,7 +206,12 @@ fn providers_json_rejects_expired_cline_oauth_access_token() {
     }"#;
 
     let err = parse_providers_json(body, NOW_MS).expect_err("must not reuse expired OAuth");
-    assert!(matches!(err, ProviderError::SessionExpired { .. }));
+    assert!(matches!(
+        err,
+        ProviderError::SessionExpired {
+            advice: Some(crate::models::FailureAdvice::OpenAppToRefresh { ref app }),
+        } if app.contains("Cline")
+    ));
 }
 
 #[test]

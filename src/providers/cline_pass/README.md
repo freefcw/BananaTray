@@ -33,7 +33,7 @@ The settings file path follows Cline's own precedence:
 
 Current credentials live under `providers.cline.settings`; `providers.cline-pass` is read only when the current shared entry is absent, for legacy compatibility. API keys may be stored at `apiKey` or `auth.apiKey`. OAuth uses `auth.accessToken`, normalized to Cline's `workos:` form, and an epoch-millisecond `auth.expiresAt`.
 
-When `auth.expiresAt` is absent or invalid, BananaTray falls back to the JWT `exp` claim. Tokens with unknown expiry, expired tokens, and tokens expiring within the HTTP client's 20-second timeout window return `SessionExpired`; users can sign in through Cline again or configure an API key override.
+When `auth.expiresAt` is absent or invalid, BananaTray falls back to the JWT `exp` claim. Tokens with unknown expiry, expired tokens, and tokens expiring within the HTTP client's 20-second timeout window return `SessionExpired` with `FailureAdvice::OpenAppToRefresh` (`app = "Cline"`), telling users to open Cline (VS Code extension or Cline CLI — both refresh `providers.json` on use) or configure an API key override in BananaTray settings.
 
 BananaTray only reads Cline-owned credentials. It deliberately does not refresh OAuth or write `providers.json`, because refresh-token rotation by two processes can invalidate Cline's own session.
 

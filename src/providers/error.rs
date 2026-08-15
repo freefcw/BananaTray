@@ -349,6 +349,7 @@ impl FailureAdvice {
             Self::ReloginCli { cli } => format!("relogin cli {}", cli),
             Self::RefreshCli { cli } => format!("refresh cli {}", cli),
             Self::LoginApp { app } => format!("login app {}", app),
+            Self::OpenAppToRefresh { app } => format!("open app {} to refresh", app),
             Self::CliExitFailed { code } => format!("cli exit {}", code),
             Self::ApiHttpError { status } => format!("http {}", status),
             Self::ApiError { message } => format!("api error {}", message),

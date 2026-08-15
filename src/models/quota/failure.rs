@@ -34,6 +34,7 @@ pub enum FailureAdvice {
     ReloginCli { cli: String },
     RefreshCli { cli: String },
     LoginApp { app: String },
+    OpenAppToRefresh { app: String },
     CliExitFailed { code: i32 },
     ApiHttpError { status: String },
     ApiError { message: String },

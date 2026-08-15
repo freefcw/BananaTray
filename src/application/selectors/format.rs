@@ -162,6 +162,9 @@ fn format_failure_advice(advice: &FailureAdvice) -> String {
         FailureAdvice::ReloginCli { cli } => t!("hint.relogin_cli", cli = cli).to_string(),
         FailureAdvice::RefreshCli { cli } => t!("hint.refresh_cli", cli = cli).to_string(),
         FailureAdvice::LoginApp { app } => t!("hint.login_app", app = app).to_string(),
+        FailureAdvice::OpenAppToRefresh { app } => {
+            t!("hint.open_app_to_refresh", app = app).to_string()
+        }
         FailureAdvice::CliExitFailed { code } => {
             t!("hint.cli_exit_failed", code = code).to_string()
         }
