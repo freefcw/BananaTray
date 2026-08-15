@@ -18,6 +18,7 @@ pub fn display_source_label(raw: &str) -> String {
         "github api" => t!("provider.source_label.github_api").to_string(),
         "seat api" => t!("provider.source_label.seat_api").to_string(),
         "seat api + local cache" => t!("provider.source_label.seat_api_local_cache").to_string(),
+        "antigravity cloud" => t!("provider.source_label.antigravity_cloud").to_string(),
         "local api" => t!("provider.source_label.local_api").to_string(),
         "local cache" => t!("provider.source_label.local_cache").to_string(),
         "local/cloud fallback" => t!("provider.source_label.local_cloud_fallback").to_string(),
@@ -192,6 +193,9 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
         QuotaLabelSpec::Monthly => t!("quota.label.monthly").to_string(),
         QuotaLabelSpec::WeeklyModel { model } => {
             t!("quota.label.weekly_model", model = model).to_string()
+        }
+        QuotaLabelSpec::ModelSpecificSession { model } => {
+            t!("quota.label.session_model", model = model).to_string()
         }
         QuotaLabelSpec::WeeklyTier { tier } => {
             format!("{} ({})", t!("quota.label.weekly"), tier)
@@ -421,6 +425,10 @@ mod tests {
         assert_eq!(
             display_source_label("seat api + local cache"),
             "Devin Cloud + Local cache"
+        );
+        assert_eq!(
+            display_source_label("antigravity cloud"),
+            "Antigravity Cloud"
         );
         assert_eq!(display_source_label("local api"), "Local language server");
         assert_eq!(display_source_label("cline api"), "Cline API");

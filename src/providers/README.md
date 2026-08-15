@@ -78,7 +78,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `kimi/` | Kimi | `kimi` | `kimi:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `amp.rs` | Amp | `amp` | `amp:cli` | `Monitorable` | CLI output | Uses `common::cli` for availability and exit-code handling |
 | `cursor/` | Cursor | `cursor` | `cursor:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`; reads token directly from local SQLite (`state.vscdb`) through bundled `rusqlite` without requiring an external `sqlite3` executable; parses Auto / API usage pools from `usage-summary`. Free tier (`membershipType = free`) hides the API pool while `apiPercentUsed` stays 0 and skips the `breakdown.total` limit fallback; a non-zero free API percentage is still shown — see [docs/providers.md](../../docs/providers.md) |
-| `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Local language server API + local cache | Provider facade owns `live -> cache` orchestration on top of shared `codeium_family/` primitives |
+| `antigravity/` | Antigravity | `antigravity` | `antigravity:api` | `Monitorable` | Cloud quota API (macOS) + local language server API + local cache | Provider facade owns `cloud -> live -> cache` orchestration; `antigravity/cloud_source.rs` reads the agy CLI Keychain token (read-only) and calls the Google quota summary API with 429 cooldown, kept provider-local on top of shared `codeium_family/` primitives |
 | `windsurf/` | Devin Desktop | `windsurf` | `windsurf:api` | `Monitorable` | Seat API + local language server API + local cache | Provider facade (`windsurf/mod.rs`) owns `seat -> live -> cache` orchestration; `windsurf/seat_source.rs` keeps the seat API provider-local |
 | `minimax/` | MiniMax | `minimax` | `minimax:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs` |
 | `kiro.rs` | Kiro | `kiro` | `kiro:cli` | `Monitorable` | CLI | Uses `common::cli`; keeps stderr/stdout merge logic provider-local |
@@ -121,7 +121,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   - `codeium_family/live_source.rs` handles process discovery + local API transport
   - `codeium_family/cache_source.rs` handles SQLite/local cache fallback
   - `codeium_family/quota_semantics.rs` holds the pure Devin weekly exhaustion rule shared by seat/cache parsing; orchestration remains provider-owned
-  - `antigravity/mod.rs` owns `live -> cache`
+  - `antigravity/mod.rs` owns `cloud -> live -> cache`; `antigravity/cloud_source.rs` contains the Antigravity-only cloud source
   - `windsurf/mod.rs` owns `seat -> live -> cache`
   - `windsurf/seat_source.rs` contains the Devin Desktop-only cloud source
 

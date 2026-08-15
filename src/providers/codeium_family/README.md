@@ -47,6 +47,7 @@ Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `s
 ```text
 Antigravity
   refresh()
+    ├─→ antigravity::cloud_source::fetch_refresh_data()  # macOS 云端 quota API
     ├─→ codeium_family::refresh_live()
     └─→ codeium_family::refresh_cache()
 
@@ -74,6 +75,7 @@ source、fallback 或合并结果，因此不改变 provider-owned orchestration
 - `local cache`
 - `seat api`
 - `seat api + local cache`
+- `antigravity cloud`（属 Antigravity facade 的 `cloud_source`，非共享层）
 
 `spec.source_label` 只是静态兜底文案；Devin Desktop 当前使用 `"local/cloud fallback"` 作为默认说明。Seat API 的运行时来源展示为 Devin Cloud（或 Devin Cloud + Local cache）。
 

@@ -16,6 +16,10 @@ pub enum QuotaLabelSpec {
     WeeklyModel {
         model: String,
     },
+    /// 按模型组的 5h 会话配额（如 Antigravity 的 Gemini / Claude+GPT 组）
+    ModelSpecificSession {
+        model: String,
+    },
     /// 周配额 + 套餐层级（如 Kimi 的 Moderato）
     WeeklyTier {
         tier: String,
@@ -56,6 +60,7 @@ impl QuotaLabelSpec {
             Self::Weekly | Self::WeeklyTier { .. } => "weekly".into(),
             Self::Monthly => "monthly".into(),
             Self::WeeklyModel { model } => format!("model:{model}"),
+            Self::ModelSpecificSession { model } => format!("model-session:{model}"),
             Self::MonthlyCredits => "monthly-credits".into(),
             Self::Credits => {
                 match quota_type {

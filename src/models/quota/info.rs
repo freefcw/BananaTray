@@ -194,6 +194,23 @@ impl QuotaInfo {
         )
     }
 
+    /// 创建带显式 key 的百分比模式配额。调用方传入的 `remaining_fraction` 是 0-1 尺度。
+    pub fn with_key_from_remaining_fraction(
+        stable_key: impl Into<String>,
+        label: impl Into<QuotaLabelSpec>,
+        remaining_fraction: f64,
+        quota_type: QuotaType,
+        detail_spec: Option<QuotaDetailSpec>,
+    ) -> Self {
+        Self::with_key_from_used_percent(
+            stable_key,
+            label,
+            used_percent_from_remaining_fraction(remaining_fraction),
+            quota_type,
+            detail_spec,
+        )
+    }
+
     /// 创建余额模式的配额（无进度条，仅展示余额和已用）
     pub fn balance_only(
         label: impl Into<QuotaLabelSpec>,
