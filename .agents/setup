@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Orb setup for BananaTray — installs the Rust toolchain, system libraries
+# needed for the GPUI app build, GNOME extension check tooling, and `just`.
+# Idempotent: safe to re-run on a warm orb (stale snapshot) without
+# duplicating installs or clobbering existing configuration.
+set -euo pipefail
+
+log() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
+step() { printf '\n\033[1;34m[setup]\033[0m === %s ===\n' "$*"; }
+# Time and run a step; prints elapsed seconds on completion.
+timed() {
+  local label="$1"; shift
+  local start
+  start=$(date +%s)
+  "$@"
+  printf '\033[1;34m[setup]\033[0m %s done in %ss\n' "$label" "$(( $(date +%s) - start ))"
+}
+
+# Ensure user-local bin (node, just) is on PATH for every tool check below,
+# independent of the invoking shell's environment.
+case ":${PATH:-}:" in
+  *":$HOME/.local/bin:"*) : ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# --- System packages -------------------------------------------------------
+# App build libs (GTK/Wayland/XCB/Vulkan) match .github/workflows/app-ci.yml.
+# gettext provides msgfmt for the GNOME translation-staleness check.
+# gjs is intentionally NOT installed: Debian 12 ships gjs 1.74.2 (mozjs-102),
+# which segfaults (SIGSEGV on exit) in this test's DBus-proxy teardown. CI runs
+# on Ubuntu 24.04's gjs 1.80 where this does not occur. Building a newer gjs/
+# mozjs from source is too heavy for orb setup. `just ci-fast` invokes
+# check-gnome-extension in non-strict mode, so the GJS integration test skips
+# gracefully when gjs is missing (the intended local-dev behavior); the
+# Node-based extension syntax/contract/unit checks still run.
+# dbus-run-session, build-essential, curl, git, pkg-config, libssl-dev are
+# already present in the base orb image; listed here so a non-base image still
+# converges. We check each package before installing so a warm snapshot skips
+# apt-get update entirely.
+APT_PKGS=(
+  build-essential curl git pkg-config libssl-dev
+  libgtk-3-dev libayatana-appindicator3-dev
+  libxkbcommon-dev libxkbcommon-x11-dev libvulkan-dev libwayland-dev
+  libxcb1-dev libxcb-xinput-dev libxcb-randr0-dev libxcb-shape0-dev
+  libxcb-screensaver0-dev libxcb-sync-dev libxcb-xkb-dev
+  gettext
+)
+
+need_apt=()
+for p in "${APT_PKGS[@]}"; do
+  if ! dpkg -s "$p" >/dev/null 2>&1; then
+    need_apt+=("$p")
+  fi
+done
+
+if [ "${#need_apt[@]}" -gt 0 ]; then
+  step "apt: installing ${#need_apt[@]} missing packages"
+  timed "apt-get update" sudo apt-get update -qq
+  timed "apt-get install" sudo apt-get install -y --no-install-recommends "${need_apt[@]}"
+else
+  log "apt: all required packages already installed"
+fi
+
+# --- Node.js 22 (GNOME extension checks) -----------------------------------
+# check-gnome-extension.sh runs `node --check` on GNOME extension .js files
+# that use ESM `import` syntax. Auto-detection of ESM in .js files is enabled
+# by default only in Node >= 22.12 (matching the Node 22 the CI uses); the base
+# orb ships Node 20, which rejects those files. Install the official Node 22
+# standalone binary into ~/.local/bin so it shadows /usr/local/bin/node on PATH.
+NODE_BIN="$HOME/.local/bin/node"
+node_major_ok=false
+if command -v node >/dev/null 2>&1; then
+  node_ver=$(node --version 2>/dev/null | sed 's/^v//')
+  node_major=${node_ver%%.*}
+  [ "${node_major:-0}" -ge 22 ] && node_major_ok=true
+fi
+if [ "$node_major_ok" = true ] && [ -x "$NODE_BIN" ]; then
+  log "node: already Node >= 22 ($(node --version))"
+else
+  step "node: installing Node 22 LTS binary"
+  tmp="$(mktemp -d)"
+  # Resolve the exact latest v22.x tarball from the official directory listing.
+  node_tarball=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/ \
+    | grep -oE 'node-v[0-9]+\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | head -1)
+  curl -fsSL "https://nodejs.org/dist/latest-v22.x/${node_tarball}" -o "$tmp/node.tar.xz"
+  tar -xJf "$tmp/node.tar.xz" -C "$tmp" --wildcards --strip-components=2 'node-v*/bin/node'
+  install -m 0755 "$tmp/node" "$NODE_BIN"
+  rm -rf "$tmp"
+fi
+
+# --- Rust toolchain (stable, per rust-toolchain.toml) ----------------------
+# rustup installs into ~/.cargo and ~/.rustup and appends the env source line
+# to ~/.bashrc, ~/.profile, and ~/.zshenv, so non-interactive login shells
+# (and Amp supervised services) get cargo on PATH.
+CARGO_ENV="$HOME/.cargo/env"
+# shellcheck disable=SC1090
+[ -f "$CARGO_ENV" ] && source "$CARGO_ENV"
+
+if ! command -v cargo >/dev/null 2>&1; then
+  step "rust: installing rustup + stable toolchain"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --profile default --default-toolchain stable
+  # shellcheck disable=SC1090
+  source "$CARGO_ENV"
+else
+  log "rust: cargo already available ($(cargo --version))"
+fi
+
+# Ensure the stable toolchain + components are present even if cargo came from
+# a stale snapshot that lost a component.
+rustup toolchain install stable --profile default --no-self-update 2>/dev/null || true
+rustup component add clippy rustfmt 2>/dev/null || true
+rustup target add "$(rustc -vV | sed -n 's/^host: //p')" 2>/dev/null || true
+
+# --- just (task runner, used by `just ci-fast`) ----------------------------
+# Download a static musl binary so we don't pay a `cargo install` compile.
+# just tags its release assets with the version, so resolve the latest tag from
+# the GitHub redirect and build the versioned asset URL.
+JUST_BIN="$HOME/.local/bin/just"
+mkdir -p "$HOME/.local/bin"
+if [ -x "$JUST_BIN" ] && "$JUST_BIN" --version >/dev/null 2>&1; then
+  log "just: already installed ($("$JUST_BIN" --version))"
+else
+  step "just: installing standalone binary"
+  tmp="$(mktemp -d)"
+  latest_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/casey/just/releases/latest)
+  just_tag=${latest_url##*/}
+  curl -fsSL "https://github.com/casey/just/releases/download/${just_tag}/just-${just_tag}-x86_64-unknown-linux-musl.tar.gz" -o "$tmp/just.tgz"
+  tar -xzf "$tmp/just.tgz" -C "$tmp" just
+  install -m 0755 "$tmp/just" "$JUST_BIN"
+  rm -rf "$tmp"
+fi
+
+# --- Prefetch dependencies -------------------------------------------------
+# Warming the cargo cache moves the slow git-dependency clone (adabraka-gpui,
+# adabraka-ui) out of the first real build. `cargo fetch` is idempotent.
+step "cargo: prefetching dependencies"
+timed "cargo fetch" cargo fetch --locked
+
+log "setup complete"
