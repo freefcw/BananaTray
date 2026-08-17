@@ -31,6 +31,7 @@ const KEYCHAIN_SERVICE: &str = "gemini";
 const KEYCHAIN_ACCOUNT: &str = "antigravity";
 
 /// go-keyring 在 macOS 上的存储值带此前缀，后面跟 base64(JSON)。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const KEYRING_BASE64_PREFIX: &str = "go-keyring-base64:";
 
 /// 撞到 RESOURCE_EXHAUSTED（429）后的本地冷却窗口。
@@ -96,6 +97,7 @@ fn read_agy_keychain_payload() -> Option<AgyKeychainPayload> {
 }
 
 /// 云端源是否已配置：Keychain 中存在非空 access token。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn has_keychain_token() -> bool {
     extract_access_token(read_agy_keychain_payload()).is_some()
 }
@@ -107,6 +109,7 @@ fn extract_access_token(payload: Option<AgyKeychainPayload>) -> Option<String> {
 }
 
 /// 解析 go-keyring 存储值：`go-keyring-base64:` 前缀 + base64(JSON payload)。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_keychain_payload(raw: &str) -> Result<AgyKeychainPayload> {
     let encoded = raw
         .strip_prefix(KEYRING_BASE64_PREFIX)
