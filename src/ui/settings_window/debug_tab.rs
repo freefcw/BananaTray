@@ -4,7 +4,6 @@ use crate::application::{
     build_debug_info_text, debug_tab_view_state, format_debug_console_logs, AppAction,
     DebugNotificationKind, DebugTabViewState, EnvironmentRowKind, LogLevelColor,
 };
-use crate::models::ProviderId;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
@@ -13,8 +12,8 @@ use crate::ui::widgets::{
     IconTooltipButtonOptions, SegmentedSize,
 };
 use gpui::{
-    div, px, rgb, AnyElement, Context, Div, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, StatefulInteractiveElement, Styled,
+    deferred, div, px, rgb, AnyElement, Context, Deferred, Div, FontWeight, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, StatefulInteractiveElement, Styled,
 };
 use rust_i18n::t;
 
@@ -33,6 +32,11 @@ const LOG_LEVELS: &[(&str, &str)] = &[
     ("debug", "Debug"),
     ("trace", "Trace"),
 ];
+
+/// Debug Console Provider 下拉宽度
+const PROVIDER_DROPDOWN_WIDTH: f32 = 220.0;
+/// 选项过多时列表最大高度，超出后滚动
+const PROVIDER_DROPDOWN_MAX_HEIGHT: f32 = 240.0;
 
 impl SettingsView {
     /// 在后台刷新 Debug Tab 的阻塞式系统诊断快照。
@@ -443,16 +447,8 @@ impl SettingsView {
             .items_center()
             .gap(px(8.0))
             .px(px(14.0))
-            .py(px(10.0));
-
-        for (kind, name) in &console.available_providers {
-            toolbar = toolbar.child(self.render_debug_provider_chip(
-                kind,
-                name,
-                console.selected_provider.as_ref() == Some(kind),
-                theme,
-            ));
-        }
+            .py(px(10.0))
+            .child(self.render_debug_provider_dropdown(debug_state, theme));
 
         toolbar = toolbar.child(div().flex_grow());
 
@@ -464,56 +460,194 @@ impl SettingsView {
         toolbar
     }
 
-    fn render_debug_provider_chip(
+    fn render_debug_provider_dropdown(
         &self,
-        provider_id: &ProviderId,
-        name: &str,
-        is_selected: bool,
+        debug_state: &DebugTabViewState,
         theme: &Theme,
     ) -> Div {
-        let provider_id = provider_id.clone();
-        let state = self.state.clone();
-
-        div()
-            .px(px(10.0))
-            .py(px(4.0))
-            .rounded(px(6.0))
-            .bg(if is_selected {
-                theme.bg.card_inner
-            } else {
-                theme.bg.subtle
+        let console = &debug_state.console;
+        let dropdown_open = console.provider_dropdown_open;
+        let has_providers = !console.available_providers.is_empty();
+        let selected_label = console
+            .selected_provider
+            .as_ref()
+            .and_then(|id| {
+                console
+                    .available_providers
+                    .iter()
+                    .find(|(available_id, _)| available_id == id)
+                    .map(|(_, name)| name.clone())
             })
+            .unwrap_or_else(|| t!("debug.console.select_provider").to_string());
+
+        let mut trigger = div()
+            .relative()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .justify_between()
+            .w(px(PROVIDER_DROPDOWN_WIDTH))
+            .gap(px(8.0))
+            .px(px(12.0))
+            .py(px(6.0))
+            .rounded(px(6.0))
+            .bg(theme.bg.base)
             .border_1()
-            .border_color(if is_selected {
-                theme.text.accent_soft
+            .border_color(if dropdown_open {
+                theme.element.selected
             } else {
                 theme.border.strong
-            })
-            .cursor_pointer()
-            .hover(|s| s.opacity(0.85))
+            });
+
+        trigger = trigger
             .child(
                 div()
-                    .text_size(px(11.0))
-                    .font_weight(if is_selected {
-                        FontWeight::SEMIBOLD
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if has_providers {
+                        theme.text.primary
                     } else {
-                        FontWeight::NORMAL
+                        theme.text.muted
                     })
-                    .text_color(if is_selected {
-                        theme.text.accent
-                    } else {
-                        theme.text.secondary
-                    })
-                    .child(name.to_string()),
+                    .child(selected_label),
             )
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                crate::bootstrap::dispatch_in_window(
-                    &state,
-                    AppAction::SelectDebugProvider(provider_id.clone()),
-                    window,
-                    cx,
-                );
-            })
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .text_color(theme.text.muted)
+                    .child(if dropdown_open { "▲" } else { "▼" }),
+            );
+
+        if !has_providers {
+            return trigger;
+        }
+
+        let toggle_state = self.state.clone();
+        trigger =
+            trigger
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    crate::bootstrap::dispatch_in_window(
+                        &toggle_state,
+                        AppAction::ToggleDebugProviderDropdown,
+                        window,
+                        cx,
+                    );
+                });
+
+        if dropdown_open {
+            trigger = trigger.child(self.render_debug_provider_options(debug_state, theme));
+        }
+
+        trigger
+    }
+
+    fn render_debug_provider_options(
+        &self,
+        debug_state: &DebugTabViewState,
+        theme: &Theme,
+    ) -> Deferred {
+        let console = &debug_state.console;
+        let selected = console.selected_provider.clone();
+        let options = console.available_providers.clone();
+        let state = self.state.clone();
+        let theme = theme.clone();
+
+        deferred(
+            div()
+                .occlude()
+                .absolute()
+                .top(px(36.0))
+                .left(px(0.0))
+                .w(px(PROVIDER_DROPDOWN_WIDTH))
+                .p(px(6.0))
+                .rounded(px(8.0))
+                .bg(theme.bg.subtle)
+                .border_1()
+                .border_color(theme.border.strong)
+                .shadow_lg()
+                .child(
+                    div()
+                        .id("debug-provider-dropdown")
+                        .w_full()
+                        .max_h(px(PROVIDER_DROPDOWN_MAX_HEIGHT))
+                        .overflow_y_scroll()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.0))
+                        .children(options.into_iter().map(move |(provider_id, name)| {
+                            let is_active = selected.as_ref() == Some(&provider_id);
+                            let opt_state = state.clone();
+                            let th = theme.clone();
+
+                            let mut row = div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .px(px(8.0))
+                                .py(px(6.0))
+                                .rounded(px(6.0))
+                                .cursor_pointer();
+
+                            if is_active {
+                                row = row
+                                    .bg(th.nav.pill_active_bg)
+                                    .border_1()
+                                    .border_color(th.element.selected)
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_size(px(13.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(th.text.primary)
+                                            .child(name),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.0))
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(th.text.accent)
+                                            .child("✓"),
+                                    );
+                            } else {
+                                row = row
+                                    .border_1()
+                                    .border_color(gpui::transparent_black())
+                                    .hover(|s| s.bg(th.bg.card_inner_hovered))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_size(px(13.0))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(th.text.secondary)
+                                            .child(name),
+                                    );
+                            }
+
+                            row.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                cx.stop_propagation();
+                                crate::bootstrap::dispatch_in_window(
+                                    &opt_state,
+                                    AppAction::SelectDebugProvider(provider_id.clone()),
+                                    window,
+                                    cx,
+                                );
+                            })
+                        })),
+                ),
+        )
+        .with_priority(1)
     }
 
     fn render_debug_refresh_button(&self, is_active: bool, theme: &Theme) -> Div {

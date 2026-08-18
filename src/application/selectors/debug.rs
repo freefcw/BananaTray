@@ -57,6 +57,8 @@ pub struct DebugConsoleViewState {
     pub available_providers: Vec<(ProviderId, String)>,
     /// 当前选中的 Provider
     pub selected_provider: Option<ProviderId>,
+    /// Provider 下拉是否展开（无可选项时始终为 false）
+    pub provider_dropdown_open: bool,
     /// 是否正在调试刷新中
     pub refresh_active: bool,
     /// 捕获的日志条目
@@ -427,6 +429,8 @@ fn build_console_view_state(session: &AppSession, ctx: &DebugContext) -> DebugCo
         .collect();
 
     DebugConsoleViewState {
+        provider_dropdown_open: session.debug_ui.provider_dropdown_open
+            && !available_providers.is_empty(),
         available_providers,
         selected_provider,
         refresh_active: session.debug_ui.refresh_active,

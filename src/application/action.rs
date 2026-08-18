@@ -52,6 +52,8 @@ pub enum AppAction {
     SendDebugNotification(DebugNotificationKind),
     OpenLogDirectory,
     CopyToClipboard(String),
+    /// Debug Tab: 展开 / 收起 Provider 下拉
+    ToggleDebugProviderDropdown,
     /// Debug Tab: 选择调试目标 Provider
     SelectDebugProvider(ProviderId),
     /// Debug Tab: 强制刷新选中的 Provider（跳过 cooldown，临时提升日志级别）

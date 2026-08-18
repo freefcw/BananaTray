@@ -586,6 +586,8 @@ impl SettingsModalState {
 pub struct DebugUiState {
     /// 当前选中的调试 Provider
     pub selected_provider: Option<ProviderId>,
+    /// Provider 下拉是否展开
+    pub provider_dropdown_open: bool,
     /// 是否正在调试刷新中
     pub refresh_active: bool,
     /// 调试刷新前的日志级别（用于刷新完成后恢复）

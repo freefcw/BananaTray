@@ -172,6 +172,7 @@ fn modal_state_helpers_match_variants() {
 fn debug_ui_default_values() {
     let debug = DebugUiState::default();
     assert!(debug.selected_provider.is_none());
+    assert!(!debug.provider_dropdown_open);
     assert!(!debug.refresh_active);
     assert!(debug.prev_log_level.is_none());
 }

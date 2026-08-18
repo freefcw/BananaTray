@@ -5,11 +5,27 @@ use crate::application::{
 use crate::models::{NavTab, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshRequest, RefreshResult};
 
+// ── ToggleDebugProviderDropdown ─────────────────────
+
+#[test]
+fn toggle_debug_provider_dropdown_flips_state() {
+    let mut session = make_session();
+    assert!(!session.debug_ui.provider_dropdown_open);
+
+    let effects = reduce(&mut session, AppAction::ToggleDebugProviderDropdown);
+    assert!(session.debug_ui.provider_dropdown_open);
+    assert!(has_render(&effects));
+
+    reduce(&mut session, AppAction::ToggleDebugProviderDropdown);
+    assert!(!session.debug_ui.provider_dropdown_open);
+}
+
 // ── SelectDebugProvider ─────────────────────────────
 
 #[test]
 fn select_debug_provider_updates_state() {
     let mut session = make_session();
+    session.debug_ui.provider_dropdown_open = true;
     assert!(session.debug_ui.selected_provider.is_none());
 
     let effects = reduce(
@@ -21,6 +37,7 @@ fn select_debug_provider_updates_state() {
         session.debug_ui.selected_provider,
         Some(pid(ProviderKind::Claude))
     );
+    assert!(!session.debug_ui.provider_dropdown_open);
     assert!(has_render(&effects));
 }
 

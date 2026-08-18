@@ -18,7 +18,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()` / `form_identity()`
   - 互斥关系上升到类型层，reducer 不再需要 `set A = true; set B = false;` 的手工同步
 - **`GlobalHotkeyError`** — 全局热键保存失败原因（空值 / 格式错误 / 缺少修饰键 / 预检冲突 / 注册失败）
-- **`DebugUiState`** — Debug Tab 状态
+- **`DebugUiState`** — Debug Tab 状态（选中的调试 Provider、下拉展开态、调试刷新与日志级别恢复）
 - **`SettingsTab`** — 设置窗口 Tab 枚举
 - **`HeaderStatusKind`** — 头部状态徽章类型（Synced/Syncing/Stale/Offline）
 - **`provider_panel_flags()`** — 面板可见性规则（单一真理来源）

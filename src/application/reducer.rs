@@ -59,6 +59,9 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::OpenLogDirectory => debug::open_log_directory(&mut effects),
         AppAction::CopyToClipboard(text) => debug::copy_to_clipboard(text, &mut effects),
+        AppAction::ToggleDebugProviderDropdown => {
+            debug::toggle_debug_provider_dropdown(session, &mut effects)
+        }
         AppAction::SelectDebugProvider(id) => {
             debug::select_debug_provider(session, id, &mut effects)
         }

@@ -345,11 +345,26 @@ fn debug_console_hides_stale_non_monitorable_selection() {
         .set_provider_enabled(ProviderKind::Kilo, true);
     let mut session = make_session(settings);
     session.debug_ui.selected_provider = Some(ProviderId::BuiltIn(ProviderKind::Kilo));
+    session.debug_ui.provider_dropdown_open = true;
 
     let console = build_console_view_state(&session, &test_context());
 
     assert!(console.available_providers.is_empty());
     assert!(console.selected_provider.is_none());
+    assert!(!console.provider_dropdown_open);
+}
+
+#[test]
+fn debug_console_exposes_provider_dropdown_open() {
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+    let mut session = make_session(settings);
+    session.debug_ui.provider_dropdown_open = true;
+
+    let console = build_console_view_state(&session, &test_context());
+    assert!(console.provider_dropdown_open);
 }
 
 #[test]

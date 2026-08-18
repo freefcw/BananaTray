@@ -151,6 +151,7 @@ debug.copy_debug_info: "复制诊断信息"
 
 # Debug tab — Provider 调试控制台
 debug.section.console: "调试控制台"
+debug.console.select_provider: "选择服务商"
 debug.console.force_refresh: "强制刷新"
 debug.console.refreshing: "刷新中…"
 debug.console.empty: "选择一个服务商，点击「强制刷新」以捕获日志。"

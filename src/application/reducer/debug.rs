@@ -34,12 +34,21 @@ pub(super) fn copy_to_clipboard(text: String, effects: &mut Vec<AppEffect>) {
     effects.push(DebugEffect::CopyToClipboard(text).into());
 }
 
+pub(super) fn toggle_debug_provider_dropdown(
+    session: &mut AppSession,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.debug_ui.provider_dropdown_open = !session.debug_ui.provider_dropdown_open;
+    effects.push(ContextEffect::Render.into());
+}
+
 pub(super) fn select_debug_provider(
     session: &mut AppSession,
     id: ProviderId,
     effects: &mut Vec<AppEffect>,
 ) {
     session.debug_ui.selected_provider = Some(id);
+    session.debug_ui.provider_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 

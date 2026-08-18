@@ -151,6 +151,7 @@ debug.copy_debug_info: "Copy Debug Info"
 
 # Debug tab — Provider Debug Console
 debug.section.console: "PROVIDER DEBUG CONSOLE"
+debug.console.select_provider: "Select provider"
 debug.console.force_refresh: "Force Refresh"
 debug.console.refreshing: "Refreshing…"
 debug.console.empty: "Select a provider and click Force Refresh to capture logs."
