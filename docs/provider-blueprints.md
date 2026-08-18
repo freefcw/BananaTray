@@ -71,7 +71,7 @@ providers/
 - `common::cli::stdout_text()` / `stdout_or_stderr_text()`
 
 当前参考：
-- `amp.rs`
+- `amp/`
 - `kiro.rs`
 
 边界说明：

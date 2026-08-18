@@ -65,7 +65,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 ```
 providers/claude/         → cli.rs + runner.rs
 providers/codex/          → runner.rs + http_client.rs
-providers/amp.rs          → cli.rs
+providers/amp/            → cli.rs
 providers/kiro.rs         → cli.rs
 providers/copilot/        → config_paths.rs + http_client.rs + jwt.rs
 providers/gemini/         → http_client.rs

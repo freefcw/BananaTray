@@ -1,3 +1,5 @@
+mod subscription;
+
 use super::{
     AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
 };
@@ -35,17 +37,6 @@ static PERCENT_REMAINING_RE: LazyLock<Regex> =
 // 百分比行中括号内的重置说明，如 "(resets daily)"，原文透传到卡片详情行。
 static RESET_NOTE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([^)]+)\)").unwrap());
 
-// 订阅制（Megawatt / Gigawatt）输出，2026 年 amp 上线月度订阅后的主推计费方式：
-//   "Subscription Megawatt: 81% other usage and 100% orb usage remaining"
-// 一行含两个独立月度池：other usage（agent 调用额度）与 orb usage（远程实例额度）。
-// 两个池独立计费、独立耗尽，拆成独立 quota 分别展示。
-// 行前缀 "Subscription <Plan>:" 锚定；池片段用通用正则全局匹配，
-// 支持任意池数量 / 顺序 / 未来新增池名。
-static SUBSCRIPTION_LINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)^Subscription\s+(.+?):\s*(.+)$").unwrap());
-static SUBSCRIPTION_POOL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"([0-9]+(?:\.[0-9]+)?)%\s+(\w+)\s+usage").unwrap());
-
 super::define_unit_provider!(AmpProvider);
 
 impl AmpProvider {
@@ -76,25 +67,10 @@ impl AmpProvider {
                 }
             }
 
-            // 订阅制：拆成多个独立池 quota（other / orb 等），百分比模式。
-            // 放在最前以避免被后续百分比 / 信用正则误匹配订阅行。
-            if let Some(caps) = SUBSCRIPTION_LINE_RE.captures(line) {
-                let plan = caps[1].trim();
-                let rest = &caps[2];
-                for pool_caps in SUBSCRIPTION_POOL_RE.captures_iter(rest) {
-                    let remaining_percent: f64 = pool_caps[1].parse().unwrap_or(0.0);
-                    // pool 保留 CLI 原文小写（other / orb），selector 再按 locale 渲染
-                    let pool = pool_caps[2].to_ascii_lowercase();
-                    quotas.push(QuotaInfo::from_remaining_percent(
-                        QuotaLabelSpec::SubscriptionUsage {
-                            plan: plan.to_string(),
-                            pool,
-                        },
-                        remaining_percent,
-                        QuotaType::General,
-                        None,
-                    ));
-                }
+            // 订阅制：现行 / 旧版策略各自认领行前缀，拆成独立池 quota。
+            // 放在最前，避免被后续百分比 / 信用正则碰到订阅行。
+            if let Some(subscription_quotas) = subscription::parse_line(line) {
+                quotas.extend(subscription_quotas);
                 continue;
             }
 
@@ -360,8 +336,45 @@ mod tests {
         assert!(!error.contains("no quota data"));
     }
 
-    /// 实际 amp CLI 输出（订阅制）：Megawatt 套餐含 other / orb 两个独立月度池。
-    /// 2026 年 amp 上线月度订阅后的主推计费格式。
+    /// 2026-08-17 起 amp CLI 现行订阅行：`Amp <Plan> Subscription:`。
+    /// 本机 `amp usage --no-color` 实测 113 字节即此格式，旧 `Subscription <Plan>:` 解析器认不出。
+    #[test]
+    fn test_parse_subscription_current_amp_plan_subscription() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Signed in as user@example.com (user)\n\
+            Amp Megawatt Subscription: 75% other usage and 100% orb usage remaining\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.account_email.as_deref(), Some("user@example.com"));
+        assert_eq!(data.quotas.len(), 2);
+
+        let q0 = &data.quotas[0];
+        assert_eq!(
+            q0.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "other".into(),
+            }
+        );
+        assert!((q0.used - 25.0).abs() < f64::EPSILON);
+        assert_eq!(q0.limit, 100.0);
+        assert_eq!(q0.quota_type, QuotaType::General);
+        assert_eq!(q0.stable_key, "subscription:megawatt:other");
+
+        let q1 = &data.quotas[1];
+        assert_eq!(
+            q1.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "orb".into(),
+            }
+        );
+        assert!((q1.used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(q1.stable_key, "subscription:megawatt:orb");
+    }
+
+    /// 旧版订阅行（`Subscription <Plan>:`）。2026-08-17 起官方不再输出，
+    /// 预计 2026-11-17 后删除 `subscription/legacy.rs` 及本用例。
     #[test]
     fn test_parse_subscription_megawatt() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
@@ -400,7 +413,8 @@ mod tests {
         assert_eq!(q1.status_level(), crate::models::StatusLevel::Green);
     }
 
-    /// 订阅池状态等级：other 38%（Yellow 20-50）、orb 5%（Red <20）
+    /// 订阅池状态等级：other 38%（Yellow 20-50）、orb 5%（Red <20）。
+    /// 使用旧版行前缀；2026-11-17 裁汰 legacy 时改成现行前缀或随 legacy 一起删。
     #[test]
     fn test_parse_subscription_status_levels() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
@@ -425,7 +439,8 @@ mod tests {
         );
     }
 
-    /// stable_key 应包含计划名与池标识，用于 hidden_quotas 持久化去重
+    /// stable_key 应包含计划名与池标识，用于 hidden_quotas 持久化去重。
+    /// 旧版行前缀；裁汰 legacy 时随之一起删。
     #[test]
     fn test_parse_subscription_stable_key() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
@@ -435,11 +450,11 @@ mod tests {
         assert_eq!(data.quotas[1].stable_key, "subscription:megawatt:orb");
     }
 
-    /// 订阅用户耗尽 agent usage 后追加 credits：订阅行与信用行应各自解析
+    /// 订阅用户耗尽 agent usage 后追加 credits：现行订阅行与信用行应各自解析
     #[test]
     fn test_parse_subscription_mixed_with_credits() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
-        let output = "Subscription Megawatt: 0% other usage and 50% orb usage remaining\n\
+        let output = "Amp Megawatt Subscription: 0% other usage and 50% orb usage remaining\n\
             Monthly credits: $5.00 / $20.00 remaining\n";
         let data = AmpProvider::parse_usage_output(output).unwrap();
 
