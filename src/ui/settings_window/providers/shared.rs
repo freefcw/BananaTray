@@ -3,8 +3,9 @@ use crate::ui::widgets::register_input_actions;
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, hsla, px, App, Div, Entity, Focusable, FontWeight, InteractiveElement, MouseButton,
-    MouseDownEvent, ParentElement, Pixels, Stateful, StatefulInteractiveElement, Styled, Window,
+    div, hsla, px, relative, App, Div, Entity, Focusable, FontWeight, InteractiveElement,
+    MouseButton, MouseDownEvent, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
+    Styled, Window,
 };
 
 /// 表单字段的共享布局规格。
@@ -276,6 +277,7 @@ pub(super) fn render_confirm_cancel_buttons(
                 .child(
                     div()
                         .text_size(px(11.0))
+                        .line_height(relative(1.3))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(gpui::white())
                         .child(confirm_label.to_string()),

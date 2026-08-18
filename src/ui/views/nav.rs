@@ -395,7 +395,7 @@ impl AppView {
             .child(
                 div()
                     .text_size(px(13.0))
-                    .line_height(relative(1.2))
+                    .line_height(relative(1.3))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(text_color)
                     .child(label),

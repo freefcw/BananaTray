@@ -3,7 +3,7 @@ use crate::application::{AppAction, AvailableProviderItem};
 use crate::runtime;
 use crate::theme::Theme;
 use gpui::{
-    div, hsla, px, svg, AnyElement, Context, Div, Entity, FontWeight, InteractiveElement,
+    div, hsla, px, relative, svg, AnyElement, Context, Div, Entity, FontWeight, InteractiveElement,
     IntoElement, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
 };
 use rust_i18n::t;
@@ -131,6 +131,7 @@ fn render_available_provider(
             div()
                 .flex_1()
                 .text_size(px(14.0))
+                .line_height(relative(1.3))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text.primary)
                 .child(item.display_name.clone()),
@@ -214,6 +215,7 @@ where
             div()
                 .flex_1()
                 .text_size(px(14.0))
+                .line_height(relative(1.3))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text.muted)
                 .child(label),

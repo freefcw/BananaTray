@@ -74,6 +74,7 @@ fn render_quota_header_row(
                     div()
                         .overflow_hidden()
                         .text_size(px(11.0))
+                        .line_height(relative(1.3))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.text.secondary)
                         .whitespace_nowrap()

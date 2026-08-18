@@ -5,7 +5,7 @@ use crate::models::ProviderId;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    div, hsla, px, App, AppContext, Context, Div, Entity, FontWeight, InteractiveElement,
+    div, hsla, px, relative, App, AppContext, Context, Div, Entity, FontWeight, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Pixels, Point, Render, Stateful,
     StatefulInteractiveElement, Styled, Window,
 };
@@ -113,6 +113,7 @@ fn render_sidebar_item_content(
     let name_row = div()
         .flex_1()
         .text_size(px(13.0))
+        .line_height(relative(1.3))
         .font_weight(FontWeight::MEDIUM)
         .text_color(name_color)
         .child(display_name);
@@ -243,6 +244,7 @@ fn render_add_relay_button(theme: &Theme, ctx: SidebarActionContext) -> Div {
         .child(
             div()
                 .text_size(px(12.0))
+                .line_height(relative(1.3))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(muted)
                 .child(t!("provider.add_button").to_string()),

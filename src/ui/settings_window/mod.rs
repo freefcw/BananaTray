@@ -18,7 +18,7 @@ use adabraka_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
 use gpui::{
-    div, linear_color_stop, multi_stop_linear_gradient, px, rgba, svg, transparent_black,
+    div, linear_color_stop, multi_stop_linear_gradient, px, relative, rgba, svg, transparent_black,
     AnyElement, App, AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
     Subscription, Window, WindowAppearance,
@@ -550,6 +550,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(13.0))
+                    .line_height(relative(1.3))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(foreground)
                     .whitespace_nowrap()

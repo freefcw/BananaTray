@@ -4,7 +4,7 @@ use crate::models::ProviderId;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
 use crate::ui::widgets::{render_action_button, ButtonVariant};
-use gpui::{div, px, App, Div, MouseDownEvent, ParentElement, Styled, Window};
+use gpui::{div, px, App, Div, Hsla, MouseDownEvent, ParentElement, Styled, Window};
 use rust_i18n::t;
 
 pub(super) struct EditableProviderActions {
@@ -94,52 +94,70 @@ pub(super) fn render_editable_provider_actions(
     dispatcher: &DetailActionDispatcher,
     theme: &Theme,
 ) -> Div {
-    let row = div()
-        .mt(px(10.0))
-        .w_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(px(10.0))
-        .child(render_action_button(
+    if confirming_delete {
+        return action_row()
+            .child(row_action_button(
+                &actions.confirm_delete_label,
+                Some(("src/icons/trash.svg", theme.status.error)),
+                ButtonVariant::Danger,
+                theme,
+                {
+                    let action = actions.delete_action_factory();
+                    dispatcher.interactive_cleanup_action(action)
+                },
+            ))
+            .child(row_action_button(
+                &actions.cancel_delete_label,
+                Some(("src/icons/close.svg", theme.text.primary)),
+                ButtonVariant::Subtle,
+                theme,
+                {
+                    let action = actions.cancel_delete_action_factory();
+                    dispatcher.interactive_cleanup_action(action)
+                },
+            ));
+    }
+
+    action_row()
+        .child(row_action_button(
             &actions.edit_label,
-            Some(("src/icons/settings.svg", theme.text.accent)),
+            Some(("src/icons/settings.svg", theme.text.primary)),
             ButtonVariant::Subtle,
-            false,
             theme,
             {
                 let action = actions.edit_action_factory();
                 dispatcher.interactive_cleanup_action(action)
             },
-        ));
-
-    if confirming_delete {
-        return row.child(render_confirm_cancel_buttons(
-            &actions.confirm_delete_label,
-            &actions.cancel_delete_label,
-            {
-                let action = actions.delete_action_factory();
-                dispatcher.interactive_cleanup_action(action)
-            },
-            {
-                let action = actions.cancel_delete_action_factory();
-                dispatcher.interactive_cleanup_action(action)
-            },
+        ))
+        .child(row_action_button(
+            &actions.delete_label,
+            Some(("src/icons/trash.svg", theme.text.primary)),
+            ButtonVariant::Subtle,
             theme,
-        ));
-    }
+            {
+                let action = actions.confirm_delete_action_factory();
+                dispatcher.interactive_cleanup_action(action)
+            },
+        ))
+}
 
-    row.child(render_action_button(
-        &actions.delete_label,
-        Some(("src/icons/trash.svg", theme.status.error)),
-        ButtonVariant::Subtle,
-        false,
-        theme,
-        {
-            let action = actions.confirm_delete_action_factory();
-            dispatcher.interactive_cleanup_action(action)
-        },
-    ))
+fn action_row() -> Div {
+    div()
+        .mt(px(10.0))
+        .w_full()
+        .flex()
+        .items_center()
+        .gap(px(10.0))
+}
+
+fn row_action_button(
+    label: &str,
+    icon: Option<(&'static str, Hsla)>,
+    variant: ButtonVariant,
+    theme: &Theme,
+    on_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    render_action_button(label, icon, variant, false, theme, on_click).min_w(px(96.0))
 }
 
 pub(super) fn render_confirm_cancel_buttons(

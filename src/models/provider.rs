@@ -218,7 +218,7 @@ pub enum SettingsCapability {
     None,
     /// Token 输入型设置（如 Copilot GitHub Token）
     TokenInput(TokenInputCapability),
-    /// NewAPI 型自定义 Provider — 显示「编辑配置」按钮
+    /// NewAPI 型自定义 Provider — 显示「编辑」按钮
     NewApiEditable,
     /// Script 型自定义 Provider — 显示脚本编辑按钮
     ScriptEditable,

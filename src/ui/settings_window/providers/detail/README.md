@@ -7,7 +7,7 @@
 - `mod.rs` owns the scroll container and section ordering.
 - `header.rs` renders provider identity plus enable, refresh, and remove-from-sidebar actions.
 - `info.rs` renders status/source/update/service-state cells.
-- `usage.rs` renders quota usage and provider error/empty states.
+- `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
 - `quota_visibility.rs` renders per-quota tray visibility toggles.
 - `settings_section.rs` renders provider settings capability branches.
 - `actions.rs` owns shared detail-page action buttons and editable-provider edit/delete flows.

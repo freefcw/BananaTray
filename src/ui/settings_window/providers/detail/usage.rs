@@ -1,8 +1,10 @@
 use crate::application::SettingsProviderUsageViewState;
 use crate::models::QuotaDisplayMode;
 use crate::theme::Theme;
-use crate::ui::widgets::render_detail_section_title;
-use gpui::{div, px, relative, Div, ParentElement, Styled};
+use crate::ui::widgets::{
+    render_detail_empty_card, render_detail_error_card, render_detail_section_title,
+};
+use gpui::{div, px, Div, ParentElement, Styled};
 use rust_i18n::t;
 
 pub(super) fn render_usage_section(
@@ -14,7 +16,7 @@ pub(super) fn render_usage_section(
         SettingsProviderUsageViewState::Disabled { message }
         | SettingsProviderUsageViewState::Empty { message }
         | SettingsProviderUsageViewState::Missing { message } => {
-            usage_section(theme).child(render_usage_message(message, theme))
+            usage_section(theme).child(render_detail_empty_card(message, theme))
         }
         SettingsProviderUsageViewState::Quotas { quotas } => {
             let mut section = usage_section(theme);
@@ -25,9 +27,9 @@ pub(super) fn render_usage_section(
             }
             section
         }
-        SettingsProviderUsageViewState::Error { title, message } => usage_section(theme)
-            .child(render_error_title(title, theme))
-            .child(render_error_detail(message, theme)),
+        SettingsProviderUsageViewState::Error { title, message } => {
+            usage_section(theme).child(render_detail_error_card(title, message, theme))
+        }
     }
 }
 
@@ -39,35 +41,4 @@ fn usage_section(theme: &Theme) -> Div {
             &t!("provider.section.usage"),
             theme,
         ))
-}
-
-fn render_usage_message(message: &str, theme: &Theme) -> Div {
-    div()
-        .mt(px(8.0))
-        .text_size(px(12.0))
-        .text_color(theme.text.secondary)
-        .child(message.to_string())
-}
-
-fn render_error_title(title: &str, theme: &Theme) -> Div {
-    div()
-        .mt(px(8.0))
-        .text_size(px(12.0))
-        .text_color(theme.text.muted)
-        .child(title.to_string())
-}
-
-fn render_error_detail(message: &str, theme: &Theme) -> Div {
-    div()
-        .px(px(10.0))
-        .py(px(8.0))
-        .rounded(px(6.0))
-        .bg(theme.bg.subtle)
-        .child(
-            div()
-                .text_size(px(11.5))
-                .line_height(relative(1.4))
-                .text_color(theme.text.secondary)
-                .child(message.to_string()),
-        )
 }

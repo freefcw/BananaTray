@@ -2,8 +2,8 @@ use super::{provider_id_for_action, DetailActionDispatcher};
 use crate::application::{AppAction, QuotaVisibilityItem, SettingChange};
 use crate::models::ProviderId;
 use crate::theme::Theme;
-use crate::ui::widgets::{render_detail_section_title, render_svg_icon};
-use gpui::{div, px, Div, InteractiveElement, MouseButton, ParentElement, Styled};
+use crate::ui::widgets::{render_detail_empty_card, render_detail_section_title, render_svg_icon};
+use gpui::{div, px, relative, Div, InteractiveElement, MouseButton, ParentElement, Styled};
 use rust_i18n::t;
 
 const SHOW_QUOTA_ROW_ICON: bool = true;
@@ -23,7 +23,10 @@ pub(super) fn render_quota_visibility_section(
         ));
 
     if items.is_empty() {
-        return section.child(render_empty_message(theme));
+        return section.child(render_detail_empty_card(
+            &t!("provider.quota_visibility.empty"),
+            theme,
+        ));
     }
 
     section.child(render_quota_visibility_list(
@@ -32,14 +35,6 @@ pub(super) fn render_quota_visibility_section(
         dispatcher,
         theme,
     ))
-}
-
-fn render_empty_message(theme: &Theme) -> Div {
-    div()
-        .mt(px(8.0))
-        .text_size(px(12.0))
-        .text_color(theme.text.secondary)
-        .child(t!("provider.quota_visibility.empty").to_string())
 }
 
 fn render_quota_visibility_list(
@@ -118,6 +113,7 @@ fn render_quota_label(item: &QuotaVisibilityItem, theme: &Theme) -> Div {
     label.child(
         div()
             .text_size(px(12.5))
+            .line_height(relative(1.3))
             .text_color(quota_label_color(item.visible, theme))
             .child(item.label.clone()),
     )

@@ -239,6 +239,7 @@ impl AppView {
                 .child(
                     div()
                         .text_size(px(11.0))
+                        .line_height(relative(1.3))
                         .text_color(theme.text.muted)
                         .child(account.updated_text.clone()),
                 ),
@@ -356,6 +357,7 @@ impl AppView {
             .child(
                 div()
                     .text_size(px(13.0))
+                    .line_height(relative(1.3))
                     .text_color(theme.text.secondary)
                     .child(label.to_string()),
             )

@@ -69,12 +69,13 @@ where
         ),
     };
 
+    // 紧凑按钮不要同时设 h + py：GPUI 高度含 padding 时内容区会被挤扁，
+    // 文字行盒溢出后从底部裁切，看起来就像字往上浮。
     let mut btn = div()
         .flex()
         .items_center()
         .justify_center()
-        .gap(px(8.0))
-        .py(px(if full_width { 12.0 } else { 6.0 }))
+        .gap(px(if full_width { 8.0 } else { 6.0 }))
         .rounded(px(if full_width { 12.0 } else { 6.0 }))
         .bg(bg)
         .border_1()
@@ -82,9 +83,9 @@ where
         .cursor_pointer();
 
     if full_width {
-        btn = btn.w_full();
+        btn = btn.w_full().py(px(12.0));
     } else {
-        btn = btn.px(px(12.0));
+        btn = btn.h(px(32.0)).px(px(12.0));
     }
 
     // hover 效果
@@ -94,19 +95,39 @@ where
         btn = btn.hover(|s| s.opacity(0.85));
     }
 
-    // 可选图标
+    // 图标和文字用同一行高。GPUI 基线是 (line_height - ascent - descent) / 2，
+    // 行高小于 ascent+descent（约 1.3em）时 padding 为负，字形会往上冒。
+    let icon_size = 16.0;
+    let text_size = if full_width { 14.0 } else { 12.0 };
+    let text_line = if full_width { 18.0 } else { 16.0 };
+
     if let Some((icon_path, icon_color)) = icon {
-        btn = btn.child(crate::ui::widgets::render_svg_icon(
-            icon_path,
-            px(16.0),
-            icon_color,
-        ));
+        btn = btn.child(
+            div()
+                .w(px(icon_size))
+                .h(px(icon_size))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(crate::ui::widgets::render_svg_icon(
+                    icon_path,
+                    px(icon_size),
+                    icon_color,
+                )),
+        );
     }
 
-    // 文字标签
+    // 截图实测：行盒已经和图标同高，但大写字母墨水中心仍比图标高约 1.5px
+    // （descent 留白在基线下方，Inter/Helvetica 都这样）。往下挪 2px 做光学对齐。
     btn = btn.child(
         div()
-            .text_size(px(if full_width { 14.0 } else { 12.0 }))
+            .h(px(text_line))
+            .flex()
+            .items_center()
+            .mt(px(2.0))
+            .text_size(px(text_size))
+            .line_height(px(text_line))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(text_color)
             .child(label.to_string()),

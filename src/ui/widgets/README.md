@@ -39,7 +39,7 @@ widgets/
 | `quota_bar.rs` | `render_quota_bar()` | 额度进度条（带动画、渐变色、标签） |
 | `info_row.rs` | `render_kv_info_row()` / `render_info_cell()` / `render_path_info_cell()` | Key-Value 信息行，路径行支持点击打开文件管理器 |
 | `icon_row.rs` | `render_icon_row()` | 图标 + 文本行（三栏布局，用于设置项） |
-| `card.rs` | `render_detail_section_title()` | Provider 详情区段标题 |
+| `card.rs` | `render_detail_section_title()` / `render_detail_empty_card()` / `render_detail_error_card()` | Provider 详情区段标题、空态卡片、失败卡片 |
 | `provider_icon.rs` | `render_provider_icon()` | Provider 品牌图标（SVG / 首字母文本双模式，含方形 boxed 变体） |
 
 ## 已迁出的组件

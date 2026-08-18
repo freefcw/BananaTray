@@ -199,6 +199,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(13.0))
+                    .line_height(relative(1.3))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.text.secondary)
                     .child(label.to_string()),
