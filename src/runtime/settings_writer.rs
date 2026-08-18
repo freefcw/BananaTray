@@ -197,6 +197,22 @@ mod tests {
         (writer, records)
     }
 
+    /// 等到至少 n 次 persist 完成。不能用固定 sleep：CI 上 worker 晚启动时，
+    /// 第二次 schedule 会掉进第一次的 debounce 窗口，被合并成一次写入。
+    fn wait_writes(records: &Arc<Mutex<Vec<u64>>>, n: usize) {
+        let start = Instant::now();
+        loop {
+            if records.lock().unwrap().len() >= n {
+                return;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(1),
+                "timed out waiting for {n} writes"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     #[test]
     fn burst_coalesced_to_single_write() {
         let (writer, records) = test_writer(50);
@@ -218,18 +234,14 @@ mod tests {
     fn separate_bursts_produce_multiple_writes() {
         let (writer, records) = test_writer(30);
 
-        // 第一次
         writer.schedule(make_settings(10));
-        thread::sleep(Duration::from_millis(100)); // 等待 debounce 结束
+        wait_writes(&records, 1);
 
-        // 第二次
         writer.schedule(make_settings(20));
-        thread::sleep(Duration::from_millis(100));
+        wait_writes(&records, 2);
 
         let r = records.lock().unwrap();
-        assert_eq!(r.len(), 2, "separate bursts should produce 2 writes");
-        assert_eq!(r[0], 10);
-        assert_eq!(r[1], 20);
+        assert_eq!(*r, vec![10, 20]);
     }
 
     #[test]
