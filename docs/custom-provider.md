@@ -2,7 +2,7 @@
 
 BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 代码。
 
-当前稳定契约是 `schema_version: 2`，运行时只解释 `plan.steps`。旧版顶层 `source` / `parser` YAML 不再作为运行时兼容路径保留；可用 `scripts/migrate_custom_provider_yaml.py` 做一次性迁移。
+当前稳定契约是 `schema_version: 2`，运行时只解释 `plan.steps`。旧版顶层 `source` / `parser` YAML 不再作为运行时兼容路径；加载或按 id 定位时会自动迁移并写回 `schema_version: 2`（同目录保留 `.bak`）。无法安全转换的文件仍会跳过。离线批量迁移仍可用 `scripts/migrate_custom_provider_yaml.py`。
 
 ## 先说结论
 
@@ -127,7 +127,7 @@ plan:
   - 固定为 `2`。
 - `id`
   - 自定义 provider 的稳定标识，必须唯一，且不能等于任何内置 provider 的稳定 key（如 `claude`、`codex`、`gemini`）；冲突配置会在加载时被拒绝。
-  - NewAPI 表单生成的 provider 使用 `{domain-slug}:newapi`；填写 User ID 时为 `{domain-slug}-{user-slug}:newapi`，同一站点因此可添加多个账号。这类 provider 会在设置页显示“编辑配置”入口；编辑保存保持原 `id` 不变（不随 User ID 修改而迁移身份）。新增时若身份（站点 + 账号）已存在会被拒绝并提示改用编辑，不会静默覆盖已有 YAML。
+  - NewAPI 表单生成的 provider 使用 `{domain-slug}:newapi`；填写 User ID 时为 `{domain-slug}-{user-slug}:newapi`，同一站点因此可添加多个账号。这类 provider 会在设置页显示“编辑”入口；编辑保存保持原 `id` 不变（不随 User ID 修改而迁移身份）。新增时若身份（站点 + 账号）已存在会被拒绝并提示改用编辑，不会静默覆盖已有 YAML。
 - `base_url`
   - 可选前缀；step 中的 URL 若以 `/` 开头，会自动拼接该前缀。
 - `metadata`
@@ -379,13 +379,15 @@ preprocess:
 
 ## 旧 YAML 迁移
 
-旧版顶层 `availability/source/parser/preprocess` 可以用脚本迁移：
+应用启动或 reload 自定义 provider 时，会自动把旧版顶层 `availability/source/parser/preprocess` 写成 `schema_version: 2`，并在同目录留下 `.bak`。设置页按 id 定位 NewAPI / 脚本 provider 时也会走同一条迁移路径。无法安全转换的文件不会改写，日志里会有 `providers::custom` warning。
+
+离线批量迁移（不启动应用）仍可用脚本：
 
 ```bash
 python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/BananaTray/providers --write
 ```
 
-默认会生成 `.bak` 备份；确认无误后可自行删除。只预览不写入时去掉 `--write`。
+脚本默认会生成 `.bak` 备份；确认无误后可自行删除。只预览不写入时去掉 `--write`。
 
 迁移规则：
 
@@ -426,7 +428,7 @@ python3 scripts/migrate_custom_provider_yaml.py ~/Library/Application\ Support/B
 
 1. YAML 是否位于正确目录
 2. 扩展名是否为 `.yaml` 或 `.yml`
-3. 是否包含 `schema_version: 2`
+3. 是否包含 `schema_version: 2`（旧 YAML 应在加载时被自动迁移；若仍是顶层 `source` / `parser`，看日志里的自动迁移失败原因）
 4. YAML 语法是否有效
 5. 日志里是否有 `providers::custom` 的 warning
 

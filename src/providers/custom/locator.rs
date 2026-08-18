@@ -24,10 +24,7 @@ pub fn find_custom_provider_yaml_by_id(
             continue;
         }
 
-        let Ok(content) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(def) = serde_norway::from_str::<CustomProviderDef>(&content) else {
+        let Ok(def) = super::loader::read_provider_def(&path) else {
             continue;
         };
         if def.id != provider_custom_id {
@@ -119,5 +116,41 @@ plan:
 
         let found = find_custom_provider_yaml_by_id("script:test", dir.path()).unwrap();
         assert_eq!(found.path, yaml_path);
+    }
+
+    #[test]
+    fn find_custom_provider_yaml_by_id_migrates_legacy_newapi_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml_path = dir.path().join("newapi-anyrouter-top.yaml");
+        std::fs::write(
+            &yaml_path,
+            r#"id: "anyrouter-top:newapi"
+base_url: "https://anyrouter.top"
+metadata:
+  display_name: "AnyRouter"
+  brand_name: "NewAPI Relay"
+availability:
+  type: always
+source:
+  type: http_get
+  url: "/api/user/self"
+  auth:
+    type: cookie
+    value: "session=test-token"
+parser:
+  format: json
+  quotas:
+    - label: "Balance"
+      remaining: "data.quota"
+"#,
+        )
+        .unwrap();
+
+        let found = find_custom_provider_yaml_by_id("anyrouter-top:newapi", dir.path()).unwrap();
+        assert_eq!(found.path, yaml_path);
+        assert_eq!(found.def.schema_version, 2);
+        assert!(std::fs::read_to_string(&yaml_path)
+            .unwrap()
+            .contains("schema_version: 2"));
     }
 }

@@ -31,7 +31,8 @@ custom/
   url.rs          — base_url 拼接、${ENV_VAR} 展开、~ 路径展开
   log_utils.rs    — 认证 header 脱敏（响应正文禁止写日志）
   json_file.rs    — 本地 JSON 文件读取公共基础设施
-  loader.rs       — 文件扫描 + 加载 + 校验
+  loader.rs       — 文件扫描 + 加载 + 校验；旧 schema 在加载时自动迁移并写回
+  legacy_migrate.rs — 旧版顶层 source/parser YAML → schema_version 2 的 fail-closed 文本迁移
   generator.rs    — NewAPI / Script Provider YAML 生成 + 纯解析辅助（由各 lifecycle 持有外部契约）
   newapi_lifecycle.rs          — NewAPI 生命周期：filename、加载、保存、删除
   script_provider_lifecycle.rs — Script Provider 生命周期：filename、默认模板、加载、保存、删除
@@ -73,7 +74,7 @@ YAML 顶层固定使用 `schema_version: 2` 和 `plan.steps`。
 | `first_success` | 按顺序执行 step，首个成功结果作为刷新结果 |
 | `merge` | 执行多个 step，合并成功 step 的 quotas；`required: false` 的失败不阻断刷新 |
 
-旧版顶层 `availability/source/parser/preprocess` 不再是运行时兼容路径；一次性迁移脚本为 `scripts/migrate_custom_provider_yaml.py`。迁移器会整批预检并拒绝未知/重复顶层字段或 legacy/v2 混合结构，避免猜测性迁移。
+旧版顶层 `availability/source/parser/preprocess` 不再是运行时兼容路径。加载和按 id 定位时会先自动迁移并写回 `schema_version: 2`（同目录保留 `.bak`；已有备份则改用带时间戳的备份名），然后再按 v2 解析。无法安全转换的文件会跳过并打 warning。离线批量迁移仍可用 `scripts/migrate_custom_provider_yaml.py`。迁移器会拒绝未知/重复顶层字段或 legacy/v2 混合结构，避免猜测性迁移。
 
 ## 支持的认证方式
 

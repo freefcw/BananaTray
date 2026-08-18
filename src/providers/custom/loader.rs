@@ -5,6 +5,7 @@ use regex::Regex;
 use crate::models::ProviderKind;
 use std::path::{Path, PathBuf};
 
+use super::legacy_migrate::migrate_text;
 use super::provider::CustomProvider;
 use super::schema::{
     AuthDef, CustomProviderDef, HeaderDef, HttpMethodDef, ParserDef, PlanStepDef, RegexQuotaRule,
@@ -82,23 +83,80 @@ pub fn load_from_dir(dir: &Path) -> Vec<CustomProvider> {
 }
 
 fn load_one(path: &Path) -> Result<CustomProvider> {
-    let content = std::fs::read_to_string(path)?;
-    let def: CustomProviderDef = serde_norway::from_str(&content)
-        .map_err(|err| augment_legacy_schema_hint(err, &content))?;
+    let def = read_provider_def(path)?;
     validate(&def)?;
     CustomProvider::new(def)
 }
 
-/// 当 deserialize 失败且 YAML 看起来像旧 schema 时，在错误后追加迁移脚本提示。
+/// 读取自定义 Provider YAML；旧 schema 会先自动迁移并尽量写回磁盘。
+pub(super) fn read_provider_def(path: &Path) -> Result<CustomProviderDef> {
+    let original = std::fs::read_to_string(path)?;
+    let (def, migrated) = parse_with_optional_migration(&original)?;
+    if let Some(migrated) = migrated.as_deref() {
+        match persist_migrated_yaml(path, migrated) {
+            Ok(backup) => info!(
+                target: "providers::custom",
+                "Migrated legacy custom provider YAML {} → schema_version 2 (backup: {})",
+                path.display(),
+                backup.display()
+            ),
+            Err(err) => warn!(
+                target: "providers::custom",
+                "Migrated {} in memory but failed to write schema_version 2 YAML: {}",
+                path.display(),
+                err
+            ),
+        }
+    }
+    Ok(def)
+}
+
+fn parse_with_optional_migration(content: &str) -> Result<(CustomProviderDef, Option<String>)> {
+    match serde_norway::from_str::<CustomProviderDef>(content) {
+        Ok(def) => Ok((def, None)),
+        Err(err) => match migrate_text(content) {
+            Ok((migrated, true)) => {
+                let def = serde_norway::from_str(&migrated).map_err(|migrate_err| {
+                    anyhow::anyhow!(
+                        "{err}; auto-migration produced invalid schema_version 2 YAML: {migrate_err}"
+                    )
+                })?;
+                Ok((def, Some(migrated)))
+            }
+            Ok((_, false)) => Err(augment_legacy_schema_hint(err, content)),
+            Err(migrate_err) => Err(augment_legacy_schema_hint_with_cause(
+                err,
+                content,
+                &migrate_err.to_string(),
+            )),
+        },
+    }
+}
+
+/// 当 deserialize 失败且 YAML 看起来像旧 schema 时，补上自动迁移失败原因。
 ///
 /// `deny_unknown_fields` 让旧 YAML 顶层 `availability/source/parser` 在 deserialize
-/// 阶段就死于 `unknown field`，会丢掉 validate 阶段对 `schema_version` 的友好提示，
-/// 这里把同等提示补回来。
+/// 阶段就死于 `unknown field`，会丢掉 validate 阶段对 `schema_version` 的友好提示。
 fn augment_legacy_schema_hint(err: serde_norway::Error, content: &str) -> anyhow::Error {
     if looks_like_legacy_schema(content) {
         anyhow::anyhow!(
             "{err}; YAML appears to use the legacy schema (top-level source/parser), \
-             run scripts/migrate_custom_provider_yaml.py to migrate to schema_version 2"
+             but auto-migration did not change the file"
+        )
+    } else {
+        anyhow::Error::from(err)
+    }
+}
+
+fn augment_legacy_schema_hint_with_cause(
+    err: serde_norway::Error,
+    content: &str,
+    cause: &str,
+) -> anyhow::Error {
+    if looks_like_legacy_schema(content) {
+        anyhow::anyhow!(
+            "{err}; YAML appears to use the legacy schema (top-level source/parser), \
+             but auto-migration failed: {cause}"
         )
     } else {
         anyhow::Error::from(err)
@@ -106,24 +164,61 @@ fn augment_legacy_schema_hint(err: serde_norway::Error, content: &str) -> anyhow
 }
 
 fn looks_like_legacy_schema(content: &str) -> bool {
-    let has_schema_version = content
-        .lines()
-        .any(|line| line.trim_start().starts_with("schema_version:"));
-    if has_schema_version {
-        return false;
+    content.lines().any(|line| {
+        line.starts_with("source:")
+            || line.starts_with("availability:")
+            || line.starts_with("parser:")
+    })
+}
+
+fn persist_migrated_yaml(path: &Path, migrated: &str) -> std::io::Result<PathBuf> {
+    let backup = unique_backup_path(path);
+    std::fs::copy(path, &backup)?;
+    let permissions = path.metadata()?.permissions();
+    let tmp = {
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("provider.yaml");
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        path.with_file_name(format!(".{filename}.{stamp}.migrate.tmp"))
+    };
+    let write_result = (|| {
+        std::fs::write(&tmp, migrated)?;
+        std::fs::set_permissions(&tmp, permissions.clone())?;
+        std::fs::rename(&tmp, path)
+    })();
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
-    content
-        .lines()
-        .any(|line| line.starts_with("source:") || line.starts_with("availability:"))
+    write_result.map(|()| backup)
+}
+
+fn unique_backup_path(path: &Path) -> PathBuf {
+    let backup = {
+        let mut backup = path.as_os_str().to_os_string();
+        backup.push(".bak");
+        PathBuf::from(backup)
+    };
+    if !backup.exists() {
+        return backup;
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    let mut stamped = path.as_os_str().to_os_string();
+    stamped.push(format!(".bak.{stamp}"));
+    PathBuf::from(stamped)
 }
 
 /// 校验定义的合法性，在加载时 fail-fast
 fn validate(def: &CustomProviderDef) -> Result<()> {
     if def.schema_version != 2 {
-        anyhow::bail!(
-            "'schema_version' is {} but must be 2; run scripts/migrate_custom_provider_yaml.py for legacy YAML",
-            def.schema_version
-        );
+        anyhow::bail!("'schema_version' is {} but must be 2", def.schema_version);
     }
     if def.id.trim().is_empty() {
         anyhow::bail!("'id' cannot be empty");
@@ -851,7 +946,7 @@ plan:
     }
 
     #[test]
-    fn test_legacy_yaml_load_error_hints_migration_script() {
+    fn test_legacy_yaml_is_migrated_written_and_loaded() {
         let dir = tempfile::tempdir().unwrap();
         let yaml = r#"
 id: "legacy:cli"
@@ -873,17 +968,86 @@ parser:
         let path = dir.path().join("legacy.yaml");
         fs::write(&path, yaml).unwrap();
 
-        // load_one 应在 deserialize 失败后追加迁移脚本提示
+        let providers = load_from_dir(dir.path());
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].id(), "legacy:cli");
+
+        let migrated = fs::read_to_string(&path).unwrap();
+        assert!(migrated.contains("schema_version: 2"));
+        assert!(migrated.contains("plan:"));
+        assert!(!migrated.contains("\navailability:"));
+
+        let backup = {
+            let mut backup = path.as_os_str().to_os_string();
+            backup.push(".bak");
+            PathBuf::from(backup)
+        };
+        assert_eq!(fs::read_to_string(backup).unwrap(), yaml);
+    }
+
+    #[test]
+    fn test_generated_newapi_legacy_yaml_is_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"# 自动生成的 NewAPI 中转站配置
+id: "anyrouter-top:newapi"
+base_url: "https://anyrouter.top"
+metadata:
+  display_name: "AnyRouter"
+  brand_name: "NewAPI Relay"
+availability:
+  type: always
+source:
+  type: http_get
+  url: "/api/user/self"
+  auth:
+    type: cookie
+    value: "session=test-token"
+parser:
+  format: json
+  account_email: "data.display_name"
+  quotas:
+    - label: "Balance"
+      remaining: "data.quota"
+      used: "data.used_quota"
+      quota_type: credit
+      divisor: 500000
+"#;
+        fs::write(dir.path().join("newapi-anyrouter-top.yaml"), yaml).unwrap();
+        let providers = load_from_dir(dir.path());
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].id(), "anyrouter-top:newapi");
+    }
+
+    #[test]
+    fn test_unmigratable_legacy_yaml_explains_auto_migration_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+id: "legacy:cli"
+metadata:
+  display_name: "Legacy"
+  brand_name: "Legacy"
+custom_timeout: 42
+source:
+  type: cli
+  command: "echo"
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let path = dir.path().join("legacy.yaml");
+        fs::write(&path, yaml).unwrap();
+
         let err = match load_one(&path) {
-            Ok(_) => panic!("expected legacy YAML to fail loading"),
+            Ok(_) => panic!("expected unmigratable YAML to fail loading"),
             Err(e) => e,
         };
         let msg = err.to_string();
-        assert!(
-            msg.contains("migrate_custom_provider_yaml.py"),
-            "got: {msg}"
-        );
         assert!(msg.contains("legacy schema"), "got: {msg}");
+        assert!(msg.contains("auto-migration failed"), "got: {msg}");
+        assert!(msg.contains("custom_timeout"), "got: {msg}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), yaml);
     }
 
     #[test]

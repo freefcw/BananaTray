@@ -42,7 +42,7 @@
 自定义 provider 通过 YAML 声明，不需要新增 Rust 代码。
 
 - 规范目录、Schema 和示例见 `custom-provider.md` 与 `docs/examples/`。
-- 当前运行时只支持 `schema_version: 2`。
+- 当前运行时只支持 `schema_version: 2`。旧版顶层 `source` / `parser` YAML 会在加载时自动迁移并写回；无法安全转换的文件会被跳过。
 - 所有 step 都是 `source.type: placeholder` 的自定义 provider 会被标记为 `Placeholder`，仅保留展示入口和可用性检查，不参与正常刷新。
 - 设置页 NewAPI 与自定义脚本向导都会生成普通 YAML；应用内保存 / 删除会显式触发 reload。
 - BananaTray 生成的自定义 provider YAML 使用私密临时文件原子替换，Unix 上权限为 `0600`；脚本向导先提交不可变版本化脚本，再以 YAML 作为最终提交点。

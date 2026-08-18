@@ -10,6 +10,7 @@ mod file_ops;
 #[cfg(any(feature = "app", test))]
 pub(in crate::providers::custom) mod generator;
 mod json_file;
+mod legacy_migrate;
 #[cfg(feature = "app")]
 mod lifecycle_error;
 pub(crate) mod loader;

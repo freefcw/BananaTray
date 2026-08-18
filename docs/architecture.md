@@ -159,7 +159,7 @@
 
 自定义 provider reload 的稳定语义：
 
-- YAML 运行时契约为 `schema_version: 2` + `plan.steps`；详见 `custom-provider.md`。
+- YAML 运行时契约为 `schema_version: 2` + `plan.steps`；加载旧 YAML 时会自动迁移并写回，详见 `custom-provider.md`。
 - reload 会重建 provider manager 快照，并把最新状态发回前台。
 - 当前没有文件系统 watcher；触发规则和 reload 语义详见 `refresh-strategy.md` §Custom Provider Reload。
 
