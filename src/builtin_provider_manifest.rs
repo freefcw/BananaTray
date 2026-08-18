@@ -20,6 +20,7 @@ macro_rules! builtin_provider_manifest {
             Kiro => "kiro" => kiro::KiroProvider,
             Antigravity => "antigravity" => antigravity::AntigravityProvider,
             Windsurf => "windsurf" => windsurf::WindsurfProvider,
+            Grok => "grok" => grok::GrokProvider,
         }
     };
 }

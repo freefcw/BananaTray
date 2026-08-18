@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1258" viewBox="0 0 800 1258">
-  <rect x="0" y="0" width="800" height="1258" fill="#eef0f3" />
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1326" viewBox="0 0 800 1326">
+  <rect x="0" y="0" width="800" height="1326" fill="#eef0f3" />
   <text x="24" y="27" fill="#20242a" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="600">BananaTray provider icon optical review</text>
   <text x="180" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">LIGHT</text>
   <text x="452" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">DARK</text>
@@ -487,411 +487,451 @@
     <path d="M12 3.5L13.9 8.1L18.5 10L13.9 11.9L12 16.5L10.1 11.9L5.5 10L10.1 8.1L12 3.5Z" fill="currentColor" />
     <path d="M18.5 14.5L19.4 16.6L21.5 17.5L19.4 18.4L18.5 20.5L17.6 18.4L15.5 17.5L17.6 16.6L18.5 14.5Z" fill="currentColor" fill-opacity="0.65" />
   </g>
-  <text x="24" y="802" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kilo</text>
+  <text x="24" y="802" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">grok</text>
   <rect x="180" y="770" width="252" height="56" fill="#ffffff" rx="4" />
   <g color="#30343b" transform="translate(194.5 790.5) scale(0.625)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(238 790) scale(0.666667)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(280 788) scale(0.833333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(322 782) scale(1.33333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <rect x="370" y="770" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 782) scale(1.33333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <rect x="452" y="770" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 790.5) scale(0.625)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(510 790) scale(0.666667)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(552 788) scale(0.833333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(594 782) scale(1.33333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <rect x="642" y="770" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 782) scale(1.33333)">
-    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
   </g>
   <rect x="724" y="770" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 790) scale(0.666667)">
+    <path d="M12 3.8L13.55 10.45L20.2 12L13.55 13.55L12 20.2L10.45 13.55L3.8 12L10.45 10.45Z" fill="currentColor" />
+  </g>
+  <rect x="12" y="832" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="870" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kilo</text>
+  <rect x="180" y="838" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 858.5) scale(0.625)">
     <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
     <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
     <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
-  <rect x="12" y="832" width="776" height="68" fill="#e8eaed" rx="4" />
-  <text x="24" y="870" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kimi</text>
-  <rect x="180" y="838" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 858.5) scale(0.625)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
-  </g>
   <g color="#30343b" transform="translate(238 858) scale(0.666667)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(280 856) scale(0.833333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(322 850) scale(1.33333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="370" y="838" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 850) scale(1.33333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="452" y="838" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 858.5) scale(0.625)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(510 858) scale(0.666667)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(552 856) scale(0.833333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(594 850) scale(1.33333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="642" y="838" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 850) scale(1.33333)">
-    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="724" y="838" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 858) scale(0.666667)">
+    <path d="M6 4V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L16 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M6 12L18 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="938" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kimi</text>
+  <rect x="180" y="906" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 926.5) scale(0.625)">
     <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
     <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
-  <text x="24" y="938" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kiro</text>
-  <rect x="180" y="906" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 926.5) scale(0.625)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-  </g>
   <g color="#30343b" transform="translate(238 926) scale(0.666667)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(280 924) scale(0.833333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(322 918) scale(1.33333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <rect x="370" y="906" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 918) scale(1.33333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <rect x="452" y="906" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 926.5) scale(0.625)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(510 926) scale(0.666667)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(552 924) scale(0.833333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(594 918) scale(1.33333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <rect x="642" y="906" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 918) scale(1.33333)">
-    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
   </g>
   <rect x="724" y="906" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 926) scale(0.666667)">
+    <path d="M15.8 4.7C14.8 4.3 13.7 4 12.5 4C8.4 4 5 7.4 5 11.5C5 15.6 8.4 19 12.5 19C13.7 19 14.8 18.7 15.8 18.3C13.7 17.6 12.2 15.6 12.2 13.2C12.2 10.8 13.7 8.8 15.8 8.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17.6" cy="7.3" r="1.4" fill="currentColor" />
+  </g>
+  <rect x="12" y="968" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="1006" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">kiro</text>
+  <rect x="180" y="974" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 994.5) scale(0.625)">
     <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
     <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
     <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
-  <rect x="12" y="968" width="776" height="68" fill="#e8eaed" rx="4" />
-  <text x="24" y="1006" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">minimax</text>
-  <rect x="180" y="974" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 994.5) scale(0.625)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-  </g>
   <g color="#30343b" transform="translate(238 994) scale(0.666667)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(280 992) scale(0.833333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(322 986) scale(1.33333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="370" y="974" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 986) scale(1.33333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="452" y="974" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 994.5) scale(0.625)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(510 994) scale(0.666667)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(552 992) scale(0.833333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(594 986) scale(1.33333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="642" y="974" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 986) scale(1.33333)">
-    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="724" y="974" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 994) scale(0.666667)">
+    <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+    <path d="M9 9L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M15 9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="1074" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">minimax</text>
+  <rect x="180" y="1042" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1062.5) scale(0.625)">
     <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
     <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
     <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
-  <text x="24" y="1074" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">opencode</text>
-  <rect x="180" y="1042" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 1062.5) scale(0.625)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-  </g>
   <g color="#30343b" transform="translate(238 1062) scale(0.666667)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(280 1060) scale(0.833333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(322 1054) scale(1.33333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="370" y="1042" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 1054) scale(1.33333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="452" y="1042" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 1062.5) scale(0.625)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(510 1062) scale(0.666667)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(552 1060) scale(0.833333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(594 1054) scale(1.33333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="642" y="1042" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 1054) scale(1.33333)">
-    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="724" y="1042" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 1062) scale(0.666667)">
+    <path d="M4 17V7L8 13L12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M20 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <rect x="12" y="1104" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="1142" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">opencode</text>
+  <rect x="180" y="1110" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1130.5) scale(0.625)">
     <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
     <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
     <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
-  <rect x="12" y="1104" width="776" height="68" fill="#e8eaed" rx="4" />
-  <text x="24" y="1142" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">unknown</text>
-  <rect x="180" y="1110" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 1130.5) scale(0.625)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
-  </g>
   <g color="#30343b" transform="translate(238 1130) scale(0.666667)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(280 1128) scale(0.833333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#30343b" transform="translate(322 1122) scale(1.33333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="370" y="1110" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 1122) scale(1.33333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="452" y="1110" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 1130.5) scale(0.625)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(510 1130) scale(0.666667)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(552 1128) scale(0.833333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <g color="#f1f2f4" transform="translate(594 1122) scale(1.33333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="642" y="1110" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 1122) scale(1.33333)">
-    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
-    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
   </g>
   <rect x="724" y="1110" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 1130) scale(0.666667)">
+    <path d="M8 7L3 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 7L21 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 4L10 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+  </g>
+  <text x="24" y="1210" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">unknown</text>
+  <rect x="180" y="1178" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1198.5) scale(0.625)">
     <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
     <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
     <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
-  <text x="24" y="1210" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">vertexai</text>
-  <rect x="180" y="1178" width="252" height="56" fill="#ffffff" rx="4" />
-  <g color="#30343b" transform="translate(194.5 1198.5) scale(0.625)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
-  </g>
   <g color="#30343b" transform="translate(238 1198) scale(0.666667)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(280 1196) scale(0.833333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <g color="#30343b" transform="translate(322 1190) scale(1.33333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <rect x="370" y="1178" width="56" height="56" fill="#e8eaed" rx="8" />
   <g color="#30343b" transform="translate(382 1190) scale(1.33333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <rect x="452" y="1178" width="252" height="56" fill="#17191d" rx="4" />
   <g color="#f1f2f4" transform="translate(466.5 1198.5) scale(0.625)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(510 1198) scale(0.666667)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(552 1196) scale(0.833333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <g color="#f1f2f4" transform="translate(594 1190) scale(1.33333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <rect x="642" y="1178" width="56" height="56" fill="#2b2e34" rx="8" />
   <g color="#f1f2f4" transform="translate(654 1190) scale(1.33333)">
-    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
   </g>
   <rect x="724" y="1178" width="56" height="56" fill="#ffffff" rx="4" />
   <g color="#8a9099" transform="translate(744 1198) scale(0.666667)">
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 10C10 8.9 10.9 8 12 8C13.1 8 14 8.9 14 10C14 11.1 12 11.5 12 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+  </g>
+  <rect x="12" y="1240" width="776" height="68" fill="#e8eaed" rx="4" />
+  <text x="24" y="1278" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">vertexai</text>
+  <rect x="180" y="1246" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1266.5) scale(0.625)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(238 1266) scale(0.666667)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(280 1264) scale(0.833333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#30343b" transform="translate(322 1258) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="370" y="1246" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 1258) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="452" y="1246" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 1266.5) scale(0.625)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 1266) scale(0.666667)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 1264) scale(0.833333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 1258) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="642" y="1246" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 1258) scale(1.33333)">
+    <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+    <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <rect x="724" y="1246" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 1266) scale(0.666667)">
     <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
     <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
   </g>

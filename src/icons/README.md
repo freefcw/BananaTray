@@ -57,7 +57,7 @@ review rather than automatic rejection.
 ## Current Icons
 
 ### Provider Icons
-`provider-amp.svg`, `provider-antigravity.svg`, `provider-claude.svg`, `provider-cline-pass.svg`, `provider-codex.svg`, `provider-copilot.svg`, `provider-cursor.svg`, `provider-custom.svg`, `provider-gemini.svg`, `provider-kilo.svg`, `provider-kimi.svg`, `provider-kiro.svg`, `provider-minimax.svg`, `provider-opencode.svg`, `provider-unknown.svg`, `provider-vertexai.svg`, `provider-devin-desktop.svg`
+`provider-amp.svg`, `provider-antigravity.svg`, `provider-claude.svg`, `provider-cline-pass.svg`, `provider-codex.svg`, `provider-copilot.svg`, `provider-cursor.svg`, `provider-custom.svg`, `provider-gemini.svg`, `provider-grok.svg`, `provider-kilo.svg`, `provider-kimi.svg`, `provider-kiro.svg`, `provider-minimax.svg`, `provider-opencode.svg`, `provider-unknown.svg`, `provider-vertexai.svg`, `provider-devin-desktop.svg`
 
 ### UI Icons
 `about.svg`, `advanced.svg`, `chevron-left.svg`, `chevron-right.svg`, `close.svg`, `compass.svg`, `display.svg`, `drag-handle.svg`, `overview.svg`, `plus.svg`, `quit.svg`, `refresh.svg`, `settings.svg`, `status.svg`, `switch.svg`, `trash.svg`, `usage.svg`

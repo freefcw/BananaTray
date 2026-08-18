@@ -1,6 +1,6 @@
 # src/providers/
 
-Provider abstraction layer and all 15 AI provider implementations.
+Provider abstraction layer and all 16 AI provider implementations.
 
 ## Core Abstractions
 
@@ -85,6 +85,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `kilo.rs` | Kilo | `kilo` | `kilo:ext` | `Placeholder` | Extension detection | Discoverable entry only; no normal refresh |
 | `opencode/` | OpenCode Go | `opencode` | `opencode:api` | `Monitorable` | OpenCode Go usage API | Display name is OpenCode Go; stable settings key remains `opencode`. Reads `auth.json` (`opencode-go` / `opencode`); maps rolling / weekly / monthly used percent |
 | `vertex_ai.rs` | Vertex AI | `vertexai` | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
+| `grok/` | Grok | `grok` | `grok:api` | `Monitorable` | Grok Build billing API | Reads `~/.grok/auth.json`; SuperGrok / subscription weekly pool via `cli-chat-proxy` `?format=credits`. See `grok/README.md` |
 
 ## Design Notes
 

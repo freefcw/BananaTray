@@ -6,7 +6,7 @@
 
 ## Built-in Providers
 
-当前内置 15 个 provider，外加 YAML 自定义 provider。
+当前内置 16 个 provider，外加 YAML 自定义 provider。
 
 | Provider | 设置 / 配置里的稳定 key | 主要数据来源 | Capability | 备注 |
 |----------|--------------------------|--------------|------------|------|
@@ -22,6 +22,7 @@
 | Kiro | `kiro` | CLI | `Monitorable` | Credits / Bonus Credits 显示为积分（`X.XX / Y.YY`），不带 `$` 前缀；底层 `QuotaType::Points` |
 | Antigravity | `antigravity` | 云端 API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `cloud -> live -> cache`；云端源读取 agy CLI 存在 macOS Keychain 的 token，access_token 过期时先跑一次非交互 `agy models` 触发 CLI 续期（BananaTray 不持有 refresh_token），续期失败才报 `SessionExpired`；调用 Google quota summary API 时带 `User-Agent: antigravity`（该端点按 UA 白名单放行，否则 429），撞 429 后本地冷却 30 分钟内直接走本地源；Linux 无云端源回落 `live -> cache`。见 `antigravity-api.md` |
 | Devin Desktop | `windsurf` | seat API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `seat -> live -> cache`；seat API 的日 / 周配额优先，若 seat 缺周配额才用本地缓存补周配额。用户可见来源显示为 Devin Cloud；`windsurf` 仍是兼容稳定 key。见 `antigravity-api.md` |
+| Grok | `grok` | HTTP API + 本地 OAuth | `Monitorable` | 读取 `$GROK_HOME/auth.json` 或 `~/.grok/auth.json` 的 Grok Build session，请求 `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits`；展示 SuperGrok / 订阅周池已用百分比。token 过期前会用 refresh_token 轮转并原子写回。这不是 xAI 开发者 API 预付积分，也不是 `XAI_API_KEY` |
 | Kilo | `kilo` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |
 | OpenCode Go | `opencode` | HTTP API + 本地凭据 | `Monitorable` | UI 展示名为 OpenCode Go；设置 / 状态稳定 key 仍为 `opencode`。读取 `~/.local/share/opencode/auth.json` 的 `opencode-go` / `opencode` API key，请求 `GET https://opencode.ai/zen/go/v1/usage`；展示滚动 5 小时 / 周 / 月已用百分比；仅监控 Go 订阅配额，不汇总壳内其它 BYO provider |
 | Vertex AI | `vertexai` | Gemini CLI 配置检测 | `Informational` | 说明 Gemini CLI 的 Vertex AI 认证路径，本身不直接抓取配额 |

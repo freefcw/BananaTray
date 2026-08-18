@@ -275,6 +275,7 @@ mod tests {
         assert_eq!(ProviderKind::Gemini.id_key(), "gemini");
         assert_eq!(ProviderKind::VertexAi.id_key(), "vertexai");
         assert_eq!(ProviderKind::Windsurf.id_key(), "windsurf");
+        assert_eq!(ProviderKind::Grok.id_key(), "grok");
     }
 
     #[test]
