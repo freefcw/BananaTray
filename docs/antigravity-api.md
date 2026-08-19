@@ -49,10 +49,10 @@ source orchestration 目前明确分开：
 Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不属于 `codeium_family` 共享层：
 
 - 读取 agy CLI 存在 macOS Keychain 的凭证（`go-keyring-base64:` 前缀 + base64 JSON）
-- access_token 约 1 小时过期，过期是常态；过期时先跑一次非交互 `agy models` 触发 CLI 用自持 refresh_token 续期并重读 Keychain，续期仍失败才返回 `SessionExpired`（建议跑一次 `agy` 登录）并继续尝试本地源。BananaTray 不持有 refresh_token，也不直接写 Keychain
-- 调用 `daily-cloudcode-pa.googleapis.com` 的 quota summary API；该端点限流激进，撞 429 后本地冷却 30 分钟，冷却期内直接跳过云端源
-- 该端点按 User-Agent 白名单放行（2026-08 实测：同一 token，UA 为 `antigravity` 时 200，curl 默认 UA 一律 429；CodexBar 的远程实现同样固定 `User-Agent: antigravity`）。请求必须带 `User-Agent: antigravity`
-- 实际响应形态是 `groups` 数组（如 "Gemini Models" / "Claude and GPT models" 两组），每组共享 `weekly` + `5h` 两个 bucket；顶层 `buckets` 字段保留为兼容兜底。stable_key 带 group 前缀，避免两组同名 window 互相覆盖显示状态
+- access_token 约 1 小时过期，过期是常态；过期时先跑一次非交互 `agy models` 触发 CLI 用自持 refresh_token 续期并重读 Keychain，续期后仍无有效 token 才返回 `SessionExpired`（建议跑一次 `agy` 登录）并继续尝试本地源。BananaTray 不持有 refresh_token，也不直接写 Keychain；`security` 查询和 `agy models` 分别限制为 5 秒和 15 秒，避免阻塞刷新 worker
+- 调用 `daily-cloudcode-pa.googleapis.com`：正常路径先通过 `loadCodeAssist` 读取账户对应的 `cloudaicompanionProject`，再把 `project` 传给 quota summary API；project discovery 失败时仍用空请求体尝试 summary，避免辅助步骤阻断原本可用的账号。该端点限流激进，summary 撞 429 后本地冷却 30 分钟，冷却期内直接跳过云端源
+- 近期 agy 请求和公开远程实现都携带 `User-Agent: antigravity`；部分复现中省略该标识会触发 429，因此请求固定携带该 UA 以保持兼容。该观察行为不是 Google 公布的稳定协议保证
+- 远端响应使用顶层 `groups`；每组（如 "Gemini Models" / "Claude and GPT models"）共享 `weekly` + `5h` 两个 bucket，剩余额度来自 bucket 顶层的 `remainingFraction`。顶层 `buckets` 字段保留为旧形状兜底；stable_key 带 group 前缀，避免两组同名 window 互相覆盖显示状态。不要把本地 language server RPC 的 `response.groups` 包装直接套到该远端响应上
 - 云端源可用性只看 Keychain token 是否存在；Keychain 首次读取可能触发系统授权弹窗，属预期行为
 
 这意味着：
@@ -67,7 +67,7 @@ Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不
 1. Antigravity：优先尝试云端 quota API（macOS，读 agy Keychain token；请求带 `User-Agent: antigravity`，429 冷却期内跳过），失败时尝试 live source，最后回退本地 cache
 2. Devin Desktop：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
 3. Devin Desktop 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining
-4. 所有来源都失败时返回结构化错误
+4. 所有来源都失败时，云端 `SessionExpired` / `AuthRequired` 优先保留结构化 reason 与 advice；其它组合返回包含三路诊断的 `FetchFailed`
 
 本地 cache 回退之前会做两道陈旧检查：
 

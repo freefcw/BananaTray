@@ -147,6 +147,22 @@ fn quota_with_key_from_remaining_percent_preserves_explicit_key() {
 }
 
 #[test]
+fn quota_with_key_from_remaining_fraction_preserves_key_and_converts_to_used_percent() {
+    let quota = QuotaInfo::with_key_from_remaining_fraction(
+        "session-quota",
+        QuotaLabelSpec::Session,
+        0.25,
+        QuotaType::Session,
+        None,
+    );
+
+    assert_eq!(quota.used, 75.0);
+    assert_eq!(quota.limit, 100.0);
+    assert_eq!(quota.percent_remaining(), 25.0);
+    assert_eq!(quota.stable_key, "session-quota");
+}
+
+#[test]
 fn quota_from_full_remaining_sets_zero_used_percent() {
     let quota = QuotaInfo::from_full_remaining(QuotaLabelSpec::Daily, QuotaType::General, None);
 

@@ -1,27 +1,30 @@
 //! Antigravity 云端 quota source：读取 agy CLI 的 Keychain token，
 //! 调用 Google 内部 quota summary API 获取账户额度。
 //!
-//! token 只读不刷新（刷新属于 agy CLI 的职责）；过期时返回 `SessionExpired`
-//! 引导用户跑一次 `agy` 重新登录。
+//! BananaTray 不持有 refresh token，也不直接写 Keychain；access token 过期时
+//! 通过有界的 `agy models` 调用触发 CLI 续期，续期后仍无有效 token 才返回
+//! `SessionExpired`。
 
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
+use crate::providers::common::cli;
 use crate::providers::ProviderError;
 use crate::utils::time_utils::{is_expired_epoch_secs, parse_iso8601_to_epoch};
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use log::{debug, info, warn};
 use serde::Deserialize;
-use std::process::Command;
+use std::process::Output;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 pub(crate) const CLOUD_API_SOURCE_LABEL: &str = "antigravity cloud";
 
 const QUOTA_API_BASE: &str = "https://daily-cloudcode-pa.googleapis.com";
+const LOAD_CODE_ASSIST_PATH: &str = "/v1internal:loadCodeAssist";
 const RETRIEVE_USER_QUOTA_SUMMARY_PATH: &str = "/v1internal:retrieveUserQuotaSummary";
 
-/// Google quota 端点按 User-Agent 白名单放行：非 `antigravity` UA 一律 429。
-/// 与 agy CLI / CodexBar 的远程实现保持一致。
+/// 近期 agy 请求和公开远程实现都携带 Antigravity User-Agent；部分复现中
+/// 省略该标识会触发 429，因此固定发送以保持客户端兼容性。
 const USER_AGENT: &str = "User-Agent: antigravity";
 
 /// macOS Keychain 中 agy CLI 凭证的存储位置（go-keyring 约定）。
@@ -39,6 +42,9 @@ const KEYRING_BASE64_PREFIX: &str = "go-keyring-base64:";
 /// 该端点对非 agy 客户端的调用限流非常激进，冷却期内直接跳过云端源，
 /// 走 live / cache fallback，避免每个刷新周期都触发一次注定失败的请求。
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(30 * 60);
+#[cfg(target_os = "macos")]
+const KEYCHAIN_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+const AGY_REFRESH_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 429 冷却截止时间；None 表示当前不在冷却期。
 static RATE_LIMIT_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
@@ -62,17 +68,26 @@ struct AgyToken {
 /// 从 macOS Keychain 读取 agy CLI 的完整凭证 payload；读取失败视为云端源不可用。
 #[cfg(target_os = "macos")]
 fn read_agy_keychain_payload() -> Option<AgyKeychainPayload> {
-    let output = Command::new("security")
-        .args([
+    read_agy_keychain_payload_with(cli::run_command_with_timeout)
+}
+
+#[cfg(target_os = "macos")]
+fn read_agy_keychain_payload_with(
+    run: impl FnOnce(&str, &[&str], Duration) -> Result<Output>,
+) -> Option<AgyKeychainPayload> {
+    let output = run(
+        "/usr/bin/security",
+        &[
             "find-generic-password",
             "-s",
             KEYCHAIN_SERVICE,
             "-a",
             KEYCHAIN_ACCOUNT,
             "-w",
-        ])
-        .output()
-        .ok()?;
+        ],
+        KEYCHAIN_COMMAND_TIMEOUT,
+    )
+    .ok()?;
 
     if !output.status.success() {
         debug!(
@@ -137,22 +152,44 @@ fn payload_token_expired(payload: Option<&AgyKeychainPayload>) -> bool {
     )
 }
 
+fn resolve_access_token_with_refresh(
+    mut payload: AgyKeychainPayload,
+    refresh: impl FnOnce(),
+    reread: impl FnOnce() -> Option<AgyKeychainPayload>,
+) -> Result<String> {
+    if payload_token_expired(Some(&payload)) {
+        refresh();
+        payload = reread().ok_or_else(|| anyhow::Error::new(session_expired_error()))?;
+    }
+
+    if payload_token_expired(Some(&payload)) {
+        return Err(session_expired_error().into());
+    }
+
+    extract_access_token(Some(payload)).ok_or_else(|| session_expired_error().into())
+}
+
+fn session_expired_error() -> ProviderError {
+    ProviderError::session_expired(Some(crate::models::FailureAdvice::LoginCli {
+        cli: "agy".to_string(),
+    }))
+}
+
 /// 跑一次非交互 agy 命令，让 CLI 用自持的 refresh_token 自动刷新 Keychain。
 ///
 /// agy 的 access_token 有效期约 1 小时，过期是常态而不是需要重新登录；
 /// CLI 侧任何一次联网调用都会顺带完成续期。这里只负责触发，
 /// 刷新是否成功由调用方重读 Keychain 判定。
 fn try_refresh_token_via_agy() {
+    try_refresh_token_via_agy_with(cli::run_command_with_timeout);
+}
+
+fn try_refresh_token_via_agy_with(run: impl FnOnce(&str, &[&str], Duration) -> Result<Output>) {
     info!(
         target: "providers",
         "antigravity: token expired, triggering agy CLI token refresh"
     );
-    let output = Command::new("agy")
-        .args(["models"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output();
+    let output = run("agy", &["models"], AGY_REFRESH_TIMEOUT);
     match output {
         Ok(status) if !status.status.success() => {
             warn!(
@@ -238,6 +275,12 @@ struct QuotaSummaryGroup {
     display_name: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LoadCodeAssistResponse {
+    cloudaicompanion_project: Option<String>,
+}
+
 pub fn fetch_refresh_data() -> Result<RefreshData> {
     if rate_limit_active() {
         debug!(
@@ -247,7 +290,7 @@ pub fn fetch_refresh_data() -> Result<RefreshData> {
         return Err(ProviderError::unavailable("cloud API in rate-limit cooldown").into());
     }
 
-    let mut payload = read_agy_keychain_payload().ok_or_else(|| {
+    let payload = read_agy_keychain_payload().ok_or_else(|| {
         // Keychain 没有 agy 凭证：说明用户没装 / 没登录过 agy CLI，
         // 属于正常的不可用而不是错误，静默走本地源。
         ProviderError::unavailable("agy Keychain token not found")
@@ -256,40 +299,33 @@ pub fn fetch_refresh_data() -> Result<RefreshData> {
     // access_token 约 1 小时过期，过期是常态；跑一次非交互 agy 让 CLI
     // 用自持的 refresh_token 续期（实测 `agy models` 即可触发），再重读 Keychain。
     // 续期失败或用户没装 CLI 时才报 SessionExpired 引导重新登录。
-    if payload_token_expired(Some(&payload)) {
-        try_refresh_token_via_agy();
-        payload = read_agy_keychain_payload()
-            .ok_or_else(|| ProviderError::unavailable("agy Keychain token not found"))?;
-    }
-
-    let access_token = extract_access_token(Some(payload)).ok_or_else(|| {
-        ProviderError::session_expired(Some(crate::models::FailureAdvice::LoginCli {
-            cli: "agy".to_string(),
-        }))
-    })?;
-
-    let url = format!("{}{}", QUOTA_API_BASE, RETRIEVE_USER_QUOTA_SUMMARY_PATH);
-    let auth_header = format!("Authorization: Bearer {}", access_token);
+    let access_token = resolve_access_token_with_refresh(
+        payload,
+        try_refresh_token_via_agy,
+        read_agy_keychain_payload,
+    )?;
 
     info!(
         target: "providers",
         "antigravity: fetching quota summary from cloud API"
     );
 
-    let response_text =
-        crate::providers::common::http_client::post_json(&url, &[&auth_header, USER_AGENT], "{}")
-            .map_err(|err| {
-            if is_rate_limit_error(&err) {
-                mark_rate_limited(Instant::now());
-                warn!(
-                    target: "providers",
-                    "antigravity: cloud API rate limited (429), cooling down for 30 minutes"
-                );
-                ProviderError::fetch_failed("cloud API rate limited")
-            } else {
-                ProviderError::classify(&err)
-            }
-        })?;
+    let response_text = fetch_quota_summary_response(
+        &access_token,
+        crate::providers::common::http_client::post_json,
+    )
+    .map_err(|err| {
+        if is_rate_limit_error(&err) {
+            mark_rate_limited(Instant::now());
+            warn!(
+                target: "providers",
+                "antigravity: cloud API rate limited (429), cooling down for 30 minutes"
+            );
+            ProviderError::fetch_failed("cloud API rate limited")
+        } else {
+            ProviderError::classify(&err)
+        }
+    })?;
 
     clear_rate_limit();
 
@@ -297,6 +333,49 @@ pub fn fetch_refresh_data() -> Result<RefreshData> {
         .with_context(|| "Failed to parse cloud quota summary response")?;
 
     build_refresh_data(response)
+}
+
+fn fetch_quota_summary_response(
+    access_token: &str,
+    mut post_json: impl FnMut(&str, &[&str], &str) -> Result<String>,
+) -> Result<String> {
+    let auth_header = format!("Authorization: Bearer {access_token}");
+    let headers = [auth_header.as_str(), USER_AGENT];
+    let load_url = format!("{QUOTA_API_BASE}{LOAD_CODE_ASSIST_PATH}");
+    let load_body = serde_json::json!({
+        "metadata": {
+            "ideType": "ANTIGRAVITY",
+            "pluginType": "GEMINI"
+        }
+    })
+    .to_string();
+    let project = match post_json(&load_url, &headers, &load_body) {
+        Ok(load_response) => match serde_json::from_str::<LoadCodeAssistResponse>(&load_response) {
+            Ok(response) => response
+                .cloudaicompanion_project
+                .filter(|project| !project.is_empty()),
+            Err(err) => {
+                debug!(
+                    target: "providers",
+                    "antigravity: loadCodeAssist response could not be parsed: {err}"
+                );
+                None
+            }
+        },
+        Err(err) => {
+            debug!(
+                target: "providers",
+                "antigravity: project discovery failed, trying unscoped quota request: {err}"
+            );
+            None
+        }
+    };
+
+    let summary_url = format!("{QUOTA_API_BASE}{RETRIEVE_USER_QUOTA_SUMMARY_PATH}");
+    let body = project
+        .map(|project| serde_json::json!({ "project": project }).to_string())
+        .unwrap_or_else(|| "{}".to_string());
+    post_json(&summary_url, &headers, &body)
 }
 
 /// `HttpError::HttpStatus { code: 429 }` 检测（正文被 http 层有意丢弃，只看状态码）。
@@ -480,6 +559,89 @@ mod tests {
         assert!(!is_token_expired(None));
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn keychain_lookup_uses_bounded_command_runner() {
+        let mut observed = None;
+        let payload = read_agy_keychain_payload_with(|binary, args, timeout| {
+            observed = Some((
+                binary.to_string(),
+                args.iter()
+                    .map(|arg| (*arg).to_string())
+                    .collect::<Vec<_>>(),
+                timeout,
+            ));
+            Err(anyhow::anyhow!("stop after observing command"))
+        });
+
+        assert!(payload.is_none());
+        let (binary, args, timeout) = observed.unwrap();
+        assert_eq!(binary, "/usr/bin/security");
+        assert_eq!(args[0], "find-generic-password");
+        assert_eq!(timeout, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn agy_refresh_uses_bounded_command_runner() {
+        let mut observed = None;
+        try_refresh_token_via_agy_with(|binary, args, timeout| {
+            observed = Some((
+                binary.to_string(),
+                args.iter()
+                    .map(|arg| (*arg).to_string())
+                    .collect::<Vec<_>>(),
+                timeout,
+            ));
+            Err(anyhow::anyhow!("stop after observing command"))
+        });
+
+        let (binary, args, timeout) = observed.unwrap();
+        assert_eq!(binary, "agy");
+        assert_eq!(args, ["models"]);
+        assert_eq!(timeout, Duration::from_secs(15));
+    }
+
+    #[test]
+    fn expired_token_still_expired_after_cli_refresh_returns_session_expired() {
+        let expired_payload = || AgyKeychainPayload {
+            token: Some(AgyToken {
+                access_token: Some("stale-token".to_string()),
+                expiry: Some("2020-01-01T00:00:00Z".to_string()),
+            }),
+        };
+
+        let err =
+            resolve_access_token_with_refresh(expired_payload(), || {}, || Some(expired_payload()))
+                .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::SessionExpired { .. })
+        ));
+    }
+
+    #[test]
+    fn expired_token_refreshed_by_cli_returns_new_access_token() {
+        let expired_payload = AgyKeychainPayload {
+            token: Some(AgyToken {
+                access_token: Some("stale-token".to_string()),
+                expiry: Some("2020-01-01T00:00:00Z".to_string()),
+            }),
+        };
+        let refreshed_payload = AgyKeychainPayload {
+            token: Some(AgyToken {
+                access_token: Some("fresh-token".to_string()),
+                expiry: Some("2099-01-01T00:00:00Z".to_string()),
+            }),
+        };
+
+        let token =
+            resolve_access_token_with_refresh(expired_payload, || {}, || Some(refreshed_payload))
+                .unwrap();
+
+        assert_eq!(token, "fresh-token");
+    }
+
     #[test]
     fn parse_quota_summary_camel_case() {
         // 实测形态：bucket 全部在 groups 里，每组共享 weekly + 5h 两个窗口
@@ -651,5 +813,67 @@ mod tests {
         assert_eq!(classify_window(Some("MONTH")), QuotaType::Monthly);
         assert_eq!(classify_window(None), QuotaType::General);
         assert_eq!(classify_window(Some("ROLLING")), QuotaType::General);
+    }
+
+    #[test]
+    fn quota_request_discovers_project_before_fetching_summary() {
+        let mut calls = Vec::new();
+        let response = fetch_quota_summary_response("test-token", |url, headers, body| {
+            calls.push((
+                url.to_string(),
+                headers
+                    .iter()
+                    .map(|header| (*header).to_string())
+                    .collect::<Vec<_>>(),
+                body.to_string(),
+            ));
+            if url.ends_with("/v1internal:loadCodeAssist") {
+                Ok(r#"{"cloudaicompanionProject":"project-123"}"#.to_string())
+            } else {
+                Ok(r#"{"groups":[]}"#.to_string())
+            }
+        })
+        .unwrap();
+
+        assert_eq!(response, r#"{"groups":[]}"#);
+        assert_eq!(calls.len(), 2);
+        assert!(calls[0].0.ends_with("/v1internal:loadCodeAssist"));
+        assert!(calls[1].0.ends_with("/v1internal:retrieveUserQuotaSummary"));
+        assert!(calls[0].1.iter().any(|header| header == USER_AGENT));
+        assert!(calls[0]
+            .1
+            .iter()
+            .any(|header| header == "Authorization: Bearer test-token"));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&calls[0].2).unwrap(),
+            serde_json::json!({
+                "metadata": {
+                    "ideType": "ANTIGRAVITY",
+                    "pluginType": "GEMINI"
+                }
+            })
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&calls[1].2).unwrap(),
+            serde_json::json!({ "project": "project-123" })
+        );
+    }
+
+    #[test]
+    fn quota_request_falls_back_to_unscoped_summary_when_project_discovery_fails() {
+        let mut calls = Vec::new();
+        let response = fetch_quota_summary_response("test-token", |url, _headers, body| {
+            calls.push((url.to_string(), body.to_string()));
+            if url.ends_with("/v1internal:loadCodeAssist") {
+                Err(anyhow::anyhow!("load unavailable"))
+            } else {
+                Ok(r#"{"groups":[]}"#.to_string())
+            }
+        })
+        .unwrap();
+
+        assert_eq!(response, r#"{"groups":[]}"#);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].1, "{}");
     }
 }

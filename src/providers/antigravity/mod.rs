@@ -86,6 +86,10 @@ fn refresh_antigravity_with_sources(
     );
 
     fetch_cache().map_err(|cache_err| {
+        if let Some(auth_error) = cloud_auth_error(&cloud_err) {
+            return anyhow::Error::new(auth_error);
+        }
+
         ProviderError::fetch_failed(&format!(
             "all sources failed: cloud API error: {}; local API error: {}; cache error: {}",
             cloud_err, live_err, cache_err
@@ -94,12 +98,20 @@ fn refresh_antigravity_with_sources(
     })
 }
 
+fn cloud_auth_error(err: &anyhow::Error) -> Option<ProviderError> {
+    match err.downcast_ref::<ProviderError>() {
+        Some(error @ ProviderError::AuthRequired { .. })
+        | Some(error @ ProviderError::SessionExpired { .. }) => Some(error.clone()),
+        _ => None,
+    }
+}
+
 impl ProviderCapabilities for AntigravityProvider {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{QuotaInfo, QuotaType};
+    use crate::models::{FailureAdvice, QuotaInfo, QuotaType};
     #[test]
     fn test_classify_unavailable_maps_both_sources_missing() {
         let err = ProviderError::unavailable(ANTIGRAVITY_SPEC.unavailable_message);
@@ -249,5 +261,43 @@ mod tests {
         .unwrap();
 
         assert_eq!(data.source_label, Some("local api".to_string()));
+    }
+
+    #[test]
+    fn test_all_sources_failed_preserves_cloud_session_expired() {
+        let err = refresh_antigravity_with_sources(
+            || {
+                Err(anyhow::Error::new(ProviderError::session_expired(Some(
+                    FailureAdvice::LoginCli {
+                        cli: "agy".to_string(),
+                    },
+                ))))
+            },
+            || Err(anyhow::anyhow!("live unavailable")),
+            || Err(anyhow::anyhow!("cache unavailable")),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::SessionExpired {
+                advice: Some(FailureAdvice::LoginCli { cli })
+            }) if cli == "agy"
+        ));
+    }
+
+    #[test]
+    fn test_all_sources_failed_preserves_cloud_auth_required() {
+        let err = refresh_antigravity_with_sources(
+            || Err(anyhow::Error::new(ProviderError::auth_required(None))),
+            || Err(anyhow::anyhow!("live unavailable")),
+            || Err(anyhow::anyhow!("cache unavailable")),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::AuthRequired { .. })
+        ));
     }
 }
