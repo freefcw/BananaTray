@@ -1,5 +1,5 @@
 use crate::application::{header_view_state, HeaderStatusKind};
-use crate::models::{NavTab, ProviderId};
+use crate::models::NavTab;
 use crate::theme::Theme;
 #[cfg(target_os = "linux")]
 use gpui::MouseButton;
@@ -10,7 +10,6 @@ use gpui::{
 use log::debug;
 use rust_i18n::t;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::runtime::AppState;
@@ -63,8 +62,6 @@ pub struct AppView {
     #[cfg(target_os = "linux")]
     pub(crate) _bounds_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
-    /// Overview 面板中展开了配额详情的 Provider 集合（UI-only 状态）
-    pub(crate) overview_expanded: HashSet<ProviderId>,
 }
 
 impl AppView {
@@ -89,7 +86,6 @@ impl AppView {
             #[cfg(target_os = "linux")]
             _bounds_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
-            overview_expanded: HashSet::new(),
         }
     }
 

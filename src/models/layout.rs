@@ -114,19 +114,25 @@ pub fn compute_popup_height_for_quotas(quota_count: usize) -> f32 {
     compute_popup_height_detailed(quota_count, true, false)
 }
 
-/// 根据已启用 Provider 数量计算 Overview 面板的弹出窗口高度
+/// 根据每个已启用 Provider 的 Overview 卡片行数计算弹出窗口高度
 ///
-/// 所有卡片默认折叠为单行，展开后靠内容区 scroll 处理。
-pub fn compute_popup_height_for_overview(provider_count: usize) -> f32 {
-    if provider_count == 0 {
-        return PopupLayout::FIXED_HEIGHT + PopupLayout::OVERVIEW_ITEM_HEIGHT;
+/// `card_rows` 按 Provider 顺序给出各卡片的配额行数：`1` 为折叠/单配额的单行卡片，
+/// `>1` 为展开态多行卡片。超过 `MAX_HEIGHT` 的部分仍靠内容区 scroll 处理。
+pub fn compute_popup_height_for_overview(card_rows: &[usize]) -> f32 {
+    if card_rows.is_empty() {
+        return PopupLayout::MIN_OVERVIEW_HEIGHT;
     }
-    let cards = provider_count as f32 * PopupLayout::OVERVIEW_ITEM_HEIGHT;
-    let spacers = if provider_count > 1 {
-        (provider_count - 1) as f32 * PopupLayout::OVERVIEW_ITEM_SPACER
-    } else {
-        0.0
-    };
+    let cards: f32 = card_rows
+        .iter()
+        .map(|rows| {
+            if *rows > 1 {
+                PopupLayout::overview_multi_item_height(*rows)
+            } else {
+                PopupLayout::OVERVIEW_ITEM_HEIGHT
+            }
+        })
+        .sum();
+    let spacers = card_rows.len().saturating_sub(1) as f32 * PopupLayout::OVERVIEW_ITEM_SPACER;
     let raw = PopupLayout::FIXED_HEIGHT + cards + spacers;
     raw.clamp(PopupLayout::MIN_OVERVIEW_HEIGHT, PopupLayout::MAX_HEIGHT)
 }
@@ -264,14 +270,14 @@ mod tests {
 
     #[test]
     fn overview_height_empty_has_minimum() {
-        let h = compute_popup_height_for_overview(0);
+        let h = compute_popup_height_for_overview(&[]);
         let expected = PopupLayout::FIXED_HEIGHT + PopupLayout::OVERVIEW_ITEM_HEIGHT;
         assert!((h - expected).abs() < f32::EPSILON);
     }
 
     #[test]
     fn overview_height_single_provider() {
-        let h = compute_popup_height_for_overview(1);
+        let h = compute_popup_height_for_overview(&[1]);
         let raw = PopupLayout::FIXED_HEIGHT + PopupLayout::OVERVIEW_ITEM_HEIGHT;
         let expected = raw.clamp(PopupLayout::MIN_OVERVIEW_HEIGHT, PopupLayout::MAX_HEIGHT);
         assert!((h - expected).abs() < f32::EPSILON);
@@ -281,7 +287,7 @@ mod tests {
 
     #[test]
     fn overview_height_multiple_providers() {
-        let h = compute_popup_height_for_overview(3);
+        let h = compute_popup_height_for_overview(&[1, 1, 1]);
         let expected = PopupLayout::FIXED_HEIGHT
             + 3.0 * PopupLayout::OVERVIEW_ITEM_HEIGHT
             + 2.0 * PopupLayout::OVERVIEW_ITEM_SPACER;
@@ -290,8 +296,21 @@ mod tests {
 
     #[test]
     fn overview_height_clamps_to_max() {
-        let h = compute_popup_height_for_overview(100);
+        let h = compute_popup_height_for_overview(&[1; 100]);
         assert_eq!(h, PopupLayout::MAX_HEIGHT);
+    }
+
+    /// 展开态卡片按多行高度计算，窗口跟着长高（否则重开弹窗会立刻溢出滚动）
+    #[test]
+    fn overview_height_expanded_card_is_taller() {
+        let collapsed = compute_popup_height_for_overview(&[1, 1]);
+        let expanded = compute_popup_height_for_overview(&[3, 1]);
+        let expected = PopupLayout::FIXED_HEIGHT
+            + PopupLayout::overview_multi_item_height(3)
+            + PopupLayout::OVERVIEW_ITEM_HEIGHT
+            + PopupLayout::OVERVIEW_ITEM_SPACER;
+        assert!((expanded - expected).abs() < f32::EPSILON);
+        assert!(expanded > collapsed);
     }
 
     // ── 展开态多行高度 ──────────────────────────────────

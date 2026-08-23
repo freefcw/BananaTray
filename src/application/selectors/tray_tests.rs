@@ -516,6 +516,7 @@ fn overview_shows_quota_for_connected_provider() {
         OverviewItemStatus::Quota {
             status_level,
             quotas,
+            ..
         } => {
             assert_eq!(*status_level, crate::models::StatusLevel::Green);
             assert_eq!(quotas.len(), 1);
@@ -628,9 +629,12 @@ fn overview_picks_worst_quota_and_sorts_descending() {
         OverviewItemStatus::Quota {
             status_level,
             quotas,
+            expanded,
         } => {
             // overall worst 是 Red
             assert_eq!(*status_level, crate::models::StatusLevel::Red);
+            // 默认折叠
+            assert!(!*expanded);
             // 收集了 2 个配额
             assert_eq!(quotas.len(), 2);
             // 最差的在前（Red）
@@ -642,6 +646,61 @@ fn overview_picks_worst_quota_and_sorts_descending() {
         }
         other => panic!("expected Quota, got {:?}", other),
     }
+}
+
+/// 展开状态来自 session 记忆，弹窗重建后仍然是展开态
+#[test]
+fn overview_reports_remembered_expansion() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 95.0, 100.0),
+    ];
+
+    let mut session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    session.toggle_overview_expanded(&pid(ProviderKind::Claude));
+
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { expanded, .. } => assert!(*expanded),
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+/// 展开记忆按 Provider 隔离，展开一个不会带上其他 Provider
+#[test]
+fn overview_expansion_is_per_provider() {
+    let _locale_guard = setup_locale();
+    let mut claude = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    claude.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 95.0, 100.0),
+    ];
+    let mut codex = make_provider(ProviderKind::Codex, ConnectionStatus::Connected);
+    codex.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 95.0, 100.0),
+    ];
+
+    let mut session = make_overview_session(
+        vec![claude, codex],
+        &[ProviderKind::Claude, ProviderKind::Codex],
+    );
+    session.toggle_overview_expanded(&pid(ProviderKind::Claude));
+
+    let vm = overview_view_state(&session);
+
+    let expanded_flags: Vec<bool> = vm
+        .items
+        .iter()
+        .map(|item| match &item.status {
+            OverviewItemStatus::Quota { expanded, .. } => *expanded,
+            other => panic!("expected Quota, got {:?}", other),
+        })
+        .collect();
+    assert_eq!(expanded_flags, vec![true, false]);
 }
 
 #[test]
@@ -703,6 +762,7 @@ fn overview_three_plus_quotas_collected_and_sorted() {
         OverviewItemStatus::Quota {
             status_level,
             quotas,
+            ..
         } => {
             // overall worst 应为 Red
             assert_eq!(*status_level, crate::models::StatusLevel::Red);

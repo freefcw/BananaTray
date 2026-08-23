@@ -137,6 +137,8 @@ pub enum OverviewItemStatus {
         status_level: StatusLevel,
         /// 所有可见配额（按 status_level 降序，最差的在前）
         quotas: Vec<OverviewQuotaItem>,
+        /// 是否展开显示全部配额（进程内记忆；单配额时无意义）
+        expanded: bool,
     },
     /// 正在刷新
     Refreshing,

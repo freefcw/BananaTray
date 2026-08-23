@@ -578,3 +578,31 @@ fn toggle_quota_visibility_round_trip() {
         .provider
         .is_quota_visible(&pid(ProviderKind::Claude), "weekly"));
 }
+
+// ── ToggleOverviewExpanded ─────────────────────────
+
+/// 展开记忆只活在进程内，不写 settings.json
+#[test]
+fn toggle_overview_expanded_flips_session_state_without_persisting() {
+    let mut session = make_session();
+    let provider_id = pid(ProviderKind::Claude);
+    assert!(!session.is_overview_expanded(&provider_id));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::ToggleOverviewExpanded(provider_id.clone()),
+    );
+
+    assert!(session.is_overview_expanded(&provider_id));
+    assert!(has_render(&effects));
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    reduce(
+        &mut session,
+        AppAction::ToggleOverviewExpanded(provider_id.clone()),
+    );
+    assert!(!session.is_overview_expanded(&provider_id));
+}

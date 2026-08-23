@@ -12,6 +12,15 @@ pub(super) fn select_nav_tab(session: &mut AppSession, tab: NavTab, effects: &mu
     effects.push(ContextEffect::Render.into());
 }
 
+pub(super) fn toggle_overview_expanded(
+    session: &mut AppSession,
+    provider_id: ProviderId,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.toggle_overview_expanded(&provider_id);
+    effects.push(ContextEffect::Render.into());
+}
+
 pub(super) fn set_settings_tab(
     session: &mut AppSession,
     tab: SettingsTab,

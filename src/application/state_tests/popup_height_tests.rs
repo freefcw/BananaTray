@@ -97,23 +97,66 @@ fn popup_height_account_info_hides_dashboard_row() {
     assert_eq!(h, expected);
 }
 
+// ── Overview 面板高度（走 AppSession::popup_height 的真实分支）──
+// AppSession::new 在 show_overview 默认开启时就落在 Overview tab
+
 #[test]
 fn popup_height_overview_single_provider_has_no_dead_space() {
     let store = make_store(&[ProviderKind::Claude]);
-    let nav = NavigationState {
-        active_tab: NavTab::Overview,
-        last_provider_id: pid(ProviderKind::Claude),
-        prev_active_tab: None,
-        generation: 0,
-    };
     // Overview 分支只统计已启用 Provider
-    let settings = make_settings(&[ProviderKind::Claude]);
+    let session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
 
-    let h = compute_popup_height(&nav, &store, &settings);
+    let h = session.popup_height();
 
     assert_eq!(h, crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT);
     assert_eq!(
         h,
         crate::models::PopupLayout::FIXED_HEIGHT + crate::models::PopupLayout::OVERVIEW_ITEM_HEIGHT
     );
+}
+
+/// 展开态要让窗口长高，否则展开的内容会被压在折叠高度里滚动
+#[test]
+fn popup_height_overview_grows_when_expanded() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 20.0, 100.0),
+        QuotaInfo::new("monthly", 30.0, 100.0),
+    ];
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+
+    let collapsed = session.popup_height();
+
+    session.toggle_overview_expanded(&pid(ProviderKind::Claude));
+    let expanded = session.popup_height();
+
+    assert_eq!(
+        expanded,
+        crate::models::PopupLayout::FIXED_HEIGHT
+            + crate::models::PopupLayout::overview_multi_item_height(3)
+    );
+    assert!(expanded > collapsed);
+}
+
+/// 展开态只按可见配额算行数，隐藏的配额不占高度
+#[test]
+fn popup_height_overview_expansion_ignores_hidden_quotas() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 20.0, 100.0),
+    ];
+    let mut settings = make_settings(&[ProviderKind::Claude]);
+    settings
+        .provider
+        .toggle_quota_visibility(&pid(ProviderKind::Claude), "weekly".to_string());
+    let mut session = AppSession::new(settings, store.providers);
+    session.toggle_overview_expanded(&pid(ProviderKind::Claude));
+
+    let h = session.popup_height();
+
+    // 只剩 1 个可见配额 → 退回单行卡片高度
+    assert_eq!(h, crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT);
 }

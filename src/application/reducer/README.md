@@ -7,7 +7,7 @@ Reducer 子模块目录。这里承载 `AppAction` 到 `AppSession` 状态变更
 
 | 文件 | 职责 |
 |------|------|
-| `settings.rs` | 导航、设置窗口通用 UI 状态、`SettingChange`、全局热键提交、弹窗可见性 |
+| `settings.rs` | 导航、Overview 展开记忆、设置窗口通用 UI 状态、`SettingChange`、全局热键提交、弹窗可见性 |
 | `provider_sidebar.rs` | Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序 |
 | `refresh.rs` | 手动刷新、刷新事件处理、Provider 热重载、热重载后的悬空引用清理 |
 | `newapi.rs` | NewAPI 新增 / 编辑 / 删除表单流、runtime completion action 处理，以及对应 effect 发射 |

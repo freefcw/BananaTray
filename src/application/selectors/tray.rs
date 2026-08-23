@@ -336,6 +336,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                         OverviewItemStatus::Quota {
                             status_level: worst,
                             quotas: quota_items,
+                            expanded: session.is_overview_expanded(&provider.provider_id),
                         }
                     }
                 }

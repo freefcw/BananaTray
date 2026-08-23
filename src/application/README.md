@@ -9,8 +9,9 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 包含所有 GPUI-free 的状态定义和计算逻辑：
 
 - **`AppSession`** — 顶层会话状态，组合各子状态
+  - `overview_expanded` — Overview 面板中展开显示全部配额的 provider id_key 集合。默认折叠，只活在本次进程内（不写 settings.json）；放在 session 而非 `AppView`，因为 macOS 每次关闭弹窗都会销毁 view。`is_overview_expanded()` / `toggle_overview_expanded()`
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
-  - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`DBusQuotaSnapshot::from_session` 等多处复用
+  - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`AppSession::overview_card_rows`、`DBusQuotaSnapshot::from_session` 等多处复用。Overview 的窗口高度和窗口内容都必须走这里，否则两边对"谁被启用"的口径一旦分叉，就会出现死空白或提前滚动
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
 - **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
 - **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 脚本 Provider 新增 / 脚本 Provider 编辑 / 移除二次确认 / 删除二次确认"这些原本散落的 bool/Option 字段折叠成单一 enum：
@@ -22,7 +23,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`SettingsTab`** — 设置窗口 Tab 枚举
 - **`HeaderStatusKind`** — 头部状态徽章类型（Synced/Syncing/Stale/Offline）
 - **`provider_panel_flags()`** — 面板可见性规则（单一真理来源）
-- **`compute_popup_height()`** — 弹窗高度计算
+- **`compute_popup_height()`** — Provider 面板的弹窗高度计算（配额卡片 + 账户信息 / dashboard 行）。Overview 面板不走这里：它的高度取决于 session 内的展开记忆，由 `AppSession::popup_height()` 分派到 `overview_card_rows()` + `models::compute_popup_height_for_overview()`，展开卡片时窗口会跟着长高
 - **`compute_header_status()`** — 头部状态文本计算
 
 测试目录：`state_tests/`（按域拆分，共享 fixture 在 `common.rs`）

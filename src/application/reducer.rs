@@ -43,6 +43,9 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::PopupVisibilityChanged(visible) => {
             settings::popup_visibility_changed(session, visible, &mut effects)
         }
+        AppAction::ToggleOverviewExpanded(id) => {
+            settings::toggle_overview_expanded(session, id, &mut effects)
+        }
         AppAction::QuitApp => settings::quit_app(&mut effects),
 
         AppAction::RefreshProvider { id, reason } => {

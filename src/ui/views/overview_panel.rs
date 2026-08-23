@@ -91,28 +91,16 @@ impl AppView {
             OverviewItemStatus::Quota {
                 status_level,
                 quotas,
+                expanded,
             } => match quotas.len() {
                 0 => {
                     debug_assert!(false, "Quota variant should never have empty quotas vec");
                     self.render_card_disconnected(item, theme)
                 }
                 1 => self.render_card_single_row(item, *status_level, &quotas[0], false, theme, cx),
-                _ => {
-                    // 2+ 配额：折叠/展开
-                    let is_expanded = self.overview_expanded.contains(&item.id);
-                    if is_expanded {
-                        self.render_card_expanded(item, *status_level, quotas, theme, cx)
-                    } else {
-                        self.render_card_single_row(
-                            item,
-                            *status_level,
-                            &quotas[0],
-                            true,
-                            theme,
-                            cx,
-                        )
-                    }
-                }
+                // 2+ 配额：默认折叠，展开选择在本次运行期间被记住
+                _ if *expanded => self.render_card_expanded(item, *status_level, quotas, theme, cx),
+                _ => self.render_card_single_row(item, *status_level, &quotas[0], true, theme, cx),
             },
             OverviewItemStatus::Refreshing => self
                 .build_card_base_row(
@@ -192,29 +180,7 @@ impl AppView {
 
         // 展开列（固定宽度，保证所有单行卡片对齐）
         if expandable {
-            let expand_id = item.id.clone();
-            let entity = cx.entity().clone();
-            row = row.child(
-                div()
-                    .id(ElementId::Name(
-                        format!("expand-{}", item.id.id_key()).into(),
-                    ))
-                    .w(px(PopupLayout::OVERVIEW_EXPAND_W))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(14.0))
-                    .text_color(theme.text.accent)
-                    .cursor_pointer()
-                    .child("▸")
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        cx.stop_propagation();
-                        entity.update(cx, |view, _cx| {
-                            view.overview_expanded.insert(expand_id.clone());
-                        });
-                    }),
-            );
+            row = row.child(self.render_expand_toggle(item, false, theme, cx));
         } else {
             // 空白占位，保证进度条对齐
             row = row.child(div().w(px(PopupLayout::OVERVIEW_EXPAND_W)).flex_shrink_0());
@@ -236,33 +202,11 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let hover_bg = theme.bg.card_inner_hovered;
-        let collapse_id = item.id.clone();
-        let entity = cx.entity().clone();
 
         // header 行：[dot] [icon] [name] [▾]（展开态不显示整体 badge，各行已有独立 badge）
         let header_row = self
             .build_expanded_header(item, overall_level, theme)
-            .child(
-                div()
-                    .id(ElementId::Name(
-                        format!("collapse-{}", item.id.id_key()).into(),
-                    ))
-                    .w(px(PopupLayout::OVERVIEW_EXPAND_W))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(14.0))
-                    .text_color(theme.text.accent)
-                    .cursor_pointer()
-                    .child("▾")
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        cx.stop_propagation();
-                        entity.update(cx, |view, _cx| {
-                            view.overview_expanded.remove(&collapse_id);
-                        });
-                    }),
-            );
+            .child(self.render_expand_toggle(item, true, theme, cx));
 
         let mut quota_container = div()
             .w_full()
@@ -448,6 +392,46 @@ impl AppView {
     }
 
     // ── 原子 UI 元素 ──
+
+    /// 展开/折叠按钮列（固定宽度）。点击写入 session，使展开选择跨弹窗保留。
+    fn render_expand_toggle(
+        &self,
+        item: &OverviewItemViewState,
+        expanded: bool,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let (id_prefix, glyph) = if expanded {
+            ("collapse", "▾")
+        } else {
+            ("expand", "▸")
+        };
+        let provider_id = item.id.clone();
+        let entity = cx.entity().clone();
+        div()
+            .id(ElementId::Name(
+                format!("{id_prefix}-{}", item.id.id_key()).into(),
+            ))
+            .w(px(PopupLayout::OVERVIEW_EXPAND_W))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(14.0))
+            .text_color(theme.text.accent)
+            .cursor_pointer()
+            .child(glyph)
+            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                cx.stop_propagation();
+                entity.update(cx, |view, cx| {
+                    runtime::dispatch_in_context(
+                        &view.state,
+                        AppAction::ToggleOverviewExpanded(provider_id.clone()),
+                        cx,
+                    );
+                });
+            })
+    }
 
     /// 固定宽度数值单元格（右对齐）
     fn render_value_cell(&self, text: &str, theme: &Theme) -> Div {

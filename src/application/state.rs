@@ -174,6 +174,11 @@ pub struct AppSession {
     pub alert_tracker: QuotaAlertTracker,
     /// 弹窗是否可见（Dynamic 图标在弹窗可见时延迟更新，关闭后同步）
     pub popup_visible: bool,
+    /// Overview 面板中展开显示全部配额的 Provider id_key 集合。
+    ///
+    /// 只活在本次进程内：默认折叠，用户展开后在应用生命周期里保持。
+    /// 放在 session 而非 `AppView`，因为 macOS 每次关闭弹窗都会销毁 view。
+    pub overview_expanded: std::collections::HashSet<String>,
 }
 
 impl AppSession {
@@ -197,6 +202,20 @@ impl AppSession {
             settings,
             alert_tracker: QuotaAlertTracker::new(),
             popup_visible: false,
+            overview_expanded: Default::default(),
+        }
+    }
+
+    /// Overview 面板中该 Provider 是否展开显示全部可见配额
+    pub fn is_overview_expanded(&self, id: &ProviderId) -> bool {
+        self.overview_expanded.contains(&id.id_key())
+    }
+
+    /// 切换 Overview 展开状态（展开 ↔ 折叠）
+    pub fn toggle_overview_expanded(&mut self, id: &ProviderId) {
+        let key = id.id_key();
+        if !self.overview_expanded.remove(&key) {
+            self.overview_expanded.insert(key);
         }
     }
 
@@ -205,7 +224,30 @@ impl AppSession {
     }
 
     pub fn popup_height(&self) -> f32 {
+        if self.nav.active_tab == NavTab::Overview {
+            let rows = self.overview_card_rows();
+            return crate::models::compute_popup_height_for_overview(&rows);
+        }
         compute_popup_height(&self.nav, &self.provider_store, &self.settings)
+    }
+
+    /// 各已启用 Provider 在 Overview 面板中占用的配额行数。
+    ///
+    /// 折叠卡片恒为 1 行；展开卡片按可见配额数展开，所以展开会让弹窗跟着长高，
+    /// 而不是把内容压进滚动区。
+    fn overview_card_rows(&self) -> Vec<usize> {
+        self.provider_store
+            .enabled_providers(&self.settings)
+            .map(|p| {
+                if self.is_overview_expanded(&p.provider_id) {
+                    self.settings
+                        .provider
+                        .visible_quota_count(&p.provider_id, &p.quotas)
+                } else {
+                    1
+                }
+            })
+            .collect()
     }
 
     pub fn has_enabled_providers(&self) -> bool {
@@ -607,24 +649,15 @@ pub enum HeaderStatusKind {
     Offline,
 }
 
-/// 根据当前导航状态和 Provider 数据计算弹出窗口高度
+/// Provider 面板的弹出窗口高度（配额卡片 + 账户信息 / dashboard 行）
 ///
-/// 步骤：解析当前 tab → 分派布局计算
+/// Overview 面板走 `AppSession::popup_height` 的独立分支，因为它的高度取决于
+/// session 内的展开记忆，而非单个 Provider 的面板构成。
 pub fn compute_popup_height(
     nav: &NavigationState,
     store: &ProviderStore,
     settings: &AppSettings,
 ) -> f32 {
-    // Overview 面板：根据已启用 Provider 数量计算高度（所有卡片默认折叠）
-    if nav.active_tab == NavTab::Overview {
-        let enabled_count = store
-            .providers
-            .iter()
-            .filter(|p| settings.provider.is_enabled(&p.provider_id))
-            .count();
-        return crate::models::compute_popup_height_for_overview(enabled_count);
-    }
-
     let id = match &nav.active_tab {
         NavTab::Provider(id) => id.clone(),
         _ => nav.last_provider_id.clone(),
