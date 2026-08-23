@@ -10,6 +10,8 @@ use gpui::{
 
 /// 按钮风格变体
 pub(crate) enum ButtonVariant {
+    /// 主操作（主题色填充），如 Token 面板的 Create / Save
+    Primary,
     /// 危险操作（红色背景 + 红色边框），如 Quit 按钮
     Danger,
     /// 主题色边框 + 透明背景，如 Check for Updates 按钮
@@ -18,25 +20,37 @@ pub(crate) enum ButtonVariant {
     Subtle,
 }
 
+/// 按钮尺寸档
+#[derive(Clone, Copy)]
+pub(crate) enum ButtonSize {
+    /// 紧凑内联操作（固定 32 高），如信息行右侧的按钮
+    Compact,
+    /// 面板按钮行（flex 均分一行），如 Provider 设置区成对的主/次操作
+    Panel,
+    /// 卡片内全宽主操作
+    FullWidth,
+}
+
 /// 渲染操作按钮
 ///
 /// # 参数
 /// - `label` — 按钮文字
 /// - `icon` — 可选 SVG 图标路径
 /// - `variant` — 按钮风格变体
-/// - `full_width` — 是否全宽
+/// - `size` — 按钮尺寸档
 /// - `theme` — 主题
 /// - `on_click` — 点击回调
 ///
 /// # 使用场景
-/// - `settings_window/general_tab.rs` — Quit 按钮 (Danger)
-/// - `settings_window/about_tab.rs` — Check for Updates 按钮 (Outlined)
-/// - `settings_window/debug_tab.rs` — Send 按钮 (Subtle)
+/// - `settings_window/general_tab.rs` — Quit 按钮 (Danger / FullWidth)
+/// - `settings_window/about_tab.rs` — Check for Updates 按钮 (Outlined / FullWidth)
+/// - `settings_window/debug_tab.rs` — Send 按钮 (Subtle / Compact)
+/// - `settings_window/providers/` — Token 面板与自定义 provider 的编辑/删除按钮 (Panel)
 pub(crate) fn render_action_button<F>(
     label: &str,
     icon: Option<(&'static str, Hsla)>,
     variant: ButtonVariant,
-    full_width: bool,
+    size: ButtonSize,
     theme: &Theme,
     on_click: F,
 ) -> Div
@@ -44,6 +58,12 @@ where
     F: Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 {
     let (bg, border_color, text_color, hover_bg) = match variant {
+        ButtonVariant::Primary => (
+            theme.text.accent,
+            theme.text.accent,
+            theme.element.active,
+            None, // 使用 opacity 替代
+        ),
         ButtonVariant::Danger => (
             theme.button.danger_bg,
             theme.status.error,
@@ -75,18 +95,25 @@ where
         .flex()
         .items_center()
         .justify_center()
-        .gap(px(if full_width { 8.0 } else { 6.0 }))
-        .rounded(px(if full_width { 12.0 } else { 6.0 }))
+        .gap(px(match size {
+            ButtonSize::Compact => 6.0,
+            ButtonSize::Panel | ButtonSize::FullWidth => 8.0,
+        }))
+        .rounded(px(match size {
+            ButtonSize::Compact => 6.0,
+            ButtonSize::Panel => 8.0,
+            ButtonSize::FullWidth => 12.0,
+        }))
         .bg(bg)
         .border_1()
         .border_color(border_color)
         .cursor_pointer();
 
-    if full_width {
-        btn = btn.w_full().py(px(12.0));
-    } else {
-        btn = btn.h(px(32.0)).px(px(12.0));
-    }
+    btn = match size {
+        ButtonSize::Compact => btn.h(px(32.0)).px(px(12.0)),
+        ButtonSize::Panel => btn.flex_1().px(px(16.0)).py(px(10.0)),
+        ButtonSize::FullWidth => btn.w_full().py(px(12.0)),
+    };
 
     // hover 效果
     if let Some(hbg) = hover_bg {
@@ -98,8 +125,11 @@ where
     // 图标和文字用同一行高。GPUI 基线是 (line_height - ascent - descent) / 2，
     // 行高小于 ascent+descent（约 1.3em）时 padding 为负，字形会往上冒。
     let icon_size = 16.0;
-    let text_size = if full_width { 14.0 } else { 12.0 };
-    let text_line = if full_width { 18.0 } else { 16.0 };
+    let (text_size, text_line) = match size {
+        ButtonSize::Compact => (12.0, 16.0),
+        ButtonSize::Panel => (13.0, 17.0),
+        ButtonSize::FullWidth => (14.0, 18.0),
+    };
 
     if let Some((icon_path, icon_color)) = icon {
         btn = btn.child(

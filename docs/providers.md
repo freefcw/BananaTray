@@ -106,10 +106,16 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
   - 自动管理型 provider，没有额外交互设置。
 - `TokenInput(...)`
   - 使用通用 token 输入面板。
-- `NewApiEditable`
+- `NewApiEditable { base_url }`
   - 面向通过 NewAPI 表单创建的自定义 provider，允许在设置页继续编辑。
-- `ScriptEditable`
+  - `base_url` 取自 YAML 的 `base_url`，设置卡片用它显示当前站点地址（可点击打开）。
+- `ScriptEditable { interpreter }`
   - 面向通过自定义脚本向导创建的 `{slug}:script` provider，允许继续编辑脚本、解释器、测试和删除配置树 `scripts/` 目录内的 companion script 文件。
+  - `interpreter` 取自 plan 首个 CLI 步骤的 `command`，设置卡片用它显示当前解释器。
+
+后两个变体携带当前配置值，是为了让设置卡片能说明"这张卡管的是哪份配置"，而不是只给两个按钮。
+取值在 `CustomProvider::settings_capability()` 内完成（无 I/O，读已加载的 YAML 定义），
+经 `ProviderStatus.settings_capability` 流到 selector 快照，UI 不再自己回读 provider store。
 
 重要边界：
 

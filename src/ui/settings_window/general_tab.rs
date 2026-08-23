@@ -5,7 +5,7 @@ use crate::models::AppSettings;
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
-    render_action_button, render_hotkey_field_inline, render_icon_row, ButtonVariant,
+    render_action_button, render_hotkey_field_inline, render_icon_row, ButtonSize, ButtonVariant,
 };
 use adabraka_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
@@ -332,7 +332,7 @@ impl SettingsView {
                 &t!("settings.quit"),
                 Some(("src/icons/switch.svg", theme.status.error)),
                 ButtonVariant::Danger,
-                true,
+                ButtonSize::FullWidth,
                 theme,
                 move |_, window, cx| {
                     crate::bootstrap::dispatch_in_window(&state, AppAction::QuitApp, window, cx);

@@ -3,17 +3,27 @@ use crate::application::AppAction;
 use crate::models::ProviderId;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
-use crate::ui::widgets::{render_action_button, ButtonVariant};
-use gpui::{div, px, App, Div, Hsla, MouseDownEvent, ParentElement, Styled, Window};
+use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonSize, ButtonVariant};
+use gpui::{div, px, Div, ParentElement, Styled};
 use rust_i18n::t;
 
 pub(super) struct EditableProviderActions {
+    card_title: String,
+    config_row: Option<ConfigSummaryRow>,
     edit_label: String,
     delete_label: String,
     confirm_delete_label: String,
     cancel_delete_label: String,
     kind: EditableProviderKind,
     provider_id: ProviderId,
+}
+
+/// 设置卡片里的当前配置摘要行 —— 让用户看清这张卡管的是哪份配置，而不是只有两个按钮。
+struct ConfigSummaryRow {
+    label: String,
+    value: String,
+    /// 值本身是可打开的地址时填入，行内会带跳转标记
+    url: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -23,8 +33,14 @@ enum EditableProviderKind {
 }
 
 impl EditableProviderActions {
-    pub(super) fn newapi(provider_id: ProviderId) -> Self {
+    pub(super) fn newapi(provider_id: ProviderId, base_url: String) -> Self {
         Self {
+            card_title: t!("newapi.settings_title").to_string(),
+            config_row: (!base_url.is_empty()).then(|| ConfigSummaryRow {
+                label: t!("newapi.field.url").to_string(),
+                value: base_url.clone(),
+                url: Some(base_url),
+            }),
             edit_label: t!("newapi.edit_button").to_string(),
             delete_label: t!("newapi.delete_button").to_string(),
             confirm_delete_label: t!("newapi.confirm_delete").to_string(),
@@ -34,8 +50,14 @@ impl EditableProviderActions {
         }
     }
 
-    pub(super) fn script_provider(provider_id: ProviderId) -> Self {
+    pub(super) fn script_provider(provider_id: ProviderId, interpreter: String) -> Self {
         Self {
+            card_title: t!("script_provider.settings_title").to_string(),
+            config_row: (!interpreter.is_empty()).then(|| ConfigSummaryRow {
+                label: t!("script_provider.field.interpreter").to_string(),
+                value: interpreter,
+                url: None,
+            }),
             edit_label: t!("script_provider.edit_button").to_string(),
             delete_label: t!("script_provider.delete_button").to_string(),
             confirm_delete_label: t!("script_provider.confirm_delete").to_string(),
@@ -94,78 +116,73 @@ pub(super) fn render_editable_provider_actions(
     dispatcher: &DetailActionDispatcher,
     theme: &Theme,
 ) -> Div {
-    if confirming_delete {
-        return action_row()
-            .child(row_action_button(
+    let button_row = if confirming_delete {
+        action_row()
+            .child(render_action_button(
                 &actions.confirm_delete_label,
                 Some(("src/icons/trash.svg", theme.status.error)),
                 ButtonVariant::Danger,
+                ButtonSize::Panel,
                 theme,
                 {
                     let action = actions.delete_action_factory();
                     dispatcher.interactive_cleanup_action(action)
                 },
             ))
-            .child(row_action_button(
+            .child(render_action_button(
                 &actions.cancel_delete_label,
                 Some(("src/icons/close.svg", theme.text.primary)),
                 ButtonVariant::Subtle,
+                ButtonSize::Panel,
                 theme,
                 {
                     let action = actions.cancel_delete_action_factory();
                     dispatcher.interactive_cleanup_action(action)
                 },
-            ));
+            ))
+    } else {
+        action_row()
+            .child(render_action_button(
+                &actions.edit_label,
+                Some(("src/icons/settings.svg", theme.text.primary)),
+                ButtonVariant::Subtle,
+                ButtonSize::Panel,
+                theme,
+                {
+                    let action = actions.edit_action_factory();
+                    dispatcher.interactive_cleanup_action(action)
+                },
+            ))
+            .child(render_action_button(
+                &actions.delete_label,
+                Some(("src/icons/trash.svg", theme.text.primary)),
+                ButtonVariant::Subtle,
+                ButtonSize::Panel,
+                theme,
+                {
+                    let action = actions.confirm_delete_action_factory();
+                    dispatcher.interactive_cleanup_action(action)
+                },
+            ))
+    };
+
+    let mut card = shared::render_settings_card(theme).child(shared::render_settings_card_title(
+        &actions.card_title,
+        theme,
+    ));
+
+    if let Some(row) = &actions.config_row {
+        card = card.child(render_kv_info_row(
+            &row.label,
+            &row.value,
+            row.url.as_deref(),
+            theme,
+        ));
     }
 
-    action_row()
-        .child(row_action_button(
-            &actions.edit_label,
-            Some(("src/icons/settings.svg", theme.text.primary)),
-            ButtonVariant::Subtle,
-            theme,
-            {
-                let action = actions.edit_action_factory();
-                dispatcher.interactive_cleanup_action(action)
-            },
-        ))
-        .child(row_action_button(
-            &actions.delete_label,
-            Some(("src/icons/trash.svg", theme.text.primary)),
-            ButtonVariant::Subtle,
-            theme,
-            {
-                let action = actions.confirm_delete_action_factory();
-                dispatcher.interactive_cleanup_action(action)
-            },
-        ))
+    card.child(button_row)
 }
 
 fn action_row() -> Div {
-    div()
-        .mt(px(10.0))
-        .w_full()
-        .flex()
-        .items_center()
-        .gap(px(10.0))
-}
-
-fn row_action_button(
-    label: &str,
-    icon: Option<(&'static str, Hsla)>,
-    variant: ButtonVariant,
-    theme: &Theme,
-    on_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-) -> Div {
-    render_action_button(label, icon, variant, false, theme, on_click).min_w(px(96.0))
-}
-
-pub(super) fn render_confirm_cancel_buttons(
-    confirm_label: &str,
-    cancel_label: &str,
-    on_confirm: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-    on_cancel: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-    theme: &Theme,
-) -> Div {
-    shared::render_confirm_cancel_buttons(confirm_label, cancel_label, on_confirm, on_cancel, theme)
+    div().w_full().flex().items_center().gap(px(10.0))
 }

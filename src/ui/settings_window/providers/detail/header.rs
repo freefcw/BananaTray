@@ -3,6 +3,7 @@ use crate::application::AppAction;
 use crate::application::SettingsProviderDetailViewState;
 use crate::refresh::RefreshReason;
 use crate::theme::Theme;
+use crate::ui::settings_window::providers::shared;
 use gpui::{div, px, Div, FontWeight, InteractiveElement, ParentElement, Styled};
 use rust_i18n::t;
 
@@ -103,7 +104,7 @@ fn render_remove_from_sidebar_button(
     theme: &Theme,
 ) -> Div {
     if detail.confirming_remove {
-        return super::actions::render_confirm_cancel_buttons(
+        return shared::render_confirm_cancel_buttons(
             &t!("common.confirm"),
             &t!("common.cancel"),
             {

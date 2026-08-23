@@ -546,12 +546,17 @@ fn settings_capability_newapi_editable_for_custom_newapi() {
     let id = ProviderId::Custom("my-site:newapi".to_string());
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     let mut provider = ProviderStatus::new(id.clone(), metadata);
-    provider.settings_capability = SettingsCapability::NewApiEditable;
+    provider.settings_capability = SettingsCapability::NewApiEditable {
+        base_url: "https://my-site.com".to_string(),
+    };
     let session = make_session(settings, id, vec![provider]);
     let view_state = settings_providers_tab_view_state(&session);
+    // 站点地址要原样带到详情视图，设置卡片靠它标明这张卡管的是哪个中转站
     assert_eq!(
         view_state.detail.settings_capability,
-        SettingsCapability::NewApiEditable
+        SettingsCapability::NewApiEditable {
+            base_url: "https://my-site.com".to_string()
+        }
     );
 }
 
@@ -562,12 +567,16 @@ fn settings_capability_script_editable_for_custom_script() {
     let id = ProviderId::Custom("my-script:script".to_string());
     let metadata = crate::models::test_helpers::make_test_metadata(ProviderKind::Custom);
     let mut provider = ProviderStatus::new(id.clone(), metadata);
-    provider.settings_capability = SettingsCapability::ScriptEditable;
+    provider.settings_capability = SettingsCapability::ScriptEditable {
+        interpreter: "python3".to_string(),
+    };
     let session = make_session(settings, id, vec![provider]);
     let view_state = settings_providers_tab_view_state(&session);
     assert_eq!(
         view_state.detail.settings_capability,
-        SettingsCapability::ScriptEditable
+        SettingsCapability::ScriptEditable {
+            interpreter: "python3".to_string()
+        }
     );
 }
 

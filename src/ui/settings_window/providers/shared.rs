@@ -8,6 +8,30 @@ use gpui::{
     Styled, Window,
 };
 
+/// Provider 设置区的卡片外壳。Token 面板和自定义 provider 的编辑区共用这一套容器规格，
+/// 保证设置区在两类 provider 下看起来一致。
+pub(super) fn render_settings_card(theme: &Theme) -> Div {
+    div()
+        .flex_col()
+        .w_full()
+        .rounded(px(12.0))
+        .bg(theme.bg.card_inner)
+        .border_1()
+        .border_color(theme.border.strong)
+        .px(px(20.0))
+        .py(px(20.0))
+        .gap(px(14.0))
+}
+
+/// 设置卡片标题。
+pub(super) fn render_settings_card_title(title: &str, theme: &Theme) -> Div {
+    div()
+        .text_size(px(15.0))
+        .font_weight(FontWeight::BOLD)
+        .text_color(theme.text.primary)
+        .child(title.to_string())
+}
+
 /// 表单字段的共享布局规格。
 #[derive(Clone, Copy)]
 pub(super) struct FormFieldSpec<'a> {

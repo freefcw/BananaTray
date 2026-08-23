@@ -3,7 +3,7 @@ use crate::application::{build_issue_report, build_issue_url};
 use crate::platform::system::open_url;
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonVariant};
+use crate::ui::widgets::{render_action_button, render_kv_info_row, ButtonSize, ButtonVariant};
 use gpui::{
     div, hsla, img, px, relative, svg, Div, FontWeight, Hsla, InteractiveElement, MouseButton,
     ParentElement, Styled, TextAlign,
@@ -227,7 +227,7 @@ impl SettingsView {
                 &t!("about.check_updates"),
                 None,
                 ButtonVariant::Outlined,
-                true,
+                ButtonSize::FullWidth,
                 theme,
                 move |_, _, _| {
                     open_external_url(&repo);
@@ -238,7 +238,7 @@ impl SettingsView {
                 &t!("about.report_issue"),
                 Some(("src/icons/status.svg", theme.text.secondary)),
                 ButtonVariant::Outlined,
-                true,
+                ButtonSize::FullWidth,
                 theme,
                 move |_, _, _| {
                     let log_path = state.borrow().log_path.clone();
@@ -258,9 +258,6 @@ impl SettingsView {
     // ========================================================================
 
     fn render_info_section(theme: &Theme) -> Div {
-        let accent = theme.text.accent;
-        let link_color = hsla(accent.h, accent.s, accent.l, 0.7);
-
         div()
             .flex_col()
             .w_full()
@@ -270,7 +267,6 @@ impl SettingsView {
                 &t!("about.build_version"),
                 GIT_HASH,
                 None,
-                theme.text.secondary,
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
@@ -278,7 +274,6 @@ impl SettingsView {
                 &t!("about.developed_by"),
                 APP_AUTHOR,
                 Some(APP_AUTHOR_URL),
-                link_color,
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
@@ -286,7 +281,6 @@ impl SettingsView {
                 &t!("about.license"),
                 APP_LICENSE,
                 None,
-                theme.text.secondary,
                 theme,
             ))
             .child(div().h(px(0.5)).w_full().bg(theme.border.subtle))
@@ -294,7 +288,6 @@ impl SettingsView {
                 &t!("about.website"),
                 "BananaTray",
                 Some(APP_WEBSITE),
-                link_color,
                 theme,
             ))
     }

@@ -18,23 +18,30 @@ pub(super) fn render_settings_section(
     let section = settings_section_shell(theme);
 
     match detail.settings_capability.clone() {
-        SettingsCapability::TokenInput(capability) => section.child(div().mt(px(10.0)).child(
+        SettingsCapability::TokenInput(capability) => section.child(
             super::super::token_input_panel::render_token_input_panel(
                 &detail.id, capability, view, theme, cx,
-            ),
-        )),
-        SettingsCapability::NewApiEditable => section.child(render_editable_provider_actions(
-            EditableProviderActions::newapi(detail.id.clone()),
-            detail.confirming_delete_newapi,
-            dispatcher,
-            theme,
-        )),
-        SettingsCapability::ScriptEditable => section.child(render_editable_provider_actions(
-            EditableProviderActions::script_provider(detail.id.clone()),
-            detail.confirming_delete_script_provider,
-            dispatcher,
-            theme,
-        )),
+            )
+            .mt(px(10.0)),
+        ),
+        SettingsCapability::NewApiEditable { base_url } => section.child(
+            render_editable_provider_actions(
+                EditableProviderActions::newapi(detail.id.clone(), base_url),
+                detail.confirming_delete_newapi,
+                dispatcher,
+                theme,
+            )
+            .mt(px(10.0)),
+        ),
+        SettingsCapability::ScriptEditable { interpreter } => section.child(
+            render_editable_provider_actions(
+                EditableProviderActions::script_provider(detail.id.clone(), interpreter),
+                detail.confirming_delete_script_provider,
+                dispatcher,
+                theme,
+            )
+            .mt(px(10.0)),
+        ),
         SettingsCapability::None => {
             let placeholder = placeholder_for_provider_capability(detail.provider_capability);
             section.child(render_info_placeholder_card(

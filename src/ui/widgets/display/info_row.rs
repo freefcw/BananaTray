@@ -6,8 +6,8 @@ use crate::platform::system::{open_path_in_finder, open_url};
 use crate::theme::Theme;
 use crate::ui::widgets::with_tooltip;
 use gpui::{
-    div, px, Div, ElementId, FontWeight, Hsla, InteractiveElement, MouseButton, ParentElement,
-    Stateful, Styled,
+    div, hsla, px, Div, ElementId, FontWeight, Hsla, InteractiveElement, MouseButton,
+    ParentElement, Stateful, Styled,
 };
 use log::warn;
 use rust_i18n::t;
@@ -17,20 +17,24 @@ use rust_i18n::t;
 /// # 参数
 /// - `label` — 左侧标签文字
 /// - `value` — 右侧显示值
-/// - `url` — 可选链接，点击右侧值时打开
-/// - `value_color` — 右侧值的文字颜色
+/// - `url` — 可选链接，点击右侧值时打开；同时决定右值配色（链接用主题色，普通值用次级文字色），
+///   避免每个调用方各自推导导致链接样式不一致
 /// - `theme` — 主题
 ///
 /// # 使用场景
 /// - `settings_window/about_tab.rs` — Build Version / Developer / License / Website 行
-/// - `settings_window/providers/detail/info.rs` — Provider 信息单元格
+/// - `settings_window/providers/detail/actions.rs` — 自定义 provider 设置卡片的配置摘要行
 pub(crate) fn render_kv_info_row(
     label: &str,
     value: &str,
     url: Option<&str>,
-    value_color: Hsla,
     theme: &Theme,
 ) -> Div {
+    let accent = theme.text.accent;
+    let value_color = match url {
+        Some(_) => hsla(accent.h, accent.s, accent.l, 0.7),
+        None => theme.text.secondary,
+    };
     let value_str = value.to_string();
 
     let mut value_el = div()

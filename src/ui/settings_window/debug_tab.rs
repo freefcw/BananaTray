@@ -8,7 +8,7 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
     render_action_button, render_colored_icon_sized, render_icon_row, render_icon_tooltip_button,
-    render_info_cell, render_path_info_cell, render_segmented_control, ButtonVariant,
+    render_info_cell, render_path_info_cell, render_segmented_control, ButtonSize, ButtonVariant,
     IconTooltipButtonOptions, SegmentedSize,
 };
 use gpui::{
@@ -197,7 +197,7 @@ impl SettingsView {
                 &t!("debug.open"),
                 None,
                 ButtonVariant::Subtle,
-                false,
+                ButtonSize::Compact,
                 theme,
                 move |_, window, cx| {
                     crate::bootstrap::dispatch_in_window(
@@ -212,7 +212,7 @@ impl SettingsView {
                 &t!("debug.copy_path"),
                 None,
                 ButtonVariant::Subtle,
-                false,
+                ButtonSize::Compact,
                 theme,
                 move |_, window, cx| {
                     crate::bootstrap::dispatch_in_window(
@@ -313,7 +313,7 @@ impl SettingsView {
                     &t!("debug.copy_debug_info"),
                     Some(("src/icons/overview.svg", theme.text.secondary)),
                     ButtonVariant::Subtle,
-                    true,
+                    ButtonSize::FullWidth,
                     theme,
                     move |_, window, cx| {
                         crate::bootstrap::dispatch_in_window(
@@ -408,7 +408,7 @@ impl SettingsView {
                 &t!("debug.send"),
                 None,
                 ButtonVariant::Subtle,
-                false,
+                ButtonSize::Compact,
                 theme,
                 move |_, window, cx| {
                     crate::bootstrap::dispatch_in_window(

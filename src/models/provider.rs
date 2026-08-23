@@ -218,10 +218,16 @@ pub enum SettingsCapability {
     None,
     /// Token 输入型设置（如 Copilot GitHub Token）
     TokenInput(TokenInputCapability),
-    /// NewAPI 型自定义 Provider — 显示「编辑」按钮
-    NewApiEditable,
-    /// Script 型自定义 Provider — 显示脚本编辑按钮
-    ScriptEditable,
+    /// NewAPI 型自定义 Provider — 显示站点地址和「编辑」按钮
+    NewApiEditable {
+        /// 当前配置的站点地址，用于在设置卡片里标明这张卡管的是哪个中转站
+        base_url: String,
+    },
+    /// Script 型自定义 Provider — 显示解释器和脚本编辑按钮
+    ScriptEditable {
+        /// 运行脚本的解释器命令（如 python3）
+        interpreter: String,
+    },
 }
 
 impl ProviderMetadata {

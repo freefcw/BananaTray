@@ -10,7 +10,17 @@
 - `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
 - `quota_visibility.rs` renders per-quota tray visibility toggles.
 - `settings_section.rs` renders provider settings capability branches.
-- `actions.rs` owns shared detail-page action buttons and editable-provider edit/delete flows.
+- `actions.rs` owns the editable-provider edit/delete flow. It renders the same settings card as the
+  Token panel (`shared::render_settings_card` + `render_action_button(.., ButtonSize::Panel, ..)`),
+  so the settings section looks identical for token-input and editable providers. Add new card-level
+  chrome to `providers/shared.rs`, not to one of the two callers.
+  Between title and buttons the card shows one config summary row (`render_kv_info_row`) built from
+  the capability payload — NewAPI's site URL, the script provider's interpreter — so the card states
+  which config it manages instead of restating the buttons in prose. An empty payload hides the row.
+  Descriptive prose is deliberately not shared card chrome: only the Token panel has a description,
+  and this card shows a config value instead. Do not add a description helper to `shared.rs`.
+  Confirm/cancel buttons come from `shared::render_confirm_cancel_buttons` directly; do not add a
+  re-export shim here.
 
 The module consumes `SettingsProviderDetailViewState` from `application/selectors`.
 It must not rebuild provider business state, quota visibility decisions, or settings capability

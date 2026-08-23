@@ -6,10 +6,11 @@
 //! 草稿由 `SettingsView::begin_token_input()` 创建，并在保存 / 取消 / 导航离开时清理。
 
 use super::super::SettingsView;
+use super::shared;
 use crate::application::AppAction;
 use crate::models::{ProviderId, TokenEditMode, TokenInputCapability, TokenInputState};
 use crate::theme::Theme;
-use crate::ui::widgets::register_input_actions;
+use crate::ui::widgets::{register_input_actions, render_action_button, ButtonSize, ButtonVariant};
 use gpui::{
     div, hsla, px, relative, AnyElement, App, Context, Div, ElementId, Entity, FocusHandle,
     FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled,
@@ -100,7 +101,7 @@ pub(crate) fn render_token_input_panel(
     };
 
     let has_token = display_info.has_token;
-    let mut card = token_panel_card(theme)
+    let mut card = shared::render_settings_card(theme)
         .child(render_token_panel_header(capability, theme))
         .child(render_token_panel_description(capability, theme));
 
@@ -153,19 +154,6 @@ pub(crate) fn render_token_input_panel(
     card
 }
 
-fn token_panel_card(theme: &Theme) -> Div {
-    div()
-        .flex_col()
-        .w_full()
-        .rounded(px(12.0))
-        .bg(theme.bg.card_inner)
-        .border_1()
-        .border_color(theme.border.strong)
-        .px(px(20.0))
-        .py(px(20.0))
-        .gap(px(14.0))
-}
-
 fn render_token_panel_header(capability: TokenInputCapability, theme: &Theme) -> Div {
     let hover_color = theme.text.primary;
     let help_icon = crate::ui::with_multiline_tooltip(
@@ -192,13 +180,10 @@ fn render_token_panel_header(capability: TokenInputCapability, theme: &Theme) ->
         .flex()
         .items_center()
         .gap(px(8.0))
-        .child(
-            div()
-                .text_size(px(15.0))
-                .font_weight(FontWeight::BOLD)
-                .text_color(theme.text.primary)
-                .child(t!(capability.title_i18n_key).to_string()),
-        )
+        .child(shared::render_settings_card_title(
+            &t!(capability.title_i18n_key),
+            theme,
+        ))
         .child(help_icon)
 }
 
@@ -367,8 +352,13 @@ fn render_primary_token_action(
     let provider_id = provider_id.clone();
     let view_entity = cx.entity().clone();
 
-    token_action_button(label, theme.text.accent, None, theme.element.active)
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+    render_action_button(
+        &label,
+        None,
+        ButtonVariant::Primary,
+        ButtonSize::Panel,
+        theme,
+        move |_, window, cx| {
             if !is_editing {
                 crate::bootstrap::dispatch_in_window(
                     &state,
@@ -407,8 +397,9 @@ fn render_primary_token_action(
                 window,
                 cx,
             );
-        })
-        .into_any_element()
+        },
+    )
+    .into_any_element()
 }
 
 fn render_secondary_token_action(
@@ -430,56 +421,30 @@ fn render_secondary_token_action(
     let state = view.state.clone();
     let view_entity = cx.entity().clone();
 
-    token_action_button(
-        label,
-        theme.bg.subtle,
-        Some(theme.border.strong),
-        theme.text.primary,
+    render_action_button(
+        &label,
+        None,
+        ButtonVariant::Subtle,
+        ButtonSize::Panel,
+        theme,
+        move |_, window, cx| {
+            if is_editing {
+                view_entity.update(cx, |view, _| view.clear_token_input());
+            } else {
+                view_entity.update(cx, |view, cx| {
+                    view.begin_token_input(&provider_id, capability, edit_mode, cx);
+                });
+            }
+            crate::bootstrap::dispatch_in_window(
+                &state,
+                AppAction::SetTokenEditing {
+                    provider_id: provider_id.clone(),
+                    editing: !is_editing,
+                },
+                window,
+                cx,
+            );
+        },
     )
-    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-        if is_editing {
-            view_entity.update(cx, |view, _| view.clear_token_input());
-        } else {
-            view_entity.update(cx, |view, cx| {
-                view.begin_token_input(&provider_id, capability, edit_mode, cx);
-            });
-        }
-        crate::bootstrap::dispatch_in_window(
-            &state,
-            AppAction::SetTokenEditing {
-                provider_id: provider_id.clone(),
-                editing: !is_editing,
-            },
-            window,
-            cx,
-        );
-    })
     .into_any_element()
-}
-
-fn token_action_button(
-    label: String,
-    background: gpui::Hsla,
-    border: Option<gpui::Hsla>,
-    text: gpui::Hsla,
-) -> Div {
-    let button = div()
-        .flex_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .px(px(16.0))
-        .py(px(10.0))
-        .rounded(px(8.0))
-        .bg(background)
-        .text_size(px(13.0))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(text)
-        .cursor_pointer()
-        .hover(|style| style.opacity(0.9))
-        .child(label);
-    match border {
-        Some(color) => button.border_1().border_color(color),
-        None => button,
-    }
 }
