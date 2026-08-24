@@ -34,6 +34,19 @@ pub struct ProviderPanelFlags {
     pub has_dashboard_url: bool,
 }
 
+/// Overview 当前是否会把 Provider 渲染为配额内容，而非单行状态提示。
+///
+/// selector 与 popup height 必须共用这条规则，否则刷新或断开期间保留的缓存配额
+/// 会让窗口高度和实际卡片内容分叉。
+pub(super) fn overview_provider_renders_quotas(provider: &ProviderStatus) -> bool {
+    provider.supports_refresh()
+        && !provider.quotas.is_empty()
+        && matches!(
+            provider.connection,
+            ConnectionStatus::Connected | ConnectionStatus::Error
+        )
+}
+
 /// 根据设置和 Provider 状态计算面板可见性标志。
 ///
 /// 核心规则：账户卡片已包含 Dashboard 入口时，隐藏底部 Dashboard 行（互斥）。
@@ -239,7 +252,8 @@ impl AppSession {
         self.provider_store
             .enabled_providers(&self.settings)
             .map(|p| {
-                if self.is_overview_expanded(&p.provider_id) {
+                if self.is_overview_expanded(&p.provider_id) && overview_provider_renders_quotas(p)
+                {
                     self.settings
                         .provider
                         .visible_quota_count(&p.provider_id, &p.quotas)

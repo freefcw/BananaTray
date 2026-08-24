@@ -1,6 +1,9 @@
 use super::super::*;
 use super::common::*;
-use crate::models::{NavTab, ProviderKind, QuotaInfo, QuotaType};
+use crate::application::{overview_view_state, OverviewItemStatus};
+use crate::models::{
+    FailureReason, NavTab, ProviderCapability, ProviderFailure, ProviderKind, QuotaInfo, QuotaType,
+};
 
 #[test]
 fn popup_height_missing_provider_returns_min() {
@@ -120,6 +123,7 @@ fn popup_height_overview_single_provider_has_no_dead_space() {
 #[test]
 fn popup_height_overview_grows_when_expanded() {
     let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].connection = crate::models::ConnectionStatus::Connected;
     store.providers[0].quotas = vec![
         QuotaInfo::new("session", 10.0, 100.0),
         QuotaInfo::new("weekly", 20.0, 100.0),
@@ -144,6 +148,7 @@ fn popup_height_overview_grows_when_expanded() {
 #[test]
 fn popup_height_overview_expansion_ignores_hidden_quotas() {
     let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].connection = crate::models::ConnectionStatus::Connected;
     store.providers[0].quotas = vec![
         QuotaInfo::new("session", 10.0, 100.0),
         QuotaInfo::new("weekly", 20.0, 100.0),
@@ -159,4 +164,71 @@ fn popup_height_overview_expansion_ignores_hidden_quotas() {
 
     // 只剩 1 个可见配额 → 退回单行卡片高度
     assert_eq!(h, crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT);
+}
+
+/// 刷新和断开状态只渲染一行提示，即使缓存配额和展开记忆仍然存在
+#[test]
+fn popup_height_overview_status_rows_ignore_cached_expansion() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].connection = crate::models::ConnectionStatus::Connected;
+    store.providers[0].quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 20.0, 100.0),
+        QuotaInfo::new("monthly", 30.0, 100.0),
+    ];
+    let provider_id = pid(ProviderKind::Claude);
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    session.toggle_overview_expanded(&provider_id);
+
+    session.provider_store.mark_refreshing_by_id(&provider_id);
+    assert!(matches!(
+        overview_view_state(&session).items[0].status,
+        OverviewItemStatus::Refreshing
+    ));
+    assert_eq!(
+        session.popup_height(),
+        crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT
+    );
+
+    session
+        .provider_store
+        .find_by_id_mut(&provider_id)
+        .unwrap()
+        .mark_unavailable(ProviderFailure {
+            reason: FailureReason::Unavailable,
+            advice: None,
+            raw_detail: None,
+        });
+    assert!(matches!(
+        overview_view_state(&session).items[0].status,
+        OverviewItemStatus::Disconnected
+    ));
+    assert_eq!(
+        session.popup_height(),
+        crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT
+    );
+}
+
+/// 不参与监控的 Provider 始终渲染单行说明，不受缓存配额和展开记忆影响
+#[test]
+fn popup_height_overview_non_monitorable_card_stays_single_row() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].connection = crate::models::ConnectionStatus::Connected;
+    store.providers[0].provider_capability = ProviderCapability::Informational;
+    store.providers[0].quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0),
+        QuotaInfo::new("weekly", 20.0, 100.0),
+    ];
+    let provider_id = pid(ProviderKind::Claude);
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    session.toggle_overview_expanded(&provider_id);
+
+    assert!(matches!(
+        overview_view_state(&session).items[0].status,
+        OverviewItemStatus::Error { .. }
+    ));
+    assert_eq!(
+        session.popup_height(),
+        crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT
+    );
 }

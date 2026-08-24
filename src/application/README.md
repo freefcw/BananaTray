@@ -23,7 +23,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`SettingsTab`** — 设置窗口 Tab 枚举
 - **`HeaderStatusKind`** — 头部状态徽章类型（Synced/Syncing/Stale/Offline）
 - **`provider_panel_flags()`** — 面板可见性规则（单一真理来源）
-- **`compute_popup_height()`** — Provider 面板的弹窗高度计算（配额卡片 + 账户信息 / dashboard 行）。Overview 面板不走这里：它的高度取决于 session 内的展开记忆，由 `AppSession::popup_height()` 分派到 `overview_card_rows()` + `models::compute_popup_height_for_overview()`，展开卡片时窗口会跟着长高
+- **`compute_popup_height()`** — Provider 面板的弹窗高度计算（配额卡片 + 账户信息 / dashboard 行）。Overview 面板不走这里：它的高度取决于 session 内的展开记忆，由 `AppSession::popup_height()` 分派到 `overview_card_rows()` + `models::compute_popup_height_for_overview()`，展开卡片时窗口会跟着长高。`overview_provider_renders_quotas()` 是 selector 与高度计算共用的状态契约：只有当前真正渲染配额内容的 Connected / 缓存 Error 卡片才按展开行数计高，Refreshing / Disconnected / informational 卡片始终按单行状态卡计高
 - **`compute_header_status()`** — 头部状态文本计算
 
 测试目录：`state_tests/`（按域拆分，共享 fixture 在 `common.rs`）

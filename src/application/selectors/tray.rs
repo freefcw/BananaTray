@@ -2,7 +2,7 @@
 //!
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
-use super::super::state::{provider_panel_flags, AppSession};
+use super::super::state::{overview_provider_renders_quotas, provider_panel_flags, AppSession};
 use super::format::{
     format_failure_message, format_non_monitoring_message, format_quota_card_display_text,
     format_quota_card_has_unit, format_quota_label, format_refresh_status,
@@ -297,47 +297,47 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 };
             }
 
-            let status = match provider.connection {
-                ConnectionStatus::Refreshing => OverviewItemStatus::Refreshing,
-                ConnectionStatus::Disconnected => OverviewItemStatus::Disconnected,
-                ConnectionStatus::Error if provider.quotas.is_empty() => {
-                    OverviewItemStatus::Error {
+            let status = if overview_provider_renders_quotas(provider) {
+                let visible = session
+                    .settings
+                    .provider
+                    .visible_quotas(&provider.provider_id, &provider.quotas);
+                if visible.is_empty() {
+                    OverviewItemStatus::Disconnected
+                } else {
+                    // 收集所有可见配额，按 status_level 降序（最差在前）
+                    let mut quota_items: Vec<OverviewQuotaItem> = visible
+                        .iter()
+                        .map(|q| {
+                            let sl = q.status_level();
+                            OverviewQuotaItem {
+                                label: format_quota_label(q),
+                                display_text: compact_quota_display_text(q, display_mode),
+                                bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
+                                status_level: sl,
+                            }
+                        })
+                        .collect();
+                    quota_items.sort_by_key(|item| std::cmp::Reverse(item.status_level));
+                    let worst = quota_items[0].status_level;
+                    OverviewItemStatus::Quota {
+                        status_level: worst,
+                        quotas: quota_items,
+                        expanded: session.is_overview_expanded(&provider.provider_id),
+                    }
+                }
+            } else {
+                match provider.connection {
+                    ConnectionStatus::Refreshing => OverviewItemStatus::Refreshing,
+                    ConnectionStatus::Error => OverviewItemStatus::Error {
                         message: provider
                             .last_failure
                             .as_ref()
                             .map(format_failure_message)
                             .unwrap_or_else(|| t!("provider.refresh_failed").to_string()),
-                    }
-                }
-                // Connected 或 Error（有缓存配额）：展示配额数据
-                ConnectionStatus::Connected | ConnectionStatus::Error => {
-                    let visible = session
-                        .settings
-                        .provider
-                        .visible_quotas(&provider.provider_id, &provider.quotas);
-                    if visible.is_empty() {
+                    },
+                    ConnectionStatus::Connected | ConnectionStatus::Disconnected => {
                         OverviewItemStatus::Disconnected
-                    } else {
-                        // 收集所有可见配额，按 status_level 降序（最差在前）
-                        let mut quota_items: Vec<OverviewQuotaItem> = visible
-                            .iter()
-                            .map(|q| {
-                                let sl = q.status_level();
-                                OverviewQuotaItem {
-                                    label: format_quota_label(q),
-                                    display_text: compact_quota_display_text(q, display_mode),
-                                    bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
-                                    status_level: sl,
-                                }
-                            })
-                            .collect();
-                        quota_items.sort_by_key(|item| std::cmp::Reverse(item.status_level));
-                        let worst = quota_items[0].status_level;
-                        OverviewItemStatus::Quota {
-                            status_level: worst,
-                            quotas: quota_items,
-                            expanded: session.is_overview_expanded(&provider.provider_id),
-                        }
                     }
                 }
             };
