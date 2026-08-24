@@ -6,6 +6,7 @@ pub(super) const BILLING_URL: &str = "https://cli-chat-proxy.grok.com/v1/billing
 fn billing_headers(access_token: &str) -> Vec<String> {
     vec![
         format!("Authorization: Bearer {access_token}"),
+        "x-xai-token-auth: xai-grok-cli".to_string(),
         "Accept: application/json".to_string(),
         "User-Agent: BananaTray".to_string(),
     ]
@@ -27,7 +28,8 @@ mod tests {
     fn billing_request_headers_use_bearer_token() {
         let headers = billing_headers("token-123");
         assert_eq!(headers[0], "Authorization: Bearer token-123");
-        assert_eq!(headers[1], "Accept: application/json");
-        assert_eq!(headers[2], "User-Agent: BananaTray");
+        assert_eq!(headers[1], "x-xai-token-auth: xai-grok-cli");
+        assert_eq!(headers[2], "Accept: application/json");
+        assert_eq!(headers[3], "User-Agent: BananaTray");
     }
 }

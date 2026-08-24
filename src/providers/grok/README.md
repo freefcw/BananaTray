@@ -9,7 +9,7 @@
 ## Data Contract
 
 - Endpoint: `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits`
-- Authentication: `Authorization: Bearer <~/.grok/auth.json session key>`
+- Authentication: `Authorization: Bearer <~/.grok/auth.json session key>`，并带 `x-xai-token-auth: xai-grok-cli`（与 Grok CLI 一致）
 - 只走 `?format=credits`。不带该 query 的 `/v1/billing` 返回的是另一套月度 API spend，不能当 Grok Build 用量。
 - `config.creditUsagePercent` → `QuotaType::Weekly` / `QuotaLabelSpec::Weekly`（`currentPeriod.type` 为 `USAGE_PERIOD_TYPE_MONTHLY` / `DAILY` 时改用对应标签）
 - `currentPeriod.end` 或 `billingPeriodEnd` → `QuotaDetailSpec::ResetAt`
