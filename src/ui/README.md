@@ -30,7 +30,7 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 
 - `app_view.rs` — **`AppView`** GPUI view struct implementing `Render`. Renders the tray popup with top navigation bar, content area, and global action footer.
 - `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`. Overview pill inserted first when enabled.
-- `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail. 2+ 配额的卡片默认折叠、可展开为多行；展开态不是 view-local 状态，而是 `AppAction::ToggleOverviewExpanded` 写入 `AppSession::overview_expanded` 后由 `overview_view_state` 回读，因此弹窗销毁重建（macOS 每次关闭都会）后仍保留，重启应用则回到折叠。
+- `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail. 2+ 配额的卡片默认折叠、可展开为多行；展开态不是 view-local 状态，而是 `AppAction::ToggleOverviewExpanded` 写入 `AppSession::overview_expanded` 后由 `overview_view_state` 回读，因此弹窗销毁重建（macOS 每次关闭都会）后仍保留，重启应用则回到折叠。展开按钮使用 24×24 点击区域、localized tooltip 和焦点环，并支持 Tab 聚焦后用 Enter / Space 切换。
 - `provider_panel.rs` — Provider detail view: header, quota bars, status indicators, error messages.
 - `tray_settings.rs` — Inline settings content rendered inside the tray popup (overview toggle, auto-hide, account info).
 

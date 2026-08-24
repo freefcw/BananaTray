@@ -86,8 +86,8 @@ impl PopupLayout {
     pub const OVERVIEW_VALUE_W: f32 = 38.0;
     /// 状态徽章列固定宽度
     pub const OVERVIEW_BADGE_W: f32 = 28.0;
-    /// 展开/折叠按钮列固定宽度（不可展开时用空白占位保持对齐）
-    pub const OVERVIEW_EXPAND_W: f32 = 16.0;
+    /// 展开/折叠按钮方形点击区域（不可展开时用等宽空白占位保持对齐）
+    pub const OVERVIEW_EXPAND_W: f32 = 24.0;
 
     // ── Overview 展开态行尺寸 ──
 

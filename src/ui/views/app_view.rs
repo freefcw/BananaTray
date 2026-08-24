@@ -261,7 +261,7 @@ impl Render for AppView {
                             .px(px(12.0))
                             .pt(px(10.0))
                             .pb(px(8.0))
-                            .child(self.render_overview_panel(cx))
+                            .child(self.render_overview_panel(window, cx))
                             .into_any_element(),
                         NavTab::Provider(id) => div()
                             .px(px(12.0))

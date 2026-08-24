@@ -26,6 +26,8 @@ tooltip.open_dashboard: "Open Dashboard"
 tooltip.refresh: "Refresh"
 tooltip.settings: "Settings"
 tooltip.quit: "Quit"
+tooltip.expand_quotas: "Expand quotas"
+tooltip.collapse_quotas: "Collapse quotas"
 
 # ── Settings window ──────────────────────────────────────
 settings.title: "BananaTray Settings"

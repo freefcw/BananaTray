@@ -5,10 +5,11 @@ use crate::application::{
 use crate::models::{NavTab, PopupLayout, StatusLevel};
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::with_tooltip;
 use crate::ui::AppView;
 use gpui::{
     div, px, relative, AnyElement, Context, Div, ElementId, FontWeight, Hsla, InteractiveElement,
-    IntoElement, MouseButton, ParentElement, Stateful, Styled, TextAlign,
+    IntoElement, MouseButton, ParentElement, Stateful, Styled, TextAlign, Window,
 };
 use rust_i18n::t;
 
@@ -31,7 +32,11 @@ fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
 }
 
 impl AppView {
-    pub(crate) fn render_overview_panel(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_overview_panel(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = cx.global::<Theme>().clone();
         let vm = {
             let state = self.state.borrow();
@@ -46,7 +51,7 @@ impl AppView {
         let count = vm.items.len();
 
         for (i, item) in vm.items.iter().enumerate() {
-            let mut card = self.render_compact_provider_card(item, &theme, cx);
+            let mut card = self.render_compact_provider_card(item, &theme, window, cx);
             if i < count - 1 {
                 card = card.mb(px(8.0));
             }
@@ -82,6 +87,7 @@ impl AppView {
         &self,
         item: &OverviewItemViewState,
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let entity = cx.entity().clone();
@@ -97,10 +103,14 @@ impl AppView {
                     debug_assert!(false, "Quota variant should never have empty quotas vec");
                     self.render_card_disconnected(item, theme)
                 }
-                1 => self.render_card_single_row(item, *status_level, &quotas[0], false, theme, cx),
+                1 => {
+                    self.render_card_single_row(item, *status_level, &quotas[0], false, window, cx)
+                }
                 // 2+ 配额：默认折叠，展开选择在本次运行期间被记住
-                _ if *expanded => self.render_card_expanded(item, *status_level, quotas, theme, cx),
-                _ => self.render_card_single_row(item, *status_level, &quotas[0], true, theme, cx),
+                _ if *expanded => {
+                    self.render_card_expanded(item, *status_level, quotas, window, cx)
+                }
+                _ => self.render_card_single_row(item, *status_level, &quotas[0], true, window, cx),
             },
             OverviewItemStatus::Refreshing => self
                 .build_card_base_row(
@@ -160,27 +170,34 @@ impl AppView {
         overall_level: StatusLevel,
         quota: &OverviewQuotaItem,
         expandable: bool,
-        theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let color = dot_color(overall_level, theme);
-        let fill = bar_color(quota.status_level, theme);
+        let theme = cx.global::<Theme>().clone();
+        let color = dot_color(overall_level, &theme);
+        let fill = bar_color(quota.status_level, &theme);
 
         let mut row = self
-            .build_card_base_row(item, color, theme.text.secondary, theme.text.primary, theme)
-            .child(self.render_value_cell(&quota.display_text, theme))
+            .build_card_base_row(
+                item,
+                color,
+                theme.text.secondary,
+                theme.text.primary,
+                &theme,
+            )
+            .child(self.render_value_cell(&quota.display_text, &theme))
             .child(self.render_bar(
                 quota.bar_ratio,
                 PopupLayout::OVERVIEW_BAR_W,
                 PopupLayout::OVERVIEW_BAR_H,
                 fill,
-                theme,
+                &theme,
             ))
             .child(self.render_badge(overall_level, color));
 
         // 展开列（固定宽度，保证所有单行卡片对齐）
         if expandable {
-            row = row.child(self.render_expand_toggle(item, false, theme, cx));
+            row = row.child(self.render_expand_toggle(item, false, &theme, window, cx));
         } else {
             // 空白占位，保证进度条对齐
             row = row.child(div().w(px(PopupLayout::OVERVIEW_EXPAND_W)).flex_shrink_0());
@@ -198,15 +215,16 @@ impl AppView {
         item: &OverviewItemViewState,
         overall_level: StatusLevel,
         quotas: &[OverviewQuotaItem],
-        theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        let theme = cx.global::<Theme>().clone();
         let hover_bg = theme.bg.card_inner_hovered;
 
         // header 行：[dot] [icon] [name] [▾]（展开态不显示整体 badge，各行已有独立 badge）
         let header_row = self
-            .build_expanded_header(item, overall_level, theme)
-            .child(self.render_expand_toggle(item, true, theme, cx));
+            .build_expanded_header(item, overall_level, &theme)
+            .child(self.render_expand_toggle(item, true, &theme, window, cx));
 
         let mut quota_container = div()
             .w_full()
@@ -215,10 +233,10 @@ impl AppView {
             .pl(px(PopupLayout::OVERVIEW_QUOTA_ROW_PL));
 
         for q in quotas {
-            quota_container = quota_container.child(self.render_quota_row(q, theme));
+            quota_container = quota_container.child(self.render_quota_row(q, &theme));
         }
 
-        self.build_card_shell(item, theme)
+        self.build_card_shell(item, &theme)
             .hover(move |style| style.bg(hover_bg))
             .child(header_row)
             .child(quota_container)
@@ -393,44 +411,82 @@ impl AppView {
 
     // ── 原子 UI 元素 ──
 
-    /// 展开/折叠按钮列（固定宽度）。点击写入 session，使展开选择跨弹窗保留。
+    /// 展开/折叠按钮：固定方形点击区域，支持 tooltip、Tab 聚焦和 Enter/Space 操作。
     fn render_expand_toggle(
         &self,
         item: &OverviewItemViewState,
         expanded: bool,
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let (id_prefix, glyph) = if expanded {
-            ("collapse", "▾")
+        let (id_prefix, glyph, tooltip) = if expanded {
+            ("collapse", "▾", t!("tooltip.collapse_quotas").to_string())
         } else {
-            ("expand", "▸")
+            ("expand", "▸", t!("tooltip.expand_quotas").to_string())
         };
-        let provider_id = item.id.clone();
-        let entity = cx.entity().clone();
-        div()
-            .id(ElementId::Name(
-                format!("{id_prefix}-{}", item.id.id_key()).into(),
-            ))
-            .w(px(PopupLayout::OVERVIEW_EXPAND_W))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(14.0))
-            .text_color(theme.text.accent)
-            .cursor_pointer()
-            .child(glyph)
-            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+        let control_id = ElementId::Name(format!("{id_prefix}-{}", item.id.id_key()).into());
+        let focus_handle = window
+            .use_keyed_state(control_id.clone(), cx, |_, cx| cx.focus_handle())
+            .read(cx)
+            .clone();
+        let tracked_focus = focus_handle.clone().tab_index(0).tab_stop(true);
+        let is_focused = focus_handle.is_focused(window);
+
+        let provider_id_for_mouse = item.id.clone();
+        let provider_id_for_key = item.id.clone();
+        let entity_for_mouse = cx.entity().clone();
+        let entity_for_key = cx.entity().clone();
+        let hover_bg = theme.bg.card_inner_hovered;
+
+        with_tooltip(
+            control_id,
+            &tooltip,
+            theme,
+            div()
+                .w(px(PopupLayout::OVERVIEW_EXPAND_W))
+                .h(px(PopupLayout::OVERVIEW_EXPAND_W))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(6.0))
+                .border_1()
+                .border_color(if is_focused {
+                    theme.text.accent
+                } else {
+                    theme.border.subtle
+                })
+                .text_size(px(14.0))
+                .text_color(theme.text.accent)
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
+                .child(glyph),
+        )
+        .track_focus(&tracked_focus)
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            cx.stop_propagation();
+            focus_handle.focus(window);
+            entity_for_mouse.update(cx, |view, cx| {
+                runtime::dispatch_in_context(
+                    &view.state,
+                    AppAction::ToggleOverviewExpanded(provider_id_for_mouse.clone()),
+                    cx,
+                );
+            });
+        })
+        .on_key_down(move |event, _, cx| {
+            if event.keystroke.key == "space" || event.keystroke.key == "enter" {
                 cx.stop_propagation();
-                entity.update(cx, |view, cx| {
+                entity_for_key.update(cx, |view, cx| {
                     runtime::dispatch_in_context(
                         &view.state,
-                        AppAction::ToggleOverviewExpanded(provider_id.clone()),
+                        AppAction::ToggleOverviewExpanded(provider_id_for_key.clone()),
                         cx,
                     );
                 });
-            })
+            }
+        })
     }
 
     /// 固定宽度数值单元格（右对齐）

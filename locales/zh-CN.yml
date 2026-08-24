@@ -26,6 +26,8 @@ tooltip.open_dashboard: "打开 Dashboard"
 tooltip.refresh: "刷新"
 tooltip.settings: "设置"
 tooltip.quit: "退出"
+tooltip.expand_quotas: "展开配额"
+tooltip.collapse_quotas: "折叠配额"
 
 # ── 设置窗口 ──────────────────────────────────────────────
 settings.title: "BananaTray 设置"
