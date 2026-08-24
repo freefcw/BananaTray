@@ -420,12 +420,13 @@ impl AppView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let (id_prefix, glyph, tooltip) = if expanded {
-            ("collapse", "▾", t!("tooltip.collapse_quotas").to_string())
+        let (glyph, tooltip) = if expanded {
+            ("▾", t!("tooltip.collapse_quotas").to_string())
         } else {
-            ("expand", "▸", t!("tooltip.expand_quotas").to_string())
+            ("▸", t!("tooltip.expand_quotas").to_string())
         };
-        let control_id = ElementId::Name(format!("{id_prefix}-{}", item.id.id_key()).into());
+        // ID 不随展开态切换，避免 GPUI 拆掉重建控件，连带整卡闪一下。
+        let control_id = ElementId::Name(format!("overview-expand-{}", item.id.id_key()).into());
         let focus_handle = window
             .use_keyed_state(control_id.clone(), cx, |_, cx| cx.focus_handle())
             .read(cx)
@@ -451,11 +452,12 @@ impl AppView {
                 .items_center()
                 .justify_center()
                 .rounded(px(6.0))
+                // 预留 1px 边框避免聚焦时跳动；默认透明，避免空闲态画出按钮外框
                 .border_1()
                 .border_color(if is_focused {
                     theme.text.accent
                 } else {
-                    theme.border.subtle
+                    gpui::transparent_black()
                 })
                 .text_size(px(14.0))
                 .text_color(theme.text.accent)
@@ -464,9 +466,8 @@ impl AppView {
                 .child(glyph),
         )
         .track_focus(&tracked_focus)
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
             cx.stop_propagation();
-            focus_handle.focus(window);
             entity_for_mouse.update(cx, |view, cx| {
                 runtime::dispatch_in_context(
                     &view.state,

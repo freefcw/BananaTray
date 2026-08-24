@@ -30,7 +30,7 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 
 - `app_view.rs` — **`AppView`** GPUI view struct implementing `Render`. Renders the tray popup with top navigation bar, content area, and global action footer. 打开弹窗或切入 Overview / Provider tab 时按 `popup_height()` 调整窗口；停留在 Overview 时展开/折叠不改原生窗口高度，多出的行走内容区滚动，避免 GPUI/AppKit 改尺寸造成的整窗抖动。macOS 的必要 resize 走 `platform::popup_window::resize_popup_window`（钉住顶边、关掉动画）。
 - `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`. Overview pill inserted first when enabled.
-- `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail. 2+ 配额的卡片默认折叠、可展开为多行；展开态不是 view-local 状态，而是 `AppAction::ToggleOverviewExpanded` 写入 `AppSession::overview_expanded` 后由 `overview_view_state` 回读，因此弹窗销毁重建（macOS 每次关闭都会）后仍保留，重启应用则回到折叠。展开按钮使用 24×24 点击区域、localized tooltip 和焦点环，并支持 Tab 聚焦后用 Enter / Space 切换。
+- `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail. 2+ 配额的卡片默认折叠、可展开为多行；展开态不是 view-local 状态，而是 `AppAction::ToggleOverviewExpanded` 写入 `AppSession::overview_expanded` 后由 `overview_view_state` 回读，因此弹窗销毁重建（macOS 每次关闭都会）后仍保留，重启应用则回到折叠。停留在 Overview 时展开/折叠不改窗口高度。展开按钮使用 24×24 点击区域和 localized tooltip，默认无描边，Tab 聚焦时才显示焦点环，并支持 Enter / Space 切换。按钮 element id 不随展开态改名。
 - `provider_panel.rs` — Provider detail view: header, quota bars, status indicators, error messages.
 - `tray_settings.rs` — Inline settings content rendered inside the tray popup (overview toggle, auto-hide, account info).
 
