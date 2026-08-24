@@ -15,6 +15,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | `notification.rs` | app-only | OS notification adapter. Domain alert decisions stay in `application/quota_alert.rs`. |
 | `auto_launch.rs` | app-only | Launch-at-login integration: macOS `SMAppService`, Linux XDG autostart desktop entry; requests run on one background worker, coalesce to the latest desired state, and expose an exit-time completion barrier. |
 | `single_instance.rs` | app-only | Single-instance IPC via local sockets; secondary launches send `SHOW` to the primary instance. |
+| `popup_window.rs` | app-only | 托盘弹窗在打开 / 切 tab 时的内容区 resize。macOS 用 `setFrame` 钉住顶边并关掉动画；Linux 仍走 `Window::resize()`。Overview 展开/折叠不走这条路径。 |
 | `gnome_detect.rs` | Linux + app-only | Detects when the native GNOME Shell Extension path should replace KSNI/AppIndicator fallback. |
 
 ## Stable Paths

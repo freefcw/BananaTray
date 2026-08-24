@@ -90,7 +90,7 @@ Refactored into a sub-directory with its own [README](settings/README.md). Key t
   - `MIN_OVERVIEW_HEIGHT` — Overview 专属最小高度（`FIXED_HEIGHT + OVERVIEW_ITEM_HEIGHT`）；不复用 `MIN_HEIGHT`，避免单 Provider 时窗口多出 ~87px 死空白
 - **`compute_popup_height_for_quotas()`** — pure function mapping quota count to pixel height (clamped to min/max)
 - **`compute_popup_height_detailed()`** — extended height calculation with dashboard row and account info flags
-- **`compute_popup_height_for_overview(card_rows)`** — height calculation from per-provider card row counts (`1` = 折叠/单配额单行卡片，`>1` = 展开态多行卡片，走 `overview_multi_item_height`)，clamped to `MIN_OVERVIEW_HEIGHT` / `MAX_HEIGHT`。行数由 `AppSession::overview_card_rows()` 按展开记忆算出，因此展开卡片时窗口会跟着长高而不是把内容压进滚动区
+- **`compute_popup_height_for_overview(card_rows)`** — height calculation from per-provider card row counts (`1` = 折叠/单配额单行卡片，`>1` = 展开态多行卡片，走 `overview_multi_item_height`)，clamped to `MIN_OVERVIEW_HEIGHT` / `MAX_HEIGHT`。行数由 `AppSession::overview_card_rows()` 按展开记忆算出，供打开弹窗 / 切入 Overview 时定高；停留在 Overview 时展开折叠不改窗口
 
 ### `test_helpers.rs` — Test Fixtures
 

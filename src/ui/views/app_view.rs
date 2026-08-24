@@ -4,14 +4,15 @@ use crate::theme::Theme;
 #[cfg(target_os = "linux")]
 use gpui::MouseButton;
 use gpui::{
-    div, img, px, size, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Render, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    div, img, px, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 use log::debug;
 use rust_i18n::t;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::platform::popup_window::{resize_popup_window, size_differs};
 use crate::runtime::AppState;
 
 use crate::models::PopupLayout;
@@ -62,6 +63,8 @@ pub struct AppView {
     #[cfg(target_os = "linux")]
     pub(crate) _bounds_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
+    /// 已在 Overview tab 上按当前窗口高度锁定。展开/折叠不再改原生窗口，避免抖动。
+    is_overview_height_locked: bool,
 }
 
 impl AppView {
@@ -86,6 +89,7 @@ impl AppView {
             #[cfg(target_os = "linux")]
             _bounds_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
+            is_overview_height_locked: false,
         }
     }
 
@@ -197,6 +201,33 @@ impl AppView {
     pub(crate) fn render_toggle_switch_small(&self, enabled: bool, theme: &Theme) -> Div {
         crate::ui::widgets::render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
     }
+
+    fn sync_popup_height(&mut self, window: &mut Window, active_tab: &NavTab, desired_height: f32) {
+        let is_overview = matches!(active_tab, NavTab::Overview);
+        let should_sync_height = !is_overview || !self.is_overview_height_locked;
+        if should_sync_height {
+            if let WindowBounds::Windowed(current_bounds) = window.window_bounds() {
+                let new_height = px(desired_height);
+                let new_width = px(PopupLayout::WIDTH);
+                if size_differs(current_bounds.size, new_width, new_height) {
+                    let content_area = desired_height
+                        - PopupLayout::HEADER_HEIGHT
+                        - PopupLayout::NAV_HEIGHT
+                        - PopupLayout::FOOTER_HEIGHT;
+                    debug!(
+                        target: "layout",
+                        "window resize: {:?} -> {:?} (diff={:?}), content_area={:.0}px",
+                        current_bounds.size.height,
+                        new_height,
+                        current_bounds.size.height - new_height,
+                        content_area
+                    );
+                    resize_popup_window(window, new_width, new_height);
+                }
+            }
+        }
+        self.is_overview_height_locked = is_overview;
+    }
 }
 
 impl Render for AppView {
@@ -205,37 +236,17 @@ impl Render for AppView {
         let active_tab = state.session.nav.active_tab.clone();
         #[cfg(target_os = "linux")]
         let popup_visible = state.session.popup_visible;
-        // 在每次渲染时动态调整窗口高度
         let desired_height = state.session.popup_height();
         drop(state);
 
         #[cfg(target_os = "linux")]
         if !popup_visible {
+            // Linux 隐藏弹窗不销毁 view，解锁以便重开时重新落地高度
+            self.is_overview_height_locked = false;
             return div().size_full();
         }
 
-        // 仅对 Windowed 类型窗口执行 resize（避免影响全屏/最大化窗口）
-        let bounds = window.window_bounds();
-        if let WindowBounds::Windowed(current_bounds) = bounds {
-            let new_height = px(desired_height);
-            let diff = current_bounds.size.height - new_height;
-            if diff.abs() > px(2.0) {
-                // 仅在高度变化时输出布局明细（避免每帧刷屏）
-                let content_area = desired_height
-                    - PopupLayout::HEADER_HEIGHT
-                    - PopupLayout::NAV_HEIGHT
-                    - PopupLayout::FOOTER_HEIGHT;
-                debug!(
-                    target: "layout",
-                    "window resize: {:?} -> {:?} (diff={:?}), content_area={:.0}px",
-                    current_bounds.size.height,
-                    new_height,
-                    diff,
-                    content_area
-                );
-                window.resize(size(px(PopupLayout::WIDTH), new_height));
-            }
-        }
+        self.sync_popup_height(window, &active_tab, desired_height);
 
         let theme = cx.global::<Theme>();
         div()

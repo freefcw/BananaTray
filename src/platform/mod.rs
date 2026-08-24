@@ -7,6 +7,7 @@
 //! - `auto_launch` — 开机自启动（macOS SMAppService / Linux XDG autostart）
 //! - `logging` — 日志系统初始化（fern + panic hook）
 //! - `notification` — 系统通知发送（OS adapter）
+//! - `popup_window` — 托盘弹窗 resize（macOS 钉住顶边，避开 GPUI 异步 setContentSize）
 //! - `single_instance` — 单实例检测（IPC local socket）
 //! - `system` — 系统工具（打开 URL、剪贴板、暗色模式检测、系统信息）
 
@@ -32,6 +33,8 @@ pub(crate) mod assets;
 pub mod auto_launch;
 #[cfg(feature = "app")]
 pub mod notification;
+#[cfg(feature = "app")]
+pub(crate) mod popup_window;
 #[cfg(feature = "app")]
 pub(crate) mod single_instance;
 
