@@ -13,6 +13,8 @@ struct BillingResponse {
 struct BillingConfig {
     current_period: Option<UsagePeriod>,
     credit_usage_percent: Option<f64>,
+    on_demand_cap: Option<ValNumber>,
+    on_demand_used: Option<ValNumber>,
     product_usage: Option<Vec<ProductUsage>>,
     billing_period_end: Option<String>,
 }
@@ -22,6 +24,13 @@ struct UsagePeriod {
     #[serde(rename = "type")]
     period_type: Option<String>,
     end: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ValNumber {
+    // proto3 JSON 可能省略内层默认 0 的 val，缺省按 0 处理
+    #[serde(default)]
+    val: f64,
 }
 
 #[derive(Deserialize)]
@@ -56,7 +65,7 @@ pub(super) fn parse_usage_response(body: &str) -> ProviderResult<Vec<QuotaInfo>>
     );
 
     let mut quotas = Vec::new();
-    if let Some(percent) = config.credit_usage_percent {
+    if let Some(percent) = overall_percent(&config) {
         quotas.push(percent_quota(
             period_label,
             period_type,
@@ -88,6 +97,27 @@ pub(super) fn parse_usage_response(body: &str) -> ProviderResult<Vec<QuotaInfo>>
     } else {
         Ok(quotas)
     }
+}
+
+fn overall_percent(config: &BillingConfig) -> Option<f64> {
+    if let Some(percent) = config.credit_usage_percent {
+        return Some(percent);
+    }
+    match (
+        config.on_demand_used.as_ref().map(|v| v.val),
+        config.on_demand_cap.as_ref().map(|v| v.val),
+    ) {
+        (Some(used), Some(cap)) if cap > 0.0 && used.is_finite() && cap.is_finite() => {
+            Some(used / cap * 100.0)
+        }
+        _ if has_credits_window(config) => Some(0.0),
+        _ => None,
+    }
+}
+
+fn has_credits_window(config: &BillingConfig) -> bool {
+    // proto3 JSON 会省略默认 0 的 creditUsagePercent。账单窗口还在，就当成 0%。
+    config.current_period.is_some() || config.billing_period_end.is_some()
 }
 
 fn period_quota_type(period_type: Option<&str>) -> (QuotaLabelSpec, QuotaType) {
@@ -226,6 +256,75 @@ mod tests {
             parse_usage_response(r#"{"config":{}}"#).unwrap_err(),
             ProviderError::no_data()
         );
+    }
+
+    #[test]
+    fn omitted_percent_with_weekly_window_is_zero_usage() {
+        let body = r#"{
+            "config": {
+                "currentPeriod": {
+                    "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                    "start": "2026-08-23T17:04:49.666421+00:00",
+                    "end": "2026-08-30T17:04:49.666421+00:00"
+                },
+                "onDemandCap": {"val": 0},
+                "onDemandUsed": {"val": 0},
+                "billingPeriodEnd": "2026-08-30T17:04:49.666421+00:00"
+            }
+        }"#;
+        let quotas = parse_usage_response(body).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert_eq!(quotas[0].label_spec, QuotaLabelSpec::Weekly);
+        assert_eq!(quotas[0].quota_type, QuotaType::Weekly);
+        assert_eq!(quotas[0].used, 0.0);
+        assert_eq!(quotas[0].limit, 100.0);
+        assert!(matches!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::ResetAt { epoch_secs }) if epoch_secs > 0
+        ));
+    }
+
+    #[test]
+    fn uses_on_demand_ratio_when_percent_missing() {
+        let body = r#"{
+            "config": {
+                "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-08-30T17:04:49Z"},
+                "onDemandCap": {"val": 200},
+                "onDemandUsed": {"val": 50}
+            }
+        }"#;
+        let quotas = parse_usage_response(body).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert_eq!(quotas[0].used, 25.0);
+    }
+
+    #[test]
+    fn credit_percent_wins_over_on_demand_ratio() {
+        let body = r#"{
+            "config": {
+                "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-08-30T17:04:49Z"},
+                "creditUsagePercent": 12.0,
+                "onDemandCap": {"val": 200},
+                "onDemandUsed": {"val": 50}
+            }
+        }"#;
+        let quotas = parse_usage_response(body).unwrap();
+        assert_eq!(quotas[0].used, 12.0);
+    }
+
+    #[test]
+    fn omitted_val_inside_on_demand_numbers_is_zero() {
+        // proto3 JSON 省略内层默认 0：{"onDemandCap": {}} 不能导致整个响应 parse 失败
+        let body = r#"{
+            "config": {
+                "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-08-30T17:04:49Z"},
+                "onDemandCap": {},
+                "onDemandUsed": {}
+            }
+        }"#;
+        let quotas = parse_usage_response(body).unwrap();
+        assert_eq!(quotas.len(), 1);
+        assert_eq!(quotas[0].used, 0.0);
     }
 
     #[test]

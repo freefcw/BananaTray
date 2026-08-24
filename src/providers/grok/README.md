@@ -12,6 +12,7 @@
 - Authentication: `Authorization: Bearer <~/.grok/auth.json session key>`，并带 `x-xai-token-auth: xai-grok-cli`（与 Grok CLI 一致）
 - 只走 `?format=credits`。不带该 query 的 `/v1/billing` 返回的是另一套月度 API spend，不能当 Grok Build 用量。
 - `config.creditUsagePercent` → `QuotaType::Weekly` / `QuotaLabelSpec::Weekly`（`currentPeriod.type` 为 `USAGE_PERIOD_TYPE_MONTHLY` / `DAILY` 时改用对应标签）
+- 缺 `creditUsagePercent` 时：`onDemandCap.val > 0` 则用 `onDemandUsed.val / onDemandCap.val * 100`；否则只要还有 `currentPeriod` 或 `billingPeriodEnd`，按 proto3 省略默认 0 处理成 **0%**（周池刚重置时 SuperGrok Heavy 常见）。两者都没有才是 `NoData`。
 - `currentPeriod.end` 或 `billingPeriodEnd` → `QuotaDetailSpec::ResetAt`
 - `productUsage` 仅在多产品，或唯一产品百分比与总池不同时展示；与总池相同的单独 `GrokBuild` 行会丢掉，避免重复。
 - 百分比经 `QuotaInfo::from_used_percent()` 入库。
