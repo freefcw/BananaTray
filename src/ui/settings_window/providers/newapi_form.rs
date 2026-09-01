@@ -4,7 +4,7 @@
 //! 用户填写必要字段后自动生成 YAML 配置文件。
 //! 编辑模式下从磁盘读取已有配置回填表单，URL 字段只读。
 //!
-//! 使用 adabraka-ui InputState / TextareaState，
+//! 使用 fc-ui InputState / TextareaState，
 //! 支持鼠标选择、光标闪烁、Alt+方向键按单词跳转等标准编辑功能。
 //! Cookie 字段使用 Textarea 多行编辑组件，便于查看和编辑长字符串。
 

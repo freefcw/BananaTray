@@ -29,7 +29,7 @@ widgets/
 | `icon_button.rs` | `render_icon_tooltip_button()` | 图标按钮 + 悬浮 tooltip |
 | `segmented_control.rs` | `render_segmented_control()` | 分段控件（类 iOS UISegmentedControl） |
 | `cadence_dropdown.rs` | `render_cadence_trigger()` | 刷新频率下拉菜单触发器 |
-| `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 adabraka-ui HotkeyInputState |
+| `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 fc-ui HotkeyInputState |
 | `input_actions.rs` | `register_input_actions()` | 注册 Ctrl+A/C/V/X 等输入快捷键 |
 
 ## display/ — 数据展示
@@ -66,4 +66,4 @@ use crate::ui::widgets::{render_quota_bar, render_svg_icon};
 - 不要在调用方另写一套按钮样式：Token 面板和自定义 provider 的编辑/删除曾各写一份，
   尺寸和圆角对不上，已收敛到 `ButtonSize::Panel`
 - 所有组件接受 `&Theme` 参数获取颜色（不直接读 `cx.global::<Theme>()`），保持纯渲染逻辑
-- 文本输入使用 `adabraka-ui` 的 `InputState`（单行）和 `TextareaState`（多行），配合 `input_actions.rs` 注册快捷键
+- 文本输入使用 `fc-ui` 的 `InputState`（单行）和 `TextareaState`（多行），配合 `input_actions.rs` 注册快捷键
