@@ -59,8 +59,8 @@ impl AmpProvider {
         let mut account_email = None;
 
         for line in output_str.lines() {
-            let line = line.trim();
-
+            let line = strip_markdown_bold(line.trim());
+            let line = &*line;
             if account_email.is_none() {
                 if let Some(caps) = EMAIL_RE.captures(line) {
                     account_email = Some(caps[1].to_string());
@@ -137,6 +137,23 @@ impl AmpProvider {
 
         Ok(RefreshData::with_account(quotas, account_email, None))
     }
+}
+
+/// 剥离 amp CLI 的 markdown 加粗标记。
+///
+/// 2026-08-31 起（Amp CLI `0.0.1788192028`）`amp usage` 即使带 `--no-color`
+/// 也会输出 `**Label:**` 形态的加粗，既有正则都假设裸文本 `Label:`。
+/// 只剥行首一对 `**...**`（覆盖 label 包裹场景），行内其他文本不动。
+fn strip_markdown_bold(line: &str) -> std::borrow::Cow<'_, str> {
+    if let Some(rest) = line.strip_prefix("**") {
+        if let Some(close) = rest.find("**") {
+            let mut stripped = String::with_capacity(line.len());
+            stripped.push_str(&rest[..close]);
+            stripped.push_str(&rest[close + 2..]);
+            return stripped.into();
+        }
+    }
+    line.into()
 }
 
 #[async_trait]
@@ -336,10 +353,71 @@ mod tests {
         assert!(!error.contains("no quota data"));
     }
 
-    /// 2026-08-17 起 amp CLI 现行订阅行：`Amp <Plan> Subscription:`。
-    /// 本机 `amp usage --no-color` 实测 113 字节即此格式，旧 `Subscription <Plan>:` 解析器认不出。
+    /// 2026-08-31 起 amp CLI 实测输出（v0.0.1788192028）：label 包 markdown 加粗，
+    /// 订阅池改为绝对值 + 括号百分比，池名 `other` → `agent`，行尾追加周期信息。
     #[test]
-    fn test_parse_subscription_current_amp_plan_subscription() {
+    fn test_parse_real_world_markdown_bold_subscription() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Signed in as freefcw@gmail.com (freefcw)\n\
+            **Amp Megawatt Subscription:** agent usage $6.42 of $20 remaining (32%), orb usage 750h of 750h a1.small orb hours remaining (100%) - period 2026-08-30 to 2026-09-30, ends in 29 days\n\
+            **Individual credits:** $0 remaining - https://ampcode.com/settings\n\
+            \n\
+            # Run `amp usage --details` for more detailed information.\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.account_email.as_deref(), Some("freefcw@gmail.com"));
+        // 加粗剥掉后 $0 余额的 Individual credits 仍应被跳过
+        assert_eq!(data.quotas.len(), 2);
+
+        let q0 = &data.quotas[0];
+        assert_eq!(
+            q0.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "agent".into(),
+            }
+        );
+        // 32% remaining → used=68/100
+        assert!((q0.used - 68.0).abs() < f64::EPSILON);
+        assert_eq!(q0.limit, 100.0);
+        assert_eq!(q0.quota_type, QuotaType::General);
+        assert_eq!(q0.stable_key, "subscription:megawatt:agent");
+        assert_eq!(
+            q0.detail_spec,
+            Some(QuotaDetailSpec::Raw("$6.42 of $20".to_string()))
+        );
+
+        let q1 = &data.quotas[1];
+        assert_eq!(
+            q1.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "orb".into(),
+            }
+        );
+        assert!((q1.used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(
+            q1.detail_spec,
+            Some(QuotaDetailSpec::Raw("750h of 750h".to_string()))
+        );
+    }
+
+    /// 加粗剥离只处理行首成对的 `**...**`；未闭合或行中出现的 `**` 原样保留
+    #[test]
+    fn test_strip_markdown_bold_only_unwraps_leading_pair() {
+        assert_eq!(strip_markdown_bold("**Label:** rest"), "Label: rest");
+        assert_eq!(strip_markdown_bold("**unclosed line"), "**unclosed line");
+        assert_eq!(
+            strip_markdown_bold("Amp Free: 75% ** weird"),
+            "Amp Free: 75% ** weird"
+        );
+        assert_eq!(strip_markdown_bold("plain line"), "plain line");
+    }
+
+    /// 2026-08-17 ~ 2026-08-31 之间的过渡订阅行：`Amp <Plan> Subscription:`
+    /// 百分比池形态（见 `subscription/interim.rs`）。
+    #[test]
+    fn test_parse_subscription_interim_amp_plan_subscription() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
         let output = "Signed in as user@example.com (user)\n\
             Amp Megawatt Subscription: 75% other usage and 100% orb usage remaining\n";

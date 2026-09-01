@@ -218,6 +218,7 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
         QuotaLabelSpec::SubscriptionUsage { plan, pool } => {
             let pool_label = match pool.as_str() {
                 "orb" => t!("quota.label.subscription_pool_orb").to_string(),
+                "agent" => t!("quota.label.subscription_pool_agent").to_string(),
                 "other" => t!("quota.label.subscription_pool_other").to_string(),
                 "auto" => t!("quota.label.subscription_pool_auto").to_string(),
                 "api" => t!("quota.label.subscription_pool_api").to_string(),

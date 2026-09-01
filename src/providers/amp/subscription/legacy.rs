@@ -31,7 +31,12 @@ impl SubscriptionLineStrategy for LegacySubscriptionLine {
 
     fn parse_line(line: &str) -> Option<Vec<QuotaInfo>> {
         let caps = LINE_RE.captures(line)?;
-        Some(quotas_from_pool_text(caps[1].trim(), &caps[2]))
+        let quotas = quotas_from_pool_text(caps[1].trim(), &caps[2]);
+        // 认不出任何池片段时返回 None，让调度继续尝试后续策略
+        if quotas.is_empty() {
+            return None;
+        }
+        Some(quotas)
     }
 }
 

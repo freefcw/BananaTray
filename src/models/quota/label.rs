@@ -42,7 +42,8 @@ pub enum QuotaLabelSpec {
     /// 订阅制的用量池（如 Amp 的 agent / orb，或 Cursor 的 auto / api）。
     ///
     /// `plan` 为套餐名（如 `Megawatt` / `PRO`），`pool` 为语言无关的池标识
-    /// （Amp：`other` / `orb`；Cursor：`auto` / `api`）；selector 再按 locale 渲染池文案。
+    /// （Amp：现行 `agent` / `orb`，2026-08-31 前的历史输出为 `other` / `orb`；
+    /// Cursor：`auto` / `api`）；selector 再按 locale 渲染池文案。
     /// 各池独立展示为独立 quota。
     SubscriptionUsage {
         plan: String,
