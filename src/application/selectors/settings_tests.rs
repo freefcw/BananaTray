@@ -6,7 +6,7 @@ use crate::models::test_helpers::{
 };
 use crate::models::{
     AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind, ProviderStatus,
-    QuotaLabelSpec, SettingsCapability,
+    QuotaInfo, QuotaLabelSpec, SettingsCapability, UpdateStatus,
 };
 
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -356,6 +356,37 @@ fn settings_provider_detail_reports_error_usage() {
         view_state.detail.usage,
         SettingsProviderUsageViewState::Error { .. }
     ));
+}
+
+#[test]
+fn settings_status_row_marks_stale_refresh_failure() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Copilot, true);
+
+    // 刷新失败但保留旧数据（mark_refresh_failed 有旧配额的分支）：
+    // 连接仍是 Connected，状态行必须降为错误而不是绿色「运行中」
+    let mut provider = make_provider(ProviderKind::Copilot, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+    provider.last_refreshed_instant = Some(std::time::Instant::now());
+    provider.update_status = Some(UpdateStatus::Failed);
+    provider.last_failure = Some(test_failure("parse error"));
+
+    let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
+    let view_state = settings_providers_tab_view_state(&session);
+
+    assert_eq!(view_state.detail.info.status_text, "Last refresh failed");
+    assert_eq!(
+        view_state.detail.info.status_kind,
+        SettingsProviderStatusKind::Error
+    );
+    // 更新时间列同步明示失败，不冒充正常相对时间
+    assert_eq!(
+        view_state.detail.info.updated_text,
+        "Update failed · data just now"
+    );
 }
 
 #[test]

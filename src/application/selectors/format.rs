@@ -90,12 +90,21 @@ pub fn format_refresh_status(provider: &ProviderStatus) -> String {
     }
 }
 
-/// 设置页 info table「更新时间」列：有 instant 返回相对时间，否则「尚未获取」。
+/// 「更新时间」文案（设置页 info table 与托盘详情账户行共用）：
+/// 有 instant 返回相对时间，否则「尚未获取」。
+/// 上次刷新失败时明示失败与数据年龄——陈旧数据不能冒充正常数据。
 pub fn format_provider_updated_at(provider: &ProviderStatus) -> String {
-    provider
+    let age = provider
         .last_refreshed_instant
-        .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()))
-        .unwrap_or_else(|| t!("provider.not_fetched").to_string())
+        .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()));
+    match (provider.update_status, age) {
+        (Some(UpdateStatus::Failed), Some(age)) => {
+            t!("provider.update_failed_stale", age = age).to_string()
+        }
+        (Some(UpdateStatus::Failed), None) => t!("quota.update_failed").to_string(),
+        (None, Some(age)) => age,
+        (None, None) => t!("provider.not_fetched").to_string(),
+    }
 }
 
 /// 格式化 Provider 最近一次失败消息。
@@ -496,6 +505,27 @@ mod tests {
         let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
         p.last_refreshed_instant = Some(std::time::Instant::now());
         assert_eq!(format_provider_updated_at(&p), "just now");
+    }
+
+    #[test]
+    fn format_provider_updated_at_marks_failure_with_stale_age() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.last_refreshed_instant = Some(std::time::Instant::now());
+        p.update_status = Some(UpdateStatus::Failed);
+        // 陈旧旧值不能冒充正常数据：明示失败 + 数据年龄
+        assert_eq!(
+            format_provider_updated_at(&p),
+            "Update failed · data just now"
+        );
+    }
+
+    #[test]
+    fn format_provider_updated_at_marks_failure_without_instant() {
+        let _locale_guard = setup_locale();
+        let mut p = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+        p.update_status = Some(UpdateStatus::Failed);
+        assert_eq!(format_provider_updated_at(&p), "Update failed");
     }
 
     // ── format_failure_message ──────────────────────────────

@@ -5,13 +5,61 @@ use crate::application::{
 use crate::models::{NavTab, PopupLayout, StatusLevel};
 use crate::runtime;
 use crate::theme::Theme;
-use crate::ui::widgets::with_tooltip;
+use crate::ui::widgets::{with_multiline_tooltip, with_tooltip};
 use crate::ui::AppView;
 use gpui::{
     div, px, relative, AnyElement, Context, Div, ElementId, FontWeight, Hsla, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Stateful, Styled, TextAlign, Window,
 };
 use rust_i18n::t;
+
+/// Provider 名称单元格：[name flex-1] [更新失败徽标?]。
+///
+/// 刷新失败但展示陈旧旧值时，名称旁挂「更新失败」警示徽标，
+/// tooltip 说明失败原因——不能让旧数据冒充正常数据。
+fn render_provider_name_cell(
+    item: &crate::application::OverviewItemViewState,
+    name_color: Hsla,
+    theme: &Theme,
+) -> Div {
+    let mut cell = div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap(px(4.0))
+        .overflow_hidden()
+        .child(
+            div()
+                .min_w_0()
+                .text_size(px(12.0))
+                .line_height(relative(1.3))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(name_color)
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .child(item.display_name.clone()),
+        );
+
+    if item.refresh_failed {
+        let hint = item
+            .failure_hint
+            .clone()
+            .unwrap_or_else(|| t!("provider.update_failed_badge").to_string());
+        cell = cell.child(with_multiline_tooltip(
+            format!("overview-stale-{}", item.id.id_key()),
+            &hint,
+            theme,
+            div()
+                .flex_shrink_0()
+                .text_size(px(9.0))
+                .font_weight(FontWeight::BOLD)
+                .text_color(theme.status.warning)
+                .child(t!("provider.update_failed_badge").to_string()),
+        ));
+    }
+    cell
+}
 
 /// 状态点颜色
 fn dot_color(level: StatusLevel, theme: &Theme) -> Hsla {
@@ -271,18 +319,7 @@ impl AppView {
                 px(PopupLayout::OVERVIEW_ICON_SIZE),
                 theme.text.secondary,
             ))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_size(px(12.0))
-                    .line_height(relative(1.3))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text.primary)
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .child(item.display_name.clone()),
-            )
+            .child(render_provider_name_cell(item, theme.text.primary, theme))
     }
 
     /// 展开态卡片的公共外壳：id + flex_col + padding + 圆角 + 背景 + 边框
@@ -394,19 +431,8 @@ impl AppView {
                 px(PopupLayout::OVERVIEW_ICON_SIZE),
                 icon_color,
             ))
-            // Provider 名称
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_size(px(12.0))
-                    .line_height(relative(1.3))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(name_color)
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .child(item.display_name.clone()),
-            )
+            // Provider 名称（刷新失败时附「更新失败」徽标）
+            .child(render_provider_name_cell(item, name_color, theme))
     }
 
     // ── 原子 UI 元素 ──

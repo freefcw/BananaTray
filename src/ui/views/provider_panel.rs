@@ -13,6 +13,36 @@ use gpui::{
 };
 use rust_i18n::t;
 
+/// 账户行「更新时间」文本：刷新失败时用警示色并挂 tooltip 说明失败原因，
+/// 不让陈旧旧值默默冒充正常数据。
+fn render_account_updated_text(
+    account: &AccountInfoViewState,
+    id: &ProviderId,
+    theme: &Theme,
+) -> gpui::AnyElement {
+    let text_color = if account.failure_hint.is_some() {
+        theme.status.warning
+    } else {
+        theme.text.muted
+    };
+    let text = div()
+        .text_size(px(11.0))
+        .line_height(relative(1.3))
+        .text_color(text_color)
+        .child(account.updated_text.clone());
+
+    match &account.failure_hint {
+        Some(hint) => crate::ui::widgets::with_multiline_tooltip(
+            format!("account-updated-tooltip-{}", id.id_key()),
+            hint,
+            theme,
+            text,
+        )
+        .into_any_element(),
+        None => text.into_any_element(),
+    }
+}
+
 /// 通用操作按钮（Lumina风格：半透明背景+圆角）
 fn render_action_button(
     label: &str,
@@ -236,13 +266,7 @@ impl AppView {
                     px(12.0),
                     theme.text.muted,
                 ))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .line_height(relative(1.3))
-                        .text_color(theme.text.muted)
-                        .child(account.updated_text.clone()),
-                ),
+                .child(render_account_updated_text(account, id, theme)),
         );
 
         let arrow_button =

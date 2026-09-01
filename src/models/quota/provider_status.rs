@@ -59,7 +59,9 @@ pub enum UpdateStatus {
 ///                                         Connected Error     Connected Disconnected
 /// ```
 ///
-/// - `mark_refresh_failed`: 有旧配额数据 → 保持 Connected（展示陈旧数据）；
+/// - `mark_refresh_failed`: 有旧配额数据 → 保持 Connected（展示陈旧数据，
+///   同时置 `update_status=Failed`，selector 层据此在时间行 / overview 徽标 /
+///   设置页状态行明示「更新失败」，不让旧值冒充正常数据）；
 ///   无旧数据 → Error（触发 UI 空状态/错误提示）
 /// - `mark_unavailable`: 仅在非 Connected 时回退到 Disconnected
 /// - `mark_skipped`: 刷新被协调器跳过（未实际执行）时，从 Refreshing 收敛回

@@ -4,14 +4,14 @@
 
 use super::super::state::{overview_provider_renders_quotas, provider_panel_flags, AppSession};
 use super::format::{
-    format_failure_message, format_non_monitoring_message, format_quota_card_display_text,
-    format_quota_card_has_unit, format_quota_label, format_refresh_status,
-    format_relative_refresh_age, quota_display_view_state, split_stale_age, StaleAgeUnit,
+    format_failure_message, format_non_monitoring_message, format_provider_updated_at,
+    format_quota_card_display_text, format_quota_card_has_unit, format_quota_label,
+    quota_display_view_state, split_stale_age, StaleAgeUnit,
 };
 use super::*;
 use crate::models::{
     AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderCapability, ProviderId,
-    ProviderStatus,
+    ProviderStatus, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -122,10 +122,8 @@ pub fn provider_detail_view_state(
             .map(|email| AccountInfoViewState {
                 email: email.clone(),
                 tier: provider.account_tier.clone(),
-                updated_text: provider
-                    .last_refreshed_instant
-                    .map(|instant| format_relative_refresh_age(instant.elapsed().as_secs()))
-                    .unwrap_or_else(|| format_refresh_status(&provider)),
+                updated_text: format_provider_updated_at(&provider),
+                failure_hint: stale_failure_hint(&provider),
                 dashboard_url: flags
                     .has_dashboard_url
                     .then(|| provider.dashboard_url().to_string()),
@@ -294,6 +292,8 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                     status: OverviewItemStatus::Error {
                         message: format_non_monitoring_message(provider),
                     },
+                    refresh_failed: false,
+                    failure_hint: None,
                 };
             }
 
@@ -347,11 +347,21 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 icon,
                 display_name,
                 status,
+                refresh_failed: provider.update_status == Some(UpdateStatus::Failed),
+                failure_hint: stale_failure_hint(provider),
             }
         })
         .collect();
 
     OverviewViewState { items }
+}
+
+/// 陈旧失败提示：刷新失败但保留旧数据展示时，把失败原因本地化成 tooltip 文案。
+/// 账户行 tooltip 与 overview 徽标 tooltip 共用。
+fn stale_failure_hint(provider: &ProviderStatus) -> Option<String> {
+    (provider.update_status == Some(UpdateStatus::Failed))
+        .then(|| provider.last_failure.as_ref().map(format_failure_message))
+        .flatten()
 }
 
 /// Overview 紧凑显示文本：根据 display_mode 选择 Remaining/Used 模式

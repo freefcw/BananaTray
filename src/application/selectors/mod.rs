@@ -78,8 +78,10 @@ pub struct AccountInfoViewState {
     pub email: String,
     /// 套餐名称（如 "Pro", "Max"）
     pub tier: Option<String>,
-    /// 上次更新时间描述
+    /// 上次更新时间描述（刷新失败时明示失败与数据年龄，不冒充正常）
     pub updated_text: String,
+    /// 刷新失败原因（tooltip 展示；None 表示最近刷新成功或无失败记录）
+    pub failure_hint: Option<String>,
     /// 可打开的 Dashboard 链接（None 表示不可点击）
     pub dashboard_url: Option<String>,
 }
@@ -126,6 +128,10 @@ pub struct OverviewItemViewState {
     pub icon: String,
     pub display_name: String,
     pub status: OverviewItemStatus,
+    /// 上次刷新失败（当前展示的是陈旧旧值）→ 名称旁挂「更新失败」徽标
+    pub refresh_failed: bool,
+    /// 失败原因提示（徽标 tooltip，selector 预计算好文案）
+    pub failure_hint: Option<String>,
 }
 
 /// Overview 单项的状态展示

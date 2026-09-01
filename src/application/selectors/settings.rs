@@ -11,7 +11,7 @@ use super::format::{
 };
 use super::*;
 use crate::models::{
-    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus,
+    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -227,6 +227,16 @@ fn settings_provider_info_view_state(
             }
 
             match provider.connection {
+                ConnectionStatus::Connected
+                    if provider.update_status == Some(UpdateStatus::Failed) =>
+                {
+                    // 数据仍在展示（陈旧旧值），但最近一次刷新失败：
+                    // 状态行必须降为错误，不能继续绿色「运行中」冒充正常
+                    (
+                        t!("provider.status.update_failed").to_string(),
+                        SettingsProviderStatusKind::Error,
+                    )
+                }
                 ConnectionStatus::Connected => (
                     t!("provider.status.operational").to_string(),
                     SettingsProviderStatusKind::Success,

@@ -5,6 +5,7 @@ use crate::models::test_helpers::{
 };
 use crate::models::{
     AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind, QuotaInfo,
+    UpdateStatus,
 };
 
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -178,6 +179,36 @@ fn account_card_assembled_when_email_and_setting_on() {
             assert_eq!(account.tier, Some("Pro".to_string()));
             assert!(account.dashboard_url.is_some());
             assert!(!panel.show_dashboard);
+        }
+        _ => panic!("expected Panel variant"),
+    }
+}
+
+#[test]
+fn account_updated_text_marks_stale_failure_with_hint() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings.display.show_account_info = true;
+
+    // 刷新失败但保留旧数据：时间行必须明示失败，tooltip 原因可用
+    let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    provider.account_email = Some("test@example.com".to_string());
+    provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+    provider.last_refreshed_instant = Some(std::time::Instant::now());
+    provider.update_status = Some(UpdateStatus::Failed);
+    provider.last_failure = Some(test_failure("parse error"));
+
+    let session = make_session_with_provider(settings, provider);
+    let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
+
+    match view {
+        ProviderDetailViewState::Panel(panel) => {
+            let account = panel.account.expect("account should be Some");
+            assert_eq!(account.updated_text, "Update failed · data just now");
+            assert_eq!(account.failure_hint.as_deref(), Some("parse error"));
         }
         _ => panic!("expected Panel variant"),
     }
@@ -512,6 +543,9 @@ fn overview_shows_quota_for_connected_provider() {
     assert_eq!(vm.items.len(), 1);
     let item = &vm.items[0];
     assert_eq!(item.id, pid(ProviderKind::Claude));
+    // 正常成功刷新：不应有失败标记
+    assert!(!item.refresh_failed);
+    assert!(item.failure_hint.is_none());
     match &item.status {
         OverviewItemStatus::Quota {
             status_level,
@@ -525,6 +559,28 @@ fn overview_shows_quota_for_connected_provider() {
         }
         other => panic!("expected Quota, got {:?}", other),
     }
+}
+
+#[test]
+fn overview_marks_stale_refresh_failure() {
+    let _locale_guard = setup_locale();
+    // 刷新失败但保留旧配额展示：overview 项必须携带失败标记与原因
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("session", 30.0, 100.0)];
+    provider.update_status = Some(UpdateStatus::Failed);
+    provider.last_failure = Some(test_failure("parse error"));
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let vm = overview_view_state(&session);
+
+    assert_eq!(vm.items.len(), 1);
+    assert!(vm.items[0].refresh_failed);
+    assert_eq!(vm.items[0].failure_hint.as_deref(), Some("parse error"));
+    // 配额本身仍照常展示（陈旧旧值）
+    assert!(matches!(
+        vm.items[0].status,
+        OverviewItemStatus::Quota { .. }
+    ));
 }
 
 #[test]
