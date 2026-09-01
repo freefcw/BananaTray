@@ -1,8 +1,8 @@
 //! 热键录入输入框 — 使用 BananaTray Theme 样式
 //!
-//! 包裹 adabraka-ui 的 `HotkeyInputState` entity，提供 click-to-record / keydown 交互，
+//! 包裹 fc-ui 的 `HotkeyInputState` entity，提供 click-to-record / keydown 交互，
 //! 同时使用 `theme.bg.card` / `theme.border.strong` / `theme.text.accent` 等 Token
-//! 替代 adabraka-ui 内置主题，保证全局视觉一致性。
+//! 替代 fc-ui 内置主题，保证全局视觉一致性。
 //!
 //! 紧凑内联 chip 样式 — 用于设置行 trailing 控件位置，与 toggle / dropdown 行保持一致风格。
 

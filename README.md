@@ -47,7 +47,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Tech Stack
 
 - **Language**: Rust (stable toolchain)
-- **UI Framework**: [GPUI](https://crates.io/crates/adabraka-gpui) (`adabraka-gpui`) + `adabraka-ui` component library
+- **UI Framework**: [GPUI](https://crates.io/crates/fc-gpui) (`fc-gpui` v0.9, imported as `gpui`) + [`fc-ui`](https://crates.io/crates/fc-ui) v0.8 component library (imported as `adabraka_ui`)
 - **Async Runtime**: smol v2 (background refresh coordinator)
 - **HTTP Client**: ureq v3
 - **Logging**: fern + log (file + stdout, with panic hook)

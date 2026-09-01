@@ -60,6 +60,6 @@ SettingsView::render()
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
-- `NewApiFormInputs` 使用 adabraka-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）；右侧面板 selector 会显式传入当前 form identity，同一 identity 复用输入实体，不同 identity 重建，避免跨 provider 串用旧草稿
+- `NewApiFormInputs` 使用 fc-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）；右侧面板 selector 会显式传入当前 form identity，同一 identity 复用输入实体，不同 identity 重建，避免跨 provider 串用旧草稿
 - `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件；缓存重建规则与 NewAPI 表单一致
 - Debug 环境诊断在进入 Tab 或点击刷新按钮时由后台执行器采集；`render_debug_tab()` 只能读取缓存，不得执行文件 metadata、外部命令等阻塞操作

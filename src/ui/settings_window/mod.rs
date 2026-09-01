@@ -44,7 +44,7 @@ pub(crate) fn register_shell_hooks() {
 // 设置视图 — 匹配 Lumina Bar 设计稿
 // ============================================================================
 
-/// NewAPI 表单输入状态（使用 adabraka-ui InputState，支持鼠标选择、光标闪烁等）
+/// NewAPI 表单输入状态（使用 fc-ui InputState，支持鼠标选择、光标闪烁等）
 #[derive(Clone)]
 pub(crate) struct NewApiFormInputs {
     pub name: Entity<InputState>,
