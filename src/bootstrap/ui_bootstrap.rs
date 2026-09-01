@@ -1,5 +1,5 @@
 use crate::models::AppSettings;
-use gpui::App;
+use gpui::{App, QuitMode};
 use log::info;
 use rust_i18n::t;
 
@@ -14,7 +14,8 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
 
     adabraka_ui::init(cx);
     adabraka_ui::theme::install_theme(cx, adabraka_ui::theme::Theme::light());
-    cx.set_keep_alive_without_windows(true);
+    // 托盘应用在所有窗口关闭后仍需常驻，只允许显式退出。
+    cx.set_quit_mode(QuitMode::Explicit);
     crate::runtime::register_idle_gpu_cache_trim(cx);
 
     if crate::tray::should_use_gpui_tray() {
