@@ -1,5 +1,5 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RefreshData};
-use anyhow::{bail, Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -46,9 +46,9 @@ pub(super) fn parse_github_user(body: &str) -> Option<String> {
 pub(super) fn parse_user_info_response(
     body: &str,
     account_name: Option<String>,
-) -> Result<RefreshData> {
-    let resp: CopilotInternalResponse =
-        serde_json::from_str(body).context("Failed to parse Copilot Internal API response.")?;
+) -> ProviderResult<RefreshData> {
+    let resp: CopilotInternalResponse = serde_json::from_str(body)
+        .map_err(|_| ProviderError::parse_failed("Copilot Internal API response"))?;
 
     let plan = resp.copilot_plan.unwrap_or_else(|| "unknown".to_string());
     let plan_label = capitalize_first(&plan);
@@ -93,7 +93,7 @@ pub(super) fn parse_user_info_response(
             )
         }
     } else {
-        bail!("No quota data found in Copilot API response.");
+        return Err(ProviderError::no_data());
     };
 
     Ok(RefreshData::with_account(
@@ -114,6 +114,22 @@ fn capitalize_first(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::{ProviderError, ProviderResult};
+
+    #[test]
+    fn invalid_json_is_classified_as_parse_failed() {
+        let result: ProviderResult<RefreshData> = parse_user_info_response("not json", None);
+
+        assert!(matches!(result, Err(ProviderError::ParseFailed { .. })));
+    }
+
+    #[test]
+    fn missing_quota_snapshots_is_classified_as_no_data() {
+        let result: ProviderResult<RefreshData> =
+            parse_user_info_response(r#"{"copilot_plan":"pro"}"#, None);
+
+        assert_eq!(result.unwrap_err(), ProviderError::NoData);
+    }
 
     #[test]
     fn test_parse_unlimited_plan() {

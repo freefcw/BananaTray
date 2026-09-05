@@ -167,7 +167,7 @@ impl AiProvider for CopilotProvider {
             .ok()
             .and_then(|user_body| parse_github_user(&user_body));
 
-        Ok(parse_user_info_response(&body, account_name)?)
+        parse_user_info_response(&body, account_name)
     }
 }
 

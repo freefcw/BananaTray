@@ -1,7 +1,6 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
-use crate::providers::ProviderError;
+use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::time_utils;
-use anyhow::{Context, Result};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -45,15 +44,15 @@ const KIMI_TIER_ALLEGRETTO: u64 = 7168;
 const KIMI_CODING_SESSION_WINDOW_MINUTES: u64 = 300;
 const KIMI_WINDOW_UNIT_MINUTE: &str = "TIME_UNIT_MINUTE";
 
-pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
+pub(super) fn parse_usage_response(response_str: &str) -> ProviderResult<Vec<QuotaInfo>> {
     let resp: KimiUsageResponse = serde_json::from_str(response_str)
-        .context("Failed to parse Kimi API response (body omitted)")?;
+        .map_err(|_| ProviderError::parse_failed("Kimi API response"))?;
 
     let usages = resp.usages.unwrap_or_default();
     let coding_usage = usages
         .iter()
         .find(|u| u.scope.as_deref() == Some("FEATURE_CODING"))
-        .context("No FEATURE_CODING usage data found.")?;
+        .ok_or_else(ProviderError::no_data)?;
 
     let mut quotas = Vec::new();
 
@@ -113,7 +112,7 @@ pub(super) fn parse_usage_response(response_str: &str) -> Result<Vec<QuotaInfo>>
     }
 
     if quotas.is_empty() {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     Ok(quotas)
@@ -142,6 +141,22 @@ fn is_coding_session_window(window: &KimiWindow) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::ProviderResult;
+
+    #[test]
+    fn invalid_json_is_classified_as_parse_failed() {
+        let result: ProviderResult<Vec<QuotaInfo>> = parse_usage_response("not json");
+
+        assert!(matches!(result, Err(ProviderError::ParseFailed { .. })));
+    }
+
+    #[test]
+    fn missing_coding_usage_is_classified_as_no_data() {
+        let result: ProviderResult<Vec<QuotaInfo>> =
+            parse_usage_response(r#"{"usages":[{"scope":"OTHER"}]}"#);
+
+        assert_eq!(result.unwrap_err(), ProviderError::NoData);
+    }
 
     #[test]
     fn test_parse_usage_response_weekly_and_session() {

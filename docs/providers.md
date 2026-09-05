@@ -48,6 +48,7 @@
 - BananaTray 生成的自定义 provider YAML 使用私密临时文件原子替换，Unix 上权限为 `0600`；脚本向导先提交不可变版本化脚本，再以 YAML 作为最终提交点。
 - HTTP `headers` 在 YAML 加载阶段校验 name/value，非法请求头不会延迟到 refresh 时静默失败。
 - Provider HTTP 错误正文和 custom login 响应不得进入日志、`ProviderFailure.raw_detail` 或用户界面；公共 HTTP 层只传播状态码，登录诊断只记录操作阶段。
+- `file_json_match` 的值不匹配时只暴露稳定位置 `path:json_path`；YAML 中的 `expected` 与文件内 `actual` 不得进入日志、`ProviderFailure` 或用户界面。
 - 手工编辑 YAML 后通常需重启应用。
 
 ## Stable Provider Contract
@@ -67,13 +68,15 @@
 - **Descriptor ID**：`AiProvider::descriptor().id` 用于 provider 注册去重和 source 描述，内置 provider 可能包含来源后缀，如 `codex:api`、`amp:cli`、`windsurf:api`。不要把它当成内置 provider 的 settings key。
 - **自定义 provider ID**：YAML 的 `id` 会作为 `ProviderId::Custom(String)` 持久化，既是 descriptor ID，也是自定义 provider 的 settings/sidebar/order key。它必须全局唯一，且不得等于任何内置 `ProviderKind::id_key()`（如 `claude`、`codex`、`gemini`）；loader 和 manager 注册边界都会拒绝这些保留 ID。
 
+内置注册会把 manifest 声明的 kind 显式传给 `ProviderManager`，并与实现的 `descriptor().metadata.kind` 校验。两者错配属于编程错误，构造 registry 时立即 panic，不能把实现静默挂到错误的持久化身份。`ProviderManagerHandle::default()` 只创建内置、纯内存 registry；磁盘自定义 provider 必须由生产组合根显式调用 `ProviderManager::load_default()` 后传入。
+
 修改设置、排序、刷新请求或 D-Bus / selector 状态时，优先传递 `ProviderId`，不要在调用点手拼字符串。
 
 实现层面的关键约束：
 
 - provider 返回结构化事实，不直接拼 UI 文案。
 - 错误统一返回 `ProviderError` 语义，而不是裸字符串。
-- `AiProvider` 只承载 descriptor、availability 和 refresh 核心契约；settings/token UI 能力属于 `ProviderCapabilities`。`AiProvider` 与 `ProviderManager::refresh_by_id` 对 refresh/runtime 层返回 `ProviderResult<RefreshData>`；底层 helper 仍可用 `anyhow` 保存技术上下文，但不能穿过 provider 边界。
+- `AiProvider` 只承载 descriptor、availability 和 refresh 核心契约；settings/token UI 能力属于 `ProviderCapabilities`。`AiProvider` 与 `ProviderManager::refresh_by_id` 对 refresh/runtime 层返回 `ProviderResult<T>`；Kimi、MiniMax、Copilot 的领域 parser 也已采用该边界，格式错误的 payload 映射为 `ParseFailed`，缺少可展示配额映射为 `NoData`。其他底层或遗留 helper 仍可用 `anyhow` 保存技术上下文，但不能穿过 provider 边界。
 - selector / UI 才负责把稳定语义格式化成当前语言。
 
 ## Provider Capability

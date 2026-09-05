@@ -32,14 +32,14 @@ Provider abstraction layer and all 16 AI provider implementations.
   - only for BananaTray-managed token overrides; providers may still resolve auth from external files, CLI sessions, or env vars
 - **`resolve_token_input_state()`** — optional `ProviderCapabilities` hook for provider-side runtime token display state; override only when default credential-store behavior is insufficient
 - **`ProviderDescriptor`** — static description for registration and UI metadata. For built-in providers, `descriptor().id` is a registration/dedup/source descriptor and may include suffixes such as `codex:api`; settings/state routing uses `ProviderId::BuiltIn(kind)` and `ProviderKind::id_key()` instead. For custom providers, the YAML `id` is persisted as `ProviderId::Custom`.
-- **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `FetchFailed`
+- **`ProviderError`** — structured error enum with variants: `CliNotFound`, `Unavailable`, `AuthRequired`, `SessionExpired`, `FolderTrustRequired`, `UpdateRequired`, `ParseFailed`, `Timeout`, `NoData`, `NetworkFailed`, `ConfigMissing`, `ConfigMismatch`, `FetchFailed`; `ConfigMismatch` carries only the stable config location, never expected / actual values
 - **`ProviderResult<T>`** — provider boundary result type (`Result<T, ProviderError>`) used by `AiProvider` and `ProviderManager`
 - **`ProviderError::to_failure()` / `error_kind()`** — maps provider errors to stable `ProviderFailure` and `ErrorKind`; final locale-specific message generation belongs to selector/UI
 - **`common/`** — crate-internal cross-provider helpers shared by multiple implementations (for example JWT decoding, CLI execution helpers, config path candidates, Unicode-safe secret preview masking)
 - **`codeium_family/`** — crate-internal shared local-source/spec/parser primitives for Antigravity and Devin Desktop; provider-specific orchestration stays in each facade
 - **`docs/archive/provider/provider-refactor-retrospective.md`** — why the provider layer was refactored this way, including rejected abstractions
 - **`src/builtin_provider_manifest.rs`** — single compile-time manifest for built-in providers; feeds both `ProviderKind` generation and built-in registration
-- **`register_providers!`** macro — consumes the manifest to declare private built-in provider modules and generate crate-internal `register_all()` function
+- **`register_providers!`** macro — consumes the manifest to declare private built-in provider modules and generate crate-internal `register_all()` function; registration passes the manifest kind into `ProviderManager` and panics immediately if an implementation descriptor reports a different kind
 - **`define_unit_provider!`** macro — boilerplate for zero-field provider structs
 
 ### `manager.rs` — ProviderManager
@@ -54,7 +54,7 @@ Aggregation registry holding all provider implementations. Maintains exactly two
 - `initial_statuses()` — generates `Vec<ProviderStatus>` for all `ProviderKind` variants
 - `initial_statuses()` also copies each provider's `settings_capability()` and `provider_capability()` into runtime `ProviderStatus`
 - `refresh_by_id(id, provider_credentials)` — routes built-in and custom providers through one refresh entrypoint; non-monitorable providers return `NoData`, monitorable providers receive a `ProviderExecutionContext`, run `check_availability(ctx)`, and then delegate to `refresh(ctx)`
-- `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
+- `ProviderManagerHandle` — shared snapshot handle used by foreground runtime and background refresh loop; `Default` is the pure built-in-only in-memory registry, while production startup must pass an explicitly loaded manager; hot-reload swaps the inner `Arc<ProviderManager>` atomically so both sides observe the same registry
 
 ProviderManager / ProviderManagerHandle form the provider facade used by the rest of the app.
 Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` are crate-internal implementation details; do not treat their module paths as external API.
@@ -62,6 +62,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 ### `custom/` — YAML-backed Providers
 
 - Custom provider YAML files are resolved through `crate::platform::paths`
+- `file_json_match` mismatch errors expose only `path:json_path`; configured expected / actual values are not copied into logs, `ProviderFailure`, or UI payloads
 - Canonical directory:
   - macOS: `~/Library/Application Support/BananaTray/providers/`
   - Linux: `$XDG_CONFIG_HOME/bananatray/providers/`
@@ -101,6 +102,9 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 - `AiProvider` implementations return `ProviderResult<T>`. Provider-owned source/parser
   boundaries should also prefer `ProviderResult<T>` once they encode domain semantics
   (for example Claude `UsageProbe` and Codeium-family `ParseStrategy`).
+- Kimi, MiniMax, and Copilot domain parsers return `ProviderResult<T>` directly: malformed
+  payloads are `ParseFailed`, absent quota data is `NoData`, and MiniMax API-domain failures
+  remain structured `FetchFailed`; their low-level HTTP clients continue to use `anyhow::Result`.
 - Low-level transport clients may still use `anyhow::Result` when callers need to inspect
   raw technical errors such as `HttpError`; classify them before returning from provider
   facade/source boundaries.

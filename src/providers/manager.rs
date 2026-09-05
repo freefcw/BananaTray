@@ -12,6 +12,7 @@ use std::sync::{Arc, RwLock};
 /// 前台 UI 和后台 refresh 协调器通过同一个句柄读取当前快照；
 /// 热重载自定义 provider 时，仅替换内部 `Arc<ProviderManager>`，
 /// 避免前后台各自持有不同 manager 实例。
+/// `Default` 只构造内置、纯内存 registry；磁盘加载必须由组合根显式完成。
 #[derive(Clone)]
 pub struct ProviderManagerHandle {
     inner: Arc<RwLock<Arc<ProviderManager>>>,
@@ -49,7 +50,7 @@ impl ProviderManagerHandle {
 
 impl Default for ProviderManagerHandle {
     fn default() -> Self {
-        Self::new(ProviderManager::load_default())
+        Self::new(ProviderManager::new())
     }
 }
 
@@ -140,6 +141,30 @@ impl ProviderManager {
         } else {
             self.providers_by_kind.insert(kind, provider);
         }
+    }
+
+    /// 注册 manifest 声明的内置 Provider。
+    ///
+    /// manifest kind 与实现 descriptor kind 都是编译期维护的程序不变量；
+    /// 一旦错配立即 panic，避免实现被静默挂到另一个持久化身份下。
+    pub(crate) fn register_builtin(
+        &mut self,
+        manifest_kind: ProviderKind,
+        provider: Arc<dyn ProviderEntry>,
+    ) {
+        let descriptor = provider.descriptor();
+        assert_ne!(
+            manifest_kind,
+            ProviderKind::Custom,
+            "built-in provider manifest cannot declare ProviderKind::Custom"
+        );
+        assert_eq!(
+            descriptor.kind(),
+            manifest_kind,
+            "built-in provider manifest kind mismatch for descriptor {}",
+            descriptor.id
+        );
+        self.register(provider);
     }
 
     /// 检查某个 provider ID 是否已被注册
@@ -295,6 +320,32 @@ mod tests {
     use crate::providers::{AiProvider, ProviderCapabilities};
     use async_trait::async_trait;
     use std::borrow::Cow;
+    use std::ffi::{OsStr, OsString};
+
+    struct ScopedEnvOverride {
+        name: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl ScopedEnvOverride {
+        fn set(name: &'static str, value: impl AsRef<OsStr>) -> Self {
+            let previous = std::env::var_os(name);
+            // SAFETY: 调用方在 guard 的整个生命周期内持有共享 env_lock。
+            unsafe { std::env::set_var(name, value) };
+            Self { name, previous }
+        }
+    }
+
+    impl Drop for ScopedEnvOverride {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                // SAFETY: 调用方仍持有共享 env_lock，恢复操作不会与其他测试并发。
+                Some(value) => unsafe { std::env::set_var(self.name, value) },
+                // SAFETY: 同上。
+                None => unsafe { std::env::remove_var(self.name) },
+            }
+        }
+    }
 
     struct TestProvider {
         descriptor: crate::models::ProviderDescriptor,
@@ -668,6 +719,57 @@ mod tests {
         assert!(!Arc::ptr_eq(&current, &original));
     }
 
+    #[test]
+    fn default_manager_handle_does_not_load_custom_providers_from_disk() {
+        let _guard = crate::utils::test_support::env_lock().lock().unwrap();
+        let inherited_xdg_home = tempfile::tempdir().unwrap();
+        let _inherited_xdg_home =
+            ScopedEnvOverride::set("XDG_CONFIG_HOME", inherited_xdg_home.path());
+        let temp_home = tempfile::tempdir().unwrap();
+        let _home = ScopedEnvOverride::set("HOME", temp_home.path());
+        let _xdg_home = ScopedEnvOverride::set("XDG_CONFIG_HOME", temp_home.path());
+
+        let providers_dir = crate::platform::paths::custom_providers_dir();
+        let xdg_home_is_isolated =
+            std::env::var_os("XDG_CONFIG_HOME") == Some(temp_home.path().as_os_str().to_owned());
+        let providers_dir_uses_inherited_xdg = providers_dir.starts_with(inherited_xdg_home.path());
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("disk-only.yaml"),
+            r#"schema_version: 2
+id: "disk-only:provider"
+metadata:
+  display_name: "Disk Only"
+  brand_name: "Disk Only"
+plan:
+  steps:
+    - name: placeholder
+      availability:
+        type: always
+      source:
+        type: placeholder
+        reason: "test fixture"
+"#,
+        )
+        .unwrap();
+
+        let handle = ProviderManagerHandle::default();
+        let custom_ids = handle.snapshot().custom_provider_ids();
+
+        assert!(
+            xdg_home_is_isolated,
+            "test fixture must override an inherited XDG_CONFIG_HOME"
+        );
+        assert!(
+            !providers_dir_uses_inherited_xdg,
+            "test fixture must not write under inherited XDG_CONFIG_HOME"
+        );
+        assert!(
+            custom_ids.is_empty(),
+            "Default must be an in-memory manager; found disk providers: {custom_ids:?}"
+        );
+    }
+
     fn make_test_provider(id: &'static str, kind: ProviderKind) -> Arc<dyn ProviderEntry> {
         Arc::new(TestProvider {
             descriptor: crate::models::ProviderDescriptor {
@@ -702,6 +804,16 @@ mod tests {
         // 同 kind 不同 ID，应被拒绝
         manager.register(make_test_provider("amp2", ProviderKind::Amp));
         assert_eq!(manager.providers_by_kind.len(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "built-in provider manifest kind mismatch")]
+    fn register_builtin_panics_when_manifest_kind_disagrees_with_descriptor() {
+        let mut manager = ProviderManager::empty();
+        manager.register_builtin(
+            ProviderKind::Amp,
+            make_test_provider("cursor:rotated", ProviderKind::Cursor),
+        );
     }
 
     #[test]

@@ -16,7 +16,9 @@ pub(crate) fn bootstrap_refresh() -> (
     crate::providers::ProviderManagerHandle,
 ) {
     let (event_tx, event_rx) = smol::channel::bounded::<crate::refresh::RefreshEvent>(64);
-    let manager = crate::providers::ProviderManagerHandle::default();
+    let manager = crate::providers::ProviderManagerHandle::new(
+        crate::providers::ProviderManager::load_default(),
+    );
     let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
     let refresh_tx = coordinator.sender();
 

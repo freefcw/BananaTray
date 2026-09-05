@@ -1,6 +1,5 @@
 use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaType};
-use crate::providers::ProviderError;
-use anyhow::{Context, Result};
+use crate::providers::{ProviderError, ProviderResult};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -25,24 +24,23 @@ struct ModelRemain {
     end_time: Option<i64>,
 }
 
-pub(super) fn parse_remains_response(response_str: &str) -> Result<Vec<QuotaInfo>> {
+pub(super) fn parse_remains_response(response_str: &str) -> ProviderResult<Vec<QuotaInfo>> {
     let resp: MiniMaxRemainsResponse = serde_json::from_str(response_str)
-        .context("Failed to parse MiniMax API response (body omitted)")?;
+        .map_err(|_| ProviderError::parse_failed("MiniMax API response"))?;
 
     if resp.base_resp.status_code != 0 {
         let msg = resp
             .base_resp
             .status_msg
             .unwrap_or_else(|| "unknown error".to_string());
-        return Err(
-            ProviderError::fetch_failed_with_advice(FailureAdvice::ApiError { message: msg })
-                .into(),
-        );
+        return Err(ProviderError::fetch_failed_with_advice(
+            FailureAdvice::ApiError { message: msg },
+        ));
     }
 
     let model_remains = resp.model_remains.unwrap_or_default();
     if model_remains.is_empty() {
-        return Err(ProviderError::no_data().into());
+        return Err(ProviderError::no_data());
     }
 
     let quotas = model_remains
@@ -71,6 +69,36 @@ pub(super) fn parse_remains_response(response_str: &str) -> Result<Vec<QuotaInfo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::ProviderResult;
+
+    #[test]
+    fn invalid_json_is_classified_as_parse_failed() {
+        let result: ProviderResult<Vec<QuotaInfo>> = parse_remains_response("not json");
+
+        assert!(matches!(result, Err(ProviderError::ParseFailed { .. })));
+    }
+
+    #[test]
+    fn api_error_is_classified_as_fetch_failed() {
+        let result: ProviderResult<Vec<QuotaInfo>> =
+            parse_remains_response(r#"{"base_resp":{"status_code":1001,"status_msg":"denied"}}"#);
+
+        assert!(matches!(
+            result,
+            Err(ProviderError::FetchFailed {
+                advice: Some(FailureAdvice::ApiError { message }),
+                raw_detail: None,
+            }) if message == "denied"
+        ));
+    }
+
+    #[test]
+    fn empty_model_remains_is_classified_as_no_data() {
+        let result: ProviderResult<Vec<QuotaInfo>> =
+            parse_remains_response(r#"{"base_resp":{"status_code":0},"model_remains":[]}"#);
+
+        assert_eq!(result.unwrap_err(), ProviderError::NoData);
+    }
 
     #[test]
     fn test_parse_remains_response_success() {

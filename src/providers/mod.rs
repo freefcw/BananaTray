@@ -6,7 +6,7 @@ pub(crate) mod common;
 pub(crate) mod custom;
 pub(crate) mod manager;
 
-use crate::models::{AppSettings, TokenEditMode, TokenInputState};
+use crate::models::{AppSettings, ProviderKind, TokenEditMode, TokenInputState};
 use std::sync::Arc;
 
 pub use ai_provider::{AiProvider, ProviderCapabilities, ProviderEntry, ProviderExecutionContext};
@@ -82,7 +82,10 @@ macro_rules! register_providers {
         /// 注册所有可用的 Provider 实现
         pub(crate) fn register_all(manager: &mut ProviderManager) {
             $(
-                manager.register(Arc::new($mod_name::$struct_name::new()));
+                manager.register_builtin(
+                    ProviderKind::$variant,
+                    Arc::new($mod_name::$struct_name::new()),
+                );
             )*
         }
     };

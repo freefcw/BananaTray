@@ -23,6 +23,8 @@ pub enum ProviderError {
     UpdateRequired { version: Option<String> },
     /// 配置缺失（环境变量、配置文件、Token 等）
     ConfigMissing { key: String },
+    /// 配置存在但与 Provider 所需模式不匹配；仅保留稳定位置，不携带配置值。
+    ConfigMismatch { location: String },
 
     // ── 技术性错误（不国际化，保留英文）────────────────────
     /// Provider 在当前环境不可用（文件不存在、服务未运行等）
@@ -113,6 +115,9 @@ impl std::fmt::Display for ProviderError {
             }
             Self::ConfigMissing { key } => {
                 write!(f, "config missing: {}", key)
+            }
+            Self::ConfigMismatch { location } => {
+                write!(f, "config mismatch: {}", location)
             }
             Self::FetchFailed { advice, raw_detail } => {
                 write!(f, "fetch failed")?;
@@ -241,6 +246,16 @@ impl ProviderError {
         }
     }
 
+    /// 配置值不符合 Provider 要求。
+    ///
+    /// `location` 只描述文件和字段位置；不得放入 expected / actual 配置值，
+    /// 避免错误日志与 UI 载荷泄露凭据或其他敏感配置。
+    pub fn config_mismatch(location: &str) -> Self {
+        Self::ConfigMismatch {
+            location: location.to_string(),
+        }
+    }
+
     /// 无数据
     pub fn no_data() -> Self {
         Self::NoData
@@ -299,6 +314,15 @@ impl ProviderError {
                 advice: None,
                 raw_detail: None,
             },
+            Self::ConfigMismatch { location } => ProviderFailure {
+                // 现有 UI 使用 ConfigMissing 的定位载荷展示可操作配置位置；
+                // mismatch 保持相同用户语义，但不会把配置值带出 provider 层。
+                reason: FailureReason::ConfigMissing {
+                    key: location.clone(),
+                },
+                advice: None,
+                raw_detail: None,
+            },
             Self::Unavailable { advice, raw_detail } => ProviderFailure {
                 reason: FailureReason::Unavailable,
                 advice: advice.clone(),
@@ -334,7 +358,7 @@ impl ProviderError {
 
     pub fn error_kind(&self) -> ErrorKind {
         match self {
-            Self::ConfigMissing { .. } => ErrorKind::ConfigMissing,
+            Self::ConfigMissing { .. } | Self::ConfigMismatch { .. } => ErrorKind::ConfigMissing,
             Self::AuthRequired { .. } | Self::SessionExpired { .. } => ErrorKind::AuthRequired,
             Self::Timeout | Self::NetworkFailed { .. } => ErrorKind::NetworkError,
             _ => ErrorKind::Unknown,

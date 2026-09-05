@@ -47,11 +47,7 @@ fn check_file_json_match(path: &str, json_path: &str, expected: &str) -> Result<
     if actual == expected {
         Ok(())
     } else {
-        Err(ProviderError::config_missing(&format!(
-            "{}:{} (expected '{}', got '{}')",
-            path, json_path, expected, actual
-        ))
-        .into())
+        Err(ProviderError::config_mismatch(&format!("{}:{}", path, json_path)).into())
     }
 }
 
@@ -160,6 +156,11 @@ mod tests {
             r#"{"security":{"auth":{"selectedType":"gemini"}}}"#,
         )
         .unwrap();
+        let location = format!(
+            "{}:{}",
+            json_path.to_str().unwrap(),
+            "security.auth.selectedType"
+        );
         let result = check_file_json_match(
             json_path.to_str().unwrap(),
             "security.auth.selectedType",
@@ -167,8 +168,21 @@ mod tests {
         );
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("expected 'vertex-ai'"));
-        assert!(err.to_string().contains("got 'gemini'"));
+        let provider_err = err
+            .downcast_ref::<ProviderError>()
+            .expect("mismatch should remain a structured provider error");
+        assert_eq!(
+            provider_err.to_string(),
+            format!("config mismatch: {location}")
+        );
+        let failure = provider_err.to_failure();
+        assert_eq!(
+            failure.reason,
+            crate::models::FailureReason::ConfigMissing { key: location }
+        );
+        assert_eq!(failure.raw_detail, None);
+        assert!(!provider_err.to_string().contains("vertex-ai"));
+        assert!(!provider_err.to_string().contains("gemini"));
     }
 
     #[test]
