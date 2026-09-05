@@ -49,7 +49,7 @@ fn make_state() -> Rc<RefCell<AppState>> {
     let (script_tx, _script_rx) = smol::channel::bounded(1);
     let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
-        tx,
+        crate::refresh::RefreshWorker::detached(tx),
         script_tx,
         manager,
         AppSettings::default(),
@@ -64,7 +64,7 @@ fn make_state_with_full_refresh_queue() -> Rc<RefCell<AppState>> {
     let (script_tx, _script_rx) = smol::channel::bounded(1);
     let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
-        tx,
+        crate::refresh::RefreshWorker::detached(tx),
         script_tx,
         manager,
         AppSettings::default(),
@@ -89,7 +89,7 @@ fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
         .expect("script queue should accept filler request");
     let manager = ProviderManagerHandle::default();
     Rc::new(RefCell::new(AppState::new(
-        tx,
+        crate::refresh::RefreshWorker::detached(tx),
         script_tx,
         manager,
         AppSettings::default(),

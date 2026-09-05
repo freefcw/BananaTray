@@ -50,6 +50,21 @@ pub struct DBusServiceHandle {
     snapshot_cache: Arc<Mutex<String>>,
     /// 信号发射通道
     signal_tx: smol::channel::Sender<()>,
+    worker: Arc<Mutex<Option<crate::utils::BoundedThreadOwner>>>,
+}
+
+impl Drop for DBusServiceHandle {
+    fn drop(&mut self) {
+        self.signal_tx.close();
+        if let Ok(mut slot) = self.worker.lock() {
+            if let Some(worker) = slot.as_mut() {
+                let _ = worker.shutdown_before(
+                    std::time::Instant::now() + std::time::Duration::from_millis(20),
+                );
+            }
+            *slot = None;
+        }
+    }
 }
 
 impl DBusServiceHandle {
@@ -81,8 +96,7 @@ impl DBusServiceHandle {
 /// 启动 D-Bus 服务，返回 handle 供主线程更新缓存和发射信号
 ///
 /// D-Bus 服务在独立线程运行，使用自己的 smol 执行器。
-/// `action_rx` 的消费在 GPUI 的 foreground executor 上进行，
-/// 仍需要 `state` 来调用 `bootstrap::dispatch_in_app`。
+/// `action_rx` 的消费在 GPUI 的 foreground executor 上进行。
 pub fn start_dbus_service(
     state: Rc<RefCell<AppState>>,
     async_cx: gpui::AsyncApp,
@@ -94,20 +108,22 @@ pub fn start_dbus_service(
     let handle = DBusServiceHandle {
         snapshot_cache: snapshot_cache.clone(),
         signal_tx,
+        worker: Arc::new(Mutex::new(None)),
     };
 
     // 桥接 D-Bus 动作请求到 GPUI 主线程（复用 foreground executor，无需额外线程）
     spawn_action_bridge(state, action_rx, async_cx);
 
     // 启动 D-Bus 服务线程
-    let spawn_result = std::thread::Builder::new()
-        .name("dbus-service".into())
-        .spawn(move || {
-            run_dbus_server(snapshot_cache, action_tx, signal_rx);
-        });
+    let spawn_result = crate::utils::BoundedThreadOwner::spawn("dbus-service", move || {
+        run_dbus_server(snapshot_cache, action_tx, signal_rx);
+    });
 
     match spawn_result {
-        Ok(_) => {
+        Ok(owner) => {
+            if let Ok(mut slot) = handle.worker.lock() {
+                *slot = Some(owner);
+            }
             info!(target: "dbus", "D-Bus service thread started");
             Some(handle)
         }
@@ -214,6 +230,7 @@ mod tests {
             DBusServiceHandle {
                 snapshot_cache,
                 signal_tx,
+                worker: Arc::new(Mutex::new(None)),
             },
             signal_rx,
         )

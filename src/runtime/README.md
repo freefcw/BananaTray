@@ -87,7 +87,7 @@
 
 - `session: AppSession` — 纯状态树
 - `manager: ProviderManagerHandle` — provider 运行时注册表共享句柄；UI 每次按需读取当前快照，后台 reload 时原子替换
-- `refresh_tx` — 后台刷新请求通道
+- `refresh_worker` — 后台刷新请求通道及其线程 owner
 - `settings_writer: SettingsWriter` — 设置持久化串行写入器
 - `log_path` — Debug 页展示的日志路径
 

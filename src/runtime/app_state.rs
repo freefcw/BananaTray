@@ -1,7 +1,7 @@
 use crate::application::AppSession;
 use crate::models::{AppSettings, ScriptProviderConfig};
 use crate::providers::ProviderManagerHandle;
-use crate::refresh::RefreshRequest;
+use crate::refresh::{RefreshRequest, RefreshWorker};
 use log::debug;
 use smol::channel::Sender;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ pub struct AppState {
     pub session: AppSession,
     pub manager: ProviderManagerHandle,
     /// 向 RefreshCoordinator 发送请求的通道
-    pub refresh_tx: smol::channel::Sender<RefreshRequest>,
+    refresh_worker: RefreshWorker,
     /// 向前台事件泵发送脚本测试请求。
     pub(crate) script_test_tx: Sender<(u64, ScriptProviderConfig)>,
     /// 设置文件 debounce 写入器（所有持久化统一通过此句柄串行化）
@@ -31,8 +31,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        refresh_tx: smol::channel::Sender<RefreshRequest>,
+    pub(crate) fn new(
+        refresh_worker: RefreshWorker,
         script_test_tx: Sender<(u64, ScriptProviderConfig)>,
         manager: ProviderManagerHandle,
         settings: AppSettings,
@@ -50,7 +50,7 @@ impl AppState {
         Self {
             session,
             manager,
-            refresh_tx,
+            refresh_worker,
             script_test_tx,
             settings_writer: SettingsWriter::spawn(),
             log_path,
@@ -68,11 +68,19 @@ impl AppState {
         &self,
         request: RefreshRequest,
     ) -> Result<(), smol::channel::TrySendError<RefreshRequest>> {
-        self.refresh_tx.try_send(request)
+        self.refresh_worker.try_send(request)
     }
 
     /// 关闭设置写入器，并等待最后一份待写设置完成持久化。
+    #[cfg(test)]
     pub(crate) fn shutdown_settings_writer(&mut self) {
+        self.settings_writer.shutdown_and_join();
+    }
+
+    /// 在退出截止时间内回收刷新线程，随后完成设置最终写入。
+    pub(crate) fn shutdown_before(&mut self, deadline: std::time::Instant) {
+        self.refresh_worker.request_shutdown();
+        let _ = self.refresh_worker.join_before(deadline);
         self.settings_writer.shutdown_and_join();
     }
 

@@ -37,6 +37,13 @@
 
 测试文件：`coordinator_tests.rs`
 
+### `worker.rs` — 线程 owner
+
+`RefreshWorker` 同时持有请求发送端和协调器线程 owner。生产启动显式使用
+`ProviderManager::load_default()` 构建初始 registry；退出会发送 `RefreshRequest::Shutdown`，
+并在 GPUI 共享截止时间内回收协调器线程。正在运行且不可取消的底层 Provider 任务不会拖住退出。
+该 owner 只在 `app` feature 或测试构建中编译，纯 lib 构建只保留 coordinator / scheduler / types。
+
 ## 数据流
 
 ```

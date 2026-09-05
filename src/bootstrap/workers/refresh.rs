@@ -11,7 +11,7 @@ use crate::bootstrap::capabilities::dispatch_in_app;
 /// 创建 ProviderManager + RefreshCoordinator，启动后台刷新线程。
 /// 返回 (refresh_tx, event_rx, manager) 供后续步骤使用。
 pub(crate) fn bootstrap_refresh() -> (
-    smol::channel::Sender<RefreshRequest>,
+    crate::refresh::RefreshWorker,
     smol::channel::Receiver<crate::refresh::RefreshEvent>,
     crate::providers::ProviderManagerHandle,
 ) {
@@ -20,14 +20,10 @@ pub(crate) fn bootstrap_refresh() -> (
         crate::providers::ProviderManager::load_default(),
     );
     let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
-    let refresh_tx = coordinator.sender();
-
-    std::thread::Builder::new()
-        .name("refresh-coordinator".into())
-        .spawn(move || smol::block_on(coordinator.run()))
+    let refresh_worker = crate::refresh::RefreshWorker::spawn(coordinator)
         .expect("failed to spawn refresh coordinator thread");
 
-    (refresh_tx, event_rx, manager)
+    (refresh_worker, event_rx, manager)
 }
 
 /// 启动事件泵：从协调器接收 RefreshEvent，分派到 UI 线程更新 AppState。
@@ -38,6 +34,15 @@ pub(crate) fn start_event_pump(
     dbus_handle: Option<crate::dbus::DBusServiceHandle>,
     cx: &mut App,
 ) {
+    let dbus_handle = Rc::new(RefCell::new(dbus_handle));
+    let shutdown_dbus_handle = dbus_handle.clone();
+    cx.on_app_quit(move |_| {
+        // 显式释放最后一个服务 handle：关闭 signal channel，并触发有界线程回收。
+        shutdown_dbus_handle.borrow_mut().take();
+        std::future::ready(())
+    })
+    .detach();
+
     let state = state.clone();
     let pump_cx = cx.to_async();
     cx.to_async()
@@ -46,7 +51,10 @@ pub(crate) fn start_event_pump(
             while let Ok(event) = event_rx.recv().await {
                 let _ = pump_cx.update(|cx| {
                     dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
-                    super::linux_dbus::emit_current_dbus_snapshot(&state, dbus_handle.as_ref());
+                    super::linux_dbus::emit_current_dbus_snapshot(
+                        &state,
+                        dbus_handle.borrow().as_ref(),
+                    );
                 });
             }
         })

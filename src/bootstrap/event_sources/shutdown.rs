@@ -7,10 +7,10 @@ use std::rc::Rc;
 pub(crate) fn register_app_shutdown(state: &Rc<RefCell<AppState>>, cx: &mut App) {
     let state = state.clone();
     cx.on_app_quit(move |_| {
-        // GPUI 只给异步退出 observer 100ms；这里先同步 join，再返回已完成 future。
+        // 先有界回收 refresh，再完成 settings 与 auto-launch，最后返回 ready future。
         let start_at_login = {
             let mut state = state.borrow_mut();
-            state.shutdown_settings_writer();
+            state.shutdown_before(std::time::Instant::now() + std::time::Duration::from_millis(60));
             state.session.settings.system.start_at_login
         };
         crate::platform::auto_launch::sync_and_wait(start_at_login);

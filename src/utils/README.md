@@ -4,6 +4,10 @@ Shared utility modules used across the application. **No GPUI dependency.**
 
 ## Modules
 
+### `bounded_thread.rs` — Bounded Worker Ownership
+
+- `BoundedThreadOwner` — owns a background thread. Workers use a caller-supplied absolute deadline and detach when overdue. The module is compiled only for the app shell and tests.
+
 ### `text_utils.rs` — Text Processing
 
 - `strip_ansi(text)` — removes ANSI escape sequences (CSI and OSC) via regex

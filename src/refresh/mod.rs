@@ -8,6 +8,10 @@
 mod coordinator;
 mod scheduler;
 mod types;
+#[cfg(any(feature = "app", test))]
+mod worker;
 
 pub use coordinator::RefreshCoordinator;
 pub use types::*;
+#[cfg(any(feature = "app", test))]
+pub(crate) use worker::RefreshWorker;

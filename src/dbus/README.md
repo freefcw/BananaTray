@@ -28,6 +28,9 @@ AppImage 不安装到宿主 D-Bus 搜索路径，因此不提供 activation。
 1. **D-Bus 线程**（`dbus-service`）：运行 `smol::block_on` 执行器，持有 zbus `ObjectServer`，处理 D-Bus 方法调用和信号发射。
 2. **GPUI 主线程**：通过 foreground executor 的 `spawn()` 消费 `action_rx`，执行需要 GPUI 上下文的操作（`OpenSettings`、`RefreshAll`）。
 
+`DBusServiceHandle` 持有 `dbus-service` 线程 owner。bootstrap 注册显式 quit hook，释放最后一个
+handle 时关闭 signal channel，并最多等待 20ms；若 zbus/系统总线未及时返回则 detach，应用退出不会挂起。
+
 ### 为什么不用 Rc<RefCell<AppState>>
 
 zbus 5 的 `Interface` trait 要求 `Send + Sync`，而 `Rc<RefCell<_>>` 不满足。因此 `BananaTrayIface` 不持有 `AppState`，而是持有：

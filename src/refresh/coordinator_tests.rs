@@ -1,4 +1,14 @@
 use super::*;
+
+#[test]
+fn refresh_worker_shutdown_stops_coordinator_before_deadline() {
+    let manager = ProviderManagerHandle::new(ProviderManager::new());
+    let (event_tx, _event_rx) = smol::channel::bounded(1);
+    let coordinator = RefreshCoordinator::new(manager, event_tx);
+    let worker = crate::refresh::RefreshWorker::spawn(coordinator).unwrap();
+
+    assert!(worker.shutdown_before(std::time::Instant::now() + std::time::Duration::from_secs(1)));
+}
 use crate::models::ErrorKind;
 use crate::models::{
     FailureAdvice, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata, RefreshData,
@@ -392,7 +402,7 @@ fn test_shutdown_is_processed_while_provider_is_still_running() {
 fn test_reload_providers_replaces_shared_manager_snapshot() {
     smol::block_on(async {
         let (event_tx, event_rx) = smol::channel::bounded(8);
-        let manager = ProviderManagerHandle::default();
+        let manager = ProviderManagerHandle::new(ProviderManager::new());
         let initial = manager.snapshot();
         let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
         let request_tx = coordinator.sender();
