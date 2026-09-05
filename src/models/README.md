@@ -49,7 +49,7 @@ Refactored into a sub-directory with its own [README](quota/README.md). External
 
 Refactored into a sub-directory with its own [README](settings/README.md). Key types:
 
-- **`AppSettings`** — top-level persisted configuration composed of `SystemSettings`, `NotificationSettings`, `DisplaySettings`, `ProviderConfig`
+- **`AppSettings`** — top-level runtime configuration composed of `SystemSettings`, `NotificationSettings`, `DisplaySettings`, `LoggingSettings`, and `ProviderConfig`; `settings_store::PersistedAppSettingsV1` owns the top-level JSON persistence boundary
 - **`ProviderConfig`** — provider enable/disable, ordering, sidebar, quota visibility, and app-managed credentials
 - **`ProviderSettings`** — flattened credential key-value store (`github_token`, future `custom_token`, etc.), stored under `ProviderConfig::credentials` for provider-scoped persisted tokens owned by BananaTray
 - **`TrayPopupSettings`** / **`SavedWindowPosition`** — persisted tray popup UI state, currently used for Linux drag-position restore

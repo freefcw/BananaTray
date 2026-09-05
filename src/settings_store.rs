@@ -1,9 +1,51 @@
-use crate::models::AppSettings;
+use crate::models::{
+    AppSettings, DisplaySettings, LoggingSettings, NotificationSettings, ProviderConfig,
+    SystemSettings,
+};
 use crate::platform::atomic_file::write_private_file_atomically;
 use anyhow::{Context, Result};
 use log::debug;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// settings.json 当前持久化版本。
+///
+/// 该 DTO 刻意与运行时 `AppSettings` 分离：未来磁盘 schema 迁移应发生在此边界，
+/// 领域模型不再直接承担顶层文件格式契约。字段形状保持与既有 settings.json 一致。
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct PersistedAppSettingsV1 {
+    system: SystemSettings,
+    notification: NotificationSettings,
+    display: DisplaySettings,
+    logging: LoggingSettings,
+    provider: ProviderConfig,
+}
+
+impl From<PersistedAppSettingsV1> for AppSettings {
+    fn from(value: PersistedAppSettingsV1) -> Self {
+        Self {
+            system: value.system,
+            notification: value.notification,
+            display: value.display,
+            logging: value.logging,
+            provider: value.provider,
+        }
+    }
+}
+
+impl From<&AppSettings> for PersistedAppSettingsV1 {
+    fn from(value: &AppSettings) -> Self {
+        Self {
+            system: value.system.clone(),
+            notification: value.notification.clone(),
+            display: value.display.clone(),
+            logging: value.logging.clone(),
+            provider: value.provider.clone(),
+        }
+    }
+}
 
 pub fn load() -> Result<AppSettings> {
     load_from(&config_path())
@@ -84,11 +126,11 @@ fn load_from(path: &Path) -> Result<AppSettings> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("failed to read settings file at {}", path.display()))?;
 
-    let settings: AppSettings = serde_json::from_str(&content)
+    let settings: PersistedAppSettingsV1 = serde_json::from_str(&content)
         .with_context(|| format!("failed to deserialize settings from {}", path.display()))?;
 
     debug!(target: "settings", "loaded settings from {}", path.display());
-    Ok(settings)
+    Ok(settings.into())
 }
 
 fn save_to(settings: &AppSettings, path: &Path) -> Result<PathBuf> {
@@ -105,13 +147,92 @@ fn save_to(settings: &AppSettings, path: &Path) -> Result<PathBuf> {
         )
     })?;
 
-    let content = serde_json::to_string_pretty(settings)?;
+    let persisted = PersistedAppSettingsV1::from(settings);
+    let mut serialized = serde_json::to_value(persisted)?;
+    if let Ok(existing_content) = fs::read_to_string(path) {
+        if let Ok(mut existing) = serde_json::from_str::<serde_json::Value>(&existing_content) {
+            // `linux_last_position` 是已知但可省略的字段。用户将它重置为默认值后，
+            // 只移除这个字段，保留新版可能写入 `tray_popup` 的其他成员。
+            if settings.display.tray_popup.linux_last_position.is_none() {
+                if let Some(display) = existing
+                    .get_mut("display")
+                    .and_then(serde_json::Value::as_object_mut)
+                {
+                    let tray_popup_is_empty = display
+                        .get_mut("tray_popup")
+                        .and_then(serde_json::Value::as_object_mut)
+                        .is_some_and(|tray_popup| {
+                            tray_popup.remove("linux_last_position");
+                            tray_popup.is_empty()
+                        });
+                    if tray_popup_is_empty {
+                        display.remove("tray_popup");
+                    }
+                }
+            }
+            replace_dynamic_provider_maps(&mut existing, &serialized);
+            serialized = merge_preserving_unknown_fields(existing, serialized);
+        }
+    }
+    let content = serde_json::to_string_pretty(&serialized)?;
 
     write_private_file_atomically(path, content.as_bytes())
         .with_context(|| format!("failed to atomically save settings at {}", path.display()))?;
 
     debug!(target: "settings", "settings saved (atomic) to {}", path.display());
     Ok(path.to_path_buf())
+}
+
+/// 用当前已知字段覆盖旧文档，同时保留新版本添加的未知字段。
+///
+/// 这样旧版应用读取并保存由新版生成的兼容 JSON 时，不会静默删除自己不认识的
+/// 顶层或嵌套配置。已知字段始终以当前 `AppSettings` 为准。
+fn merge_preserving_unknown_fields(
+    mut existing: serde_json::Value,
+    current: serde_json::Value,
+) -> serde_json::Value {
+    let (Some(existing), Some(current)) = (existing.as_object_mut(), current.as_object()) else {
+        return current;
+    };
+
+    for (key, current_value) in current {
+        let merged = existing
+            .remove(key)
+            .map(|existing_value| {
+                merge_preserving_unknown_fields(existing_value, current_value.clone())
+            })
+            .unwrap_or_else(|| current_value.clone());
+        existing.insert(key.clone(), merged);
+    }
+
+    serde_json::Value::Object(std::mem::take(existing))
+}
+
+/// 动态 map 的键是用户数据，不是可向前兼容的 schema 字段。
+///
+/// 保存时以当前领域状态整体替换这些 map，确保删除 credential、provider 状态或
+/// 隐藏配额后不会被通用的未知字段合并重新带回。
+fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
+    const DYNAMIC_MAP_FIELDS: [&str; 3] = ["credentials", "enabled_providers", "hidden_quotas"];
+
+    let Some(existing_provider) = existing
+        .get_mut("provider")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    let Some(current_provider) = current
+        .get("provider")
+        .and_then(serde_json::Value::as_object)
+    else {
+        return;
+    };
+
+    for field in DYNAMIC_MAP_FIELDS {
+        if let Some(current_value) = current_provider.get(field) {
+            existing_provider.insert(field.to_string(), current_value.clone());
+        }
+    }
 }
 
 pub fn config_path() -> PathBuf {
@@ -202,6 +323,74 @@ mod tests {
     }
 
     #[test]
+    fn current_format_round_trips_through_persistence_dto() {
+        let (_dir, path) = temp_settings_path();
+        save_to(&AppSettings::default(), &path).unwrap();
+
+        let restored = load_from(&path).unwrap();
+
+        assert_eq!(
+            restored.display.tray_icon_style,
+            crate::models::TrayIconStyle::default()
+        );
+        assert_eq!(restored.system.refresh_interval_mins, 5);
+    }
+
+    #[test]
+    fn empty_object_deserializes_to_domain_defaults() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(&path, "{}").unwrap();
+
+        let restored = load_from(&path).unwrap();
+
+        assert!(restored.system.auto_hide_window);
+        assert_eq!(
+            restored.system.refresh_interval_mins,
+            SystemSettings::DEFAULT_REFRESH_INTERVAL_MINS
+        );
+        assert_eq!(
+            restored.system.global_hotkey,
+            SystemSettings::DEFAULT_GLOBAL_HOTKEY
+        );
+        assert!(restored.notification.session_quota_notifications);
+        assert_eq!(restored.display.theme, AppTheme::Dark);
+        assert!(restored.display.show_overview);
+        assert_eq!(
+            restored.logging.max_bytes,
+            LoggingSettings::default().max_bytes
+        );
+    }
+
+    #[test]
+    fn partial_document_fills_domain_defaults() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(&path, r#"{"system": {"refresh_interval_mins": 42}}"#).unwrap();
+
+        let restored = load_from(&path).unwrap();
+
+        assert_eq!(restored.system.refresh_interval_mins, 42);
+        assert!(restored.system.auto_hide_window);
+        assert_eq!(restored.display.theme, AppTheme::Dark);
+    }
+
+    #[test]
+    fn missing_global_hotkey_uses_domain_default() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{"system":{"auto_hide_window":true,"start_at_login":false,"refresh_interval_mins":5}}"#,
+        )
+        .unwrap();
+
+        let restored = load_from(&path).unwrap();
+
+        assert_eq!(
+            restored.system.global_hotkey,
+            SystemSettings::DEFAULT_GLOBAL_HOTKEY
+        );
+    }
+
+    #[test]
     fn load_corrupt_file_returns_error() {
         let (_dir, path) = temp_settings_path();
         fs::write(&path, "not valid json {{{").unwrap();
@@ -259,5 +448,156 @@ mod tests {
 
         let loaded = load_from(&path).unwrap();
         assert_eq!(loaded.system.refresh_interval_mins, 99);
+    }
+
+    #[test]
+    fn save_preserves_unknown_fields_from_newer_schema() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "system": {
+                    "refresh_interval_mins": 42,
+                    "future_system_option": "keep-me"
+                },
+                "future_section": {
+                    "enabled": true
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut settings = load_from(&path).unwrap();
+        settings.system.refresh_interval_mins = 15;
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["system"]["refresh_interval_mins"], 15);
+        assert_eq!(saved["system"]["future_system_option"], "keep-me");
+        assert_eq!(saved["future_section"]["enabled"], true);
+    }
+
+    #[test]
+    fn save_removes_known_optional_field_after_reset_to_default() {
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings.display.tray_popup.linux_last_position =
+            Some(crate::models::SavedWindowPosition { x: 12.0, y: 34.0 });
+        save_to(&settings, &path).unwrap();
+
+        settings.display.tray_popup.linux_last_position = None;
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["display"].get("tray_popup").is_none(),
+            "已知可选字段重置为默认值后不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn save_persists_enabled_provider_entry_removal() {
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        let provider_id = crate::models::ProviderId::Custom("removed:newapi".to_string());
+        settings.provider.set_enabled(&provider_id, true);
+        save_to(&settings, &path).unwrap();
+
+        settings.provider.remove_enabled_record(&provider_id);
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"]["enabled_providers"]
+                .get(provider_id.id_key())
+                .is_none(),
+            "已删除的动态 provider 启用记录不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn save_persists_provider_credential_removal() {
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .credentials
+            .set_credential("removed_token", "secret".to_string());
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .credentials
+            .remove_credential("removed_token");
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"]["credentials"]
+                .get("removed_token")
+                .is_none(),
+            "已删除的动态 credential 不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn save_persists_hidden_quota_entry_removal() {
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        let provider_id = crate::models::ProviderId::Custom("removed:newapi".to_string());
+        settings
+            .provider
+            .hidden_quotas
+            .insert(provider_id.id_key(), ["session".to_string()].into());
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .hidden_quotas
+            .remove(&provider_id.id_key());
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"]["hidden_quotas"]
+                .get(provider_id.id_key())
+                .is_none(),
+            "已删除的动态 hidden_quotas 条目不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn save_reset_position_preserves_unknown_tray_popup_fields() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "display": {
+                    "tray_popup": {
+                        "linux_last_position": {"x": 12.0, "y": 34.0},
+                        "future_anchor_policy": "screen-edge"
+                    }
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut settings = load_from(&path).unwrap();
+        settings.display.tray_popup.linux_last_position = None;
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["display"]["tray_popup"]
+                .get("linux_last_position")
+                .is_none(),
+            "已重置的窗口位置不应被兼容性合并带回"
+        );
+        assert_eq!(
+            saved["display"]["tray_popup"]["future_anchor_policy"], "screen-edge",
+            "重置已知字段时必须保留同一对象中的未来字段"
+        );
     }
 }

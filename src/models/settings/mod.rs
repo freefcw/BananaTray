@@ -393,12 +393,11 @@ impl ProviderSettings {
 // 应用设置（顶层）
 // ============================================================================
 
-/// 应用配置 — 按职责分为五组子设置
+/// 应用运行时配置 — 按职责分为五组子设置。
 ///
-/// 容器级 `#[serde(default)]`：缺失的整个 section 从对应子结构的 `Default` 回填，
-/// 配合各子结构自身的容器级 default，空 JSON 对象也可完整加载。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
+/// 顶层磁盘格式由 `settings_store::PersistedAppSettingsV1` 负责；这里不直接派生
+/// serde，避免领域模型与 settings.json 的版本演进绑定。
+#[derive(Debug, Clone, Default)]
 pub struct AppSettings {
     /// 系统行为：自动隐藏、开机自启、刷新间隔、全局热键
     pub system: SystemSettings,
@@ -407,7 +406,6 @@ pub struct AppSettings {
     /// 显示/外观：主题、语言、托盘图标、各 UI 开关
     pub display: DisplaySettings,
     /// 日志：轮转 / 清理阈值（不在 UI 中暴露）
-    #[serde(default)]
     pub logging: LoggingSettings,
     /// Provider 管理：启用状态、排序、隐藏配额、sidebar、以及 app-managed credentials
     pub provider: ProviderConfig,
