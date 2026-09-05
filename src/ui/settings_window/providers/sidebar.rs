@@ -5,7 +5,7 @@ use crate::models::ProviderId;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    div, hsla, px, relative, App, AppContext, Context, Div, Entity, FontWeight, InteractiveElement,
+    div, px, relative, App, AppContext, Context, Div, Entity, FontWeight, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Pixels, Point, Render, Stateful,
     StatefulInteractiveElement, Styled, Window,
 };
@@ -33,6 +33,7 @@ struct DraggedProvider {
 struct DragPreview {
     icon: String,
     display_name: String,
+    theme: Theme,
 }
 
 #[derive(Clone)]
@@ -50,21 +51,21 @@ impl Render for DragPreview {
             .px(px(12.0))
             .py(px(8.0))
             .rounded(px(8.0))
-            .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.3))
+            .bg(self.theme.text.accent_soft)
             .border_1()
-            .border_color(hsla(250.0 / 360.0, 0.6, 0.5, 0.5))
+            .border_color(self.theme.text.accent)
             .shadow_md()
             .opacity(0.85)
             .child(render_provider_icon(
                 self.icon.clone(),
                 px(18.0),
-                hsla(0.0, 0.0, 1.0, 0.9),
+                self.theme.text.primary,
             ))
             .child(
                 div()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(hsla(0.0, 0.0, 1.0, 0.9))
+                    .text_color(self.theme.text.primary)
                     .child(self.display_name.clone()),
             )
     }
@@ -150,15 +151,15 @@ fn render_sidebar_item(
     index: usize,
     dragged: DraggedProvider,
 ) -> Stateful<Div> {
-    // 设计稿：选中项有半透明紫色背景 + 紫色边框，未选中无背景。
+    // 选中项使用主题 accent token；浅色和深色模式各自提供匹配的背景与边框。
     // 将两者统一为一个带 border_1() 的 div，避免边框切换造成的 1px 跳动。
     let styled_wrapper = if is_selected {
         div()
             .rounded(px(8.0))
             .w_full()
             .border_1()
-            .border_color(hsla(250.0 / 360.0, 0.6, 0.5, 0.4))
-            .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.2))
+            .border_color(theme.text.accent)
+            .bg(theme.text.accent_soft)
             .child(item_content)
     } else {
         div()
@@ -173,6 +174,8 @@ fn render_sidebar_item(
     let select_state = ctx.state.clone();
     let select_id = id.clone();
     let drop_state = ctx.state.clone();
+    let preview_theme = theme.clone();
+    let drop_indicator = theme.text.accent;
 
     div()
         .id(("sidebar-provider", index))
@@ -187,13 +190,12 @@ fn render_sidebar_item(
                 cx.new(|_| DragPreview {
                     icon: data.icon.clone(),
                     display_name: data.display_name.clone(),
+                    theme: preview_theme.clone(),
                 })
             },
         )
         // 放置目标：拖入时显示视觉反馈（顶部紫色指示线）
-        .drag_over::<DraggedProvider>(move |style, _, _, _| {
-            style.border_color(hsla(250.0 / 360.0, 0.7, 0.6, 0.6))
-        })
+        .drag_over::<DraggedProvider>(move |style, _, _, _| style.border_color(drop_indicator))
         // 放置处理：将拖动的 provider 移动到此位置
         .on_drop::<DraggedProvider>(move |data, window, cx| {
             crate::bootstrap::dispatch_in_window(
@@ -220,6 +222,7 @@ fn render_sidebar_item(
 /// 「+ 新增中转站」按钮
 fn render_add_relay_button(theme: &Theme, ctx: SidebarActionContext) -> Div {
     let accent = theme.text.accent;
+    let accent_soft = theme.text.accent_soft;
     let muted = theme.text.muted;
     let state = ctx.state.clone();
     let view_entity = ctx.view_entity.clone();
@@ -234,12 +237,9 @@ fn render_add_relay_button(theme: &Theme, ctx: SidebarActionContext) -> Div {
         .rounded(px(8.0))
         .border_1()
         .border_dashed()
-        .border_color(hsla(0.0, 0.0, 0.3, 0.3))
+        .border_color(theme.border.strong)
         .cursor_pointer()
-        .hover(move |s| {
-            s.border_color(accent)
-                .bg(hsla(250.0 / 360.0, 0.6, 0.4, 0.1))
-        })
+        .hover(move |s| s.border_color(accent).bg(accent_soft))
         .child(render_svg_icon("src/icons/plus.svg", px(14.0), muted))
         .child(
             div()

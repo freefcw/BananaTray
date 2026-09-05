@@ -180,6 +180,7 @@
 
 - 设置写入由后台 `settings_writer` 串行化并做 debounce；custom-provider 保存所需的 deferred flush 在专用 I/O worker 上等待，不进入 GPUI dispatch 栈，其他前台同步路径（如全局热键）仍可直接调用 `flush()`。脚本 Run Test 使用另一条独立串行队列，长 timeout 不会阻塞 NewAPI / Script Provider 的 save/delete/load。正常退出时，refresh 发送 Shutdown 请求，script-test 发布队外取消状态；custom-provider CRUD 关闭入队端后继续 drain 已接受事务，三者在共同 60ms deadline 内 join，超时线程记录警告并 detach。worker 先把完成 action 写入可靠结果 ledger，再发轻量唤醒；退出阶段会在最终 settings 快照前同步结算 ledger 中已经收到但尚未消费的 action；超时 detach 的 CRUD 不保证完成，也不保证其迟到结果得到结算。Linux D-Bus handle 另最多等待 20ms，超时线程 detach；settings writer 使用独立 `Shutdown` 协议完成 pending snapshot 的 final flush。最终 `start_at_login` 状态也在 quit observer 返回前同步确认，保留用户设置的完成保证。
 - `AppSettings` 是运行时领域模型；顶层 JSON 形状由 `settings_store::PersistedAppSettingsV1` 拥有并转换。保存兼容的新版本文件时会递归保留固定 schema 对象中的未知字段，同时以当前领域值覆盖已知字段；`provider.credentials`、`provider.enabled_providers`、`provider.hidden_quotas` 的键属于用户数据，保存时由当前动态 map 整体替换，确保删除操作不会被兼容合并恢复。
+- 系统深浅色与 Linux GNOME extension 的首份状态在进入 GPUI 前预热（每条平台命令最多 500ms）；进入事件循环后只读取缓存，过期 CLI 刷新在后台运行，不会同步阻塞渲染或托盘更新。
 - `settings.json`、BananaTray 代写的外部 OAuth 凭证和自定义 provider YAML 复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 使用不可变版本化脚本，最后原子提交引用它的 YAML；成功后再清理旧脚本，避免崩溃窗口产生跨版本文件对。
 - `settings.json` 加载失败（JSON 损坏等）时，启动路径会先把原文件 rename 备份为 `settings.json.corrupt-<epoch>` 再回退默认值，避免后续 persist 覆盖后原始内容不可恢复；备份成功时启动后发送系统通知告知备份位置。
 - 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。

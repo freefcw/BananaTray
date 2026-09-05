@@ -78,6 +78,12 @@ pub fn run_app() {
         }
     };
 
+    // 只在 GPUI 事件循环启动前允许同步平台探测；进入前台后调用点只读取缓存，
+    // 过期刷新由后台线程完成，避免系统命令阻塞窗口构造或托盘更新。
+    platform::system::prewarm_system_dark_mode_detection();
+    #[cfg(target_os = "linux")]
+    platform::gnome_detect::prewarm_gnome_extension_detection();
+
     Application::new()
         .with_resource_profile(AppProfile::Minimal)
         .with_assets(Assets::new())

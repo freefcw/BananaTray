@@ -9,14 +9,14 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | `mod.rs` | mixed | Defines app identity constants and gates app-only adapters behind `feature = "app"`. |
 | `atomic_file.rs` | lib-safe | Atomically replaces private settings/credential files and creates exclusive private files for caller-owned multi-file transactions, with Unix `0600` at creation, flush-before-rename, and error cleanup. |
 | `paths.rs` | lib-safe | Resolves settings, custom provider, and custom script directories. |
-| `system.rs` | lib-safe | Small system helpers: open URL/path without blocking the UI while a background monitor checks exit status, clipboard fallback, OS info, file-size formatting, dark-mode detection. |
+| `system.rs` | lib-safe | Small system helpers: non-blocking URL/path launch, clipboard fallback, OS info, file-size formatting, and prewarmed/cached asynchronous dark-mode detection. |
 | `logging.rs` | mixed | App logger initialization (size-based rotation + startup cleanup) behind `feature = "app"`, plus test/lib-safe log-tail helpers. |
 | `assets.rs` | app-only | GPUI `AssetSource`; resolves resources from `BANANATRAY_RESOURCES`, app bundles, Linux system install paths, then dev root. |
 | `notification.rs` | app-only | OS notification adapter. Domain alert decisions stay in `application/quota_alert.rs`. |
 | `auto_launch.rs` | app-only | Launch-at-login integration: macOS `SMAppService`, Linux XDG autostart desktop entry; requests run on one background worker, coalesce to the latest desired state, and expose an exit-time completion barrier. |
 | `single_instance.rs` | app-only | Single-instance IPC via local sockets; secondary launches send `SHOW` to the primary instance. |
 | `popup_window.rs` | app-only | 托盘弹窗在打开 / 切 tab 时的内容区 resize。macOS 用 `setFrame` 钉住顶边并关掉动画；Linux 仍走 `Window::resize()`。Overview 展开/折叠不走这条路径。 |
-| `gnome_detect.rs` | Linux + app-only | Detects when the native GNOME Shell Extension path should replace KSNI/AppIndicator fallback. |
+| `gnome_detect.rs` | Linux + app-only | Detects when the native GNOME Shell Extension path should replace KSNI/AppIndicator fallback. The first CLI probe is prewarmed before GPUI starts (500ms timeout); TTL refreshes run off-thread. |
 
 ## Stable Paths
 

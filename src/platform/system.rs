@@ -4,6 +4,71 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::OnceLock;
 
+#[derive(Default)]
+pub(crate) struct NonBlockingBoolProbe {
+    state: std::sync::Arc<std::sync::Mutex<BoolProbeState>>,
+}
+
+#[derive(Default)]
+struct BoolProbeState {
+    cached: Option<(std::time::Instant, bool)>,
+    running: bool,
+}
+
+impl NonBlockingBoolProbe {
+    #[allow(dead_code)] // app 启动前的 prewarm wiring 在 app feature 路径调用
+    pub(crate) fn publish(&self, value: bool) {
+        if let Ok(mut state) = self.state.lock() {
+            state.cached = Some((std::time::Instant::now(), value));
+            state.running = false;
+        }
+    }
+
+    /// 返回最近缓存；过期或首次探测只启动一个后台线程，调用方从不等待命令/I/O。
+    pub(crate) fn get_or_refresh(
+        &self,
+        fallback: bool,
+        ttl: std::time::Duration,
+        detect: impl FnOnce() -> bool + Send + 'static,
+    ) -> bool {
+        let now = std::time::Instant::now();
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(_) => return fallback,
+        };
+        if let Some((updated_at, value)) = state.cached {
+            if now.duration_since(updated_at) < ttl {
+                return value;
+            }
+        }
+        let current = state.cached.map(|(_, value)| value).unwrap_or(fallback);
+        if state.running {
+            return current;
+        }
+        state.running = true;
+        drop(state);
+
+        let shared = self.state.clone();
+        if std::thread::Builder::new()
+            .name("system-bool-probe".into())
+            .spawn(move || {
+                let value = std::panic::catch_unwind(std::panic::AssertUnwindSafe(detect))
+                    .unwrap_or(fallback);
+                if let Ok(mut state) = shared.lock() {
+                    state.cached = Some((std::time::Instant::now(), value));
+                    state.running = false;
+                }
+            })
+            .is_err()
+        {
+            if let Ok(mut state) = self.state.lock() {
+                state.running = false;
+            }
+        }
+        current
+    }
+}
+
 /// 使用系统默认浏览器打开外部 URL
 ///
 /// 跨平台支持：macOS → `open`，Linux → `xdg-open`
@@ -251,17 +316,38 @@ pub fn format_file_size(bytes: u64) -> String {
 /// macOS: 读取 `defaults read -g AppleInterfaceStyle`
 /// Linux: 优先读取 GNOME `color-scheme`，fallback 到 GTK 主题名
 pub fn detect_system_dark_mode() -> bool {
+    system_dark_mode_probe().get_or_refresh(
+        false,
+        std::time::Duration::from_secs(2),
+        detect_system_dark_mode_blocking,
+    )
+}
+
+/// 在 GPUI 事件循环启动前填充首份主题缓存；平台命令有 500ms 硬超时。
+#[allow(dead_code)] // app 启动前 wiring 调用；lib-only 目标不会触达
+pub(crate) fn prewarm_system_dark_mode_detection() {
+    system_dark_mode_probe().publish(detect_system_dark_mode_blocking());
+}
+
+fn system_dark_mode_probe() -> &'static NonBlockingBoolProbe {
+    static PROBE: OnceLock<NonBlockingBoolProbe> = OnceLock::new();
+    PROBE.get_or_init(NonBlockingBoolProbe::default)
+}
+
+fn detect_system_dark_mode_blocking() -> bool {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("defaults")
-            .args(["read", "-g", "AppleInterfaceStyle"])
-            .output()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .trim()
-                    .eq_ignore_ascii_case("dark")
-            })
-            .unwrap_or(false)
+        crate::providers::common::cli::run_command_with_timeout(
+            "defaults",
+            &["read", "-g", "AppleInterfaceStyle"],
+            std::time::Duration::from_millis(500),
+        )
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .eq_ignore_ascii_case("dark")
+        })
+        .unwrap_or(false)
     }
     #[cfg(target_os = "linux")]
     {
@@ -280,10 +366,11 @@ pub fn detect_system_dark_mode() -> bool {
 #[cfg(target_os = "linux")]
 fn detect_linux_dark_mode() -> bool {
     // 方法 1: GNOME color-scheme（'prefer-dark' = 深色）
-    if let Ok(output) = Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
-        .output()
-    {
+    if let Ok(output) = crate::providers::common::cli::run_command_with_timeout(
+        "gsettings",
+        &["get", "org.gnome.desktop.interface", "color-scheme"],
+        std::time::Duration::from_millis(500),
+    ) {
         if output.status.success() {
             let value = String::from_utf8_lossy(&output.stdout);
             if value.contains("prefer-dark") {
@@ -297,10 +384,11 @@ fn detect_linux_dark_mode() -> bool {
     }
 
     // 方法 2: GTK 主题名是否包含 "dark"
-    if let Ok(output) = Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
-        .output()
-    {
+    if let Ok(output) = crate::providers::common::cli::run_command_with_timeout(
+        "gsettings",
+        &["get", "org.gnome.desktop.interface", "gtk-theme"],
+        std::time::Duration::from_millis(500),
+    ) {
         if output.status.success() {
             let theme = String::from_utf8_lossy(&output.stdout)
                 .trim()
@@ -317,6 +405,28 @@ fn detect_linux_dark_mode() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boolean_probe_returns_immediately_while_slow_detection_runs_off_thread() {
+        let probe = NonBlockingBoolProbe::default();
+        let start = std::time::Instant::now();
+
+        let initial = probe.get_or_refresh(false, std::time::Duration::from_secs(30), || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            true
+        });
+
+        assert!(!initial);
+        assert!(start.elapsed() < std::time::Duration::from_millis(20));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while !probe.get_or_refresh(false, std::time::Duration::from_secs(30), || false) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "probe result not published"
+            );
+            std::thread::yield_now();
+        }
+    }
 
     #[test]
     fn os_info_returns_non_empty() {

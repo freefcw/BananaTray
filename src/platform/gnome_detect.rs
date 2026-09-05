@@ -36,6 +36,17 @@ pub fn should_use_gnome_extension() -> bool {
     true
 }
 
+/// 在进入 GPUI 事件循环前执行一次有 500ms 上限的探测。
+///
+/// 之后前台调用只读缓存；TTL 到期后的刷新也在后台执行。
+#[cfg(target_os = "linux")]
+#[allow(dead_code)] // app 启动前 wiring 调用；非 Linux/lib-only 目标不会触达
+pub(crate) fn prewarm_gnome_extension_detection() {
+    if is_gnome_desktop() {
+        extension_state_probe().publish(is_extension_active_via_cli());
+    }
+}
+
 fn env_flag_enabled(name: &str) -> bool {
     std::env::var(name)
         .map(|value| env_flag_value_enabled(&value))
@@ -69,47 +80,39 @@ fn is_gnome_desktop() -> bool {
 /// 实时 spawn `gnome-extensions` 子进程代价过高；代价是扩展状态变化
 /// （启用/禁用/重载）最长延迟 `EXTENSION_STATE_CACHE_TTL` 才被感知。
 fn is_extension_active() -> bool {
-    static CACHE: std::sync::OnceLock<std::sync::Mutex<Option<(std::time::Instant, bool)>>> =
-        std::sync::OnceLock::new();
-    let cache = CACHE.get_or_init(|| std::sync::Mutex::new(None));
-    let now = std::time::Instant::now();
+    extension_state_probe().get_or_refresh(
+        false,
+        EXTENSION_STATE_CACHE_TTL,
+        is_extension_active_via_cli,
+    )
+}
 
-    match cache.lock() {
-        Ok(mut guard) => {
-            if let Some(value) = cached_extension_state(*guard, now, EXTENSION_STATE_CACHE_TTL) {
-                return value;
-            }
-            let value = is_extension_active_via_cli();
-            *guard = Some((now, value));
-            value
-        }
-        // Mutex 中毒时退化为实时检测，不因缓存故障影响功能
-        Err(_) => is_extension_active_via_cli(),
-    }
+fn extension_state_probe() -> &'static crate::platform::system::NonBlockingBoolProbe {
+    static PROBE: std::sync::OnceLock<crate::platform::system::NonBlockingBoolProbe> =
+        std::sync::OnceLock::new();
+    PROBE.get_or_init(crate::platform::system::NonBlockingBoolProbe::default)
 }
 
 /// CLI 检测结果缓存 TTL：每次托盘图标更新都会触发检测，
 /// 缓存避免在 UI 线程上频繁 spawn 子进程。
 const EXTENSION_STATE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// 纯函数：缓存存在且未过期时返回缓存值，否则返回 `None`。
-fn cached_extension_state(
-    stored: Option<(std::time::Instant, bool)>,
-    now: std::time::Instant,
-    ttl: std::time::Duration,
-) -> Option<bool> {
-    let (ts, value) = stored?;
-    (now.duration_since(ts) < ttl).then_some(value)
-}
-
 /// 通过 gnome-extensions CLI 检查扩展是否处于 ACTIVE 状态
 ///
 /// 使用 `LC_ALL=C` 固定输出语言，避免本地化文案影响解析。
 fn is_extension_active_via_cli() -> bool {
-    let output = std::process::Command::new("gnome-extensions")
+    let mut command = std::process::Command::new("gnome-extensions");
+    command
         .args(["info", EXTENSION_UUID])
         .env("LC_ALL", "C")
-        .output();
+        .env(
+            "PATH",
+            crate::providers::common::path_resolver::enriched_path(),
+        );
+    let output = crate::providers::common::cli::run_prepared_command_with_timeout(
+        command,
+        std::time::Duration::from_millis(500),
+    );
 
     match output {
         Ok(output) if output.status.success() => {
@@ -201,51 +204,5 @@ bananatray@bananatray.github.io
 ";
 
         assert!(!extension_info_is_active(info));
-    }
-
-    #[test]
-    fn extension_state_cache_returns_value_within_ttl() {
-        let ts = std::time::Instant::now();
-        let ttl = std::time::Duration::from_secs(30);
-
-        assert_eq!(
-            cached_extension_state(
-                Some((ts, true)),
-                ts + std::time::Duration::from_secs(5),
-                ttl
-            ),
-            Some(true)
-        );
-        assert_eq!(
-            cached_extension_state(
-                Some((ts, false)),
-                ts + std::time::Duration::from_secs(29),
-                ttl
-            ),
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn extension_state_cache_expires_after_ttl() {
-        let ts = std::time::Instant::now();
-        let ttl = std::time::Duration::from_secs(30);
-
-        assert_eq!(
-            cached_extension_state(Some((ts, true)), ts + ttl, ttl),
-            None
-        );
-    }
-
-    #[test]
-    fn extension_state_cache_empty_returns_none() {
-        assert_eq!(
-            cached_extension_state(
-                None,
-                std::time::Instant::now(),
-                std::time::Duration::from_secs(30)
-            ),
-            None
-        );
     }
 }
