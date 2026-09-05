@@ -61,6 +61,18 @@ impl BoundedThreadOwner {
         }
         true
     }
+
+    /// 无期限等待线程结束，用于必须完成最终持久化的 owner。
+    pub(crate) fn join(&mut self) -> bool {
+        let Some(worker) = self.worker.take() else {
+            return true;
+        };
+        if worker.join().is_err() {
+            log::warn!(target: "app", "{} panicked during shutdown", self.name);
+            return false;
+        }
+        true
+    }
 }
 
 #[cfg(test)]

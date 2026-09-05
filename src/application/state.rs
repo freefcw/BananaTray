@@ -381,6 +381,9 @@ fn build_initial_settings_ui_state(
         script_provider_test_request_id: 0,
         script_provider_pending_test_request_id: None,
         script_provider_test_result: None,
+        custom_provider_save_request_id: 0,
+        pending_custom_provider_save_request_id: None,
+        pending_custom_provider_delete: None,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     }
@@ -505,6 +508,12 @@ pub struct SettingsUiState {
     pub script_provider_pending_test_request_id: Option<u64>,
     /// 最近一次脚本测试结果
     pub script_provider_test_result: Option<ScriptProviderTestResult>,
+    /// 自定义 Provider 保存请求序号，用于隔离迟到完成动作的 UI 回滚。
+    pub custom_provider_save_request_id: u64,
+    /// 仍允许恢复原提交表单的保存请求；用户进入新交互上下文后清空。
+    pub pending_custom_provider_save_request_id: Option<u64>,
+    /// 当前仍有效的异步删除请求及其 Provider 身份。
+    pub pending_custom_provider_delete: Option<(u64, ProviderId)>,
     /// General Tab 全局热键设置的最近一次错误
     pub global_hotkey_error: Option<GlobalHotkeyError>,
     /// 与 `global_hotkey_error` 对应的候选热键（持久化格式）
@@ -512,6 +521,45 @@ pub struct SettingsUiState {
 }
 
 impl SettingsUiState {
+    pub fn begin_custom_provider_save(&mut self) -> u64 {
+        self.custom_provider_save_request_id = self.custom_provider_save_request_id.wrapping_add(1);
+        let request_id = self.custom_provider_save_request_id;
+        self.pending_custom_provider_save_request_id = Some(request_id);
+        request_id
+    }
+
+    pub fn settle_custom_provider_save(&mut self, request_id: u64) -> bool {
+        if self.pending_custom_provider_save_request_id != Some(request_id) {
+            return false;
+        }
+        self.pending_custom_provider_save_request_id = None;
+        true
+    }
+
+    pub fn invalidate_custom_provider_save_context(&mut self) {
+        self.pending_custom_provider_save_request_id = None;
+    }
+
+    pub fn begin_custom_provider_delete(&mut self, provider_id: ProviderId) -> u64 {
+        self.custom_provider_save_request_id = self.custom_provider_save_request_id.wrapping_add(1);
+        let request_id = self.custom_provider_save_request_id;
+        self.pending_custom_provider_delete = Some((request_id, provider_id));
+        request_id
+    }
+
+    pub fn settle_custom_provider_delete(
+        &mut self,
+        request_id: u64,
+        provider_id: &ProviderId,
+    ) -> bool {
+        if self.pending_custom_provider_delete.as_ref() != Some(&(request_id, provider_id.clone()))
+        {
+            return false;
+        }
+        self.pending_custom_provider_delete = None;
+        true
+    }
+
     /// 清理脚本 Provider 测试流程的瞬时状态，不重置请求序号或其他设置页状态。
     pub fn clear_script_provider_transient_state(&mut self) {
         self.script_provider_testing = false;
@@ -559,10 +607,14 @@ pub enum SettingsModalState {
     AddingProvider,
     /// 右面板：NewAPI 新增表单（空表单，提交后会预注册新 provider）。
     AddingNewApi,
+    /// 正在后台加载指定 NewAPI 配置；仅匹配目标的完成动作可进入编辑态。
+    LoadingNewApi(ProviderId),
     /// 右面板：NewAPI 编辑表单（含从 YAML 读取的回填数据）。
     EditingNewApi(NewApiEditData),
     /// 右面板：脚本 Provider 新增表单。
     AddingScriptProvider,
+    /// 正在后台加载指定脚本 Provider 配置；仅匹配目标的完成动作可进入编辑态。
+    LoadingScriptProvider(ProviderId),
     /// 右面板：脚本 Provider 编辑表单（含从 YAML 读取的回填数据）。
     EditingScriptProvider(ScriptProviderEditData),
 }
@@ -625,6 +677,7 @@ impl SettingsModalState {
     pub fn form_identity(&self) -> Option<FormIdentity> {
         match self {
             Self::AddingNewApi => Some(FormIdentity::NewApiAdd),
+            Self::LoadingNewApi(_) | Self::LoadingScriptProvider(_) => None,
             Self::EditingNewApi(data) => Some(FormIdentity::NewApiEdit {
                 original_filename: data.original_filename.clone(),
             }),

@@ -235,6 +235,15 @@ impl ProviderConfig {
         self.enabled_providers.remove(&id.id_key())
     }
 
+    /// 删除一个已从磁盘移除的 Provider 的所有持久引用。
+    pub fn remove_provider_references(&mut self, id: &ProviderId) {
+        let key = id.id_key();
+        self.enabled_providers.remove(&key);
+        self.provider_order.retain(|candidate| candidate != &key);
+        self.hidden_quotas.remove(&key);
+        self.sidebar_providers.retain(|candidate| candidate != &key);
+    }
+
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）
     ///
     /// 从 `enabled_providers`、`provider_order`、`hidden_quotas`、`sidebar_providers` 中移除

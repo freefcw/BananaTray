@@ -1,4 +1,6 @@
-use crate::application::{AppEffect, ContextEffect, NotificationEffect, TrayIconRequest};
+use crate::application::{
+    AppEffect, ContextEffect, NotificationEffect, SettingsEffect, TrayIconRequest,
+};
 use crate::models::{ProviderId, StatusLevel, TrayIconStyle};
 use crate::refresh::RefreshRequest;
 
@@ -70,4 +72,20 @@ pub(super) fn notify_plain_i18n(
         }
         .into(),
     );
+}
+
+/// 文件删除成功后立即提交 settings 侧的删除，避免等待 reload 时发生 file/settings 分裂。
+pub(super) fn commit_deleted_provider(
+    session: &mut AppSession,
+    provider_id: &ProviderId,
+    effects: &mut Vec<AppEffect>,
+) {
+    session
+        .settings
+        .provider
+        .remove_provider_references(provider_id);
+    if session.settings_ui.selected_provider == *provider_id {
+        session.settings_ui.selected_provider = session.first_sidebar_provider();
+    }
+    effects.push(SettingsEffect::PersistSettings.into());
 }

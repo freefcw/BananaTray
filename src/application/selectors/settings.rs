@@ -117,6 +117,8 @@ fn settings_provider_right_pane_view_state(
             }
         }
         SettingsModalState::Idle
+        | SettingsModalState::LoadingNewApi(_)
+        | SettingsModalState::LoadingScriptProvider(_)
         | SettingsModalState::ConfirmingRemoveProvider
         | SettingsModalState::ConfirmingDeleteNewApi
         | SettingsModalState::ConfirmingDeleteScriptProvider => {

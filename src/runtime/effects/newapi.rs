@@ -6,32 +6,60 @@ use log::{info, warn};
 use crate::application::{AppAction, NewApiEffect};
 use crate::models::{CustomProviderLifecycleFailure, NewApiConfig, NewApiSaveSuccess, ProviderId};
 use crate::providers::custom::api;
+use crate::runtime::settings_writer::DeferredSettingsFlush;
 
 use super::super::AppState;
 
 pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: NewApiEffect) -> Vec<AppAction> {
+    let settings = {
+        let state = state.borrow();
+        state
+            .settings_writer
+            .defer_flush(state.session.settings.clone())
+    };
+    let job = crate::runtime::CustomProviderJob::NewApi { effect, settings };
+    match state.borrow().custom_provider_tx.try_send(job) {
+        Ok(()) => Vec::new(),
+        Err(err) => {
+            let detail = format!("failed to queue custom-provider I/O: {err}");
+            vec![err.into_inner().queue_failure(detail)]
+        }
+    }
+}
+
+pub(crate) fn execute(
+    effect: NewApiEffect,
+    settings: DeferredSettingsFlush,
+    settings_writer: &crate::runtime::settings_writer::SettingsWriterHandle,
+) -> AppAction {
     match effect {
         NewApiEffect::SaveProvider {
+            request_id,
             config,
             original_filename,
             original_id,
             is_editing,
-        } => vec![save_provider(
-            state,
+        } => save_provider(
+            settings_writer,
+            settings,
+            request_id,
             config,
             original_filename,
             original_id,
             is_editing,
-        )],
-        NewApiEffect::DeleteProvider { provider_id } => {
-            vec![delete_provider(provider_id)]
-        }
-        NewApiEffect::LoadConfig { provider_id } => vec![load_config(provider_id)],
+        ),
+        NewApiEffect::DeleteProvider {
+            request_id,
+            provider_id,
+        } => delete_provider(request_id, provider_id),
+        NewApiEffect::LoadConfig { provider_id } => load_config(provider_id),
     }
 }
 
 fn save_provider(
-    state: &Rc<RefCell<AppState>>,
+    settings_writer: &crate::runtime::settings_writer::SettingsWriterHandle,
+    settings: DeferredSettingsFlush,
+    request_id: u64,
     config: NewApiConfig,
     original_filename: Option<String>,
     original_id: Option<String>,
@@ -42,8 +70,7 @@ fn save_provider(
     let result = match api::save_newapi_yaml(&config, &filename, original_id.as_deref()) {
         Ok(path) => {
             info!(target: "settings", "saved custom provider YAML to {}", path.display());
-            let s = state.borrow();
-            let settings_saved = s.settings_writer.flush(s.session.settings.clone());
+            let settings_saved = settings_writer.flush_deferred(settings);
             Ok(NewApiSaveSuccess {
                 path,
                 settings_saved,
@@ -56,6 +83,7 @@ fn save_provider(
     };
 
     AppAction::NewApiSaveFinished {
+        request_id,
         config,
         filename,
         original_id,
@@ -64,7 +92,7 @@ fn save_provider(
     }
 }
 
-fn delete_provider(provider_id: ProviderId) -> AppAction {
+fn delete_provider(request_id: u64, provider_id: ProviderId) -> AppAction {
     let result = api::delete_newapi_yaml(&provider_id).map_err(|err| {
         warn!(target: "settings", "{err}");
         err
@@ -75,6 +103,7 @@ fn delete_provider(provider_id: ProviderId) -> AppAction {
     }
 
     AppAction::NewApiDeleteFinished {
+        request_id,
         provider_id,
         result,
     }

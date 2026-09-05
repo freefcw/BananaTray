@@ -30,6 +30,8 @@ pub(crate) use settings_window::{
 #[allow(unused_imports)]
 pub(crate) use ui_bootstrap::{bootstrap_ui, sync_initial_auto_launch};
 #[allow(unused_imports)]
+pub(crate) use workers::custom_provider::{custom_provider_channel, start_custom_provider_pump};
+#[allow(unused_imports)]
 #[cfg(target_os = "linux")]
 pub(crate) use workers::linux_dbus::emit_current_dbus_snapshot;
 #[allow(unused_imports)]

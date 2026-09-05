@@ -6,7 +6,7 @@ use crate::application::{AppAction, CommonEffect};
 use super::AppState;
 
 mod debug;
-mod newapi;
+pub(super) mod newapi;
 mod notification;
 mod refresh;
 pub(super) mod script_provider;

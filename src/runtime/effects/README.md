@@ -13,6 +13,6 @@
 - `newapi.rs` — NewAPI 保存 / 删除 / 加载的运行时编排。
 - `script_provider.rs` — 自定义脚本 Provider 的 Run Test、脚本 + YAML 保存、删除和编辑加载编排。
 
-`newapi.rs` 只执行 YAML 保存 / 删除 / 编辑态加载等 I/O，并把结果转换成 `NewApi*Finished` 后续 action。状态回滚、通知 key 选择、render 和 provider reload 都在 `application/reducer/newapi.rs` 中统一声明；底层 YAML 文件读写与 provider 编辑态加载统一放在 `providers::custom::api`。
+`newapi.rs` 的前台 `run()` 只把 YAML 保存 / 删除 / 编辑态加载放入持久 blocking 队列；worker 侧 `execute()` 才执行 I/O，并把结果先写入可靠 ledger，再通过前台唤醒转换成 `NewApi*Finished` action。关闭入队端后 worker 在共同退出截止时间内 drain/join；超时 detach 不保证未完成事务结算，退出时已收到但尚未消费的 ledger action 由 shutdown 同步结算。状态回滚、通知 key 选择、render 和 provider reload 都在 `application/reducer/newapi.rs` 中统一声明；底层 YAML 文件读写与 provider 编辑态加载统一放在 `providers::custom::api`。
 
-`script_provider.rs` 遵守相同边界：Run Test 只把请求发送到脚本测试事件泵，后台执行完成或排队失败都通过 `ScriptProviderTestFinished` 回到前台 reducer；保存 / 删除 / 编辑加载都通过 `providers::custom::api`，并转换成 `ScriptProvider*Finished` action。成功后的 provider reload、partial delete 通知和失败回滚由 `application/reducer/script_provider.rs` 处理。
+`script_provider.rs` 将 CRUD 与 Run Test 分开：保存 / 删除 / 编辑加载进入持久串行 `custom-provider-io-worker`，保存成功后的 deferred settings flush 也在该 worker 上等待；Run Test 进入独立、可取消的串行 `script-test-worker`。CRUD 完成 action 先进入可靠 ledger，再由前台 pump 结算；入队失败则在当前 dispatch 中直接返回后续 action。Run Test 结果通过其独立 action 通道回到前台 reducer。成功后的 provider reload、partial delete 通知和失败回滚由 `application/reducer/script_provider.rs` 处理。

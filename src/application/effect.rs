@@ -99,6 +99,7 @@ pub enum NewApiEffect {
     /// 保存 NewAPI Provider：runtime 负责 YAML 生成、文件写入和同步持久化，
     /// 然后通过 `NewApiSaveFinished` 把结果交回 reducer 处理通知、reload 或回滚。
     SaveProvider {
+        request_id: u64,
         config: NewApiConfig,
         original_filename: Option<String>,
         /// 编辑模式下原始 YAML 的 Provider ID：保存时保持身份不变，
@@ -108,7 +109,10 @@ pub enum NewApiEffect {
         is_editing: bool,
     },
     /// 删除 NewAPI Provider：runtime 负责文件定位 + 文件删除，然后回传 `NewApiDeleteFinished`。
-    DeleteProvider { provider_id: ProviderId },
+    DeleteProvider {
+        request_id: u64,
+        provider_id: ProviderId,
+    },
     /// 从磁盘加载 NewAPI 配置，由 runtime 执行 I/O 后回传 `NewApiLoadFinished`。
     LoadConfig { provider_id: ProviderId },
 }
@@ -123,13 +127,17 @@ pub enum ScriptProviderEffect {
     },
     /// Save script + generated YAML, then return `ScriptProviderSaveFinished`.
     SaveProvider {
+        request_id: u64,
         config: ScriptProviderConfig,
         original_yaml_filename: Option<String>,
         original_script_filename: Option<String>,
         is_editing: bool,
     },
     /// Delete script-generated YAML and companion script file, then return `ScriptProviderDeleteFinished`.
-    DeleteProvider { provider_id: ProviderId },
+    DeleteProvider {
+        request_id: u64,
+        provider_id: ProviderId,
+    },
     /// Load script-generated config from disk for editing, then return `ScriptProviderLoadFinished`.
     LoadConfig { provider_id: ProviderId },
 }

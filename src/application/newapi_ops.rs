@@ -35,10 +35,16 @@ pub fn rollback_newapi_edit(
 /// 新增模式下的回滚：撤销 reducer 预注册的 provider ID 并恢复空表单。
 ///
 /// 回滚内容：
-/// 1. 将预注册的 provider ID 从 enabled + sidebar 中移除
+/// 1. 移除预注册 provider ID 的全部持久引用
 /// 2. 重新打开空的添加表单
 /// 3. 恢复 `selected_provider` 到 sidebar 的第一项
+#[cfg(test)]
 pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
+    rollback_newapi_create_registration(session, config);
+    restore_newapi_create_form(session);
+}
+
+pub fn rollback_newapi_create_registration(session: &mut AppSession, config: &NewApiConfig) {
     let rollback_id = ProviderId::Custom(crate::models::newapi_provider_id(
         &config.base_url,
         config.user_id.as_deref(),
@@ -46,10 +52,11 @@ pub fn rollback_newapi_create(session: &mut AppSession, config: &NewApiConfig) {
     session
         .settings
         .provider
-        .remove_enabled_record(&rollback_id);
-    session.settings.provider.remove_from_sidebar(&rollback_id);
+        .remove_provider_references(&rollback_id);
+}
 
-    // 重新打开空表单让用户可以重试
+pub fn restore_newapi_create_form(session: &mut AppSession) {
+    // 仅当用户仍停留在本次提交上下文时，重新打开空表单让用户重试。
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
 
     // 恢复 selected_provider 到 sidebar 第一项

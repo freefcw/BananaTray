@@ -20,14 +20,24 @@ pub fn rollback_script_provider_edit(
     });
 }
 
+#[cfg(test)]
 pub fn rollback_script_provider_create(session: &mut AppSession, config: &ScriptProviderConfig) {
+    rollback_script_provider_create_registration(session, config);
+    restore_script_provider_create_form(session);
+}
+
+pub fn rollback_script_provider_create_registration(
+    session: &mut AppSession,
+    config: &ScriptProviderConfig,
+) {
     let rollback_id = ProviderId::Custom(config.provider_id.clone());
     session
         .settings
         .provider
-        .remove_enabled_record(&rollback_id);
-    session.settings.provider.remove_from_sidebar(&rollback_id);
+        .remove_provider_references(&rollback_id);
+}
 
+pub fn restore_script_provider_create_form(session: &mut AppSession) {
     session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
     session.settings_ui.selected_provider = session.first_sidebar_provider();
 }

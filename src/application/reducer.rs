@@ -18,6 +18,25 @@ pub use shared::build_config_sync_request;
 pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
     let mut effects = Vec::new();
 
+    // 后台完成动作不会改变用户正在操作的表单上下文；其余前台动作一旦发生，
+    // 迟到的保存失败仍回滚持久状态，但不得再恢复旧表单覆盖新输入。
+    if !matches!(
+        &action,
+        AppAction::RefreshEventReceived(_)
+            | AppAction::NewApiSaveFinished { .. }
+            | AppAction::NewApiLoadFinished { .. }
+            | AppAction::NewApiDeleteFinished { .. }
+            | AppAction::ScriptProviderTestFinished { .. }
+            | AppAction::ScriptProviderSaveFinished { .. }
+            | AppAction::ScriptProviderLoadFinished { .. }
+            | AppAction::ScriptProviderDeleteFinished { .. }
+            | AppAction::GlobalHotkeyApplyFinished { .. }
+    ) {
+        session
+            .settings_ui
+            .invalidate_custom_provider_save_context();
+    }
+
     match action {
         AppAction::SelectNavTab(tab) => settings::select_nav_tab(session, tab, &mut effects),
         AppAction::SetSettingsTab(tab) => settings::set_settings_tab(session, tab, &mut effects),
@@ -109,6 +128,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::CancelAddNewApi => newapi::cancel_add_newapi(session, &mut effects),
         AppAction::SubmitNewApi(config) => newapi::submit_newapi(session, config, &mut effects),
         AppAction::NewApiSaveFinished {
+            request_id,
             config,
             filename,
             original_id,
@@ -116,11 +136,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             result,
         } => newapi::newapi_save_finished(
             session,
-            config,
-            filename,
-            original_id,
-            is_editing,
-            result,
+            newapi::NewApiSaveCompletion {
+                request_id,
+                config,
+                filename,
+                original_id,
+                is_editing,
+                result,
+            },
             &mut effects,
         ),
         AppAction::EditNewApi { provider_id } => {
@@ -134,9 +157,10 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             newapi::delete_newapi(session, provider_id, &mut effects)
         }
         AppAction::NewApiDeleteFinished {
+            request_id,
             provider_id,
             result,
-        } => newapi::newapi_delete_finished(session, provider_id, result, &mut effects),
+        } => newapi::newapi_delete_finished(session, request_id, provider_id, result, &mut effects),
         AppAction::ConfirmDeleteNewApi => newapi::confirm_delete_newapi(session, &mut effects),
         AppAction::CancelDeleteNewApi => newapi::cancel_delete_newapi(session, &mut effects),
 
@@ -161,6 +185,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             script_provider::submit_script_provider(session, config, &mut effects)
         }
         AppAction::ScriptProviderSaveFinished {
+            request_id,
             config,
             yaml_filename,
             script_filename,
@@ -168,11 +193,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             result,
         } => script_provider::script_provider_save_finished(
             session,
-            config,
-            yaml_filename,
-            script_filename,
-            is_editing,
-            result,
+            script_provider::ScriptProviderSaveCompletion {
+                request_id,
+                config,
+                yaml_filename,
+                script_filename,
+                is_editing,
+                result,
+            },
             &mut effects,
         ),
         AppAction::EditScriptProvider { provider_id } => {
@@ -191,10 +219,12 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             script_provider::delete_script_provider(session, provider_id, &mut effects)
         }
         AppAction::ScriptProviderDeleteFinished {
+            request_id,
             provider_id,
             result,
         } => script_provider::script_provider_delete_finished(
             session,
+            request_id,
             provider_id,
             result,
             &mut effects,

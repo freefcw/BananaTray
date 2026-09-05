@@ -84,6 +84,7 @@ pub enum AppAction {
     SubmitNewApi(crate::models::NewApiConfig),
     /// NewAPI 保存完成（由 runtime I/O 回传，reducer 统一处理状态和通知）
     NewApiSaveFinished {
+        request_id: u64,
         config: crate::models::NewApiConfig,
         filename: String,
         /// 编辑模式下原始 YAML 的 Provider ID（随 `SaveProvider` 透传，供失败回滚重建表单）
@@ -106,6 +107,7 @@ pub enum AppAction {
     },
     /// NewAPI 删除完成（由 runtime I/O 回传）
     NewApiDeleteFinished {
+        request_id: u64,
         provider_id: ProviderId,
         result: Result<PathBuf, CustomProviderLifecycleFailure>,
     },
@@ -128,6 +130,7 @@ pub enum AppAction {
     SubmitScriptProvider(ScriptProviderConfig),
     /// 脚本 Provider 保存完成（由 runtime I/O 回传）
     ScriptProviderSaveFinished {
+        request_id: u64,
         config: ScriptProviderConfig,
         yaml_filename: String,
         script_filename: String,
@@ -149,6 +152,7 @@ pub enum AppAction {
     },
     /// 脚本 Provider 删除完成（由 runtime I/O 回传）
     ScriptProviderDeleteFinished {
+        request_id: u64,
         provider_id: ProviderId,
         result: Result<ScriptProviderDeleteSuccess, CustomProviderLifecycleFailure>,
     },

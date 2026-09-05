@@ -73,7 +73,7 @@
 2. 释放借用
 3. 将相应上下文包装进 Adapter
 4. 逐个执行 effects (通过 context effect runner 或 `effects::run_common_effect`)
-5. 若 CommonEffect 返回后续 `AppAction`（例如 refresh 请求入队失败、自定义 provider I/O 完成或脚本测试排队失败），同一 dispatch 循环继续 reduce 并执行新 effects，避免 effect handler 直接重入 `dispatch_*()`
+5. 若 CommonEffect 返回后续 `AppAction`（例如 refresh 请求入队失败或后台队列入队失败），同一 dispatch 循环继续 reduce 并执行新 effects；后台自定义 Provider 工作完成后则由 foreground pump 重新进入 dispatch
 
 ### 重入保护
 
@@ -88,6 +88,9 @@
 - `session: AppSession` — 纯状态树
 - `manager: ProviderManagerHandle` — provider 运行时注册表共享句柄；UI 每次按需读取当前快照，后台 reload 时原子替换
 - `refresh_worker` — 后台刷新请求通道及其线程 owner
+- `custom_provider_tx` — NewAPI / 脚本 Provider CRUD 的持久后台队列及线程 owner；关闭入队端后继续 drain 已入队事务，在共同截止时间内等待 worker；超时 detach，不再保证未完成事务的结算
+- `custom_provider_results` — CRUD worker 的可靠结果 ledger；完成 action 先写入 ledger，再由前台 pump 唤醒并结算
+- `script_test_tx` — 脚本 Run Test 的独立有界后台队列及线程 owner，长 timeout 不会阻塞 CRUD
 - `settings_writer: SettingsWriter` — 设置持久化串行写入器
 - `log_path` — Debug 页展示的日志路径
 
@@ -121,10 +124,10 @@
 
 - **`SettingsWriter::spawn()`** — 启动后台写入线程，返回句柄（存放在 `AppState` 上）
 - **`schedule(settings)`** — 异步 debounce 写入，500ms 窗口内合并多次调用，只写最后一份
-- **`flush(settings)`** — 同步写入，立即落盘并返回结果，会打断未落盘的 debounce 窗口
-- **`shutdown_and_join()`** — 关闭发送端，触发 pending snapshot 的 final flush，并等待后台线程退出；重复调用安全
+- **`flush(settings)`** — custom-provider 保存通过专用 worker 的 deferred flush 同步等待落盘；全局热键等前台路径仍会直接调用同步 `flush()` 并等待 writer 完成
+- **退出** — 先停止 refresh 与 script-test，并在共同 60ms 截止时间内有界回收；custom-provider CRUD 关闭入队端后在共同退出截止时间内 drain/join；超时任务记录警告并 detach，避免异常 I/O 阻塞应用退出。CRUD worker 完成 action 先写入可靠 ledger，退出时同步结算未消费结果，再以最终 `session.settings` 调度快照，最后由 settings writer 的显式 `Shutdown` 完成 pending snapshot 的 final flush。Linux D-Bus 另保留最多 20ms，超时线程 detach
 - 所有写入（schedule 和 flush）通过同一个后台线程串行化，避免乱序覆盖
-- `bootstrap/event_sources/shutdown.rs` 在 GPUI 正常退出回调中显式调用 shutdown；`Drop` 只作为遗漏路径的兜底。强制杀进程或断电不在该保证范围内
+- `bootstrap/event_sources/shutdown.rs` 在 GPUI 正常退出回调中先关闭 CRUD 入队并请求 refresh/script-test 停止，按“有界 refresh/script-test → 有界 CRUD → 已收到的 ledger 结果结算 → settings writer”顺序收尾；`Drop` 只作为遗漏路径的有界兜底。强制杀进程或断电不在该保证范围内
 
 ### `diagnostics_context.rs` — 诊断上下文收集
 
@@ -142,7 +145,7 @@
 - `newapi.rs` — `NewApiEffect`
 - `script_provider.rs` — `ScriptProviderEffect`
 
-各子模块只暴露 `run()` 或少量同领域 helper。NewAPI 与脚本 Provider 的 YAML / 脚本、编辑态加载、删除都统一放在 `providers::custom::api`，runtime 将 `CustomProviderLifecycleResult` 转成模型层失败语义并返回完成 action；纯状态回滚、通知选择、render 和 reload 声明位于 `application/reducer/newapi.rs` / `application/reducer/script_provider.rs`。脚本 Run Test 通过独立事件泵在后台线程执行，结果或排队失败再回到前台 reducer，避免阻塞设置窗口。
+各子模块只暴露 `run()` 或少量同领域 helper。`run()` 只做非阻塞入队；NewAPI 与脚本 Provider 的 YAML / 脚本、编辑态加载、删除和 settings flush 在串行 `custom-provider-io-worker` 执行，脚本 Run Test 在独立串行 `script-test-worker` 执行。两条结果泵都通过 `bootstrap::dispatch_in_app` 回到同一 reducer。底层文件 API 仍位于 `providers::custom::api`；纯状态回滚、通知选择、render 和 reload 声明位于 `application/reducer/newapi.rs` / `application/reducer/script_provider.rs`。
 
 ### `global_hotkey.rs` — 全局热键解析与重绑
 

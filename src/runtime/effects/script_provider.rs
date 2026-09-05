@@ -9,55 +9,75 @@ use crate::models::{
     ScriptProviderDeleteSuccess, ScriptProviderSaveSuccess, ScriptProviderTestResult,
 };
 use crate::providers::custom::api;
+use crate::runtime::settings_writer::DeferredSettingsFlush;
 use std::process::Command;
 use std::time::Duration;
 
 use super::super::AppState;
 
 pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: ScriptProviderEffect) -> Vec<AppAction> {
+    if let ScriptProviderEffect::TestProvider { request_id, config } = effect {
+        let job = crate::runtime::ScriptTestJob { request_id, config };
+        return match state.borrow().script_test_tx.try_send(job) {
+            Ok(()) => Vec::new(),
+            Err(err) => {
+                let detail = err.to_string();
+                vec![err.into_inner().queue_failure(detail)]
+            }
+        };
+    }
+
+    let settings = {
+        let state = state.borrow();
+        state
+            .settings_writer
+            .defer_flush(state.session.settings.clone())
+    };
+    let job = crate::runtime::CustomProviderJob::ScriptProvider { effect, settings };
+    match state.borrow().custom_provider_tx.try_send(job) {
+        Ok(()) => Vec::new(),
+        Err(err) => {
+            let detail = format!("failed to queue custom-provider work: {err}");
+            vec![err.into_inner().queue_failure(detail)]
+        }
+    }
+}
+
+pub(crate) fn execute(
+    effect: ScriptProviderEffect,
+    settings: DeferredSettingsFlush,
+    settings_writer: &crate::runtime::settings_writer::SettingsWriterHandle,
+) -> AppAction {
     match effect {
         ScriptProviderEffect::TestProvider { request_id, config } => {
-            test_provider(state, request_id, config)
+            AppAction::ScriptProviderTestFinished {
+                request_id,
+                result: execute_script_test(&config),
+            }
         }
         ScriptProviderEffect::SaveProvider {
-            config,
-            original_yaml_filename,
-            original_script_filename,
-            is_editing,
-        } => vec![save_provider(
-            state,
-            config,
-            original_yaml_filename,
-            original_script_filename,
-            is_editing,
-        )],
-        ScriptProviderEffect::DeleteProvider { provider_id } => vec![delete_provider(provider_id)],
-        ScriptProviderEffect::LoadConfig { provider_id } => vec![load_config(provider_id)],
-    }
-}
-
-fn test_provider(
-    state: &Rc<RefCell<AppState>>,
-    request_id: u64,
-    config: ScriptProviderConfig,
-) -> Vec<AppAction> {
-    let send_result = state.borrow().script_test_tx.try_send((request_id, config));
-    if let Err(err) = send_result {
-        return vec![AppAction::ScriptProviderTestFinished {
             request_id,
-            result: ScriptProviderTestResult {
-                success: false,
-                message: format!("failed to queue script test: {err}"),
-                stdout: String::new(),
-                stderr: String::new(),
-                preview: None,
-            },
-        }];
+            config,
+            original_yaml_filename,
+            original_script_filename,
+            is_editing,
+        } => save_provider(
+            settings_writer,
+            settings,
+            request_id,
+            config,
+            original_yaml_filename,
+            original_script_filename,
+            is_editing,
+        ),
+        ScriptProviderEffect::DeleteProvider {
+            request_id,
+            provider_id,
+        } => delete_provider(request_id, provider_id),
+        ScriptProviderEffect::LoadConfig { provider_id } => load_config(provider_id),
     }
-    Vec::new()
 }
 
-#[allow(dead_code)] // bin 启动线程通过 runtime::execute_script_provider_test 间接调用
 pub(crate) fn execute_script_test(config: &ScriptProviderConfig) -> ScriptProviderTestResult {
     match write_temp_script_and_run(config) {
         Ok(CommandTestOutput {
@@ -166,7 +186,9 @@ fn run_script_command(
 }
 
 fn save_provider(
-    state: &Rc<RefCell<AppState>>,
+    settings_writer: &crate::runtime::settings_writer::SettingsWriterHandle,
+    settings: DeferredSettingsFlush,
+    request_id: u64,
     config: ScriptProviderConfig,
     original_yaml_filename: Option<String>,
     original_script_filename: Option<String>,
@@ -186,8 +208,7 @@ fn save_provider(
                     yaml_path.display(),
                     script_path.display()
                 );
-                let s = state.borrow();
-                let settings_saved = s.settings_writer.flush(s.session.settings.clone());
+                let settings_saved = settings_writer.flush_deferred(settings);
                 Ok(ScriptProviderSaveSuccess {
                     yaml_path,
                     script_path,
@@ -201,6 +222,7 @@ fn save_provider(
         };
 
     AppAction::ScriptProviderSaveFinished {
+        request_id,
         config,
         yaml_filename,
         script_filename,
@@ -209,7 +231,7 @@ fn save_provider(
     }
 }
 
-fn delete_provider(provider_id: ProviderId) -> AppAction {
+fn delete_provider(request_id: u64, provider_id: ProviderId) -> AppAction {
     let result = match api::delete_script_provider_files(&provider_id) {
         Ok((yaml_path, script_result)) => match script_result {
             Ok(script_path) => {
@@ -244,6 +266,7 @@ fn delete_provider(provider_id: ProviderId) -> AppAction {
     };
 
     AppAction::ScriptProviderDeleteFinished {
+        request_id,
         provider_id,
         result,
     }

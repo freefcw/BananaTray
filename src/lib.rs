@@ -99,12 +99,14 @@ pub fn run_app() {
             // 2. 后台刷新系统
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
             let (script_test_tx, script_test_rx) = bootstrap::script_test_channel();
+            let (custom_provider_tx, custom_provider_rx) = bootstrap::custom_provider_channel();
 
             bootstrap::sync_initial_auto_launch(&settings);
 
             // 3. 组合共享运行时状态与窗口控制器
             let state = Rc::new(RefCell::new(runtime::AppState::new(
                 refresh_tx,
+                custom_provider_tx,
                 script_test_tx,
                 manager.clone(),
                 settings,
@@ -129,6 +131,7 @@ pub fn run_app() {
             #[cfg(not(target_os = "linux"))]
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
+            bootstrap::start_custom_provider_pump(&state, custom_provider_rx, cx);
 
             // 7. 初始刷新
             bootstrap::trigger_initial_refresh(&state);

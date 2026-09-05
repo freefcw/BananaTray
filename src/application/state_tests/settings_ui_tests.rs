@@ -14,6 +14,9 @@ fn settings_ui_default_values() {
         script_provider_test_request_id: 0,
         script_provider_pending_test_request_id: None,
         script_provider_test_result: None,
+        custom_provider_save_request_id: 0,
+        pending_custom_provider_save_request_id: None,
+        pending_custom_provider_delete: None,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     };
@@ -34,6 +37,7 @@ fn clear_script_provider_transient_state_preserves_unrelated_settings_ui_state()
     let selected_provider = pid(ProviderKind::Claude);
     let token_editing_provider = pid(ProviderKind::Copilot);
     let mut ui = SettingsUiState {
+        pending_custom_provider_delete: None,
         active_tab: SettingsTab::Providers,
         selected_provider: selected_provider.clone(),
         cadence_dropdown_open: true,
@@ -49,6 +53,8 @@ fn clear_script_provider_transient_state_preserves_unrelated_settings_ui_state()
             stderr: String::new(),
             preview: None,
         }),
+        custom_provider_save_request_id: 2,
+        pending_custom_provider_save_request_id: Some(2),
         global_hotkey_error: Some(GlobalHotkeyError::InvalidFormat),
         global_hotkey_error_candidate: Some("bad-hotkey".into()),
     };
@@ -86,6 +92,9 @@ fn global_hotkey_error_helpers_preserve_error_candidate_pair_invariant() {
         script_provider_test_request_id: 0,
         script_provider_pending_test_request_id: None,
         script_provider_test_result: None,
+        custom_provider_save_request_id: 0,
+        pending_custom_provider_save_request_id: None,
+        pending_custom_provider_delete: None,
         global_hotkey_error: None,
         global_hotkey_error_candidate: None,
     };

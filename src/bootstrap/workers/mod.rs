@@ -1,3 +1,4 @@
+pub(crate) mod custom_provider;
 pub(crate) mod refresh;
 pub(crate) mod script_test;
 

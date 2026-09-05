@@ -2,6 +2,7 @@ use crate::application::{reduce, AppAction, AppEffect, ContextEffect};
 use gpui::Context;
 
 mod app_state;
+mod background_job;
 mod diagnostics_context;
 mod effects;
 pub(crate) mod global_hotkey;
@@ -12,6 +13,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use app_state::AppState;
+pub(crate) use background_job::{
+    BackgroundJobReceiver, BackgroundJobSender, CustomProviderJob, CustomProviderResults,
+    PersistentJobReceiver, PersistentJobSender, ScriptTestJob,
+};
 pub(crate) use diagnostics_context::{
     collect_debug_diagnostics, collect_issue_report_context, debug_context_from_diagnostics,
     DebugDiagnostics,
@@ -21,11 +26,32 @@ pub(crate) use settings_writer::SettingsWriter;
 
 // runtime 是前台内核：只持有 reducer/effect 执行和上下文能力抽象。
 // 具体窗口、托盘、D-Bus 句柄与 App/Window 级 dispatch facade 由 bootstrap 组合。
-#[allow(dead_code)] // bin 启动线程调用；lib 目标自身不会触达 bootstrap.rs
+#[cfg(test)]
 pub(crate) fn execute_script_provider_test(
     config: &crate::models::ScriptProviderConfig,
 ) -> crate::models::ScriptProviderTestResult {
     effects::script_provider::execute_script_test(config)
+}
+
+pub(crate) fn execute_custom_provider_job(
+    job: CustomProviderJob,
+    settings_writer: &settings_writer::SettingsWriterHandle,
+) -> AppAction {
+    match job {
+        CustomProviderJob::NewApi { effect, settings } => {
+            effects::newapi::execute(effect, settings, settings_writer)
+        }
+        CustomProviderJob::ScriptProvider { effect, settings } => {
+            effects::script_provider::execute(effect, settings, settings_writer)
+        }
+    }
+}
+
+pub(crate) fn execute_script_test_job(job: ScriptTestJob) -> AppAction {
+    AppAction::ScriptProviderTestFinished {
+        request_id: job.request_id,
+        result: effects::script_provider::execute_script_test(&job.config),
+    }
 }
 
 pub fn dispatch_in_context<V: 'static>(

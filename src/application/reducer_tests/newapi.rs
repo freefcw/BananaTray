@@ -1,7 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session};
 use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, NewApiEffect, NotificationEffect, RefreshEffect,
-    SettingsEffect, SettingsModalState, SettingsTab,
+    SettingChange, SettingsEffect, SettingsModalState, SettingsTab,
 };
 use crate::models::{
     CustomProviderLifecycleFailure, NewApiConfig, NewApiEditData, NewApiSaveSuccess, ProviderId,
@@ -208,6 +208,7 @@ fn newapi_save_finished_success_notifies_and_reloads_providers() {
     let effects = reduce(
         &mut session,
         AppAction::NewApiSaveFinished {
+            request_id: 0,
             config: make_newapi_config(),
             filename: "newapi-relay.yaml".to_string(),
             original_id: None,
@@ -242,13 +243,25 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
         &config.base_url,
         config.user_id.as_deref(),
     ));
+    let provider_key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
+    session
+        .settings
+        .provider
+        .provider_order
+        .push(provider_key.clone());
+    session.settings.provider.hidden_quotas.insert(
+        provider_key.clone(),
+        ["Session".to_string()].into_iter().collect(),
+    );
     session.settings_ui.selected_provider = provider_id.clone();
+    let request_id = session.settings_ui.begin_custom_provider_save();
 
     let effects = reduce(
         &mut session,
         AppAction::NewApiSaveFinished {
+            request_id,
             config,
             filename: "newapi-relay.yaml".to_string(),
             original_id: None,
@@ -261,6 +274,16 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
     );
 
     assert!(!session.settings.provider.is_enabled(&provider_id));
+    assert!(!session
+        .settings
+        .provider
+        .provider_order
+        .contains(&provider_key));
+    assert!(!session
+        .settings
+        .provider
+        .hidden_quotas
+        .contains_key(&provider_key));
     assert!(session.settings_ui.modal.is_newapi_form());
     assert!(has_render(&effects));
     assert!(has_effect(&effects, |e| matches!(
@@ -273,16 +296,148 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
 }
 
 #[test]
+fn newapi_save_failure_persists_rollback_after_newer_settings_write_is_scheduled() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    let config = make_newapi_config();
+    let provider_id = ProviderId::Custom(crate::models::newapi_provider_id(
+        &config.base_url,
+        config.user_id.as_deref(),
+    ));
+
+    reduce(&mut session, AppAction::SubmitNewApi(config.clone()));
+    let request_id = session
+        .settings_ui
+        .pending_custom_provider_save_request_id
+        .expect("save request id");
+    assert!(session.settings.provider.is_enabled(&provider_id));
+
+    let newer_settings_effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowDashboardButton),
+    );
+    assert!(has_effect(&newer_settings_effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::NewApiSaveFinished {
+            request_id,
+            config,
+            filename: "newapi-relay.yaml".to_string(),
+            original_id: None,
+            is_editing: false,
+            result: Err(CustomProviderLifecycleFailure::file_operation(
+                "save NewAPI provider",
+                "disk full",
+            )),
+        },
+    );
+
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&provider_id.id_key()));
+    assert!(!session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&provider_id.id_key()));
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+}
+
+#[test]
+fn late_newapi_save_failure_preserves_the_users_new_form_context() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingNewApi;
+    let config = make_newapi_config();
+    let failed_id = ProviderId::Custom(crate::models::newapi_provider_id(
+        &config.base_url,
+        config.user_id.as_deref(),
+    ));
+    reduce(&mut session, AppAction::SubmitNewApi(config.clone()));
+    let request_id = session
+        .settings_ui
+        .pending_custom_provider_save_request_id
+        .expect("save request id");
+
+    let later_selected = ProviderId::BuiltIn(ProviderKind::Gemini);
+    reduce(
+        &mut session,
+        AppAction::SelectSettingsProvider(later_selected.clone()),
+    );
+    reduce(&mut session, AppAction::EnterAddScriptProvider);
+
+    reduce(
+        &mut session,
+        AppAction::NewApiSaveFinished {
+            request_id,
+            config,
+            filename: "newapi-relay.yaml".to_string(),
+            original_id: None,
+            is_editing: false,
+            result: Err(CustomProviderLifecycleFailure::file_operation(
+                "save NewAPI provider",
+                "disk full",
+            )),
+        },
+    );
+
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&failed_id.id_key()));
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::AddingScriptProvider
+    );
+    assert_eq!(session.settings_ui.selected_provider, later_selected);
+}
+
+#[test]
 fn newapi_delete_finished_success_reloads_providers() {
     let mut session = make_session();
+    session
+        .settings_ui
+        .begin_custom_provider_delete(ProviderId::Custom("relay:newapi".to_string()));
+    let provider_id = ProviderId::Custom("relay:newapi".to_string());
+    let key = provider_id.id_key();
+    session.settings.provider.set_enabled(&provider_id, true);
+    session.settings.provider.add_to_sidebar(&provider_id);
+    session.settings.provider.provider_order.push(key.clone());
+    session
+        .settings
+        .provider
+        .hidden_quotas
+        .insert(key.clone(), ["Daily".to_string()].into_iter().collect());
     let effects = reduce(
         &mut session,
         AppAction::NewApiDeleteFinished {
-            provider_id: ProviderId::Custom("relay:newapi".to_string()),
+            request_id: 1,
+            provider_id,
             result: Ok(std::path::PathBuf::from("newapi-relay.yaml")),
         },
     );
 
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&key));
+    assert!(!session.settings.provider.sidebar_providers.contains(&key));
+    assert!(!session.settings.provider.provider_order.contains(&key));
+    assert!(!session.settings.provider.hidden_quotas.contains_key(&key));
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
@@ -294,9 +449,13 @@ fn newapi_delete_finished_success_reloads_providers() {
 #[test]
 fn newapi_delete_finished_failure_notifies_without_reload() {
     let mut session = make_session();
+    session
+        .settings_ui
+        .begin_custom_provider_delete(ProviderId::Custom("missing:newapi".to_string()));
     let effects = reduce(
         &mut session,
         AppAction::NewApiDeleteFinished {
+            request_id: 1,
             provider_id: ProviderId::Custom("missing:newapi".to_string()),
             result: Err(CustomProviderLifecycleFailure::yaml_not_found(
                 "delete NewAPI provider",
@@ -324,10 +483,17 @@ fn newapi_delete_finished_failure_notifies_without_reload() {
 #[test]
 fn newapi_load_finished_failure_notifies_and_renders() {
     let mut session = make_session();
+    let provider_id = ProviderId::Custom("missing:newapi".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditNewApi {
+            provider_id: provider_id.clone(),
+        },
+    );
     let effects = reduce(
         &mut session,
         AppAction::NewApiLoadFinished {
-            provider_id: ProviderId::Custom("missing:newapi".to_string()),
+            provider_id,
             result: Err(CustomProviderLifecycleFailure::yaml_not_found(
                 "load NewAPI provider",
                 "missing:newapi",
@@ -349,6 +515,13 @@ fn newapi_load_finished_failure_notifies_and_renders() {
 #[test]
 fn newapi_load_finished_success_sets_edit_modal() {
     let mut session = make_session();
+    let provider_id = ProviderId::Custom("relay:newapi".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditNewApi {
+            provider_id: provider_id.clone(),
+        },
+    );
     let edit_data = NewApiEditData {
         display_name: "Relay".to_string(),
         base_url: "https://relay.example.com".to_string(),
@@ -362,7 +535,7 @@ fn newapi_load_finished_success_sets_edit_modal() {
     let effects = reduce(
         &mut session,
         AppAction::NewApiLoadFinished {
-            provider_id: ProviderId::Custom("relay:newapi".to_string()),
+            provider_id,
             result: Ok(edit_data.clone()),
         },
     );
@@ -372,6 +545,41 @@ fn newapi_load_finished_success_sets_edit_modal() {
         SettingsModalState::EditingNewApi(edit_data)
     );
     assert!(has_render(&effects));
+}
+
+#[test]
+fn late_newapi_load_does_not_replace_a_newer_modal() {
+    let mut session = make_session();
+    let provider_id = ProviderId::Custom("relay:newapi".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditNewApi {
+            provider_id: provider_id.clone(),
+        },
+    );
+    reduce(&mut session, AppAction::EnterAddProvider);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::NewApiLoadFinished {
+            provider_id,
+            result: Ok(NewApiEditData {
+                display_name: "Relay".to_string(),
+                base_url: "https://relay.example.com".to_string(),
+                cookie: "c=1".to_string(),
+                user_id: None,
+                divisor: None,
+                original_filename: "newapi-relay.yaml".to_string(),
+                original_id: "relay-example-com:newapi".to_string(),
+            }),
+        },
+    );
+
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::AddingProvider
+    );
+    assert!(effects.is_empty(), "stale completion should be ignored");
 }
 
 #[test]
@@ -708,7 +916,7 @@ fn submit_newapi_in_edit_mode_uses_original_filename() {
     // Effect: 使用原始文件名 + 原始身份 + 编辑模式标志
     // （user_id 从 None 改为 Some("99")，身份仍保持 original_id 不变）
     assert!(has_effect(&effects, |e| {
-        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, original_id, is_editing }))
+        matches!(e, AppEffect::Common(CommonEffect::NewApi(NewApiEffect::SaveProvider { config, original_filename, original_id, is_editing, .. }))
             if *original_filename == Some("original-file.yaml".to_string())
             && *original_id == Some("old-site-com:newapi".to_string())
             && config.display_name == "Updated Name"
@@ -827,7 +1035,7 @@ fn delete_newapi_produces_delete_effect_with_correct_provider_id() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id }))
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id, .. }))
             if *provider_id == id
     )));
     assert!(!session.settings_ui.modal.is_confirming_delete_newapi());
@@ -850,7 +1058,7 @@ fn delete_newapi_emits_effect_for_any_provider_id() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id }))
+        AppEffect::Common(CommonEffect::NewApi(NewApiEffect::DeleteProvider { provider_id, .. }))
             if *provider_id == id
     )));
 }

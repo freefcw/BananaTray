@@ -1,7 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_provider_status, make_session};
 use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, NotificationEffect, RefreshEffect,
-    ScriptProviderEffect, SettingsModalState,
+    ScriptProviderEffect, SettingChange, SettingsEffect, SettingsModalState,
 };
 use crate::models::{
     CustomProviderLifecycleFailure, ProviderId, ScriptProviderConfig, ScriptProviderDeleteSuccess,
@@ -179,6 +179,7 @@ fn script_provider_save_finished_success_notifies_and_reloads_providers() {
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderSaveFinished {
+            request_id: 0,
             config: make_script_config(),
             yaml_filename: "script-ccswitch.yaml".to_string(),
             script_filename: "script-ccswitch.py".to_string(),
@@ -211,13 +212,25 @@ fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
     let mut session = make_session();
     let config = make_script_config();
     let provider_id = ProviderId::Custom(config.provider_id.clone());
+    let provider_key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
+    session
+        .settings
+        .provider
+        .provider_order
+        .push(provider_key.clone());
+    session.settings.provider.hidden_quotas.insert(
+        provider_key.clone(),
+        ["Session".to_string()].into_iter().collect(),
+    );
     session.settings_ui.selected_provider = provider_id.clone();
+    let request_id = session.settings_ui.begin_custom_provider_save();
 
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderSaveFinished {
+            request_id,
             config,
             yaml_filename: "script-ccswitch.yaml".to_string(),
             script_filename: "script-ccswitch.py".to_string(),
@@ -230,6 +243,16 @@ fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
     );
 
     assert!(!session.settings.provider.is_enabled(&provider_id));
+    assert!(!session
+        .settings
+        .provider
+        .provider_order
+        .contains(&provider_key));
+    assert!(!session
+        .settings
+        .provider
+        .hidden_quotas
+        .contains_key(&provider_key));
     assert!(session.settings_ui.modal.is_script_provider_form());
     assert!(has_render(&effects));
     assert!(has_effect(&effects, |e| matches!(
@@ -242,12 +265,129 @@ fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
 }
 
 #[test]
+fn script_provider_save_failure_persists_rollback_after_newer_settings_write_is_scheduled() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
+    let config = make_script_config();
+
+    reduce(
+        &mut session,
+        AppAction::SubmitScriptProvider(config.clone()),
+    );
+    let request_id = session
+        .settings_ui
+        .pending_custom_provider_save_request_id
+        .expect("save request id");
+    let provider_id = session.settings_ui.selected_provider.clone();
+    assert!(session.settings.provider.is_enabled(&provider_id));
+
+    let newer_settings_effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleShowDashboardButton),
+    );
+    assert!(has_effect(&newer_settings_effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderSaveFinished {
+            request_id,
+            config,
+            yaml_filename: "script-ccswitch.yaml".to_string(),
+            script_filename: "script-ccswitch.py".to_string(),
+            is_editing: false,
+            result: Err(CustomProviderLifecycleFailure::file_operation(
+                "save script provider",
+                "permission denied",
+            )),
+        },
+    );
+
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&provider_id.id_key()));
+    assert!(!session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&provider_id.id_key()));
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+}
+
+#[test]
+fn late_script_save_failure_preserves_the_users_new_form_context() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
+    let config = make_script_config();
+    reduce(
+        &mut session,
+        AppAction::SubmitScriptProvider(config.clone()),
+    );
+    let request_id = session
+        .settings_ui
+        .pending_custom_provider_save_request_id
+        .expect("save request id");
+    let failed_id = session.settings_ui.selected_provider.clone();
+
+    let later_selected = ProviderId::BuiltIn(crate::models::ProviderKind::Gemini);
+    reduce(
+        &mut session,
+        AppAction::SelectSettingsProvider(later_selected.clone()),
+    );
+    reduce(&mut session, AppAction::EnterAddNewApi);
+
+    reduce(
+        &mut session,
+        AppAction::ScriptProviderSaveFinished {
+            request_id,
+            config,
+            yaml_filename: "script-ccswitch.yaml".to_string(),
+            script_filename: "script-ccswitch.py".to_string(),
+            is_editing: false,
+            result: Err(CustomProviderLifecycleFailure::file_operation(
+                "save script provider",
+                "permission denied",
+            )),
+        },
+    );
+
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&failed_id.id_key()));
+    assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
+    assert_eq!(session.settings_ui.selected_provider, later_selected);
+}
+
+#[test]
 fn script_provider_delete_finished_deleted_all_reloads_providers() {
     let mut session = make_session();
+    session
+        .settings_ui
+        .begin_custom_provider_delete(ProviderId::Custom("ccswitch:script".to_string()));
+    let provider_id = ProviderId::Custom("ccswitch:script".to_string());
+    let key = provider_id.id_key();
+    session.settings.provider.set_enabled(&provider_id, true);
+    session.settings.provider.add_to_sidebar(&provider_id);
+    session.settings.provider.provider_order.push(key.clone());
+    session
+        .settings
+        .provider
+        .hidden_quotas
+        .insert(key.clone(), ["Daily".to_string()].into_iter().collect());
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderDeleteFinished {
-            provider_id: ProviderId::Custom("ccswitch:script".to_string()),
+            request_id: 1,
+            provider_id,
             result: Ok(ScriptProviderDeleteSuccess::DeletedAll {
                 yaml_path: std::path::PathBuf::from("script-ccswitch.yaml"),
                 script_path: std::path::PathBuf::from("script-ccswitch.py"),
@@ -255,6 +395,18 @@ fn script_provider_delete_finished_deleted_all_reloads_providers() {
         },
     );
 
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&key));
+    assert!(!session.settings.provider.sidebar_providers.contains(&key));
+    assert!(!session.settings.provider.provider_order.contains(&key));
+    assert!(!session.settings.provider.hidden_quotas.contains_key(&key));
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
@@ -266,10 +418,17 @@ fn script_provider_delete_finished_deleted_all_reloads_providers() {
 #[test]
 fn script_provider_delete_finished_partial_notifies_and_reloads() {
     let mut session = make_session();
+    session
+        .settings_ui
+        .begin_custom_provider_delete(ProviderId::Custom("ccswitch:script".to_string()));
+    let provider_id = ProviderId::Custom("ccswitch:script".to_string());
+    session.settings.provider.set_enabled(&provider_id, true);
+    session.settings.provider.add_to_sidebar(&provider_id);
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderDeleteFinished {
-            provider_id: ProviderId::Custom("ccswitch:script".to_string()),
+            request_id: 1,
+            provider_id: provider_id.clone(),
             result: Ok(ScriptProviderDeleteSuccess::DeletedYamlOnly {
                 yaml_path: std::path::PathBuf::from("script-ccswitch.yaml"),
                 script_failure: CustomProviderLifecycleFailure::file_operation(
@@ -280,6 +439,20 @@ fn script_provider_delete_finished_partial_notifies_and_reloads() {
         },
     );
 
+    assert!(!session
+        .settings
+        .provider
+        .enabled_providers
+        .contains_key(&provider_id.id_key()));
+    assert!(!session
+        .settings
+        .provider
+        .sidebar_providers
+        .contains(&provider_id.id_key()));
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
     assert!(has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Notification(NotificationEffect::PlainI18n {
@@ -298,9 +471,13 @@ fn script_provider_delete_finished_partial_notifies_and_reloads() {
 #[test]
 fn script_provider_delete_finished_failure_notifies_without_reload() {
     let mut session = make_session();
+    session
+        .settings_ui
+        .begin_custom_provider_delete(ProviderId::Custom("missing:script".to_string()));
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderDeleteFinished {
+            request_id: 1,
             provider_id: ProviderId::Custom("missing:script".to_string()),
             result: Err(CustomProviderLifecycleFailure::yaml_not_found(
                 "delete script provider",
@@ -328,6 +505,13 @@ fn script_provider_delete_finished_failure_notifies_without_reload() {
 #[test]
 fn script_provider_load_finished_success_sets_edit_modal_and_clears_test_result() {
     let mut session = make_session();
+    let provider_id = ProviderId::Custom("script:script".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditScriptProvider {
+            provider_id: provider_id.clone(),
+        },
+    );
     session.settings_ui.script_provider_test_result = Some(ScriptProviderTestResult {
         success: false,
         message: "old".to_string(),
@@ -348,7 +532,7 @@ fn script_provider_load_finished_success_sets_edit_modal_and_clears_test_result(
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderLoadFinished {
-            provider_id: ProviderId::Custom("script:script".to_string()),
+            provider_id,
             result: Ok(edit_data.clone()),
         },
     );
@@ -362,12 +546,54 @@ fn script_provider_load_finished_success_sets_edit_modal_and_clears_test_result(
 }
 
 #[test]
-fn script_provider_load_finished_failure_notifies_and_renders() {
+fn late_script_provider_load_does_not_replace_a_newer_modal() {
     let mut session = make_session();
+    let provider_id = ProviderId::Custom("script:script".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditScriptProvider {
+            provider_id: provider_id.clone(),
+        },
+    );
+    reduce(&mut session, AppAction::EnterAddProvider);
+
     let effects = reduce(
         &mut session,
         AppAction::ScriptProviderLoadFinished {
-            provider_id: ProviderId::Custom("missing:script".to_string()),
+            provider_id,
+            result: Ok(ScriptProviderEditData {
+                display_name: "Script".to_string(),
+                provider_id: "script:script".to_string(),
+                interpreter: "python3".to_string(),
+                timeout_ms: 20_000,
+                script: "print(1)".to_string(),
+                original_yaml_filename: "script.yaml".to_string(),
+                original_script_filename: "script.py".to_string(),
+            }),
+        },
+    );
+
+    assert_eq!(
+        session.settings_ui.modal,
+        SettingsModalState::AddingProvider
+    );
+    assert!(effects.is_empty(), "stale completion should be ignored");
+}
+
+#[test]
+fn script_provider_load_finished_failure_notifies_and_renders() {
+    let mut session = make_session();
+    let provider_id = ProviderId::Custom("missing:script".to_string());
+    reduce(
+        &mut session,
+        AppAction::EditScriptProvider {
+            provider_id: provider_id.clone(),
+        },
+    );
+    let effects = reduce(
+        &mut session,
+        AppAction::ScriptProviderLoadFinished {
+            provider_id,
             result: Err(CustomProviderLifecycleFailure::yaml_not_found(
                 "load script provider",
                 "missing:script",
@@ -544,7 +770,7 @@ fn delete_script_provider_produces_delete_effect() {
 
     assert!(has_effect(&effects, |e| matches!(
         e,
-        AppEffect::Common(CommonEffect::ScriptProvider(ScriptProviderEffect::DeleteProvider { provider_id }))
+        AppEffect::Common(CommonEffect::ScriptProvider(ScriptProviderEffect::DeleteProvider { provider_id, .. }))
             if *provider_id == id
     )));
     assert!(session.settings_ui.token_editing_provider.is_none());

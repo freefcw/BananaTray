@@ -1,10 +1,21 @@
-use crate::application::{newapi_ops, AppEffect, ContextEffect, NewApiEffect, RefreshEffect};
+use crate::application::{
+    newapi_ops, AppEffect, ContextEffect, NewApiEffect, RefreshEffect, SettingsEffect,
+};
 use crate::models::{
     CustomProviderLifecycleFailure, NewApiConfig, NewApiEditData, NewApiSaveSuccess, ProviderId,
 };
 use crate::refresh::RefreshRequest;
 
 use super::super::state::{AppSession, SettingsModalState};
+
+pub(super) struct NewApiSaveCompletion {
+    pub(super) request_id: u64,
+    pub(super) config: NewApiConfig,
+    pub(super) filename: String,
+    pub(super) original_id: Option<String>,
+    pub(super) is_editing: bool,
+    pub(super) result: Result<NewApiSaveSuccess, CustomProviderLifecycleFailure>,
+}
 
 pub(super) fn enter_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填 / 脚本表单）
@@ -67,8 +78,10 @@ pub(super) fn submit_newapi(
     session.settings.provider.add_to_sidebar(&new_id);
     session.settings_ui.selected_provider = new_id;
 
+    let request_id = session.settings_ui.begin_custom_provider_save();
     effects.push(
         NewApiEffect::SaveProvider {
+            request_id,
             config,
             original_filename,
             original_id,
@@ -96,13 +109,18 @@ fn newapi_identity_occupied(session: &AppSession, id: &ProviderId) -> bool {
 
 pub(super) fn newapi_save_finished(
     session: &mut AppSession,
-    config: NewApiConfig,
-    filename: String,
-    original_id: Option<String>,
-    is_editing: bool,
-    result: Result<NewApiSaveSuccess, CustomProviderLifecycleFailure>,
+    completion: NewApiSaveCompletion,
     effects: &mut Vec<AppEffect>,
 ) {
+    let NewApiSaveCompletion {
+        request_id,
+        config,
+        filename,
+        original_id,
+        is_editing,
+        result,
+    } = completion;
+    let restore_submission_ui = session.settings_ui.settle_custom_provider_save(request_id);
     match result {
         Ok(success) => {
             let (title_key, body_key) =
@@ -111,15 +129,19 @@ pub(super) fn newapi_save_finished(
             effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
         }
         Err(_failure) => {
-            if is_editing {
+            if is_editing && restore_submission_ui {
                 newapi_ops::rollback_newapi_edit(
                     session,
                     &config,
                     &filename,
                     original_id.as_deref(),
                 );
-            } else {
-                newapi_ops::rollback_newapi_create(session, &config);
+            } else if !is_editing {
+                newapi_ops::rollback_newapi_create_registration(session, &config);
+                if restore_submission_ui {
+                    newapi_ops::restore_newapi_create_form(session);
+                }
+                effects.push(SettingsEffect::PersistSettings.into());
             }
             let (title_key, body_key) = newapi_ops::newapi_save_failed_notification_keys();
             super::shared::notify_plain_i18n(effects, title_key, body_key);
@@ -130,15 +152,22 @@ pub(super) fn newapi_save_finished(
 
 pub(super) fn newapi_load_finished(
     session: &mut AppSession,
-    _provider_id: ProviderId,
+    provider_id: ProviderId,
     result: Result<NewApiEditData, CustomProviderLifecycleFailure>,
     effects: &mut Vec<AppEffect>,
 ) {
+    if !matches!(
+        &session.settings_ui.modal,
+        SettingsModalState::LoadingNewApi(expected) if expected == &provider_id
+    ) {
+        return;
+    }
     match result {
         Ok(edit_data) => {
             session.settings_ui.modal = SettingsModalState::EditingNewApi(edit_data);
         }
         Err(_failure) => {
+            session.settings_ui.modal = SettingsModalState::Idle;
             let (title_key, body_key) = newapi_ops::newapi_load_failed_notification_keys();
             super::shared::notify_plain_i18n(effects, title_key, body_key);
         }
@@ -147,13 +176,21 @@ pub(super) fn newapi_load_finished(
 }
 
 pub(super) fn newapi_delete_finished(
-    _session: &mut AppSession,
-    _provider_id: ProviderId,
+    session: &mut AppSession,
+    request_id: u64,
+    provider_id: ProviderId,
     result: Result<std::path::PathBuf, CustomProviderLifecycleFailure>,
     effects: &mut Vec<AppEffect>,
 ) {
+    if !session
+        .settings_ui
+        .settle_custom_provider_delete(request_id, &provider_id)
+    {
+        return;
+    }
     match result {
         Ok(_path) => {
+            super::shared::commit_deleted_provider(session, &provider_id, effects);
             effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into())
         }
         Err(_failure) => {
@@ -174,6 +211,7 @@ pub(super) fn edit_newapi(
     // 磁盘 I/O 委托给 runtime effect handler，保持 reducer 纯函数
     // 切到 NewAPI 编辑面板时，token 编辑上下文需要结束。
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.modal = SettingsModalState::LoadingNewApi(provider_id.clone());
     effects.push(NewApiEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
 }
@@ -187,9 +225,18 @@ pub(super) fn delete_newapi(
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
+    let request_id = session
+        .settings_ui
+        .begin_custom_provider_delete(provider_id.clone());
     // 先刷新 UI 关闭确认态，避免等待文件删除 / 热重载结果才消失。
     effects.push(ContextEffect::Render.into());
-    effects.push(NewApiEffect::DeleteProvider { provider_id }.into());
+    effects.push(
+        NewApiEffect::DeleteProvider {
+            request_id,
+            provider_id,
+        }
+        .into(),
+    );
 }
 
 pub(super) fn confirm_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {

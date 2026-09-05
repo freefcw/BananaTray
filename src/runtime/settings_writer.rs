@@ -8,9 +8,9 @@
 
 use crate::models::AppSettings;
 use crate::settings_store;
+use crate::utils::BoundedThreadOwner;
 use log::{debug, warn};
-use std::sync::mpsc;
-use std::thread::JoinHandle;
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 /// 默认 debounce 窗口
@@ -22,6 +22,8 @@ enum WriteCmd {
     Schedule(AppSettings),
     /// 同步写入：立即落盘，通过 reply channel 返回成功/失败
     Flush(AppSettings, mpsc::Sender<bool>),
+    /// 完成当前 pending snapshot 的最终写入后退出。
+    Shutdown,
 }
 
 /// 设置文件写入器句柄
@@ -30,7 +32,46 @@ enum WriteCmd {
 /// 保证不会出现旧快照覆盖新快照的乱序问题。
 pub(crate) struct SettingsWriter {
     tx: Option<mpsc::Sender<WriteCmd>>,
-    worker: Option<JoinHandle<()>>,
+    snapshots: Arc<Mutex<SnapshotState>>,
+    worker: Option<BoundedThreadOwner>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DeferredSettingsFlush {
+    revision: u64,
+    settings: AppSettings,
+}
+
+#[derive(Default)]
+struct SnapshotState {
+    next_revision: u64,
+    latest_committed: Option<DeferredSettingsFlush>,
+}
+
+#[derive(Clone)]
+pub(crate) struct SettingsWriterHandle {
+    tx: mpsc::Sender<WriteCmd>,
+    snapshots: Arc<Mutex<SnapshotState>>,
+}
+
+impl SettingsWriterHandle {
+    pub(crate) fn flush_deferred(&self, deferred: DeferredSettingsFlush) -> bool {
+        let reply_rx = {
+            let mut snapshots = self
+                .snapshots
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let settings = match &snapshots.latest_committed {
+                Some(latest) if latest.revision > deferred.revision => latest.settings.clone(),
+                _ => {
+                    snapshots.latest_committed = Some(deferred.clone());
+                    deferred.settings
+                }
+            };
+            send_flush(&self.tx, settings)
+        };
+        await_flush(reply_rx)
+    }
 }
 
 impl SettingsWriter {
@@ -39,19 +80,27 @@ impl SettingsWriter {
         Self::spawn_internal(DEFAULT_DEBOUNCE, Box::new(settings_store::persist))
     }
 
+    #[cfg(test)]
+    pub(crate) fn spawn_for_test(
+        persist_fn: impl Fn(&AppSettings) -> bool + Send + 'static,
+    ) -> Self {
+        Self::spawn_internal(Duration::from_secs(60), Box::new(persist_fn))
+    }
+
     fn spawn_internal(
         debounce: Duration,
         persist_fn: Box<dyn Fn(&AppSettings) -> bool + Send>,
     ) -> Self {
         let (tx, rx) = mpsc::channel::<WriteCmd>();
 
-        let worker = std::thread::Builder::new()
-            .name("settings-writer".into())
-            .spawn(move || run_loop(rx, debounce, &*persist_fn))
-            .expect("failed to spawn settings-writer thread");
+        let worker = BoundedThreadOwner::spawn("settings-writer", move || {
+            run_loop(rx, debounce, &*persist_fn)
+        })
+        .expect("failed to spawn settings-writer thread");
 
         Self {
             tx: Some(tx),
+            snapshots: Arc::new(Mutex::new(SnapshotState::default())),
             worker: Some(worker),
         }
     }
@@ -63,35 +112,85 @@ impl SettingsWriter {
             warn!(target: "settings", "settings-writer already shut down, schedule ignored");
             return;
         };
-        if let Err(e) = tx.send(WriteCmd::Schedule(settings)) {
+        let mut snapshots = self
+            .snapshots
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let snapshot = snapshots.commit(settings);
+        if let Err(e) = tx.send(WriteCmd::Schedule(snapshot.settings)) {
             warn!(target: "settings", "settings-writer channel closed: {e}");
         }
+    }
+
+    /// 创建一份尚未承诺持久化的快照，供后台文件任务成功后提交。
+    ///
+    /// 后台任务完成前若已有更新设置被 `schedule` / `flush` 提交，迟到的
+    /// deferred flush 会改为写入较新的已提交快照，避免旧状态覆盖新状态。
+    pub(crate) fn defer_flush(&self, settings: AppSettings) -> DeferredSettingsFlush {
+        self.snapshots
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .reserve(settings)
     }
 
     /// 同步写入：立即落盘并返回结果。
     /// 后台线程会先丢弃未落盘的 debounce 快照，确保此次写入是最终状态。
     pub fn flush(&self, settings: AppSettings) -> bool {
-        let (reply_tx, reply_rx) = mpsc::channel();
         let Some(tx) = &self.tx else {
             warn!(target: "settings", "settings-writer already shut down, flush failed");
             return false;
         };
-        if tx.send(WriteCmd::Flush(settings, reply_tx)).is_err() {
-            warn!(target: "settings", "settings-writer channel closed, flush failed");
-            return false;
-        }
-        reply_rx.recv().unwrap_or(false)
+        let reply_rx = {
+            let mut snapshots = self
+                .snapshots
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let snapshot = snapshots.commit(settings);
+            send_flush(tx, snapshot.settings)
+        };
+        await_flush(reply_rx)
+    }
+
+    pub(crate) fn handle(&self) -> Option<SettingsWriterHandle> {
+        self.tx.as_ref().cloned().map(|tx| SettingsWriterHandle {
+            tx,
+            snapshots: self.snapshots.clone(),
+        })
     }
 
     /// 关闭发送端并等待后台线程完成最终写入。
     pub fn shutdown_and_join(&mut self) {
-        self.tx = None;
-        let Some(worker) = self.worker.take() else {
+        self.request_shutdown();
+        let Some(worker) = self.worker.as_mut() else {
             return;
         };
-        if worker.join().is_err() {
-            warn!(target: "settings", "settings-writer thread panicked during shutdown");
+        let _ = worker.join();
+        self.worker = None;
+    }
+
+    pub(crate) fn request_shutdown(&mut self) {
+        let Some(tx) = self.tx.take() else {
+            return;
+        };
+        if tx.send(WriteCmd::Shutdown).is_err() {
+            warn!(target: "settings", "settings-writer channel closed before shutdown request");
         }
+    }
+
+    pub(crate) fn join_before(&mut self, deadline: std::time::Instant) -> bool {
+        let Some(worker) = self.worker.as_mut() else {
+            return true;
+        };
+        let stopped = worker.shutdown_before(deadline);
+        if stopped {
+            self.worker = None;
+        }
+        stopped
+    }
+
+    pub(crate) fn shutdown_before(&mut self, deadline: std::time::Instant) -> bool {
+        self.request_shutdown();
+        self.join_before(deadline)
     }
 
     #[cfg(test)]
@@ -100,9 +199,41 @@ impl SettingsWriter {
     }
 }
 
+impl SnapshotState {
+    fn reserve(&mut self, settings: AppSettings) -> DeferredSettingsFlush {
+        self.next_revision = self
+            .next_revision
+            .checked_add(1)
+            .expect("settings snapshot revision exhausted");
+        DeferredSettingsFlush {
+            revision: self.next_revision,
+            settings,
+        }
+    }
+
+    fn commit(&mut self, settings: AppSettings) -> DeferredSettingsFlush {
+        let snapshot = self.reserve(settings);
+        self.latest_committed = Some(snapshot.clone());
+        snapshot
+    }
+}
+
+fn send_flush(tx: &mpsc::Sender<WriteCmd>, settings: AppSettings) -> Option<mpsc::Receiver<bool>> {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    if tx.send(WriteCmd::Flush(settings, reply_tx)).is_err() {
+        warn!(target: "settings", "settings-writer channel closed, flush failed");
+        return None;
+    }
+    Some(reply_rx)
+}
+
+fn await_flush(reply_rx: Option<mpsc::Receiver<bool>>) -> bool {
+    reply_rx.and_then(|rx| rx.recv().ok()).unwrap_or(false)
+}
+
 impl Drop for SettingsWriter {
     fn drop(&mut self) {
-        self.shutdown_and_join();
+        self.shutdown_before(std::time::Instant::now() + Duration::from_millis(80));
     }
 }
 
@@ -123,6 +254,10 @@ fn run_loop(
         };
 
         match cmd {
+            WriteCmd::Shutdown => {
+                debug!(target: "settings", "settings-writer shutdown requested");
+                return;
+            }
             WriteCmd::Flush(settings, reply) => {
                 let ok = persist_fn(&settings);
                 let _ = reply.send(ok);
@@ -141,6 +276,11 @@ fn run_loop(
                             let ok = persist_fn(&settings);
                             let _ = reply.send(ok);
                             break;
+                        }
+                        Ok(WriteCmd::Shutdown) => {
+                            persist_fn(&latest);
+                            debug!(target: "settings", "settings-writer: final flush before exit");
+                            return;
                         }
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             // 窗口期结束，写盘
@@ -281,6 +421,22 @@ mod tests {
     }
 
     #[test]
+    fn deferred_flush_does_not_overwrite_newer_scheduled_settings() {
+        let (writer, records) = test_writer(2000);
+        let deferred = writer.defer_flush(make_settings(1));
+        let handle = writer.handle().expect("writer handle");
+
+        writer.schedule(make_settings(2));
+        assert!(handle.flush_deferred(deferred));
+
+        assert_eq!(
+            *records.lock().unwrap(),
+            vec![2],
+            "a late background completion must persist the newest committed settings"
+        );
+    }
+
+    #[test]
     fn drop_waits_for_final_flush() {
         let (writer, records) = test_writer(5000); // 很长的 debounce
 
@@ -301,6 +457,21 @@ mod tests {
 
         let r = records.lock().unwrap();
         assert_eq!(*r, vec![88], "shutdown should wait for final flush");
+    }
+
+    #[test]
+    fn shutdown_signal_stops_writer_while_flush_handle_is_still_alive() {
+        let (mut writer, records) = test_writer(5000);
+        let _flush_handle = writer.handle().expect("writer handle");
+        writer.schedule(make_settings(91));
+
+        let stopped = writer.shutdown_before(Instant::now() + Duration::from_millis(200));
+
+        assert!(
+            stopped,
+            "an external flush handle must not keep shutdown open"
+        );
+        assert_eq!(*records.lock().unwrap(), vec![91]);
     }
 
     #[test]

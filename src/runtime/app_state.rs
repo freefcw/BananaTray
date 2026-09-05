@@ -1,12 +1,15 @@
 use crate::application::AppSession;
-use crate::models::{AppSettings, ScriptProviderConfig};
+use crate::models::AppSettings;
 use crate::providers::ProviderManagerHandle;
 use crate::refresh::{RefreshRequest, RefreshWorker};
 use log::debug;
-use smol::channel::Sender;
 use std::path::PathBuf;
 
 use super::SettingsWriter;
+use super::{
+    BackgroundJobSender, CustomProviderJob, CustomProviderResults, PersistentJobSender,
+    ScriptTestJob,
+};
 
 // ============================================================================
 // 外部持久状态 (不随窗口销毁) — 纯组合容器
@@ -18,8 +21,12 @@ pub struct AppState {
     pub manager: ProviderManagerHandle,
     /// 向 RefreshCoordinator 发送请求的通道
     refresh_worker: RefreshWorker,
-    /// 向前台事件泵发送脚本测试请求。
-    pub(crate) script_test_tx: Sender<(u64, ScriptProviderConfig)>,
+    /// 向专用阻塞线程发送 NewAPI / Script Provider CRUD 文件 I/O。
+    pub(crate) custom_provider_tx: PersistentJobSender<CustomProviderJob>,
+    /// worker 已完成但前台 reducer 尚未结算的持久事务结果。
+    pub(crate) custom_provider_results: CustomProviderResults,
+    /// 向独立阻塞线程发送脚本 Run Test，避免长 timeout 阻塞 CRUD。
+    pub(crate) script_test_tx: BackgroundJobSender<ScriptTestJob>,
     /// 设置文件 debounce 写入器（所有持久化统一通过此句柄串行化）
     pub(crate) settings_writer: SettingsWriter,
     /// 日志文件路径（Debug Tab 展示用）
@@ -33,7 +40,8 @@ pub struct AppState {
 impl AppState {
     pub(crate) fn new(
         refresh_worker: RefreshWorker,
-        script_test_tx: Sender<(u64, ScriptProviderConfig)>,
+        custom_provider_tx: PersistentJobSender<CustomProviderJob>,
+        script_test_tx: BackgroundJobSender<ScriptTestJob>,
         manager: ProviderManagerHandle,
         settings: AppSettings,
         log_path: Option<PathBuf>,
@@ -51,6 +59,8 @@ impl AppState {
             session,
             manager,
             refresh_worker,
+            custom_provider_tx,
+            custom_provider_results: CustomProviderResults::default(),
             script_test_tx,
             settings_writer: SettingsWriter::spawn(),
             log_path,
@@ -77,10 +87,40 @@ impl AppState {
         self.settings_writer.shutdown_and_join();
     }
 
-    /// 在退出截止时间内回收刷新线程，随后完成设置最终写入。
+    #[cfg(test)]
+    pub(crate) fn shutdown_background_workers_before(
+        &mut self,
+        deadline: std::time::Instant,
+    ) -> bool {
+        self.custom_provider_tx.close();
+        self.script_test_tx.request_shutdown();
+        self.custom_provider_tx.join_before(deadline) & self.script_test_tx.join_before(deadline)
+    }
+
+    /// 先有界等待后台工作，再结算已收到的事务结果，最后完成 settings 快照落盘。
+    ///
+    /// refresh / script-test / custom-provider worker 共享退出 deadline；CRUD 超时 detach
+    /// 不保证未完成事务结算，settings writer 随后持久化已结算的领域状态。
     pub(crate) fn shutdown_before(&mut self, deadline: std::time::Instant) {
         self.refresh_worker.request_shutdown();
+        self.custom_provider_tx.close();
+        self.script_test_tx.request_shutdown();
+
         let _ = self.refresh_worker.join_before(deadline);
+        let _ = self.script_test_tx.join_before(deadline);
+        let custom_provider_stopped = self.custom_provider_tx.join_before(deadline);
+        if !custom_provider_stopped {
+            log::warn!(
+                target: "settings",
+                "custom-provider I/O did not stop before quit deadline; pending transaction detached"
+            );
+        }
+        for action in self.custom_provider_results.drain() {
+            // 退出阶段只结算领域状态；通知、render、reload 等非持久 effect 无需执行。
+            let _ = crate::application::reduce(&mut self.session, action);
+        }
+        // 将所有事务完成动作归并后的权威状态作为 writer 的最后一份快照。
+        self.settings_writer.schedule(self.session.settings.clone());
         self.settings_writer.shutdown_and_join();
     }
 

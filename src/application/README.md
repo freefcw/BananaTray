@@ -33,7 +33,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`AppAction`** — 所有用户交互和系统事件的枚举（导航、设置变更、Provider 操作、调试等）
   - `SubmitNewApi(NewApiConfig)` 以领域配置对象承载完整表单提交；新增 NewAPI 字段只需扩展 `NewApiConfig`，不再同步修改 action 字段列表
   - `SaveGlobalHotkey(String)` 将 General Tab 捕获到的候选热键提交给 runtime 做预检、重绑和持久化
-  - `*Finished` action（如 `NewApiSaveFinished` / `ScriptProviderDeleteFinished`）承接 runtime I/O 结果，reducer 统一决定状态回滚、通知、render 和 reload
+  - `*Finished` action（如 `NewApiSaveFinished` / `ScriptProviderDeleteFinished`）承接 runtime I/O 结果，reducer 统一决定状态回滚、通知、render 和 reload；两类保存完成 action 均携带 `request_id`，只有仍属于当前提交上下文的迟到失败才可恢复旧表单，避免覆盖用户已切换到的新表单或选中项
 - **`SettingChange`** — 设置变更子枚举
 - **`DebugNotificationKind`** — 调试通知类型
 
@@ -50,8 +50,10 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 发出 `ContextEffect::ApplyGlobalHotkey`，runtime 完成平台冲突 probe、注册和同步持久化后返回 `GlobalHotkeyApplyFinished`。只有保存成功时 reducer 才提交新值；持久化失败会恢复旧平台热键并保留旧设置。其中 macOS 使用 `RegisterEventHotKey` 的系统级注册路径。
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID（含 user_id 维度，同站多账号为 `{slug}-{user}:newapi`）并预注册到 `enabled_providers` + `sidebar_providers`；新增模式下身份（站点 + 账号）已被占用时拒绝保存并通知用户改用编辑，不静默覆盖 YAML；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename` / `original_id`（编辑保持身份不变，不随 user_id 修改迁移），不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；runtime 回传 `NewApiSaveFinished` 后，reducer 再统一通知、reload 或回滚
-- **NewAPI 删除 / 加载流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除；`EditNewApi` 委托 `NewApiEffect::LoadConfig` 读取 YAML，runtime 通过 `NewApiLoadFinished` 回填编辑态或失败通知
-- **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成或排队失败都由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行，并通过 `ScriptProvider*Finished` action 回到 reducer
+- **NewAPI 删除 / 加载流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除；成功后立即删除 enabled/sidebar/order/hidden-quota 等 settings 引用并发出 `PersistSettings`，不等待 reload 才收敛。`EditNewApi` 委托 `NewApiEffect::LoadConfig` 读取 YAML，runtime 通过 `NewApiLoadFinished` 回填编辑态或失败通知
+- **脚本 Provider 流**：`SubmitScriptProvider` 预注册 `{slug}:script` custom provider 并委托 `ScriptProviderEffect::SaveProvider` 写入脚本 + YAML；`TestScriptProvider` 只发送后台测试请求，不持久化，完成或排队失败都由 `ScriptProviderTestFinished` 回填结果；`EditScriptProvider` / `DeleteScriptProvider` 的磁盘 I/O 都在 runtime effect 中执行，并通过 `ScriptProvider*Finished` action 回到 reducer；YAML 删除成功即清理 settings 引用并持久化，即使 companion script 删除失败而返回 partial success 也不保留幽灵 Provider
+- **异步完成校验**：删除完成 action 携带 `request_id`，仅在其与记录的请求号及 `ProviderId` 匹配时结算；加载结果仅在 modal 仍为对应 Provider 的 Loading 状态时回填，避免旧加载结果覆盖其他表单。
+- **新增失败回滚持久化**：NewAPI / 脚本 Provider 新增保存失败时，reducer 移除乐观预注册的 enabled/sidebar/order/hidden-quota 等全部持久引用后必须再次发出 `PersistSettings`，以更新后的 revision 覆盖可能已排队的旧 settings 快照，避免重启后恢复幽灵 Provider；编辑失败只恢复表单态，不修改持久设置
 
 测试目录：`reducer_tests/`（按 settings / refresh / provider_sidebar / newapi / script_provider / debug 拆分）
 
@@ -75,7 +77,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 
 - **`rollback_newapi_edit()`** — 编辑模式失败回滚：从 config 重建 `NewApiEditData` 回填表单
-- **`rollback_newapi_create()`** — 新增模式失败回滚：从 `enabled_providers` + `sidebar_providers` 中移除预注册 ID（而非写回 disabled）+ 恢复空表单 + 回退 `selected_provider`
+- **`rollback_newapi_create_registration()` / `restore_newapi_create_form()`** — 新增模式失败时始终移除预注册 ID（而非写回 disabled）；仅当完成结果仍属于当前提交上下文时恢复空表单并回退 `selected_provider`
 - **`newapi_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）
 - **`newapi_save_failed_notification_keys()`** — YAML 写入失败并回滚表单后使用的失败通知 key。
 - **`newapi_load_failed_notification_keys()`** — 编辑态 YAML 读取失败时使用的失败通知 key。
@@ -87,7 +89,7 @@ NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 脚本 Provider 保存完成后由 reducer 调用的状态回滚和通知 key 选择：
 
 - **`rollback_script_provider_edit()`** — 编辑模式失败时保留原表单数据和原文件名。
-- **`rollback_script_provider_create()`** — 新增模式失败时移除预注册 provider，并恢复添加表单。
+- **`rollback_script_provider_create_registration()` / `restore_script_provider_create_form()`** — 新增模式失败时始终移除预注册 provider；仅当完成结果仍属于当前提交上下文时恢复添加表单。
 - **`script_provider_save_notification_keys()`** — 根据保存成功结果选择通知 i18n key（partial / edit_success / save_success）。
 - **`script_provider_save_failed_notification_keys()`** — 脚本 / YAML 写入失败并回滚表单后使用的失败通知 key。
 

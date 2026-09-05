@@ -51,7 +51,7 @@ src/
   main.rs                 — 只调用 `bananatray::run_app()` 的薄 binary（requires `app` feature）
   lib.rs                  — Crate root；持有唯一 app 模块图 / 启动入口，`runtime` / `tray` / `ui` / `theme` 和 app-only 平台适配器由 `app` feature 门控
   bootstrap.rs + bootstrap/    — Shell composition root, startup wiring, background bridge/event-source setup
-                           workers/             — Refresh/script-test foreground bridges and Linux D-Bus snapshot emission
+                           workers/             — Refresh/custom-provider I/O/script-test foreground bridges and Linux D-Bus snapshot emission
                            event_sources/       — App shutdown, tray, global hotkey, and secondary-instance event registration
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
                            selectors/           — GPUI-free ViewModel / D-Bus DTO / issue-report selectors

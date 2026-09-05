@@ -32,7 +32,7 @@
   - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
 - `bootstrap.rs` + `bootstrap/`
   - shell composition root；`bootstrap.rs` 是薄入口，`bootstrap/` 按职责拆分 full-context dispatch facade、popup/settings hook registry、settings window 生命周期、UI 启动。
-  - `bootstrap/workers/` 承担 refresh/script-test worker 到前台 reducer 的 bridge，以及 Linux D-Bus 快照发射。
+  - `bootstrap/workers/` 承担 refresh/custom-provider CRUD/script-test worker 到前台 reducer 的 bridge，以及 Linux D-Bus 快照发射。
   - `bootstrap/event_sources/` 承担 app shutdown、tray events、startup hotkey、secondary instance bridge 的外部事件源注册。
   - 统一注册 UI hooks，并持有具体 tray / settings window / D-Bus 适配器入口；不引入 runtime-owned shell manager。
 - `ui/`
@@ -118,7 +118,7 @@
   - settings window 打开 / 复用编排
   - tray 图标应用
   - tray / hotkey / secondary-instance 事件源注册
-  - refresh 与 script-test 后台 worker 到前台 reducer 的 bridge
+  - refresh、custom-provider CRUD 与 script-test 后台 worker 到前台 reducer 的 bridge
   - Linux D-Bus 事件泵连接
 - `ui/` 负责：
   - popup 和 settings window 的具体视图类型
@@ -178,7 +178,7 @@
 
 稳定事实：
 
-- 设置写入由后台 `settings_writer` 串行化并做 debounce；正常应用退出会关闭 writer sender、执行 pending snapshot 的 final flush，并 join 后台线程。随后，退出钩子把内存中的最终 `start_at_login` 状态提交给同一个 auto-launch worker，等待应用完成后再结束进程。
+- 设置写入由后台 `settings_writer` 串行化并做 debounce；custom-provider 保存所需的 deferred flush 在专用 I/O worker 上等待，不进入 GPUI dispatch 栈，其他前台同步路径（如全局热键）仍可直接调用 `flush()`。脚本 Run Test 使用另一条独立串行队列，长 timeout 不会阻塞 NewAPI / Script Provider 的 save/delete/load。正常退出时，refresh 发送 Shutdown 请求，script-test 发布队外取消状态；custom-provider CRUD 关闭入队端后继续 drain 已接受事务，三者在共同 60ms deadline 内 join，超时线程记录警告并 detach。worker 先把完成 action 写入可靠结果 ledger，再发轻量唤醒；退出阶段会在最终 settings 快照前同步结算 ledger 中已经收到但尚未消费的 action；超时 detach 的 CRUD 不保证完成，也不保证其迟到结果得到结算。Linux D-Bus handle 另最多等待 20ms，超时线程 detach；settings writer 使用独立 `Shutdown` 协议完成 pending snapshot 的 final flush。最终 `start_at_login` 状态也在 quit observer 返回前同步确认，保留用户设置的完成保证。
 - `AppSettings` 是运行时领域模型；顶层 JSON 形状由 `settings_store::PersistedAppSettingsV1` 拥有并转换。保存兼容的新版本文件时会递归保留固定 schema 对象中的未知字段，同时以当前领域值覆盖已知字段；`provider.credentials`、`provider.enabled_providers`、`provider.hidden_quotas` 的键属于用户数据，保存时由当前动态 map 整体替换，确保删除操作不会被兼容合并恢复。
 - `settings.json`、BananaTray 代写的外部 OAuth 凭证和自定义 provider YAML 复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 使用不可变版本化脚本，最后原子提交引用它的 YAML；成功后再清理旧脚本，避免崩溃窗口产生跨版本文件对。
 - `settings.json` 加载失败（JSON 损坏等）时，启动路径会先把原文件 rename 备份为 `settings.json.corrupt-<epoch>` 再回退默认值，避免后续 persist 覆盖后原始内容不可恢复；备份成功时启动后发送系统通知告知备份位置。
