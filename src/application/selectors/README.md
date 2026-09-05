@@ -36,6 +36,8 @@ ViewModel 选择器层，从 `AppSession` 中派生 UI 所需的 ViewModel 结�
 
 `dbus_dto.rs` 定义了 D-Bus 传输用的扁平 JSON DTO（`DBusQuotaSnapshot`、`DBusProviderEntry`、`DBusQuotaEntry`、`DBusHeaderInfo`），以及对应的格式化函数（`format_status_level`、`format_connection_status`、`format_provider_id`）。
 
+wire 契约常量 `DBUS_QUOTA_SCHEMA_VERSION` 与 `DBUS_HEADER_STATUS_KIND_WIRE_VALUES` 与 DTO 类型一起从 `application` re-export：它们是对 Extension 公开的协议声明，必须保持在 crate 公开路径上可达。仅在 `#[cfg(test)]` 中引用的契约常量会在 `cargo clippy --lib --no-default-features -- -D warnings` 下被判为 dead code（该路径不编译测试），因此新增此类常量时同步补齐 `selectors/mod.rs` 与 `application/mod.rs` 的 re-export。
+
 **放在 `application/selectors/` 而非 `dbus/` 的原因**：DTO 类型和格式化逻辑不依赖 GPUI/zbus，可在任何平台编译和测试。`dbus/` 模块受 Linux target 与 `app` feature 双重门控，其内部代码无法在跨平台纯 lib 路径运行测试。`dbus/serde_types.rs` 仅做 re-export 保持接口不变。
 
 ## 设计原则

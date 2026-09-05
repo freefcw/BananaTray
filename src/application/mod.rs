@@ -33,7 +33,10 @@ pub(crate) use selectors::{
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]
-pub use selectors::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
+pub use selectors::{
+    DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot,
+    DBUS_HEADER_STATUS_KIND_WIRE_VALUES, DBUS_QUOTA_SCHEMA_VERSION,
+};
 #[allow(unused_imports)] // app/UI 和 reducer 测试通过 application facade 使用这些状态类型
 pub use state::{
     AppSession, FormIdentity, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab,

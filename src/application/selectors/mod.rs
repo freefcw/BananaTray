@@ -284,7 +284,10 @@ pub enum SettingsProviderUsageViewState {
 // ============================================================================
 
 #[cfg(any(target_os = "linux", test))]
-pub use dbus_dto::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
+pub use dbus_dto::{
+    DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot,
+    DBUS_HEADER_STATUS_KIND_WIRE_VALUES, DBUS_QUOTA_SCHEMA_VERSION,
+};
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, format_debug_console_logs, DebugContext,
     DebugTabViewState, EnvironmentRowKind, LogLevelColor,
