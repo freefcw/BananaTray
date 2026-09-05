@@ -29,7 +29,8 @@ into lower-level modules just to shrink this package.
 
 ## Startup Flow
 
-`main.rs` intentionally keeps the high-level startup order visible:
+`lib.rs::run_app()` intentionally keeps the high-level startup order visible, while `main.rs`
+remains a thin binary entry point:
 
 1. load settings and initialize UI/tray shell
 2. start refresh/script-test channels and worker threads

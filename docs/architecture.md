@@ -8,13 +8,14 @@
 
 - 默认受支持的产品路径是开启 `app` feature 的托盘应用构建。
 - `bananatray` 二进制目标通过 Cargo `required-features = ["app"]` 显式要求该 feature。
-- `app` 不只控制模块导出，也隔离托盘壳的运行时依赖（GPUI / fc-ui / 单实例 / 通知 / 自启动等）。
+- `src/main.rs` 是只调用 `bananatray::run_app()` 的薄入口；唯一模块图和完整启动流程位于 lib crate，避免 bin/lib 各编译一份同名模块。
+- `app` 不只控制模块导出，也隔离托盘壳的运行时依赖（GPUI / fc-ui / 单实例 / 通知 / 自启动 / Linux zbus 等）。
 - GPUI 与 UI 组件库都来自 crates.io 正式发布版：`fc-gpui` 0.9（Cargo 依赖键仍是 `gpui`，`use gpui::*` 不变）和 `fc-ui` 0.8（依赖键仍是 `adabraka-ui`，`use adabraka_ui::*` 不变）。两者不再走 git + rev 固定，`fc-ui` 自身依赖 `fc-gpui ^0.9`，因此不会再出现同一 GPUI 被解析成两份的风险。
 - 这两个包要求 rustc ≥ 1.97.1（`fc-ui` 声明 `rust-version = 1.97.1`，`fc-gpui` 使用 edition 2024）；`rust-toolchain.toml` 固定 `channel = "stable"`，stable 已满足该下限。
 - GPUI 启动使用 `AppProfile::Minimal`，让托盘类长驻进程采用较小的文本布局缓存、glyph raster-bounds 缓存、GPU atlas / instance buffer 初始预算和 element arena。
 - 托盘常驻依赖 `QuitMode::Explicit`（`fc-gpui` 0.9 取代旧的 `set_keep_alive_without_windows`）：所有窗口关闭后进程不退出，只有显式 quit 才结束。
 - `fc-ui` 以 `default-features = false` 引入时不会自动注册内置字体；BananaTray 在 `Cargo.toml` 显式开启 Inter 400/500/600/700 和 JetBrains Mono Regular，保留当前 UI 字重覆盖，同时避免嵌入未使用的 Mono Bold。
-- `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖。
+- `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖，Linux target 的依赖树也不得包含 `zbus`。
 - i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。
 
 ## Stable Module Boundaries

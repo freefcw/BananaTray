@@ -36,7 +36,7 @@ ViewModel 选择器层，从 `AppSession` 中派生 UI 所需的 ViewModel 结�
 
 `dbus_dto.rs` 定义了 D-Bus 传输用的扁平 JSON DTO（`DBusQuotaSnapshot`、`DBusProviderEntry`、`DBusQuotaEntry`、`DBusHeaderInfo`），以及对应的格式化函数（`format_status_level`、`format_connection_status`、`format_provider_id`）。
 
-**放在 `application/selectors/` 而非 `dbus/` 的原因**：DTO 类型和格式化逻辑不依赖 GPUI/zbus，可在任何平台编译和测试。`dbus/` 模块受 `cfg(target_os = "linux")` 门控，其内部代码无法在 macOS/Windows 上运行测试。`dbus/serde_types.rs` 仅做 re-export 保持接口不变。
+**放在 `application/selectors/` 而非 `dbus/` 的原因**：DTO 类型和格式化逻辑不依赖 GPUI/zbus，可在任何平台编译和测试。`dbus/` 模块受 Linux target 与 `app` feature 双重门控，其内部代码无法在跨平台纯 lib 路径运行测试。`dbus/serde_types.rs` 仅做 re-export 保持接口不变。
 
 ## 设计原则
 

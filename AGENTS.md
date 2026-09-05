@@ -48,10 +48,11 @@ just release-verify        # release-oriented local verification wrapper
 ```
 src/
   builtin_provider_manifest.rs — 内置 Provider 单一编译期清单，生成 ProviderKind 与 register_all
-  main.rs / bootstrap.rs + bootstrap/ — App entry, shell composition root, startup wiring, background bridge/event-source setup (`main.rs` requires `app` feature)
+  main.rs                 — 只调用 `bananatray::run_app()` 的薄 binary（requires `app` feature）
+  lib.rs                  — Crate root；持有唯一 app 模块图 / 启动入口，`runtime` / `tray` / `ui` / `theme` 和 app-only 平台适配器由 `app` feature 门控
+  bootstrap.rs + bootstrap/    — Shell composition root, startup wiring, background bridge/event-source setup
                            workers/             — Refresh/script-test foreground bridges and Linux D-Bus snapshot emission
                            event_sources/       — App shutdown, tray, global hotkey, and secondary-instance event registration
-  lib.rs                 — Crate root; `runtime` / `tray` / `ui` / `theme` and app-only platform adapters compiled behind `cfg(feature = "app")`
   application/           — Action-Reducer-Effect pipeline, pure app-domain logic, NewAPI 状态操作
                            selectors/           — GPUI-free ViewModel / D-Bus DTO / issue-report selectors
                            reducer/             — reducer domain slices; top-level reducer.rs only dispatches actions
