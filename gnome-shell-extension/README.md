@@ -100,7 +100,7 @@ bash scripts/install-gnome-extension.sh
 
 脚本会安装到
 `~/.local/share/gnome-shell/extensions/bananatray@bananatray.github.io/`，并检查
-`i18n.js`、`panelButton.js`、`quotaClient.js`、`quotaWidgets.js`、`locale/zh_CN/LC_MESSAGES/bananatray.mo`
+`i18n.js`、`panelButton.js`、`quotaClient.js`、`dbusContract.js`、`quotaWidgets.js`、`locale/zh_CN/LC_MESSAGES/bananatray.mo`
 与 `icons/bananatray-symbolic.svg`
 等必需文件是否已经复制。手工安装时必须递归复制整个
 `gnome-shell-extension/` 目录，不能只复制顶层 `extension.js`、`metadata.json` 和 `stylesheet.css`。
@@ -227,6 +227,7 @@ mock 与真实 daemon 契约漂移。
 | `i18n.js` | Extension gettext 包装：所有 GNOME Shell UI 文案统一通过 `_()` 翻译 |
 | `panelButton.js` | `BananaTrayIndicator`：PanelMenu.Button、弹窗装配、`QuotaClient` 回调和整体 UI 状态切换 |
 | `quotaClient.js` | D-Bus client：接口 XML、proxy 生命周期、异步方法调用、`RefreshComplete` 监听、JSON schema guard |
+| `dbusContract.js` | schema v1 的稳定 `status_kind` wire 值集合，供 validator 和 presentation 共享 |
 | `quotaPresentation.js` | 展示层纯函数：状态归一化、手动刷新进度判定、Provider/quota 排序、顶栏摘要聚合 |
 | `quotaWidgets.js` | 可复用 UI 组件：Provider 行、Quota 行、quota bar、状态点和文本 label helper |
 | `metadata.json` | GNOME Shell 扩展元数据：UUID、名称、Shell 版本兼容性和 `gettext-domain` |
@@ -279,6 +280,9 @@ BananaTrayExtension (入口)
 `Cached data`。
 
 弹窗 Header 右侧徽章展示 daemon 返回的全局同步状态（如 `Synced` / `Syncing` / `Offline`）；
+schema v1 的稳定 `status_kind` 集合为 `Synced`、`Syncing`、`Stale`、`Offline`，由跨语言
+golden 契约同时约束 Rust producer、Extension validator 和 presentation；未知值记录告警并按
+`Stale` 降级展示。
 标题副文本展示紧凑 Provider 摘要（总数、已连接数，以及仅在非零时追加 refreshing / error /
 offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `LOW` / `OUT`
 徽章表达，非 connected 状态用连接状态徽章表达。
@@ -389,7 +393,7 @@ bash scripts/dev-gnome-extension.sh --app-command 'cargo run --release'
 bash scripts/dev-gnome-extension.sh --real-daemon
 ```
 
-修改 `extension.js`、`panelButton.js`、`quotaPresentation.js`、`quotaWidgets.js`、
+修改 `extension.js`、`panelButton.js`、`dbusContract.js`、`quotaPresentation.js`、`quotaWidgets.js`、
 `stylesheet.css` 或 `metadata.json` 后，关闭这个 nested
 Shell 窗口并重新运行脚本即可；不需要注销当前桌面。
 

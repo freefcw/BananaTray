@@ -24,6 +24,7 @@ required_files=(
     "i18n.js"
     "panelButton.js"
     "quotaClient.js"
+    "dbusContract.js"
     "quotaPresentation.js"
     "quotaWidgets.js"
     "locale/zh_CN/LC_MESSAGES/bananatray.mo"

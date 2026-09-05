@@ -27,6 +27,7 @@ render-provider-icons:
     python3 scripts/check_provider_icons.py --write-preview
 
 check-gpui-imports:
+    bash ./scripts/test-check-gpui-imports.sh
     ./scripts/check-gpui-imports.sh
 
 check-provider-secret-slicing:

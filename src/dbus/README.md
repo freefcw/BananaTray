@@ -115,6 +115,9 @@ DTO 类型和格式化函数定义在 `application::selectors::dbus_dto`（跨�
 `serde_types.rs` 仅重导出 DTO 类型。
 GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静态一致性由
 `scripts/check-gnome-dbus-contract.mjs` 校验，并通过 `scripts/check-gnome-extension.sh` 执行。
+`header.status_kind` 不再来自 Rust `Debug` 输出：Rust producer 使用显式穷尽映射，Extension
+validator 与 presentation 共享 `dbusContract.js` 中的稳定集合，三者都由
+`gnome-shell-extension/tests/fixtures/dbus-v1-wire.json` golden 约束。
 
 ### JSON 兼容规则
 
@@ -126,6 +129,8 @@ GNOME Extension client、mock daemon、Rust iface 和 DTO schema version 的静�
   - `header`：`status_text`、`status_kind`、`elapsed_secs`（可选）
   - provider：`id`、`display_name`、`icon_asset`、`connection`、`worst_status`、`quotas`
   - quota：`label`、`used`、`limit`、`status_level`、`display_text`、`quota_type_key`
+- schema v1 的 `header.status_kind` wire 值固定为 `Synced`、`Syncing`、`Stale`、`Offline`。
+  未知值为前向兼容只告警、不拒绝整个快照，展示层降级为 `Stale`。
 
 `quota.bar_ratio` 是 schema v1 内新增的可选字段，表示 Overview 进度条比例 `[0.0, 1.0]`。
 它的语义与当前 `quota_display_mode` 对齐：Remaining 模式表示剩余比例，Used 模式表示已用比例。GNOME Shell Extension 会优先使用该字段；旧 daemon 未提供时会降级为 `used / limit`。

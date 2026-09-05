@@ -36,10 +36,12 @@ tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bananatray-gjs-test.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 # Copy the extension modules that quotaClient.js imports at runtime.
-# quotaClient.js only depends on gi://Gio, gi://GLib and ./i18n.js — it does
-# NOT import resource:///org/gnome/shell/..., so it loads in plain GJS.
+# quotaClient.js only depends on gi://Gio, gi://GLib, ./i18n.js and the pure
+# ./dbusContract.js module — it does NOT import resource:///org/gnome/shell/...,
+# so it loads in plain GJS.
 mkdir -p "$tmp_dir/gnome-shell-extension/tests"
 cp "$EXT_DIR/quotaClient.js" "$tmp_dir/gnome-shell-extension/quotaClient.js"
+cp "$EXT_DIR/dbusContract.js" "$tmp_dir/gnome-shell-extension/dbusContract.js"
 # Overwrite i18n.js with the GJS test stub (passthrough _/ngettext).
 cp "$I18N_STUB" "$tmp_dir/gnome-shell-extension/i18n.js"
 # Test driver + mock daemon live under tests/; the test imports ../quotaClient.js

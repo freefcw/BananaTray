@@ -1,6 +1,7 @@
 // 展示层纯函数：归一化 D-Bus 快照字段并生成面板/列表摘要。
 
 import {_, ngettext} from './i18n.js';
+import {STATUS_KIND_WIRE_VALUES} from './dbusContract.js';
 
 const STATUS_ORDER = {
     green: 0,
@@ -20,7 +21,7 @@ export function normalizeConnection(value) {
     return CONNECTION_KEYS.has(connection) ? connection : 'disconnected';
 }
 
-const STATUS_KIND_KEYS = new Set(['synced', 'syncing', 'stale', 'offline']);
+const STATUS_KIND_KEYS = new Set(STATUS_KIND_WIRE_VALUES.map(value => value.toLowerCase()));
 
 export function normalizeStatusKind(value) {
     const kind = String(value || '').toLowerCase();

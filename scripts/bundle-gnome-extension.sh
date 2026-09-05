@@ -31,6 +31,7 @@ ZIP_FILES=(
     "i18n.js"
     "panelButton.js"
     "quotaClient.js"
+    "dbusContract.js"
     "quotaPresentation.js"
     "quotaWidgets.js"
     "stylesheet.css"

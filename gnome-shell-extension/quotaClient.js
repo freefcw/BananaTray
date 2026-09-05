@@ -2,6 +2,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import {_} from './i18n.js';
+import {STATUS_KIND_WIRE_VALUES} from './dbusContract.js';
 
 export const DBUS_ID = 'com.bananatray.Daemon';
 export const DBUS_PATH = '/com/bananatray/Daemon';
@@ -16,6 +17,7 @@ const START_SERVICE_FAILURE_RETRY_MS = START_SERVICE_RETRY_MS / 2;
 const START_SERVICE_REPLY = new GLib.VariantType('(u)');
 const STATUS_LEVEL_VALUES = new Set(['green', 'yellow', 'red']);
 const CONNECTION_VALUES = new Set(['connected', 'refreshing', 'error', 'disconnected']);
+const STATUS_KIND_VALUES = new Set(STATUS_KIND_WIRE_VALUES.map(value => value.toLowerCase()));
 
 const DBUS_INTERFACE_XML = `
 <node>
@@ -70,13 +72,14 @@ function validateQuota(quota, providerId, index, warn) {
     }
 }
 
-function validateHeader(header) {
+function validateHeader(header, warn) {
     if (!isPlainObject(header))
         throw new Error('snapshot header is not an object');
     if (!isString(header.status_text))
         throw new Error('snapshot header missing string status_text');
     if (!isString(header.status_kind))
         throw new Error('snapshot header missing string status_kind');
+    validateEnumField(header.status_kind, STATUS_KIND_VALUES, 'header.status_kind', warn);
     if (header.elapsed_secs !== null && header.elapsed_secs !== undefined && !isNumber(header.elapsed_secs))
         throw new Error('snapshot header elapsed_secs must be a finite number');
 }
@@ -107,7 +110,7 @@ export function validateSnapshot(data, warn) {
         throw new Error('snapshot is not an object');
     if (data.schema_version !== SUPPORTED_SCHEMA_VERSION)
         throw new Error(`unsupported schema_version ${data.schema_version}`);
-    validateHeader(data.header);
+    validateHeader(data.header, warn);
     if (!Array.isArray(data.providers))
         throw new Error('snapshot providers must be an array');
 

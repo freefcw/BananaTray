@@ -21,6 +21,10 @@ use crate::models::{ConnectionStatus, ProviderId, ProviderStatus, QuotaInfo, Sta
 /// 兼容规则：同版本内允许新增可选字段；删除/改名/改类型必须提升版本。
 pub const DBUS_QUOTA_SCHEMA_VERSION: u32 = 1;
 
+/// schema v1 中 `header.status_kind` 允许的稳定 wire 值。
+pub const DBUS_HEADER_STATUS_KIND_WIRE_VALUES: [&str; 4] =
+    ["Synced", "Syncing", "Stale", "Offline"];
+
 /// D-Bus 传输的配额快照
 #[derive(Debug, Clone, Serialize)]
 pub struct DBusQuotaSnapshot {
@@ -111,7 +115,7 @@ impl DBusQuotaSnapshot {
             providers,
             header: DBusHeaderInfo {
                 status_text: dbus_header_status_text(session),
-                status_kind: format!("{:?}", status_kind),
+                status_kind: format_header_status_kind(status_kind).to_string(),
                 elapsed_secs,
             },
         }
@@ -180,6 +184,18 @@ pub fn format_connection_status(status: ConnectionStatus) -> String {
         ConnectionStatus::Disconnected => "Disconnected".to_string(),
         ConnectionStatus::Refreshing => "Refreshing".to_string(),
         ConnectionStatus::Error => "Error".to_string(),
+    }
+}
+
+/// 将 HeaderStatusKind 转为 schema v1 的稳定 wire 值。
+///
+/// 必须显式穷尽匹配，避免 Rust variant 的 Debug 名称意外成为跨语言协议。
+pub fn format_header_status_kind(kind: HeaderStatusKind) -> &'static str {
+    match kind {
+        HeaderStatusKind::Synced => "Synced",
+        HeaderStatusKind::Syncing => "Syncing",
+        HeaderStatusKind::Stale => "Stale",
+        HeaderStatusKind::Offline => "Offline",
     }
 }
 
@@ -372,5 +388,33 @@ mod tests {
             .elapsed_secs
             .expect("elapsed_secs should exist");
         assert!((89..=91).contains(&elapsed));
+    }
+
+    #[test]
+    fn header_status_kind_wire_values_match_schema_v1_golden() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../gnome-shell-extension/tests/fixtures/dbus-v1-wire.json"
+        ))
+        .unwrap();
+        let expected: Vec<&str> = fixture["header_status_kinds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        let actual = [
+            HeaderStatusKind::Synced,
+            HeaderStatusKind::Syncing,
+            HeaderStatusKind::Stale,
+            HeaderStatusKind::Offline,
+        ]
+        .map(format_header_status_kind);
+
+        assert_eq!(fixture["schema_version"].as_u64(), Some(1));
+        assert_eq!(
+            DBUS_HEADER_STATUS_KIND_WIRE_VALUES.as_slice(),
+            expected.as_slice()
+        );
+        assert_eq!(actual.as_slice(), expected.as_slice());
     }
 }

@@ -2,6 +2,8 @@ import {readFileSync} from 'node:fs';
 
 const paths = {
     client: process.env.BANANATRAY_DBUS_CONTRACT_CLIENT ?? 'gnome-shell-extension/quotaClient.js',
+    jsContract: process.env.BANANATRAY_DBUS_CONTRACT_JS ?? 'gnome-shell-extension/dbusContract.js',
+    fixture: process.env.BANANATRAY_DBUS_CONTRACT_FIXTURE ?? 'gnome-shell-extension/tests/fixtures/dbus-v1-wire.json',
     mock: process.env.BANANATRAY_DBUS_CONTRACT_MOCK ?? 'scripts/gnome-extension-mock-daemon.js',
     rustIface: process.env.BANANATRAY_DBUS_CONTRACT_RUST_IFACE ?? 'src/dbus/iface.rs',
     rustDto: process.env.BANANATRAY_DBUS_CONTRACT_RUST_DTO ?? 'src/application/selectors/dbus_dto.rs',
@@ -45,6 +47,28 @@ function extractRustSchemaVersion(source, path) {
         return null;
     }
     return Number.parseInt(match[1], 10);
+}
+
+function extractQuotedValues(source) {
+    return [...source.matchAll(/['"]([^'"]+)['"]/g)].map(match => match[1]);
+}
+
+function extractJsFrozenStringArray(source, name, path) {
+    const match = source.match(new RegExp(`export\\s+const\\s+${name}\\s*=\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)\\s*;`));
+    if (!match) {
+        fail(`${path} must define frozen string array ${name}`);
+        return [];
+    }
+    return extractQuotedValues(match[1]);
+}
+
+function extractRustStringArray(source, name, path) {
+    const match = source.match(new RegExp(`pub\\s+const\\s+${name}\\s*:\\s*\\[&str;\\s*\\d+\\]\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*;`));
+    if (!match) {
+        fail(`${path} must define string array ${name}`);
+        return [];
+    }
+    return extractQuotedValues(match[1]);
 }
 
 function extractInterfaceXml(source, path) {
@@ -95,6 +119,8 @@ function assertStructFields(source, structName, fields) {
 }
 
 const client = read(paths.client);
+const jsContract = read(paths.jsContract);
+const fixture = JSON.parse(read(paths.fixture));
 const mock = read(paths.mock);
 const rustIface = read(paths.rustIface);
 const rustDto = read(paths.rustDto);
@@ -106,6 +132,8 @@ const mockPath = extractStringConst(mock, 'DBUS_PATH', paths.mock);
 const clientSchemaVersion = extractNumberConst(client, 'SUPPORTED_SCHEMA_VERSION', paths.client);
 const mockSchemaVersion = extractNumberConst(mock, 'SCHEMA_VERSION', paths.mock);
 const rustSchemaVersion = extractRustSchemaVersion(rustDto, paths.rustDto);
+const jsStatusKinds = extractJsFrozenStringArray(jsContract, 'STATUS_KIND_WIRE_VALUES', paths.jsContract);
+const rustStatusKinds = extractRustStringArray(rustDto, 'DBUS_HEADER_STATUS_KIND_WIRE_VALUES', paths.rustDto);
 const clientXml = extractInterfaceXml(client, paths.client);
 const mockXml = extractInterfaceXml(mock, paths.mock);
 
@@ -135,6 +163,12 @@ assertSharedValue(
 );
 assertEqual(rustSchemaVersion, EXPECTED_SCHEMA_VERSION, `${paths.rustDto} DBUS_QUOTA_SCHEMA_VERSION`);
 assertEqual(clientSchemaVersion, rustSchemaVersion, 'GNOME Extension/Rust DTO schema version');
+assertEqual(fixture.schema_version, EXPECTED_SCHEMA_VERSION, `${paths.fixture} schema_version`);
+assertEqual(JSON.stringify(jsStatusKinds), JSON.stringify(fixture.header_status_kinds), 'GNOME Extension/fixture status_kind values');
+assertEqual(JSON.stringify(rustStatusKinds), JSON.stringify(fixture.header_status_kinds), 'Rust DTO/fixture status_kind values');
+
+assertMatches(client, /validateEnumField\(header\.status_kind,\s*STATUS_KIND_VALUES,\s*['"]header\.status_kind['"]/, 'header.status_kind validator');
+assertMatches(rustDto, /status_kind:\s*format_header_status_kind\(status_kind\)\.to_string\(\)/, 'explicit Rust header.status_kind formatter');
 
 assertEqual(clientXml, mockXml, 'GNOME Extension client/mock DBUS_INTERFACE_XML');
 
