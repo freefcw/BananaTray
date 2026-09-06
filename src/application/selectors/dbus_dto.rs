@@ -23,22 +23,9 @@ pub const DBUS_QUOTA_SCHEMA_VERSION: u32 = 1;
 
 /// schema v1 中 `header.status_kind` 允许的稳定 wire 值。
 ///
-/// 编码器 `format_header_status_kind` 必须读这张表，避免 GNOME wire 契约与运行时输出分叉。
-pub const DBUS_HEADER_STATUS_KIND_WIRE_VALUES: [&str; 4] = [
-    header_status_kind_wire(HeaderStatusKind::Synced),
-    header_status_kind_wire(HeaderStatusKind::Syncing),
-    header_status_kind_wire(HeaderStatusKind::Stale),
-    header_status_kind_wire(HeaderStatusKind::Offline),
-];
-
-const fn header_status_kind_wire(kind: HeaderStatusKind) -> &'static str {
-    match kind {
-        HeaderStatusKind::Synced => "Synced",
-        HeaderStatusKind::Syncing => "Syncing",
-        HeaderStatusKind::Stale => "Stale",
-        HeaderStatusKind::Offline => "Offline",
-    }
-}
+/// 顺序与 `format_header_status_kind` 的穷尽匹配一致：Synced / Syncing / Stale / Offline。
+pub const DBUS_HEADER_STATUS_KIND_WIRE_VALUES: [&str; 4] =
+    ["Synced", "Syncing", "Stale", "Offline"];
 
 /// D-Bus 传输的配额快照
 #[derive(Debug, Clone, Serialize)]
@@ -206,7 +193,12 @@ pub fn format_connection_status(status: ConnectionStatus) -> String {
 ///
 /// 必须显式穷尽匹配，避免 Rust variant 的 Debug 名称意外成为跨语言协议。
 pub fn format_header_status_kind(kind: HeaderStatusKind) -> &'static str {
-    header_status_kind_wire(kind)
+    match kind {
+        HeaderStatusKind::Synced => DBUS_HEADER_STATUS_KIND_WIRE_VALUES[0],
+        HeaderStatusKind::Syncing => DBUS_HEADER_STATUS_KIND_WIRE_VALUES[1],
+        HeaderStatusKind::Stale => DBUS_HEADER_STATUS_KIND_WIRE_VALUES[2],
+        HeaderStatusKind::Offline => DBUS_HEADER_STATUS_KIND_WIRE_VALUES[3],
+    }
 }
 
 /// 将 ProviderId 转为字符串标识符
