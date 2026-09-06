@@ -28,7 +28,7 @@ AppSettings
   - `provider_layout` 是有序 Provider 偏好列表；数组顺序就是排序，每个 item 只保存稳定 `id`、`in_sidebar` 和 `enabled`
   - `in_sidebar: false` 的 item 保留在布局中，用于重新加入时恢复原位置；隐藏 Provider 始终为 disabled，启用 Provider 会自动将其加入 sidebar
   - Provider 名称、图标、能力和运行时状态均从 Provider descriptor / `ProviderStatus` 计算，不复制到 settings
-  - 旧版 `enabled_providers` / `provider_order` / `sidebar_providers` 在 `settings_store` 加载边界一次性迁移；缺失字段与显式空数组语义不同
+  - 旧版 `enabled_providers` / `provider_order` / `sidebar_providers` 在 `settings_store` 加载边界一次性迁移；缺失字段与显式空数组语义不同。仅在 `enabled_providers` 中启用、未出现在 `sidebar_providers` 的项会保持 enabled 并补进 sidebar（旧 Overview / refresh 不要求 sidebar 成员资格）；不要改成按 sidebar 成员强制禁用，否则会静默停止监控
   - `is_enabled()` / `set_enabled()` / `is_in_sidebar()` / `add_to_sidebar()` / `remove_from_sidebar()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()`
 - **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
   - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量
