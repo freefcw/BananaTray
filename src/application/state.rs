@@ -233,7 +233,11 @@ impl AppSession {
     }
 
     pub fn header_status_text(&self) -> (HeaderStatusKind, Option<u64>) {
-        compute_header_status(&self.nav, &self.provider_store)
+        if self.nav.active_tab == NavTab::Overview {
+            compute_overview_header_status(&self.provider_store, &self.settings)
+        } else {
+            compute_header_status(&self.nav, &self.provider_store)
+        }
     }
 
     pub fn popup_height(&self) -> f32 {
@@ -783,6 +787,51 @@ pub fn compute_header_status(
             }
             _ => (HeaderStatusKind::Syncing, None),
         }
+    }
+}
+
+/// 计算 Dashboard 头部状态。
+///
+/// Dashboard 展示的是所有已启用、可刷新的 Provider 的整体状态，不能使用
+/// `last_provider_id` 作为唯一时间来源，否则某个持续失败的 Provider 会阻塞
+/// 其他 Provider 成功刷新后的时间更新。
+fn compute_overview_header_status(
+    store: &ProviderStore,
+    settings: &AppSettings,
+) -> (HeaderStatusKind, Option<u64>) {
+    let providers = store.providers.iter().filter(|provider| {
+        settings.provider.is_enabled(&provider.provider_id) && provider.supports_refresh()
+    });
+
+    let mut latest_success: Option<std::time::Instant> = None;
+    let mut has_connected_provider = false;
+    let mut has_refreshing_provider = false;
+
+    for provider in providers {
+        has_refreshing_provider |= provider.connection == ConnectionStatus::Refreshing;
+        has_connected_provider |= provider.connection == ConnectionStatus::Connected;
+        if let Some(instant) = provider.last_refreshed_instant {
+            latest_success = Some(latest_success.map_or(instant, |latest| latest.max(instant)));
+        }
+    }
+
+    if has_refreshing_provider {
+        return (HeaderStatusKind::Syncing, None);
+    }
+
+    if let Some(instant) = latest_success {
+        let secs = instant.elapsed().as_secs();
+        return if secs < 60 {
+            (HeaderStatusKind::Synced, Some(secs))
+        } else {
+            (HeaderStatusKind::Stale, Some(secs))
+        };
+    }
+
+    if has_connected_provider {
+        (HeaderStatusKind::Syncing, None)
+    } else {
+        (HeaderStatusKind::Offline, None)
     }
 }
 

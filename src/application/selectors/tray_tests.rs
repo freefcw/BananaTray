@@ -861,6 +861,32 @@ fn header_view_state_synced() {
 }
 
 #[test]
+fn header_view_state_overview_uses_latest_successful_provider() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings.display.show_overview = true;
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+
+    // Claude 是首个 Provider，但最近一次刷新失败；Gemini 有成功刷新时间。
+    let claude = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+    let mut gemini = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    gemini.last_refreshed_instant =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(300));
+    let session = AppSession::new(settings, vec![claude, gemini]);
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
+
+    let header = header_view_state(&session);
+
+    assert_eq!(header.status_kind, HeaderStatusKind::Stale);
+    assert_eq!(header.status_text, "5m ago");
+}
+
+#[test]
 fn header_view_state_syncing() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings::default();
