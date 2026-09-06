@@ -171,11 +171,7 @@ mod tests {
 
         // 验证预注册已回滚
         assert!(!session.settings.provider.is_enabled(&pre_id));
-        assert!(!session
-            .settings
-            .provider
-            .enabled_providers
-            .contains_key(&pre_id.id_key()));
+        assert!(!session.settings.provider.has_layout_item(&pre_id));
         assert!(!session
             .settings
             .provider

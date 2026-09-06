@@ -64,8 +64,11 @@ fn settings_providers_tab_respects_order_and_selection() {
     let _locale_guard = setup_locale();
     let mut settings = AppSettings {
         provider: crate::models::ProviderConfig {
-            provider_order: vec!["gemini".into(), "claude".into(), "copilot".into()],
-            sidebar_providers: vec!["gemini".into(), "claude".into(), "copilot".into()],
+            provider_layout: vec![
+                crate::models::ProviderLayoutItem::new("gemini", true, false),
+                crate::models::ProviderLayoutItem::new("claude", true, false),
+                crate::models::ProviderLayoutItem::new("copilot", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()

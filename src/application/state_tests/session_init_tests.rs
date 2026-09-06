@@ -136,11 +136,25 @@ fn session_new_uses_settings_tab_when_overview_hidden_and_no_enabled_provider() 
 }
 
 #[test]
+fn session_new_restores_default_sidebar_for_empty_provider_config() {
+    let store = make_store(&[ProviderKind::Claude, ProviderKind::Codex]);
+
+    let session = AppSession::new(AppSettings::default(), store.providers);
+
+    assert_eq!(
+        session.settings.provider.sidebar_provider_ids(&[]),
+        vec![pid(ProviderKind::Claude), pid(ProviderKind::Codex)]
+    );
+}
+
+#[test]
 fn session_new_selects_first_sidebar_provider_for_settings() {
     let store = make_store(&[ProviderKind::Claude, ProviderKind::Gemini]);
     let mut settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
-    settings.provider.sidebar_providers = vec!["gemini".into(), "claude".into()];
-    settings.provider.provider_order = vec!["gemini".into(), "claude".into()];
+    settings.provider.provider_layout = vec![
+        crate::models::ProviderLayoutItem::new("gemini", true, false),
+        crate::models::ProviderLayoutItem::new("claude", true, false),
+    ];
 
     let session = AppSession::new(settings, store.providers);
 
@@ -163,21 +177,14 @@ fn session_new_auto_registers_unregistered_custom_provider() {
 
     // settings 中没有 custom provider 的任何条目
     let settings = make_settings(&[ProviderKind::Claude]);
-    assert!(!settings
-        .provider
-        .enabled_providers
-        .contains_key("my-relay:newapi"));
+    assert!(!settings.provider.has_layout_item(&custom_id));
 
     let session = AppSession::new(settings, store.providers);
 
     // 自动启用
     assert!(session.settings.provider.is_enabled(&custom_id));
     // 自动加入 sidebar
-    assert!(session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&"my-relay:newapi".to_string()));
+    assert!(session.settings.provider.is_in_sidebar(&custom_id));
 }
 
 #[test]
@@ -209,21 +216,13 @@ fn session_new_reuses_existing_sidebar_entry_for_custom_provider() {
         .push(ProviderStatus::new(custom_id.clone(), metadata));
 
     let mut settings = make_settings(&[ProviderKind::Claude]);
-    settings.provider.sidebar_providers.push(custom_id.id_key());
+    settings.provider.set_enabled(&custom_id, true);
+    settings.provider.add_to_sidebar(&custom_id);
 
     let session = AppSession::new(settings, store.providers);
 
     assert!(session.settings.provider.is_enabled(&custom_id));
-    assert_eq!(
-        session
-            .settings
-            .provider
-            .sidebar_providers
-            .iter()
-            .filter(|key| **key == "my-relay:newapi")
-            .count(),
-        1
-    );
+    assert!(session.settings.provider.is_in_sidebar(&custom_id));
 }
 
 // ── ProviderKind::first() ─────────────────────────────────
@@ -238,8 +237,10 @@ fn provider_kind_first_matches_all_index_zero() {
 #[test]
 fn first_sidebar_provider_returns_first_in_sidebar() {
     let mut settings = make_settings(&[ProviderKind::Claude, ProviderKind::Gemini]);
-    settings.provider.sidebar_providers = vec!["gemini".into(), "claude".into()];
-    settings.provider.provider_order = vec!["gemini".into(), "claude".into()];
+    settings.provider.provider_layout = vec![
+        crate::models::ProviderLayoutItem::new("gemini", true, false),
+        crate::models::ProviderLayoutItem::new("claude", true, false),
+    ];
 
     let session = AppSession::new(
         settings,
@@ -254,7 +255,9 @@ fn first_sidebar_provider_returns_first_in_sidebar() {
 
 #[test]
 fn first_sidebar_provider_falls_back_to_manifest_first() {
-    let settings = AppSettings::default(); // empty sidebar
+    // 构造真正空的 sidebar（清空默认布局），验证 fallback 到 manifest 首项
+    let mut settings = AppSettings::default();
+    settings.provider.provider_layout = Vec::new();
     let session = AppSession::new(settings, vec![]);
 
     assert_eq!(session.first_sidebar_provider(), pid(ProviderKind::first()));

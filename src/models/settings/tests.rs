@@ -23,13 +23,13 @@ fn provider_config_set_and_check_enabled() {
 }
 
 #[test]
-fn provider_config_remove_enabled_record_clears_explicit_state() {
+fn provider_config_set_disabled_preserves_layout_item() {
     let mut config = ProviderConfig::default();
-    let custom = ProviderId::Custom("retry:newapi".to_string());
+    let custom = ProviderId::Custom("retry:api".to_string());
 
     config.set_enabled(&custom, false);
-    assert_eq!(config.remove_enabled_record(&custom), Some(false));
-    assert!(!config.enabled_providers.contains_key(&custom.id_key()));
+
+    assert!(config.has_layout_item(&custom));
     assert!(!config.is_enabled(&custom));
 }
 
@@ -45,43 +45,34 @@ fn register_discovered_custom_providers_auto_enables_missing_customs() {
 
     assert_eq!(registered, vec![fresh.clone()]);
     assert!(config.is_enabled(&fresh));
-    assert!(config.sidebar_providers.contains(&fresh.id_key()));
+    assert!(config.is_in_sidebar(&fresh));
 }
 
 #[test]
 fn register_discovered_custom_providers_preserves_explicit_state_and_sidebar() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["fresh:api".into()],
-        ..Default::default()
-    };
+    let mut config = ProviderConfig::default();
     let fresh = ProviderId::Custom("fresh:api".to_string());
     let disabled = ProviderId::Custom("disabled:api".to_string());
+    config.add_to_sidebar(&fresh);
     config.set_enabled(&disabled, false);
 
     let registered =
         config.register_discovered_custom_providers(&[fresh.clone(), disabled.clone()]);
 
-    assert_eq!(registered, vec![fresh.clone()]);
-    assert!(config.is_enabled(&fresh));
+    assert_eq!(registered, vec![]);
+    assert!(!config.is_enabled(&fresh));
     assert!(!config.is_enabled(&disabled));
-    assert_eq!(
-        config
-            .sidebar_providers
-            .iter()
-            .filter(|key| **key == "fresh:api")
-            .count(),
-        1
-    );
+    assert!(config.is_in_sidebar(&fresh));
 }
 
 #[test]
 fn provider_config_ordered_providers_ignores_invalid() {
     let config = ProviderConfig {
-        provider_order: vec![
-            "gemini".into(),
-            "invalid".into(),
-            "claude".into(),
-            "gemini".into(), // duplicate
+        provider_layout: vec![
+            ProviderLayoutItem::new("gemini", true, false),
+            ProviderLayoutItem::new("invalid", false, false),
+            ProviderLayoutItem::new("claude", true, false),
+            ProviderLayoutItem::new("gemini", true, false),
         ],
         ..Default::default()
     };
@@ -90,6 +81,36 @@ fn provider_config_ordered_providers_ignores_invalid() {
     assert_eq!(ordered[0], ProviderKind::Gemini);
     assert_eq!(ordered[1], ProviderKind::Claude);
     assert_eq!(ordered.len(), ProviderKind::all().len());
+}
+
+#[test]
+fn provider_layout_item_disables_hidden_provider() {
+    let hidden_enabled = ProviderLayoutItem::new("claude", false, true);
+    let visible_enabled = ProviderLayoutItem::new("claude", true, true);
+
+    assert!(!hidden_enabled.is_enabled());
+    assert!(!hidden_enabled.is_in_sidebar());
+    assert!(visible_enabled.is_enabled());
+    assert!(visible_enabled.is_in_sidebar());
+}
+
+#[test]
+fn normalize_layout_deduplicates_and_repairs_invalid_state() {
+    let mut config = ProviderConfig {
+        provider_layout: serde_json::from_value(serde_json::json!([
+            {"id": "gemini", "in_sidebar": false, "enabled": true},
+            {"id": "gemini", "in_sidebar": true, "enabled": true},
+            {"id": "", "in_sidebar": true, "enabled": true}
+        ]))
+        .unwrap(),
+        ..Default::default()
+    };
+
+    assert!(config.normalize_layout());
+    assert_eq!(config.provider_layout.len(), 1);
+    assert_eq!(config.provider_layout[0].id(), "gemini");
+    assert!(!config.provider_layout[0].is_enabled());
+    assert!(!config.provider_layout[0].is_in_sidebar());
 }
 
 #[test]
@@ -107,17 +128,30 @@ fn provider_config_quota_visibility() {
 }
 
 #[test]
-fn provider_config_move_to_index_normalizes_order() {
+fn provider_config_move_to_index_normalizes_layout() {
     let mut config = ProviderConfig {
-        provider_order: vec!["gemini".into(), "gemini".into(), "claude".into()],
+        provider_layout: vec![
+            ProviderLayoutItem::new("gemini", true, false),
+            ProviderLayoutItem::new("gemini", true, false),
+            ProviderLayoutItem::new("claude", true, false),
+        ],
         ..Default::default()
     };
 
     let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-    // 带重复 key 的 provider_order 应被 ensure_order 正规化，然后正确移动
     assert!(config.move_provider_to_index(&claude, 0, &[]));
-    assert_eq!(config.provider_order[0], ProviderKind::Claude.id_key());
-    assert_eq!(config.provider_order.len(), ProviderKind::all().len());
+    assert_eq!(
+        config.provider_layout[0].id(),
+        ProviderKind::Claude.id_key()
+    );
+    assert_eq!(
+        config
+            .provider_layout
+            .iter()
+            .filter(|item| item.id() == ProviderKind::Gemini.id_key())
+            .count(),
+        1
+    );
 }
 
 // ── TrayIconStyle ────────────────────────────────────
@@ -253,7 +287,10 @@ fn hidden_quotas_isolated_between_custom_providers() {
 fn ordered_provider_ids_respects_saved_order() {
     let settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["gemini".into(), "claude".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("gemini", true, false),
+                ProviderLayoutItem::new("claude", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -269,7 +306,11 @@ fn ordered_provider_ids_respects_saved_order() {
 fn ordered_provider_ids_includes_custom() {
     let settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["gemini".into(), "myai:cli".into(), "claude".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("gemini", true, false),
+                ProviderLayoutItem::new("myai:cli", true, false),
+                ProviderLayoutItem::new("claude", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -307,7 +348,11 @@ fn ordered_provider_ids_appends_unseen_custom() {
 fn ordered_provider_ids_deduplicates() {
     let settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "claude".into(), "gemini".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -340,12 +385,12 @@ fn prune_removes_stale_custom_from_enabled() {
 }
 
 #[test]
-fn prune_removes_stale_custom_from_provider_order() {
+fn prune_removes_stale_custom_from_provider_layout() {
     let config = ProviderConfig {
-        provider_order: vec![
-            ProviderKind::Claude.id_key().to_string(),
-            "old:api".to_string(),
-            "keep:api".to_string(),
+        provider_layout: vec![
+            ProviderLayoutItem::new(ProviderKind::Claude.id_key(), true, false),
+            ProviderLayoutItem::new("old:api", true, false),
+            ProviderLayoutItem::new("keep:api", true, false),
         ],
         ..Default::default()
     };
@@ -356,8 +401,8 @@ fn prune_removes_stale_custom_from_provider_order() {
     let changed = config.prune_stale_custom_ids(&existing);
 
     assert!(changed);
-    assert_eq!(config.provider_order.len(), 2);
-    assert!(!config.provider_order.contains(&"old:api".to_string()));
+    assert_eq!(config.provider_layout.len(), 2);
+    assert!(!config.has_layout_item(&ProviderId::Custom("old:api".to_string())));
 }
 
 #[test]
@@ -393,7 +438,11 @@ fn prune_preserves_all_builtin_keys() {
 fn move_provider_to_index_forward() {
     let mut settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "gemini".into(), "copilot".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+                ProviderLayoutItem::new("copilot", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -405,9 +454,9 @@ fn move_provider_to_index_forward() {
     // ensure_order 展开后 claude 应在第三个位置
     let pos = settings
         .provider
-        .provider_order
+        .provider_layout
         .iter()
-        .position(|k| k == "claude")
+        .position(|item| item.id() == "claude")
         .unwrap();
     assert_eq!(pos, 2);
 }
@@ -416,7 +465,11 @@ fn move_provider_to_index_forward() {
 fn move_provider_to_index_backward() {
     let mut settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "gemini".into(), "copilot".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+                ProviderLayoutItem::new("copilot", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -427,9 +480,9 @@ fn move_provider_to_index_backward() {
     assert!(settings.provider.move_provider_to_index(&copilot, 0, &[]));
     let pos = settings
         .provider
-        .provider_order
+        .provider_layout
         .iter()
-        .position(|k| k == "copilot")
+        .position(|item| item.id() == "copilot")
         .unwrap();
     assert_eq!(pos, 0);
 }
@@ -438,7 +491,10 @@ fn move_provider_to_index_backward() {
 fn move_provider_to_index_same_position_returns_false() {
     let mut settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "gemini".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -452,7 +508,10 @@ fn move_provider_to_index_same_position_returns_false() {
 fn move_provider_to_index_clamps_out_of_bounds() {
     let mut settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "gemini".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -461,13 +520,8 @@ fn move_provider_to_index_clamps_out_of_bounds() {
     let claude = ProviderId::BuiltIn(ProviderKind::Claude);
     // target=999 应被 clamp 到末尾
     assert!(settings.provider.move_provider_to_index(&claude, 999, &[]));
-    let pos = settings
-        .provider
-        .provider_order
-        .iter()
-        .position(|k| k == "claude")
-        .unwrap();
-    assert_eq!(pos, settings.provider.provider_order.len() - 1);
+    let visible = settings.provider.sidebar_provider_ids(&[]);
+    assert_eq!(visible.last(), Some(&claude));
 }
 
 #[test]
@@ -475,7 +529,11 @@ fn move_custom_provider_to_index() {
     let custom = ProviderId::Custom("myai:cli".to_string());
     let mut settings = AppSettings {
         provider: ProviderConfig {
-            provider_order: vec!["claude".into(), "myai:cli".into(), "gemini".into()],
+            provider_layout: vec![
+                ProviderLayoutItem::new("claude", true, false),
+                ProviderLayoutItem::new("myai:cli", true, false),
+                ProviderLayoutItem::new("gemini", true, false),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -485,42 +543,50 @@ fn move_custom_provider_to_index() {
     assert!(settings
         .provider
         .move_provider_to_index(&custom, 0, std::slice::from_ref(&custom)));
-    assert_eq!(settings.provider.provider_order[0], "myai:cli");
-    assert_eq!(settings.provider.provider_order[1], "claude");
+    assert_eq!(settings.provider.provider_layout[0].id(), "myai:cli");
+    assert_eq!(settings.provider.provider_layout[1].id(), "claude");
 }
 
-// ── sidebar_provider_ids ──────────────────────────────
+// ── provider_layout / sidebar ─────────────────────────
 
 #[test]
-fn sidebar_provider_ids_returns_subset() {
+fn sidebar_provider_ids_returns_subset_in_layout_order() {
     let config = ProviderConfig {
-        sidebar_providers: vec!["claude".into(), "gemini".into()],
-        provider_order: vec!["gemini".into(), "claude".into()],
+        provider_layout: vec![
+            ProviderLayoutItem::new("gemini", true, false),
+            ProviderLayoutItem::new("claude", true, false),
+        ],
         ..Default::default()
     };
     let ids = config.sidebar_provider_ids(&[]);
-    assert_eq!(ids.len(), 2);
-    // 按 provider_order 排序
-    assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
-    assert_eq!(ids[1], ProviderId::BuiltIn(ProviderKind::Claude));
+    assert_eq!(
+        ids,
+        vec![builtin(ProviderKind::Gemini), builtin(ProviderKind::Claude)]
+    );
 }
 
 #[test]
-fn sidebar_provider_ids_excludes_non_sidebar() {
+fn sidebar_provider_ids_excludes_hidden_items() {
     let config = ProviderConfig {
-        sidebar_providers: vec!["claude".into()],
+        provider_layout: vec![
+            ProviderLayoutItem::new("claude", true, false),
+            ProviderLayoutItem::new("gemini", false, false),
+        ],
         ..Default::default()
     };
-    let ids = config.sidebar_provider_ids(&[]);
-    assert_eq!(ids.len(), 1);
-    assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Claude));
+    assert_eq!(
+        config.sidebar_provider_ids(&[]),
+        vec![builtin(ProviderKind::Claude)]
+    );
 }
 
 #[test]
 fn sidebar_provider_ids_includes_custom() {
     let config = ProviderConfig {
-        sidebar_providers: vec!["claude".into(), "myai:newapi".into()],
-        provider_order: vec!["claude".into(), "myai:newapi".into()],
+        provider_layout: vec![
+            ProviderLayoutItem::new("claude", true, false),
+            ProviderLayoutItem::new("myai:newapi", true, false),
+        ],
         ..Default::default()
     };
     let custom = vec![ProviderId::Custom("myai:newapi".to_string())];
@@ -530,29 +596,25 @@ fn sidebar_provider_ids_includes_custom() {
 }
 
 #[test]
-fn sidebar_provider_ids_hides_removed_provider_with_residual_order() {
-    // provider_order 残留已从 sidebar 移除的 key（排序记忆），
-    // sidebar_provider_ids 必须不暴露它。
-    let config = ProviderConfig {
-        sidebar_providers: vec!["gemini".into()],
-        provider_order: vec!["claude".into(), "gemini".into()], // claude 已移除但残留
+fn hidden_layout_item_keeps_its_position_when_readded() {
+    let mut config = ProviderConfig {
+        provider_layout: vec![
+            ProviderLayoutItem::new("claude", true, false),
+            ProviderLayoutItem::new("gemini", true, false),
+        ],
         ..Default::default()
     };
-    let ids = config.sidebar_provider_ids(&[]);
-    assert_eq!(ids.len(), 1);
-    assert_eq!(ids[0], ProviderId::BuiltIn(ProviderKind::Gemini));
-    // claude 不在结果中
-    assert!(!ids.contains(&ProviderId::BuiltIn(ProviderKind::Claude)));
+    let claude = ProviderId::BuiltIn(ProviderKind::Claude);
+    assert!(config.remove_from_sidebar(&claude));
+    assert!(config.add_to_sidebar(&claude));
+    assert_eq!(config.provider_layout[0].id(), "claude");
 }
 
 // ── addable_provider_kinds ────────────────────────────
 
 #[test]
 fn addable_provider_kinds_excludes_existing() {
-    let config = ProviderConfig {
-        sidebar_providers: vec!["claude".into(), "codex".into()],
-        ..Default::default()
-    };
+    let config = ProviderConfig::default();
     let addable = config.addable_provider_kinds();
     assert!(!addable.contains(&ProviderKind::Claude));
     assert!(!addable.contains(&ProviderKind::Codex));
@@ -561,37 +623,41 @@ fn addable_provider_kinds_excludes_existing() {
 }
 
 #[test]
-fn addable_provider_kinds_all_when_sidebar_empty() {
-    let config = ProviderConfig::default();
-    let addable = config.addable_provider_kinds();
-    assert_eq!(addable.len(), ProviderKind::all().len());
+fn addable_provider_kinds_all_when_layout_empty() {
+    let config = ProviderConfig {
+        provider_layout: Vec::new(),
+        ..Default::default()
+    };
+    assert_eq!(
+        config.addable_provider_kinds().len(),
+        ProviderKind::all().len()
+    );
 }
 
 // ── add_to_sidebar ───────────────────────────────────
 
 #[test]
 fn add_to_sidebar_success() {
-    let mut config = ProviderConfig::default();
+    let mut config = ProviderConfig {
+        provider_layout: Vec::new(),
+        ..Default::default()
+    };
     let id = ProviderId::BuiltIn(ProviderKind::Gemini);
     assert!(config.add_to_sidebar(&id));
-    assert!(config.sidebar_providers.contains(&"gemini".to_string()));
-    assert!(config.provider_order.contains(&"gemini".to_string()));
+    assert!(config.is_in_sidebar(&id));
+    assert_eq!(config.provider_layout[0].id(), "gemini");
 }
 
 #[test]
 fn add_to_sidebar_duplicate_builtin_rejected() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["claude".into()],
-        ..Default::default()
-    };
+    let mut config = ProviderConfig::default();
     let id = ProviderId::BuiltIn(ProviderKind::Claude);
     assert!(!config.add_to_sidebar(&id));
-    // sidebar 中仍只有一个 claude
     assert_eq!(
         config
-            .sidebar_providers
+            .provider_layout
             .iter()
-            .filter(|k| *k == "claude")
+            .filter(|item| item.id() == "claude" && item.is_in_sidebar())
             .count(),
         1
     );
@@ -599,17 +665,15 @@ fn add_to_sidebar_duplicate_builtin_rejected() {
 
 #[test]
 fn add_to_sidebar_duplicate_custom_rejected() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["myai:newapi".into()],
-        ..Default::default()
-    };
+    let mut config = ProviderConfig::default();
     let id = ProviderId::Custom("myai:newapi".to_string());
+    assert!(config.add_to_sidebar(&id));
     assert!(!config.add_to_sidebar(&id));
     assert_eq!(
         config
-            .sidebar_providers
+            .provider_layout
             .iter()
-            .filter(|k| *k == "myai:newapi")
+            .filter(|item| item.id() == "myai:newapi" && item.is_in_sidebar())
             .count(),
         1
     );
@@ -619,43 +683,18 @@ fn add_to_sidebar_duplicate_custom_rejected() {
 
 #[test]
 fn remove_from_sidebar_success() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["claude".into(), "gemini".into()],
-        ..Default::default()
-    };
+    let mut config = ProviderConfig::default();
     let id = ProviderId::BuiltIn(ProviderKind::Claude);
     assert!(config.remove_from_sidebar(&id));
-    assert!(!config.sidebar_providers.contains(&"claude".to_string()));
-    assert_eq!(config.sidebar_providers.len(), 1);
-}
-
-#[test]
-fn remove_from_sidebar_preserves_provider_order_for_re_add() {
-    // provider_order 是排序记忆：从 sidebar 移除后保留 key，
-    // 用户重新加回时 add_to_sidebar 跳过追加，恢复原位置。
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["claude".into(), "gemini".into()],
-        provider_order: vec!["claude".into(), "gemini".into()],
-        ..Default::default()
-    };
-    let claude = ProviderId::BuiltIn(ProviderKind::Claude);
-    assert!(config.remove_from_sidebar(&claude));
-    // provider_order 仍保留 claude（排序记忆）
-    assert!(config.provider_order.contains(&"claude".to_string()));
-    // 重新加回：claude 仍在原位置（order[0]），不被追加到末尾
-    assert!(config.add_to_sidebar(&claude));
-    assert_eq!(config.provider_order[0], "claude");
+    assert!(!config.is_in_sidebar(&id));
+    assert!(!config.is_enabled(&id));
 }
 
 #[test]
 fn remove_from_sidebar_nonexistent_noop() {
-    let mut config = ProviderConfig {
-        sidebar_providers: vec!["claude".into()],
-        ..Default::default()
-    };
+    let mut config = ProviderConfig::default();
     let id = ProviderId::BuiltIn(ProviderKind::Gemini);
     assert!(!config.remove_from_sidebar(&id));
-    assert_eq!(config.sidebar_providers.len(), 1);
 }
 
 // ── ProviderSettings credential accessors ──────────────

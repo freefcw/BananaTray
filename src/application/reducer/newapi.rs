@@ -67,12 +67,7 @@ pub(super) fn submit_newapi(
     }
 
     // ── 预注册 Provider ID：确保热重载后 Provider 立即可见 ──
-    if !session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&new_id.id_key())
-    {
+    if !session.settings.provider.has_layout_item(&new_id) {
         session.settings.provider.set_enabled(&new_id, true);
     }
     session.settings.provider.add_to_sidebar(&new_id);
@@ -99,12 +94,7 @@ pub(super) fn submit_newapi(
 /// 新增模式下判断身份（站点 + 账号）是否已被占用：
 /// settings 中的启用记录（含被禁用的记录）或已加载的 Provider 均视为占用。
 fn newapi_identity_occupied(session: &AppSession, id: &ProviderId) -> bool {
-    session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&id.id_key())
-        || session.provider_store.find_by_id(id).is_some()
+    session.settings.provider.has_layout_item(id) || session.provider_store.find_by_id(id).is_some()
 }
 
 pub(super) fn newapi_save_finished(

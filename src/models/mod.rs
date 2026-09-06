@@ -37,6 +37,6 @@ pub use script_provider::{
 };
 pub use settings::{
     AppSettings, AppTheme, DisplaySettings, LoggingSettings, NotificationSettings, ProviderConfig,
-    ProviderSettings, QuotaDisplayMode, SavedWindowPosition, SystemSettings, TrayIconStyle,
-    TrayPopupSettings,
+    ProviderLayoutItem, ProviderSettings, QuotaDisplayMode, SavedWindowPosition, SystemSettings,
+    TrayIconStyle, TrayPopupSettings,
 };

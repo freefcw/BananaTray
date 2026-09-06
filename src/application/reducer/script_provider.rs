@@ -90,12 +90,7 @@ pub(super) fn submit_script_provider(
         config.provider_id = unique_script_provider_id_for_session(session, &config.display_name);
     }
     let new_id = ProviderId::Custom(config.provider_id.clone());
-    if !session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&new_id.id_key())
-    {
+    if !session.settings.provider.has_layout_item(&new_id) {
         session.settings.provider.set_enabled(&new_id, true);
     }
     session.settings.provider.add_to_sidebar(&new_id);

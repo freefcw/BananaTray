@@ -82,7 +82,10 @@ fn cancel_add_provider_clears_flag() {
 fn add_provider_to_sidebar_persists_and_selects() {
     let mut session = make_session();
     // 预设 sidebar 只有 claude
-    session.settings.provider.sidebar_providers = vec!["claude".into()];
+    session
+        .settings
+        .provider
+        .remove_from_sidebar(&pid(ProviderKind::Codex));
     session.settings_ui.modal = SettingsModalState::AddingProvider;
     session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 
@@ -93,8 +96,7 @@ fn add_provider_to_sidebar_persists_and_selects() {
     assert!(session
         .settings
         .provider
-        .sidebar_providers
-        .contains(&"gemini".to_string()));
+        .is_in_sidebar(&pid(ProviderKind::Gemini)));
     // 选中了刚添加的 provider
     assert_eq!(session.settings_ui.selected_provider, id);
     // 退出添加模式
@@ -110,7 +112,10 @@ fn add_provider_to_sidebar_persists_and_selects() {
 #[test]
 fn remove_provider_from_sidebar_disables_and_persists() {
     let mut session = make_session();
-    session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
+    session
+        .settings
+        .provider
+        .add_to_sidebar(&pid(ProviderKind::Gemini));
     session
         .settings
         .provider
@@ -130,8 +135,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
     assert!(!session
         .settings
         .provider
-        .sidebar_providers
-        .contains(&"claude".to_string()));
+        .is_in_sidebar(&pid(ProviderKind::Claude)));
     // claude 被 disable
     assert!(!session
         .settings
@@ -148,7 +152,10 @@ fn remove_provider_from_sidebar_disables_and_persists() {
 #[test]
 fn remove_last_sidebar_provider_enters_add_mode() {
     let mut session = make_session();
-    session.settings.provider.sidebar_providers = vec!["claude".into()];
+    session
+        .settings
+        .provider
+        .remove_from_sidebar(&pid(ProviderKind::Codex));
     session
         .settings
         .provider
@@ -160,7 +167,11 @@ fn remove_last_sidebar_provider_enters_add_mode() {
     );
 
     // sidebar 已空
-    assert!(session.settings.provider.sidebar_providers.is_empty());
+    assert!(session
+        .settings
+        .provider
+        .sidebar_provider_ids(&[])
+        .is_empty());
     // 自动进入添加模式
     assert!(session.settings_ui.modal.is_adding_provider());
     assert!(has_effect(&effects, |e| matches!(
@@ -173,7 +184,10 @@ fn remove_last_sidebar_provider_enters_add_mode() {
 #[test]
 fn remove_nonexistent_provider_from_sidebar_is_noop() {
     let mut session = make_session();
-    session.settings.provider.sidebar_providers = vec!["claude".into()];
+    session
+        .settings
+        .provider
+        .remove_from_sidebar(&pid(ProviderKind::Codex));
 
     let effects = reduce(
         &mut session,
@@ -181,7 +195,7 @@ fn remove_nonexistent_provider_from_sidebar_is_noop() {
     );
 
     // sidebar 不变
-    assert_eq!(session.settings.provider.sidebar_providers.len(), 1);
+    assert_eq!(session.settings.provider.sidebar_provider_ids(&[]).len(), 1);
     // 无持久化
     assert!(!has_effect(&effects, |e| matches!(
         e,
@@ -222,7 +236,10 @@ fn cancel_remove_provider_clears_confirming_flag() {
 #[test]
 fn remove_provider_resets_confirming_flag() {
     let mut session = make_session();
-    session.settings.provider.sidebar_providers = vec!["claude".into(), "gemini".into()];
+    session
+        .settings
+        .provider
+        .add_to_sidebar(&pid(ProviderKind::Gemini));
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
     session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
 

@@ -246,11 +246,6 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
     let provider_key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
-    session
-        .settings
-        .provider
-        .provider_order
-        .push(provider_key.clone());
     session.settings.provider.hidden_quotas.insert(
         provider_key.clone(),
         ["Session".to_string()].into_iter().collect(),
@@ -274,11 +269,7 @@ fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
     );
 
     assert!(!session.settings.provider.is_enabled(&provider_id));
-    assert!(!session
-        .settings
-        .provider
-        .provider_order
-        .contains(&provider_key));
+    assert!(!session.settings.provider.has_layout_item(&provider_id));
     assert!(!session
         .settings
         .provider
@@ -336,16 +327,7 @@ fn newapi_save_failure_persists_rollback_after_newer_settings_write_is_scheduled
         },
     );
 
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
-    assert!(!session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&provider_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&provider_id));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -389,11 +371,7 @@ fn late_newapi_save_failure_preserves_the_users_new_form_context() {
         },
     );
 
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&failed_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&failed_id));
     assert_eq!(
         session.settings_ui.modal,
         SettingsModalState::AddingScriptProvider
@@ -411,7 +389,6 @@ fn newapi_delete_finished_success_reloads_providers() {
     let key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
-    session.settings.provider.provider_order.push(key.clone());
     session
         .settings
         .provider
@@ -429,10 +406,7 @@ fn newapi_delete_finished_success_reloads_providers() {
     assert!(!session
         .settings
         .provider
-        .enabled_providers
-        .contains_key(&key));
-    assert!(!session.settings.provider.sidebar_providers.contains(&key));
-    assert!(!session.settings.provider.provider_order.contains(&key));
+        .has_layout_item(&ProviderId::Custom(key.clone())));
     assert!(!session.settings.provider.hidden_quotas.contains_key(&key));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
@@ -586,9 +560,6 @@ fn late_newapi_load_does_not_replace_a_newer_modal() {
 fn submit_newapi_auto_enables_and_adds_to_sidebar() {
     let mut session = make_session();
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
-    // sidebar 初始为空（模拟全新用户场景）
-    session.settings.provider.sidebar_providers = vec!["claude".into()];
-
     let effects = reduce(
         &mut session,
         AppAction::SubmitNewApi(NewApiConfig {
@@ -605,11 +576,7 @@ fn submit_newapi_auto_enables_and_adds_to_sidebar() {
     // 自动启用
     assert!(session.settings.provider.is_enabled(&expected_id));
     // 加入 sidebar
-    assert!(session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&"relay-example-com:newapi".to_string()));
+    assert!(session.settings.provider.is_in_sidebar(&expected_id));
     // 设置页选中新 Provider
     assert_eq!(session.settings_ui.selected_provider, expected_id);
     // Submit 阶段不发 PersistSettings；保存完成后再按结果处理
@@ -626,11 +593,7 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
     let mut session = make_session();
     let custom_id = ProviderId::Custom("old-site-com:newapi".to_string());
     session.settings.provider.set_enabled(&custom_id, true);
-    session
-        .settings
-        .provider
-        .sidebar_providers
-        .push("old-site-com:newapi".to_string());
+    session.settings.provider.add_to_sidebar(&custom_id);
 
     session.settings_ui.modal = SettingsModalState::EditingNewApi(NewApiEditData {
         display_name: "Old Site".to_string(),
@@ -655,16 +618,7 @@ fn submit_newapi_edit_mode_preserves_existing_enabled_state() {
 
     // 已存在的 enabled 状态不被覆盖，也不会重复加入 sidebar
     assert!(session.settings.provider.is_enabled(&custom_id));
-    assert_eq!(
-        session
-            .settings
-            .provider
-            .sidebar_providers
-            .iter()
-            .filter(|key| **key == "old-site-com:newapi")
-            .count(),
-        1
-    );
+    assert!(session.settings.provider.is_in_sidebar(&custom_id));
 }
 
 #[test]
@@ -697,11 +651,7 @@ fn submit_newapi_reenables_same_provider_after_create_rollback() {
             divisor: None,
         },
     );
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&retry_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&retry_id));
 
     reduce(
         &mut session,
@@ -715,11 +665,7 @@ fn submit_newapi_reenables_same_provider_after_create_rollback() {
     );
 
     assert!(session.settings.provider.is_enabled(&retry_id));
-    assert!(session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&retry_id.id_key()));
+    assert!(session.settings.provider.is_in_sidebar(&retry_id));
     assert_eq!(session.settings_ui.selected_provider, retry_id);
 }
 
@@ -740,11 +686,7 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
     // 自动启用
     assert!(session.settings.provider.is_enabled(&fresh_id));
     // 加入 sidebar
-    assert!(session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&"fresh:api".to_string()));
+    assert!(session.settings.provider.is_in_sidebar(&fresh_id));
     // 产出 PersistSettings
     assert!(has_effect(&effects, |e| matches!(
         e,
@@ -763,11 +705,9 @@ fn providers_reloaded_auto_enables_new_custom_provider() {
 #[test]
 fn providers_reloaded_reuses_existing_sidebar_entry_for_new_custom_provider() {
     let mut session = make_session();
-    session
-        .settings
-        .provider
-        .sidebar_providers
-        .push("fresh:api".to_string());
+    let fresh_id = ProviderId::Custom("fresh:api".to_string());
+    session.settings.provider.set_enabled(&fresh_id, true);
+    session.settings.provider.add_to_sidebar(&fresh_id);
 
     let mut statuses = session.provider_store.providers.to_vec();
     statuses.push(make_custom_provider_status("fresh:api"));
@@ -777,19 +717,9 @@ fn providers_reloaded_reuses_existing_sidebar_entry_for_new_custom_provider() {
         AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
-    let fresh_id = ProviderId::Custom("fresh:api".to_string());
     assert!(session.settings.provider.is_enabled(&fresh_id));
-    assert_eq!(
-        session
-            .settings
-            .provider
-            .sidebar_providers
-            .iter()
-            .filter(|key| **key == "fresh:api")
-            .count(),
-        1
-    );
-    assert!(has_effect(&effects, |e| matches!(
+    assert!(session.settings.provider.is_in_sidebar(&fresh_id));
+    assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));

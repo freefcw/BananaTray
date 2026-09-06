@@ -227,14 +227,10 @@ fn shutdown_settles_completed_save_failure_before_final_settings_flush() {
         .session
         .settings
         .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
+        .has_layout_item(&provider_id));
     let records = records.lock().unwrap();
     let final_settings = records.last().expect("final settings snapshot");
-    assert!(!final_settings
-        .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
+    assert!(!final_settings.provider.has_layout_item(&provider_id));
 }
 
 #[test]
@@ -271,14 +267,7 @@ fn shutdown_settles_completed_delete_success_before_final_settings_flush() {
         .session
         .settings
         .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
-    assert!(!state
-        .session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&provider_id.id_key()));
+        .has_layout_item(&provider_id));
 }
 
 #[test]

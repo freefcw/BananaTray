@@ -1,91 +1,68 @@
 //! ProviderConfig — 设置页 Sidebar 管理
 //!
-//! 管理设置页 sidebar 列表：默认值填充、增删、可添加项查询。
+//! 管理统一 `provider_layout` 中的 sidebar 可见性、默认 Provider 和自定义 Provider 发现。
 
 use super::*;
 
 impl ProviderConfig {
-    /// 设置页 sidebar 应展示的 Provider ID 列表。
-    ///
-    /// 返回 `sidebar_providers` 中有效的 Provider，按 `provider_order` 排序；
-    /// 不在 `sidebar_providers` 中的项不展示。
+    /// 返回按布局顺序排列的 sidebar Provider。
     pub fn sidebar_provider_ids(&self, custom_ids: &[ProviderId]) -> Vec<ProviderId> {
-        let sidebar_set: HashSet<&str> =
-            self.sidebar_providers.iter().map(|s| s.as_str()).collect();
-        // 按 provider_order 的顺序，过滤出在 sidebar 中的项
         self.ordered_provider_ids(custom_ids)
             .into_iter()
-            .filter(|id| sidebar_set.contains(id.id_key().as_str()))
+            .filter(|id| self.is_in_sidebar(id))
             .collect()
     }
 
     /// 返回可添加到 sidebar 的内置 Provider 列表。
-    ///
-    /// 规则：全量内置 Provider 中排除已在 sidebar 中的（Custom 类型不在此列，
-    /// NewAPI 有独立入口）。
     pub fn addable_provider_kinds(&self) -> Vec<ProviderKind> {
-        let sidebar_set: HashSet<&str> =
-            self.sidebar_providers.iter().map(|s| s.as_str()).collect();
         ProviderKind::all()
             .iter()
-            .filter(|kind| !sidebar_set.contains(kind.id_key()))
+            .filter(|kind| !self.is_in_sidebar(&ProviderId::BuiltIn(**kind)))
             .copied()
             .collect()
     }
 
     /// 自动登记首次发现的自定义 Provider。
     ///
-    /// 仅当 `enabled_providers` 中不存在显式记录时才自动启用，
-    /// 以保留用户手动关闭（`false`）的状态；若 sidebar 中已存在该项，
-    /// 则不重复追加，避免冷启动/热重载修补时制造重复项。
-    ///
-    /// 返回本次新登记的自定义 Provider ID 列表。
+    /// 没有任何既有布局记录时，新发现的 custom Provider 自动加入 sidebar 并启用；
+    /// 已存在但被用户禁用或移除的记录保持原状态。
     pub fn register_discovered_custom_providers(&mut self, ids: &[ProviderId]) -> Vec<ProviderId> {
         let mut registered = Vec::new();
 
         for id in ids.iter().filter(|id| id.is_custom()) {
-            let key = id.id_key();
-            if self.enabled_providers.contains_key(&key) {
+            if self.layout_item(id).is_some() {
                 continue;
             }
 
-            self.set_enabled(id, true);
-            if !self.sidebar_providers.contains(&key) {
-                self.add_to_sidebar(id);
-            }
+            let item = self.ensure_layout_item(id);
+            item.in_sidebar = true;
+            item.enabled = true;
             registered.push(id.clone());
         }
 
         registered
     }
 
-    /// 将 Provider 添加到 sidebar 列表。
-    ///
-    /// `sidebar_providers` 表达集合语义：无论内置还是自定义 Provider，重复添加都返回 false。
+    /// 将 Provider 添加到 sidebar；保留其原有排序位置和启用状态。
     pub fn add_to_sidebar(&mut self, id: &ProviderId) -> bool {
-        let key = id.id_key();
-        if self.sidebar_providers.contains(&key) {
+        let item = self.ensure_layout_item(id);
+        if item.in_sidebar {
             return false;
         }
-        self.sidebar_providers.push(key.clone());
-        // 同步到 provider_order（排序列表也需要包含该项）
-        if !self.provider_order.contains(&key) {
-            self.provider_order.push(key);
-        }
+        item.in_sidebar = true;
         true
     }
 
-    /// 从 sidebar 列表移除 Provider。返回 true 表示移除成功。
-    ///
-    /// 注意：不同步清理 `provider_order`。`provider_order` 是"用户自定义排序前缀"，
-    /// 缺失的 provider 会被 `ordered_provider_ids` 自动追加到末尾，因此残留 key 无害；
-    /// 保留它还能让用户重新加回 sidebar 时恢复原排序位置（`add_to_sidebar` 发现
-    /// key 已在 order 中即跳过追加）。内置 key 不会被 `prune_stale_custom_ids`
-    /// 清理，这是有意的——排序记忆比强一致更有价值。
+    /// 从 sidebar 移除 Provider，同时禁用它但保留布局项以记住排序位置。
     pub fn remove_from_sidebar(&mut self, id: &ProviderId) -> bool {
-        let key = id.id_key();
-        let before = self.sidebar_providers.len();
-        self.sidebar_providers.retain(|k| *k != key);
-        self.sidebar_providers.len() != before
+        let Some(item) = self.layout_item_mut(id) else {
+            return false;
+        };
+        if !item.in_sidebar {
+            return false;
+        }
+        item.in_sidebar = false;
+        item.enabled = false;
+        true
     }
 }

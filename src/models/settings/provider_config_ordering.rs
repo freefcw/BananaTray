@@ -1,39 +1,25 @@
 //! ProviderConfig — Provider 排序管理
 //!
-//! 负责 Provider 的用户自定义排列顺序、拖拽排序等逻辑。
+//! 负责有序 `provider_layout` 的读取、补齐和拖拽排序；数组位置就是唯一排序来源。
 
 use super::*;
 
 impl ProviderConfig {
-    /// 按用户自定义顺序返回所有内置 Provider。未在 provider_order 中出现的追加到末尾。
+    /// 按用户布局顺序返回所有内置 Provider。未出现在布局中的 Provider 追加到末尾。
     pub fn ordered_providers(&self) -> Vec<ProviderKind> {
-        let mut result = Vec::with_capacity(ProviderKind::all().len());
-        let mut seen = HashSet::with_capacity(ProviderKind::all().len());
-
-        for key in &self.provider_order {
-            if let Some(kind) = ProviderKind::from_id_key(key) {
-                if seen.insert(kind) {
-                    result.push(kind);
-                }
-            }
-        }
-
-        for &kind in ProviderKind::all() {
-            if seen.insert(kind) {
-                result.push(kind);
-            }
-        }
-
-        result
+        self.ordered_provider_ids(&[])
+            .into_iter()
+            .filter_map(|id| id.as_builtin())
+            .collect()
     }
 
-    /// 按用户自定义顺序返回所有 Provider（内置 + 自定义）。
+    /// 按用户布局顺序返回所有 Provider（内置 + 已发现的自定义 Provider）。
     pub fn ordered_provider_ids(&self, custom_ids: &[ProviderId]) -> Vec<ProviderId> {
         let mut result = Vec::new();
         let mut seen = HashSet::new();
 
-        for key in &self.provider_order {
-            let id = ProviderId::from_id_key(key);
+        for item in &self.provider_layout {
+            let id = ProviderId::from_id_key(&item.id);
             if seen.insert(id.clone()) {
                 result.push(id);
             }
@@ -55,32 +41,66 @@ impl ProviderConfig {
         result
     }
 
-    /// 将指定 Provider 移动到目标索引位置（拖拽排序）。返回 true 表示发生了移动。
+    /// 将指定 sidebar Provider 移动到目标可见索引位置（拖拽排序）。
     pub fn move_provider_to_index(
         &mut self,
         id: &ProviderId,
         target_index: usize,
         custom_ids: &[ProviderId],
     ) -> bool {
-        self.ensure_order(custom_ids);
-        let key = id.id_key();
-        if let Some(current) = self.provider_order.iter().position(|k| *k == key) {
-            let target = target_index.min(self.provider_order.len().saturating_sub(1));
-            if current != target {
-                let item = self.provider_order.remove(current);
-                self.provider_order.insert(target, item);
-                return true;
-            }
+        self.ensure_layout_items(custom_ids);
+        let Some(current) = self
+            .provider_layout
+            .iter()
+            .position(|item| item.id == id.id_key() && item.in_sidebar)
+        else {
+            return false;
+        };
+
+        let current_visible_index = self.provider_layout[..current]
+            .iter()
+            .filter(|candidate| candidate.in_sidebar)
+            .count();
+        let item = self.provider_layout.remove(current);
+        let visible_count = self
+            .provider_layout
+            .iter()
+            .filter(|candidate| candidate.in_sidebar)
+            .count();
+        let target_index = target_index.min(visible_count);
+        if current_visible_index == target_index {
+            self.provider_layout
+                .insert(current.min(self.provider_layout.len()), item);
+            return false;
         }
-        false
+
+        let target_position = if target_index == visible_count {
+            self.provider_layout
+                .iter()
+                .rposition(|candidate| candidate.in_sidebar)
+                .map(|position| position + 1)
+                .unwrap_or(self.provider_layout.len())
+        } else {
+            self.provider_layout
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| candidate.in_sidebar)
+                .nth(target_index)
+                .map(|(position, _)| position)
+                .unwrap_or(self.provider_layout.len())
+        };
+
+        self.provider_layout.insert(target_position, item);
+        true
     }
 
-    /// 确保 provider_order 包含所有 Provider（内置 + 自定义）
-    fn ensure_order(&mut self, custom_ids: &[ProviderId]) {
-        self.provider_order = self
-            .ordered_provider_ids(custom_ids)
-            .into_iter()
-            .map(|id| id.id_key().to_string())
-            .collect();
+    fn ensure_layout_items(&mut self, custom_ids: &[ProviderId]) {
+        for &kind in ProviderKind::all() {
+            self.ensure_layout_item(&ProviderId::BuiltIn(kind));
+        }
+        for custom_id in custom_ids {
+            self.ensure_layout_item(custom_id);
+        }
+        self.normalize_layout();
     }
 }

@@ -175,44 +175,100 @@ pub struct SavedWindowPosition {
     pub y: f32,
 }
 
-/// Provider 管理配置（容器级 `#[serde(default)]` 语义见 `SystemSettings`）
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
+/// Provider 在设置页中的用户偏好。
+///
+/// 数组位置就是 Provider 的排序，不再额外保存 order 字段。
+///
+/// `in_sidebar` 与 `enabled` 是两个用户可感知的维度，但有明确约束：
+/// 启用 Provider 必须出现在 sidebar 中；隐藏 Provider 必须同时禁用。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProviderLayoutItem {
+    /// 稳定的 Provider id_key；内置 Provider 来自 `ProviderKind::id_key()`。
+    id: String,
+    /// 是否出现在设置页 sidebar / Provider 导航中。
+    #[serde(default)]
+    in_sidebar: bool,
+    /// 是否参与 Overview、托盘状态和后台刷新。
+    #[serde(default)]
+    enabled: bool,
+}
+
+impl ProviderLayoutItem {
+    pub fn new(id: impl Into<String>, in_sidebar: bool, enabled: bool) -> Self {
+        Self {
+            id: id.into(),
+            in_sidebar,
+            enabled: in_sidebar && enabled,
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn is_in_sidebar(&self) -> bool {
+        self.in_sidebar
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
+/// Provider 管理配置。
+///
+/// Provider 的布局和启用状态统一存储在 `provider_layout`；凭证与 quota 可见性仍然
+/// 分别属于独立的数据域，不混入布局项。
+#[derive(Debug, Clone)]
 pub struct ProviderConfig {
     /// BananaTray 自己管理的 Provider 凭证覆盖值（如 github_token / custom_token）。
     ///
     /// 注意：这不代表 Provider 的完整认证状态；部分 Provider 还会从外部配置文件、
     /// CLI 登录态或环境变量读取凭证。
     pub credentials: ProviderSettings,
-    /// 各 Provider 启用状态（key = provider id_key, value = enabled）
-    #[serde(default)]
-    pub enabled_providers: HashMap<String, bool>,
-    /// Provider 排序前缀（id_key 列表）。只记录用户自定义顺序，
-    /// 不在其中的 provider 由 `ordered_provider_ids` 自动追加到末尾。
-    /// 可包含已从 sidebar 移除或已禁用的 provider key（作为排序记忆，
-    /// 重新加回时恢复原位置）；`prune_stale_custom_ids` 只清理不存在的 custom id。
-    #[serde(default)]
-    pub provider_order: Vec<String>,
-    /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）
-    /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合
-    #[serde(default)]
+    /// 有序的 Provider 用户偏好；数组顺序就是设置页和导航排序。
+    pub provider_layout: Vec<ProviderLayoutItem>,
+    /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）。
+    /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合。
     pub hidden_quotas: HashMap<String, HashSet<String>>,
-    /// 设置页 sidebar 中展示的 Provider id_key 列表（动态子集）
-    #[serde(default)]
-    pub sidebar_providers: Vec<String>,
+}
+
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        Self {
+            credentials: ProviderSettings::default(),
+            provider_layout: Self::default_layout(),
+            hidden_quotas: HashMap::new(),
+        }
+    }
 }
 
 // ── ProviderConfig 核心方法（启用/禁用/清理）──
 impl ProviderConfig {
-    /// 检查指定 Provider 是否已启用
-    pub fn is_enabled(&self, id: &ProviderId) -> bool {
-        self.enabled_providers
-            .get(&id.id_key())
-            .copied()
-            .unwrap_or(false)
+    /// 首次启动默认展示 Claude + Codex，但不自动开启后台监控。
+    pub fn default_layout() -> Vec<ProviderLayoutItem> {
+        [ProviderKind::Claude, ProviderKind::Codex]
+            .into_iter()
+            .map(|kind| ProviderLayoutItem::new(kind.id_key(), true, false))
+            .collect()
     }
 
-    /// 设置指定 Provider 的启用状态（按 ProviderKind）
+    /// 检查指定 Provider 是否已启用。
+    pub fn is_enabled(&self, id: &ProviderId) -> bool {
+        self.layout_item(id).is_some_and(|item| item.enabled)
+    }
+
+    /// 检查指定 Provider 是否出现在 sidebar。
+    pub fn is_in_sidebar(&self, id: &ProviderId) -> bool {
+        self.layout_item(id).is_some_and(|item| item.in_sidebar)
+    }
+
+    /// 检查指定 Provider 是否已经有用户配置记录。
+    pub fn has_layout_item(&self, id: &ProviderId) -> bool {
+        self.layout_item(id).is_some()
+    }
+
+    /// 设置指定 Provider 的启用状态（按 ProviderKind）。
     ///
     /// 已废弃：请使用 `set_enabled(&ProviderId::BuiltIn(kind), enabled)` 替代。
     #[deprecated(note = "use set_enabled(&ProviderId::BuiltIn(kind), enabled) instead")]
@@ -220,36 +276,25 @@ impl ProviderConfig {
         self.set_enabled(&ProviderId::BuiltIn(kind), enabled);
     }
 
-    /// 通过 ProviderId 设置启用状态
+    /// 通过 ProviderId 设置启用状态。
     pub fn set_enabled(&mut self, id: &ProviderId, enabled: bool) {
-        self.enabled_providers
-            .insert(id.id_key().to_string(), enabled);
-    }
-
-    /// 移除指定 Provider 的显式启用记录。
-    ///
-    /// 这与 `set_enabled(false)` 语义不同：
-    /// - `set_enabled(false)` 会保留一个显式 disabled 记录
-    /// - `remove_enabled_record()` 会回到“未登记”状态，供热重载/冷启动按首次出现逻辑处理
-    pub fn remove_enabled_record(&mut self, id: &ProviderId) -> Option<bool> {
-        self.enabled_providers.remove(&id.id_key())
+        let item = self.ensure_layout_item(id);
+        item.enabled = enabled;
+        if enabled {
+            item.in_sidebar = true;
+        }
     }
 
     /// 删除一个已从磁盘移除的 Provider 的所有持久引用。
     pub fn remove_provider_references(&mut self, id: &ProviderId) {
         let key = id.id_key();
-        self.enabled_providers.remove(&key);
-        self.provider_order.retain(|candidate| candidate != &key);
+        self.provider_layout.retain(|item| item.id != key);
         self.hidden_quotas.remove(&key);
-        self.sidebar_providers.retain(|candidate| candidate != &key);
     }
 
-    /// 清除已不存在的自定义 Provider ID（热重载后清理残留）
-    ///
-    /// 从 `enabled_providers`、`provider_order`、`hidden_quotas`、`sidebar_providers` 中移除
-    /// 不再存在的自定义 Provider 条目。返回 true 表示发生了变更。
+    /// 清除已不存在的自定义 Provider ID（热重载后清理残留）。
     pub fn prune_stale_custom_ids(&mut self, existing_custom_ids: &[ProviderId]) -> bool {
-        let existing: std::collections::HashSet<String> = existing_custom_ids
+        let existing: HashSet<String> = existing_custom_ids
             .iter()
             .filter_map(|id| match id {
                 ProviderId::Custom(s) => Some(s.clone()),
@@ -257,26 +302,52 @@ impl ProviderConfig {
             })
             .collect();
 
-        let is_valid_key = |key: &String| -> bool {
-            // 内置 Provider key 始终保留
-            ProviderKind::from_id_key(key).is_some() || existing.contains(key)
-        };
+        let before = self.provider_layout.len() + self.hidden_quotas.len();
+        self.provider_layout.retain(|item| {
+            ProviderKind::from_id_key(&item.id).is_some() || existing.contains(&item.id)
+        });
+        self.hidden_quotas
+            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
+        let normalized = self.normalize_layout();
+        let after = self.provider_layout.len() + self.hidden_quotas.len();
+        normalized || before != after
+    }
 
-        let before = self.enabled_providers.len()
-            + self.provider_order.len()
-            + self.hidden_quotas.len()
-            + self.sidebar_providers.len();
+    pub(crate) fn normalize_layout(&mut self) -> bool {
+        let before = self.provider_layout.clone();
+        let mut seen = HashSet::new();
+        self.provider_layout.retain_mut(|item| {
+            if item.id.is_empty() || !seen.insert(item.id.clone()) {
+                return false;
+            }
+            if !item.in_sidebar {
+                item.enabled = false;
+            }
+            true
+        });
+        before != self.provider_layout
+    }
 
-        self.enabled_providers.retain(|key, _| is_valid_key(key));
-        self.provider_order.retain(|key| is_valid_key(key));
-        self.hidden_quotas.retain(|key, _| is_valid_key(key));
-        self.sidebar_providers.retain(|key| is_valid_key(key));
+    pub(super) fn layout_item(&self, id: &ProviderId) -> Option<&ProviderLayoutItem> {
+        let key = id.id_key();
+        self.provider_layout.iter().find(|item| item.id == key)
+    }
 
-        let after = self.enabled_providers.len()
-            + self.provider_order.len()
-            + self.hidden_quotas.len()
-            + self.sidebar_providers.len();
-        before != after
+    pub(super) fn layout_item_mut(&mut self, id: &ProviderId) -> Option<&mut ProviderLayoutItem> {
+        let key = id.id_key();
+        self.provider_layout.iter_mut().find(|item| item.id == key)
+    }
+
+    pub(super) fn ensure_layout_item(&mut self, id: &ProviderId) -> &mut ProviderLayoutItem {
+        let key = id.id_key();
+        if !self.provider_layout.iter().any(|item| item.id == key) {
+            self.provider_layout
+                .push(ProviderLayoutItem::new(key, false, false));
+        }
+        self.provider_layout
+            .iter_mut()
+            .find(|item| item.id == id.id_key())
+            .expect("provider layout item was inserted")
     }
 }
 

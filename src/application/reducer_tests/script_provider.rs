@@ -77,11 +77,7 @@ fn submit_script_provider_auto_enables_and_emits_save_effect() {
 
     let expected_id = ProviderId::Custom("ccswitch:script".to_string());
     assert!(session.settings.provider.is_enabled(&expected_id));
-    assert!(session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&"ccswitch:script".to_string()));
+    assert!(session.settings.provider.is_in_sidebar(&expected_id));
     assert_eq!(session.settings_ui.selected_provider, expected_id);
     assert!(!session.settings_ui.modal.is_script_provider_form());
     assert!(has_effect(&effects, |e| matches!(
@@ -141,24 +137,17 @@ fn submit_script_provider_edit_mode_does_not_duplicate_sidebar_entry() {
     session
         .settings
         .provider
-        .sidebar_providers
-        .push("script:script".to_string());
+        .add_to_sidebar(&ProviderId::Custom("script:script".to_string()));
 
     let effects = reduce(
         &mut session,
         AppAction::SubmitScriptProvider(make_script_config()),
     );
 
-    assert_eq!(
-        session
-            .settings
-            .provider
-            .sidebar_providers
-            .iter()
-            .filter(|id| *id == "script:script")
-            .count(),
-        1
-    );
+    assert!(session
+        .settings
+        .provider
+        .is_in_sidebar(&ProviderId::Custom("script:script".to_string())));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
         AppEffect::Common(CommonEffect::ScriptProvider(
@@ -215,11 +204,6 @@ fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
     let provider_key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
-    session
-        .settings
-        .provider
-        .provider_order
-        .push(provider_key.clone());
     session.settings.provider.hidden_quotas.insert(
         provider_key.clone(),
         ["Session".to_string()].into_iter().collect(),
@@ -243,11 +227,7 @@ fn script_provider_save_finished_failure_rolls_back_create_and_notifies() {
     );
 
     assert!(!session.settings.provider.is_enabled(&provider_id));
-    assert!(!session
-        .settings
-        .provider
-        .provider_order
-        .contains(&provider_key));
+    assert!(!session.settings.provider.has_layout_item(&provider_id));
     assert!(!session
         .settings
         .provider
@@ -305,16 +285,7 @@ fn script_provider_save_failure_persists_rollback_after_newer_settings_write_is_
         },
     );
 
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
-    assert!(!session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&provider_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&provider_id));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
@@ -358,11 +329,7 @@ fn late_script_save_failure_preserves_the_users_new_form_context() {
         },
     );
 
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&failed_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&failed_id));
     assert_eq!(session.settings_ui.modal, SettingsModalState::AddingNewApi);
     assert_eq!(session.settings_ui.selected_provider, later_selected);
 }
@@ -377,7 +344,6 @@ fn script_provider_delete_finished_deleted_all_reloads_providers() {
     let key = provider_id.id_key();
     session.settings.provider.set_enabled(&provider_id, true);
     session.settings.provider.add_to_sidebar(&provider_id);
-    session.settings.provider.provider_order.push(key.clone());
     session
         .settings
         .provider
@@ -398,10 +364,7 @@ fn script_provider_delete_finished_deleted_all_reloads_providers() {
     assert!(!session
         .settings
         .provider
-        .enabled_providers
-        .contains_key(&key));
-    assert!(!session.settings.provider.sidebar_providers.contains(&key));
-    assert!(!session.settings.provider.provider_order.contains(&key));
+        .has_layout_item(&ProviderId::Custom(key.clone())));
     assert!(!session.settings.provider.hidden_quotas.contains_key(&key));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
@@ -439,16 +402,7 @@ fn script_provider_delete_finished_partial_notifies_and_reloads() {
         },
     );
 
-    assert!(!session
-        .settings
-        .provider
-        .enabled_providers
-        .contains_key(&provider_id.id_key()));
-    assert!(!session
-        .settings
-        .provider
-        .sidebar_providers
-        .contains(&provider_id.id_key()));
+    assert!(!session.settings.provider.has_layout_item(&provider_id));
     assert!(has_effect(&effects, |effect| matches!(
         effect,
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))

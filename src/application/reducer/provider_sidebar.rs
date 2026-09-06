@@ -179,8 +179,7 @@ pub(super) fn remove_provider_from_sidebar(
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     if session.settings.provider.remove_from_sidebar(&id) {
-        // 移除同时 disable
-        session.settings.provider.set_enabled(&id, false);
+        // remove_from_sidebar 已在模型层同时置 enabled = false，无需重复调用 set_enabled
         // 导航回退
         let providers = &session.provider_store.providers;
         session

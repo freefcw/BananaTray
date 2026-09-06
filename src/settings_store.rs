@@ -1,18 +1,100 @@
 use crate::models::{
     AppSettings, DisplaySettings, LoggingSettings, NotificationSettings, ProviderConfig,
-    SystemSettings,
+    ProviderLayoutItem, ProviderSettings, SystemSettings,
 };
 use crate::platform::atomic_file::write_private_file_atomically;
 use anyhow::{Context, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Provider 配置的持久化 DTO。
+///
+/// `provider_layout: None` 表示旧格式或首次启动；`Some([])` 表示用户明确配置为空。
+/// 这一区分只存在于持久化边界，进入运行时领域模型前会完成迁移和归一化。
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct PersistedProviderConfig {
+    credentials: ProviderSettings,
+    hidden_quotas: HashMap<String, HashSet<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_layout: Option<Vec<ProviderLayoutItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enabled_providers: Option<HashMap<String, bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_order: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sidebar_providers: Option<Vec<String>>,
+}
+
+impl PersistedProviderConfig {
+    fn into_domain(self) -> ProviderConfig {
+        let legacy_layout = migrate_legacy_provider_layout(&self);
+        let layout = self.provider_layout.unwrap_or(legacy_layout);
+        let mut config = ProviderConfig {
+            credentials: self.credentials,
+            provider_layout: layout,
+            hidden_quotas: self.hidden_quotas,
+        };
+        config.normalize_layout();
+        config
+    }
+}
+
+fn migrate_legacy_provider_layout(value: &PersistedProviderConfig) -> Vec<ProviderLayoutItem> {
+    let enabled = value.enabled_providers.as_ref();
+    let order = value.provider_order.as_deref().unwrap_or_default();
+    let sidebar: HashSet<&str> = value
+        .sidebar_providers
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(String::as_str)
+        .collect();
+
+    let mut ids = Vec::new();
+    let mut seen = HashSet::new();
+    for key in order
+        .iter()
+        .chain(value.sidebar_providers.as_deref().unwrap_or_default())
+        .chain(enabled.into_iter().flat_map(|map| map.keys()))
+    {
+        if seen.insert(key.clone()) {
+            ids.push(key.clone());
+        }
+    }
+
+    if ids.is_empty() {
+        return ProviderConfig::default_layout();
+    }
+
+    for kind in crate::models::ProviderKind::all() {
+        let key = kind.id_key().to_string();
+        if seen.insert(key.clone()) {
+            ids.push(key);
+        }
+    }
+
+    ids.into_iter()
+        .map(|id| {
+            let is_enabled = enabled
+                .and_then(|map| map.get(&id))
+                .copied()
+                .unwrap_or(false);
+            ProviderLayoutItem::new(
+                id.clone(),
+                sidebar.contains(id.as_str()) || is_enabled,
+                is_enabled,
+            )
+        })
+        .collect()
+}
+
 /// settings.json 当前持久化版本。
 ///
-/// 该 DTO 刻意与运行时 `AppSettings` 分离：未来磁盘 schema 迁移应发生在此边界，
-/// 领域模型不再直接承担顶层文件格式契约。字段形状保持与既有 settings.json 一致。
+/// 顶层 DTO 刻意与运行时 `AppSettings` 分离；Provider 旧字段的迁移也在此边界完成。
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct PersistedAppSettingsV1 {
@@ -20,7 +102,7 @@ struct PersistedAppSettingsV1 {
     notification: NotificationSettings,
     display: DisplaySettings,
     logging: LoggingSettings,
-    provider: ProviderConfig,
+    provider: PersistedProviderConfig,
 }
 
 impl From<PersistedAppSettingsV1> for AppSettings {
@@ -30,7 +112,7 @@ impl From<PersistedAppSettingsV1> for AppSettings {
             notification: value.notification,
             display: value.display,
             logging: value.logging,
-            provider: value.provider,
+            provider: value.provider.into_domain(),
         }
     }
 }
@@ -42,7 +124,12 @@ impl From<&AppSettings> for PersistedAppSettingsV1 {
             notification: value.notification.clone(),
             display: value.display.clone(),
             logging: value.logging.clone(),
-            provider: value.provider.clone(),
+            provider: PersistedProviderConfig {
+                credentials: value.provider.credentials.clone(),
+                hidden_quotas: value.provider.hidden_quotas.clone(),
+                provider_layout: Some(value.provider.provider_layout.clone()),
+                ..Default::default()
+            },
         }
     }
 }
@@ -208,12 +295,13 @@ fn merge_preserving_unknown_fields(
     serde_json::Value::Object(std::mem::take(existing))
 }
 
-/// 动态 map 的键是用户数据，不是可向前兼容的 schema 字段。
+/// Provider 布局、凭证和 quota 可见性都是当前领域状态的完整快照。
 ///
-/// 保存时以当前领域状态整体替换这些 map，确保删除 credential、provider 状态或
-/// 隐藏配额后不会被通用的未知字段合并重新带回。
+/// 保存时整体替换这些字段，并删除已经迁移的旧字段，避免通用未知字段合并把旧状态
+/// 再次带回，造成新旧 Provider 配置同时存在。
 fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
-    const DYNAMIC_MAP_FIELDS: [&str; 3] = ["credentials", "enabled_providers", "hidden_quotas"];
+    const LEGACY_FIELDS: [&str; 3] = ["enabled_providers", "provider_order", "sidebar_providers"];
+    const CURRENT_FIELDS: [&str; 3] = ["credentials", "hidden_quotas", "provider_layout"];
 
     let Some(existing_provider) = existing
         .get_mut("provider")
@@ -228,7 +316,10 @@ fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &ser
         return;
     };
 
-    for field in DYNAMIC_MAP_FIELDS {
+    for field in LEGACY_FIELDS {
+        existing_provider.remove(field);
+    }
+    for field in CURRENT_FIELDS {
         if let Some(current_value) = current_provider.get(field) {
             existing_provider.insert(field.to_string(), current_value.clone());
         }
@@ -425,6 +516,159 @@ mod tests {
     }
 
     #[test]
+    fn diag_load_builtin_enabled_records() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+            "system": {"refresh_interval_mins": 5, "global_hotkey": "alt-1"},
+            "notification": {"session_quota_notifications": true, "notification_sound": true},
+            "display": {"theme": "Dark", "language": "system", "tray_icon_style": "Monochrome", "quota_display_mode": "Remaining", "show_dashboard_button": true, "show_refresh_button": true, "show_debug_tab": false, "show_account_info": true, "show_overview": true},
+            "logging": {"max_bytes": 5242880, "max_files": 4},
+            "provider": {
+                "credentials": {},
+                "enabled_providers": {"claude": true, "codex": true, "windsurf": true, "ciii:script": true, "suixiang:script": true},
+                "provider_order": ["claude", "codex", "windsurf", "ciii:script", "suixiang:script"],
+                "hidden_quotas": {},
+                "sidebar_providers": ["claude", "codex", "windsurf", "ciii:script", "suixiang:script"]
+            }
+        }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        let claude = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
+        let codex = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Codex);
+        let windsurf = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Windsurf);
+        assert!(
+            loaded.provider.is_enabled(&claude),
+            "claude enabled record lost on load!"
+        );
+        assert!(
+            loaded.provider.is_enabled(&codex),
+            "codex enabled record lost on load!"
+        );
+        assert!(
+            loaded.provider.is_enabled(&windsurf),
+            "windsurf enabled record lost on load!"
+        );
+        assert_eq!(loaded.system.global_hotkey, "alt-1");
+    }
+
+    #[test]
+    fn legacy_empty_provider_state_gets_default_layout() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "provider": {
+                    "enabled_providers": {},
+                    "provider_order": [],
+                    "sidebar_providers": []
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert_eq!(
+            loaded.provider.sidebar_provider_ids(&[]),
+            vec![
+                crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Claude),
+                crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Codex),
+            ]
+        );
+    }
+
+    #[test]
+    fn explicit_empty_provider_layout_is_preserved() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(&path, r#"{"provider":{"provider_layout":[]}}"#).unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert!(loaded.provider.provider_layout.is_empty());
+        assert!(loaded.provider.sidebar_provider_ids(&[]).is_empty());
+    }
+
+    #[test]
+    fn legacy_provider_layout_migration_preserves_custom_order_and_flags() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "provider": {
+                    "enabled_providers": {"gemini": true, "relay:api": false},
+                    "provider_order": ["relay:api", "gemini"],
+                    "sidebar_providers": ["gemini"]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        let layout = &loaded.provider.provider_layout;
+
+        assert_eq!(layout[0].id(), "relay:api");
+        assert!(!layout[0].is_in_sidebar());
+        assert!(!layout[0].is_enabled());
+        assert_eq!(layout[1].id(), "gemini");
+        assert!(layout[1].is_in_sidebar());
+        assert!(layout[1].is_enabled());
+    }
+
+    #[test]
+    fn new_provider_layout_normalizes_duplicate_and_invalid_items() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "provider": {
+                    "provider_layout": [
+                        {"id": "gemini", "in_sidebar": false, "enabled": true},
+                        {"id": "gemini", "in_sidebar": true, "enabled": true},
+                        {"id": "", "in_sidebar": true, "enabled": true}
+                    ]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert_eq!(loaded.provider.provider_layout.len(), 1);
+        assert_eq!(loaded.provider.provider_layout[0].id(), "gemini");
+        assert!(!loaded.provider.provider_layout[0].is_in_sidebar());
+        assert!(!loaded.provider.provider_layout[0].is_enabled());
+    }
+
+    #[test]
+    fn saving_legacy_provider_config_removes_legacy_fields() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "provider": {
+                    "enabled_providers": {"claude": true},
+                    "provider_order": ["claude"],
+                    "sidebar_providers": ["claude"]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        save_to(&loaded, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(saved["provider"].get("provider_layout").is_some());
+        assert!(saved["provider"].get("enabled_providers").is_none());
+        assert!(saved["provider"].get("provider_order").is_none());
+        assert!(saved["provider"].get("sidebar_providers").is_none());
+    }
+
+    #[test]
     fn save_overwrites_existing_file() {
         let (_dir, path) = temp_settings_path();
 
@@ -497,23 +741,25 @@ mod tests {
     }
 
     #[test]
-    fn save_persists_enabled_provider_entry_removal() {
+    fn save_persists_provider_layout_item_removal() {
         let (_dir, path) = temp_settings_path();
         let mut settings = AppSettings::default();
         let provider_id = crate::models::ProviderId::Custom("removed:newapi".to_string());
         settings.provider.set_enabled(&provider_id, true);
         save_to(&settings, &path).unwrap();
 
-        settings.provider.remove_enabled_record(&provider_id);
+        settings.provider.remove_provider_references(&provider_id);
         save_to(&settings, &path).unwrap();
 
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert!(
-            saved["provider"]["enabled_providers"]
-                .get(provider_id.id_key())
-                .is_none(),
-            "已删除的动态 provider 启用记录不应被兼容性合并带回"
-        );
+        assert!(!saved["provider"]["provider_layout"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["id"] == provider_id.id_key()));
+        assert!(saved["provider"].get("enabled_providers").is_none());
+        assert!(saved["provider"].get("provider_order").is_none());
+        assert!(saved["provider"].get("sidebar_providers").is_none());
     }
 
     #[test]
