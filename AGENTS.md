@@ -105,3 +105,27 @@ This map is intentionally high-level. File-level structure and public APIs live 
 Detailed guides live in `docs/`:
 - [docs/providers.md](docs/providers.md) — Provider table, AiProvider trait, step-by-step guide for adding a new provider
 - [docs/architecture.md](docs/architecture.md) — AppState decomposition, refresh architecture, env vars, settings paths, testing coverage
+
+## Cursor Cloud specific instructions
+
+The Cloud Agent environment pre-installs every build/run dependency (GPUI/GTK/xcb/wayland/vulkan
+build libs, `gjs`/`dbus`/`gettext` for the GNOME extension checks, `just`, and Mesa's software
+Vulkan `lavapipe` for headless rendering). Standard commands work directly: `cargo build`,
+`cargo test --lib`, `cargo clippy --lib -- -D warnings`, and `GNOME_CHECK_STRICT=1 just ci-fast`.
+
+Running the GPUI tray app itself is a GUI process and needs a display plus a session D-Bus bus.
+The VM already provides an X display on `:1`. Launch the app headlessly like this:
+
+```bash
+export DISPLAY=:1
+export XDG_RUNTIME_DIR=/tmp/xdg-runtime && mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+eval "$(dbus-launch --sh-syntax)"   # provides DBUS_SESSION_BUS_ADDRESS for the D-Bus service
+cargo run   # renders via lavapipe (llvmpipe); logs to stdout + $BANANATRAY_LOG_DIR
+```
+
+- The `com.bananatray.Daemon` D-Bus service (object `/com/bananatray/Daemon`, methods
+  `GetAllQuotas` / `RefreshAll` / `OpenSettings`, property `IsActive`) then registers on that
+  session bus and can be exercised with `gdbus call --session ...` — this is the same contract the
+  GNOME Shell Extension consumes. Call `OpenSettings` to pop the settings window for GUI checks.
+- There is no `StatusNotifierWatcher`/SNI host in the VM, so the tray icon cannot attach; the
+  matching `tray … Failed to start tray service` warnings are expected and harmless headlessly.
