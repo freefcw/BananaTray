@@ -45,19 +45,30 @@ impl FullContextCapabilities for FakeCaps {
     }
 }
 
+/// 测试专用：构造 AppState 后立即替换真实 SettingsWriter，
+/// 避免任何 effect 触发 PersistSettings 时写入真实 settings.json。
+fn noop_persist(_: &AppSettings) -> bool {
+    true
+}
+
+fn seal_settings_writer(state: Rc<RefCell<AppState>>) -> Rc<RefCell<AppState>> {
+    state.borrow_mut().settings_writer = SettingsWriter::spawn_for_test(Box::new(noop_persist));
+    state
+}
+
 fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
-    Rc::new(RefCell::new(AppState::new(
+    seal_settings_writer(Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
         manager,
         AppSettings::default(),
         None,
-    )))
+    ))))
 }
 
 fn make_state_with_background_receiver() -> (
@@ -69,14 +80,14 @@ fn make_state_with_background_receiver() -> (
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(8);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
     (
-        Rc::new(RefCell::new(AppState::new(
+        seal_settings_writer(Rc::new(RefCell::new(AppState::new(
             crate::refresh::RefreshWorker::detached(tx),
             custom_provider_tx,
             script_test_tx,
             manager,
             AppSettings::default(),
             None,
-        ))),
+        )))),
         custom_provider_rx,
     )
 }
@@ -88,14 +99,14 @@ fn make_state_with_full_refresh_queue() -> Rc<RefCell<AppState>> {
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
-    Rc::new(RefCell::new(AppState::new(
+    seal_settings_writer(Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
         manager,
         AppSettings::default(),
         None,
-    )))
+    ))))
 }
 
 fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
@@ -115,14 +126,14 @@ fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
         })
         .expect("script queue should accept filler request");
     let manager = ProviderManagerHandle::new(ProviderManager::new());
-    Rc::new(RefCell::new(AppState::new(
+    seal_settings_writer(Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
         manager,
         AppSettings::default(),
         None,
-    )))
+    ))))
 }
 
 #[test]
