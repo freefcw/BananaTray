@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 
 pub(crate) fn cache_db_path_candidates(spec: &CodeiumFamilySpec) -> Vec<PathBuf> {
-    // Devin Desktop / Antigravity 都是 VS Code 系 Electron 应用：
+    // Devin / Antigravity 都是 VS Code 系 Electron 应用：
     // macOS 使用 ~/Library/Application Support，Linux 使用 XDG config。
     // dirs::config_dir() 已自动适配平台，无需 cfg! 分支。
     let mut candidates =
@@ -118,15 +118,15 @@ mod tests {
         CodeiumFamilySpec {
             kind: ProviderKind::Windsurf,
             provider_id: "windsurf:api",
-            display_name: "Devin Desktop",
+            display_name: "Devin",
             brand_name: "Cognition",
             icon_asset: "src/icons/provider-devin-desktop.svg",
             dashboard_url: "",
             account_hint: "Devin account",
             source_label: "local cache",
-            log_label: "Devin Desktop",
+            log_label: "Devin",
             ide_name: "windsurf",
-            unavailable_message: "Devin Desktop local cache unavailable",
+            unavailable_message: "Devin local cache unavailable",
             cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
             cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
             auth_status_key_candidates: &["windsurfAuthStatus"],

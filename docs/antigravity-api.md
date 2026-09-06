@@ -1,12 +1,12 @@
 # Cognition-family Providers
 
-本文件说明 BananaTray 当前对 Antigravity / Devin Desktop 的共享实现方式。
+本文件说明 BananaTray 当前对 Antigravity / Devin 的共享实现方式。
 
 它是专题参考文档，不是 provider 注册表的完整契约。对外稳定边界请以 `docs/providers.md` 为准。
 
 ## 当前定位
 
-BananaTray 把 **Antigravity** 和 **Devin Desktop** 视为两个独立的 built-in provider：
+BananaTray 把 **Antigravity** 和 **Devin** 视为两个独立的 built-in provider：
 
 - UI 中独立展示
 - 各自拥有独立的 metadata、图标和可用性判断
@@ -23,7 +23,7 @@ BananaTray 把 **Antigravity** 和 **Devin Desktop** 视为两个独立的 built
 - 本地 cache fallback
 - JSON / protobuf 解析
 
-Devin Desktop 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Devin Desktop facade 自己决定何时插入 seat API。
+Devin 的 seat management API 不再放在共享层，而是收回到 provider 自己的模块 `src/providers/windsurf/seat_source.rs`。`codeium_family` 只暴露本地 source primitive，Devin facade 自己决定何时插入 seat API。
 
 唯一跨 seat/cache 共享的 Devin 专属规则是纯 payload 语义：当 weekly percentage 缺失且 reset 仍在未来时，`quota_semantics.rs` 将其解释为本周期已耗尽。该 helper 不选择 source、不执行 fallback，也不合并结果。
 
@@ -44,7 +44,7 @@ provider facade 负责两类东西：
 source orchestration 目前明确分开：
 
 - Antigravity：`cloud -> live -> cache`（macOS；Linux 无云端源，为 `live -> cache`）
-- Devin Desktop：`seat -> live -> cache`
+- Devin：`seat -> live -> cache`
 
 Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不属于 `codeium_family` 共享层：
 
@@ -57,16 +57,16 @@ Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不
 
 这意味着：
 
-- 不要把 Devin Desktop 折叠成 Antigravity 的别名。
-- 也不要把 Devin Desktop 的云端 fallback 反向塞进共享流程逻辑里。
+- 不要把 Devin 折叠成 Antigravity 的别名。
+- 也不要把 Devin 的云端 fallback 反向塞进共享流程逻辑里。
 
 ## Refresh Path
 
 当前 refresh 策略保持为：
 
 1. Antigravity：优先尝试云端 quota API（macOS，读 agy Keychain token；请求带 `User-Agent: antigravity`，429 冷却期内跳过），失败时尝试 live source，最后回退本地 cache
-2. Devin Desktop：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
-3. Devin Desktop 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining
+2. Devin：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
+3. Devin 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining
 4. 所有来源都失败时，云端 `SessionExpired` / `AuthRequired` 优先保留结构化 reason 与 advice；其它组合返回包含三路诊断的 `FetchFailed`
 
 本地 cache 回退之前会做两道陈旧检查：
@@ -74,7 +74,7 @@ Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不
 - **mtime 闸**：`cache_source::read_refresh_data` 会遍历 cache DB 候选路径，选择第一份
   新鲜 cache。单个 DB 的新鲜度取 `state.vscdb`、`state.vscdb-wal`、
   `state.vscdb-journal` 三者中**最新的 mtime**作为 cache 实际活跃时间，超过
-  `spec.cache_max_age_secs`（Antigravity / Devin Desktop 当前都是 3 小时）即视为该候选
+  `spec.cache_max_age_secs`（Antigravity / Devin 当前都是 3 小时）即视为该候选
   整体快照不可信，并继续尝试后续候选；所有存在的候选都陈旧时才返回 `Unavailable`。
   之所以要看 sidecar：VS Code/Electron 系 SQLite 走 WAL 模式，新写入先到 `-wal`，
   主 DB 文件 mtime 在 checkpoint 之前可能远落后；只看主文件会把"还在活跃写入"的
@@ -85,7 +85,7 @@ Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不
 - **reset 闸**：单条 quota 的 `reset_at_unix` 已过 → 说明缓存为上一重置周期的旧数据，该条配额被过滤（不误报 100% 剩余）；若全部配额均已过期，则整体视为缓存失效返回 Unavailable / `no_data()`。
 
 `cache_source::is_available()` 与 `read_refresh_data()` 共用同一道 mtime 闸，避免本地
-quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Devin Desktop 的
+quota cache source 在 `check` 说"可用"但 `refresh` 立刻失败。Devin 的
 provider-level `check_availability(ctx)` 还会单独接受"存在 cache DB"这个更弱条件，因为
 seat API 只需要从 DB 中读取 apiKey，不应该被陈旧 quota 快照阻断。
 
@@ -138,8 +138,8 @@ cargo run -- debug-codeium-family windsurf  # legacy alias
 - 本地服务的参数格式和 marker 可能随上游版本变化。
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
-- Devin Desktop seat API 依赖本地 auth status 中的 `apiKey`，当前优先读取 `windsurfAuthStatus`，并兼容未来可能出现的 `devinAuthStatus`；请求体里的版本号使用本机安装版本的最佳努力探测，探测不到时不发送版本字段。
-- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；单条额度的 reset 时间已过时，不会据此推断“100% 剩余”，而是视为不可用。Devin Desktop seat API 省略 `weeklyQuotaRemainingPercent`、但仍给出未来的 `weeklyQuotaResetAtUnix` 时，表示当前周额度已耗尽，应用会继续展示 Weekly 为 0% 剩余；没有有效 reset 时间时不作此推断。
+- Devin seat API 依赖本地 auth status 中的 `apiKey`，当前优先读取 `windsurfAuthStatus`，并兼容未来可能出现的 `devinAuthStatus`；请求体里的版本号使用本机安装版本的最佳努力探测，探测不到时不发送版本字段。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；单条额度的 reset 时间已过时，不会据此推断“100% 剩余”，而是视为不可用。Devin seat API 省略 `weeklyQuotaRemainingPercent`、但仍给出未来的 `weeklyQuotaResetAtUnix` 时，表示当前周额度已耗尽，应用会继续展示 Weekly 为 0% 剩余；没有有效 reset 时间时不作此推断。
 
 ## Maintenance Rule
 
@@ -148,6 +148,6 @@ cargo run -- debug-codeium-family windsurf  # legacy alias
 只有在以下场景才需要同步更新这里：
 
 - 修改 `codeium_family` 共享层边界
-- 修改 Antigravity / Devin Desktop 的差异建模方式
+- 修改 Antigravity / Devin 的差异建模方式
 - 修改 provider facade 的 source orchestration 顺序
 - 修改运行时校验命令或关键诊断入口

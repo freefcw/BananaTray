@@ -21,7 +21,7 @@
 | MiniMax | `minimax` | HTTP API | `Monitorable` | |
 | Kiro | `kiro` | CLI | `Monitorable` | Credits / Bonus Credits 显示为积分（`X.XX / Y.YY`），不带 `$` 前缀；底层 `QuotaType::Points` |
 | Antigravity | `antigravity` | 云端 API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `cloud -> live -> cache`；云端源读取 agy CLI 存在 macOS Keychain 的 token，access token 过期时用有界的非交互 `agy models` 触发 CLI 续期并重新校验（BananaTray 不持有 refresh token），续期失败才报 `SessionExpired`；正常路径先通过 `loadCodeAssist` 获取 project，再调用 Google quota summary API，project discovery 失败时兼容回退到无 project 请求；请求携带 Antigravity `User-Agent`，撞 429 后本地冷却 30 分钟内直接走本地源；三路都失败时保留结构化认证错误；Linux 无云端源回落 `live -> cache`。见 `antigravity-api.md` |
-| Devin Desktop | `windsurf` | seat API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `seat -> live -> cache`；seat API 的日 / 周配额优先，若 seat 缺周配额才用本地缓存补周配额。用户可见来源显示为 Devin Cloud；`windsurf` 仍是兼容稳定 key。见 `antigravity-api.md` |
+| Devin | `windsurf` | seat API + 本地服务 + 本地缓存回退 | `Monitorable` | provider facade 自己编排 `seat -> live -> cache`；seat API 的日 / 周配额优先，若 seat 缺周配额才用本地缓存补周配额。用户可见来源显示为 Devin Cloud；`windsurf` 仍是兼容稳定 key。见 `antigravity-api.md` |
 | Grok | `grok` | HTTP API + 本地 OAuth | `Monitorable` | 读取 `$GROK_HOME/auth.json` 或 `~/.grok/auth.json` 的 Grok Build session，请求 `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits`；展示 SuperGrok / 订阅周池已用百分比。`creditUsagePercent` 缺省时，有 on-demand 上限用其比例，否则有账单窗口按 proto3 默认 0 展示 0%（不是无数据）。token 过期前会用 refresh_token 轮转并原子写回。这不是 xAI 开发者 API 预付积分，也不是 `XAI_API_KEY` |
 | Kilo | `kilo` | 占位 / 安装检测 | `Placeholder` | 只保留 provider 入口与环境检测，不参与正常刷新 |
 | OpenCode Go | `opencode` | HTTP API + 本地凭据 | `Monitorable` | UI 展示名为 OpenCode Go；设置 / 状态稳定 key 仍为 `opencode`。读取 `~/.local/share/opencode/auth.json` 的 `opencode-go` / `opencode` API key，请求 `GET https://opencode.ai/zen/go/v1/usage`；展示滚动 5 小时 / 周 / 月已用百分比；仅监控 Go 订阅配额，不汇总壳内其它 BYO provider |
@@ -64,7 +64,7 @@
 
 当前有两层 provider 标识，不能混用：
 
-- **设置 / 状态稳定 key**：内置 provider 使用 `ProviderKind::id_key()`，并通过 `ProviderId::BuiltIn(kind)` 进入 settings、refresh、sidebar、quota visibility 等状态；例如 `codex`、`windsurf`、`vertexai`。Devin Desktop 的稳定 key 仍是 `windsurf`，不要迁移为 `devin`。
+- **设置 / 状态稳定 key**：内置 provider 使用 `ProviderKind::id_key()`，并通过 `ProviderId::BuiltIn(kind)` 进入 settings、refresh、sidebar、quota visibility 等状态；例如 `codex`、`windsurf`、`vertexai`。Devin 的稳定 key 仍是 `windsurf`，不要迁移为 `devin`。
 - **Descriptor ID**：`AiProvider::descriptor().id` 用于 provider 注册去重和 source 描述，内置 provider 可能包含来源后缀，如 `codex:api`、`amp:cli`、`windsurf:api`。不要把它当成内置 provider 的 settings key。
 - **自定义 provider ID**：YAML 的 `id` 会作为 `ProviderId::Custom(String)` 持久化，既是 descriptor ID，也是自定义 provider 的 settings/sidebar/order key。它必须全局唯一，且不得等于任何内置 `ProviderKind::id_key()`（如 `claude`、`codex`、`gemini`）；loader 和 manager 注册边界都会拒绝这些保留 ID。
 

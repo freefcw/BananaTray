@@ -52,7 +52,7 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     cache_max_age_secs: 3 * 60 * 60,
 };
 
-/// Devin Desktop（原 Windsurf）的 provider spec。
+/// Devin（原 Windsurf）的 provider spec。
 ///
 /// 2026-06 品牌重命名后：app bundle、data dir、CLI 已改为 Devin，
 /// 但内部协议（`--ide_name windsurf`、DB auth key、seat API endpoint）仍用 windsurf。
@@ -60,15 +60,15 @@ pub const ANTIGRAVITY_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
 pub const WINDSURF_SPEC: CodeiumFamilySpec = CodeiumFamilySpec {
     kind: ProviderKind::Windsurf,
     provider_id: "windsurf:api",
-    display_name: "Devin Desktop",
+    display_name: "Devin",
     brand_name: "Cognition",
     icon_asset: "src/icons/provider-devin-desktop.svg",
     dashboard_url: "https://app.devin.ai",
     account_hint: "Devin account",
     source_label: "local/cloud fallback",
-    log_label: "Devin Desktop",
+    log_label: "Devin",
     ide_name: "windsurf", // 进程仍用 --ide_name windsurf，不可改
-    unavailable_message: "Devin Desktop live source and local cache are both unavailable",
+    unavailable_message: "Devin live source and local cache are both unavailable",
     cache_db_config_relative_path: "Devin/User/globalStorage/state.vscdb",
     cache_db_fallback_paths: &["Windsurf/User/globalStorage/state.vscdb"],
     auth_status_key_candidates: &[

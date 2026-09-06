@@ -2,7 +2,7 @@
 
 Cognition 系 Provider 的共享底层实现。
 
-这里故意只放 **Antigravity / Devin Desktop** 都会长期复用的本地 source primitive，不负责完整的 source orchestration。
+这里故意只放 **Antigravity / Devin** 都会长期复用的本地 source primitive，不负责完整的 source orchestration。
 
 ## 架构
 
@@ -17,7 +17,7 @@ codeium_family/
 └── quota_semantics.rs  — Devin seat/cache 共用的 active weekly 耗尽推断
 ```
 
-Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `src/providers/windsurf/seat_source.rs`。
+Devin 专属的云端 seat management API 实现不在这里，而在 `src/providers/windsurf/seat_source.rs`。
 
 ## 共享层职责
 
@@ -36,9 +36,9 @@ Devin Desktop 专属的云端 seat management API 实现不在这里，而在 `s
 
 这里**不负责**：
 
-- Antigravity / Devin Desktop 的 fallback 顺序
-- Devin Desktop seat API 调用
-- Devin Desktop seat + cache 的 quota 合并策略
+- Antigravity / Devin 的 fallback 顺序
+- Devin seat API 调用
+- Devin seat + cache 的 quota 合并策略
 
 ## Provider-Owned Orchestration
 
@@ -51,7 +51,7 @@ Antigravity
     ├─→ codeium_family::refresh_live()
     └─→ codeium_family::refresh_cache()
 
-Devin Desktop
+Devin
   refresh()
     ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly
     ├─→ codeium_family::refresh_live()
@@ -60,8 +60,8 @@ Devin Desktop
 
 这样拆的原因是：
 
-- Antigravity 和 Devin Desktop 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
-- Devin Desktop 的 seat API 是产品特有实时数据源，不应反向污染共享层
+- Antigravity 和 Devin 是两个独立 provider，不是同一个 provider 的两个品牌皮肤
+- Devin 的 seat API 是产品特有实时数据源，不应反向污染共享层
 - 共享层保留为“本地 source primitive”，未来更容易继续复用或替换
 
 这里的 weekly helper 共享的是两条 Devin source 对同一上游字段的纯解释，不负责选择
@@ -77,7 +77,7 @@ source、fallback 或合并结果，因此不改变 provider-owned orchestration
 - `seat api + local cache`
 - `antigravity cloud`（属 Antigravity facade 的 `cloud_source`，非共享层）
 
-`spec.source_label` 只是静态兜底文案；Devin Desktop 当前使用 `"local/cloud fallback"` 作为默认说明。Seat API 的运行时来源展示为 Devin Cloud（或 Devin Cloud + Local cache）。
+`spec.source_label` 只是静态兜底文案；Devin 当前使用 `"local/cloud fallback"` 作为默认说明。Seat API 的运行时来源展示为 Devin Cloud（或 Devin Cloud + Local cache）。
 
 ## `CodeiumFamilySpec`
 
@@ -88,9 +88,9 @@ source、fallback 或合并结果，因此不改变 provider-owned orchestration
 - `dashboard_url`
 - `ide_name`
 - `cache_db_config_relative_path`
-- `auth_status_key_candidates`（Devin Desktop 当前仍优先使用 `windsurfAuthStatus`，并兼容未来 `devinAuthStatus`）
+- `auth_status_key_candidates`（Devin 当前仍优先使用 `windsurfAuthStatus`，并兼容未来 `devinAuthStatus`）
 - `process_markers`
-- `cached_plan_info_key_candidates`（Devin Desktop 当前仍优先使用 `windsurf.settings.cachedPlanInfo`，并兼容未来 `devin.settings.cachedPlanInfo`）
+- `cached_plan_info_key_candidates`（Devin 当前仍优先使用 `windsurf.settings.cachedPlanInfo`，并兼容未来 `devin.settings.cachedPlanInfo`）
 - `cache_max_age_secs` — 缓存 SQLite 的 mtime 最大可信年龄（秒）
 
 `cache_db_config_relative_path` 是相对系统配置目录的路径：macOS 会解析到
@@ -140,13 +140,13 @@ SQLite WAL 模式下新写入先到 `-wal`，主 DB 文件 mtime 在 checkpoint 
 availability 语义刻意拆成两层：
 
 - `cache_source::is_available()` 表示本地 quota cache source 可用，要求 DB 存在且新鲜。
-- `cache_source::has_cache_db()` 只表示存在可尝试读取 auth / apiKey 的 DB。Devin Desktop
+- `cache_source::has_cache_db()` 只表示存在可尝试读取 auth / apiKey 的 DB。Devin
   provider-level `check_availability()` 使用这一层，让 seat API 不会被陈旧 quota 快照阻断。
 
 进入解析后还有第二道闸：
 
-- `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Devin Desktop）
-- `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Devin Desktop）
+- `parse_strategy::CacheParseStrategy`（protobuf 路径，Antigravity / 旧版 Devin）
+- `cache_source::cached_plan::build_quota_from_cached`（JSON 路径，新版 Devin）
 
 两条路径都对单条 quota 的 `reset_at_unix` 做 `<= now` 判断。reset 时间已过时，
 缓存没有新周期的实际用量，必须丢弃该额度，不能推断为 100% 剩余；所有额度都被
@@ -170,12 +170,12 @@ reset 闸防"数据库仍有其他状态写入、但个别额度快照已经失�
 - `live_source.rs`：进程识别、端口探测、endpoint 选择测试
 - `parse_strategy.rs`：protobuf / JSON payload 解析测试
 
-Devin Desktop seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。`debug-codeium-family devin` 是推荐诊断入口，`debug-codeium-family windsurf` 保留为兼容 alias。
+Devin seat API 相关测试位于 `src/providers/windsurf/mod.rs` 与 `src/providers/windsurf/seat_source.rs`。`debug-codeium-family devin` 是推荐诊断入口，`debug-codeium-family windsurf` 保留为兼容 alias。
 
 ## 维护规则
 
 如果你在这里新增代码，先问一句：
 
-> 这是 Antigravity 和 Devin Desktop 都会共享的本地 primitive，还是只是某个 provider 的编排特例？
+> 这是 Antigravity 和 Devin 都会共享的本地 primitive，还是只是某个 provider 的编排特例？
 
 只有前者才应该进入 `codeium_family/`。

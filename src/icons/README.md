@@ -63,7 +63,7 @@ review rather than automatic rejection.
 `about.svg`, `advanced.svg`, `chevron-left.svg`, `chevron-right.svg`, `close.svg`, `compass.svg`, `display.svg`, `drag-handle.svg`, `overview.svg`, `plus.svg`, `quit.svg`, `refresh.svg`, `settings.svg`, `status.svg`, `switch.svg`, `trash.svg`, `usage.svg`
 
 ### Legacy & Deprecated Icons
-- `provider-windsurf.svg` (removed) — retired during the Windsurf → Devin Desktop rename. The UI now uses `provider-devin-desktop.svg`; the built-in `Windsurf` key (`ProviderKind::Windsurf` / `"windsurf"`) remains as the compatibility stable key.
+- `provider-windsurf.svg` (removed) — retired during the Windsurf → Devin rename. The UI now uses `provider-devin-desktop.svg`; the built-in `Windsurf` key (`ProviderKind::Windsurf` / `"windsurf"`) remains as the compatibility stable key.
 
 ## Usage in Code
 

@@ -29,7 +29,7 @@
 | **Amp** | CLI (`amp usage`) | 可监控 | 完整配额刷新 |
 | **Cursor** | HTTP API (`cursor.com`) + 本地 SQLite 令牌 | 可监控 | 完整配额刷新 |
 | **Antigravity** | 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
-| **Devin Desktop** | Seat API + 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
+| **Devin** | Seat API + 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **MiniMax** | HTTP API (`api.minimax.io`) | 可监控 | 完整配额刷新 |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | 可监控 | 完整配额刷新 |
 | **自定义 YAML** | HTTP / CLI | 可监控 | 取决于 YAML plan |

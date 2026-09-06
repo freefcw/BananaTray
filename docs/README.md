@@ -47,7 +47,7 @@
 - `provider-blueprints.md`
   - 新增 / 重构 provider 时可复用的设计模式。
 - `antigravity-api.md`
-  - Antigravity / Devin Desktop 共享实现的专题说明.
+  - Antigravity / Devin 共享实现的专题说明.
 
 ## 示例
 

@@ -1,6 +1,6 @@
 use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
 
-/// Devin Desktop 省略 active weekly percentage 时，将其解释为本周期已耗尽。
+/// Devin 省略 active weekly percentage 时，将其解释为本周期已耗尽。
 ///
 /// reset 已过期或缺失时无法区分“耗尽”与“陈旧快照”，因此不生成配额。
 pub(crate) fn infer_exhausted_weekly_quota(

@@ -53,7 +53,7 @@ struct SeatResponse {
 
 pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> Result<RefreshData> {
     if spec.kind != crate::models::ProviderKind::Windsurf {
-        return Err(ProviderError::unavailable("seat API only available for Devin Desktop").into());
+        return Err(ProviderError::unavailable("seat API only available for Devin").into());
     }
 
     let api_key = get_api_key(spec)?;
@@ -127,7 +127,7 @@ fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
         // Devin seat API 以缺失 Weekly percentage 表示当前周期已耗尽。
         debug!(
             target: "providers",
-            "Devin Desktop seat API omitted active weekly remaining percent; treating quota as exhausted"
+            "Devin seat API omitted active weekly remaining percent; treating quota as exhausted"
         );
         quotas.push(quota);
     }
