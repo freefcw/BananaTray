@@ -83,6 +83,9 @@ fn migrate_legacy_provider_layout(value: &PersistedProviderConfig) -> Vec<Provid
                 .and_then(|map| map.get(&id))
                 .copied()
                 .unwrap_or(false);
+            // 旧 Overview/refresh 不要求 sidebar 成员资格。启用但未入栏的项必须
+            // 带着 enabled 一起迁入 sidebar；若只按 sidebar 成员写 in_sidebar，
+            // ProviderLayoutItem::new 会因不变量把 enabled 关掉，静默停止监控。
             ProviderLayoutItem::new(
                 id.clone(),
                 sidebar.contains(id.as_str()) || is_enabled,
@@ -616,6 +619,38 @@ mod tests {
         assert_eq!(layout[1].id(), "gemini");
         assert!(layout[1].is_in_sidebar());
         assert!(layout[1].is_enabled());
+    }
+
+    #[test]
+    fn legacy_enabled_provider_missing_from_sidebar_stays_enabled_and_joins_sidebar() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "provider": {
+                    "enabled_providers": {"windsurf": true, "claude": false},
+                    "provider_order": ["claude", "windsurf"],
+                    "sidebar_providers": ["claude"]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        let layout = &loaded.provider.provider_layout;
+        let claude = layout.iter().find(|item| item.id() == "claude").unwrap();
+        let windsurf = layout.iter().find(|item| item.id() == "windsurf").unwrap();
+
+        assert!(claude.is_in_sidebar());
+        assert!(!claude.is_enabled());
+        assert!(
+            windsurf.is_in_sidebar(),
+            "enabled-but-not-in-sidebar must be added to the sidebar"
+        );
+        assert!(
+            windsurf.is_enabled(),
+            "enabled-but-not-in-sidebar must stay enabled"
+        );
     }
 
     #[test]
