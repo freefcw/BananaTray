@@ -6,7 +6,6 @@ use super::{
     AiProvider, ProviderCapabilities, ProviderError, ProviderExecutionContext, ProviderResult,
 };
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata, RefreshData};
-use anyhow::Context;
 use async_trait::async_trait;
 use std::borrow::Cow;
 
@@ -43,14 +42,15 @@ impl AiProvider for CursorProvider {
     }
 
     async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
-        let access_token = read_access_token().context("Failed to read Cursor access token")?;
-        let user_id = extract_user_id_from_jwt(&access_token)
-            .context("Failed to extract user ID from Cursor JWT")?;
+        let access_token = read_access_token().map_err(ProviderError::from)?;
+        let user_id = extract_user_id_from_jwt(&access_token).map_err(ProviderError::from)?;
 
         let cookie = format!("WorkosCursorSessionToken={}::{}", user_id, access_token);
-        let body = fetch_usage_summary(&cookie).context("Failed to fetch Cursor usage summary")?;
+        let body = fetch_usage_summary(&cookie).map_err(|err| ProviderError::classify(&err))?;
 
-        Ok(RefreshData::quotas_only(parse_usage_response(&body)?))
+        Ok(RefreshData::quotas_only(
+            parse_usage_response(&body).map_err(ProviderError::from)?,
+        ))
     }
 }
 

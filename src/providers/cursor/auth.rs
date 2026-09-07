@@ -87,13 +87,17 @@ fn read_access_token_from_db(db_path: &Path) -> Result<Option<String>> {
 }
 
 pub(super) fn extract_user_id_from_jwt(token: &str) -> Result<String> {
-    let payload: serde_json::Value =
-        jwt::decode_payload(token).map_err(|e| ProviderError::parse_failed(&e.to_string()))?;
+    let login_required = || {
+        ProviderError::session_expired(Some(FailureAdvice::LoginApp {
+            app: "Cursor".to_string(),
+        }))
+    };
+    let payload: serde_json::Value = jwt::decode_payload(token).map_err(|_| login_required())?;
     let sub = payload
         .get("sub")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| ProviderError::parse_failed("JWT missing 'sub' field"))?;
+        .ok_or_else(login_required)?;
 
     Ok(sub.to_string())
 }
@@ -224,7 +228,16 @@ mod tests {
 
     #[test]
     fn test_extract_user_id_from_jwt_invalid_format() {
-        assert!(extract_user_id_from_jwt("badtoken").is_err());
+        let err = extract_user_id_from_jwt("badtoken").unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<ProviderError>(),
+                Some(ProviderError::SessionExpired {
+                    advice: Some(FailureAdvice::LoginApp { app }),
+                }) if app == "Cursor"
+            ),
+            "invalid Cursor JWT should ask the user to log in, got: {err}"
+        );
     }
 
     #[test]
@@ -234,5 +247,19 @@ mod tests {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"sub":"user_123"}"#);
         let jwt = format!("header.{}.sig", payload);
         assert_eq!(extract_user_id_from_jwt(&jwt).unwrap(), "user_123");
+    }
+
+    #[test]
+    fn test_extract_user_id_from_jwt_missing_sub_asks_user_to_login() {
+        use base64::Engine;
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"email":"a"}"#);
+        let jwt = format!("header.{}.sig", payload);
+        let err = extract_user_id_from_jwt(&jwt).unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<ProviderError>(),
+            Some(ProviderError::SessionExpired {
+                advice: Some(FailureAdvice::LoginApp { app }),
+            }) if app == "Cursor"
+        ));
     }
 }
