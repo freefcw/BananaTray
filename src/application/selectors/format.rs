@@ -34,6 +34,7 @@ pub fn display_source_label(raw: &str) -> String {
         "kimi api" => t!("provider.source_label.kimi_api").to_string(),
         "minimax api" => t!("provider.source_label.minimax_api").to_string(),
         "opencode api" => t!("provider.source_label.opencode_api").to_string(),
+        "grok api" => t!("provider.source_label.grok_api").to_string(),
         "newapi api" => t!("provider.source_label.newapi_api").to_string(),
         "merged" => t!("provider.source_label.merged").to_string(),
         "" => t!("provider.source_label.auto").to_string(),
@@ -442,6 +443,7 @@ mod tests {
         );
         assert_eq!(display_source_label("local api"), "Local language server");
         assert_eq!(display_source_label("cline api"), "Cline API");
+        assert_eq!(display_source_label("grok api"), "Grok");
     }
 
     #[test]
