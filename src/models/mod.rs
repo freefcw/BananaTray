@@ -18,8 +18,9 @@ pub use layout::{
     compute_popup_height_for_quotas, PopupLayout,
 };
 pub use newapi::{
-    format_divisor_value, format_optional_divisor_value, newapi_provider_id, parse_divisor_input,
-    NewApiConfig, NewApiDivisorError, NewApiEditData,
+    build_newapi_config_from_fields, format_divisor_value, format_optional_divisor_value,
+    newapi_provider_id, parse_divisor_input, NewApiConfig, NewApiDivisorError, NewApiEditData,
+    NewApiFormError,
 };
 pub use provider::{
     NavTab, ProviderCapability, ProviderDescriptor, ProviderId, ProviderKind, ProviderMetadata,

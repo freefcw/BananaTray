@@ -517,6 +517,8 @@ newapi.delete_failed_body: "无法删除中转站配置文件，请检查权限�
 newapi.load_failed_title: "⚠️ 加载失败"
 newapi.load_failed_body: "无法加载中转站配置文件，请检查 YAML 文件后重试。"
 newapi.field.url.readonly_hint: "站点 URL 为身份标识，不可修改"
+newapi.validation.required: "请填写名称、站点 URL 和 Cookie。"
+newapi.validation.invalid_divisor: "积分换算比例必须是正数。"
 
 # ── Provider 动态列表 ─────────────────────────────────────
 provider.add_button: "添加服务商"

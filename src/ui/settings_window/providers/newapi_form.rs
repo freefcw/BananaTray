@@ -14,12 +14,12 @@ use super::shared::{
 };
 use crate::application::AppAction;
 use crate::application::FormIdentity;
-use crate::models::{parse_divisor_input, NewApiConfig, NewApiEditData};
+use crate::models::{build_newapi_config_from_fields, NewApiEditData, NewApiFormError};
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, px, App, Context, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
-    StatefulInteractiveElement, Styled, Window,
+    div, px, relative, App, Context, Div, FontWeight, InteractiveElement, MouseButton,
+    ParentElement, StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -39,6 +39,7 @@ impl SettingsView {
                 None => NewApiFormInputs::new_add(cx),
             };
             self.newapi_inputs = Some(FormInputsCache { identity, inputs });
+            self.newapi_form_error = None;
         }
 
         &self.newapi_inputs.as_ref().expect("newapi inputs").inputs
@@ -149,6 +150,12 @@ impl SettingsView {
             // ── 操作按钮 ──
             .child(self.render_form_buttons(theme, cx));
 
+        let inner = if let Some(error) = self.newapi_form_error {
+            inner.child(render_newapi_validation_error(error, theme))
+        } else {
+            inner
+        };
+
         // ── 外层容器 ──
         div().flex_col().flex_1().h_full().overflow_hidden().child(
             div()
@@ -160,45 +167,26 @@ impl SettingsView {
         )
     }
 
-    /// 从表单当前值构造提交 Action；必填字段缺失时返回 None
-    fn collect_submit_action(&self, cx: &App) -> Option<AppAction> {
+    /// 从表单当前值构造提交 Action；校验失败时记下错误并返回 None。
+    fn collect_submit_action(&mut self, cx: &App) -> Option<AppAction> {
         let inputs = self.newapi_inputs.as_ref()?;
         let inputs = &inputs.inputs;
-        let name_val = inputs.name.read(cx).content().trim().to_string();
-        let url_val = inputs.url.read(cx).content().trim().to_string();
-        let cookie_val = inputs.cookie.read(cx).content().trim().to_string();
-
-        if name_val.is_empty() || url_val.is_empty() || cookie_val.is_empty() {
-            log::warn!(target: "settings", "NewAPI save: required fields missing");
-            return None;
-        }
-
-        let user_id_val = inputs.user_id.read(cx).content().trim().to_string();
-        let divisor_val = inputs.divisor.read(cx).content().trim().to_string();
-        let divisor = match parse_divisor_input(&divisor_val) {
-            Ok(divisor) => divisor,
-            Err(err) => {
-                log::warn!(
-                    target: "settings",
-                    "NewAPI save: invalid divisor input '{}': {:?}",
-                    divisor_val,
-                    err
-                );
-                return None;
+        match build_newapi_config_from_fields(
+            inputs.name.read(cx).content(),
+            inputs.url.read(cx).content(),
+            inputs.cookie.read(cx).content(),
+            inputs.user_id.read(cx).content(),
+            inputs.divisor.read(cx).content(),
+        ) {
+            Ok(config) => {
+                self.newapi_form_error = None;
+                Some(AppAction::SubmitNewApi(config))
             }
-        };
-
-        Some(AppAction::SubmitNewApi(NewApiConfig {
-            display_name: name_val,
-            base_url: url_val,
-            cookie: cookie_val,
-            user_id: if user_id_val.is_empty() {
+            Err(error) => {
+                self.newapi_form_error = Some(error);
                 None
-            } else {
-                Some(user_id_val)
-            },
-            divisor,
-        }))
+            }
+        }
     }
 
     /// 渲染取消 + 保存按钮
@@ -257,14 +245,26 @@ impl SettingsView {
                     .hover(|s| s.opacity(0.9))
                     .child(t!("newapi.save").to_string())
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        let ok =
-                            view.update(cx, |view: &mut Self, cx| view.collect_submit_action(cx));
+                        let ok = view.update(cx, |view: &mut Self, cx| {
+                            let action = view.collect_submit_action(cx);
+                            cx.notify();
+                            action
+                        });
                         if let Some(action) = ok {
                             crate::bootstrap::dispatch_in_window(&state_save, action, window, cx);
                         }
                     })
             })
     }
+}
+
+fn render_newapi_validation_error(error: NewApiFormError, theme: &Theme) -> Div {
+    div()
+        .mt(px(12.0))
+        .text_size(px(12.0))
+        .line_height(relative(1.4))
+        .text_color(theme.status.warning)
+        .child(t!(error.i18n_key()).to_string())
 }
 
 fn render_newapi_header(title: String, theme: &Theme) -> Div {

@@ -8,7 +8,7 @@ use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::application::SettingsTab;
 use crate::models::{
-    format_optional_divisor_value, ProviderId, TokenEditMode, TokenInputCapability,
+    format_optional_divisor_value, NewApiFormError, ProviderId, TokenEditMode, TokenInputCapability,
 };
 use crate::runtime;
 use crate::runtime::AppState;
@@ -263,6 +263,8 @@ pub(crate) struct SettingsView {
     pub(crate) _appearance_sub: Option<Subscription>,
     /// NewAPI 快速添加表单输入组（identity 变化时重建）
     pub(crate) newapi_inputs: Option<FormInputsCache<NewApiFormInputs>>,
+    /// NewAPI 保存前校验失败提示（点保存后显示，换表单时清掉）
+    pub(crate) newapi_form_error: Option<NewApiFormError>,
     /// Script Provider 表单输入组（identity 变化时重建）
     pub(crate) script_provider_inputs: Option<FormInputsCache<ScriptProviderFormInputs>>,
     /// Debug Tab 的阻塞式系统诊断缓存；渲染阶段只读取该快照。
@@ -290,6 +292,7 @@ impl SettingsView {
             global_hotkey_synced_value: None,
             _appearance_sub: None,
             newapi_inputs: None,
+            newapi_form_error: None,
             script_provider_inputs: None,
             debug_diagnostics: None,
             debug_diagnostics_loading: false,

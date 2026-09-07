@@ -10,6 +10,22 @@ pub enum NewApiDivisorError {
     NonPositive,
 }
 
+/// NewAPI 表单提交前的校验错误（给用户看，不是磁盘 I/O）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewApiFormError {
+    MissingRequired,
+    InvalidDivisor,
+}
+
+impl NewApiFormError {
+    pub fn i18n_key(self) -> &'static str {
+        match self {
+            Self::MissingRequired => "newapi.validation.required",
+            Self::InvalidDivisor => "newapi.validation.invalid_divisor",
+        }
+    }
+}
+
 /// NewAPI 配置输入（用户通过表单提交的数据）
 #[derive(Debug, Clone)]
 pub struct NewApiConfig {
@@ -84,6 +100,37 @@ pub fn parse_divisor_input(input: &str) -> Result<Option<f64>, NewApiDivisorErro
     }
 
     Ok(Some(divisor))
+}
+
+/// 从表单字段构造 NewAPI 配置；必填缺失或除数非法时返回可展示的错误。
+pub fn build_newapi_config_from_fields(
+    name: &str,
+    url: &str,
+    cookie: &str,
+    user_id: &str,
+    divisor: &str,
+) -> Result<NewApiConfig, NewApiFormError> {
+    let display_name = name.trim();
+    let base_url = url.trim();
+    let cookie = cookie.trim();
+    if display_name.is_empty() || base_url.is_empty() || cookie.is_empty() {
+        return Err(NewApiFormError::MissingRequired);
+    }
+
+    let divisor = parse_divisor_input(divisor).map_err(|_| NewApiFormError::InvalidDivisor)?;
+    let user_id = user_id.trim();
+
+    Ok(NewApiConfig {
+        display_name: display_name.to_string(),
+        base_url: base_url.to_string(),
+        cookie: cookie.to_string(),
+        user_id: if user_id.is_empty() {
+            None
+        } else {
+            Some(user_id.to_string())
+        },
+        divisor,
+    })
 }
 
 /// 将任意字符串规范化为 slug 片段：非字母数字字符折叠为单个连字符。
@@ -224,5 +271,55 @@ mod tests {
             parse_divisor_input("-1"),
             Err(NewApiDivisorError::NonPositive)
         );
+    }
+
+    #[test]
+    fn build_newapi_config_rejects_missing_required_fields() {
+        assert_eq!(
+            build_newapi_config_from_fields("", "https://api.example.com", "session=1", "", "")
+                .unwrap_err(),
+            NewApiFormError::MissingRequired
+        );
+        assert_eq!(
+            build_newapi_config_from_fields("Relay", "", "session=1", "", "").unwrap_err(),
+            NewApiFormError::MissingRequired
+        );
+        assert_eq!(
+            build_newapi_config_from_fields("Relay", "https://api.example.com", "  ", "", "")
+                .unwrap_err(),
+            NewApiFormError::MissingRequired
+        );
+    }
+
+    #[test]
+    fn build_newapi_config_rejects_invalid_divisor() {
+        assert_eq!(
+            build_newapi_config_from_fields(
+                "Relay",
+                "https://api.example.com",
+                "session=1",
+                "",
+                "oops"
+            )
+            .unwrap_err(),
+            NewApiFormError::InvalidDivisor
+        );
+    }
+
+    #[test]
+    fn build_newapi_config_accepts_trimmed_required_fields() {
+        let config = build_newapi_config_from_fields(
+            " Relay ",
+            " https://api.example.com ",
+            " session=1 ",
+            " 42 ",
+            "500000",
+        )
+        .unwrap();
+        assert_eq!(config.display_name, "Relay");
+        assert_eq!(config.base_url, "https://api.example.com");
+        assert_eq!(config.cookie, "session=1");
+        assert_eq!(config.user_id.as_deref(), Some("42"));
+        assert_eq!(config.divisor, Some(500000.0));
     }
 }

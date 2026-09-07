@@ -279,6 +279,8 @@ mod tests {
             "newapi.delete_failed_body",
             "newapi.load_failed_title",
             "newapi.load_failed_body",
+            "newapi.validation.required",
+            "newapi.validation.invalid_divisor",
             "script_provider.save_success_title",
             "script_provider.save_success_body",
             "script_provider.save_partial_title",

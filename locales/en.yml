@@ -517,6 +517,8 @@ newapi.delete_failed_body: "Failed to remove the relay config file. Check permis
 newapi.load_failed_title: "⚠️ Load Failed"
 newapi.load_failed_body: "Failed to load the relay config file. Check the YAML file and try again."
 newapi.field.url.readonly_hint: "Site URL is an identity field and cannot be changed"
+newapi.validation.required: "Name, site URL, and cookie are required."
+newapi.validation.invalid_divisor: "Credit ratio must be a positive number."
 
 # ── Provider dynamic list ─────────────────────────────────
 provider.add_button: "Add Provider"
