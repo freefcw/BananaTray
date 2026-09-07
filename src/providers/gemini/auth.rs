@@ -1,3 +1,4 @@
+use crate::providers::common::{cli, path_resolver};
 use crate::providers::{ProviderError, ProviderResult};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -80,9 +81,9 @@ pub(super) fn check_auth_type_from_content(content: &str) -> ProviderResult<()> 
 }
 
 pub(super) fn refresh_token_via_cli() -> ProviderResult<()> {
-    let output = Command::new("gemini").args(["--version"]).output();
-
-    if output.is_err() {
+    // GUI 启动的进程 PATH 很小，探测和执行都必须走补全后的 PATH，
+    // 否则装了 gemini 也会判定为未安装，token 过期后永远无法自动刷新。
+    if !cli::command_exists("gemini") {
         return Err(ProviderError::cli_not_found("gemini"));
     }
 
@@ -96,6 +97,7 @@ pub(super) fn refresh_token_via_cli() -> ProviderResult<()> {
 
     let output = Command::new("sh")
         .args(["-c", "echo '/quit' | gemini 2>/dev/null || true"])
+        .env("PATH", path_resolver::enriched_path())
         .output()
         .map_err(|err| {
             ProviderError::fetch_failed(&format!("run gemini CLI for token refresh: {err}"))

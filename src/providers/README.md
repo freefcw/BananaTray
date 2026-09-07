@@ -202,6 +202,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 - Providers run on background threads (via `smol::unblock`). They must be `Send + Sync`.
 - HTTP requests should use `crate::providers::common::http_client` (shared ureq agent).
 - Non-interactive CLI providers should use `crate::providers::common::cli`; it shares command lookup and PATH enrichment with the PTY runner through `common::path_resolver`.
+- Never probe or launch a CLI with a bare `Command::new("foo")` / `which foo`. GUI-launched apps inherit a minimal PATH, so a CLI installed under `~/.local/bin`, Homebrew or nvm is reported as "not installed" and the user gets the wrong remediation hint. Probe through `cli::command_exists()`, and any hand-rolled `Command` must set `.env("PATH", path_resolver::enriched_path())`.
 - CLI-based providers should use `crate::providers::common::runner::InteractiveRunner` for PTY-based execution when interactive behavior is required.
 - Return `ProviderError` variants (not raw strings) for structured classification.
 - Do not hide user remediation inside `anyhow::Context`; reserve context for technical details
