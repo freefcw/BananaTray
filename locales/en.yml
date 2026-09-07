@@ -441,6 +441,7 @@ hint.token_invalid: "GitHub token is invalid or expired. Update your token in Se
 hint.token_no_permission: "Token lacks required permissions. Use a Classic PAT with 'copilot' scope."
 hint.copilot_not_enabled: "Copilot not enabled for this account. Check your GitHub Copilot subscription."
 hint.no_quota_in_response: "No quota data found in API response."
+hint.opencode_go_required: "OpenCode Go subscription required, or the API key is invalid. Connect OpenCode Go in the OpenCode TUI and ensure auth.json has an opencode-go / opencode API key."
 
 # ── Quota labels ──────────────────────────────────────────
 quota.label.session: "Session (5h)"

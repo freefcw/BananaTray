@@ -183,6 +183,9 @@ fn format_failure_advice(advice: &FailureAdvice) -> String {
             t!("hint.api_http_error", status = status).to_string()
         }
         FailureAdvice::ApiError { message } => t!("hint.api_error", msg = message).to_string(),
+        FailureAdvice::CopilotTokenNoPermission => t!("hint.token_no_permission").to_string(),
+        FailureAdvice::CopilotNotEnabled => t!("hint.copilot_not_enabled").to_string(),
+        FailureAdvice::OpenCodeGoRequired => t!("hint.opencode_go_required").to_string(),
         FailureAdvice::NoOauthCreds { cli } => t!("hint.no_oauth_creds", cli = cli).to_string(),
         FailureAdvice::BothUnavailable { name } => {
             t!("hint.both_unavailable", name = name).to_string()
@@ -546,6 +549,34 @@ mod tests {
             format_failure_message(&failure),
             "Please run `claude` to login"
         );
+    }
+
+    /// Copilot / OpenCode 的权限类失败曾经硬编码英文长句送进界面，
+    /// 这里钉住它们必须走 i18n，中文用户不能再看到英文。
+    #[test]
+    fn permission_failures_are_localized_not_hardcoded_english() {
+        let _locale_guard = crate::i18n::test_locale_guard("zh-CN");
+        let rendered: Vec<(FailureAdvice, String)> = [
+            FailureAdvice::CopilotTokenNoPermission,
+            FailureAdvice::CopilotNotEnabled,
+            FailureAdvice::OpenCodeGoRequired,
+        ]
+        .into_iter()
+        .map(|advice| {
+            let message = format_failure_advice(&advice);
+            (advice, message)
+        })
+        .collect();
+        rust_i18n::set_locale("en");
+
+        for (advice, message) in rendered {
+            assert!(
+                message
+                    .chars()
+                    .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
+                "{advice:?} 应输出中文文案，实际: {message}"
+            );
+        }
     }
 
     #[test]

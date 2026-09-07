@@ -141,17 +141,12 @@ impl AiProvider for CopilotProvider {
                         }
                         HttpError::HttpStatus { code: 403 } => {
                             return Err(ProviderError::auth_required(Some(
-                                crate::models::FailureAdvice::ApiError {
-                                    message: "GitHub token lacks required Copilot permissions; use a Classic PAT with 'copilot' scope.".to_string(),
-                                },
+                                crate::models::FailureAdvice::CopilotTokenNoPermission,
                             )));
                         }
                         HttpError::HttpStatus { code: 404 } => {
                             return Err(ProviderError::fetch_failed_with_advice(
-                                crate::models::FailureAdvice::ApiError {
-                                    message: "GitHub Copilot is not enabled for this account."
-                                        .to_string(),
-                                },
+                                crate::models::FailureAdvice::CopilotNotEnabled,
                             ));
                         }
                         _ => {}

@@ -43,4 +43,8 @@ pub enum FailureAdvice {
     TrustFolder { cli: String },
     CannotParseQuota,
     TokenStillInvalid,
+    // 权限/订阅类失败：语义固定，文案由 selector 出，provider 侧不再拼英文句子。
+    CopilotTokenNoPermission,
+    CopilotNotEnabled,
+    OpenCodeGoRequired,
 }

@@ -70,9 +70,7 @@ impl AiProvider for OpenCodeProvider {
                         HttpError::HttpStatus { code: 403 } => {
                             // 官方对「无 Go 订阅」也返回 403 EntitlementError。
                             return Err(ProviderError::auth_required(Some(
-                                FailureAdvice::ApiError {
-                                    message: "OpenCode Go subscription required, or the API key is invalid. Connect OpenCode Go in the OpenCode TUI and ensure auth.json has an opencode-go / opencode API key.".to_string(),
-                                },
+                                FailureAdvice::OpenCodeGoRequired,
                             )));
                         }
                         _ => {}

@@ -441,6 +441,7 @@ hint.token_invalid: "GitHub token 无效或已过期。请在 设置 → 服务�
 hint.token_no_permission: "Token 缺少必要权限。请使用包含 'copilot' 权限的 Classic PAT。"
 hint.copilot_not_enabled: "此账户未启用 Copilot。请检查 GitHub Copilot 订阅。"
 hint.no_quota_in_response: "API 响应中未找到配额数据。"
+hint.opencode_go_required: "需要 OpenCode Go 订阅，或 API Key 无效。请在 OpenCode TUI 中连接 OpenCode Go，并确认 auth.json 中有 opencode-go / opencode 的 API Key。"
 
 # ── 配额标签 ──────────────────────────────────────────────
 quota.label.session: "会话 (5小时)"
