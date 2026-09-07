@@ -7,7 +7,7 @@ use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::models::{
     unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
-    ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
+    ScriptProviderQuotaPreview, ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
@@ -76,14 +76,10 @@ fn render_test_result(result: Option<&ScriptProviderTestResult>, theme: &Theme) 
     } else {
         theme.status.error
     };
-    let preview = result.preview.as_ref().map(|p| {
-        format!(
-            "{}  {:.2} {}",
-            p.label,
-            p.remaining,
-            if p.unit.is_empty() { "USD" } else { &p.unit }
-        )
-    });
+    let preview = result
+        .preview
+        .as_ref()
+        .map(ScriptProviderQuotaPreview::display_line);
 
     div()
         .flex_col()

@@ -43,6 +43,17 @@ pub struct ScriptProviderQuotaPreview {
     pub unit: String,
 }
 
+impl ScriptProviderQuotaPreview {
+    /// Settings「Run Test」预览行：有单位才附上，空单位不猜货币。
+    pub fn display_line(&self) -> String {
+        if self.unit.trim().is_empty() {
+            format!("{}  {:.2}", self.label, self.remaining)
+        } else {
+            format!("{}  {:.2} {}", self.label, self.remaining, self.unit)
+        }
+    }
+}
+
 /// Last result of the Settings UI "Run Test" action.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptProviderTestResult {
@@ -131,7 +142,7 @@ pub fn parse_script_stdout(stdout: &str) -> Result<ScriptProviderQuotaPreview, S
     let remaining = numeric_field(&json, "remaining")
         .ok_or_else(|| "stdout JSON must include numeric field 'remaining'".to_string())?;
     let used = numeric_field(&json, "used");
-    let unit = string_field(&json, "unit").unwrap_or_else(|| "USD".to_string());
+    let unit = string_field(&json, "unit").unwrap_or_default();
     let label = string_field(&json, "label").unwrap_or_else(|| "Balance".to_string());
 
     Ok(ScriptProviderQuotaPreview {
@@ -237,5 +248,33 @@ mod tests {
 
         assert_eq!(preview.remaining, 12.5);
         assert_eq!(preview.used, None);
+    }
+
+    #[test]
+    fn parse_script_stdout_keeps_missing_unit_empty() {
+        let preview = parse_script_stdout(r#"{"remaining":12.5}"#).unwrap();
+        assert_eq!(preview.unit, "");
+    }
+
+    #[test]
+    fn script_quota_preview_line_omits_empty_unit() {
+        let preview = ScriptProviderQuotaPreview {
+            label: "Balance".to_string(),
+            remaining: 12.5,
+            used: None,
+            unit: String::new(),
+        };
+        assert_eq!(preview.display_line(), "Balance  12.50");
+    }
+
+    #[test]
+    fn script_quota_preview_line_keeps_explicit_unit() {
+        let preview = ScriptProviderQuotaPreview {
+            label: "Balance".to_string(),
+            remaining: 12.5,
+            used: None,
+            unit: "USD".to_string(),
+        };
+        assert_eq!(preview.display_line(), "Balance  12.50 USD");
     }
 }
