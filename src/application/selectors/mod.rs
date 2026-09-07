@@ -289,6 +289,8 @@ pub use debug::{
     build_debug_info_text, debug_tab_view_state, format_debug_console_logs, DebugContext,
     DebugTabViewState, EnvironmentRowKind, LogLevelColor,
 };
+#[cfg(test)]
+pub(crate) use format::display_source_label;
 #[cfg(any(target_os = "linux", test))]
 pub(crate) use format::format_quota_label;
 #[allow(unused_imports)] // app feature 下 ui/widgets 使用

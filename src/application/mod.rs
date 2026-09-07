@@ -14,6 +14,8 @@ pub use effect::{
 };
 pub use quota_alert::QuotaAlert;
 pub use reducer::{build_config_sync_request, reduce};
+#[cfg(test)]
+pub(crate) use selectors::display_source_label;
 pub use selectors::{
     build_debug_info_text, build_issue_report, build_issue_url, debug_tab_view_state,
     format_debug_console_logs, header_view_state, overview_view_state, provider_detail_view_state,

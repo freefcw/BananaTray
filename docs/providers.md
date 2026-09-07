@@ -158,7 +158,8 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 3. 实现 provider 本体并返回稳定的元数据 / 刷新语义 / 错误语义。
 4. 明确声明 `provider_capability()`；如果不是可监控 provider，不要继续伪装成“普通 refresh 失败”。
 5. 如需设置页交互，声明合适的 `SettingsCapability`。
-6. 补上 icon、测试与文档。内置注册由 manifest 自动生成，不要再维护第二份注册表。
+6. 在 `selectors/format.rs::display_source_label` 补上新 `source_label` 的分支和 `provider.source_label.*` 文案——漏了不会编译失败，设置页副标题会静默回落成「自定义」；`builtin_provider_manifest.rs` 的 `every_builtin_source_label_has_its_own_translation` 会拦住这种遗漏。
+7. 补上 icon、测试与文档。内置注册由 manifest 自动生成，不要再维护第二份注册表。
 
 推荐同时查看：
 
