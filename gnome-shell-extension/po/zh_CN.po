@@ -42,9 +42,13 @@ msgstr "无法刷新配额数据"
 msgid "Invalid quota data from BananaTray daemon"
 msgstr "BananaTray 后台服务返回了无效配额数据"
 
-# Translators: quota status badge shown when quota is low but not exhausted.
+# Translators: quota status badge shown when remaining quota is low.
 msgid "LOW"
-msgstr "低"
+msgstr "偏低"
+
+# Translators: quota status badge shown when remaining quota needs attention.
+msgid "WARN"
+msgstr "注意"
 
 msgid "Loading"
 msgstr "加载中"
@@ -67,10 +71,6 @@ msgstr "暂无配额数据"
 # Translators: quota status badge shown when quota usage is healthy.
 msgid "OK"
 msgstr "正常"
-
-# Translators: quota status badge shown when quota is exhausted.
-msgid "OUT"
-msgstr "耗尽"
 
 msgid "Offline"
 msgstr "离线"

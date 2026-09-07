@@ -79,11 +79,11 @@ export function providerVisualLevel(provider) {
 export function statusBadgeLabel(level) {
     switch (level) {
     case 'red':
-        // Translators: quota status badge shown when quota is exhausted.
-        return _('OUT');
-    case 'yellow':
-        // Translators: quota status badge shown when quota is low but not exhausted.
+        // Translators: quota status badge shown when remaining quota is low.
         return _('LOW');
+    case 'yellow':
+        // Translators: quota status badge shown when remaining quota needs attention.
+        return _('WARN');
     default:
         // Translators: quota status badge shown when quota usage is healthy.
         return _('OK');

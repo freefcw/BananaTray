@@ -284,7 +284,7 @@ schema v1 的稳定 `status_kind` 集合为 `Synced`、`Syncing`、`Stale`、`Of
 golden 契约同时约束 Rust producer、Extension validator 和 presentation；未知值记录告警并按
 `Stale` 降级展示。
 标题副文本展示紧凑 Provider 摘要（总数、已连接数，以及仅在非零时追加 refreshing / error /
-offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `LOW` / `OUT`
+offline）。Provider 行自身不再显示左侧状态点，正常配额用进度条和 `OK` / `WARN` / `LOW`
 徽章表达，非 connected 状态用连接状态徽章表达。
 
 弹窗视觉按托盘菜单处理：Provider 行默认透明，以细分隔线形成连续列表；只有 hover 时出现轻背景。
@@ -327,7 +327,7 @@ D-Bus 快照里来自 daemon 的 `display_name`、quota `label` 和 `display_tex
 
 1. 在 JS 中通过 `i18n.js` 导出的 `_()` 包裹普通文案，带数量的文案使用 `ngettext()`。
 2. 同步更新 `po/zh_CN.po`。
-3. 对 `OK` / `LOW` / `OUT` 这类短标签保留 `# Translators:` 语境注释，避免翻译者误解。
+3. 对 `OK` / `WARN` / `LOW` 这类短标签保留 `# Translators:` 语境注释，避免翻译者误解。
 4. 重新编译运行时翻译文件：
 
 ```bash

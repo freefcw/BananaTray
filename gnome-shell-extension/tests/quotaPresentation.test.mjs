@@ -198,8 +198,8 @@ describe('providerVisualLevel', () => {
 // ============================================================
 describe('statusBadgeLabel', () => {
     it('returns correct badge labels', () => {
-        assert.equal(statusBadgeLabel('red'), 'OUT');
-        assert.equal(statusBadgeLabel('yellow'), 'LOW');
+        assert.equal(statusBadgeLabel('red'), 'LOW');
+        assert.equal(statusBadgeLabel('yellow'), 'WARN');
         assert.equal(statusBadgeLabel('green'), 'OK');
     });
 
