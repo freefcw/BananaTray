@@ -686,7 +686,7 @@ mod tests {
         assert_eq!(format_quota_label(&api), "PRO · API");
 
         rust_i18n::set_locale("zh-CN");
-        assert_eq!(format_quota_label(&auto), "PRO · 自由模型");
+        assert_eq!(format_quota_label(&auto), "PRO · 自有模型");
         assert_eq!(format_quota_label(&api), "PRO · 三方模型");
         rust_i18n::set_locale("en");
     }

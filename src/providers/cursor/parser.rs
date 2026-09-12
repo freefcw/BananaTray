@@ -75,7 +75,7 @@ pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     Ok(quotas)
 }
 
-/// 解析 plan 配额：优先拆成 Auto（自由模型）与 API（三方模型）两池；
+/// 解析 plan 配额：优先拆成 Auto（自有模型）与 API（三方模型）两池；
 /// 若响应缺少百分比字段，再回退到单一 used/limit 月度档。
 ///
 /// free 档没有 included API 额度池（该额度只属于 Pro/Pro+/Ultra），

@@ -28,7 +28,7 @@ pub enum QuotaAlert {
         provider_name: String,
         remaining_pct: f64,
     },
-    /// 余额已耗尽
+    /// 余量已耗尽
     Exhausted { provider_name: String },
     /// 配额已恢复（从耗尽状态）
     Recovered {
