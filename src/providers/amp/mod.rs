@@ -402,6 +402,52 @@ mod tests {
         );
     }
 
+    /// 2026-09-12 起 amp CLI 实测输出（v0.0.1789200043）：行前缀
+    /// `Amp <Plan> Subscription:` → `Amp <Plan> Tier:`，池形态不变。
+    #[test]
+    fn test_parse_real_world_markdown_bold_tier() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Signed in as freefcw@gmail.com (freefcw)\n\
+            **Amp Megawatt Tier:** agent usage $20 of $20 remaining (100%), orb usage 750h of 750h a1.small orb hours remaining (100%) - period 2026-08-30 to 2026-09-30, ends in 17 days\n\
+            **Individual credits:** $0 remaining - https://ampcode.com/settings\n\
+            \n\
+            # Run `amp usage --details` for more detailed information.\n";
+        let data = AmpProvider::parse_usage_output(output).unwrap();
+
+        assert_eq!(data.account_email.as_deref(), Some("freefcw@gmail.com"));
+        assert_eq!(data.quotas.len(), 2);
+
+        let q0 = &data.quotas[0];
+        assert_eq!(
+            q0.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "agent".into(),
+            }
+        );
+        assert!((q0.used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(q0.limit, 100.0);
+        assert_eq!(q0.stable_key, "subscription:megawatt:agent");
+        assert_eq!(
+            q0.detail_spec,
+            Some(QuotaDetailSpec::Raw("$20 of $20".to_string()))
+        );
+
+        let q1 = &data.quotas[1];
+        assert_eq!(
+            q1.label_spec,
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "Megawatt".into(),
+                pool: "orb".into(),
+            }
+        );
+        assert!((q1.used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(
+            q1.detail_spec,
+            Some(QuotaDetailSpec::Raw("750h of 750h".to_string()))
+        );
+    }
+
     /// 加粗剥离只处理行首成对的 `**...**`；未闭合或行中出现的 `**` 原样保留
     #[test]
     fn test_strip_markdown_bold_only_unwraps_leading_pair() {

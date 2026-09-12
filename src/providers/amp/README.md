@@ -12,6 +12,8 @@
 - 订阅制（现行格式）：一行两个月度池，绝对值 + 括号百分比 ——
   `agent usage $6.42 of $20 remaining (32%)`（agent 调用额度，美元）、
   `orb usage 750h of 750h a1.small orb hours remaining (100%)`（远程实例，小时）。
+  行前缀 2026-09-12 起为 `Amp <Plan> Tier:`（Amp CLI `0.0.1789200043`），
+  仍兼容 2026-08-31 ~ 2026-09-12 的 `Amp <Plan> Subscription:`。
   拆成独立 quota，`QuotaLabelSpec::SubscriptionUsage { plan, pool }`，
   进度条用 CLI 括号百分比（缺失时由绝对值换算），绝对值原文（如 `$6.42 of $20`）透传到详情行。
   行尾 `- period ... , ends in N days` 暂不入模型。
@@ -22,7 +24,7 @@
 
 | 策略 | 文件 | 行前缀 | 池形态 | 状态 |
 |------|------|--------|--------|------|
-| current | `subscription/current.rs` | `Amp <Plan> Subscription:` | 绝对值 + 括号百分比，池名 `agent` / `orb` | 现行。Amp CLI `0.0.1788192028`（2026-08-31）起 |
+| current | `subscription/current.rs` | `Amp <Plan> Tier:`（兼容 `Subscription:`） | 绝对值 + 括号百分比，池名 `agent` / `orb` | 现行。`Tier` 自 Amp CLI `0.0.1789200043`（2026-09-12）；`Subscription` 自 `0.0.1788192028`（2026-08-31） |
 | interim | `subscription/interim.rs` | `Amp <Plan> Subscription:` | 纯百分比，池名 `other` / `orb` | 已失效。2026-08-31 起 CLI 不再输出；预计 2026-11-30 删除 |
 | legacy | `subscription/legacy.rs` | `Subscription <Plan>:` | 纯百分比，池名 `other` / `orb` | 已失效。2026-08-17 起 CLI 不再输出；预计 2026-11-17 删除 |
 

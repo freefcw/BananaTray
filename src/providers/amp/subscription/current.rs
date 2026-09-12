@@ -1,12 +1,14 @@
 //! 现行订阅行（Amp CLI `0.0.1788192028` / 2026-08-31 起）：
 //!
 //! ```text
-//! **Amp <Plan> Subscription:** agent usage $6.42 of $20 remaining (32%), orb usage 750h of 750h a1.small orb hours remaining (100%) - period 2026-08-30 to 2026-09-30, ends in 29 days
+//! **Amp <Plan> Tier:** agent usage $20 of $20 remaining (100%), orb usage 750h of 750h a1.small orb hours remaining (100%) - period 2026-08-30 to 2026-09-30, ends in 17 days
 //! ```
 //!
 //! 特点（相对 2026-08-17 过渡格式）：
 //! - label 外包了一层 markdown 加粗 `**...**`（`--no-color` 也剥不掉），
 //!   统一在上游 `mod.rs::strip_markdown_bold` 剥掉，本策略只见到裸文本。
+//! - 行前缀：2026-09-12 起（Amp CLI `0.0.1789200043`）`Subscription` 改为 `Tier`；
+//!   仍兼容 2026-08-31 ~ 2026-09-12 的 `Amp <Plan> Subscription:`。
 //! - 池片段从纯百分比（`X% other usage`）改为绝对值 + 括号百分比：
 //!   `agent usage $6.42 of $20 remaining (32%)`（agent 调用额度，美元）、
 //!   `orb usage 750h of 750h a1.small orb hours remaining (100%)`（远程实例，小时）。
@@ -22,7 +24,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static LINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)^Amp\s+(.+?)\s+Subscription:\s*(.+)$").unwrap());
+    LazyLock::new(|| Regex::new(r"(?i)^Amp\s+(.+?)\s+(?:Subscription|Tier):\s*(.+)$").unwrap());
 
 pub(super) struct CurrentSubscriptionLine;
 
@@ -91,6 +93,27 @@ fn parse_value_token(token: &str) -> Option<f64> {
 mod tests {
     use super::*;
     use crate::models::QuotaType;
+
+    #[test]
+    fn parses_current_tier_label() {
+        let quotas = CurrentSubscriptionLine::parse_line(
+            "Amp Megawatt Tier: agent usage $20 of $20 remaining (100%), orb usage 750h of 750h a1.small orb hours remaining (100%) - period 2026-08-30 to 2026-09-30, ends in 17 days",
+        )
+        .unwrap();
+
+        assert_eq!(quotas.len(), 2);
+        assert_eq!(quotas[0].stable_key, "subscription:megawatt:agent");
+        assert!((quotas[0].used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(
+            quotas[0].detail_spec,
+            Some(QuotaDetailSpec::Raw("$20 of $20".to_string()))
+        );
+        assert_eq!(quotas[1].stable_key, "subscription:megawatt:orb");
+        assert_eq!(
+            quotas[1].detail_spec,
+            Some(QuotaDetailSpec::Raw("750h of 750h".to_string()))
+        );
+    }
 
     #[test]
     fn parses_current_value_based_line() {

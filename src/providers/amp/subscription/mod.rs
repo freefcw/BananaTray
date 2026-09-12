@@ -156,6 +156,14 @@ mod tests {
         assert_eq!(current[0].stable_key, "subscription:gigawatt:agent");
         assert_eq!(current[1].stable_key, "subscription:gigawatt:orb");
 
+        let current_tier = parse_line(
+            "Amp Gigawatt Tier: agent usage $20 of $20 remaining (100%), orb usage 750h of 750h a1.small orb hours remaining (100%)",
+        )
+        .unwrap();
+        assert_eq!(current_tier[0].stable_key, "subscription:gigawatt:agent");
+        assert!((current_tier[0].used - 0.0).abs() < f64::EPSILON);
+        assert_eq!(current_tier[1].stable_key, "subscription:gigawatt:orb");
+
         let interim =
             parse_line("Amp Gigawatt Subscription: 38% other usage and 5% orb usage remaining")
                 .unwrap();
