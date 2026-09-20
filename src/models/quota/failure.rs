@@ -6,6 +6,9 @@ pub struct ProviderFailure {
     pub reason: FailureReason,
     #[serde(default)]
     pub advice: Option<FailureAdvice>,
+    /// 已脱敏、仅供 Debug 诊断展示的技术细节。
+    ///
+    /// 禁止包含响应正文、凭据、配置值或其他敏感用户数据。
     #[serde(default)]
     pub raw_detail: Option<String>,
 }
@@ -37,7 +40,8 @@ pub enum FailureAdvice {
     OpenAppToRefresh { app: String },
     CliExitFailed { code: i32 },
     ApiHttpError { status: String },
-    ApiError { message: String },
+    // 上游 API 返回业务错误；仅保留稳定错误码，不携带响应原文。
+    ApiError { code: i32 },
     NoOauthCreds { cli: String },
     BothUnavailable { name: String },
     TrustFolder { cli: String },

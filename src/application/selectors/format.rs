@@ -109,7 +109,7 @@ pub fn format_provider_updated_at(provider: &ProviderStatus) -> String {
 }
 
 /// 格式化 Provider 最近一次失败消息。
-pub fn format_failure_message(failure: &ProviderFailure) -> String {
+pub fn format_user_failure_message(failure: &ProviderFailure) -> String {
     match &failure.reason {
         FailureReason::CliNotFound { cli_name } => {
             t!("error.cli_not_found", cli = cli_name).to_string()
@@ -130,27 +130,44 @@ pub fn format_failure_message(failure: &ProviderFailure) -> String {
             None => t!("error.update_required").to_string(),
         },
         FailureReason::ConfigMissing { key } => t!("error.config_missing", key = key).to_string(),
-        FailureReason::Unavailable | FailureReason::ParseFailed | FailureReason::FetchFailed => {
-            failure
-                .advice
-                .as_ref()
-                .map(format_failure_advice)
-                .or_else(|| failure.raw_detail.clone())
-                .unwrap_or_else(|| t!("provider.unknown_error").to_string())
-        }
+        FailureReason::Unavailable => failure
+            .advice
+            .as_ref()
+            .map(format_failure_advice)
+            .unwrap_or_else(|| t!("error.unavailable_default").to_string()),
+        FailureReason::ParseFailed => failure
+            .advice
+            .as_ref()
+            .map(format_failure_advice)
+            .unwrap_or_else(|| t!("error.parse_failed_default").to_string()),
+        FailureReason::FetchFailed => failure
+            .advice
+            .as_ref()
+            .map(format_failure_advice)
+            .unwrap_or_else(|| t!("error.fetch_failed_default").to_string()),
         FailureReason::Timeout => t!("error.timeout").to_string(),
         FailureReason::NoData => t!("error.no_data").to_string(),
-        FailureReason::NetworkFailed => match failure.raw_detail.as_deref() {
-            Some(reason) => t!("error.network_failed", reason = reason).to_string(),
-            None => t!("error.timeout").to_string(),
-        },
+        FailureReason::NetworkFailed => t!("error.network_failed_default").to_string(),
     }
+}
+
+/// 格式化供 Debug 诊断使用的失败信息。
+///
+/// Debug 面板明确承担技术诊断职责，因此在没有结构化 advice 时保留
+/// `raw_detail`；普通用户向展示统一使用 `format_user_failure_message`，不会泄漏原始细节。
+pub fn format_failure_diagnostic(failure: &ProviderFailure) -> String {
+    if failure.advice.is_none() {
+        if let Some(raw_detail) = &failure.raw_detail {
+            return raw_detail.clone();
+        }
+    }
+    format_user_failure_message(failure)
 }
 
 /// 为非可监控 provider 生成统一说明文案。
 pub fn format_non_monitoring_message(provider: &ProviderStatus) -> String {
     if let Some(failure) = &provider.last_failure {
-        return format_failure_message(failure);
+        return format_user_failure_message(failure);
     }
 
     match (provider.provider_capability, provider.kind()) {
@@ -182,7 +199,7 @@ fn format_failure_advice(advice: &FailureAdvice) -> String {
         FailureAdvice::ApiHttpError { status } => {
             t!("hint.api_http_error", status = status).to_string()
         }
-        FailureAdvice::ApiError { message } => t!("hint.api_error", msg = message).to_string(),
+        FailureAdvice::ApiError { code } => t!("hint.api_error", code = code).to_string(),
         FailureAdvice::CopilotTokenNoPermission => t!("hint.token_no_permission").to_string(),
         FailureAdvice::CopilotNotEnabled => t!("hint.copilot_not_enabled").to_string(),
         FailureAdvice::OpenCodeGoRequired => t!("hint.opencode_go_required").to_string(),
@@ -533,7 +550,7 @@ mod tests {
         assert_eq!(format_provider_updated_at(&p), "Update failed");
     }
 
-    // ── format_failure_message ──────────────────────────────
+    // ── format_user_failure_message ──────────────────────────────
 
     #[test]
     fn failure_message_uses_advice() {
@@ -546,7 +563,7 @@ mod tests {
             raw_detail: None,
         };
         assert_eq!(
-            format_failure_message(&failure),
+            format_user_failure_message(&failure),
             "Please run `claude` to login"
         );
     }
@@ -580,14 +597,64 @@ mod tests {
     }
 
     #[test]
-    fn failure_message_falls_back_to_raw_detail() {
+    fn user_failure_messages_do_not_expose_raw_detail() {
+        let _locale_guard = setup_locale();
+        let cases = [
+            (
+                FailureReason::Unavailable,
+                "Provider is unavailable; please try again",
+            ),
+            (
+                FailureReason::ParseFailed,
+                "Failed to parse quota data; please try again",
+            ),
+            (
+                FailureReason::FetchFailed,
+                "Failed to fetch quota data; please try again",
+            ),
+            (
+                FailureReason::NetworkFailed,
+                "Network error; please check your connection",
+            ),
+        ];
+
+        for (reason, expected) in cases {
+            let failure = ProviderFailure {
+                reason,
+                advice: None,
+                raw_detail: Some("upstream secret detail".to_string()),
+            };
+            let message = format_user_failure_message(&failure);
+            assert_eq!(message, expected);
+            assert!(!message.contains("upstream secret detail"));
+        }
+    }
+
+    #[test]
+    fn api_error_advice_exposes_only_the_stable_code() {
+        let _locale_guard = setup_locale();
+        let failure = ProviderFailure {
+            reason: FailureReason::FetchFailed,
+            advice: Some(FailureAdvice::ApiError { code: 1001 }),
+            raw_detail: None,
+        };
+
+        assert_eq!(
+            format_user_failure_message(&failure),
+            "API request failed (code 1001)"
+        );
+    }
+
+    #[test]
+    fn failure_diagnostic_keeps_sanitized_detail_without_advice() {
         let _locale_guard = setup_locale();
         let failure = ProviderFailure {
             reason: FailureReason::FetchFailed,
             advice: None,
-            raw_detail: Some("upstream 502".to_string()),
+            raw_detail: Some("HTTP 502".to_string()),
         };
-        assert_eq!(format_failure_message(&failure), "upstream 502");
+
+        assert_eq!(format_failure_diagnostic(&failure), "HTTP 502");
     }
 
     // ── quota label/detail ─────────────────────────────────

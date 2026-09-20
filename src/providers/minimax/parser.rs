@@ -11,7 +11,6 @@ struct MiniMaxRemainsResponse {
 #[derive(Deserialize)]
 struct BaseResp {
     status_code: i32,
-    status_msg: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -29,12 +28,10 @@ pub(super) fn parse_remains_response(response_str: &str) -> ProviderResult<Vec<Q
         .map_err(|_| ProviderError::parse_failed("MiniMax API response"))?;
 
     if resp.base_resp.status_code != 0 {
-        let msg = resp
-            .base_resp
-            .status_msg
-            .unwrap_or_else(|| "unknown error".to_string());
         return Err(ProviderError::fetch_failed_with_advice(
-            FailureAdvice::ApiError { message: msg },
+            FailureAdvice::ApiError {
+                code: resp.base_resp.status_code,
+            },
         ));
     }
 
@@ -86,9 +83,9 @@ mod tests {
         assert!(matches!(
             result,
             Err(ProviderError::FetchFailed {
-                advice: Some(FailureAdvice::ApiError { message }),
+                advice: Some(FailureAdvice::ApiError { code: 1001 }),
                 raw_detail: None,
-            }) if message == "denied"
+            })
         ));
     }
 

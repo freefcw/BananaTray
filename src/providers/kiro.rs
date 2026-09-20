@@ -195,8 +195,8 @@ impl AiProvider for KiroProvider {
 
         if quotas.is_empty() {
             return Err(ProviderError::parse_failed(&format!(
-                "cannot parse kiro-cli output:\n{}",
-                stdout.trim()
+                "cannot parse kiro-cli output ({} bytes)",
+                stdout.len()
             )));
         }
 

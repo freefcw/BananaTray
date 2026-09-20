@@ -190,7 +190,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
    - `ProviderError::error_kind()` — 映射到 `ErrorKind`，让 refresh 调度器分类（决定是否计入连续失败、是否触发 retry 提示等）
 3. **HTTP 升级路径**：如果新错误可能来自 transport 层，更新 `ProviderError::classify()`，把对应的 `HttpError::HttpStatus { code, .. }` 升级到这个变体
 4. **i18n 文案**：在 `locales/<lang>.yml` 中**每一种语言**都加上对应的 `provider.failure.<key>.*` 文案；`src/i18n.rs` 的测试会捕获缺失
-5. **selector 格式化**：`src/application/selectors/format.rs::format_failure_message` 增加分支（如有专属 advice，也要在 `format_failure_advice` 处理）
+5. **selector 格式化**：`src/application/selectors/format.rs::format_user_failure_message` 增加分支（如有专属 advice，也要在 `format_failure_advice` 处理）
 6. **避免**：
    - 不要在 `anyhow::Context` 里写用户可见 remediation —— 那些只会留在日志里，不会进入 `ProviderFailure`
    - 不要在 provider 层硬编码语言相关文案 —— 用 `ProviderError` 表达语义，让 selector 决定文案

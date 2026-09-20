@@ -5,8 +5,8 @@
 use super::super::state::AppSession;
 use super::super::state::SettingsModalState;
 use super::format::{
-    format_failure_message, format_non_monitoring_message, format_provider_updated_at,
-    format_quota_label, format_relative_refresh_age, provider_source_label,
+    format_non_monitoring_message, format_provider_updated_at, format_quota_label,
+    format_relative_refresh_age, format_user_failure_message, provider_source_label,
     quota_display_view_state,
 };
 use super::*;
@@ -311,7 +311,7 @@ fn settings_provider_usage_view_state(
             message: provider
                 .last_failure
                 .as_ref()
-                .map(format_failure_message)
+                .map(format_user_failure_message)
                 .unwrap_or_else(|| t!("provider.unknown_error").to_string()),
         };
     }

@@ -208,7 +208,10 @@ fn account_updated_text_marks_stale_failure_with_hint() {
         ProviderDetailViewState::Panel(panel) => {
             let account = panel.account.expect("account should be Some");
             assert_eq!(account.updated_text, "Update failed · data just now");
-            assert_eq!(account.failure_hint.as_deref(), Some("parse error"));
+            assert_eq!(
+                account.failure_hint.as_deref(),
+                Some("Failed to fetch quota data; please try again")
+            );
         }
         _ => panic!("expected Panel variant"),
     }
@@ -341,7 +344,7 @@ fn body_returns_error_empty_when_error_and_no_quotas() {
         ProviderDetailViewState::Panel(panel) => match panel.body {
             ProviderBodyViewState::Empty(e) => {
                 assert!(e.is_error);
-                assert_eq!(e.message, "API key invalid");
+                assert_eq!(e.message, "Failed to fetch quota data; please try again");
             }
             other => panic!("expected Empty body, got {:?}", other),
         },
@@ -575,7 +578,10 @@ fn overview_marks_stale_refresh_failure() {
 
     assert_eq!(vm.items.len(), 1);
     assert!(vm.items[0].refresh_failed);
-    assert_eq!(vm.items[0].failure_hint.as_deref(), Some("parse error"));
+    assert_eq!(
+        vm.items[0].failure_hint.as_deref(),
+        Some("Failed to fetch quota data; please try again")
+    );
     // 配额本身仍照常展示（陈旧旧值）
     assert!(matches!(
         vm.items[0].status,
@@ -608,7 +614,7 @@ fn overview_shows_error_when_no_quotas() {
     assert_eq!(vm.items.len(), 1);
     match &vm.items[0].status {
         OverviewItemStatus::Error { message } => {
-            assert_eq!(message, "auth expired");
+            assert_eq!(message, "Failed to fetch quota data; please try again");
         }
         other => panic!("expected Error, got {:?}", other),
     }

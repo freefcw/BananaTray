@@ -5,7 +5,9 @@
 //! 所有 I/O 和环境变量读取都由 runtime 层收集后通过 DebugContext 注入。
 
 use super::super::state::AppSession;
-use super::format::{format_failure_message, format_refresh_status, format_relative_refresh_age};
+use super::format::{
+    format_failure_diagnostic, format_refresh_status, format_relative_refresh_age,
+};
 use crate::models::{ConnectionStatus, ProviderId};
 use crate::utils::log_capture::LogEntry;
 use rust_i18n::t;
@@ -258,7 +260,7 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                         let msg = provider
                             .last_failure
                             .as_ref()
-                            .map(format_failure_message)
+                            .map(format_failure_diagnostic)
                             .unwrap_or_else(|| t!("provider.unknown_error").to_string());
                         (
                             t!("debug.provider.error", msg = msg).to_string(),
@@ -272,7 +274,7 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                             .map(|failure| {
                                 t!(
                                     "debug.provider.disconnected_detail",
-                                    msg = format_failure_message(failure)
+                                    msg = format_failure_diagnostic(failure)
                                 )
                                 .to_string()
                             })
@@ -293,7 +295,10 @@ fn build_provider_diagnostics(session: &AppSession) -> Vec<ProviderDiagnosticIte
                 status_dot,
                 quota_count,
                 error_message: if is_enabled {
-                    provider.last_failure.as_ref().map(format_failure_message)
+                    provider
+                        .last_failure
+                        .as_ref()
+                        .map(format_failure_diagnostic)
                 } else {
                     None
                 },

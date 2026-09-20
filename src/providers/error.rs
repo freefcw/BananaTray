@@ -5,7 +5,7 @@ use crate::models::{ErrorKind, FailureAdvice, FailureReason, ProviderFailure};
 /// 设计原则：
 /// - Provider 层只返回稳定语义，不直接生成最终展示文案
 /// - selector/UI 再基于 `ProviderFailure` 和当前 locale 生成字符串
-/// - `raw_detail` 只承载技术细节或上游原文，不承载本地化外壳文案
+/// - `raw_detail` 只承载已脱敏、可在 Debug 面板展示的技术细节，不承载响应正文、凭据或本地化外壳文案
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderError {
     // ── 面向用户的提示（国际化）──────────────────────────
@@ -376,7 +376,7 @@ impl FailureAdvice {
             Self::OpenAppToRefresh { app } => format!("open app {} to refresh", app),
             Self::CliExitFailed { code } => format!("cli exit {}", code),
             Self::ApiHttpError { status } => format!("http {}", status),
-            Self::ApiError { message } => format!("api error {}", message),
+            Self::ApiError { code } => format!("api error code {}", code),
             Self::CopilotTokenNoPermission => "copilot token lacks permission".to_string(),
             Self::CopilotNotEnabled => "copilot not enabled".to_string(),
             Self::OpenCodeGoRequired => "opencode go subscription required".to_string(),

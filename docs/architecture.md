@@ -188,7 +188,7 @@
 
 ## Localization Boundary
 
-Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示文案。
+Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示文案。普通用户向失败提示由 `format_user_failure_message` 使用本地化默认文案生成，不直接展示 `raw_detail`；Debug 诊断路径可单独保留已经脱敏的技术细节。`raw_detail` 禁止包含响应正文、凭据、配置值或其他敏感用户数据。
 
 这带来两个稳定收益：
 

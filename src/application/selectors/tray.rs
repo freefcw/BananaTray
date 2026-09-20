@@ -4,8 +4,8 @@
 
 use super::super::state::{overview_provider_renders_quotas, provider_panel_flags, AppSession};
 use super::format::{
-    format_failure_message, format_non_monitoring_message, format_provider_updated_at,
-    format_quota_card_display_text, format_quota_card_has_unit, format_quota_label,
+    format_non_monitoring_message, format_provider_updated_at, format_quota_card_display_text,
+    format_quota_card_has_unit, format_quota_label, format_user_failure_message,
     quota_display_view_state, split_stale_age, StaleAgeUnit,
 };
 use super::*;
@@ -216,7 +216,7 @@ fn provider_empty_view_state(provider: &ProviderStatus) -> ProviderEmptyViewStat
             provider
                 .last_failure
                 .as_ref()
-                .map(format_failure_message)
+                .map(format_user_failure_message)
                 .unwrap_or_default(),
         )
     } else {
@@ -255,7 +255,7 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
     }
 
     if let Some(failure) = &provider.last_failure {
-        return format_failure_message(failure);
+        return format_user_failure_message(failure);
     }
 
     match provider.connection {
@@ -333,7 +333,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                         message: provider
                             .last_failure
                             .as_ref()
-                            .map(format_failure_message)
+                            .map(format_user_failure_message)
                             .unwrap_or_else(|| t!("provider.refresh_failed").to_string()),
                     },
                     ConnectionStatus::Connected | ConnectionStatus::Disconnected => {
@@ -360,7 +360,12 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
 /// 账户行 tooltip 与 overview 徽标 tooltip 共用。
 fn stale_failure_hint(provider: &ProviderStatus) -> Option<String> {
     (provider.update_status == Some(UpdateStatus::Failed))
-        .then(|| provider.last_failure.as_ref().map(format_failure_message))
+        .then(|| {
+            provider
+                .last_failure
+                .as_ref()
+                .map(format_user_failure_message)
+        })
         .flatten()
 }
 
