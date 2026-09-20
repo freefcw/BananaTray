@@ -12,7 +12,7 @@ pub(crate) fn register_app_shutdown(state: &Rc<RefCell<AppState>>, cx: &mut App)
         // launch-at-login 状态保持原有完成保证，在返回 ready future 前同步收尾。
         let start_at_login = {
             let mut state = state.borrow_mut();
-            state.shutdown_before(std::time::Instant::now() + std::time::Duration::from_millis(60));
+            state.shutdown_before(std::time::Instant::now() + crate::timing::APP_SHUTDOWN_DEADLINE);
             state.session.settings.system.start_at_login
         };
         crate::platform::auto_launch::sync_and_wait(start_at_login);

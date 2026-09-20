@@ -40,6 +40,8 @@
 - `theme/`
   - GPUI 主题 token、主题 YAML 解析和 `WindowAppearance` 到运行时主题的映射。
   - 仅在 `app` feature 下编译。
+- `timing.rs`
+  - app-only 的跨层生命周期时序策略，集中维护退出、设置写入和设置窗口打开协议使用的命名时长。
 - `refresh/`
   - 后台刷新调度与并发执行。
 - `providers/`
@@ -178,7 +180,7 @@
 
 稳定事实：
 
-- 设置写入由后台 `settings_writer` 串行化并做 debounce；custom-provider 保存所需的 deferred flush 在专用 I/O worker 上等待，不进入 GPUI dispatch 栈，其他前台同步路径（如全局热键）仍可直接调用 `flush()`。脚本 Run Test 使用另一条独立串行队列，长 timeout 不会阻塞 NewAPI / Script Provider 的 save/delete/load。正常退出时，refresh 发送 Shutdown 请求，script-test 发布队外取消状态；custom-provider CRUD 关闭入队端后继续 drain 已接受事务，三者在共同 60ms deadline 内 join，超时线程记录警告并 detach。worker 先把完成 action 写入可靠结果 ledger，再发轻量唤醒；退出阶段会在最终 settings 快照前同步结算 ledger 中已经收到但尚未消费的 action；超时 detach 的 CRUD 不保证完成，也不保证其迟到结果得到结算。Linux D-Bus handle 另最多等待 20ms，超时线程 detach；settings writer 使用独立 `Shutdown` 协议完成 pending snapshot 的 final flush。最终 `start_at_login` 状态也在 quit observer 返回前同步确认，保留用户设置的完成保证。
+- 设置写入由后台 `settings_writer` 串行化并做 debounce；custom-provider 保存所需的 deferred flush 在专用 I/O worker 上等待，不进入 GPUI dispatch 栈，其他前台同步路径（如全局热键）仍可直接调用 `flush()`。脚本 Run Test 使用另一条独立串行队列，长 timeout 不会阻塞 NewAPI / Script Provider 的 save/delete/load。正常退出时，refresh 发送 Shutdown 请求，script-test 发布队外取消状态；custom-provider CRUD 关闭入队端后继续 drain 已接受事务，三者在共同 60ms deadline 内 join，超时线程记录警告并 detach。worker 先把完成 action 写入可靠结果 ledger，再发轻量唤醒；退出阶段会在最终 settings 快照前同步结算 ledger 中已经收到但尚未消费的 action；超时 detach 的 CRUD 不保证完成，也不保证其迟到结果得到结算。Linux D-Bus handle 另最多等待 20ms，超时线程 detach；settings writer 使用独立 `Shutdown` 协议完成 pending snapshot 的 final flush，在正常退出协议之外被独立销毁时使用 80ms 兜底等待。最终 `start_at_login` 状态也在 quit observer 返回前同步确认，保留用户设置的完成保证。应用退出、D-Bus 收尾、设置写入 debounce、settings writer 独立销毁与设置窗口建窗延迟的命名时序参数统一维护在 `src/timing.rs`，修改时应同时复核这里描述的协议。
 - `AppSettings` 是运行时领域模型；顶层 JSON 形状由 `settings_store::PersistedAppSettingsV1` 拥有并转换。Provider 的用户布局统一持久化为有序 `provider_layout`（`id` / `in_sidebar` / `enabled`），数组顺序就是排序；旧版 `enabled_providers`、`provider_order`、`sidebar_providers` 只在加载边界迁移，保存时不会继续写回。保存兼容的新版本文件时会递归保留未知字段，同时以当前领域值整体替换 credentials、hidden quotas 和 provider layout，确保删除操作不会被兼容合并恢复。
   - 迁移规则：`in_sidebar = sidebar || enabled`，再交给 `ProviderLayoutItem::new`（该类型仍保证“启用必须出现在 sidebar”）。因此旧配置中某个 Provider 若只在 `enabled_providers` 中启用、但从未加入 `sidebar_providers`，迁移后会保持 `enabled` 并补进 sidebar。旧 Overview / refresh 并不要求 sidebar 成员资格即可监控；若改成只按 sidebar 成员写入 `in_sidebar`，构造器会把 `enabled` 强制关掉，这些用户会静默停止监控。sidebar 中未启用的项迁移后仍是 `in_sidebar = true, enabled = false`。
 - 系统深浅色与 Linux GNOME extension 的首份状态在进入 GPUI 前预热（每条平台命令最多 500ms）；进入事件循环后只读取缓存，过期 CLI 刷新在后台运行，不会同步阻塞渲染或托盘更新。

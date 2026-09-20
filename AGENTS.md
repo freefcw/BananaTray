@@ -78,6 +78,7 @@ src/
   utils/                 — Shared text/time/log helpers
   i18n.rs                — Locale detection and i18n configuration
   settings_store.rs      — Settings JSON persistence
+  timing.rs              — App-only cross-layer lifecycle timing policy for shutdown, persistence, and window opening
   theme/                 — GPUI theme tokens and window-appearance integration (`app` feature only)
 gnome-shell-extension/   — GNOME Shell Extension (GJS); PanelMenu.Button + D-Bus proxy + quota popup
 ```

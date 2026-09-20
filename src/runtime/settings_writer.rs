@@ -14,7 +14,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 /// 默认 debounce 窗口
-const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(500);
+const DEFAULT_DEBOUNCE: Duration = crate::timing::SETTINGS_WRITE_DEBOUNCE;
 
 /// 发送给后台线程的命令
 enum WriteCmd {
@@ -233,7 +233,9 @@ fn await_flush(reply_rx: Option<mpsc::Receiver<bool>>) -> bool {
 
 impl Drop for SettingsWriter {
     fn drop(&mut self) {
-        self.shutdown_before(std::time::Instant::now() + Duration::from_millis(80));
+        self.shutdown_before(
+            std::time::Instant::now() + crate::timing::SETTINGS_WRITER_SHUTDOWN_GRACE_PERIOD,
+        );
     }
 }
 

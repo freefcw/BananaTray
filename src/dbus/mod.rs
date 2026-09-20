@@ -59,7 +59,7 @@ impl Drop for DBusServiceHandle {
         if let Ok(mut slot) = self.worker.lock() {
             if let Some(worker) = slot.as_mut() {
                 let _ = worker.shutdown_before(
-                    std::time::Instant::now() + std::time::Duration::from_millis(20),
+                    std::time::Instant::now() + crate::timing::DBUS_SHUTDOWN_GRACE_PERIOD,
                 );
             }
             *slot = None;

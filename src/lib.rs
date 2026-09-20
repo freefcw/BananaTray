@@ -21,6 +21,8 @@ pub mod refresh;
 pub mod settings_store;
 #[cfg(feature = "app")]
 pub mod theme;
+#[cfg(feature = "app")]
+pub(crate) mod timing;
 pub mod utils;
 
 // GPUI 视图层和运行时模块，测试时不编译

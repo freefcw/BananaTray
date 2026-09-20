@@ -5,7 +5,6 @@ use gpui::{
 use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
 
 type NotifyPopupViewFn = fn(&Rc<RefCell<AppState>>, &mut App);
 type BuildSettingsViewFn =
@@ -70,7 +69,7 @@ pub(crate) fn schedule_open_settings_window(
     async_cx
         .foreground_executor()
         .spawn(async move {
-            smol::Timer::after(Duration::from_millis(10)).await;
+            smol::Timer::after(crate::timing::SETTINGS_WINDOW_OPEN_DELAY).await;
             let _ = delayed_cx.update(|cx| {
                 open_settings_window(state, display_id, cx);
             });
