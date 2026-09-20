@@ -20,18 +20,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
 
     // 后台完成动作不会改变用户正在操作的表单上下文；其余前台动作一旦发生，
     // 迟到的保存失败仍回滚持久状态，但不得再恢复旧表单覆盖新输入。
-    if !matches!(
-        &action,
-        AppAction::RefreshEventReceived(_)
-            | AppAction::NewApiSaveFinished { .. }
-            | AppAction::NewApiLoadFinished { .. }
-            | AppAction::NewApiDeleteFinished { .. }
-            | AppAction::ScriptProviderTestFinished { .. }
-            | AppAction::ScriptProviderSaveFinished { .. }
-            | AppAction::ScriptProviderLoadFinished { .. }
-            | AppAction::ScriptProviderDeleteFinished { .. }
-            | AppAction::GlobalHotkeyApplyFinished { .. }
-    ) {
+    if !action.preserves_custom_provider_form_context() {
         session
             .settings_ui
             .invalidate_custom_provider_save_context();

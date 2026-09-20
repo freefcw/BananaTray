@@ -163,6 +163,94 @@ pub enum AppAction {
     QuitApp,
 }
 
+impl AppAction {
+    /// 后台完成动作不会使当前自定义 Provider 表单上下文失效。
+    ///
+    /// 使用穷尽 match 而不是 reducer 外的手写白名单，确保新增完成动作时
+    /// 编译器会要求同步更新这条异步生命周期契约。
+    pub(crate) fn preserves_custom_provider_form_context(&self) -> bool {
+        match self {
+            Self::RefreshEventReceived(_)
+            | Self::NewApiSaveFinished { .. }
+            | Self::NewApiLoadFinished { .. }
+            | Self::NewApiDeleteFinished { .. }
+            | Self::ScriptProviderTestFinished { .. }
+            | Self::ScriptProviderSaveFinished { .. }
+            | Self::ScriptProviderLoadFinished { .. }
+            | Self::ScriptProviderDeleteFinished { .. }
+            | Self::GlobalHotkeyApplyFinished { .. } => true,
+            Self::SelectNavTab(_)
+            | Self::SetSettingsTab(_)
+            | Self::SelectSettingsProvider(_)
+            | Self::ToggleCadenceDropdown
+            | Self::SetTokenEditing { .. }
+            | Self::SaveProviderToken { .. }
+            | Self::MoveProviderToIndex { .. }
+            | Self::SaveGlobalHotkey(_)
+            | Self::SaveTrayPopupPosition(_)
+            | Self::UpdateSetting(_)
+            | Self::RefreshProvider { .. }
+            | Self::RefreshAll
+            | Self::ToggleProvider(_)
+            | Self::OpenSettings { .. }
+            | Self::OpenDashboard(_)
+            | Self::OpenUrl(_)
+            | Self::UpdateLogLevel(_)
+            | Self::SendDebugNotification(_)
+            | Self::OpenLogDirectory
+            | Self::CopyToClipboard(_)
+            | Self::ToggleDebugProviderDropdown
+            | Self::SelectDebugProvider(_)
+            | Self::DebugRefreshProvider
+            | Self::ClearDebugLogs
+            | Self::PopupVisibilityChanged(_)
+            | Self::ToggleOverviewExpanded(_)
+            | Self::EnterAddProvider
+            | Self::CancelAddProvider
+            | Self::AddProviderToSidebar(_)
+            | Self::RemoveProviderFromSidebar(_)
+            | Self::ConfirmRemoveProvider
+            | Self::CancelRemoveProvider
+            | Self::EnterAddNewApi
+            | Self::CancelAddNewApi
+            | Self::SubmitNewApi(_)
+            | Self::EditNewApi { .. }
+            | Self::DeleteNewApi { .. }
+            | Self::ConfirmDeleteNewApi
+            | Self::CancelDeleteNewApi
+            | Self::EnterAddScriptProvider
+            | Self::CancelAddScriptProvider
+            | Self::TestScriptProvider(_)
+            | Self::SubmitScriptProvider(_)
+            | Self::EditScriptProvider { .. }
+            | Self::DeleteScriptProvider { .. }
+            | Self::ConfirmDeleteScriptProvider
+            | Self::CancelDeleteScriptProvider
+            | Self::QuitApp => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppAction;
+
+    #[test]
+    fn background_completion_preserves_custom_provider_form_context() {
+        let action = AppAction::GlobalHotkeyApplyFinished {
+            requested: "CommandOrControl+Shift+B".to_string(),
+            result: Ok("CommandOrControl+Shift+B".to_string()),
+        };
+
+        assert!(action.preserves_custom_provider_form_context());
+    }
+
+    #[test]
+    fn foreground_action_invalidates_custom_provider_form_context() {
+        assert!(!AppAction::ToggleCadenceDropdown.preserves_custom_provider_form_context());
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SettingChange {
     ToggleAutoHideWindow,
