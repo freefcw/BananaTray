@@ -19,7 +19,6 @@ pub enum ProviderError {
     #[allow(dead_code)] // 预留给 Claude CLI trust-flow 场景
     FolderTrustRequired,
     /// CLI 需要更新
-    #[allow(dead_code)] // 预留给 CLI 版本检测场景
     UpdateRequired { version: Option<String> },
     /// 配置缺失（环境变量、配置文件、Token 等）
     ConfigMissing { key: String },

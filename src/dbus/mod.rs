@@ -19,10 +19,8 @@
 //! **关键设计**：`BananaTrayIface` 持有 `Arc<Mutex<String>>` 快照缓存，
 //! 不持有 `AppState`。这满足了 zbus `Interface: Send + Sync` 的约束。
 
-// `dbus` 同时被 lib target 编译，但实际启动入口在 bin target。
-// 对 lib target 来说这些类型会表现为未使用；保留编译覆盖即可。
-#![allow(dead_code)]
-
+// 模块整体受 `cfg(all(target_os = "linux", feature = "app"))` 门控（见 lib.rs），
+// 仅在受支持的 app 构建路径下编译，所有导出类型都在该路径中被使用。
 mod iface;
 mod serde_types;
 

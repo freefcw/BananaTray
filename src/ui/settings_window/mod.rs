@@ -35,7 +35,6 @@ pub(crate) fn build_settings_view(
     cx.new(|cx| SettingsView::new(state, cx))
 }
 
-#[allow(dead_code)]
 pub(crate) fn register_shell_hooks() {
     crate::bootstrap::register_build_settings_view(build_settings_view);
 }
@@ -274,7 +273,6 @@ pub(crate) struct SettingsView {
 }
 
 impl SettingsView {
-    #[allow(dead_code)]
     pub(crate) fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
         // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记

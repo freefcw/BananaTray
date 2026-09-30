@@ -26,8 +26,6 @@ pub(crate) struct TrayController {
     last_click_position: Cell<Option<Point<Pixels>>>,
 }
 
-/// lib target 不直接调用这些方法，但 bin 启动路径与托盘事件会完整覆盖。
-#[allow(dead_code)]
 impl TrayController {
     pub(crate) fn new(state: Rc<RefCell<AppState>>) -> Self {
         info!(target: "tray", "initializing tray controller");
