@@ -242,6 +242,52 @@ fn test_timeout_keeps_single_flight_until_underlying_task_finishes() {
     });
 }
 
+#[test]
+fn test_late_success_after_timeout_is_forwarded_and_records_success() {
+    smol::block_on(async {
+        let id = ProviderId::Custom("test:late".to_string());
+        let mut manager = ProviderManager::new();
+        manager.register(Arc::new(DelayedProvider::new(
+            "test:late",
+            // 超过测试环境 100ms 的 provider 超时，让 TimedOut 先于 Completed 到达
+            Duration::from_millis(250),
+        )));
+
+        let (event_tx, event_rx) = smol::channel::bounded(16);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
+        coordinator.scheduler.update_config(10, vec![id.clone()]);
+
+        coordinator
+            .start_refresh(id.clone(), RefreshReason::Manual)
+            .await;
+        drive_until_idle(&mut coordinator).await;
+
+        let events = drain_events(&event_rx);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            RefreshEvent::Finished(RefreshOutcome {
+                result: RefreshResult::Failed {
+                    error_kind: ErrorKind::NetworkError,
+                    ..
+                },
+                ..
+            })
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            RefreshEvent::Finished(RefreshOutcome {
+                result: RefreshResult::Success { .. },
+                ..
+            })
+        )));
+        assert!(
+            coordinator.scheduler.is_on_cooldown(&id),
+            "late success must still be recorded for cooldown"
+        );
+    });
+}
+
 struct PanicProvider {
     id: String,
 }

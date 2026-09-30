@@ -41,6 +41,9 @@ struct ActiveRefresh {
     generation: u64,
     /// timeout 或配置失效已经向前台发送了终态；底层完成时只释放 single-flight。
     result_reported: bool,
+    /// result_reported 的来源是 UI 超时（已报 Failed）。区别于配置失效：
+    /// 超时后底层任务仍可能成功，迟到的成功结果应当补报，避免 UI 停在错误状态。
+    timed_out: bool,
 }
 
 enum LoopEvent {
@@ -174,6 +177,7 @@ impl RefreshCoordinator {
                 task_id,
                 generation: self.config_generation,
                 result_reported: false,
+                timed_out: false,
             },
         );
         let _ = self
@@ -286,6 +290,7 @@ impl RefreshCoordinator {
                             false
                         } else {
                             active.result_reported = true;
+                            active.timed_out = true;
                             true
                         }
                     });
@@ -321,6 +326,17 @@ impl RefreshCoordinator {
                 self.scheduler.clear_in_flight(&id);
 
                 if active.result_reported {
+                    // 超时已报 Failed 的任务随后成功：转发迟到结果并补记成功，
+                    // 否则 UI 会一直停在错误状态直到下一次刷新。配置失效的过期
+                    // 结果仍按原逻辑丢弃。
+                    if active.timed_out
+                        && matches!(outcome.result, RefreshResult::Success { .. })
+                        && active.generation == self.config_generation
+                        && self.scheduler.enabled_providers().contains(&id)
+                    {
+                        self.scheduler.record_success(&id);
+                        let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+                    }
                     return;
                 }
                 if active.generation != self.config_generation
