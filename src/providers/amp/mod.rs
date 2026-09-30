@@ -128,6 +128,11 @@ impl AmpProvider {
         }
 
         if quotas.is_empty() {
+            // 已识别出登录邮箱行 → 输出格式正常，账户下只是没有任何配额条目
+            // （订阅到期、未购买信用额度），属于合法无数据，不是解析失败。
+            if account_email.is_some() {
+                return Err(ProviderError::no_data().into());
+            }
             return Err(ProviderError::parse_failed(&format!(
                 "cannot parse amp usage output ({} bytes)",
                 output_str.len()
@@ -305,13 +310,32 @@ mod tests {
         assert_eq!(q.detail_spec, None);
     }
 
-    /// 零余额纯信用额度行应被跳过
+    /// 零余额纯信用额度行应被跳过；连登录邮箱都认不出时仍是解析失败
     #[test]
     fn test_parse_zero_balance_only_is_skipped() {
         let output = "Individual credits: $0 remaining\n";
         assert!(
             AmpProvider::parse_usage_output(output).is_err(),
             "zero-balance-only output should produce no quotas → error"
+        );
+    }
+
+    /// 2026-09-30 Amp CLI `0.0.1790640099` 实测：账户无订阅、无 Free 档，仅剩 $0 信用额度。
+    /// 已登录状态下的合法无数据 → NoData，不能向用户误报解析失败。
+    #[test]
+    fn test_parse_signed_in_without_any_quota_is_no_data() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let output = "Signed in as freefcw@gmail.com (freefcw)\n\
+            **Individual credits:** $0 remaining - https://ampcode.com/settings\n\
+            \n\
+            # Run `amp usage --details` for more detailed information.\n";
+        let err = AmpProvider::parse_usage_output(output).unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<ProviderError>(),
+                Some(ProviderError::NoData)
+            ),
+            "signed-in but quota-less output should be NoData, got: {err}"
         );
     }
 
@@ -343,7 +367,8 @@ mod tests {
 
     #[test]
     fn test_parse_error_does_not_expose_cli_output() {
-        let output = "Signed in as private@example.com (user)\nno quota data\n";
+        // 连登录邮箱行都认不出的输出才算解析失败；错误信息只携带字节数，不回显任何原文
+        let output = "private@example.com\nno quota data\n";
         let error = AmpProvider::parse_usage_output(output)
             .unwrap_err()
             .to_string();
