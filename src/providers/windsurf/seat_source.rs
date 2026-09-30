@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use log::{debug, info};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 #[cfg(target_os = "macos")]
@@ -449,7 +450,9 @@ fn read_cli_version() -> Option<String> {
 }
 
 fn try_cli_version(cmd: &str) -> Option<String> {
-    let output = Command::new(cmd).arg("--version").output().ok()?;
+    // 走 CLI 基建：locate_executable 做 PATH 补全；GUI 启动的精简 PATH 下
+    // 裸 Command::new 会静默找不到 devin/windsurf。
+    let output = crate::providers::common::cli::run_command(cmd, &["--version"]).ok()?;
     if !output.status.success() {
         return None;
     }
