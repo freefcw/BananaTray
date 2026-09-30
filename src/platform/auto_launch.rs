@@ -82,8 +82,16 @@ pub fn sync_and_wait(desired: bool) {
         return;
     }
 
-    if completion_rx.recv().is_err() {
-        warn!(target: "auto_launch", "auto-launch worker stopped before completing final sync");
+    // 等待受 APP_SHUTDOWN_DEADLINE 约束：SMAppService / XPC 挂起时不能阻塞退出，
+    // 超时 warn 后继续结束进程。
+    match completion_rx.recv_timeout(crate::timing::APP_SHUTDOWN_DEADLINE) {
+        Ok(()) => {}
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            warn!(target: "auto_launch", "timed out waiting for final launch-at-login sync; continuing shutdown");
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            warn!(target: "auto_launch", "auto-launch worker stopped before completing final sync");
+        }
     }
 }
 
