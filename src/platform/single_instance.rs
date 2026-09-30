@@ -93,12 +93,7 @@ pub fn ensure_single_instance() -> InstanceRole {
     match listener {
         Ok(listener) => {
             info!(target: "single_instance", "primary instance: listener bound");
-            let (tx, rx) = mpsc::channel();
-            std::thread::Builder::new()
-                .name("single-instance-listener".into())
-                .spawn(move || accept_loop(listener, tx))
-                .expect("failed to spawn single-instance listener thread");
-            InstanceRole::Primary(rx)
+            InstanceRole::Primary(spawn_listener(listener))
         }
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             info!(target: "single_instance", "another instance detected, sending SHOW command");
@@ -115,12 +110,7 @@ pub fn ensure_single_instance() -> InstanceRole {
                 match listener {
                     Ok(listener) => {
                         info!(target: "single_instance", "became primary after cleanup");
-                        let (tx, rx) = mpsc::channel();
-                        std::thread::Builder::new()
-                            .name("single-instance-listener".into())
-                            .spawn(move || accept_loop(listener, tx))
-                            .expect("failed to spawn single-instance listener thread");
-                        InstanceRole::Primary(rx)
+                        InstanceRole::Primary(spawn_listener(listener))
                     }
                     Err(e) => {
                         // Unexpected error after cleanup - proceed anyway
@@ -139,6 +129,20 @@ pub fn ensure_single_instance() -> InstanceRole {
             InstanceRole::Primary(rx)
         }
     }
+}
+
+/// 启动 listener 线程并返回 SHOW 通知的接收端。
+///
+/// 线程启动失败时降级继续运行（放弃二次实例 SHOW 中继），与 bind 失败的其他路径一致。
+fn spawn_listener(listener: interprocess::local_socket::Listener) -> mpsc::Receiver<()> {
+    let (tx, rx) = mpsc::channel();
+    if let Err(e) = std::thread::Builder::new()
+        .name("single-instance-listener".into())
+        .spawn(move || accept_loop(listener, tx))
+    {
+        warn!(target: "single_instance", "failed to spawn listener thread ({e}), proceeding without SHOW relay");
+    }
+    rx
 }
 
 fn accept_loop(listener: interprocess::local_socket::Listener, tx: mpsc::Sender<()>) {
