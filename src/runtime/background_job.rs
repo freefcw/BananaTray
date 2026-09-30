@@ -287,11 +287,13 @@ impl CustomProviderJob {
 
 impl ScriptTestJob {
     pub(crate) fn queue_failure(self, detail: String) -> AppAction {
+        // 原始细节保留在日志；message 会上 UI，走 i18n。
+        log::warn!(target: "settings", "failed to queue script test: {detail}");
         AppAction::ScriptProviderTestFinished {
             request_id: self.request_id,
             result: ScriptProviderTestResult {
                 success: false,
-                message: format!("failed to queue script test: {detail}"),
+                message: rust_i18n::t!("script_provider.test.queue_failed").to_string(),
                 stdout: String::new(),
                 stderr: String::new(),
                 preview: None,

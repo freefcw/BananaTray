@@ -474,7 +474,10 @@ fn dispatch_processes_script_test_queue_failure_follow_up_action() {
         .as_ref()
         .expect("script test result");
     assert!(!result.success);
-    assert!(result.message.contains("failed to queue script test"));
+    assert_eq!(
+        result.message,
+        rust_i18n::t!("script_provider.test.queue_failed").to_string()
+    );
     assert!(caps.rendered);
 }
 

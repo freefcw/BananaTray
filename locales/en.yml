@@ -284,6 +284,7 @@ script_provider.field.script.hint: "Print one JSON object to stdout with fields 
 script_provider.field.script.cf_hint: "If the script targets a site behind Cloudflare or another CDN, requests may be flagged as bots and blocked."
 script_provider.test.ok: "Test passed"
 script_provider.test.failed: "Test failed"
+script_provider.test.queue_failed: "Failed to start the test. Please try again."
 script_provider.test.cf_warning: "Response shows Cloudflare challenge signals. You may need a cf_clearance cookie with a matching User-Agent, or an HTTP client with browser TLS fingerprints (e.g. curl_cffi). See docs/custom-provider.md."
 script_provider.cancel: "Cancel"
 script_provider.test: "Run Test"
