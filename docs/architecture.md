@@ -16,7 +16,7 @@
 - 托盘常驻依赖 `QuitMode::Explicit`（`fc-gpui` 0.9 取代旧的 `set_keep_alive_without_windows`）：所有窗口关闭后进程不退出，只有显式 quit 才结束。
 - `fc-ui` 以 `default-features = false` 引入时不会自动注册内置字体；BananaTray 在 `Cargo.toml` 显式开启 Inter 400/500/600/700 和 JetBrains Mono Regular，保留当前 UI 字重覆盖，同时避免嵌入未使用的 Mono Bold。
 - `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖，Linux target 的依赖树也不得包含 `zbus`。
-- i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。
+- i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。各 locale 文件的 key 集合（嵌套展平后）与 `%{placeholder}` 占位符集合必须互相对齐，缺 key 只在运行时暴露；`scripts/check_locales.py`（`just check-locales`，已并入 `ci-fast`，且由 GitHub CI 直接执行）负责该校验。
 
 ## Stable Module Boundaries
 

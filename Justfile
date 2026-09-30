@@ -26,6 +26,9 @@ check-provider-icons: audit-provider-icons
 render-provider-icons:
     python3 scripts/check_provider_icons.py --write-preview
 
+check-locales:
+    python3 scripts/check_locales.py
+
 check-gpui-imports:
     bash ./scripts/test-check-gpui-imports.sh
     ./scripts/check-gpui-imports.sh
@@ -54,7 +57,7 @@ clippy-lib-fast:
 test-lib-fast:
     cargo test --lib --no-default-features
 
-ci-fast: fmt-check check-provider-icons check-gpui-imports check-provider-secret-slicing check-release-panic-profile check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
+ci-fast: fmt-check check-provider-icons check-locales check-gpui-imports check-provider-secret-slicing check-release-panic-profile check-gnome-extension test-gnome-packaging-contracts test-packaging-scripts test-custom-provider-migration clippy-lib-fast test-lib-fast
     @true
 
 clippy-lib:

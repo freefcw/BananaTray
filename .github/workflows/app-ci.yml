@@ -1,6 +1,21 @@
 name: App CI
 
 on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - ".cargo/**"
+      - "themes/**"
+      - "locales/**"
+      - "scripts/check_locales.py"
+      - "Justfile"
+      - ".github/workflows/app-ci.yml"
   pull_request:
     paths:
       - "src/**"
@@ -9,6 +24,9 @@ on:
       - "build.rs"
       - ".cargo/**"
       - "themes/**"
+      - "locales/**"
+      - "scripts/check_locales.py"
+      - "Justfile"
       - ".github/workflows/app-ci.yml"
   workflow_dispatch:
   schedule:
