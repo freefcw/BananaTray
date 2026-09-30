@@ -29,6 +29,7 @@ widgets/
 | `icon_button.rs` | `render_icon_tooltip_button()` | 图标按钮 + 悬浮 tooltip |
 | `segmented_control.rs` | `render_segmented_control()` | 分段控件（类 iOS UISegmentedControl） |
 | `cadence_dropdown.rs` | `render_cadence_trigger()` | 刷新频率下拉菜单触发器 |
+| `dropdown.rs` | `render_dropdown_trigger()` / `render_dropdown_panel()` / `render_dropdown_row()` | 下拉触发器 / 浮层面板 / 选项行共享构件 |
 | `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 fc-ui HotkeyInputState |
 | `input_actions.rs` | `register_input_actions()` | 注册 Ctrl+A/C/V/X 等输入快捷键 |
 

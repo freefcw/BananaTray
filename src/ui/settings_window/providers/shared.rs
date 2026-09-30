@@ -1,4 +1,4 @@
-use crate::theme::Theme;
+use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::register_input_actions;
 use adabraka_ui::components::input_state::InputState;
 use adabraka_ui::components::textarea_state::TextareaState;
@@ -178,7 +178,7 @@ pub(super) fn render_code_field(
         } else {
             theme.border.strong
         })
-        .font_family("SF Mono")
+        .font_family(monospace_font_family())
         .text_size(px(12.0))
         .text_color(theme.text.primary)
         .overflow_y_scroll()

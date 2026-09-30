@@ -9,7 +9,7 @@ use crate::models::{
     unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
     ScriptProviderQuotaPreview, ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
-use crate::theme::Theme;
+use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
     div, prelude::FluentBuilder as _, px, AnyElement, App, Context, Div, FontWeight, Hsla,
@@ -118,14 +118,14 @@ fn render_test_result(result: Option<&ScriptProviderTestResult>, theme: &Theme) 
         })
         .child(
             div()
-                .font_family("SF Mono")
+                .font_family(monospace_font_family())
                 .text_size(px(11.0))
                 .text_color(theme.text.muted)
                 .child(format!("stdout: {}", compact_text(&result.stdout))),
         )
         .child(
             div()
-                .font_family("SF Mono")
+                .font_family(monospace_font_family())
                 .text_size(px(11.0))
                 .text_color(theme.text.muted)
                 .child(format!("stderr: {}", compact_text(&result.stderr))),

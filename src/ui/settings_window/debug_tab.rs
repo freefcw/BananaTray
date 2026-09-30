@@ -5,10 +5,11 @@ use crate::application::{
     DebugNotificationKind, DebugTabViewState, EnvironmentRowKind, LogLevelColor,
 };
 use crate::runtime;
-use crate::theme::Theme;
+use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::{
-    render_action_button, render_colored_icon_sized, render_icon_row, render_icon_tooltip_button,
-    render_info_cell, render_path_info_cell, render_segmented_control, ButtonSize, ButtonVariant,
+    render_action_button, render_colored_icon_sized, render_dropdown_panel, render_dropdown_row,
+    render_dropdown_trigger, render_icon_row, render_icon_tooltip_button, render_info_cell,
+    render_path_info_cell, render_segmented_control, ButtonSize, ButtonVariant,
     IconTooltipButtonOptions, SegmentedSize,
 };
 use gpui::{
@@ -480,47 +481,14 @@ impl SettingsView {
             })
             .unwrap_or_else(|| t!("debug.console.select_provider").to_string());
 
-        let mut trigger = div()
-            .relative()
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .justify_between()
-            .w(px(PROVIDER_DROPDOWN_WIDTH))
-            .gap(px(8.0))
-            .px(px(12.0))
-            .py(px(6.0))
-            .rounded(px(6.0))
-            .bg(theme.bg.base)
-            .border_1()
-            .border_color(if dropdown_open {
-                theme.element.selected
-            } else {
-                theme.border.strong
-            });
-
-        trigger = trigger
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if has_providers {
-                        theme.text.primary
-                    } else {
-                        theme.text.muted
-                    })
-                    .child(selected_label),
-            )
-            .child(
-                div()
-                    .text_size(px(10.0))
-                    .text_color(theme.text.muted)
-                    .child(if dropdown_open { "▲" } else { "▼" }),
-            );
+        let mut trigger = render_dropdown_trigger(
+            selected_label,
+            dropdown_open,
+            PROVIDER_DROPDOWN_WIDTH,
+            true,
+            has_providers,
+            theme,
+        );
 
         if !has_providers {
             return trigger;
@@ -555,87 +523,24 @@ impl SettingsView {
         let selected = console.selected_provider.clone();
         let options = console.available_providers.clone();
         let state = self.state.clone();
-        let theme = theme.clone();
 
         deferred(
-            div()
-                .occlude()
-                .absolute()
-                .top(px(36.0))
-                .left(px(0.0))
-                .w(px(PROVIDER_DROPDOWN_WIDTH))
-                .p(px(6.0))
-                .rounded(px(8.0))
-                .bg(theme.bg.subtle)
-                .border_1()
-                .border_color(theme.border.strong)
-                .shadow_lg()
-                .child(
-                    div()
-                        .id("debug-provider-dropdown")
-                        .w_full()
-                        .max_h(px(PROVIDER_DROPDOWN_MAX_HEIGHT))
-                        .overflow_y_scroll()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.0))
-                        .children(options.into_iter().map(move |(provider_id, name)| {
-                            let is_active = selected.as_ref() == Some(&provider_id);
-                            let opt_state = state.clone();
-                            let th = theme.clone();
+            render_dropdown_panel(PROVIDER_DROPDOWN_WIDTH, false, theme).child(
+                div()
+                    .id("debug-provider-dropdown")
+                    .w_full()
+                    .max_h(px(PROVIDER_DROPDOWN_MAX_HEIGHT))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .children(options.into_iter().map(move |(provider_id, name)| {
+                        let is_active = selected.as_ref() == Some(&provider_id);
+                        let opt_state = state.clone();
 
-                            let mut row = div()
-                                .w_full()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .px(px(8.0))
-                                .py(px(6.0))
-                                .rounded(px(6.0))
-                                .cursor_pointer();
-
-                            if is_active {
-                                row = row
-                                    .bg(th.nav.pill_active_bg)
-                                    .border_1()
-                                    .border_color(th.element.selected)
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_size(px(13.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(th.text.primary)
-                                            .child(name),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(th.text.accent)
-                                            .child("✓"),
-                                    );
-                            } else {
-                                row = row
-                                    .border_1()
-                                    .border_color(gpui::transparent_black())
-                                    .hover(|s| s.bg(th.bg.card_inner_hovered))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_size(px(13.0))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(th.text.secondary)
-                                            .child(name),
-                                    );
-                            }
-
-                            row.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        render_dropdown_row(name, is_active, true, theme).on_mouse_down(
+                            MouseButton::Left,
+                            move |_, window, cx| {
                                 cx.stop_propagation();
                                 crate::bootstrap::dispatch_in_window(
                                     &opt_state,
@@ -643,9 +548,10 @@ impl SettingsView {
                                     window,
                                     cx,
                                 );
-                            })
-                        })),
-                ),
+                            },
+                        )
+                    })),
+            ),
         )
         .with_priority(1)
     }
@@ -760,7 +666,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(10.0))
-                    .font_family("SF Mono")
+                    .font_family(monospace_font_family())
                     .text_color(theme.text.muted)
                     .flex_shrink_0()
                     .child(timestamp.to_string()),
@@ -768,7 +674,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(10.0))
-                    .font_family("SF Mono")
+                    .font_family(monospace_font_family())
                     .font_weight(FontWeight::BOLD)
                     .text_color(level_color)
                     .w(px(42.0))
@@ -778,7 +684,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(10.0))
-                    .font_family("SF Mono")
+                    .font_family(monospace_font_family())
                     .text_color(theme.text.secondary)
                     .w(px(100.0))
                     .flex_shrink_0()
@@ -787,7 +693,7 @@ impl SettingsView {
             .child(
                 div()
                     .text_size(px(10.0))
-                    .font_family("SF Mono")
+                    .font_family(monospace_font_family())
                     .text_color(theme.text.primary)
                     .flex_grow()
                     .child(message.to_string()),

@@ -1,3 +1,4 @@
+use crate::models::StatusLevel;
 use gpui::{rgb, rgba, Global, Hsla, WindowAppearance};
 use std::sync::LazyLock;
 
@@ -10,6 +11,15 @@ pub fn is_dark_appearance(appearance: WindowAppearance) -> bool {
         appearance,
         WindowAppearance::Dark | WindowAppearance::VibrantDark
     )
+}
+
+/// 等宽字体：macOS 用 SF Mono，Linux 无此字体，走 fontconfig 通用别名 monospace
+pub fn monospace_font_family() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "SF Mono"
+    } else {
+        "monospace"
+    }
 }
 
 // ── 子结构体 ──────────────────────────────────────────────
@@ -252,6 +262,24 @@ impl Theme {
             crate::models::AppTheme::Light => Self::light(),
             crate::models::AppTheme::Dark => Self::dark(),
             crate::models::AppTheme::System => unreachable!("resolve() never returns System"),
+        }
+    }
+
+    /// StatusLevel 对应的徽章色：绿=健康，黄=降级，红=离线
+    pub fn status_badge_color(&self, level: StatusLevel) -> Hsla {
+        match level {
+            StatusLevel::Green => self.badge.healthy,
+            StatusLevel::Yellow => self.badge.degraded,
+            StatusLevel::Red => self.badge.offline,
+        }
+    }
+
+    /// StatusLevel 对应的进度条色：绿=充足，黄=告警，红=告急
+    pub fn status_bar_color(&self, level: StatusLevel) -> Hsla {
+        match level {
+            StatusLevel::Green => self.status.success,
+            StatusLevel::Yellow => self.status.warning,
+            StatusLevel::Red => self.status.error,
         }
     }
 }

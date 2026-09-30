@@ -61,24 +61,6 @@ fn render_provider_name_cell(
     cell
 }
 
-/// 状态点颜色
-fn dot_color(level: StatusLevel, theme: &Theme) -> Hsla {
-    match level {
-        StatusLevel::Green => theme.badge.healthy,
-        StatusLevel::Yellow => theme.badge.degraded,
-        StatusLevel::Red => theme.badge.offline,
-    }
-}
-
-/// 进度条颜色
-fn bar_color(level: StatusLevel, theme: &Theme) -> Hsla {
-    match level {
-        StatusLevel::Green => theme.status.success,
-        StatusLevel::Yellow => theme.status.warning,
-        StatusLevel::Red => theme.status.error,
-    }
-}
-
 impl AppView {
     pub(crate) fn render_overview_panel(
         &self,
@@ -222,8 +204,8 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = cx.global::<Theme>().clone();
-        let color = dot_color(overall_level, &theme);
-        let fill = bar_color(quota.status_level, &theme);
+        let color = theme.status_badge_color(overall_level);
+        let fill = theme.status_bar_color(quota.status_level);
 
         let mut row = self
             .build_card_base_row(
@@ -301,7 +283,7 @@ impl AppView {
         overall_level: StatusLevel,
         theme: &Theme,
     ) -> Div {
-        let color = dot_color(overall_level, theme);
+        let color = theme.status_badge_color(overall_level);
         div()
             .w_full()
             .flex()
@@ -342,8 +324,8 @@ impl AppView {
 
     /// 展开态配额行：[label flex-1] [value 固定宽] [bar 固定宽] [badge]
     fn render_quota_row(&self, q: &OverviewQuotaItem, theme: &Theme) -> Div {
-        let fill = bar_color(q.status_level, theme);
-        let badge_color = dot_color(q.status_level, theme);
+        let fill = theme.status_bar_color(q.status_level);
+        let badge_color = theme.status_badge_color(q.status_level);
         div()
             .w_full()
             .flex()
