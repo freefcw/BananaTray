@@ -51,10 +51,14 @@ pub(crate) fn start_event_pump(
             while let Ok(event) = event_rx.recv().await {
                 let _ = pump_cx.update(|cx| {
                     dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
-                    super::linux_dbus::emit_current_dbus_snapshot(
+                    if !super::linux_dbus::emit_current_dbus_snapshot(
                         &state,
                         dbus_handle.borrow().as_ref(),
-                    );
+                    ) {
+                        // 发射通道已失效（如 session bus 连接失败）：放弃 handle
+                        // 一次性降级，之后不再重复发射。
+                        dbus_handle.borrow_mut().take();
+                    }
                 });
             }
         })
