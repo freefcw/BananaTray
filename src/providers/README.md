@@ -194,7 +194,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 6. **避免**：
    - 不要在 `anyhow::Context` 里写用户可见 remediation —— 那些只会留在日志里，不会进入 `ProviderFailure`
    - 不要在 provider 层硬编码语言相关文案 —— 用 `ProviderError` 表达语义，让 selector 决定文案
-   - 不要把"特定 provider 才出现"的错误塞进通用变体 —— 如果只有一两个 provider 触发，保留为 `Unavailable { message }` 或 `FetchFailed { message }` 内的结构化信息更合适
+   - 不要把"特定 provider 才出现"的错误塞进通用变体 —— 如果只有一两个 provider 触发，保留为 `Unavailable { advice, raw_detail }` 或 `FetchFailed { advice, raw_detail }` 内的结构化信息更合适
 7. **测试**：在 `src/providers/error_tests.rs` 中补 `error_kind()` / `to_failure()` 的映射用例，以及 `classify()` 对相关 `HttpError` 的分类用例
 
 ## Constraints
@@ -207,5 +207,5 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 - Return `ProviderError` variants (not raw strings) for structured classification.
 - Do not hide user remediation inside `anyhow::Context`; reserve context for technical details
   that stay in logs/debugging paths.
-- The `descriptor().metadata.kind` must match the `ProviderKind` variant — `ProviderManager::register()` asserts this.
+- The `descriptor().metadata.kind` must match the `ProviderKind` variant — `ProviderManager::register()` only `debug_assert_eq`s this; the hard check lives in `register_builtin()`, which panics when the manifest kind and descriptor kind disagree.
 - Do not persist built-in settings under `descriptor().id`; use `ProviderId::BuiltIn(kind).id_key()` / `ProviderKind::id_key()` for settings, ordering, sidebar, refresh requests, and hidden quota state.

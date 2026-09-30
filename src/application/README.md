@@ -82,7 +82,7 @@ NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 - **`newapi_save_failed_notification_keys()`** — YAML 写入失败并回滚表单后使用的失败通知 key。
 - **`newapi_load_failed_notification_keys()`** — 编辑态 YAML 读取失败时使用的失败通知 key。
 
-本模块为纯函数，不包含 I/O 或 GPUI 依赖。生产构建中它只在 `app` feature 开启时参与编译；无 `app` 的 `lib` 本地测试场景仍会编译该模块以保留单元测试覆盖。
+本模块为纯函数，不包含 I/O 或 GPUI 依赖。`application` 模块不经 `app` feature 门控（见 `src/lib.rs`），本模块随所有 lib 构建（含 `--no-default-features` 测试）参与编译并保留单元测试覆盖。
 
 ### `script_provider_ops.rs` — 脚本 Provider 保存操作纯函数
 

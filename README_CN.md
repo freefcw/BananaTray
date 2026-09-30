@@ -5,7 +5,7 @@
 ## 功能特性
 
 - **系统托盘集成** — 左键点击打开紧凑配额弹窗；Linux 采用双模模式：已安装扩展的 GNOME 桌面使用原生 GNOME Shell Extension 弹窗，其他环境回退到 ksni SNI 托盘加右键菜单
-- **14 个内置提供商条目加 YAML 自定义提供商** — 通过 API、CLI 和本地凭据文件提供配额监控以及参考/占位条目
+- **16 个内置提供商条目加 YAML 自定义提供商** — 通过 API、CLI 和本地凭据文件提供配额监控以及参考/占位条目
 - **设置窗口** — 独立的桌面设置窗口，用于完整配置（不受托盘面板尺寸限制）
 - **自动刷新** — 可配置的轮询间隔，支持按提供商冷却和去重
 - **配额告警** — 当使用量低于 10% 或配额耗尽时发送系统通知
@@ -24,14 +24,17 @@
 | **Claude** | HTTP API (`api.anthropic.com`) + CLI 回退 | 可监控 | 完整配额刷新 |
 | **Gemini** | HTTP API (`googleapis.com`) | 可监控 | 完整配额刷新 |
 | **Copilot** | HTTP API (`api.github.com`) | 可监控 | 完整配额刷新 |
+| **ClinePass** | Cline usage API + 本地 / API Key 凭据 | 可监控 | 5 小时滚动 / 周 / 月限制 |
 | **Codex** | HTTP API (`chatgpt.com`) + CLI 回退 | 可监控 | 完整配额刷新 |
 | **Kimi** | HTTP API (`kimi.com`) | 可监控 | 完整配额刷新 |
 | **Amp** | CLI (`amp usage`) | 可监控 | 完整配额刷新 |
 | **Cursor** | HTTP API (`cursor.com`) + 本地 SQLite 令牌 | 可监控 | 完整配额刷新 |
-| **Antigravity** | 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
+| **Antigravity** | 云端 quota API（macOS）+ 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **Devin** | Seat API + 本地语言服务器 API + 本地缓存 | 可监控 | 完整配额刷新 |
 | **MiniMax** | HTTP API (`api.minimax.io`) | 可监控 | 完整配额刷新 |
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | 可监控 | 完整配额刷新 |
+| **OpenCode Go** | HTTP API (`opencode.ai/zen/go/v1/usage`) + 本地 `auth.json` | 可监控 | 滚动 5 小时 / 周 / 月；设置稳定 key 仍为 `opencode` |
+| **Grok** | HTTP API (`cli-chat-proxy.grok.com`) + 本地 OAuth | 可监控 | 完整配额刷新 |
 | **自定义 YAML** | HTTP / CLI | 可监控 | 取决于 YAML plan |
 
 ### 参考 / TODO 条目
@@ -39,7 +42,6 @@
 | 提供商 | 当前数据来源 | 能力 | 状态 |
 |----------|-------------|------------|-------|
 | **Kilo** | 仅扩展检测 | 占位 | TODO：尚未实现直接配额监控 |
-| **OpenCode** | 仅 CLI 检测 | 占位 | TODO：尚未实现直接配额监控 |
 | **Vertex AI** | Gemini CLI 配置检测 | 信息参考 | 仅作为认证模式参考；如需直接抓取 Vertex AI 配额仍是 TODO |
 | **自定义 YAML (`source: placeholder`)** | 占位可用性检查 | 占位 | 仅作参考条目；改用 HTTP 或 CLI 数据源后才会参与配额刷新 |
 
