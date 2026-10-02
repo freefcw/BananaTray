@@ -13,6 +13,7 @@ pub enum AppAction {
     SetSettingsTab(SettingsTab),
     SelectSettingsProvider(ProviderId),
     ToggleCadenceDropdown,
+    ToggleQuotaUsageDropdown,
     SetTokenEditing {
         provider_id: ProviderId,
         editing: bool,
@@ -183,6 +184,7 @@ impl AppAction {
             | Self::SetSettingsTab(_)
             | Self::SelectSettingsProvider(_)
             | Self::ToggleCadenceDropdown
+            | Self::ToggleQuotaUsageDropdown
             | Self::SetTokenEditing { .. }
             | Self::SaveProviderToken { .. }
             | Self::MoveProviderToIndex { .. }

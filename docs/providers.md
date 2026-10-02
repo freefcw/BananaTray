@@ -88,7 +88,7 @@
 - `Monitorable`
   - 真实可监控 provider。
   - 会进入启动 / 周期 / 手动 / Debug 刷新链路。
-  - 设置页会显示刷新按钮和 quota visibility 配置。
+  - 设置页会显示刷新按钮、quota visibility 配置和“用量提醒”步长覆盖（跟随全局 / 关闭 / 每 5/10/20 个百分点）。
   - `ProviderManager::refresh_by_id(id, provider_credentials)` 在进入 `check_availability(ctx) → refresh(ctx)` 前会检查 `supports_refresh()`，非 `Monitorable` 直接返回 `NoData`。
 - `Informational`
   - 说明型入口，用于解释认证路径、provider 关系或外部配置前提。

@@ -9,7 +9,14 @@
 - `info.rs` renders status/source/update/service-state cells.
 - `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
 - `quota_visibility.rs` renders per-quota tray visibility toggles.
-- `settings_section.rs` renders provider settings capability branches.
+- `settings_section.rs` renders provider settings capability branches and the per-provider
+  usage-step （用量提醒） card. The usage-step card is gated on the `can_refresh` snapshot field
+  (`ProviderStatus::supports_refresh()` = `ProviderCapability::Monitorable`) and renders regardless
+  of which settings capability (token / NewAPI / script / none) the provider exposes —
+  a `SettingsCapability::None` provider still gets the usage-step entry; non-monitorable providers
+  never get it. Its state comes from the snapshot fields `quota_usage_step_pct` （provider override,
+  `None` = follow global), `global_quota_usage_step_pct`, and `quota_usage_dropdown_open`; options
+  dispatch `SettingChange::SetProviderQuotaUsageStep` through `DetailActionDispatcher`.
 - `actions.rs` owns the editable-provider edit/delete flow. It renders the same settings card as the
   Token panel (`shared::render_settings_card` + `render_action_button(.., ButtonSize::Panel, ..)`),
   so the settings section looks identical for token-input and editable providers. Add new card-level

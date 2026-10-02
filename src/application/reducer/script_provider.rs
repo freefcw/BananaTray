@@ -24,6 +24,7 @@ pub(super) fn enter_add_script_provider(session: &mut AppSession, effects: &mut 
     session.settings_ui.modal = SettingsModalState::AddingScriptProvider;
     session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -33,6 +34,7 @@ pub(super) fn cancel_add_script_provider(session: &mut AppSession, effects: &mut
     }
     session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -111,6 +113,7 @@ pub(super) fn submit_script_provider(
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -173,6 +176,7 @@ pub(super) fn edit_script_provider(
 ) {
     session.settings_ui.clear_script_provider_transient_state();
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     session.settings_ui.modal = SettingsModalState::LoadingScriptProvider(provider_id.clone());
     effects.push(ScriptProviderEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
@@ -220,6 +224,7 @@ pub(super) fn delete_script_provider(
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     let request_id = session
         .settings_ui
         .begin_custom_provider_delete(provider_id.clone());
@@ -276,6 +281,7 @@ pub(super) fn confirm_delete_script_provider(
 ) {
     session.settings_ui.modal = SettingsModalState::ConfirmingDeleteScriptProvider;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -291,5 +297,6 @@ pub(super) fn cancel_delete_script_provider(
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }

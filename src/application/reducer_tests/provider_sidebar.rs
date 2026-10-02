@@ -434,3 +434,40 @@ fn save_provider_token_supports_arbitrary_credential_key() {
         AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
     )));
 }
+
+#[test]
+fn provider_context_switches_close_quota_usage_dropdown() {
+    for action in [
+        AppAction::SelectSettingsProvider(pid(ProviderKind::Gemini)),
+        AppAction::EnterAddProvider,
+        AppAction::ConfirmRemoveProvider,
+        AppAction::ToggleProvider(pid(ProviderKind::Claude)),
+    ] {
+        let mut session = make_session();
+        session.settings_ui.quota_usage_dropdown_open = true;
+
+        reduce(&mut session, action);
+
+        assert!(
+            !session.settings_ui.quota_usage_dropdown_open,
+            "action should close quota usage dropdown"
+        );
+    }
+}
+
+#[test]
+fn remove_provider_from_sidebar_closes_quota_usage_dropdown() {
+    let mut session = make_session();
+    session
+        .settings
+        .provider
+        .add_to_sidebar(&pid(ProviderKind::Gemini));
+    session.settings_ui.quota_usage_dropdown_open = true;
+
+    reduce(
+        &mut session,
+        AppAction::RemoveProviderFromSidebar(pid(ProviderKind::Claude)),
+    );
+
+    assert!(!session.settings_ui.quota_usage_dropdown_open);
+}

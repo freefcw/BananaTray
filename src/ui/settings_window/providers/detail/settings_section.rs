@@ -1,8 +1,9 @@
 use super::actions::{render_editable_provider_actions, EditableProviderActions};
 use super::DetailActionDispatcher;
-use crate::application::SettingsProviderDetailViewState;
+use crate::application::{AppAction, SettingChange, SettingsProviderDetailViewState};
 use crate::models::{ProviderCapability, SettingsCapability};
 use crate::theme::Theme;
+use crate::ui::settings_window::providers::shared;
 use crate::ui::settings_window::SettingsView;
 use crate::ui::widgets::{render_detail_section_title, render_svg_icon};
 use gpui::{div, hsla, px, Context, Div, ParentElement, Styled, TextAlign};
@@ -17,7 +18,7 @@ pub(super) fn render_settings_section(
 ) -> Div {
     let section = settings_section_shell(theme);
 
-    match detail.settings_capability.clone() {
+    let mut section = match detail.settings_capability.clone() {
         SettingsCapability::TokenInput(capability) => section.child(
             super::super::token_input_panel::render_token_input_panel(
                 &detail.id, capability, view, theme, cx,
@@ -49,7 +50,63 @@ pub(super) fn render_settings_section(
                 placeholder.description,
             ))
         }
+    };
+
+    if detail.can_refresh {
+        section = section.child(render_quota_usage_card(detail, dispatcher, theme));
     }
+
+    section
+}
+
+fn render_quota_usage_card(
+    detail: &SettingsProviderDetailViewState,
+    dispatcher: &DetailActionDispatcher,
+    theme: &Theme,
+) -> Div {
+    let select_dispatcher = dispatcher.clone();
+    let provider_id = detail.id.clone();
+
+    shared::render_settings_card(theme)
+        .child(shared::render_settings_card_title(
+            &t!("provider.quota_usage.title"),
+            theme,
+        ))
+        .child(
+            div()
+                .w_full()
+                .flex_col()
+                .items_start()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.text.muted)
+                        .child(t!("provider.quota_usage.desc").to_string()),
+                )
+                .child(
+                    crate::ui::settings_window::quota_usage::render_quota_usage_dropdown(
+                        detail.quota_usage_step_pct,
+                        Some(detail.global_quota_usage_step_pct),
+                        detail.quota_usage_dropdown_open,
+                        theme,
+                        dispatcher.interactive_action(|| AppAction::ToggleQuotaUsageDropdown),
+                        move |step, window, cx| {
+                            select_dispatcher.dispatch(
+                                AppAction::UpdateSetting(
+                                    SettingChange::SetProviderQuotaUsageStep {
+                                        provider_id: provider_id.clone(),
+                                        step_pct: step,
+                                    },
+                                ),
+                                window,
+                                cx,
+                            );
+                        },
+                    ),
+                ),
+        )
+        .mt(px(10.0))
 }
 
 fn settings_section_shell(theme: &Theme) -> Div {

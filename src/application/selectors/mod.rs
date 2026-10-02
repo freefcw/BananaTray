@@ -239,6 +239,9 @@ pub struct SettingsProviderDetailViewState {
     pub usage: SettingsProviderUsageViewState,
     pub settings_capability: SettingsCapability,
     pub quota_display_mode: QuotaDisplayMode,
+    pub quota_usage_step_pct: Option<u8>,
+    pub global_quota_usage_step_pct: u8,
+    pub quota_usage_dropdown_open: bool,
     /// 配额可见性列表（用于设置 UI 中的勾选框）
     pub quota_visibility: Vec<QuotaVisibilityItem>,
 }

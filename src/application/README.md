@@ -13,7 +13,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
   - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`AppSession::overview_card_rows`、`DBusQuotaSnapshot::from_session` 等多处复用。Overview 的窗口高度和窗口内容都必须走这里，否则两边对"谁被启用"的口径一旦分叉，就会出现死空白或提前滚动
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
-- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence dropdown、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
+- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence / 用量步长 dropdown（两处入口共用同一开合 bool）、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
 - **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 脚本 Provider 新增 / 脚本 Provider 编辑 / 移除二次确认 / 删除二次确认"这些原本散落的 bool/Option 字段折叠成单一 enum：
   - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`AddingScriptProvider`、`EditingScriptProvider(ScriptProviderEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`、`ConfirmingDeleteScriptProvider`
   - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()` / `form_identity()`

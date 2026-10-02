@@ -4,6 +4,7 @@ mod debug_tab;
 mod display_tab;
 mod general_tab;
 mod providers;
+mod quota_usage;
 use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::application::SettingsTab;
@@ -276,11 +277,11 @@ impl SettingsView {
     pub(crate) fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
         // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记
-        state
-            .borrow_mut()
-            .session
-            .settings_ui
-            .token_editing_provider = None;
+        {
+            let settings_ui = &mut state.borrow_mut().session.settings_ui;
+            settings_ui.token_editing_provider = None;
+            settings_ui.quota_usage_dropdown_open = false;
+        }
         let load_debug_diagnostics =
             state.borrow().session.settings_ui.active_tab == SettingsTab::Debug;
         let mut view = Self {

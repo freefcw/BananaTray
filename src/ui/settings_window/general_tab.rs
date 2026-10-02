@@ -18,6 +18,7 @@ use rust_i18n::t;
 const ICON_BG_LOGIN: u32 = 0x3b30a6; // 紫蓝色 (Start at Login)
 const ICON_BG_REFRESH: u32 = 0xb55a10; // 琥珀橙色 (Refresh Rate)
 const ICON_BG_NOTIF: u32 = 0xa62828; // 深红色 (Quota Notifications)
+const ICON_BG_USAGE: u32 = 0x0e7490;
 const ICON_BG_SOUND: u32 = 0x6b3fa0; // 紫色 (Notification Sound)
 const ICON_BG_HOTKEY: u32 = 0x165a93; // 深蓝色 (Global Hotkey)
 const ICON_FG: u32 = 0xffffff; // 图标前景色统一白色
@@ -42,6 +43,9 @@ impl SettingsView {
         let notif_checked = settings.notification.session_quota_notifications;
         let sound_state = state.clone();
         let sound_checked = settings.notification.notification_sound;
+        let usage_toggle_state = state.clone();
+        let usage_select_state = state.clone();
+        let usage_dropdown_open = state.borrow().session.settings_ui.quota_usage_dropdown_open;
 
         // Cadence dropdown (复用现有组件)
         let cadence_mins = if settings.system.refresh_interval_mins == 0 {
@@ -119,6 +123,39 @@ impl SettingsView {
                                 cx,
                             );
                         },
+                    ))
+                    .child(render_divider(theme))
+                    .child(Self::render_icon_dropdown_row(
+                        "src/icons/usage.svg",
+                        rgb(ICON_FG).into(),
+                        rgb(ICON_BG_USAGE).into(),
+                        &t!("settings.quota_usage"),
+                        &t!("settings.quota_usage.desc"),
+                        theme,
+                        super::quota_usage::render_quota_usage_dropdown(
+                            Some(settings.notification.quota_usage_step_pct),
+                            None,
+                            usage_dropdown_open,
+                            theme,
+                            move |_, window, cx| {
+                                crate::bootstrap::dispatch_in_window(
+                                    &usage_toggle_state,
+                                    AppAction::ToggleQuotaUsageDropdown,
+                                    window,
+                                    cx,
+                                );
+                            },
+                            move |step, window, cx| {
+                                crate::bootstrap::dispatch_in_window(
+                                    &usage_select_state,
+                                    AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(
+                                        step.unwrap_or(0),
+                                    )),
+                                    window,
+                                    cx,
+                                );
+                            },
+                        ),
                     ))
                     .child(render_divider(theme))
                     // Notification Sound

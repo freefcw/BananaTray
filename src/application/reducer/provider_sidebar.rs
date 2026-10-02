@@ -24,6 +24,7 @@ pub(super) fn select_settings_provider(
     }
     session.settings_ui.selected_provider = id;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     // 点选已有服务商时退出 picker / 取消正在确认中的二次状态
     session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(ContextEffect::Render.into());
@@ -69,6 +70,7 @@ pub(super) fn save_provider_token(
         }
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -103,6 +105,7 @@ pub(super) fn toggle_provider(
         new_val
     );
     session.settings.provider.set_enabled(&id, new_val);
+    session.settings_ui.quota_usage_dropdown_open = false;
 
     if new_val {
         session.nav.switch_to(NavTab::Provider(id.clone()));
@@ -148,6 +151,7 @@ pub(super) fn enter_add_provider(session: &mut AppSession, effects: &mut Vec<App
     // 进入 picker 自动覆盖其他模态（含 NewAPI / 脚本表单和正在确认的二次态）
     session.settings_ui.modal = SettingsModalState::AddingProvider;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -156,6 +160,7 @@ pub(super) fn cancel_add_provider(session: &mut AppSession, effects: &mut Vec<Ap
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -170,6 +175,7 @@ pub(super) fn add_provider_to_sidebar(
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.selected_provider = id;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -202,12 +208,14 @@ pub(super) fn remove_provider_from_sidebar(
         effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn confirm_remove_provider(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -216,5 +224,6 @@ pub(super) fn cancel_remove_provider(session: &mut AppSession, effects: &mut Vec
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }

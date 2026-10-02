@@ -608,6 +608,66 @@ fn toggle_overview_expanded_flips_session_state_without_persisting() {
 }
 
 #[test]
+fn toggle_quota_usage_dropdown_flips_state() {
+    let mut session = make_session();
+    assert!(!session.settings_ui.quota_usage_dropdown_open);
+
+    let effects = reduce(&mut session, AppAction::ToggleQuotaUsageDropdown);
+
+    assert!(session.settings_ui.quota_usage_dropdown_open);
+    assert!(has_render(&effects));
+
+    reduce(&mut session, AppAction::ToggleQuotaUsageDropdown);
+    assert!(!session.settings_ui.quota_usage_dropdown_open);
+}
+
+#[test]
+fn set_quota_usage_step_closes_dropdown() {
+    let mut session = make_session();
+    session.settings_ui.quota_usage_dropdown_open = true;
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(10)),
+    );
+
+    assert!(!session.settings_ui.quota_usage_dropdown_open);
+}
+
+#[test]
+fn set_provider_quota_usage_step_closes_dropdown() {
+    let mut session = make_session();
+    session.settings_ui.quota_usage_dropdown_open = true;
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaUsageStep {
+            provider_id: pid(ProviderKind::Claude),
+            step_pct: Some(20),
+        }),
+    );
+
+    assert!(!session.settings_ui.quota_usage_dropdown_open);
+}
+
+#[test]
+fn quota_usage_dropdown_closes_on_context_switch() {
+    for action in [
+        AppAction::SetSettingsTab(crate::application::SettingsTab::Providers),
+        AppAction::SelectSettingsProvider(pid(ProviderKind::Gemini)),
+        AppAction::EnterAddProvider,
+        AppAction::OpenSettings { provider: None },
+    ] {
+        let mut session = make_session();
+        session.settings_ui.quota_usage_dropdown_open = true;
+
+        reduce(&mut session, action);
+
+        assert!(!session.settings_ui.quota_usage_dropdown_open);
+    }
+}
+
+#[test]
 fn toggle_session_quota_notifications_resets_usage_baselines() {
     use crate::models::{QuotaInfo, RefreshData};
 
