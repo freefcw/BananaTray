@@ -606,3 +606,56 @@ fn toggle_overview_expanded_flips_session_state_without_persisting() {
     );
     assert!(!session.is_overview_expanded(&provider_id));
 }
+
+#[test]
+fn toggle_session_quota_notifications_resets_usage_baselines() {
+    use crate::models::{QuotaInfo, RefreshData};
+
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    session.settings.provider.set_enabled(&claude, true);
+
+    reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: claude.clone(),
+            result: RefreshResult::Success {
+                data: RefreshData {
+                    quotas: vec![QuotaInfo::new("session", 17.0, 100.0)],
+                    account_email: None,
+                    account_tier: None,
+                    source_label: None,
+                },
+            },
+        })),
+    );
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleSessionQuotaNotifications),
+    );
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleSessionQuotaNotifications),
+    );
+
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: claude,
+            result: RefreshResult::Success {
+                data: RefreshData {
+                    quotas: vec![QuotaInfo::new("session", 22.0, 100.0)],
+                    account_email: None,
+                    account_tier: None,
+                    source_label: None,
+                },
+            },
+        })),
+    );
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota { .. }))
+    )));
+}

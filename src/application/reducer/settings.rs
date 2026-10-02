@@ -99,6 +99,7 @@ pub(super) fn apply_setting_change(
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =
                 !session.settings.notification.session_quota_notifications;
+            session.alert_tracker.reset_all_usage();
         }
         SettingChange::ToggleNotificationSound => {
             session.settings.notification.notification_sound =
@@ -162,6 +163,44 @@ pub(super) fn apply_setting_change(
                 .settings
                 .provider
                 .toggle_quota_visibility(&provider_id, quota_key);
+        }
+        SettingChange::SetQuotaUsageStep(step_pct) => {
+            let old_step = session.settings.notification.quota_usage_step_pct;
+            let new_step = step_pct.min(100);
+            session.settings.notification.quota_usage_step_pct = new_step;
+            if old_step != new_step {
+                let inherited_ids: Vec<ProviderId> = session
+                    .provider_store
+                    .providers
+                    .iter()
+                    .map(|p| p.provider_id.clone())
+                    .filter(|id| session.settings.provider.quota_usage_step(id).is_none())
+                    .collect();
+                for id in inherited_ids {
+                    session.alert_tracker.reset_usage(&id);
+                }
+            }
+        }
+        SettingChange::SetProviderQuotaUsageStep {
+            provider_id,
+            step_pct,
+        } => {
+            let global_step = session.settings.notification.quota_usage_step_pct;
+            let old_effective = session
+                .settings
+                .provider
+                .effective_quota_usage_step(&provider_id, global_step);
+            session
+                .settings
+                .provider
+                .set_quota_usage_step(&provider_id, step_pct);
+            let new_effective = session
+                .settings
+                .provider
+                .effective_quota_usage_step(&provider_id, global_step);
+            if old_effective != new_effective {
+                session.alert_tracker.reset_usage(&provider_id);
+            }
         }
     }
 

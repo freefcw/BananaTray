@@ -89,11 +89,20 @@ fn process_refresh_outcome(
                 .find_by_id(outcome_id)
                 .map(|provider| provider.display_name().to_string())
                 .unwrap_or_else(|| format!("{}", outcome_id));
-            if let Some(alert) =
-                session
-                    .alert_tracker
-                    .update(outcome_id, &provider_name, &data.quotas)
-            {
+            let usage_step_pct = if session.settings.notification.session_quota_notifications {
+                session.settings.provider.effective_quota_usage_step(
+                    outcome_id,
+                    session.settings.notification.quota_usage_step_pct,
+                )
+            } else {
+                0
+            };
+            if let Some(alert) = session.alert_tracker.update(
+                outcome_id,
+                &provider_name,
+                &data.quotas,
+                usage_step_pct,
+            ) {
                 if session.settings.notification.session_quota_notifications {
                     effects.push(
                         NotificationEffect::Quota {
@@ -181,7 +190,20 @@ pub(super) fn apply_refresh_event(
         RefreshEvent::ProvidersReloaded { statuses } => {
             info!(target: "providers", "providers reloaded: {} statuses", statuses.len());
 
+            let known_before: Vec<ProviderId> = session
+                .provider_store
+                .providers
+                .iter()
+                .map(|p| p.provider_id.clone())
+                .collect();
             let affected = session.provider_store.sync_custom_providers(&statuses);
+
+            for id in known_before
+                .into_iter()
+                .filter(|id| session.provider_store.find_by_id(id).is_none())
+            {
+                session.alert_tracker.remove(&id);
+            }
 
             // 清理 settings 中残留的已删除自定义 Provider ID
             let custom_ids = session.provider_store.custom_provider_ids();

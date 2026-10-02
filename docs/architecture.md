@@ -162,6 +162,7 @@
 - refresh 结果通过 `RefreshEvent` 回到前台，再进入 reducer。主循环不等待 Provider I/O，活跃刷新期间仍可处理配置、reload 和 shutdown。
 - 同一 Provider 始终保持 single-flight：timeout 只结束前台等待，底层阻塞任务真实完成前不会释放执行占用。
 - `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。凭证、启用列表或 registry 变化会推进 generation；旧 generation 的迟到结果不会更新 quota 或触发通知。后台执行时仍通过 `ProviderExecutionContext` 显式传递当前凭证快照。
+- 配额通知是前台契约：只有成功且 enabled 的刷新结果在前台 reducer 中喂给 `QuotaAlertTracker`，告警 effect 在同一 dispatch 内发出；后台 worker 不做告警决策。告警覆盖四类——LowQuota（≤10%）/ Exhausted（0%）/ Recovered / UsageProgress（按全局或 Provider 级步长跟踪最差剩余百分比的累计消耗，一次下降只发一条，回升或旧告警发生时重建基线不补发）。用量步长只采样 `limit > 0` 的百分比 quota，纯余额（balance-only）quota 不参与；`hidden_quotas` 只影响显示不影响监测。总开关 `session_quota_notifications` 对四类统一生效，关闭期间不累计用量；Provider 停用 / 移出 sidebar / 步长变化都会重置对应用量基线。通过设置页保存 app-managed 凭证（token 等）且值变化时，同样重建该 Provider 的用量基线；保存相同值不重置。
 
 自定义 provider reload 的稳定语义：
 

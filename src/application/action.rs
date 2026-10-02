@@ -271,6 +271,11 @@ pub enum SettingChange {
         provider_id: ProviderId,
         quota_key: String,
     },
+    SetQuotaUsageStep(u8),
+    SetProviderQuotaUsageStep {
+        provider_id: ProviderId,
+        step_pct: Option<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

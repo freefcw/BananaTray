@@ -69,6 +69,17 @@ pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
             )
             .to_string(),
         ),
+        QuotaAlert::UsageProgress {
+            provider_name,
+            remaining_pct,
+        } => (
+            t!("notification.usage_progress.title", name = provider_name).to_string(),
+            t!(
+                "notification.usage_progress.body",
+                pct = format!("{:.0}", remaining_pct)
+            )
+            .to_string(),
+        ),
     };
 
     spawn_notification(title, body, with_sound);

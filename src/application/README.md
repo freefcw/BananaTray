@@ -69,7 +69,14 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 ### `quota_alert.rs` — 配额告警领域状态机
 
 - **`QuotaAlertTracker`** — 追踪各 Provider 的 quota 状态转换，产出告警事件；通知阈值（剩余 ≤10% Low / =0% Exhausted）有意低于托盘图标状态阈值（50%/20%），早预警靠图标、晚警报靠通知，详见 `quota_alert.rs` 顶部注释
-- **`QuotaAlert`** — 告警领域事件（LowQuota / Exhausted / Recovered）
+- **`QuotaAlert`** — 告警领域事件（LowQuota / Exhausted / Recovered / UsageProgress）
+- **`UsageProgress` 用量步长提醒**：按配置步长（百分点）跟踪最差剩余额度的累计消耗，达到步长时发一次提醒并把基线重置到当前余量（大步下降不连环触发）。规则要点：
+  - 首次有效采样只建基线；余量回升、步长变化、旧告警发生时都重建基线，不补发
+  - 同一次更新中 LowQuota / Exhausted / Recovered 优先于 UsageProgress
+  - 纯余额（limit ≤ 0）quota 不参与用量采样；`hidden_quotas` 只影响显示不影响监测
+  - `reset_usage(id)` / `reset_all_usage()` 只清用量基线；`remove(id)` 清全部跟踪状态
+  - 旧告警 state 与用量基线独立演进；总开关关闭时 reducer 传 step=0，不累计用量
+  - 通过设置页保存 app-managed 凭证且新值与已保存值不同时，重建该 Provider 的用量基线；保存相同值不重置
 - 该模块只表达“应该发什么告警”，不关心 OS 通知如何发送
 
 ### `newapi_ops.rs` — NewAPI 保存操作纯函数

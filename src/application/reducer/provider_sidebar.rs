@@ -56,6 +56,9 @@ pub(super) fn save_provider_token(
                 _ => None,
             });
         if let Some(key) = credential_key {
+            if session.settings.provider.credentials.get_credential(key) != Some(token.as_str()) {
+                session.alert_tracker.reset_usage(&provider_id);
+            }
             session
                 .settings
                 .provider
@@ -104,6 +107,7 @@ pub(super) fn toggle_provider(
     if new_val {
         session.nav.switch_to(NavTab::Provider(id.clone()));
     } else {
+        session.alert_tracker.reset_usage(&id);
         let providers = &session.provider_store.providers;
         session
             .nav
@@ -180,6 +184,7 @@ pub(super) fn remove_provider_from_sidebar(
     }
     if session.settings.provider.remove_from_sidebar(&id) {
         // remove_from_sidebar 已在模型层同时置 enabled = false，无需重复调用 set_enabled
+        session.alert_tracker.reset_usage(&id);
         // 导航回退
         let providers = &session.provider_store.providers;
         session

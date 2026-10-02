@@ -758,3 +758,108 @@ fn provider_settings_serializes_flattened_credentials() {
         Some("custom_value")
     );
 }
+
+#[test]
+fn quota_usage_step_default_inherits_global() {
+    let config = ProviderConfig::default();
+    let claude = builtin(ProviderKind::Claude);
+
+    assert_eq!(config.quota_usage_step(&claude), None);
+    assert_eq!(config.effective_quota_usage_step(&claude, 10), 10);
+    assert_eq!(config.effective_quota_usage_step(&claude, 0), 0);
+}
+
+#[test]
+fn quota_usage_step_explicit_zero_disables_without_inheriting() {
+    let mut config = ProviderConfig::default();
+    let claude = builtin(ProviderKind::Claude);
+
+    config.set_quota_usage_step(&claude, Some(0));
+    assert_eq!(config.quota_usage_step(&claude), Some(0));
+    assert_eq!(config.effective_quota_usage_step(&claude, 20), 0);
+
+    config.set_quota_usage_step(&claude, None);
+    assert_eq!(config.quota_usage_step(&claude), None);
+    assert_eq!(config.effective_quota_usage_step(&claude, 20), 20);
+}
+
+#[test]
+fn quota_usage_step_builtin_and_custom_keys_are_independent() {
+    let mut config = ProviderConfig::default();
+    let claude = builtin(ProviderKind::Claude);
+    let custom = ProviderId::Custom("myai:cli".to_string());
+
+    config.set_quota_usage_step(&claude, Some(5));
+    config.set_quota_usage_step(&custom, Some(10));
+
+    assert_eq!(config.quota_usage_step(&claude), Some(5));
+    assert_eq!(config.quota_usage_step(&custom), Some(10));
+    assert_eq!(
+        config.quota_usage_step(&builtin(ProviderKind::Gemini)),
+        None
+    );
+}
+
+#[test]
+fn quota_usage_step_values_clamped_to_100() {
+    let mut config = ProviderConfig::default();
+    let claude = builtin(ProviderKind::Claude);
+
+    config.set_quota_usage_step(&claude, Some(250));
+    assert_eq!(config.quota_usage_step(&claude), Some(100));
+    assert_eq!(config.effective_quota_usage_step(&claude, 255), 100);
+    assert_eq!(
+        config.effective_quota_usage_step(&builtin(ProviderKind::Gemini), 250),
+        100
+    );
+}
+
+#[test]
+fn remove_provider_references_clears_usage_step_override() {
+    let mut config = ProviderConfig::default();
+    let custom = ProviderId::Custom("gone:api".to_string());
+    config.set_quota_usage_step(&custom, Some(5));
+    config.set_quota_usage_step(&builtin(ProviderKind::Claude), Some(10));
+
+    config.remove_provider_references(&custom);
+
+    assert_eq!(config.quota_usage_step(&custom), None);
+    assert_eq!(
+        config.quota_usage_step(&builtin(ProviderKind::Claude)),
+        Some(10)
+    );
+}
+
+#[test]
+fn prune_stale_custom_ids_removes_usage_step_overrides() {
+    let mut config = ProviderConfig::default();
+    config.set_quota_usage_step(&ProviderId::Custom("old:api".to_string()), Some(5));
+    config.set_quota_usage_step(&ProviderId::Custom("keep:api".to_string()), Some(10));
+    config.set_quota_usage_step(&builtin(ProviderKind::Claude), Some(20));
+
+    let existing = vec![ProviderId::Custom("keep:api".to_string())];
+    let changed = config.prune_stale_custom_ids(&existing);
+
+    assert!(changed);
+    assert_eq!(
+        config.quota_usage_step(&ProviderId::Custom("old:api".to_string())),
+        None
+    );
+    assert_eq!(
+        config.quota_usage_step(&ProviderId::Custom("keep:api".to_string())),
+        Some(10)
+    );
+    assert_eq!(
+        config.quota_usage_step(&builtin(ProviderKind::Claude)),
+        Some(20)
+    );
+}
+
+#[test]
+fn notification_settings_default_quota_usage_step_is_zero() {
+    assert_eq!(NotificationSettings::default().quota_usage_step_pct, 0);
+
+    let restored: NotificationSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(restored.quota_usage_step_pct, 0);
+    assert!(restored.session_quota_notifications);
+}

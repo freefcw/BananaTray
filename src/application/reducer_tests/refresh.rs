@@ -1,10 +1,13 @@
-use super::common::{has_effect, has_render, make_custom_provider_status, make_session, pid};
+use super::common::{
+    has_effect, has_render, make_custom_provider_status, make_custom_token_provider, make_session,
+    pid,
+};
 use crate::application::{
-    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, RefreshEffect,
-    SettingsEffect, TrayIconRequest,
+    reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, NotificationEffect,
+    QuotaAlert, RefreshEffect, SettingChange, SettingsEffect, TrayIconRequest,
 };
 use crate::models::test_helpers::make_test_provider;
-use crate::models::{ConnectionStatus, NavTab, ProviderId, ProviderKind, RefreshData};
+use crate::models::{ConnectionStatus, NavTab, ProviderId, ProviderKind, QuotaInfo, RefreshData};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshRequest, RefreshResult};
 
 #[test]
@@ -583,4 +586,572 @@ fn skipped_does_not_touch_non_refreshing_provider() {
     // 非 Refreshing 状态不受影响
     assert_eq!(claude.connection, ConnectionStatus::Connected);
     assert!(!has_render(&effects));
+}
+
+fn refresh_success(
+    session: &mut AppSession,
+    id: &ProviderId,
+    remaining_pct: f64,
+) -> Vec<AppEffect> {
+    reduce(
+        session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: id.clone(),
+            result: RefreshResult::Success {
+                data: RefreshData {
+                    quotas: vec![QuotaInfo::new("session", 100.0 - remaining_pct, 100.0)],
+                    account_email: None,
+                    account_tier: None,
+                    source_label: None,
+                },
+            },
+        })),
+    )
+}
+
+fn quota_alerts(effects: &[AppEffect]) -> Vec<&QuotaAlert> {
+    effects
+        .iter()
+        .filter_map(|e| match e {
+            AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota {
+                alert,
+                ..
+            })) => Some(alert),
+            _ => None,
+        })
+        .collect()
+}
+
+fn assert_usage_progress(alerts: &[&QuotaAlert], expected_name: &str, expected_remaining: f64) {
+    assert_eq!(
+        alerts.len(),
+        1,
+        "expected exactly one quota alert: {alerts:?}"
+    );
+    match alerts[0] {
+        QuotaAlert::UsageProgress {
+            provider_name,
+            remaining_pct,
+        } => {
+            assert_eq!(provider_name, expected_name);
+            assert!(
+                (*remaining_pct - expected_remaining).abs() < 1e-9,
+                "expected remaining {expected_remaining}, got {remaining_pct}"
+            );
+        }
+        other => panic!("expected UsageProgress, got {other:?}"),
+    }
+}
+
+fn enable(session: &mut AppSession, kind: ProviderKind) {
+    session.settings.provider.set_enabled(&pid(kind), true);
+}
+
+#[test]
+fn usage_step_global_default_zero_emits_no_progress() {
+    let mut session = make_session();
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &pid(ProviderKind::Claude), 83.0);
+    let effects = refresh_success(&mut session, &pid(ProviderKind::Claude), 60.0);
+    assert!(quota_alerts(&effects).is_empty());
+}
+
+#[test]
+fn usage_step_global_value_inherited_without_override() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    enable(&mut session, ProviderKind::Claude);
+    let claude = pid(ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 79.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 78.0)),
+        "Claude",
+        78.0,
+    );
+}
+
+#[test]
+fn usage_step_provider_override_takes_precedence() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&claude, Some(10));
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 90.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 85.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 80.0)),
+        "Claude",
+        80.0,
+    );
+}
+
+#[test]
+fn usage_step_provider_override_zero_disables() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&claude, Some(0));
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    let effects = refresh_success(&mut session, &claude, 60.0);
+    assert!(quota_alerts(&effects).is_empty());
+}
+
+#[test]
+fn usage_step_global_zero_plus_provider_override_alerts() {
+    let mut session = make_session();
+    let claude = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&claude, Some(5));
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 78.0)),
+        "Claude",
+        78.0,
+    );
+}
+
+#[test]
+fn usage_step_master_switch_off_suppresses_all_quota_effects() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    enable(&mut session, ProviderKind::Claude);
+    let claude = pid(ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleSessionQuotaNotifications),
+    );
+
+    let effects = refresh_success(&mut session, &claude, 8.0);
+    assert!(quota_alerts(&effects).is_empty());
+}
+
+#[test]
+fn usage_step_master_toggle_resets_baseline_without_refresh() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    enable(&mut session, ProviderKind::Claude);
+    let claude = pid(ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleSessionQuotaNotifications),
+    );
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleSessionQuotaNotifications),
+    );
+
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 78.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 73.0)),
+        "Claude",
+        73.0,
+    );
+}
+
+#[test]
+fn usage_step_disable_reenable_resets_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    reduce(&mut session, AppAction::ToggleProvider(claude.clone()));
+    reduce(&mut session, AppAction::ToggleProvider(claude.clone()));
+
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 78.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 73.0)),
+        "Claude",
+        73.0,
+    );
+}
+
+#[test]
+fn usage_step_remove_readd_sidebar_resets_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    reduce(
+        &mut session,
+        AppAction::RemoveProviderFromSidebar(claude.clone()),
+    );
+    reduce(
+        &mut session,
+        AppAction::AddProviderToSidebar(claude.clone()),
+    );
+    reduce(&mut session, AppAction::ToggleProvider(claude.clone()));
+
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 78.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 73.0)),
+        "Claude",
+        73.0,
+    );
+}
+
+#[test]
+fn usage_step_global_change_does_not_reset_overridden_provider() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&claude, Some(10));
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 90.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 85.0)).is_empty());
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(8)),
+    );
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 80.0)),
+        "Claude",
+        80.0,
+    );
+}
+
+#[test]
+fn usage_step_settings_persist_render_without_config_sync() {
+    let mut session = make_session();
+    let claude = pid(ProviderKind::Claude);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(10)),
+    );
+    assert_eq!(session.settings.notification.quota_usage_step_pct, 10);
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_render(&effects));
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::UpdateConfig { .. }
+        )))
+    )));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaUsageStep {
+            provider_id: claude.clone(),
+            step_pct: Some(5),
+        }),
+    );
+    assert_eq!(session.settings.provider.quota_usage_step(&claude), Some(5));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_render(&effects));
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+            RefreshRequest::UpdateConfig { .. }
+        )))
+    )));
+}
+
+#[test]
+fn usage_step_notification_sound_flag_passes_through() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    session.settings.notification.notification_sound = false;
+    enable(&mut session, ProviderKind::Claude);
+    let claude = pid(ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    let effects = refresh_success(&mut session, &claude, 78.0);
+
+    let with_sound = effects.iter().find_map(|e| match e {
+        AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota {
+            alert: QuotaAlert::UsageProgress { .. },
+            with_sound,
+        })) => Some(*with_sound),
+        _ => None,
+    });
+    assert_eq!(with_sound, Some(false));
+}
+
+#[test]
+fn usage_step_failed_skipped_disabled_results_do_not_advance_baseline() {
+    use crate::models::{ErrorKind, FailureReason, ProviderFailure};
+
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: claude.clone(),
+            result: RefreshResult::Failed {
+                failure: ProviderFailure {
+                    reason: FailureReason::FetchFailed,
+                    advice: None,
+                    raw_detail: Some("boom".to_string()),
+                },
+                error_kind: ErrorKind::NetworkError,
+            },
+        })),
+    );
+    reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            id: claude.clone(),
+            result: RefreshResult::SkippedCooldown,
+        })),
+    );
+    session.settings.provider.set_enabled(&claude, false);
+    refresh_success(&mut session, &claude, 50.0);
+    session.settings.provider.set_enabled(&claude, true);
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 78.0)),
+        "Claude",
+        78.0,
+    );
+}
+
+#[test]
+fn usage_step_provider_override_change_rebuilds_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 81.0)).is_empty());
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaUsageStep {
+            provider_id: claude.clone(),
+            step_pct: Some(10),
+        }),
+    );
+
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 71.0)).is_empty());
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 61.0)),
+        "Claude",
+        61.0,
+    );
+}
+
+#[test]
+fn usage_step_equivalent_override_inheritance_keeps_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&claude, Some(5));
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 81.0)).is_empty());
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaUsageStep {
+            provider_id: claude.clone(),
+            step_pct: None,
+        }),
+    );
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 78.0)),
+        "Claude",
+        78.0,
+    );
+}
+
+#[test]
+fn usage_step_token_change_rebuilds_baseline() {
+    for (provider_id, credential_key, custom_status) in [
+        (pid(ProviderKind::Copilot), "github_token", None),
+        (
+            ProviderId::Custom("custom-token:api".to_string()),
+            "custom_token",
+            Some(make_custom_token_provider(
+                "custom-token:api",
+                "custom_token",
+            )),
+        ),
+    ] {
+        let mut session = make_session();
+        if let Some(status) = custom_status {
+            session.provider_store.providers.push(status);
+        }
+        let provider_name = session
+            .provider_store
+            .find_by_id(&provider_id)
+            .unwrap()
+            .display_name()
+            .to_string();
+        session.settings.notification.quota_usage_step_pct = 5;
+        session.settings.provider.set_enabled(&provider_id, true);
+        session
+            .settings
+            .provider
+            .credentials
+            .set_credential(credential_key, "dummy-old".to_string());
+
+        refresh_success(&mut session, &provider_id, 83.0);
+        assert!(quota_alerts(&refresh_success(&mut session, &provider_id, 81.0)).is_empty());
+
+        reduce(
+            &mut session,
+            AppAction::SaveProviderToken {
+                provider_id: provider_id.clone(),
+                token: "dummy-new".to_string(),
+            },
+        );
+
+        assert!(
+            quota_alerts(&refresh_success(&mut session, &provider_id, 78.0)).is_empty(),
+            "{provider_id}: credential change must rebuild baseline without replaying consumption"
+        );
+        assert_usage_progress(
+            &quota_alerts(&refresh_success(&mut session, &provider_id, 73.0)),
+            &provider_name,
+            73.0,
+        );
+    }
+}
+
+#[test]
+fn usage_step_unchanged_token_preserves_baseline() {
+    for (provider_id, credential_key, custom_status) in [
+        (pid(ProviderKind::Copilot), "github_token", None),
+        (
+            ProviderId::Custom("custom-token:api".to_string()),
+            "custom_token",
+            Some(make_custom_token_provider(
+                "custom-token:api",
+                "custom_token",
+            )),
+        ),
+    ] {
+        let mut session = make_session();
+        if let Some(status) = custom_status {
+            session.provider_store.providers.push(status);
+        }
+        let provider_name = session
+            .provider_store
+            .find_by_id(&provider_id)
+            .unwrap()
+            .display_name()
+            .to_string();
+        session.settings.notification.quota_usage_step_pct = 5;
+        session.settings.provider.set_enabled(&provider_id, true);
+        session
+            .settings
+            .provider
+            .credentials
+            .set_credential(credential_key, "dummy-old".to_string());
+
+        refresh_success(&mut session, &provider_id, 83.0);
+        assert!(quota_alerts(&refresh_success(&mut session, &provider_id, 81.0)).is_empty());
+
+        reduce(
+            &mut session,
+            AppAction::SaveProviderToken {
+                provider_id: provider_id.clone(),
+                token: "  dummy-old \n".to_string(),
+            },
+        );
+
+        assert_usage_progress(
+            &quota_alerts(&refresh_success(&mut session, &provider_id, 78.0)),
+            &provider_name,
+            78.0,
+        );
+    }
+}
+
+#[test]
+fn usage_step_empty_token_preserves_baseline() {
+    let copilot = pid(ProviderKind::Copilot);
+    let provider_name;
+    let save_effects;
+    let mut session = make_session();
+    {
+        provider_name = session
+            .provider_store
+            .find_by_id(&copilot)
+            .unwrap()
+            .display_name()
+            .to_string();
+    }
+    session.settings.notification.quota_usage_step_pct = 5;
+    session.settings.provider.set_enabled(&copilot, true);
+    session
+        .settings
+        .provider
+        .credentials
+        .set_credential("github_token", "dummy-old".to_string());
+
+    refresh_success(&mut session, &copilot, 83.0);
+    assert!(quota_alerts(&refresh_success(&mut session, &copilot, 81.0)).is_empty());
+
+    save_effects = reduce(
+        &mut session,
+        AppAction::SaveProviderToken {
+            provider_id: copilot.clone(),
+            token: "   \n".to_string(),
+        },
+    );
+
+    assert!(!has_effect(&save_effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert_eq!(
+        session
+            .settings
+            .provider
+            .credentials
+            .get_credential("github_token"),
+        Some("dummy-old")
+    );
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &copilot, 78.0)),
+        &provider_name,
+        78.0,
+    );
 }

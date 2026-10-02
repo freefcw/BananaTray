@@ -84,6 +84,7 @@ pub(super) fn commit_deleted_provider(
         .settings
         .provider
         .remove_provider_references(provider_id);
+    session.alert_tracker.remove(provider_id);
     if session.settings_ui.selected_provider == *provider_id {
         session.settings_ui.selected_provider = session.first_sidebar_provider();
     }

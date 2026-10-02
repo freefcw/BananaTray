@@ -95,6 +95,8 @@ pub struct NotificationSettings {
     /// 通知是否带声音
     #[serde(default = "default_true")]
     pub notification_sound: bool,
+    #[serde(default)]
+    pub quota_usage_step_pct: u8,
 }
 
 impl Default for NotificationSettings {
@@ -102,6 +104,7 @@ impl Default for NotificationSettings {
         Self {
             session_quota_notifications: true,
             notification_sound: true,
+            quota_usage_step_pct: 0,
         }
     }
 }
@@ -231,6 +234,7 @@ pub struct ProviderConfig {
     /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）。
     /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合。
     pub hidden_quotas: HashMap<String, HashSet<String>>,
+    pub quota_usage_steps: HashMap<String, u8>,
 }
 
 impl Default for ProviderConfig {
@@ -239,6 +243,7 @@ impl Default for ProviderConfig {
             credentials: ProviderSettings::default(),
             provider_layout: Self::default_layout(),
             hidden_quotas: HashMap::new(),
+            quota_usage_steps: HashMap::new(),
         }
     }
 }
@@ -290,6 +295,7 @@ impl ProviderConfig {
         let key = id.id_key();
         self.provider_layout.retain(|item| item.id != key);
         self.hidden_quotas.remove(&key);
+        self.quota_usage_steps.remove(&key);
     }
 
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）。
@@ -302,15 +308,42 @@ impl ProviderConfig {
             })
             .collect();
 
-        let before = self.provider_layout.len() + self.hidden_quotas.len();
+        let before =
+            self.provider_layout.len() + self.hidden_quotas.len() + self.quota_usage_steps.len();
         self.provider_layout.retain(|item| {
             ProviderKind::from_id_key(&item.id).is_some() || existing.contains(&item.id)
         });
         self.hidden_quotas
             .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
+        self.quota_usage_steps
+            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
         let normalized = self.normalize_layout();
-        let after = self.provider_layout.len() + self.hidden_quotas.len();
+        let after =
+            self.provider_layout.len() + self.hidden_quotas.len() + self.quota_usage_steps.len();
         normalized || before != after
+    }
+
+    pub fn quota_usage_step(&self, id: &ProviderId) -> Option<u8> {
+        self.quota_usage_steps
+            .get(&id.id_key())
+            .map(|step| (*step).min(100))
+    }
+
+    pub fn set_quota_usage_step(&mut self, id: &ProviderId, step_pct: Option<u8>) {
+        let key = id.id_key();
+        match step_pct {
+            Some(step) => {
+                self.quota_usage_steps.insert(key, step.min(100));
+            }
+            None => {
+                self.quota_usage_steps.remove(&key);
+            }
+        }
+    }
+
+    pub fn effective_quota_usage_step(&self, id: &ProviderId, global_step: u8) -> u8 {
+        self.quota_usage_step(id)
+            .unwrap_or_else(|| global_step.min(100))
     }
 
     pub(crate) fn normalize_layout(&mut self) -> bool {

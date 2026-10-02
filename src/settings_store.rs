@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 struct PersistedProviderConfig {
     credentials: ProviderSettings,
     hidden_quotas: HashMap<String, HashSet<String>>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    quota_usage_steps: HashMap<String, u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider_layout: Option<Vec<ProviderLayoutItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,6 +39,7 @@ impl PersistedProviderConfig {
             credentials: self.credentials,
             provider_layout: layout,
             hidden_quotas: self.hidden_quotas,
+            quota_usage_steps: self.quota_usage_steps,
         };
         config.normalize_layout();
         config
@@ -130,6 +133,7 @@ impl From<&AppSettings> for PersistedAppSettingsV1 {
             provider: PersistedProviderConfig {
                 credentials: value.provider.credentials.clone(),
                 hidden_quotas: value.provider.hidden_quotas.clone(),
+                quota_usage_steps: value.provider.quota_usage_steps.clone(),
                 provider_layout: Some(value.provider.provider_layout.clone()),
                 ..Default::default()
             },
@@ -304,7 +308,12 @@ fn merge_preserving_unknown_fields(
 /// 再次带回，造成新旧 Provider 配置同时存在。
 fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
     const LEGACY_FIELDS: [&str; 3] = ["enabled_providers", "provider_order", "sidebar_providers"];
-    const CURRENT_FIELDS: [&str; 3] = ["credentials", "hidden_quotas", "provider_layout"];
+    const CURRENT_FIELDS: [&str; 4] = [
+        "credentials",
+        "hidden_quotas",
+        "provider_layout",
+        "quota_usage_steps",
+    ];
 
     let Some(existing_provider) = existing
         .get_mut("provider")
@@ -323,8 +332,13 @@ fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &ser
         existing_provider.remove(field);
     }
     for field in CURRENT_FIELDS {
-        if let Some(current_value) = current_provider.get(field) {
-            existing_provider.insert(field.to_string(), current_value.clone());
+        match current_provider.get(field) {
+            Some(current_value) => {
+                existing_provider.insert(field.to_string(), current_value.clone());
+            }
+            None => {
+                existing_provider.remove(field);
+            }
         }
     }
 }
@@ -879,6 +893,97 @@ mod tests {
         assert_eq!(
             saved["display"]["tray_popup"]["future_anchor_policy"], "screen-edge",
             "重置已知字段时必须保留同一对象中的未来字段"
+        );
+    }
+
+    #[test]
+    fn legacy_json_defaults_quota_usage_step_to_zero_and_empty_map() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "notification": {"session_quota_notifications": true, "notification_sound": true},
+                "provider": {"credentials": {}, "hidden_quotas": {}}
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert_eq!(loaded.notification.quota_usage_step_pct, 0);
+        assert!(loaded.provider.quota_usage_steps.is_empty());
+    }
+
+    #[test]
+    fn quota_usage_settings_round_trip() {
+        use crate::models::{ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings.notification.quota_usage_step_pct = 10;
+        settings
+            .provider
+            .set_quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude), Some(0));
+        settings
+            .provider
+            .set_quota_usage_step(&ProviderId::Custom("myai:cli".to_string()), Some(5));
+        save_to(&settings, &path).unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert_eq!(loaded.notification.quota_usage_step_pct, 10);
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude)),
+            Some(0),
+            "显式 0 覆盖必须在 round-trip 后保留（与跟随全局区分）"
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::Custom("myai:cli".to_string())),
+            Some(5)
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .effective_quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Gemini), 10),
+            10
+        );
+    }
+
+    #[test]
+    fn save_removes_cleared_quota_usage_step_override() {
+        use crate::models::{ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .set_quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude), Some(5));
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .set_quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude), None);
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"].get("quota_usage_steps").is_none()
+                || saved["provider"]["quota_usage_steps"]
+                    .as_object()
+                    .is_some_and(|map| map.is_empty()),
+            "清空后的 quota_usage_steps 不应残留旧覆盖"
+        );
+
+        let loaded = load_from(&path).unwrap();
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude)),
+            None
         );
     }
 }
