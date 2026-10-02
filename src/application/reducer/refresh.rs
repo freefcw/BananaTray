@@ -1,7 +1,8 @@
 use log::{debug, info};
 
 use crate::application::{
-    AppEffect, ContextEffect, DebugEffect, NotificationEffect, RefreshEffect, SettingsEffect,
+    AppEffect, ContextEffect, DebugEffect, NotificationEffect, QuotaObservation, RefreshEffect,
+    SettingsEffect,
 };
 use crate::models::{NavTab, ProviderId};
 use crate::refresh::{RefreshEvent, RefreshReason, RefreshRequest, RefreshResult};
@@ -97,16 +98,19 @@ fn process_refresh_outcome(
             } else {
                 0
             };
-            if let Some(alert) = session.alert_tracker.update(
-                outcome_id,
-                &provider_name,
-                &data.quotas,
+            let quota_rules = session.settings.effective_quota_rules(outcome_id);
+            let events = session.alert_engine.evaluate(QuotaObservation {
+                provider_id: outcome_id,
+                provider_name: &provider_name,
+                quotas: &data.quotas,
+                rules: &quota_rules,
                 usage_step_pct,
-            ) {
-                if session.settings.notification.session_quota_notifications {
+            });
+            if session.settings.notification.session_quota_notifications {
+                for event in events {
                     effects.push(
                         NotificationEffect::Quota {
-                            alert,
+                            event,
                             with_sound: session.settings.notification.notification_sound,
                         }
                         .into(),
@@ -202,7 +206,7 @@ pub(super) fn apply_refresh_event(
                 .into_iter()
                 .filter(|id| session.provider_store.find_by_id(id).is_none())
             {
-                session.alert_tracker.remove(&id);
+                session.alert_engine.remove(&id);
             }
 
             // 清理 settings 中残留的已删除自定义 Provider ID

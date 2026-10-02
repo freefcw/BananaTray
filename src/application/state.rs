@@ -1,7 +1,7 @@
 //! Pure-logic application state, free of GPUI dependency.
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
-use super::quota_alert::QuotaAlertTracker;
+use super::quota_alert::AlertEngine;
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
     ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
@@ -184,7 +184,7 @@ pub struct AppSession {
     pub settings_ui: SettingsUiState,
     pub debug_ui: DebugUiState,
     pub settings: AppSettings,
-    pub alert_tracker: QuotaAlertTracker,
+    pub alert_engine: AlertEngine,
     /// 弹窗是否可见（Dynamic 图标在弹窗可见时延迟更新，关闭后同步）
     pub popup_visible: bool,
     /// Overview 面板中展开显示全部配额的 Provider id_key 集合。
@@ -213,7 +213,7 @@ impl AppSession {
             settings_ui,
             debug_ui: DebugUiState::default(),
             settings,
-            alert_tracker: QuotaAlertTracker::new(),
+            alert_engine: AlertEngine::new(),
             popup_visible: false,
             overview_expanded: Default::default(),
         }
@@ -335,7 +335,7 @@ impl AppSession {
             .iter()
             .filter(|p| self.settings.provider.is_enabled(&p.provider_id))
             .filter(|p| p.connection == ConnectionStatus::Connected)
-            .map(|p| p.worst_status())
+            .map(|p| p.worst_status(&self.settings.effective_quota_rules(&p.provider_id)))
             .max()
             .unwrap_or(StatusLevel::Green)
     }

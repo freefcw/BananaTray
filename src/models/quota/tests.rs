@@ -192,10 +192,10 @@ fn quota_with_key_from_full_remaining_preserves_explicit_key() {
 #[test]
 fn test_status_level_green() {
     let q = QuotaInfo::new("green", 40.0, 100.0);
-    assert_eq!(q.status_level(), StatusLevel::Green);
-    assert!(q.is_healthy());
-    assert!(!q.is_warning());
-    assert!(!q.is_critical());
+    assert_eq!(q.status_level(&QuotaRules::default()), StatusLevel::Green);
+    assert!(q.is_healthy(&QuotaRules::default()));
+    assert!(!q.is_warning(&QuotaRules::default()));
+    assert!(!q.is_critical(&QuotaRules::default()));
     assert!(!q.is_depleted());
 }
 
@@ -203,52 +203,70 @@ fn test_status_level_green() {
 fn test_status_level_green_boundary() {
     // 正好 50% 剩余 = Yellow（因为 > 50 才是 Green）
     let q_50_remaining = QuotaInfo::new("boundary", 50.0, 100.0);
-    assert_eq!(q_50_remaining.status_level(), StatusLevel::Yellow);
+    assert_eq!(
+        q_50_remaining.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
 
     // 49.9% 剩余 = Yellow
     let q_49_9 = QuotaInfo::new("almost_green", 50.1, 100.0);
-    assert_eq!(q_49_9.status_level(), StatusLevel::Yellow);
+    assert_eq!(
+        q_49_9.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
 
     // 50.1% 剩余 = Green
     let q_50_1 = QuotaInfo::new("just_green", 49.9, 100.0);
-    assert_eq!(q_50_1.status_level(), StatusLevel::Green);
+    assert_eq!(
+        q_50_1.status_level(&QuotaRules::default()),
+        StatusLevel::Green
+    );
 }
 
 #[test]
 fn test_status_level_yellow() {
     // 50% 使用 = 50% 剩余 -> Yellow 边界
     let q_50 = QuotaInfo::new("yellow", 50.0, 100.0);
-    assert_eq!(q_50.status_level(), StatusLevel::Yellow);
-    assert!(!q_50.is_healthy());
-    assert!(q_50.is_warning());
-    assert!(!q_50.is_critical());
+    assert_eq!(
+        q_50.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
+    assert!(!q_50.is_healthy(&QuotaRules::default()));
+    assert!(q_50.is_warning(&QuotaRules::default()));
+    assert!(!q_50.is_critical(&QuotaRules::default()));
 
-    // 80% 使用 = 20% 剩余 -> Yellow 边界
-    let q_80 = QuotaInfo::new("yellow_edge", 80.0, 100.0);
-    assert_eq!(q_80.status_level(), StatusLevel::Yellow);
-    assert!(!q_80.is_critical()); // 20% 是 Yellow 边界，不是 critical
+    // 79% 使用 = 21% 剩余 -> Yellow（20% 已属于 Red 边界）
+    let q_79 = QuotaInfo::new("yellow_edge", 79.0, 100.0);
+    assert_eq!(
+        q_79.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
+    assert!(!q_79.is_critical(&QuotaRules::default())); // 21% 是 Yellow，不是 critical
 }
 
 #[test]
 fn test_status_level_red() {
     // 81% 使用 = 19% 剩余 -> Red
     let q = QuotaInfo::new("red", 81.0, 100.0);
-    assert_eq!(q.status_level(), StatusLevel::Red);
-    assert!(!q.is_healthy());
-    assert!(!q.is_warning());
-    assert!(q.is_critical()); // Red 但未耗尽
+    assert_eq!(q.status_level(&QuotaRules::default()), StatusLevel::Red);
+    assert!(!q.is_healthy(&QuotaRules::default()));
+    assert!(!q.is_warning(&QuotaRules::default()));
+    assert!(q.is_critical(&QuotaRules::default())); // Red 但未耗尽
     assert!(!q.is_depleted());
 }
 
 #[test]
 fn test_status_level_red_boundary() {
-    // 正好 20% 剩余 = Yellow（因为 >= 20 是 Yellow）
+    // 正好 20% 剩余 = Red（统一 <= 边界：remaining <= critical 即 Red）
     let q_20 = QuotaInfo::new("boundary", 80.0, 100.0);
-    assert_eq!(q_20.status_level(), StatusLevel::Yellow);
+    assert_eq!(q_20.status_level(&QuotaRules::default()), StatusLevel::Red);
 
-    // 19.9% 剩余 = Red
-    let q_19_9 = QuotaInfo::new("just_red", 80.1, 100.0);
-    assert_eq!(q_19_9.status_level(), StatusLevel::Red);
+    // 20.1% 剩余 = Yellow
+    let q_20_1 = QuotaInfo::new("just_yellow", 79.9, 100.0);
+    assert_eq!(
+        q_20_1.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
 }
 
 #[test]
@@ -263,20 +281,20 @@ fn test_depletion() {
     assert!(q_exceeded.is_depleted());
 
     // 耗尽时 critical 为 false（因为耗尽不是"接近耗尽"）
-    assert!(!q_exact.is_critical());
-    assert!(!q_exceeded.is_critical());
+    assert!(!q_exact.is_critical(&QuotaRules::default()));
+    assert!(!q_exceeded.is_critical(&QuotaRules::default()));
 }
 
 #[test]
 fn test_critical_vs_depleted() {
     // critical 是 Red 且未耗尽
     let q_critical = QuotaInfo::new("critical", 85.0, 100.0);
-    assert!(q_critical.is_critical());
+    assert!(q_critical.is_critical(&QuotaRules::default()));
     assert!(!q_critical.is_depleted());
 
     // 耗尽不是 critical
     let q_depleted = QuotaInfo::new("depleted", 100.0, 100.0);
-    assert!(!q_depleted.is_critical());
+    assert!(!q_depleted.is_critical(&QuotaRules::default()));
     assert!(q_depleted.is_depleted());
 }
 
@@ -350,26 +368,158 @@ fn test_balance_only_is_not_set_for_normal() {
 
 #[test]
 fn test_balance_only_status_level() {
-    // >= $5 → Green
-    let q_green = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
-    assert_eq!(q_green.status_level(), StatusLevel::Green);
+    let rules = QuotaRules::default();
+    // Credit 余额按货币阈值（默认 warning=10 / critical=2）判定
+    let q_green = QuotaInfo::balance_only("B", 10.01, None, QuotaType::Credit, None);
+    assert_eq!(q_green.status_level(&rules), StatusLevel::Green);
 
-    let q_green_boundary = QuotaInfo::balance_only("B", 5.0, None, QuotaType::Credit, None);
-    assert_eq!(q_green_boundary.status_level(), StatusLevel::Green);
+    // <= $10 → Yellow（边界含 10）
+    let q_yellow_boundary = QuotaInfo::balance_only("B", 10.0, None, QuotaType::Credit, None);
+    assert_eq!(q_yellow_boundary.status_level(&rules), StatusLevel::Yellow);
 
-    // $1 ~ $5 → Yellow
     let q_yellow = QuotaInfo::balance_only("B", 3.0, None, QuotaType::Credit, None);
-    assert_eq!(q_yellow.status_level(), StatusLevel::Yellow);
+    assert_eq!(q_yellow.status_level(&rules), StatusLevel::Yellow);
 
-    let q_yellow_boundary = QuotaInfo::balance_only("B", 1.0, None, QuotaType::Credit, None);
-    assert_eq!(q_yellow_boundary.status_level(), StatusLevel::Yellow);
+    // <= $2 → Red（边界含 2）
+    let q_red_boundary = QuotaInfo::balance_only("B", 2.0, None, QuotaType::Credit, None);
+    assert_eq!(q_red_boundary.status_level(&rules), StatusLevel::Red);
 
-    // < $1 → Red
     let q_red = QuotaInfo::balance_only("B", 0.5, None, QuotaType::Credit, None);
-    assert_eq!(q_red.status_level(), StatusLevel::Red);
+    assert_eq!(q_red.status_level(&rules), StatusLevel::Red);
 
     let q_red_zero = QuotaInfo::balance_only("B", 0.0, None, QuotaType::Credit, None);
-    assert_eq!(q_red_zero.status_level(), StatusLevel::Red);
+    assert_eq!(q_red_zero.status_level(&rules), StatusLevel::Red);
+}
+
+#[test]
+fn test_threshold_measurement_units() {
+    let credit = QuotaInfo::with_details("c", 98.0, 100.0, QuotaType::Credit, None);
+    assert_eq!(
+        credit.threshold_measurement(),
+        Some(QuotaMeasurement {
+            unit: QuotaThresholdUnit::Currency,
+            remaining: 2.0,
+            comparison_scale: 100.0,
+        })
+    );
+    assert_eq!(
+        credit.status_level(&QuotaRules::default()),
+        StatusLevel::Red
+    );
+
+    let points = QuotaInfo::with_details("p", 80.0, 100.0, QuotaType::Points, None);
+    assert_eq!(
+        points.threshold_measurement(),
+        Some(QuotaMeasurement {
+            unit: QuotaThresholdUnit::Amount,
+            remaining: 20.0,
+            comparison_scale: 100.0,
+        })
+    );
+    assert_eq!(
+        points.status_level(&QuotaRules::default()),
+        StatusLevel::Red
+    );
+
+    let points_full = QuotaInfo::with_details("p", 0.0, 100.0, QuotaType::Points, None);
+    assert_eq!(
+        points_full.status_level(&QuotaRules::default()),
+        StatusLevel::Yellow
+    );
+
+    let balance = QuotaInfo::balance_only("B", 5.0, None, QuotaType::Points, None);
+    assert_eq!(
+        balance.threshold_measurement(),
+        Some(QuotaMeasurement {
+            unit: QuotaThresholdUnit::Amount,
+            remaining: 5.0,
+            comparison_scale: 5.0,
+        })
+    );
+    assert_eq!(
+        balance.status_level(&QuotaRules::default()),
+        StatusLevel::Red
+    );
+
+    let invalid = QuotaInfo::with_details("g", 10.0, 0.0, QuotaType::General, None);
+    assert!(invalid.threshold_measurement().is_none());
+    assert_eq!(
+        invalid.status_level(&QuotaRules::default()),
+        StatusLevel::Green
+    );
+}
+
+#[test]
+fn test_measurement_comparison_scale_matches_unit() {
+    let q = QuotaInfo::new("q", 999.9, 1000.0);
+    let m = q.threshold_measurement().unwrap();
+    assert_eq!(m.unit, QuotaThresholdUnit::Percentage);
+    assert!((m.remaining - 0.01).abs() < 1e-9);
+    assert!((m.comparison_scale - 100.0).abs() < 1e-9);
+
+    let big = QuotaInfo::new("q", 999900.0, 1000000.0);
+    let m_big = big.threshold_measurement().unwrap();
+    assert_eq!(m_big.unit, QuotaThresholdUnit::Percentage);
+    assert!((m_big.remaining - 0.01).abs() < 1e-9);
+    assert!((m_big.comparison_scale - 100.0).abs() < 1e-9);
+
+    let mut rules = QuotaRules::default();
+    rules.percentage = QuotaThresholds {
+        warning: 1.0,
+        critical: 0.01,
+        notify: 0.01,
+    };
+    for (name, quota) in [("q", &q), ("big", &big)] {
+        let m = quota.threshold_measurement().unwrap();
+        let thresholds = rules.thresholds(m.unit);
+        assert_eq!(thresholds.status_level(m), StatusLevel::Red, "{name}");
+        assert!(thresholds.notify_threshold_reached(m), "{name}");
+    }
+
+    let points = QuotaInfo::with_details("p", 999.9, 1000.0, QuotaType::Points, None);
+    let points_big = QuotaInfo::with_details("p", 999900.0, 1000000.0, QuotaType::Points, None);
+    assert_eq!(
+        points.threshold_measurement().unwrap().comparison_scale,
+        1000.0
+    );
+    assert_eq!(
+        points_big.threshold_measurement().unwrap().comparison_scale,
+        1000000.0
+    );
+}
+
+#[test]
+fn test_balance_measurement_scale_ignores_used() {
+    let q = QuotaInfo::balance_only("c", 3e-12, Some(1e9), QuotaType::Credit, None);
+    let m = q.threshold_measurement().unwrap();
+    assert_eq!(m.unit, QuotaThresholdUnit::Currency);
+    assert!((m.comparison_scale - 3e-12).abs() < f64::EPSILON);
+
+    let rules = QuotaRules {
+        currency: QuotaThresholds {
+            warning: 5e-12,
+            critical: 2e-12,
+            notify: 1e-12,
+        },
+        ..QuotaRules::default()
+    };
+    assert_eq!(q.status_level(&rules), StatusLevel::Yellow);
+    assert!(!rules.currency.notify_threshold_reached(m));
+}
+
+#[test]
+fn test_custom_rules_change_status_level() {
+    let mut rules = QuotaRules::default();
+    rules.set(
+        QuotaThresholdUnit::Percentage,
+        QuotaThresholds {
+            warning: 90.0,
+            critical: 60.0,
+            notify: 40.0,
+        },
+    );
+    let q = QuotaInfo::new("custom", 30.0, 100.0);
+    assert_eq!(q.status_level(&rules), StatusLevel::Yellow);
 }
 
 // ========================================================================

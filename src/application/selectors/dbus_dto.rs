@@ -126,6 +126,9 @@ impl DBusQuotaSnapshot {
 
 impl DBusProviderEntry {
     fn from_provider(provider: &ProviderStatus, session: &AppSession) -> Self {
+        let rules = session
+            .settings
+            .effective_quota_rules(&provider.provider_id);
         let visible_quotas = session
             .settings
             .provider
@@ -133,10 +136,12 @@ impl DBusProviderEntry {
 
         let quotas: Vec<DBusQuotaEntry> = visible_quotas
             .iter()
-            .map(|q| DBusQuotaEntry::from_quota(q, session.settings.display.quota_display_mode))
+            .map(|q| {
+                DBusQuotaEntry::from_quota(q, session.settings.display.quota_display_mode, &rules)
+            })
             .collect();
 
-        let worst = provider.worst_status();
+        let worst = provider.worst_status(&rules);
 
         DBusProviderEntry {
             id: format_provider_id(&provider.provider_id),
@@ -152,8 +157,12 @@ impl DBusProviderEntry {
 }
 
 impl DBusQuotaEntry {
-    fn from_quota(quota: &QuotaInfo, display_mode: crate::models::QuotaDisplayMode) -> Self {
-        let sl = quota.status_level();
+    fn from_quota(
+        quota: &QuotaInfo,
+        display_mode: crate::models::QuotaDisplayMode,
+        rules: &crate::models::QuotaRules,
+    ) -> Self {
+        let sl = quota.status_level(rules);
         DBusQuotaEntry {
             label: super::format_quota_label(quota),
             used: quota.used,
@@ -287,7 +296,11 @@ mod tests {
             None,
         );
 
-        let entry = DBusQuotaEntry::from_quota(&quota, crate::models::QuotaDisplayMode::Used);
+        let entry = DBusQuotaEntry::from_quota(
+            &quota,
+            crate::models::QuotaDisplayMode::Used,
+            &crate::models::QuotaRules::default(),
+        );
 
         assert_eq!(entry.used, 45.0);
         assert_eq!(entry.limit, 100.0);
@@ -312,9 +325,13 @@ mod tests {
         let quota =
             QuotaInfo::with_details(QuotaLabelSpec::Weekly, 85.0, 100.0, QuotaType::Weekly, None);
 
-        let entry = DBusQuotaEntry::from_quota(&quota, crate::models::QuotaDisplayMode::Remaining);
+        let entry = DBusQuotaEntry::from_quota(
+            &quota,
+            crate::models::QuotaDisplayMode::Remaining,
+            &crate::models::QuotaRules::default(),
+        );
 
-        // 85% used = 15% remaining => Red (remaining < 20%)
+        // 85% used = 15% remaining => Red (remaining <= 20%)
         assert_eq!(entry.status_level, "Red");
         assert_eq!(entry.quota_type_key, "weekly");
         // Remaining mode: "15%"
@@ -330,7 +347,11 @@ mod tests {
         let quota =
             QuotaInfo::with_details(QuotaLabelSpec::Credits, 5.0, 20.0, QuotaType::Credit, None);
 
-        let entry = DBusQuotaEntry::from_quota(&quota, crate::models::QuotaDisplayMode::Used);
+        let entry = DBusQuotaEntry::from_quota(
+            &quota,
+            crate::models::QuotaDisplayMode::Used,
+            &crate::models::QuotaRules::default(),
+        );
 
         assert_eq!(entry.status_level, "Green");
         // Used mode for Credit: "$5.00"

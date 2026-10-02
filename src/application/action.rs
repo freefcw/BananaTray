@@ -1,8 +1,9 @@
 use super::state::{GlobalHotkeyError, SettingsTab};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
-    ProviderId, QuotaDisplayMode, ScriptProviderConfig, ScriptProviderDeleteSuccess,
-    ScriptProviderEditData, ScriptProviderSaveSuccess, ScriptProviderTestResult, TrayIconStyle,
+    ProviderId, QuotaDisplayMode, QuotaThresholdUnit, QuotaThresholds, ScriptProviderConfig,
+    ScriptProviderDeleteSuccess, ScriptProviderEditData, ScriptProviderSaveSuccess,
+    ScriptProviderTestResult, TrayIconStyle,
 };
 use crate::refresh::{RefreshEvent, RefreshReason};
 use std::path::PathBuf;
@@ -277,6 +278,15 @@ pub enum SettingChange {
     SetProviderQuotaUsageStep {
         provider_id: ProviderId,
         step_pct: Option<u8>,
+    },
+    SetGlobalQuotaThresholds {
+        unit: QuotaThresholdUnit,
+        thresholds: QuotaThresholds,
+    },
+    SetProviderQuotaThresholds {
+        provider_id: ProviderId,
+        unit: QuotaThresholdUnit,
+        thresholds: Option<QuotaThresholds>,
     },
 }
 

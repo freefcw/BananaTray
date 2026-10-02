@@ -3,6 +3,29 @@ use log::warn;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+struct RegisteredDBusHandle(Rc<RefCell<Option<crate::dbus::DBusServiceHandle>>>);
+
+impl gpui::Global for RegisteredDBusHandle {}
+
+pub(crate) fn register_dbus_snapshot_global(
+    handle: Rc<RefCell<Option<crate::dbus::DBusServiceHandle>>>,
+    cx: &mut gpui::App,
+) {
+    cx.set_global(RegisteredDBusHandle(handle));
+}
+
+pub(crate) fn emit_registered_dbus_snapshot(state: &Rc<RefCell<AppState>>, cx: &mut gpui::App) {
+    let Some(handle) = cx
+        .try_global::<RegisteredDBusHandle>()
+        .map(|global| global.0.clone())
+    else {
+        return;
+    };
+    if !emit_current_dbus_snapshot(state, handle.borrow().as_ref()) {
+        handle.borrow_mut().take();
+    }
+}
+
 /// 向 GNOME Shell Extension 发射当前状态快照。
 ///
 /// 返回 `false` 表示发射通道已永久失效（D-Bus 线程退出后 signal channel 关闭，

@@ -3,6 +3,15 @@ use serde::{Deserialize, Serialize};
 use super::StatusLevel;
 use crate::models::ProviderId;
 
+const QUOTA_THRESHOLD_RELATIVE_EPSILON: f64 = 1e-12;
+const QUOTA_CALCULATION_ROUNDING_FACTOR: f64 = 8.0;
+
+fn remaining_at_or_below(measurement: QuotaMeasurement, threshold: f64) -> bool {
+    let tolerance = (threshold.abs() * QUOTA_THRESHOLD_RELATIVE_EPSILON)
+        .max(measurement.comparison_scale * f64::EPSILON * QUOTA_CALCULATION_ROUNDING_FACTOR);
+    measurement.remaining <= threshold || measurement.remaining - threshold <= tolerance
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum QuotaThresholdUnit {
     Percentage,
@@ -89,14 +98,18 @@ impl QuotaThresholds {
         Ok(thresholds)
     }
 
-    pub fn status_level(&self, remaining: f64) -> StatusLevel {
-        if remaining <= self.critical {
+    pub fn status_level(&self, measurement: QuotaMeasurement) -> StatusLevel {
+        if remaining_at_or_below(measurement, self.critical) {
             StatusLevel::Red
-        } else if remaining <= self.warning {
+        } else if remaining_at_or_below(measurement, self.warning) {
             StatusLevel::Yellow
         } else {
             StatusLevel::Green
         }
+    }
+
+    pub fn notify_threshold_reached(&self, measurement: QuotaMeasurement) -> bool {
+        remaining_at_or_below(measurement, self.notify)
     }
 }
 
@@ -206,6 +219,7 @@ impl QuotaRuleOverrides {
 pub struct QuotaMeasurement {
     pub unit: QuotaThresholdUnit,
     pub remaining: f64,
+    pub comparison_scale: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,6 +246,14 @@ mod tests {
         }
     }
 
+    fn measurement(unit: QuotaThresholdUnit, remaining: f64) -> QuotaMeasurement {
+        QuotaMeasurement {
+            unit,
+            remaining,
+            comparison_scale: remaining.abs(),
+        }
+    }
+
     #[test]
     fn default_rules_match_fixed_thresholds() {
         let rules = QuotaRules::default();
@@ -246,11 +268,26 @@ mod tests {
     #[test]
     fn status_level_uses_inclusive_remaining_boundaries() {
         let t = QuotaThresholds::DEFAULT_PERCENTAGE;
-        assert_eq!(t.status_level(50.0), StatusLevel::Yellow);
-        assert_eq!(t.status_level(50.1), StatusLevel::Green);
-        assert_eq!(t.status_level(20.0), StatusLevel::Red);
-        assert_eq!(t.status_level(0.0), StatusLevel::Red);
-        assert_eq!(t.status_level(-3.0), StatusLevel::Red);
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Percentage, 50.0)),
+            StatusLevel::Yellow
+        );
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Percentage, 50.1)),
+            StatusLevel::Green
+        );
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Percentage, 20.0)),
+            StatusLevel::Red
+        );
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Percentage, 0.0)),
+            StatusLevel::Red
+        );
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Percentage, -3.0)),
+            StatusLevel::Red
+        );
     }
 
     #[test]
@@ -377,5 +414,73 @@ mod tests {
         assert!(target.is_provider(&claude));
         assert!(!target.is_provider(&codex));
         assert!(!QuotaThresholdTarget::Global.is_provider(&claude));
+    }
+
+    #[test]
+    fn threshold_boundaries_use_relative_tolerance() {
+        let t = valid(0.5, 0.1, 0.1);
+        let reconstructed = QuotaMeasurement {
+            unit: QuotaThresholdUnit::Currency,
+            remaining: 20.3 - (20.3 - 0.1),
+            comparison_scale: 20.3,
+        };
+        assert_eq!(t.status_level(reconstructed), StatusLevel::Red);
+        assert!(t.notify_threshold_reached(reconstructed));
+
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Currency, 0.5 + 1e-14)),
+            StatusLevel::Yellow
+        );
+
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Currency, 0.1 + 1e-10)),
+            StatusLevel::Yellow
+        );
+        assert!(!t.notify_threshold_reached(measurement(QuotaThresholdUnit::Currency, 0.1 + 1e-10)));
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Currency, 0.5 + 1e-10)),
+            StatusLevel::Green
+        );
+    }
+
+    #[test]
+    fn threshold_boundaries_scale_with_operand_magnitude() {
+        let t = valid(0.5, 0.01, 0.01);
+        let one_cent = QuotaMeasurement {
+            unit: QuotaThresholdUnit::Currency,
+            remaining: 0.010000000000019327,
+            comparison_scale: 200.02,
+        };
+        assert_eq!(t.status_level(one_cent), StatusLevel::Red);
+        assert!(t.notify_threshold_reached(one_cent));
+
+        let beyond = QuotaMeasurement {
+            unit: QuotaThresholdUnit::Currency,
+            remaining: 0.01 + 1e-10,
+            comparison_scale: 200.02,
+        };
+        assert_eq!(t.status_level(beyond), StatusLevel::Yellow);
+        assert!(!t.notify_threshold_reached(beyond));
+    }
+
+    #[test]
+    fn tiny_positive_thresholds_have_no_absolute_epsilon_floor() {
+        let t = valid(5e-12, 2e-12, 1e-12);
+        assert_eq!(
+            t.status_level(measurement(QuotaThresholdUnit::Amount, 3e-12)),
+            StatusLevel::Yellow
+        );
+        assert!(!t.notify_threshold_reached(measurement(QuotaThresholdUnit::Amount, 3e-12)));
+    }
+
+    #[test]
+    fn validate_stays_strict_at_epsilon_scale() {
+        assert!(valid(0.5, 0.5 - 1e-15, 0.1)
+            .validate(QuotaThresholdUnit::Currency)
+            .is_ok());
+        assert_eq!(
+            valid(0.5, 0.5, 0.1).validate(QuotaThresholdUnit::Currency),
+            Err(QuotaThresholdsError::InvalidOrder)
+        );
     }
 }

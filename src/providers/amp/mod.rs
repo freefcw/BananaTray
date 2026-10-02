@@ -244,7 +244,10 @@ mod tests {
         assert!(q.is_balance_only());
         assert!((q.remaining_balance.unwrap() - 50.0).abs() < f64::EPSILON);
         assert_eq!(q.quota_type, QuotaType::Credit);
-        assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
+        assert_eq!(
+            q.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Green
+        );
     }
 
     /// 实际 amp CLI 输出（2026-07 上游变更后）：Free 档改为每日百分比重置 + 零余额次要额度
@@ -268,7 +271,10 @@ mod tests {
         assert_eq!(q.used, 0.0);
         assert_eq!(q.limit, 100.0);
         assert_eq!(q.quota_type, QuotaType::General);
-        assert_eq!(q.status_level(), crate::models::StatusLevel::Green);
+        assert_eq!(
+            q.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Green
+        );
         // 括号内的重置说明透传到详情行
         assert_eq!(
             q.detail_spec,
@@ -289,7 +295,10 @@ mod tests {
         assert!((q.used - 62.0).abs() < f64::EPSILON);
         assert_eq!(q.limit, 100.0);
         assert_eq!(q.quota_type, QuotaType::General);
-        assert_eq!(q.status_level(), crate::models::StatusLevel::Yellow);
+        assert_eq!(
+            q.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Yellow
+        );
         assert_eq!(
             q.detail_spec,
             Some(QuotaDetailSpec::Raw("resets daily".to_string()))
@@ -359,9 +368,9 @@ mod tests {
         );
         assert!(data.quotas[1].is_balance_only());
         assert_eq!(
-            data.quotas[1].status_level(),
+            data.quotas[1].status_level(&crate::models::QuotaRules::default()),
             crate::models::StatusLevel::Yellow,
-            "$3.00 should be Yellow (>=1 && <5)"
+            "$3.00 should be Yellow (> default critical $2 && <= warning $10)"
         );
     }
 
@@ -546,7 +555,10 @@ mod tests {
         assert!((q0.used - 19.0).abs() < f64::EPSILON);
         assert_eq!(q0.limit, 100.0);
         assert_eq!(q0.quota_type, QuotaType::General);
-        assert_eq!(q0.status_level(), crate::models::StatusLevel::Green);
+        assert_eq!(
+            q0.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Green
+        );
 
         // orb usage（远程实例额度）：100% remaining -> used=0
         let q1 = &data.quotas[1];
@@ -559,7 +571,10 @@ mod tests {
         );
         assert!((q1.used - 0.0).abs() < f64::EPSILON);
         assert_eq!(q1.limit, 100.0);
-        assert_eq!(q1.status_level(), crate::models::StatusLevel::Green);
+        assert_eq!(
+            q1.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Green
+        );
     }
 
     /// 订阅池状态等级：other 38%（Yellow 20-50）、orb 5%（Red <20）。
@@ -579,11 +594,11 @@ mod tests {
             }
         );
         assert_eq!(
-            data.quotas[0].status_level(),
+            data.quotas[0].status_level(&crate::models::QuotaRules::default()),
             crate::models::StatusLevel::Yellow
         );
         assert_eq!(
-            data.quotas[1].status_level(),
+            data.quotas[1].status_level(&crate::models::QuotaRules::default()),
             crate::models::StatusLevel::Red
         );
     }
@@ -616,5 +631,60 @@ mod tests {
             data.quotas[2].label_spec,
             crate::models::QuotaLabelSpec::MonthlyCredits
         );
+    }
+
+    #[test]
+    fn test_credit_decimal_boundary_alerts_red_and_low() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let mut rules = crate::models::QuotaRules::default();
+        rules.currency = crate::models::QuotaThresholds {
+            warning: 0.5,
+            critical: 0.1,
+            notify: 0.1,
+        };
+        rules
+            .currency
+            .validate(crate::models::QuotaThresholdUnit::Currency)
+            .unwrap();
+
+        let baseline =
+            AmpProvider::parse_usage_output("Monthly credits: $0.20 / $20.30 remaining\n").unwrap();
+        let current =
+            AmpProvider::parse_usage_output("Monthly credits: $0.10 / $20.30 remaining\n").unwrap();
+        assert_eq!(baseline.quotas.len(), 1);
+        assert_eq!(current.quotas.len(), 1);
+        assert_eq!(
+            baseline.quotas[0].status_level(&rules),
+            crate::models::StatusLevel::Yellow
+        );
+        assert_eq!(
+            current.quotas[0].status_level(&rules),
+            crate::models::StatusLevel::Red
+        );
+
+        let mut engine = crate::application::AlertEngine::new();
+        let provider = crate::models::ProviderId::BuiltIn(ProviderKind::Amp);
+        let baseline_events = engine.evaluate(crate::application::QuotaObservation {
+            provider_id: &provider,
+            provider_name: "Amp",
+            quotas: &baseline.quotas,
+            rules: &rules,
+            usage_step_pct: 0,
+        });
+        assert!(baseline_events.is_empty());
+        let events = engine.evaluate(crate::application::QuotaObservation {
+            provider_id: &provider,
+            provider_name: "Amp",
+            quotas: &current.quotas,
+            rules: &rules,
+            usage_step_pct: 0,
+        });
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            crate::application::QuotaNotificationEvent::LowQuota { quota, .. } => {
+                assert_eq!(quota.stable_key, "monthly-credits");
+            }
+            other => panic!("expected LowQuota, got {other:?}"),
+        }
     }
 }

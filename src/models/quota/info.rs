@@ -6,11 +6,12 @@ use super::{
         used_percent_from_remaining_fraction, used_percent_from_remaining_percent,
         FULL_REMAINING_FRACTION, PERCENT_SCALE,
     },
-    QuotaDetailSpec, QuotaLabelSpec, QuotaType, StatusLevel,
+    QuotaDetailSpec, QuotaLabelSpec, QuotaMeasurement, QuotaRules, QuotaThresholdUnit, QuotaType,
+    StatusLevel,
 };
 
 /// 用量配额信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuotaInfo {
     /// 已使用量
     pub used: f64,
@@ -300,61 +301,82 @@ impl QuotaInfo {
     }
 
     // ========================================================================
-    // 状态判断（基于 status_level 单一真理来源）
+    // 状态判断（基于 threshold_measurement + 可配置 QuotaRules 单一真理来源）
     // ========================================================================
 
-    /// 状态等级：Green / Yellow / Red
-    ///
-    /// 传统模式阈值（基于百分比）：
-    /// - Green: 剩余 > 50%
-    /// - Yellow: 剩余 20% ~ 50%（包含边界）
-    /// - Red: 剩余 < 20%
-    ///
-    /// 余额模式阈值（基于绝对值，仅 Credit 类型）：
-    /// - Green: 余额 >= $5
-    /// - Yellow: $1 ~ $5
-    /// - Red: < $1
-    pub fn status_level(&self) -> StatusLevel {
+    pub fn threshold_measurement(&self) -> Option<QuotaMeasurement> {
+        // 余额模式：Credit → Currency，其余 → Amount
         if let Some(balance) = self.remaining_balance {
-            // 余额模式：按绝对值判断
-            if balance >= 5.0 {
-                StatusLevel::Green
-            } else if balance >= 1.0 {
-                StatusLevel::Yellow
-            } else {
-                StatusLevel::Red
+            if !balance.is_finite() {
+                return None;
             }
-        } else {
-            // 传统模式：按百分比判断
-            let remaining_pct = self.percent_remaining();
-            if remaining_pct > 50.0 {
-                StatusLevel::Green
-            } else if remaining_pct >= 20.0 {
-                StatusLevel::Yellow
-            } else {
-                StatusLevel::Red
-            }
+            let unit = match self.quota_type {
+                QuotaType::Credit => QuotaThresholdUnit::Currency,
+                _ => QuotaThresholdUnit::Amount,
+            };
+            return Some(QuotaMeasurement {
+                unit,
+                remaining: balance,
+                comparison_scale: balance.abs(),
+            });
+        }
+
+        if !self.limit.is_finite() || !self.used.is_finite() || self.limit <= 0.0 {
+            return None;
+        }
+        // 有总额配额：Credit / Points 用原生剩余值，其余按剩余百分比
+        match self.quota_type {
+            QuotaType::Credit => Some(QuotaMeasurement {
+                unit: QuotaThresholdUnit::Currency,
+                remaining: self.limit - self.used,
+                comparison_scale: self.limit.abs().max(self.used.abs()),
+            }),
+            QuotaType::Points => Some(QuotaMeasurement {
+                unit: QuotaThresholdUnit::Amount,
+                remaining: self.limit - self.used,
+                comparison_scale: self.limit.abs().max(self.used.abs()),
+            }),
+            _ => Some(QuotaMeasurement {
+                unit: QuotaThresholdUnit::Percentage,
+                remaining: self.percent_remaining(),
+                comparison_scale: (self.used.abs() / self.limit).max(1.0) * PERCENT_SCALE,
+            }),
         }
     }
 
-    /// 是否已耗尽（已使用 >= 配额）
+    /// 状态等级：Green / Yellow / Red
+    ///
+    /// 统一按“剩余值”与 `rules` 中对应单位的阈值比较（边界均为 `<=`）：
+    /// - Red: `remaining <= critical`
+    /// - Yellow: `remaining <= warning`
+    /// - Green: 其余
+    ///
+    /// 无有效 measurement 时返回 Green（安全默认；没有 Unknown 枚举）。
+    pub fn status_level(&self, rules: &QuotaRules) -> StatusLevel {
+        self.threshold_measurement()
+            .map(|m| rules.thresholds(m.unit).status_level(m))
+            .unwrap_or(StatusLevel::Green)
+    }
+
+    /// 是否已耗尽（有效剩余值 <= 0；含纯余额耗尽与超用配额）
     pub fn is_depleted(&self) -> bool {
-        self.used >= self.limit && self.limit > 0.0
+        self.threshold_measurement()
+            .is_some_and(|m| m.remaining <= 0.0)
     }
 
     /// 是否健康（Green 状态）
-    pub fn is_healthy(&self) -> bool {
-        self.status_level() == StatusLevel::Green
+    pub fn is_healthy(&self, rules: &QuotaRules) -> bool {
+        self.status_level(rules) == StatusLevel::Green
     }
 
     /// 是否需要警告（Yellow 状态）
-    pub fn is_warning(&self) -> bool {
-        self.status_level() == StatusLevel::Yellow
+    pub fn is_warning(&self, rules: &QuotaRules) -> bool {
+        self.status_level(rules) == StatusLevel::Yellow
     }
 
     /// 是否紧急（Red 状态且未耗尽）
-    pub fn is_critical(&self) -> bool {
-        self.status_level() == StatusLevel::Red && !self.is_depleted()
+    pub fn is_critical(&self, rules: &QuotaRules) -> bool {
+        self.status_level(rules) == StatusLevel::Red && !self.is_depleted()
     }
 
     // ========================================================================

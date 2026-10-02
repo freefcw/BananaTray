@@ -7,7 +7,7 @@
 //! | macOS    | `UNUserNotificationCenter` (native) | `osascript` (AppleScript) |
 //! | Linux    | `notify-rust` (D-Bus) | `notify-rust` (D-Bus) |
 //!
-//! `QuotaAlert` / `QuotaAlertTracker` live in `application/`.
+//! `QuotaNotificationEvent` / `AlertEngine` live in `application/`.
 //! This module only converts domain alerts into OS-specific notifications.
 //!
 //! ## Why `notify-rust` is excluded on macOS
@@ -26,7 +26,7 @@
 //! + `osascript` fallback), `notify-rust` is unnecessary and is excluded via
 //!   `cfg(not(target_os = "macos"))` in both `Cargo.toml` and this module.
 
-use crate::application::QuotaAlert;
+use crate::application::{format_quota_label, format_quota_remaining_text, QuotaNotificationEvent};
 use log::{info, warn};
 use rust_i18n::t;
 // ============================================================================
@@ -41,35 +41,49 @@ use rust_i18n::t;
 ///   支持应用图标显示和系统通知中心管理。
 /// - **macOS (cargo run)**: 通过 `osascript`（AppleScript）发送通知作为开发模式 fallback。
 /// - **其他平台**: 使用 `notify-rust`（Linux D-Bus / Windows Toast）。
-pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
-    let (title, body) = match alert {
-        QuotaAlert::LowQuota {
+pub fn send_system_notification(alert: &QuotaNotificationEvent, with_sound: bool) {
+    let (title, body) = quota_alert_notification(alert);
+    spawn_notification(title, body, with_sound);
+}
+
+fn quota_alert_notification(alert: &QuotaNotificationEvent) -> (String, String) {
+    match alert {
+        QuotaNotificationEvent::LowQuota {
             provider_name,
-            remaining_pct,
+            quota,
         } => (
             t!("notification.low_quota.title", name = provider_name).to_string(),
             t!(
                 "notification.low_quota.body",
-                pct = format!("{:.0}", remaining_pct)
+                label = format_quota_label(quota),
+                remaining = format_quota_remaining_text(quota)
             )
             .to_string(),
         ),
-        QuotaAlert::Exhausted { provider_name } => (
-            t!("notification.exhausted.title", name = provider_name).to_string(),
-            t!("notification.exhausted.body").to_string(),
-        ),
-        QuotaAlert::Recovered {
+        QuotaNotificationEvent::Exhausted {
             provider_name,
-            remaining_pct,
+            quota,
+        } => (
+            t!("notification.exhausted.title", name = provider_name).to_string(),
+            t!(
+                "notification.exhausted.body",
+                label = format_quota_label(quota)
+            )
+            .to_string(),
+        ),
+        QuotaNotificationEvent::Recovered {
+            provider_name,
+            quota,
         } => (
             t!("notification.recovered.title", name = provider_name).to_string(),
             t!(
                 "notification.recovered.body",
-                pct = format!("{:.0}", remaining_pct)
+                label = format_quota_label(quota),
+                remaining = format_quota_remaining_text(quota)
             )
             .to_string(),
         ),
-        QuotaAlert::UsageProgress {
+        QuotaNotificationEvent::UsageProgress {
             provider_name,
             remaining_pct,
         } => (
@@ -80,14 +94,12 @@ pub fn send_system_notification(alert: &QuotaAlert, with_sound: bool) {
             )
             .to_string(),
         ),
-    };
-
-    spawn_notification(title, body, with_sound);
+    }
 }
 
 /// 发送简单的系统通知（无声音）。
 ///
-/// 在独立线程中发送通知，供不需要 QuotaAlert 包装的场景使用
+/// 在独立线程中发送通知，供不需要 QuotaNotificationEvent 包装的场景使用
 /// （如 auto-launch 通知）。
 pub fn send_plain_notification(title: &str, body: &str) {
     spawn_notification(title.to_string(), body.to_string(), false);
@@ -399,5 +411,102 @@ mod tests {
             !super::is_running_in_bundle(),
             "cargo test 环境下不应被识别为 App Bundle"
         );
+    }
+
+    use crate::application::QuotaNotificationEvent;
+    use crate::models::{QuotaInfo, QuotaType};
+
+    fn balance_quota(amount: f64) -> QuotaInfo {
+        QuotaInfo::balance_only("credits", amount, None, QuotaType::Credit, None)
+    }
+
+    fn assert_no_unreplaced_params(text: &str) {
+        assert!(!text.contains("%{"), "unreplaced params in: {text}");
+    }
+
+    #[test]
+    fn quota_alert_body_uses_native_units_en() {
+        let _guard = crate::i18n::test_locale_guard("en");
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::LowQuota {
+            provider_name: "Claude".to_string(),
+            quota: balance_quota(2.50),
+        });
+        assert!(body.contains("$2.50"), "body: {body}");
+        assert!(!body.contains('%'), "body: {body}");
+        assert_no_unreplaced_params(&body);
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::Recovered {
+            provider_name: "Claude".to_string(),
+            quota: balance_quota(2.50),
+        });
+        assert!(body.contains("$2.50"), "body: {body}");
+        assert!(!body.contains('%'), "body: {body}");
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::LowQuota {
+            provider_name: "Claude".to_string(),
+            quota: QuotaInfo::with_details("points", 60.0, 100.0, QuotaType::Points, None),
+        });
+        assert!(body.contains("40.00"), "body: {body}");
+        assert!(!body.contains('$'), "body: {body}");
+        assert_no_unreplaced_params(&body);
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::LowQuota {
+            provider_name: "Claude".to_string(),
+            quota: QuotaInfo::new("session", 70.0, 100.0),
+        });
+        assert!(body.contains("30%"), "body: {body}");
+        assert!(body.contains("session"), "body: {body}");
+        assert_no_unreplaced_params(&body);
+
+        let (title, body) = super::quota_alert_notification(&QuotaNotificationEvent::Exhausted {
+            provider_name: "Claude".to_string(),
+            quota: QuotaInfo::new("session", 100.0, 100.0),
+        });
+        assert!(title.contains("Claude"), "title: {title}");
+        assert!(body.contains("session"), "body: {body}");
+        assert_no_unreplaced_params(&body);
+
+        let (title, body) =
+            super::quota_alert_notification(&QuotaNotificationEvent::UsageProgress {
+                provider_name: "Claude".to_string(),
+                remaining_pct: 42.0,
+            });
+        assert!(title.contains("Claude"), "title: {title}");
+        assert!(body.contains("42%"), "body: {body}");
+        assert_no_unreplaced_params(&body);
+    }
+
+    #[test]
+    fn quota_alert_body_uses_native_units_zh_cn() {
+        let _guard = crate::i18n::test_locale_guard("zh-CN");
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::LowQuota {
+            provider_name: "Claude".to_string(),
+            quota: balance_quota(2.50),
+        });
+        assert!(body.contains("$2.50"), "body: {body}");
+        assert!(!body.contains('%'), "body: {body}");
+        assert_no_unreplaced_params(&body);
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::Recovered {
+            provider_name: "Claude".to_string(),
+            quota: balance_quota(2.50),
+        });
+        assert!(body.contains("$2.50"), "body: {body}");
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::LowQuota {
+            provider_name: "Claude".to_string(),
+            quota: QuotaInfo::with_details("points", 60.0, 100.0, QuotaType::Points, None),
+        });
+        assert!(body.contains("40.00"), "body: {body}");
+        assert!(!body.contains('$'), "body: {body}");
+
+        let (_, body) = super::quota_alert_notification(&QuotaNotificationEvent::Exhausted {
+            provider_name: "Claude".to_string(),
+            quota: QuotaInfo::new("session", 100.0, 100.0),
+        });
+        assert!(body.contains("session"), "body: {body}");
+        assert_no_unreplaced_params(&body);
     }
 }

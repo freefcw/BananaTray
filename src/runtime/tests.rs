@@ -14,12 +14,17 @@ struct FakeCaps {
     settings_opened: bool,
     tray_icon_applied: bool,
     hotkey_applied: bool,
+    quota_snapshot_published: bool,
     quit: bool,
 }
 
 impl ContextCapabilities for FakeCaps {
     fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
         self.rendered = true;
+    }
+
+    fn publish_quota_snapshot(&mut self, _state: &Rc<RefCell<AppState>>) {
+        self.quota_snapshot_published = true;
     }
 }
 
@@ -297,6 +302,26 @@ fn run_context_effect_routes_full_context_capabilities() {
     assert!(caps.tray_icon_applied);
     assert!(caps.hotkey_applied);
     assert!(caps.quit);
+}
+
+#[test]
+fn run_full_context_effect_routes_publish_quota_snapshot() {
+    let state = make_state();
+    let mut caps = FakeCaps::default();
+
+    let _ = run_full_context_effect(&state, ContextEffect::PublishQuotaSnapshot, &mut caps);
+
+    assert!(caps.quota_snapshot_published);
+}
+
+#[test]
+fn run_view_context_effect_routes_publish_quota_snapshot() {
+    let state = make_state();
+    let mut caps = FakeCaps::default();
+
+    run_view_context_effect(&state, ContextEffect::PublishQuotaSnapshot, &mut caps);
+
+    assert!(caps.quota_snapshot_published);
 }
 
 #[test]

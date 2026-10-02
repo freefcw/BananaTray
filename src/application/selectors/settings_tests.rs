@@ -680,3 +680,176 @@ fn settings_detail_quota_usage_hidden_for_non_monitorable() {
 
     assert!(!detail.can_refresh);
 }
+
+#[test]
+fn settings_detail_quota_thresholds_expose_overrides_and_effective() {
+    let _locale_guard = setup_locale();
+    let custom_currency = crate::models::QuotaThresholds {
+        warning: 20.0,
+        critical: 5.0,
+        notify: 2.0,
+    };
+    let mut settings = AppSettings::default();
+    settings.provider.set_quota_threshold_override(
+        &pid(ProviderKind::Claude),
+        crate::models::QuotaThresholdUnit::Currency,
+        Some(custom_currency),
+    );
+
+    let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+
+    let detail = detail_snapshot(&session);
+
+    assert!(detail.show_quota_thresholds);
+    assert_eq!(detail.quota_thresholds.len(), 3);
+
+    let currency = detail
+        .quota_thresholds
+        .iter()
+        .find(|u| u.unit == crate::models::QuotaThresholdUnit::Currency)
+        .expect("currency unit entry");
+    assert_eq!(currency.override_thresholds, Some(custom_currency));
+    assert_eq!(currency.effective, custom_currency);
+
+    let percentage = detail
+        .quota_thresholds
+        .iter()
+        .find(|u| u.unit == crate::models::QuotaThresholdUnit::Percentage)
+        .expect("percentage unit entry");
+    assert_eq!(percentage.override_thresholds, None);
+    assert_eq!(
+        percentage.effective,
+        crate::models::QuotaThresholds::DEFAULT_PERCENTAGE
+    );
+}
+
+#[test]
+fn settings_detail_quota_thresholds_shown_without_quota_data() {
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
+    provider.quotas.clear();
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
+
+    assert!(detail_snapshot(&session).show_quota_thresholds);
+}
+
+#[test]
+fn settings_detail_quota_thresholds_hidden_for_non_monitorable() {
+    let _locale_guard = setup_locale();
+    for kind in [ProviderKind::VertexAi, ProviderKind::Kilo] {
+        let mut settings = AppSettings::default();
+        settings.provider.set_provider_enabled(kind, true);
+        let provider = make_provider(kind, ConnectionStatus::Disconnected);
+        let session = make_session(settings, pid(kind), vec![provider]);
+
+        assert!(
+            !detail_snapshot(&session).show_quota_thresholds,
+            "{kind:?} 不应显示阈值设置"
+        );
+    }
+}
+
+#[test]
+fn custom_percentage_thresholds_apply_across_all_surfaces() {
+    use crate::models::{QuotaDisplayMode, QuotaThresholdUnit, QuotaThresholds, StatusLevel};
+
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings.display.show_overview = true;
+    settings.quota.set(
+        QuotaThresholdUnit::Percentage,
+        QuotaThresholds {
+            warning: 80.0,
+            critical: 40.0,
+            notify: 30.0,
+        },
+    );
+
+    let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("session", 70.0, 100.0)];
+    let mut session = make_session(settings, pid(ProviderKind::Gemini), vec![provider]);
+
+    let assert_panel_red = |session: &AppSession| match provider_detail_view_state(
+        session,
+        &pid(ProviderKind::Gemini),
+    ) {
+        ProviderDetailViewState::Panel(panel) => match panel.body {
+            ProviderBodyViewState::Quotas { quotas, .. } => {
+                assert_eq!(quotas[0].status_level, StatusLevel::Red);
+            }
+            other => panic!("expected Quotas body, got {:?}", other),
+        },
+        other => panic!("expected Panel variant, got {:?}", other),
+    };
+
+    assert_panel_red(&session);
+
+    match detail_snapshot(&session).usage {
+        SettingsProviderUsageViewState::Quotas { quotas } => {
+            assert_eq!(quotas[0].status_level, StatusLevel::Red);
+        }
+        other => panic!("expected Quotas usage, got {:?}", other),
+    }
+
+    match &overview_view_state(&session).items[0].status {
+        OverviewItemStatus::Quota { status_level, .. } => {
+            assert_eq!(*status_level, StatusLevel::Red);
+        }
+        other => panic!("expected Quota status, got {:?}", other),
+    }
+
+    assert_eq!(session.worst_enabled_provider_status(), StatusLevel::Red);
+
+    let snapshot = DBusQuotaSnapshot::from_session(&session);
+    assert_eq!(snapshot.providers[0].worst_status, "Red");
+    assert_eq!(snapshot.providers[0].quotas[0].status_level, "Red");
+
+    session.settings.display.quota_display_mode = QuotaDisplayMode::Used;
+    assert_panel_red(&session);
+    assert_eq!(session.worst_enabled_provider_status(), StatusLevel::Red);
+}
+
+#[test]
+fn currency_override_uses_native_remaining_for_status() {
+    use crate::models::{QuotaThresholdUnit, QuotaThresholds, QuotaType, StatusLevel};
+
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings.provider.set_quota_threshold_override(
+        &pid(ProviderKind::Gemini),
+        QuotaThresholdUnit::Currency,
+        Some(QuotaThresholds {
+            warning: 20.0,
+            critical: 5.0,
+            notify: 2.0,
+        }),
+    );
+
+    let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::with_details(
+        "credits",
+        85.0,
+        100.0,
+        QuotaType::Credit,
+        None,
+    )];
+    let session = make_session(settings, pid(ProviderKind::Gemini), vec![provider]);
+
+    match provider_detail_view_state(&session, &pid(ProviderKind::Gemini)) {
+        ProviderDetailViewState::Panel(panel) => match panel.body {
+            ProviderBodyViewState::Quotas { quotas, .. } => {
+                assert_eq!(quotas[0].status_level, StatusLevel::Yellow);
+            }
+            other => panic!("expected Quotas body, got {:?}", other),
+        },
+        other => panic!("expected Panel variant, got {:?}", other),
+    }
+}

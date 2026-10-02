@@ -113,8 +113,13 @@ impl RefreshCoordinator {
                 for q in &data.quotas {
                     log::info!(
                         target: "refresh",
-                        "{}: {:?} — used={:.2} / limit={:.2}, detail={:?}, status={:?}",
-                        id, q.label_spec, q.used, q.limit, q.detail_spec, q.status_level(),
+                        "{}: {:?} — used={:.2} / limit={:.2}, detail={:?}, status(default_rules)={:?}",
+                        id,
+                        q.label_spec,
+                        q.used,
+                        q.limit,
+                        q.detail_spec,
+                        q.status_level(&crate::models::QuotaRules::default()),
                     );
                 }
                 log::debug!(

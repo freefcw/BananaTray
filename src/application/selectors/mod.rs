@@ -13,7 +13,8 @@ mod tray;
 use super::state::{FormIdentity, HeaderStatusKind};
 use crate::models::{
     NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
-    ScriptProviderEditData, ScriptProviderTestResult, SettingsCapability, StatusLevel,
+    QuotaThresholdUnit, QuotaThresholds, ScriptProviderEditData, ScriptProviderTestResult,
+    SettingsCapability, StatusLevel,
 };
 
 // ── Tray 弹出窗口 ──
@@ -176,6 +177,7 @@ pub struct QuotaDisplayViewState {
     pub quota: QuotaInfo,
     pub label: String,
     pub detail: String,
+    pub status_level: StatusLevel,
 }
 
 // ── Settings 窗口 ──
@@ -222,6 +224,13 @@ pub struct SettingsProviderListItemViewState {
     pub is_enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuotaThresholdUnitViewState {
+    pub unit: QuotaThresholdUnit,
+    pub override_thresholds: Option<QuotaThresholds>,
+    pub effective: QuotaThresholds,
+}
+
 #[derive(Debug, Clone)]
 pub struct SettingsProviderDetailViewState {
     pub id: ProviderId,
@@ -242,6 +251,8 @@ pub struct SettingsProviderDetailViewState {
     pub quota_usage_step_pct: Option<u8>,
     pub global_quota_usage_step_pct: u8,
     pub quota_usage_dropdown_open: bool,
+    pub show_quota_thresholds: bool,
+    pub quota_thresholds: Vec<QuotaThresholdUnitViewState>,
     /// 配额可见性列表（用于设置 UI 中的勾选框）
     pub quota_visibility: Vec<QuotaVisibilityItem>,
 }
@@ -294,13 +305,13 @@ pub use debug::{
 };
 #[cfg(test)]
 pub(crate) use format::display_source_label;
-#[cfg(any(target_os = "linux", test))]
-pub(crate) use format::format_quota_label;
 #[allow(unused_imports)] // app feature 下 ui/widgets 使用
 pub(crate) use format::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
     format_quota_card_mode_label, format_quota_status_label,
 };
+#[allow(unused_imports)]
+pub(crate) use format::{format_quota_label, format_quota_remaining_text};
 #[allow(unused_imports)]
 pub use issue_report::{build_issue_report, build_issue_url, IssueReportContext};
 pub use settings::settings_providers_tab_view_state;

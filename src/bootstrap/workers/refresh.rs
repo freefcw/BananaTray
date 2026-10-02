@@ -35,6 +35,7 @@ pub(crate) fn start_event_pump(
     cx: &mut App,
 ) {
     let dbus_handle = Rc::new(RefCell::new(dbus_handle));
+    super::linux_dbus::register_dbus_snapshot_global(dbus_handle.clone(), cx);
     let shutdown_dbus_handle = dbus_handle.clone();
     cx.on_app_quit(move |_| {
         // 显式释放最后一个服务 handle：关闭 signal channel，并触发有界线程回收。

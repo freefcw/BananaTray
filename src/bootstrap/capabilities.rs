@@ -15,6 +15,13 @@ impl crate::runtime::ContextCapabilities for WindowShellCaps<'_> {
     fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
         self.window.refresh();
     }
+
+    fn publish_quota_snapshot(&mut self, state: &Rc<RefCell<AppState>>) {
+        #[cfg(target_os = "linux")]
+        super::workers::linux_dbus::emit_registered_dbus_snapshot(state, self.cx);
+        #[cfg(not(target_os = "linux"))]
+        let _ = state;
+    }
 }
 
 impl crate::runtime::FullContextCapabilities for WindowShellCaps<'_> {
@@ -45,6 +52,13 @@ struct AppShellCaps<'a> {
 impl crate::runtime::ContextCapabilities for AppShellCaps<'_> {
     fn render(&mut self, state: &Rc<RefCell<AppState>>) {
         notify_popup_view(state, self.cx);
+    }
+
+    fn publish_quota_snapshot(&mut self, state: &Rc<RefCell<AppState>>) {
+        #[cfg(target_os = "linux")]
+        super::workers::linux_dbus::emit_registered_dbus_snapshot(state, self.cx);
+        #[cfg(not(target_os = "linux"))]
+        let _ = state;
     }
 }
 

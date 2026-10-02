@@ -1,12 +1,12 @@
 use rust_i18n::t;
 
-use crate::application::{DebugNotificationKind, NotificationEffect, QuotaAlert};
+use crate::application::{DebugNotificationKind, NotificationEffect, QuotaNotificationEvent};
 use crate::platform::notification::{send_plain_notification, send_system_notification};
 
 pub(super) fn run(effect: NotificationEffect) {
     match effect {
-        NotificationEffect::Quota { alert, with_sound } => {
-            send_system_notification(&alert, with_sound);
+        NotificationEffect::Quota { event, with_sound } => {
+            send_system_notification(&event, with_sound);
         }
         NotificationEffect::AutoLaunchToggled { enabled } => {
             let (title, body) = if enabled {
@@ -38,18 +38,22 @@ pub(super) fn notify_plain_i18n(title_key: &str, body_key: &str) {
     send_plain_notification(&title, &body);
 }
 
-fn build_debug_alert(kind: DebugNotificationKind) -> QuotaAlert {
+fn build_debug_alert(kind: DebugNotificationKind) -> QuotaNotificationEvent {
+    use crate::models::QuotaInfo;
+
+    let quota = |used: f64| QuotaInfo::new("Session", used, 100.0);
     match kind {
-        DebugNotificationKind::Low => QuotaAlert::LowQuota {
+        DebugNotificationKind::Low => QuotaNotificationEvent::LowQuota {
             provider_name: "TestProvider".to_string(),
-            remaining_pct: 8.0,
+            quota: quota(92.0),
         },
-        DebugNotificationKind::Exhausted => QuotaAlert::Exhausted {
+        DebugNotificationKind::Exhausted => QuotaNotificationEvent::Exhausted {
             provider_name: "TestProvider".to_string(),
+            quota: quota(100.0),
         },
-        DebugNotificationKind::Recovered => QuotaAlert::Recovered {
+        DebugNotificationKind::Recovered => QuotaNotificationEvent::Recovered {
             provider_name: "TestProvider".to_string(),
-            remaining_pct: 50.0,
+            quota: quota(50.0),
         },
     }
 }

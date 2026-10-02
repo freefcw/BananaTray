@@ -176,10 +176,11 @@ fn provider_body_view_state(
             if visible.is_empty() {
                 ProviderBodyViewState::Empty(provider_empty_view_state(provider))
             } else {
+                let rules = settings.effective_quota_rules(&provider.provider_id);
                 ProviderBodyViewState::Quotas {
                     quotas: visible
                         .into_iter()
-                        .map(|quota| quota_display_view_state(&quota))
+                        .map(|quota| quota_display_view_state(&quota, &rules))
                         .collect(),
                     generation,
                 }
@@ -305,11 +306,14 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                 if visible.is_empty() {
                     OverviewItemStatus::Disconnected
                 } else {
+                    let rules = session
+                        .settings
+                        .effective_quota_rules(&provider.provider_id);
                     // 收集所有可见配额，按 status_level 降序（最差在前）
                     let mut quota_items: Vec<OverviewQuotaItem> = visible
                         .iter()
                         .map(|q| {
-                            let sl = q.status_level();
+                            let sl = q.status_level(&rules);
                             OverviewQuotaItem {
                                 label: format_quota_label(q),
                                 display_text: compact_quota_display_text(q, display_mode),

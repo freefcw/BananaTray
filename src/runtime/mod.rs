@@ -150,6 +150,7 @@ pub(crate) trait ContextCapabilities {
             log::warn!(target: "app", "failed to open URL {url}: {err:#}");
         }
     }
+    fn publish_quota_snapshot(&mut self, _state: &Rc<RefCell<AppState>>) {}
 }
 
 pub(crate) trait FullContextCapabilities: ContextCapabilities {
@@ -186,6 +187,7 @@ fn run_full_context_effect(
         ContextEffect::ApplyGlobalHotkey(hotkey) => {
             return vec![caps.apply_global_hotkey(state, &hotkey)];
         }
+        ContextEffect::PublishQuotaSnapshot => caps.publish_quota_snapshot(state),
         ContextEffect::QuitApp => caps.quit(),
     }
     Vec::new()
@@ -199,6 +201,7 @@ fn run_view_context_effect(
     match effect {
         ContextEffect::Render => caps.render(state),
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
+        ContextEffect::PublishQuotaSnapshot => caps.publish_quota_snapshot(state),
         other => panic!(
             "BUG: ContextEffect::{other:?} requires App or Window context; \
              dispatch this action with bootstrap::dispatch_in_app or bootstrap::dispatch_in_window"

@@ -4,7 +4,7 @@ use super::common::{
 };
 use crate::application::{
     reduce, AppAction, AppEffect, AppSession, CommonEffect, ContextEffect, NotificationEffect,
-    QuotaAlert, RefreshEffect, SettingChange, SettingsEffect, TrayIconRequest,
+    QuotaNotificationEvent, RefreshEffect, SettingChange, SettingsEffect, TrayIconRequest,
 };
 use crate::models::test_helpers::make_test_provider;
 use crate::models::{ConnectionStatus, NavTab, ProviderId, ProviderKind, QuotaInfo, RefreshData};
@@ -609,27 +609,31 @@ fn refresh_success(
     )
 }
 
-fn quota_alerts(effects: &[AppEffect]) -> Vec<&QuotaAlert> {
+fn quota_alerts(effects: &[AppEffect]) -> Vec<&QuotaNotificationEvent> {
     effects
         .iter()
         .filter_map(|e| match e {
             AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota {
-                alert,
+                event,
                 ..
-            })) => Some(alert),
+            })) => Some(event),
             _ => None,
         })
         .collect()
 }
 
-fn assert_usage_progress(alerts: &[&QuotaAlert], expected_name: &str, expected_remaining: f64) {
+fn assert_usage_progress(
+    alerts: &[&QuotaNotificationEvent],
+    expected_name: &str,
+    expected_remaining: f64,
+) {
     assert_eq!(
         alerts.len(),
         1,
         "expected exactly one quota alert: {alerts:?}"
     );
     match alerts[0] {
-        QuotaAlert::UsageProgress {
+        QuotaNotificationEvent::UsageProgress {
             provider_name,
             remaining_pct,
         } => {
@@ -895,7 +899,7 @@ fn usage_step_notification_sound_flag_passes_through() {
 
     let with_sound = effects.iter().find_map(|e| match e {
         AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota {
-            alert: QuotaAlert::UsageProgress { .. },
+            event: QuotaNotificationEvent::UsageProgress { .. },
             with_sound,
         })) => Some(*with_sound),
         _ => None,
@@ -1108,7 +1112,6 @@ fn usage_step_unchanged_token_preserves_baseline() {
 fn usage_step_empty_token_preserves_baseline() {
     let copilot = pid(ProviderKind::Copilot);
     let provider_name;
-    let save_effects;
     let mut session = make_session();
     {
         provider_name = session
@@ -1129,7 +1132,7 @@ fn usage_step_empty_token_preserves_baseline() {
     refresh_success(&mut session, &copilot, 83.0);
     assert!(quota_alerts(&refresh_success(&mut session, &copilot, 81.0)).is_empty());
 
-    save_effects = reduce(
+    let save_effects = reduce(
         &mut session,
         AppAction::SaveProviderToken {
             provider_id: copilot.clone(),
@@ -1154,4 +1157,415 @@ fn usage_step_empty_token_preserves_baseline() {
         &provider_name,
         78.0,
     );
+}
+
+#[test]
+fn quota_threshold_save_only_persists_renders_and_publishes() {
+    let mut session = make_session();
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 60.0,
+                critical: 30.0,
+                notify: 15.0,
+            },
+        }),
+    );
+
+    assert_eq!(session.settings.quota.percentage.notify, 15.0);
+    assert!(has_render(&effects));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::PublishQuotaSnapshot)
+    )));
+    assert!(quota_alerts(&effects).is_empty());
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(_)))
+    )));
+}
+
+#[test]
+fn quota_threshold_invalid_group_is_rejected_without_side_effects() {
+    let mut session = make_session();
+    let before = session.settings.quota;
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 60.0,
+                critical: 20.0,
+                notify: 30.0,
+            },
+        }),
+    );
+
+    assert!(effects.is_empty());
+    assert_eq!(session.settings.quota, before);
+}
+
+#[test]
+fn quota_threshold_notify_raise_rebaselines_without_alert() {
+    let mut session = make_session();
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 30.0);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 80.0,
+                critical: 40.0,
+                notify: 30.0,
+            },
+        }),
+    );
+    assert!(quota_alerts(&effects).is_empty());
+
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 29.0)).is_empty());
+    assert!(matches!(
+        quota_alerts(&refresh_success(&mut session, &claude, 0.0)).first(),
+        Some(QuotaNotificationEvent::Exhausted { .. })
+    ));
+}
+
+#[test]
+fn quota_threshold_provider_override_isolated_from_global_change() {
+    let mut session = make_session();
+    let claude = pid(ProviderKind::Claude);
+    let codex = pid(ProviderKind::Codex);
+    enable(&mut session, ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Codex);
+
+    session.settings.provider.set_quota_threshold_override(
+        &claude,
+        crate::models::QuotaThresholdUnit::Percentage,
+        Some(crate::models::QuotaThresholds {
+            warning: 80.0,
+            critical: 40.0,
+            notify: 30.0,
+        }),
+    );
+    refresh_success(&mut session, &claude, 35.0);
+    refresh_success(&mut session, &codex, 35.0);
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 90.0,
+                critical: 50.0,
+                notify: 40.0,
+            },
+        }),
+    );
+
+    assert!(matches!(
+        quota_alerts(&refresh_success(&mut session, &claude, 29.0)).first(),
+        Some(QuotaNotificationEvent::LowQuota { .. })
+    ));
+    assert!(quota_alerts(&refresh_success(&mut session, &codex, 39.0)).is_empty());
+}
+
+#[test]
+fn quota_threshold_identity_switch_keeps_usage_step_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 83.0);
+
+    let defaults = crate::models::QuotaThresholds::DEFAULT_PERCENTAGE;
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude.clone(),
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: Some(defaults),
+        }),
+    );
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude.clone(),
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: None,
+        }),
+    );
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 78.0)),
+        "Claude",
+        78.0,
+    );
+}
+
+#[test]
+fn quota_threshold_provider_save_does_not_rebaseline_other_provider() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    let codex = pid(ProviderKind::Codex);
+    enable(&mut session, ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Codex);
+
+    refresh_success(&mut session, &codex, 83.0);
+    refresh_success(&mut session, &codex, 81.0);
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude,
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: Some(crate::models::QuotaThresholds {
+                warning: 70.0,
+                critical: 30.0,
+                notify: 15.0,
+            }),
+        }),
+    );
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &codex, 78.0)),
+        "Codex",
+        78.0,
+    );
+}
+
+#[test]
+fn quota_threshold_equal_override_switch_keeps_other_provider_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 5;
+    let claude = pid(ProviderKind::Claude);
+    let codex = pid(ProviderKind::Codex);
+    enable(&mut session, ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Codex);
+
+    refresh_success(&mut session, &codex, 83.0);
+    refresh_success(&mut session, &codex, 81.0);
+
+    let defaults = crate::models::QuotaThresholds::DEFAULT_PERCENTAGE;
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude.clone(),
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: Some(defaults),
+        }),
+    );
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude,
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: None,
+        }),
+    );
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &codex, 78.0)),
+        "Codex",
+        78.0,
+    );
+}
+
+#[test]
+fn quota_threshold_color_only_change_updates_dynamic_icon() {
+    use crate::models::{StatusLevel, TrayIconStyle};
+
+    let mut session = make_session();
+    session.settings.display.tray_icon_style = TrayIconStyle::Dynamic;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 30.0);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 25.0,
+                critical: 20.0,
+                notify: 10.0,
+            },
+        }),
+    );
+
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Context(ContextEffect::ApplyTrayIcon(
+            TrayIconRequest::DynamicStatus(StatusLevel::Green)
+        ))
+    )));
+    assert!(quota_alerts(&effects).is_empty());
+}
+
+#[test]
+fn quota_threshold_color_only_save_preserves_usage_step_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 10;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 90.0);
+    refresh_success(&mut session, &claude, 85.0);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 60.0,
+                critical: 20.0,
+                notify: 10.0,
+            },
+        }),
+    );
+    assert!(quota_alerts(&effects).is_empty());
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(_)))
+    )));
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 80.0)),
+        "Claude",
+        80.0,
+    );
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 75.0)).is_empty());
+}
+
+#[test]
+fn quota_threshold_provider_color_only_save_preserves_usage_step_baseline() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 10;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 90.0);
+    refresh_success(&mut session, &claude, 85.0);
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetProviderQuotaThresholds {
+            provider_id: claude.clone(),
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: Some(crate::models::QuotaThresholds {
+                warning: 60.0,
+                critical: 20.0,
+                notify: 10.0,
+            }),
+        }),
+    );
+
+    assert_usage_progress(
+        &quota_alerts(&refresh_success(&mut session, &claude, 80.0)),
+        "Claude",
+        80.0,
+    );
+    assert!(quota_alerts(&refresh_success(&mut session, &claude, 75.0)).is_empty());
+}
+
+#[test]
+fn quota_threshold_unrelated_unit_save_preserves_usage_step_baseline() {
+    for (unit, thresholds) in [
+        (
+            crate::models::QuotaThresholdUnit::Currency,
+            crate::models::QuotaThresholds {
+                warning: 20.0,
+                critical: 5.0,
+                notify: 2.0,
+            },
+        ),
+        (
+            crate::models::QuotaThresholdUnit::Amount,
+            crate::models::QuotaThresholds {
+                warning: 200.0,
+                critical: 50.0,
+                notify: 20.0,
+            },
+        ),
+    ] {
+        let mut session = make_session();
+        session.settings.notification.quota_usage_step_pct = 10;
+        let claude = pid(ProviderKind::Claude);
+        enable(&mut session, ProviderKind::Claude);
+
+        refresh_success(&mut session, &claude, 90.0);
+        refresh_success(&mut session, &claude, 85.0);
+
+        reduce(
+            &mut session,
+            AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds { unit, thresholds }),
+        );
+
+        assert_usage_progress(
+            &quota_alerts(&refresh_success(&mut session, &claude, 80.0)),
+            "Claude",
+            80.0,
+        );
+        assert!(quota_alerts(&refresh_success(&mut session, &claude, 75.0)).is_empty());
+    }
+}
+
+#[test]
+fn quota_threshold_notify_change_preserves_usage_step_and_rebases_alert() {
+    let mut session = make_session();
+    session.settings.notification.quota_usage_step_pct = 10;
+    let claude = pid(ProviderKind::Claude);
+    enable(&mut session, ProviderKind::Claude);
+
+    refresh_success(&mut session, &claude, 40.0);
+    refresh_success(&mut session, &claude, 35.0);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetGlobalQuotaThresholds {
+            unit: crate::models::QuotaThresholdUnit::Percentage,
+            thresholds: crate::models::QuotaThresholds {
+                warning: 80.0,
+                critical: 40.0,
+                notify: 35.0,
+            },
+        }),
+    );
+    assert!(quota_alerts(&effects).is_empty());
+
+    let effects = refresh_success(&mut session, &claude, 30.0);
+    let alerts = quota_alerts(&effects);
+    assert!(
+        !alerts
+            .iter()
+            .any(|a| matches!(a, QuotaNotificationEvent::LowQuota { .. })),
+        "rebaseline to Low must not replay LowQuota: {alerts:?}"
+    );
+    assert_usage_progress(&alerts, "Claude", 30.0);
+
+    let effects = refresh_success(&mut session, &claude, 0.0);
+    let alerts = quota_alerts(&effects);
+    assert_eq!(alerts.len(), 1, "expected single alert: {alerts:?}");
+    assert!(matches!(
+        alerts[0],
+        QuotaNotificationEvent::Exhausted { .. }
+    ));
+
+    assert!(matches!(
+        quota_alerts(&refresh_success(&mut session, &claude, 50.0)).first(),
+        Some(QuotaNotificationEvent::Recovered { .. })
+    ));
 }

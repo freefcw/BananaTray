@@ -3,6 +3,8 @@ use crate::providers::ProviderError;
 use crate::utils::time_utils;
 use anyhow::Result;
 
+const USD_CENTS_PER_DOLLAR: f64 = 100.0;
+
 pub(super) fn parse_usage_response(body: &str) -> Result<Vec<QuotaInfo>> {
     let json: serde_json::Value = serde_json::from_str(body)
         .map_err(|_| ProviderError::parse_failed("usage-summary response"))?;
@@ -215,12 +217,35 @@ fn parse_credit_quota(
         .get("limit")
         .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
-    (limit > 0.0).then(|| QuotaInfo::with_details(label, used, limit, QuotaType::Credit, reset_at))
+    (limit > 0.0).then(|| {
+        QuotaInfo::with_details(
+            label,
+            used / USD_CENTS_PER_DOLLAR,
+            limit / USD_CENTS_PER_DOLLAR,
+            QuotaType::Credit,
+            reset_at,
+        )
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn evaluate_quota(
+        engine: &mut crate::application::AlertEngine,
+        quotas: &[QuotaInfo],
+        rules: &crate::models::QuotaRules,
+    ) -> Vec<crate::application::QuotaNotificationEvent> {
+        let provider = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Cursor);
+        engine.evaluate(crate::application::QuotaObservation {
+            provider_id: &provider,
+            provider_name: "Cursor",
+            quotas,
+            rules,
+            usage_step_pct: 0,
+        })
+    }
 
     #[test]
     fn test_parse_unlimited_plan() {
@@ -464,5 +489,192 @@ mod tests {
         );
         assert!((quotas[0].used - 10.0).abs() < f64::EPSILON);
         assert!((quotas[0].limit - 20.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_credit_quota_scales_api_cents_to_dollars() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let cases = [
+            (
+                "personal on-demand",
+                r#"{"membershipType":"pro","isUnlimited":false,"individualUsage":{"onDemand":{"enabled":true,"used":1100,"limit":2000}}}"#,
+                r#"{"membershipType":"pro","isUnlimited":false,"individualUsage":{"onDemand":{"enabled":true,"used":1950,"limit":2000}}}"#,
+                QuotaLabelSpec::OnDemand,
+                "on-demand",
+            ),
+            (
+                "team on-demand",
+                r#"{"membershipType":"business","isUnlimited":false,"limitType":"team","teamUsage":{"onDemand":{"enabled":true,"used":1100,"limit":2000}}}"#,
+                r#"{"membershipType":"business","isUnlimited":false,"limitType":"team","teamUsage":{"onDemand":{"enabled":true,"used":1950,"limit":2000}}}"#,
+                QuotaLabelSpec::Team,
+                "team",
+            ),
+        ];
+        for (name, body_low, body_high, label, key) in cases {
+            let rules = crate::models::QuotaRules::default();
+            let quotas_low = parse_usage_response(body_low).unwrap();
+            let quotas_high = parse_usage_response(body_high).unwrap();
+            assert_eq!(quotas_low.len(), 1, "{name}");
+            assert_eq!(quotas_high.len(), 1, "{name}");
+
+            let low = &quotas_low[0];
+            let high = &quotas_high[0];
+            assert_eq!((low.used, low.limit), (11.0, 20.0), "{name}");
+            assert_eq!((high.used, high.limit), (19.5, 20.0), "{name}");
+            assert_eq!(low.label_spec, label, "{name}");
+            assert_eq!(low.stable_key, key, "{name}");
+            assert_eq!(low.quota_type, QuotaType::Credit, "{name}");
+
+            let m_low = low.threshold_measurement().unwrap();
+            let m_high = high.threshold_measurement().unwrap();
+            assert_eq!(
+                m_low.unit,
+                crate::models::QuotaThresholdUnit::Currency,
+                "{name}"
+            );
+            assert!((m_low.remaining - 9.0).abs() < 1e-9, "{name}");
+            assert!((m_high.remaining - 0.5).abs() < 1e-9, "{name}");
+            assert_eq!(
+                low.status_level(&rules),
+                crate::models::StatusLevel::Yellow,
+                "{name}"
+            );
+            assert_eq!(
+                high.status_level(&rules),
+                crate::models::StatusLevel::Red,
+                "{name}"
+            );
+            assert!((high.percent_remaining() - 2.5).abs() < 1e-9, "{name}");
+
+            let mut engine = crate::application::AlertEngine::new();
+            let baseline = evaluate_quota(&mut engine, &quotas_low, &rules);
+            assert!(baseline.is_empty(), "{name}");
+            let events = evaluate_quota(&mut engine, &quotas_high, &rules);
+            assert_eq!(events.len(), 1, "{name}");
+            match &events[0] {
+                crate::application::QuotaNotificationEvent::LowQuota { quota, .. } => {
+                    assert_eq!(quota.stable_key, key, "{name}");
+                    assert!(
+                        (quota.threshold_measurement().unwrap().remaining - 0.5).abs() < 1e-9,
+                        "{name}"
+                    );
+                }
+                other => panic!("{name}: expected LowQuota, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_on_demand_guard_skips_disabled_and_invalid_limits() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        for on_demand in [
+            r#"{"enabled":false,"used":1100,"limit":2000}"#,
+            r#"{"enabled":true,"used":1100,"limit":null}"#,
+            r#"{"enabled":true,"used":1100,"limit":0}"#,
+            r#"{"enabled":true,"used":1100,"limit":-50}"#,
+        ] {
+            let body = format!(
+                r#"{{"membershipType":"pro","isUnlimited":false,"individualUsage":{{"onDemand":{on_demand}}}}}"#
+            );
+            assert!(
+                parse_usage_response(&body).is_err(),
+                "onDemand {on_demand} should produce no quota"
+            );
+        }
+    }
+
+    #[test]
+    fn test_credit_quota_cent_boundary_uses_comparison_scale() {
+        use crate::models::{QuotaRules, QuotaThresholdUnit, QuotaThresholds, StatusLevel};
+
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let mut rules = QuotaRules::default();
+        rules.currency = QuotaThresholds {
+            warning: 0.5,
+            critical: 0.01,
+            notify: 0.01,
+        };
+        rules
+            .currency
+            .validate(QuotaThresholdUnit::Currency)
+            .unwrap();
+
+        let shapes = [
+            (
+                "personal on-demand",
+                QuotaLabelSpec::OnDemand,
+                "on-demand",
+                false,
+            ),
+            ("team on-demand", QuotaLabelSpec::Team, "team", true),
+        ];
+        for (name, label, key, is_team) in shapes {
+            for budget in [20002_i64, 100007, 1000007] {
+                let body = |used: i64| {
+                    let usage = serde_json::json!({"enabled": true, "used": used, "limit": budget});
+                    let root = if is_team {
+                        serde_json::json!({
+                            "membershipType": "business", "isUnlimited": false, "limitType": "team",
+                            "teamUsage": {"onDemand": usage},
+                        })
+                    } else {
+                        serde_json::json!({
+                            "membershipType": "pro", "isUnlimited": false,
+                            "individualUsage": {"onDemand": usage},
+                        })
+                    };
+                    root.to_string()
+                };
+                let baseline = parse_usage_response(&body(budget - 102)).unwrap();
+                assert_eq!(baseline.len(), 1, "{name} budget={budget}");
+                let b = &baseline[0];
+                assert_eq!(b.label_spec, label, "{name} budget={budget}");
+                assert_eq!(b.stable_key, key, "{name} budget={budget}");
+                let m_b = b.threshold_measurement().unwrap();
+                assert_eq!(m_b.unit, QuotaThresholdUnit::Currency, "{name}b{budget}");
+                assert!(
+                    (m_b.remaining - 1.02).abs() < 1e-9,
+                    "{name} budget={budget}"
+                );
+                assert_eq!(
+                    b.status_level(&rules),
+                    StatusLevel::Green,
+                    "{name}b{budget}"
+                );
+
+                for (cents, expected) in [(1_i64, StatusLevel::Red), (2, StatusLevel::Yellow)] {
+                    let current = parse_usage_response(&body(budget - cents)).unwrap();
+                    assert_eq!(current.len(), 1, "{name} budget={budget} cents={cents}");
+                    let m = current[0].threshold_measurement().unwrap();
+                    assert_eq!(m.unit, QuotaThresholdUnit::Currency, "{name}b{budget}");
+                    assert!(
+                        (m.remaining - cents as f64 / 100.0).abs() < 1e-9,
+                        "{name} budget={budget} cents={cents}"
+                    );
+                    if budget == 20002 && cents == 1 {
+                        assert!(m.remaining > 0.01, "{name}: unrounded {:.17}", m.remaining);
+                    }
+                    let status = current[0].status_level(&rules);
+                    assert_eq!(status, expected, "{name} budget={budget} cents={cents}");
+
+                    let mut engine = crate::application::AlertEngine::new();
+                    let base_events = evaluate_quota(&mut engine, &baseline, &rules);
+                    assert!(base_events.is_empty(), "{name} budget={budget}");
+                    let events = evaluate_quota(&mut engine, &current, &rules);
+                    if expected == StatusLevel::Red {
+                        let [crate::application::QuotaNotificationEvent::LowQuota { quota, .. }] =
+                            events.as_slice()
+                        else {
+                            panic!("{name} budget={budget}: expected LowQuota, got {events:?}")
+                        };
+                        assert_eq!(quota.stable_key, key, "{name} budget={budget}");
+                        let rem = quota.threshold_measurement().unwrap().remaining;
+                        assert!((rem - 0.01).abs() < 1e-9, "{name} budget={budget}");
+                    } else {
+                        assert!(events.is_empty(), "{name} budget={budget} cents={cents}");
+                    }
+                }
+            }
+        }
     }
 }

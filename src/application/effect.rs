@@ -1,4 +1,4 @@
-use super::quota_alert::QuotaAlert;
+use super::quota_alert::QuotaNotificationEvent;
 use crate::application::DebugNotificationKind;
 use crate::models::{NewApiConfig, ProviderId, ScriptProviderConfig, StatusLevel, TrayIconStyle};
 use crate::refresh::RefreshRequest;
@@ -31,6 +31,7 @@ pub enum ContextEffect {
     OpenUrl(String),
     ApplyTrayIcon(TrayIconRequest),
     ApplyGlobalHotkey(String),
+    PublishQuotaSnapshot,
     QuitApp,
 }
 
@@ -59,16 +60,14 @@ pub enum SettingsEffect {
 #[derive(Debug)]
 pub enum NotificationEffect {
     /// 自启动状态变更通知，由 runtime 层负责 i18n
-    AutoLaunchToggled {
-        enabled: bool,
-    },
+    AutoLaunchToggled { enabled: bool },
     /// 普通 i18n 文本通知，用于 reducer 集中选择用户可见结果。
     PlainI18n {
         title_key: &'static str,
         body_key: &'static str,
     },
     Quota {
-        alert: QuotaAlert,
+        event: QuotaNotificationEvent,
         with_sound: bool,
     },
     Debug {

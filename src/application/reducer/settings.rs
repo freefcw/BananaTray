@@ -2,10 +2,13 @@ use crate::application::{
     AppEffect, ContextEffect, NotificationEffect, RefreshEffect, SettingChange, SettingsEffect,
     TrayIconRequest,
 };
-use crate::models::{NavTab, ProviderId, TrayIconStyle};
+use crate::models::{NavTab, ProviderId, QuotaRules, TrayIconStyle};
+use std::collections::HashMap;
 
 use super::super::state::{AppSession, SettingsModalState, SettingsTab};
-use super::shared::{build_config_sync_request, resolve_tray_icon_request};
+use super::shared::{
+    build_config_sync_request, resolve_tray_icon_request, sync_dynamic_icon_if_needed,
+};
 
 pub(super) fn select_nav_tab(session: &mut AppSession, tab: NavTab, effects: &mut Vec<AppEffect>) {
     session.nav.switch_to(tab);
@@ -105,7 +108,7 @@ pub(super) fn apply_setting_change(
         SettingChange::ToggleSessionQuotaNotifications => {
             session.settings.notification.session_quota_notifications =
                 !session.settings.notification.session_quota_notifications;
-            session.alert_tracker.reset_all_usage();
+            session.alert_engine.reset_all_usage();
         }
         SettingChange::ToggleNotificationSound => {
             session.settings.notification.notification_sound =
@@ -184,7 +187,7 @@ pub(super) fn apply_setting_change(
                     .filter(|id| session.settings.provider.quota_usage_step(id).is_none())
                     .collect();
                 for id in inherited_ids {
-                    session.alert_tracker.reset_usage(&id);
+                    session.alert_engine.reset_usage(&id);
                 }
             }
         }
@@ -207,13 +210,86 @@ pub(super) fn apply_setting_change(
                 .effective_quota_usage_step(&provider_id, global_step);
             session.settings_ui.quota_usage_dropdown_open = false;
             if old_effective != new_effective {
-                session.alert_tracker.reset_usage(&provider_id);
+                session.alert_engine.reset_usage(&provider_id);
             }
+        }
+        SettingChange::SetGlobalQuotaThresholds { unit, thresholds } => {
+            if thresholds.validate(unit).is_err() {
+                return;
+            }
+            let prev_status = session.worst_enabled_provider_status();
+            let prev_rules = snapshot_effective_quota_rules(session);
+            session.settings.quota.set(unit, thresholds);
+            rebaseline_quota_alert_changes(session, &prev_rules);
+            sync_dynamic_icon_if_needed(session, prev_status, effects);
+            effects.push(ContextEffect::PublishQuotaSnapshot.into());
+        }
+        SettingChange::SetProviderQuotaThresholds {
+            provider_id,
+            unit,
+            thresholds,
+        } => {
+            if thresholds.is_some_and(|t| t.validate(unit).is_err()) {
+                return;
+            }
+            let prev_status = session.worst_enabled_provider_status();
+            let mut prev_rules = HashMap::new();
+            prev_rules.insert(
+                provider_id.clone(),
+                session.settings.effective_quota_rules(&provider_id),
+            );
+            session
+                .settings
+                .provider
+                .set_quota_threshold_override(&provider_id, unit, thresholds);
+            rebaseline_quota_alert_changes(session, &prev_rules);
+            sync_dynamic_icon_if_needed(session, prev_status, effects);
+            effects.push(ContextEffect::PublishQuotaSnapshot.into());
         }
     }
 
     effects.push(SettingsEffect::PersistSettings.into());
     effects.push(ContextEffect::Render.into());
+}
+
+fn snapshot_effective_quota_rules(session: &AppSession) -> HashMap<ProviderId, QuotaRules> {
+    session
+        .provider_store
+        .providers
+        .iter()
+        .map(|p| {
+            (
+                p.provider_id.clone(),
+                session.settings.effective_quota_rules(&p.provider_id),
+            )
+        })
+        .collect()
+}
+
+fn rebaseline_quota_alert_changes(
+    session: &mut AppSession,
+    prev_rules: &HashMap<ProviderId, QuotaRules>,
+) {
+    for provider in &session.provider_store.providers {
+        let id = &provider.provider_id;
+        let Some(old_rules) = prev_rules.get(id) else {
+            continue;
+        };
+        let new_rules = session.settings.effective_quota_rules(id);
+        let notify_changed = provider
+            .quotas
+            .iter()
+            .filter_map(|quota| quota.threshold_measurement())
+            .any(|measurement| {
+                old_rules.thresholds(measurement.unit).notify
+                    != new_rules.thresholds(measurement.unit).notify
+            });
+        if notify_changed {
+            session
+                .alert_engine
+                .rebaseline_alerts(id, &provider.quotas, &new_rules);
+        }
+    }
 }
 
 pub(super) fn open_settings(

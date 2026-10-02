@@ -167,6 +167,19 @@ fn settings_provider_detail_view_state(
         })
         .unwrap_or_default();
 
+    let provider_capability = provider
+        .map(|p| p.provider_capability)
+        .unwrap_or(ProviderCapability::Monitorable);
+    let effective_rules = session.settings.effective_quota_rules(id);
+    let quota_thresholds = QuotaThresholdUnit::ALL
+        .iter()
+        .map(|&unit| QuotaThresholdUnitViewState {
+            unit,
+            override_thresholds: session.settings.provider.quota_threshold_override(id, unit),
+            effective: effective_rules.thresholds(unit),
+        })
+        .collect();
+
     SettingsProviderDetailViewState {
         id: id.clone(),
         icon,
@@ -181,11 +194,9 @@ fn settings_provider_detail_view_state(
             .settings_ui
             .modal
             .is_confirming_delete_script_provider(),
-        provider_capability: provider
-            .map(|p| p.provider_capability)
-            .unwrap_or(ProviderCapability::Monitorable),
+        provider_capability,
         info: settings_provider_info_view_state(provider, is_enabled),
-        usage: settings_provider_usage_view_state(provider, is_enabled),
+        usage: settings_provider_usage_view_state(provider, is_enabled, &effective_rules),
         settings_capability: provider
             .map(|p| p.settings_capability.clone())
             .unwrap_or_default(),
@@ -193,6 +204,8 @@ fn settings_provider_detail_view_state(
         quota_usage_step_pct: session.settings.provider.quota_usage_step(id),
         global_quota_usage_step_pct: session.settings.notification.quota_usage_step_pct,
         quota_usage_dropdown_open: session.settings_ui.quota_usage_dropdown_open,
+        show_quota_thresholds: provider_capability == ProviderCapability::Monitorable,
+        quota_thresholds,
         quota_visibility,
     }
 }
@@ -279,6 +292,7 @@ fn settings_provider_info_view_state(
 fn settings_provider_usage_view_state(
     provider: Option<&ProviderStatus>,
     is_enabled: bool,
+    quota_rules: &crate::models::QuotaRules,
 ) -> SettingsProviderUsageViewState {
     if !is_enabled {
         return SettingsProviderUsageViewState::Disabled {
@@ -303,7 +317,7 @@ fn settings_provider_usage_view_state(
             quotas: provider
                 .quotas
                 .iter()
-                .map(quota_display_view_state)
+                .map(|quota| quota_display_view_state(quota, quota_rules))
                 .collect(),
         };
     }

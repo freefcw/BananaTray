@@ -115,6 +115,11 @@ impl ClaudeCliProbe {
     ) -> Option<QuotaInfo> {
         let caps = PCT_RE.captures(section_text)?;
         let value: f64 = caps[1].parse().unwrap_or(0.0);
+        let quota_type = if quota_type == QuotaType::Credit {
+            QuotaType::General
+        } else {
+            quota_type
+        };
         let quota = match &caps[2] {
             "used" => QuotaInfo::from_used_percent(label, value, quota_type, reset_at),
             "left" => QuotaInfo::from_remaining_percent(label, value, quota_type, reset_at),
@@ -373,9 +378,83 @@ Extra usage
         assert_eq!(quotas.len(), 1);
 
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
+        assert_eq!(quotas[0].stable_key, "extra-usage");
         assert_eq!(quotas[0].used, 25.0);
         assert_eq!(quotas[0].limit, 100.0);
-        assert_eq!(quotas[0].quota_type, QuotaType::Credit);
+        assert_eq!(quotas[0].quota_type, QuotaType::General);
+        assert_eq!(
+            quotas[0].threshold_measurement().unwrap().unit,
+            crate::models::QuotaThresholdUnit::Percentage
+        );
+    }
+
+    #[test]
+    fn test_parse_percent_extra_usage_alerts_as_percentage() {
+        let rules = crate::models::QuotaRules::default();
+        for later in ["Extra usage\n95% used\n", "Extra usage\n5% left\n"] {
+            let mut engine = crate::application::AlertEngine::new();
+            let provider = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
+
+            let baseline = ClaudeCliProbe::parse_usage_output("Extra usage\n25% used\n").unwrap();
+            let current = ClaudeCliProbe::parse_usage_output(later).unwrap();
+            assert_eq!(current.len(), 1, "{later:?}");
+
+            let q = &current[0];
+            assert_eq!(q.quota_type, QuotaType::General, "{later:?}");
+            assert_eq!(q.stable_key, "extra-usage");
+            let m = q.threshold_measurement().unwrap();
+            assert_eq!(
+                m.unit,
+                crate::models::QuotaThresholdUnit::Percentage,
+                "{later:?}"
+            );
+            assert!((m.remaining - 5.0).abs() < 1e-9, "{later:?}");
+            assert_eq!(
+                q.status_level(&rules),
+                crate::models::StatusLevel::Red,
+                "{later:?}"
+            );
+
+            let baseline_events = engine.evaluate(crate::application::QuotaObservation {
+                provider_id: &provider,
+                provider_name: "Claude",
+                quotas: &baseline,
+                rules: &rules,
+                usage_step_pct: 0,
+            });
+            assert!(baseline_events.is_empty(), "{later:?}");
+            let events = engine.evaluate(crate::application::QuotaObservation {
+                provider_id: &provider,
+                provider_name: "Claude",
+                quotas: &current,
+                rules: &rules,
+                usage_step_pct: 0,
+            });
+            assert_eq!(events.len(), 1, "{later:?}");
+            match &events[0] {
+                crate::application::QuotaNotificationEvent::LowQuota { quota, .. } => {
+                    assert_eq!(quota.stable_key, "extra-usage");
+                }
+                other => panic!("{later:?}: expected LowQuota, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_credit_amount_at_limit_100_stays_currency() {
+        let quotas = ClaudeCliProbe::parse_usage_output("Extra usage\n$95.00 / $100.00\n").unwrap();
+        assert_eq!(quotas.len(), 1);
+
+        let q = &quotas[0];
+        assert_eq!(q.quota_type, QuotaType::Credit);
+        assert_eq!(q.stable_key, "extra-usage");
+        let m = q.threshold_measurement().unwrap();
+        assert_eq!(m.unit, crate::models::QuotaThresholdUnit::Currency);
+        assert!((m.remaining - 5.0).abs() < 1e-9);
+        assert_eq!(
+            q.status_level(&crate::models::QuotaRules::default()),
+            crate::models::StatusLevel::Yellow
+        );
     }
 
     #[test]

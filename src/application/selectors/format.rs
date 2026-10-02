@@ -8,7 +8,7 @@ use super::QuotaDisplayViewState;
 use crate::models::{
     ConnectionStatus, FailureAdvice, FailureReason, ProviderCapability, ProviderFailure,
     ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec,
-    QuotaType, StatusLevel, UpdateStatus,
+    QuotaRules, QuotaThresholdUnit, QuotaType, StatusLevel, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -305,12 +305,32 @@ pub fn format_quota_detail(quota: &QuotaInfo) -> String {
     }
 }
 
-/// 将 domain quota 转为 UI 可直接消费的展示 ViewState。
-pub fn quota_display_view_state(quota: &QuotaInfo) -> QuotaDisplayViewState {
+/// 将 domain quota 转为 UI 展示 ViewState，并按生效规则预计算状态。
+pub fn quota_display_view_state(quota: &QuotaInfo, rules: &QuotaRules) -> QuotaDisplayViewState {
     QuotaDisplayViewState {
         quota: quota.clone(),
         label: format_quota_label(quota),
         detail: format_quota_detail(quota),
+        status_level: quota.status_level(rules),
+    }
+}
+
+#[allow(dead_code)]
+pub fn format_quota_remaining_text(quota: &QuotaInfo) -> String {
+    let Some(measurement) = quota.threshold_measurement() else {
+        return String::new();
+    };
+    let remaining = measurement.remaining;
+    match measurement.unit {
+        QuotaThresholdUnit::Currency => {
+            if remaining >= 0.0 {
+                format!("${remaining:.2}")
+            } else {
+                format!("-${:.2}", -remaining)
+            }
+        }
+        QuotaThresholdUnit::Amount => format!("{remaining:.2}"),
+        QuotaThresholdUnit::Percentage => format!("{:.0}%", remaining.max(0.0)),
     }
 }
 
@@ -861,6 +881,7 @@ mod tests {
         let _locale_guard = setup_locale();
         let quota = QuotaInfo::balance_only("Balance", 10.0, Some(3.5), QuotaType::Credit, None);
         let view = QuotaDisplayViewState {
+            status_level: quota.status_level(&QuotaRules::default()),
             quota,
             label: "Balance".to_string(),
             detail: "Resets tomorrow".to_string(),
@@ -869,5 +890,28 @@ mod tests {
             format_quota_card_detail_text(&view),
             "Used: $3.50 · Resets tomorrow"
         );
+    }
+
+    #[test]
+    fn format_quota_remaining_text_is_unit_aware() {
+        let _locale_guard = setup_locale();
+
+        let pct = QuotaInfo::new("Session", 70.0, 100.0);
+        assert_eq!(format_quota_remaining_text(&pct), "30%");
+
+        let credit = QuotaInfo::with_details("Credits", 5.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(format_quota_remaining_text(&credit), "$15.00");
+
+        let over = QuotaInfo::with_details("Credits", 25.0, 20.0, QuotaType::Credit, None);
+        assert_eq!(format_quota_remaining_text(&over), "-$5.00");
+
+        let points = QuotaInfo::with_details("Points", 10.0, 50.0, QuotaType::Points, None);
+        assert_eq!(format_quota_remaining_text(&points), "40.00");
+
+        let balance = QuotaInfo::balance_only("B", 2.5, None, QuotaType::Credit, None);
+        assert_eq!(format_quota_remaining_text(&balance), "$2.50");
+
+        let no_measurement = QuotaInfo::new("Zero", 1.0, 0.0);
+        assert_eq!(format_quota_remaining_text(&no_measurement), "");
     }
 }

@@ -12,7 +12,7 @@ pub use effect::{
     AppEffect, CommonEffect, ContextEffect, DebugEffect, NewApiEffect, NotificationEffect,
     RefreshEffect, ScriptProviderEffect, SettingsEffect, TrayIconRequest,
 };
-pub use quota_alert::QuotaAlert;
+pub use quota_alert::{AlertEngine, QuotaNotificationEvent, QuotaObservation};
 pub use reducer::{build_config_sync_request, reduce};
 #[cfg(test)]
 pub(crate) use selectors::display_source_label;
@@ -24,14 +24,16 @@ pub use selectors::{
     EnvironmentRowKind, IssueReportContext, LogLevelColor, OverviewItemStatus,
     OverviewItemViewState, OverviewQuotaItem, ProviderBodyViewState, ProviderDetailViewState,
     ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState, QuotaDisplayViewState,
-    QuotaVisibilityItem, RefreshTarget, SettingsProviderDetailViewState,
-    SettingsProviderInfoViewState, SettingsProviderListItemViewState,
-    SettingsProviderRightPaneViewState, SettingsProviderStatusKind, SettingsProviderUsageViewState,
+    QuotaThresholdUnitViewState, QuotaVisibilityItem, RefreshTarget,
+    SettingsProviderDetailViewState, SettingsProviderInfoViewState,
+    SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
+    SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
-#[allow(unused_imports)] // app feature 下 ui/widgets 使用
+#[allow(unused_imports)] // app feature 下 ui/widgets / platform 通知使用
 pub(crate) use selectors::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_card_mode_label, format_quota_status_label,
+    format_quota_card_mode_label, format_quota_label, format_quota_remaining_text,
+    format_quota_status_label,
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]

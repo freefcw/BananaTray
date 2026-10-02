@@ -190,7 +190,7 @@ pub(crate) fn render_quota_bar(
     display_mode: QuotaDisplayMode,
 ) -> impl IntoElement {
     let q = &quota_view.quota;
-    let status = q.status_level();
+    let status = quota_view.status_level;
     let badge_color = theme.status_badge_color(status);
     let badge_label = format_quota_status_label(status);
     let fill_color = theme.status_bar_color(status);
