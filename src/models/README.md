@@ -33,7 +33,7 @@ Refactored into a sub-directory with its own [README](quota/README.md). External
   - note: `QuotaInfo` no longer stores locale-dependent display strings
   - key methods:
   - `percentage()` / `percent_remaining()` — usage ratios (not clamped, allows >100% for over-quota)
-  - `status_level()` — maps percentage to `StatusLevel` (thresholds: <80% Green, <95% Yellow, else Red)
+  - `status_level(&QuotaRules)` — maps the quota's native remaining measurement to `StatusLevel`: `remaining <= critical` is Red, `remaining <= warning` is Yellow, otherwise Green. Percentage quotas use the percentage unit; Credit uses currency and Points / balance-only quotas use native amounts. Defaults are percentage `warning/critical/notify = 50/20/10`, currency `10/2/1`, and amount `100/20/10`.
   - `is_percentage_mode()` — true when `limit == 100.0` (data is already a percentage)
   - `is_balance_only()` — true when the quota is modeled as remaining balance instead of progress-bar usage
 - **`ConnectionStatus`** — provider connection state: `Connected`, `Disconnected`, `Refreshing`, `Error`

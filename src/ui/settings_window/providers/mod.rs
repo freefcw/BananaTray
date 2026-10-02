@@ -2,7 +2,7 @@ mod detail;
 mod newapi_form;
 mod picker;
 mod script_provider_form;
-mod shared;
+pub(in crate::ui::settings_window) mod shared;
 mod sidebar;
 pub(crate) mod token_input_panel;
 
@@ -67,9 +67,16 @@ impl SettingsView {
                 self.render_provider_picker(&view_state.available_providers, theme, cx)
             }
             SettingsProviderRightPaneViewState::Detail => {
-                self.render_provider_detail_panel(&view_state.detail, theme, cx)
+                self.render_provider_detail_panel(&view_state.detail, theme, window, cx)
             }
         };
+
+        if !matches!(
+            view_state.right_pane,
+            SettingsProviderRightPaneViewState::Detail
+        ) {
+            self.clear_quota_threshold_draft();
+        }
 
         div()
             .flex()

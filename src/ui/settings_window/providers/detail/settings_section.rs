@@ -6,7 +6,7 @@ use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
 use crate::ui::settings_window::SettingsView;
 use crate::ui::widgets::{render_detail_section_title, render_svg_icon};
-use gpui::{div, hsla, px, Context, Div, ParentElement, Styled, TextAlign};
+use gpui::{div, hsla, px, Context, Div, ParentElement, Styled, TextAlign, Window};
 use rust_i18n::t;
 
 pub(super) fn render_settings_section(
@@ -14,6 +14,7 @@ pub(super) fn render_settings_section(
     detail: &SettingsProviderDetailViewState,
     dispatcher: &DetailActionDispatcher,
     theme: &Theme,
+    window: &mut Window,
     cx: &mut Context<SettingsView>,
 ) -> Div {
     let section = settings_section_shell(theme);
@@ -54,6 +55,28 @@ pub(super) fn render_settings_section(
 
     if detail.can_refresh {
         section = section.child(render_quota_usage_card(detail, dispatcher, theme));
+    }
+
+    if detail.show_quota_thresholds {
+        section = section.child(
+            crate::ui::settings_window::quota_thresholds::render_quota_thresholds_section(
+                view,
+                crate::models::QuotaThresholdTarget::Provider(detail.id.clone()),
+                &detail.quota_thresholds,
+                theme,
+                window,
+                cx,
+                {
+                    let dispatcher = dispatcher.clone();
+                    std::rc::Rc::new(
+                        move |change: SettingChange, window: &mut Window, cx: &mut gpui::App| {
+                            dispatcher.dispatch(AppAction::UpdateSetting(change), window, cx);
+                        },
+                    )
+                },
+            )
+            .mt(px(10.0)),
+        );
     }
 
     section

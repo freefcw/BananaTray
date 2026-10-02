@@ -79,7 +79,7 @@
   - `SettingsUiState`
   - `DebugUiState`
   - `AppSettings`
-  - quota alert tracker
+  - `AlertEngine`（阈值状态与用量步长提醒的领域状态）
   - popup 可见性状态
 
 重要边界：
@@ -162,7 +162,8 @@
 - refresh 结果通过 `RefreshEvent` 回到前台，再进入 reducer。主循环不等待 Provider I/O，活跃刷新期间仍可处理配置、reload 和 shutdown。
 - 同一 Provider 始终保持 single-flight：timeout 只结束前台等待，底层阻塞任务真实完成前不会释放执行占用。
 - `RefreshRequest::UpdateConfig` 同步刷新调度配置和 app-managed provider credentials。凭证、启用列表或 registry 变化会推进 generation；旧 generation 的迟到结果不会更新 quota 或触发通知。后台执行时仍通过 `ProviderExecutionContext` 显式传递当前凭证快照。
-- 配额通知是前台契约：只有成功且 enabled 的刷新结果在前台 reducer 中喂给 `QuotaAlertTracker`，告警 effect 在同一 dispatch 内发出；后台 worker 不做告警决策。告警覆盖四类——LowQuota（≤10%）/ Exhausted（0%）/ Recovered / UsageProgress（按全局或 Provider 级步长跟踪最差剩余百分比的累计消耗，一次下降只发一条，回升或旧告警发生时重建基线不补发）。用量步长只采样 `limit > 0` 的百分比 quota，纯余额（balance-only）quota 不参与；`hidden_quotas` 只影响显示不影响监测。总开关 `session_quota_notifications` 对四类统一生效，关闭期间不累计用量；Provider 停用 / 移出 sidebar / 步长变化都会重置对应用量基线。通过设置页保存 app-managed 凭证（token 等）且值变化时，同样重建该 Provider 的用量基线；保存相同值不重置。
+- 配额通知是前台契约：只有成功且 enabled 的刷新结果在前台 reducer 中构造统一 `QuotaObservation` 并交给 `AlertEngine`，告警 effect 在同一 dispatch 内发出；后台 worker 不做告警决策。`AlertEngine` 组合独立的阈值状态策略和用量步长策略，共享同一份 effective rules / quota 快照，但分别维护状态。告警覆盖四类——LowQuota / Exhausted / Recovered / UsageProgress（按全局或 Provider 级步长跟踪最差剩余百分比的累计消耗，一次下降只发一条，回升或旧告警发生时重建基线不补发）。前三类按各 quota 的原生剩余值与 `QuotaRules` 中对应单位的 `notify` 阈值判定（`remaining <= notify` → Low，`remaining <= 0` → Exhausted，inclusive `<=`）：Credit 用货币余额，Points 和非 Credit 纯余额用原生额度，其余用剩余百分比。颜色档（warning / critical）与 Low 判定共用包含原始计算尺度的浮点边界容差，耗尽仍严格 `remaining <= 0`；完整精度契约见 `src/models/quota/README.md`。状态事件优先于同一次刷新中的用量事件。规则全局默认百分比 10 / 货币 1 / 积分 10（notify 档，颜色档见 `models::quota::policy`），Provider 可按单位整组覆盖；保存阈值设置仅当某 Provider 当前有效额度单位的 `notify` 阈值实际变化时才重建该 Provider 的告警档位。用量步长只采样 `limit > 0` quota 的最差剩余百分比，纯余额（balance-only）quota 不参与；`hidden_quotas` 只影响显示不影响监测。总开关 `session_quota_notifications` 对四类统一生效，关闭期间不累计用量；Provider 停用 / 移出 sidebar / 步长变化都会重置对应用量基线。
+- 阈值设置保存（`SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds`）只产生 Render / PersistSettings / `PublishQuotaSnapshot`（必要时还有 Dynamic 图标更新），不发通知、不触发刷新。`PublishQuotaSnapshot` 经 `ContextCapabilities::publish_quota_snapshot` 路由到 bootstrap 的 Linux D-Bus 即时发射（`bootstrap::workers::linux_dbus` 里以 GPUI Global 注册的共享 handle），非 Linux 为空操作；runtime 不持有 D-Bus handle。
 
 自定义 provider reload 的稳定语义：
 

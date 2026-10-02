@@ -10,7 +10,7 @@ use gpui::{
 
 /// Provider 设置区的卡片外壳。Token 面板和自定义 provider 的编辑区共用这一套容器规格，
 /// 保证设置区在两类 provider 下看起来一致。
-pub(super) fn render_settings_card(theme: &Theme) -> Div {
+pub(in crate::ui::settings_window) fn render_settings_card(theme: &Theme) -> Div {
     div()
         .flex_col()
         .w_full()
@@ -24,7 +24,10 @@ pub(super) fn render_settings_card(theme: &Theme) -> Div {
 }
 
 /// 设置卡片标题。
-pub(super) fn render_settings_card_title(title: &str, theme: &Theme) -> Div {
+pub(in crate::ui::settings_window) fn render_settings_card_title(
+    title: &str,
+    theme: &Theme,
+) -> Div {
     div()
         .text_size(px(15.0))
         .font_weight(FontWeight::BOLD)
@@ -34,7 +37,7 @@ pub(super) fn render_settings_card_title(title: &str, theme: &Theme) -> Div {
 
 /// 表单字段的共享布局规格。
 #[derive(Clone, Copy)]
-pub(super) struct FormFieldSpec<'a> {
+pub(in crate::ui::settings_window) struct FormFieldSpec<'a> {
     pub id: &'static str,
     pub label: &'a str,
     pub hint: Option<&'a str>,
@@ -63,7 +66,7 @@ fn render_field_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
     col
 }
 
-pub(super) fn render_input_field(
+pub(in crate::ui::settings_window) fn render_input_field(
     field: FormFieldSpec<'_>,
     input_entity: &Entity<InputState>,
     theme: &Theme,

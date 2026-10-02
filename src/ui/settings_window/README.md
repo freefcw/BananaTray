@@ -11,12 +11,13 @@
 | `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，shell hook 由 `bootstrap` 注册 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 | `quota_usage.rs` | 用量步长 dropdown 共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值用于 inherit 标签） |
+| `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`，Provider 详情卡按单位展示继承 / 自定义身份；三个单位（百分比 / 货币 / 积分·额度）各展示生效的 warning / critical / notify 剩余值阈值，编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
 
 ### Tab 内容页
 
 | 文件 | Tab | 内容 |
 |------|-----|------|
-| `general_tab.rs` | General | 系统行为与通知设置：自启动、全局热键、刷新间隔、额度通知总开关、用量提醒步长、提示音 |
+| `general_tab.rs` | General | 系统行为与通知设置：自启动、全局热键、刷新间隔、额度通知总开关、用量提醒步长、提示音、全局额度状态与提醒阈值 |
 | `display_tab.rs` | Display | 外观设置：主题、语言、托盘图标样式、配额显示模式、UI 开关 |
 | `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者、问题上报（GitHub Issue） |
 | `debug_tab.rs` | Debug | 调试控制台：日志捕获、可滚动 Provider 下拉选择、单 Provider 刷新、通知测试、后台采集并可手动刷新的系统诊断快照 |
@@ -58,6 +59,7 @@ SettingsView::render()
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - 设置窗口的异步调度与多显示器复用逻辑已迁至 `bootstrap::schedule_open_settings_window()`
 - Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器必须注册 `key_context("Input")` 才能接收标准编辑动作
+- 阈值编辑草稿 `QuotaThresholdDraft` 同样为 view-local：target 区分 Global / Provider(id)，渲染非归属目标区域时丢弃（切 Tab / 切 Provider / 离开 detail 都不会串草稿）；输入通过 `QuotaThresholds::parse` 与 reducer 共用同一套校验，错误内联展示
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听

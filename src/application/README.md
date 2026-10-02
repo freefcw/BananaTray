@@ -41,7 +41,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 - **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer；顶层使用单个穷尽 match 直接解构 action 并调用对应领域函数，不再通过家族 dispatcher 的 `_ => unreachable!` 二次分派。新增 `AppAction` 变体时，编译器会要求补齐唯一分派入口
 - **顶层 `reducer.rs` 只做单层穷尽 action 分发**，具体状态变换按领域拆到子 reducer：
-  - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性
+  - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性；`SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` 先对 effective rules 变化做快照比对，仅当 Provider 当前有效额度单位的 `notify` 阈值实际变化时调用 `rebaseline_alerts`（只重建告警状态，不动步长累计），并发出 Render + Persist + PublishQuotaSnapshot（不发通知、不触发刷新）
   - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
   - `reducer/refresh.rs` — 手动刷新、刷新事件、Provider 热重载，以及热重载后的悬空引用清理
   - `reducer/newapi.rs` — NewAPI 新增 / 编辑 / 删除表单流与对应 effect 发射
@@ -60,16 +60,16 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 ### `effect.rs` — 副作用声明
 
 - **`AppEffect`** — 两级副作用枚举（`Context(ContextEffect)` / `Common(CommonEffect)`）
-  - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / ApplyGlobalHotkey / QuitApp）
+  - `ContextEffect` — 需要 GPUI 上下文的 effect（Render / OpenSettingsWindow / OpenUrl / ApplyTrayIcon / ApplyGlobalHotkey / PublishQuotaSnapshot / QuitApp）。`PublishQuotaSnapshot` 让 Linux shell 在设置保存后即时向 D-Bus 推送当前快照，非 Linux 平台经 capability 默认实现为空操作
   - `CommonEffect` — GPUI-free 的领域路由 effect（Settings / Notification / Refresh / Debug / NewApi / ScriptProvider）
   - 领域子枚举：`SettingsEffect`、`NotificationEffect`、`RefreshEffect`、`DebugEffect`、`NewApiEffect`、`ScriptProviderEffect`
   - `From<ContextEffect>` / `From<CommonEffect>` / `From<领域子枚举>` trait impl — reducer 使用 `SubEnum::Variant.into()` 风格构造
 - **`TrayIconRequest`** — 托盘图标请求类型（Static/DynamicStatus）
 
-### `quota_alert.rs` — 配额告警领域状态机
+### `quota_alert.rs` — 配额提醒领域引擎
 
-- **`QuotaAlertTracker`** — 追踪各 Provider 的 quota 状态转换，产出告警事件；通知阈值（剩余 ≤10% Low / =0% Exhausted）有意低于托盘图标状态阈值（50%/20%），早预警靠图标、晚警报靠通知，详见 `quota_alert.rs` 顶部注释
-- **`QuotaAlert`** — 告警领域事件（LowQuota / Exhausted / Recovered / UsageProgress）
+- **`AlertEngine`** — 接收统一的 `QuotaObservation` 快照，组合两个独立策略：阈值状态策略负责 Low / Exhausted / Recovered，`UsageProgressPolicy` 负责按百分点步长跟踪累计下降。策略共享同一份 effective `QuotaRules` 和 quota 快照，但各自维护状态。
+- **`QuotaNotificationEvent`** — 通知领域事件（LowQuota / Exhausted / Recovered / UsageProgress）；前三者携带触发告警的 `QuotaInfo`，供通知 formatter 按单位输出真实剩余值（`$2.50` / `40.00` / `30%`）
 - **`UsageProgress` 用量步长提醒**：按配置步长（百分点）跟踪最差剩余额度的累计消耗，达到步长时发一次提醒并把基线重置到当前余量（大步下降不连环触发）。规则要点：
   - 首次有效采样只建基线；余量回升、步长变化、旧告警发生时都重建基线，不补发
   - 同一次更新中 LowQuota / Exhausted / Recovered 优先于 UsageProgress
@@ -113,7 +113,7 @@ NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 | `settings.rs` | 设置窗口 ViewModel（provider list / detail / available providers / 右侧面板 enum）；表单类 right pane 显式携带 `FormIdentity`，供 UI 判断输入缓存是否可复用 |
 | `dbus_dto.rs` | D-Bus JSON DTO（`DBusQuotaSnapshot` 等）+ 格式化函数，跨平台可测试 |
 | `debug.rs` | Debug Tab ViewModel（系统信息、日志捕获、调试刷新） |
-| `format.rs` | 共享格式化函数（时间、百分比、quota 文本） |
+| `format.rs` | 共享格式化函数（时间、百分比、quota 文本）；`format_quota_remaining_text()` 按单位输出剩余值供通知展示，`quota_display_view_state()` 按 effective rules 预计算 `status_level`，widget 不再自行判定 |
 | `*_tests.rs` | 各 selector 的单元测试 |
 
 `application/mod.rs` 只 re-export 当前 UI/运行时直接依赖的 selector API，避免把仅供 selector 内部或测试使用的类型持续暴露在根模块 facade 上。

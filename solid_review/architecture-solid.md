@@ -84,7 +84,7 @@ NewAPI 与 Script Provider 在这些层几乎 1:1 镜像：
 
 | 原则 | 现状 | 主要裂缝 |
 |------|------|----------|
-| **S 单一职责** | reducer 已按领域拆；`ProviderManager` 只做注册表；`QuotaAlertTracker` 只产领域事件 | NewAPI/Script 管线、`SettingsUiState` 杂物袋、脚本表单里的领域规则、退出协议散落 |
+| **S 单一职责** | reducer 已按领域拆；`ProviderManager` 只做注册表；`AlertEngine` 只产领域事件 | NewAPI/Script 管线、`SettingsUiState` 杂物袋、脚本表单里的领域规则、退出协议散落 |
 | **O 开闭** | 加内置 Provider：manifest + 实现 + 图标。`SettingsCapability::TokenInput` 驱动设置 UI；completion 分类由 `AppAction` 穷尽 match 保护 | `source_label` 字符串表、`format_non_monitoring_message` 按 `ProviderKind` 特判 |
 | **L 里氏替换** | manager 对非 Monitorable 直接 `NoData`；Kilo/Vertex 不覆写 `refresh`；普通 UI 不展示 `raw_detail`，MiniMax API 错误只保留稳定错误码 | `FolderTrustRequired` 仍是预留变体 |
 | **I 接口隔离** | `AiProvider` 与 `ProviderCapabilities` 分开；View-safe vs Full context 分开 | `FullContextCapabilities` 把开窗/图标/热键/退出绑在一个 trait 上 |

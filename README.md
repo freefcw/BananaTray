@@ -8,7 +8,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 - **16 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
-- **Quota alerts** — system notifications when usage drops below 10% or is exhausted
+- **Quota alerts** — configurable system notifications for low, exhausted, recovered, and usage-step states; percentage quotas default to a 10% low-alert threshold, while currency and points quotas use their native remaining values
 - **Single instance** — second launch focuses the existing window via IPC
 - **Launch at login** — macOS (SMAppService) and Linux (XDG autostart)
 - **Global hotkey** — configurable shortcut toggles the popover; defaults to `cmd-shift-s` on macOS and `super-shift-s` on Linux

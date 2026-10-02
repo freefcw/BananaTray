@@ -74,6 +74,7 @@ impl SettingsView {
         &mut self,
         detail: &SettingsProviderDetailViewState,
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let dispatcher = DetailActionDispatcher::new(self.state.clone(), cx.entity().clone());
@@ -93,6 +94,7 @@ impl SettingsView {
             detail,
             &dispatcher,
             theme,
+            window,
             cx,
         ));
 

@@ -9,14 +9,22 @@
 - `info.rs` renders status/source/update/service-state cells.
 - `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
 - `quota_visibility.rs` renders per-quota tray visibility toggles.
-- `settings_section.rs` renders provider settings capability branches and the per-provider
-  usage-step （用量提醒） card. The usage-step card is gated on the `can_refresh` snapshot field
+- `settings_section.rs` renders provider settings capability branches, the per-provider
+  usage-step （用量提醒） card, and the quota-thresholds （额度状态与提醒阈值） card.
+  The usage-step card is gated on the `can_refresh` snapshot field
   (`ProviderStatus::supports_refresh()` = `ProviderCapability::Monitorable`) and renders regardless
   of which settings capability (token / NewAPI / script / none) the provider exposes —
   a `SettingsCapability::None` provider still gets the usage-step entry; non-monitorable providers
   never get it. Its state comes from the snapshot fields `quota_usage_step_pct` （provider override,
   `None` = follow global), `global_quota_usage_step_pct`, and `quota_usage_dropdown_open`; options
   dispatch `SettingChange::SetProviderQuotaUsageStep` through `DetailActionDispatcher`.
+  The quota-thresholds card is gated on `show_quota_thresholds`
+  (`provider_capability == Monitorable`, likewise independent of `SettingsCapability`), so a
+  monitorable provider with no interactive settings still gets per-unit threshold overrides, and
+  thresholds can be pre-configured before any quota data arrives. Its three-unit rows come from the
+  `quota_thresholds` snapshot entries (unit / `override_thresholds` / `effective`); editing reuses
+  the shared `quota_thresholds::render_quota_thresholds_section` component and the view-local
+  `QuotaThresholdDraft`, dispatching `SettingChange::SetProviderQuotaThresholds` on save.
 - `actions.rs` owns the editable-provider edit/delete flow. It renders the same settings card as the
   Token panel (`shared::render_settings_card` + `render_action_button(.., ButtonSize::Panel, ..)`),
   so the settings section looks identical for token-input and editable providers. Add new card-level
@@ -47,8 +55,8 @@ view-state snapshot, not in live `SettingsView.state` reads from section rendere
 
 Use `DetailActionDispatcher` for actions that dispatch `AppAction` or need to clear token input before
 switching modes. Section modules should receive this dispatcher instead of borrowing `SettingsView`
-state directly, except for token input rendering where `SettingsView` is required to create and
-reuse input entities.
+state directly, except for token input rendering and quota-threshold drafts where `SettingsView`
+is required to create and reuse input entities.
 
 ## Boundary Check
 

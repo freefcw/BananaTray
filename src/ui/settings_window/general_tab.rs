@@ -1,7 +1,9 @@
 use super::components::{render_dark_card, render_divider, render_section_header, IconSwitchRow};
 use super::SettingsView;
-use crate::application::{AppAction, GlobalHotkeyError, SettingChange};
-use crate::models::AppSettings;
+use crate::application::{
+    AppAction, GlobalHotkeyError, QuotaThresholdUnitViewState, SettingChange,
+};
+use crate::models::{AppSettings, QuotaThresholdTarget, QuotaThresholdUnit};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
@@ -33,6 +35,14 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Div {
         let state = self.state.clone();
+        let global_quota_units: Vec<QuotaThresholdUnitViewState> = QuotaThresholdUnit::ALL
+            .iter()
+            .map(|&unit| QuotaThresholdUnitViewState {
+                unit,
+                override_thresholds: None,
+                effective: settings.quota.thresholds(unit),
+            })
+            .collect();
 
         // ── SYSTEM section ───────────────────────────────────
         let login_state = state.clone();
@@ -179,6 +189,31 @@ impl SettingsView {
                         },
                     )),
             )
+            .child(render_section_header(
+                &t!("settings.section.quota_thresholds"),
+                theme,
+            ))
+            .child(super::quota_thresholds::render_quota_thresholds_section(
+                self,
+                QuotaThresholdTarget::Global,
+                &global_quota_units,
+                theme,
+                window,
+                cx,
+                {
+                    let state = state.clone();
+                    std::rc::Rc::new(
+                        move |change: SettingChange, window: &mut Window, cx: &mut gpui::App| {
+                            crate::bootstrap::dispatch_in_window(
+                                &state,
+                                AppAction::UpdateSetting(change),
+                                window,
+                                cx,
+                            );
+                        },
+                    )
+                },
+            ))
             // ═══════ Quit ═══════
             .child(self.render_quit_button(theme))
     }

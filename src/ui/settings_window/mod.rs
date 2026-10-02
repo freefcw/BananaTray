@@ -4,6 +4,7 @@ mod debug_tab;
 mod display_tab;
 mod general_tab;
 mod providers;
+mod quota_thresholds;
 mod quota_usage;
 use crate::application::AppAction;
 use crate::application::FormIdentity;
@@ -267,6 +268,7 @@ pub(crate) struct SettingsView {
     pub(crate) newapi_form_error: Option<NewApiFormError>,
     /// Script Provider 表单输入组（identity 变化时重建）
     pub(crate) script_provider_inputs: Option<FormInputsCache<ScriptProviderFormInputs>>,
+    pub(crate) quota_threshold_draft: Option<quota_thresholds::QuotaThresholdDraft>,
     /// Debug Tab 的阻塞式系统诊断缓存；渲染阶段只读取该快照。
     pub(crate) debug_diagnostics: Option<runtime::DebugDiagnostics>,
     pub(crate) debug_diagnostics_loading: bool,
@@ -293,6 +295,7 @@ impl SettingsView {
             newapi_inputs: None,
             newapi_form_error: None,
             script_provider_inputs: None,
+            quota_threshold_draft: None,
             debug_diagnostics: None,
             debug_diagnostics_loading: false,
             _debug_diagnostics_task: None,
@@ -612,7 +615,22 @@ fn settings_tabs(show_debug: bool) -> Vec<(&'static str, String, SettingsTab)> {
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::resolve_theme(&self.state, window.appearance());
-        let active_tab = self.state.borrow().session.settings_ui.active_tab;
+        let (active_tab, selected_provider) = {
+            let state = self.state.borrow();
+            (
+                state.session.settings_ui.active_tab,
+                state.session.settings_ui.selected_provider.clone(),
+            )
+        };
+        if let Some(draft) = &self.quota_threshold_draft {
+            if !quota_thresholds::quota_threshold_target_matches_tab(
+                &draft.target,
+                active_tab,
+                &selected_provider,
+            ) {
+                self.quota_threshold_draft = None;
+            }
+        }
         let settings = self.state.borrow().session.settings.clone();
         let viewport = window.viewport_size();
 
