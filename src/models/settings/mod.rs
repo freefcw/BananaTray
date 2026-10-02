@@ -1,5 +1,7 @@
 use super::provider::{ProviderId, ProviderKind};
-use super::quota::QuotaInfo;
+use super::quota::{
+    QuotaInfo, QuotaRuleOverrides, QuotaRules, QuotaThresholdUnit, QuotaThresholds,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -235,6 +237,7 @@ pub struct ProviderConfig {
     /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合。
     pub hidden_quotas: HashMap<String, HashSet<String>>,
     pub quota_usage_steps: HashMap<String, u8>,
+    pub quota_threshold_overrides: HashMap<String, QuotaRuleOverrides>,
 }
 
 impl Default for ProviderConfig {
@@ -244,6 +247,7 @@ impl Default for ProviderConfig {
             provider_layout: Self::default_layout(),
             hidden_quotas: HashMap::new(),
             quota_usage_steps: HashMap::new(),
+            quota_threshold_overrides: HashMap::new(),
         }
     }
 }
@@ -296,6 +300,7 @@ impl ProviderConfig {
         self.provider_layout.retain(|item| item.id != key);
         self.hidden_quotas.remove(&key);
         self.quota_usage_steps.remove(&key);
+        self.quota_threshold_overrides.remove(&key);
     }
 
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）。
@@ -308,8 +313,10 @@ impl ProviderConfig {
             })
             .collect();
 
-        let before =
-            self.provider_layout.len() + self.hidden_quotas.len() + self.quota_usage_steps.len();
+        let before = self.provider_layout.len()
+            + self.hidden_quotas.len()
+            + self.quota_usage_steps.len()
+            + self.quota_threshold_overrides.len();
         self.provider_layout.retain(|item| {
             ProviderKind::from_id_key(&item.id).is_some() || existing.contains(&item.id)
         });
@@ -317,9 +324,13 @@ impl ProviderConfig {
             .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
         self.quota_usage_steps
             .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
+        self.quota_threshold_overrides
+            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
         let normalized = self.normalize_layout();
-        let after =
-            self.provider_layout.len() + self.hidden_quotas.len() + self.quota_usage_steps.len();
+        let after = self.provider_layout.len()
+            + self.hidden_quotas.len()
+            + self.quota_usage_steps.len()
+            + self.quota_threshold_overrides.len();
         normalized || before != after
     }
 
@@ -344,6 +355,41 @@ impl ProviderConfig {
     pub fn effective_quota_usage_step(&self, id: &ProviderId, global_step: u8) -> u8 {
         self.quota_usage_step(id)
             .unwrap_or_else(|| global_step.min(100))
+    }
+
+    pub fn quota_threshold_override(
+        &self,
+        id: &ProviderId,
+        unit: QuotaThresholdUnit,
+    ) -> Option<QuotaThresholds> {
+        self.quota_threshold_overrides
+            .get(&id.id_key())
+            .and_then(|overrides| overrides.get(unit))
+    }
+
+    pub fn set_quota_threshold_override(
+        &mut self,
+        id: &ProviderId,
+        unit: QuotaThresholdUnit,
+        thresholds: Option<QuotaThresholds>,
+    ) {
+        let key = id.id_key();
+        match thresholds {
+            Some(value) => {
+                self.quota_threshold_overrides
+                    .entry(key)
+                    .or_default()
+                    .set(unit, Some(value));
+            }
+            None => {
+                if let Some(overrides) = self.quota_threshold_overrides.get_mut(&key) {
+                    overrides.set(unit, None);
+                    if overrides.is_empty() {
+                        self.quota_threshold_overrides.remove(&key);
+                    }
+                }
+            }
+        }
     }
 
     pub(crate) fn normalize_layout(&mut self) -> bool {
@@ -506,7 +552,7 @@ impl ProviderSettings {
 // 应用设置（顶层）
 // ============================================================================
 
-/// 应用运行时配置 — 按职责分为五组子设置。
+/// 应用运行时配置 — 按职责分为六组子设置。
 ///
 /// 顶层磁盘格式由 `settings_store::PersistedAppSettingsV1` 负责；这里不直接派生
 /// serde，避免领域模型与 settings.json 的版本演进绑定。
@@ -522,6 +568,17 @@ pub struct AppSettings {
     pub logging: LoggingSettings,
     /// Provider 管理：启用状态、排序、隐藏配额、sidebar、以及 app-managed credentials
     pub provider: ProviderConfig,
+    pub quota: QuotaRules,
+}
+
+impl AppSettings {
+    pub fn effective_quota_rules(&self, id: &ProviderId) -> QuotaRules {
+        self.provider
+            .quota_threshold_overrides
+            .get(&id.id_key())
+            .map(|overrides| self.quota.resolve(overrides))
+            .unwrap_or(self.quota)
+    }
 }
 
 fn default_true() -> bool {

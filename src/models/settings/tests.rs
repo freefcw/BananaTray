@@ -863,3 +863,76 @@ fn notification_settings_default_quota_usage_step_is_zero() {
     assert_eq!(restored.quota_usage_step_pct, 0);
     assert!(restored.session_quota_notifications);
 }
+
+#[test]
+fn remove_provider_references_clears_quota_threshold_overrides() {
+    let mut config = ProviderConfig::default();
+    let gone = ProviderId::Custom("gone:api".to_string());
+    let keep = ProviderId::Custom("keep:api".to_string());
+    let thresholds = QuotaThresholds {
+        warning: 70.0,
+        critical: 30.0,
+        notify: 15.0,
+    };
+    let currency_thresholds = QuotaThresholds {
+        warning: 20.0,
+        critical: 5.0,
+        notify: 2.0,
+    };
+    config.set_quota_threshold_override(&gone, QuotaThresholdUnit::Percentage, Some(thresholds));
+    config.set_quota_threshold_override(
+        &keep,
+        QuotaThresholdUnit::Currency,
+        Some(currency_thresholds),
+    );
+
+    config.remove_provider_references(&gone);
+
+    assert_eq!(
+        config.quota_threshold_override(&gone, QuotaThresholdUnit::Percentage),
+        None
+    );
+    assert_eq!(
+        config.quota_threshold_override(&keep, QuotaThresholdUnit::Currency),
+        Some(currency_thresholds)
+    );
+}
+
+#[test]
+fn prune_stale_custom_ids_removes_quota_threshold_overrides() {
+    let mut config = ProviderConfig::default();
+    let gone = ProviderId::Custom("gone:api".to_string());
+    let keep = ProviderId::Custom("keep:api".to_string());
+    let thresholds = QuotaThresholds {
+        warning: 70.0,
+        critical: 30.0,
+        notify: 15.0,
+    };
+    config.set_quota_threshold_override(&gone, QuotaThresholdUnit::Percentage, Some(thresholds));
+    config.set_quota_threshold_override(&keep, QuotaThresholdUnit::Amount, Some(thresholds));
+    config.set_quota_threshold_override(
+        &builtin(ProviderKind::Claude),
+        QuotaThresholdUnit::Percentage,
+        Some(thresholds),
+    );
+
+    let existing = vec![keep.clone()];
+    let changed = config.prune_stale_custom_ids(&existing);
+
+    assert!(changed);
+    assert_eq!(
+        config.quota_threshold_override(&gone, QuotaThresholdUnit::Percentage),
+        None
+    );
+    assert_eq!(
+        config.quota_threshold_override(&keep, QuotaThresholdUnit::Amount),
+        Some(thresholds)
+    );
+    assert_eq!(
+        config.quota_threshold_override(
+            &builtin(ProviderKind::Claude),
+            QuotaThresholdUnit::Percentage
+        ),
+        Some(thresholds)
+    );
+}

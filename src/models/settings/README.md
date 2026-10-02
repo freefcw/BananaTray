@@ -1,6 +1,6 @@
 # src/models/settings/
 
-应用配置系统，按语义职责将设置分组为五个子结构体。
+应用配置系统，按语义职责将设置分组为六个子结构体。
 
 ## 顶层结构
 
@@ -10,6 +10,7 @@ AppSettings
 ├── notification: NotificationSettings - 通知
 ├── display: DisplaySettings      - 显示/外观
 ├── logging: LoggingSettings      - 日志轮转/清理阈值（不在 UI 暴露）
+├── quota: QuotaRules             - 全局额度状态/提醒阈值（按单位分组）
 └── provider: ProviderConfig      - Provider 管理（含 app-managed credentials）
 ```
 
@@ -24,10 +25,12 @@ AppSettings
 - **`NotificationSettings`** — `session_quota_notifications`（配额四类提醒总开关）/ `notification_sound` / `quota_usage_step_pct`（全局用量步长百分点，0 = 关闭）
 - **`DisplaySettings`** - `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
 - **`LoggingSettings`** - `max_bytes` / `max_files`；日志轮转与启动清理阈值，默认 5 MiB × 4 份（磁盘硬上限约 25 MiB）。不在 UI 暴露，仅在 settings.json 持久化；`#[serde(default)]` 保证旧配置无需迁移。详见 `docs/logging.md`
-- **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `quota_usage_steps`
+- **`QuotaRules`**（`AppSettings::quota`）— 全局额度状态/提醒阈值，按 `QuotaThresholdUnit` 分三组：百分比默认 50/20/10，货币默认 10/2/1，积分·额度默认 100/20/10（warning / critical / notify，全部为剩余值、inclusive `<=` 边界）。`AppSettings::effective_quota_rules(&ProviderId)` 叠加 Provider 覆盖后返回生效规则。
+- **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `quota_usage_steps` / `quota_threshold_overrides`
   - `provider_layout` 是有序 Provider 偏好列表；数组顺序就是排序，每个 item 只保存稳定 `id`、`in_sidebar` 和 `enabled`
   - `in_sidebar: false` 的 item 保留在布局中，用于重新加入时恢复原位置；隐藏 Provider 始终为 disabled，启用 Provider 会自动将其加入 sidebar
   - `quota_usage_steps` 是 Provider 级用量步长覆盖（key = 稳定 `id_key`，无条目 = 跟随全局 `notification.quota_usage_step_pct`，显式 0 = 关闭该 Provider 的用量提醒）；`remove_provider_references()` / `prune_stale_custom_ids()` 会一并清理
+  - `quota_threshold_overrides` 是 Provider 级阈值覆盖（key = 稳定 `id_key`）：按单位整组覆盖，某单位为 `None` 即继承全局；值为 `Some` 即构成“自定义”身份，即使数值与全局相同也保留记录。`set_quota_threshold_override()` 传 `None` 清除该单位覆盖，三个单位全空时删除整条 entry；`remove_provider_references()` / `prune_stale_custom_ids()` 会一并清理
   - Provider 名称、图标、能力和运行时状态均从 Provider descriptor / `ProviderStatus` 计算，不复制到 settings
   - 旧版 `enabled_providers` / `provider_order` / `sidebar_providers` 在 `settings_store` 加载边界一次性迁移；缺失字段与显式空数组语义不同。仅在 `enabled_providers` 中启用、未出现在 `sidebar_providers` 的项会保持 enabled 并补进 sidebar（旧 Overview / refresh 不要求 sidebar 成员资格）；不要改成按 sidebar 成员强制禁用，否则会静默停止监控
   - `is_enabled()` / `set_enabled()` / `is_in_sidebar()` / `add_to_sidebar()` / `remove_from_sidebar()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()` / `quota_usage_step()` / `set_quota_usage_step()` / `effective_quota_usage_step()`
@@ -58,6 +61,8 @@ AppSettings
 顶层 JSON 由 `settings_store::PersistedAppSettingsV1` 负责反序列化和默认值回填；缺失字段（或缺失的整个 section）从对应结构的 `Default` 回填，而非直接使用字段类型零值（例如 `auto_hide_window` 的语义默认是 `true`）。Provider 配置在该边界执行旧三字段到 `provider_layout` 的迁移，并区分缺失布局与显式空布局。回归测试锁定空 JSON、旧格式和新格式的兼容契约。
 
 用量步长提醒的 JSON 形状：`notification.quota_usage_step_pct`（缺省 0 = 关闭）是全局步长百分点；`provider.quota_usage_steps`（缺省 `{}`，空时省略序列化）是 `{ "<id_key>": <step_pct> }` 覆盖表，无条目表示跟随全局、显式 `0` 表示该 Provider 单独关闭。清除覆盖即删除对应 map 条目，保存时同步从磁盘移除。
+
+额度阈值的 JSON 形状：顶层 `quota` 节保存全局规则（`{"percentage"|"currency"|"amount": {"warning", "critical", "notify"}}`，全部字段必填）；`provider.quota_threshold_overrides` 是 `{ "<id_key>": {"percentage"?|...} }` 覆盖表。加载时缺失 section 或缺失单位组回落对应单位默认值；某单位组数值非法（非正数、非有限、顺序反转、百分比 warning > 100）只回落该单位，Provider 覆盖中非法的单位组按未覆盖处理（继承全局），不破坏其它配置。整组必须三字段齐全，不支持半组手写配置。全局与 Provider 覆盖在持久化层共用同一组字段形状（settings_store 内部的 `PersistedQuotaRuleGroups`）。
 
 `system.global_hotkey` 持久化为 GPUI 可直接回读的字符串格式（如 macOS 上的 `cmd-shift-s`），
 设置页中则通过键捕获控件展示为用户友好的快捷键标签。runtime 仍兼容读取旧版展示格式
