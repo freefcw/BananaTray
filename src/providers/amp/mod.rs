@@ -57,6 +57,8 @@ impl AmpProvider {
     fn parse_usage_output(output_str: &str) -> Result<RefreshData> {
         let mut quotas = Vec::new();
         let mut account_email = None;
+        // 是否有任何一行被识别为配额格式（即使随后因 $0 余额被跳过）
+        let mut saw_quota_line = false;
 
         for line in output_str.lines() {
             let line = strip_markdown_bold(line.trim());
@@ -70,11 +72,13 @@ impl AmpProvider {
             // 订阅制：现行 / 旧版策略各自认领行前缀，拆成独立池 quota。
             // 放在最前，避免被后续百分比 / 信用正则碰到订阅行。
             if let Some(subscription_quotas) = subscription::parse_line(line) {
+                saw_quota_line = true;
                 quotas.extend(subscription_quotas);
                 continue;
             }
 
             if let Some(caps) = PERCENT_REMAINING_RE.captures(line) {
+                saw_quota_line = true;
                 // amp Free 档现为每日百分比重置配额（非信用额度）。
                 // label 保留原文（如 "Amp Free"），stable_key 与历史 Credit 模式一致，
                 // 设置持久化（hidden_quotas）不受影响。
@@ -91,6 +95,7 @@ impl AmpProvider {
                     detail,
                 ));
             } else if let Some(caps) = CREDIT_RE.captures(line) {
+                saw_quota_line = true;
                 let label = caps[1].trim();
                 let remaining: f64 = caps[2].parse().unwrap_or(0.0);
                 let total: f64 = caps[3].parse().unwrap_or(0.0);
@@ -103,6 +108,7 @@ impl AmpProvider {
                     Some(QuotaDetailSpec::CreditRemaining { remaining, total }),
                 ));
             } else if let Some(caps) = BALANCE_RE.captures(line) {
+                saw_quota_line = true;
                 let label = caps[1].trim();
                 let balance: f64 = caps[2].parse().unwrap_or(0.0);
 
@@ -112,7 +118,8 @@ impl AmpProvider {
                     continue;
                 }
 
-                // 使用 balance_only 模式：状态由余额绝对值决定（>=5 Green, >=1 Yellow, <1 Red），
+                // 使用 balance_only 模式：状态由 Currency 单位的余额阈值（默认
+                // warning $10 / critical $2，可在设置中调整）按绝对值决定，
                 // 而非百分比——避免 limit=0 时 percent_remaining=0% 误判为 Red。
                 quotas.push(QuotaInfo::balance_only(
                     Self::quota_label_spec(label),
@@ -128,11 +135,15 @@ impl AmpProvider {
         }
 
         if quotas.is_empty() {
-            // 已识别出登录邮箱行 → 输出格式正常，账户下只是没有任何配额条目
-            // （订阅到期、未购买信用额度），属于合法无数据，不是解析失败。
-            if account_email.is_some() {
+            // 识别出邮箱行且至少一行配额格式被识别（即使因 $0 余额被跳过）
+            // → 输出格式正常，账户下只是没有任何配额条目（订阅到期、未购买
+            // 信用额度），属于合法无数据，不是解析失败。
+            if account_email.is_some() && saw_quota_line {
                 return Err(ProviderError::no_data().into());
             }
+            // 一行配额格式都认不出时，邮箱行不足以证明输出格式未变
+            // （上游曾三次改配额行而邮箱行保持不变），按解析失败暴露问题，
+            // 避免用"可能尚未开始使用"误导订阅用户。
             return Err(ProviderError::parse_failed(&format!(
                 "cannot parse amp usage output ({} bytes)",
                 output_str.len()
@@ -323,9 +334,29 @@ mod tests {
     #[test]
     fn test_parse_zero_balance_only_is_skipped() {
         let output = "Individual credits: $0 remaining\n";
+        let err = AmpProvider::parse_usage_output(output).unwrap_err();
         assert!(
-            AmpProvider::parse_usage_output(output).is_err(),
-            "zero-balance-only output should produce no quotas → error"
+            matches!(
+                err.downcast_ref::<ProviderError>(),
+                Some(ProviderError::ParseFailed { .. })
+            ),
+            "zero-balance-only output without email should be ParseFailed, got: {err}"
+        );
+    }
+
+    /// 只认出登录邮箱、一行配额格式都认不出 → 更可能是上游改了输出格式
+    /// （配额行历史上多次变更而邮箱行不变），报解析失败以暴露问题，
+    /// 不能用"可能尚未开始使用"误导订阅用户。
+    #[test]
+    fn test_parse_signed_in_without_any_quota_line_is_parse_failed() {
+        let output = "Signed in as user@example.com (user)\nsome unexpected banner text\n";
+        let err = AmpProvider::parse_usage_output(output).unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<ProviderError>(),
+                Some(ProviderError::ParseFailed { .. })
+            ),
+            "signed-in but fully unrecognized output should be ParseFailed, got: {err}"
         );
     }
 

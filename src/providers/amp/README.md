@@ -9,7 +9,7 @@
 - 邮箱：`Signed in as <email> (...)`。
 - Free 档：`Amp Free: <N>% remaining today (resets daily)` → `QuotaType::General` 百分比；括号说明原文进详情行。
 - 信用额度：`Monthly credits: $X / $Y remaining` → `QuotaType::Credit`；`Individual credits: $0 remaining` 跳过展示。
-- 空输出的错误归类：识别出 `Signed in as` 邮箱行但没有任何配额条目（订阅到期、未购买信用额度）→ `NoData`（合法无数据）；连邮箱行都认不出 → `ParseFailed`（输出格式未知或已登出）。
+- 空输出的错误归类：识别出 `Signed in as` 邮箱行且至少一行配额格式被识别（即使因 `$0` 余额被跳过）→ `NoData`（合法无数据：订阅到期、未购买信用额度）；一行配额格式都认不出 → `ParseFailed`（输出格式未知或已登出——只认邮箱行不足以证明输出格式未变，上游曾多次改配额行而邮箱行保持不变）。
 - 订阅制（现行格式）：一行两个月度池，绝对值 + 括号百分比 ——
   `agent usage $6.42 of $20 remaining (32%)`（agent 调用额度，美元）、
   `orb usage 750h of 750h a1.small orb hours remaining (100%)`（远程实例，小时）。
