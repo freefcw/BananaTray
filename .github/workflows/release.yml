@@ -64,7 +64,7 @@ jobs:
             sudo apt-get install -y --no-install-recommends libfuse2t64
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
@@ -119,7 +119,7 @@ jobs:
         run: bash scripts/validate-release-tag.sh "$RELEASE_TAG"
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2

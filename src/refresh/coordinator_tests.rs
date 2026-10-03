@@ -131,6 +131,57 @@ impl AiProvider for DelayedProvider {
 
 impl ProviderCapabilities for DelayedProvider {}
 
+struct GatedProvider {
+    id: String,
+    wait_rx: Option<smol::channel::Receiver<()>>,
+    notify_tx: Option<smol::channel::Sender<()>>,
+}
+
+impl GatedProvider {
+    fn new(
+        id: &str,
+        wait_rx: Option<smol::channel::Receiver<()>>,
+        notify_tx: Option<smol::channel::Sender<()>>,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            wait_rx,
+            notify_tx,
+        }
+    }
+}
+
+#[async_trait]
+impl AiProvider for GatedProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor {
+            id: Cow::Owned(self.id.clone()),
+            metadata: ProviderMetadata {
+                kind: ProviderKind::Custom,
+                display_name: self.id.clone(),
+                brand_name: self.id.clone(),
+                icon_asset: String::new(),
+                dashboard_url: String::new(),
+                account_hint: String::new(),
+                source_label: "test".to_string(),
+            },
+        }
+    }
+
+    async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
+        if let Some(rx) = &self.wait_rx {
+            let _ = rx.recv().await;
+            smol::Timer::after(Duration::from_millis(15)).await;
+        }
+        if let Some(tx) = &self.notify_tx {
+            let _ = tx.send(()).await;
+        }
+        Ok(RefreshData::quotas_only(Vec::new()))
+    }
+}
+
+impl ProviderCapabilities for GatedProvider {}
+
 async fn drive_until_idle(coordinator: &mut RefreshCoordinator) {
     while !coordinator.active_refreshes.is_empty() {
         let message = coordinator.task_rx.recv().await.unwrap();
@@ -149,16 +200,19 @@ fn drain_events(event_rx: &smol::channel::Receiver<RefreshEvent>) -> Vec<Refresh
 #[test]
 fn test_refreshes_report_physical_completion_order() {
     smol::block_on(async {
+        let (gate_tx, gate_rx) = smol::channel::bounded(1);
         let mut manager = ProviderManager::new();
         let slow_id = ProviderId::Custom("test:slow".to_string());
         let fast_id = ProviderId::Custom("test:fast".to_string());
-        manager.register(Arc::new(DelayedProvider::new(
+        manager.register(Arc::new(GatedProvider::new(
             "test:slow",
-            Duration::from_millis(50),
+            Some(gate_rx),
+            None,
         )));
-        manager.register(Arc::new(DelayedProvider::new(
+        manager.register(Arc::new(GatedProvider::new(
             "test:fast",
-            Duration::from_millis(5),
+            None,
+            Some(gate_tx),
         )));
 
         let (event_tx, event_rx) = smol::channel::bounded(8);

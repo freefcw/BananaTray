@@ -14,6 +14,7 @@ pub struct ProviderExecutionContext<'a> {
 
 /// AI Provider 的核心刷新接口。
 #[async_trait]
+#[allow(clippy::double_must_use)]
 pub trait AiProvider: Send + Sync {
     /// 获取 Provider 的描述符（ID + 元数据）
     fn descriptor(&self) -> ProviderDescriptor;
