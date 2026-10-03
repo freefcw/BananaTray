@@ -22,6 +22,33 @@ pub(super) fn render_section_header(title: &str, theme: &Theme) -> Div {
         .child(title.to_uppercase())
 }
 
+/// 带描述的段落标题 — 大写小号标题 + 紧凑副标题描述
+pub(super) fn render_section_header_with_desc(
+    title: &str,
+    description: &str,
+    theme: &Theme,
+) -> Div {
+    div()
+        .flex_col()
+        .gap(px(4.0))
+        .px(px(4.0))
+        .pt(px(16.0))
+        .pb(px(8.0))
+        .child(
+            div()
+                .text_size(px(11.0))
+                .font_weight(FontWeight::BOLD)
+                .text_color(theme.text.muted)
+                .child(title.to_uppercase()),
+        )
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(theme.text.secondary)
+                .child(description.to_string()),
+        )
+}
+
 /// 深色卡片容器（与设计稿匹配的暗色圆角卡片）
 pub(super) fn render_dark_card(theme: &Theme) -> Div {
     div()

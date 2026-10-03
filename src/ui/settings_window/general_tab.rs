@@ -1,4 +1,7 @@
-use super::components::{render_dark_card, render_divider, render_section_header, IconSwitchRow};
+use super::components::{
+    render_dark_card, render_divider, render_section_header, render_section_header_with_desc,
+    IconSwitchRow,
+};
 use super::SettingsView;
 use crate::application::{
     AppAction, GlobalHotkeyError, QuotaThresholdUnitViewState, SettingChange,
@@ -178,8 +181,9 @@ impl SettingsView {
                         },
                     )),
             )
-            .child(render_section_header(
+            .child(render_section_header_with_desc(
                 &t!("settings.section.quota_thresholds"),
+                &t!("settings.quota_thresholds.desc"),
                 theme,
             ))
             .child(super::quota_thresholds::render_quota_thresholds_section(

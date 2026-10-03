@@ -73,9 +73,33 @@ pub(in crate::ui::settings_window) fn render_input_field(
     window: &mut Window,
     cx: &App,
 ) -> Div {
+    div()
+        .flex_col()
+        .gap(px(6.0))
+        .mt(field.margin_top)
+        .child(render_field_label(field.label, field.hint, theme))
+        .child(render_input_box(
+            field.id,
+            field.is_focused,
+            input_entity,
+            theme,
+            window,
+            cx,
+        ))
+}
+
+/// 不带标签的单行输入框外壳（聚焦高亮 + 输入快捷键），供自定义标签布局复用。
+pub(in crate::ui::settings_window) fn render_input_box(
+    id: &'static str,
+    is_focused: bool,
+    input_entity: &Entity<InputState>,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &App,
+) -> Stateful<Div> {
     let focus_handle = input_entity.read(cx).focus_handle(cx);
     let input_div = div()
-        .id(field.id)
+        .id(id)
         .key_context("Input")
         .track_focus(&focus_handle)
         .w_full()
@@ -87,7 +111,7 @@ pub(in crate::ui::settings_window) fn render_input_field(
         .rounded(px(8.0))
         .bg(theme.bg.card)
         .border_1()
-        .border_color(if field.is_focused {
+        .border_color(if is_focused {
             theme.text.accent
         } else {
             theme.border.strong
@@ -99,14 +123,8 @@ pub(in crate::ui::settings_window) fn render_input_field(
             move |_, window, _| handle.focus(window)
         });
 
-    let input_div = register_input_actions(input_div, input_entity, window);
-
-    div()
-        .flex_col()
-        .gap(px(6.0))
-        .mt(field.margin_top)
-        .child(render_field_label(field.label, field.hint, theme))
-        .child(input_div.child(div().flex_1().overflow_hidden().child(input_entity.clone())))
+    register_input_actions(input_div, input_entity, window)
+        .child(div().flex_1().overflow_hidden().child(input_entity.clone()))
 }
 
 pub(super) fn render_textarea_field(
