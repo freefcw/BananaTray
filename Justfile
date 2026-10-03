@@ -66,6 +66,9 @@ clippy-lib:
 test-lib:
     cargo test --lib
 
+test-settings-ui:
+    cargo test --lib --locked --features ui-tests ui::settings_window -- --test-threads=1
+
 release-verify: ci-fast
     @echo "Core release checks passed. Run 'just release-verify-app' on a machine with the full app toolchain when app-feature validation is required."
 

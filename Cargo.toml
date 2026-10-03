@@ -36,6 +36,7 @@ app = [
     "dep:raw-window-handle",
     "dep:dispatch2",
 ]
+ui-tests = ["app", "gpui/test-support"]
 
 [lints.rust]
 # The `objc` crate's macros check for `feature = "cargo-clippy"` which triggers

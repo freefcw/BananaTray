@@ -12,6 +12,7 @@
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 | `quota_usage.rs` | 用量步长步进器共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」） |
 | `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情卡带标题并按单位展示继承 / 自定义身份；三个单位（百分比 / 货币 / 积分·额度）各一行，以彩色徽章（黄=预警、红=严重、强调色=通知，数值按单位带 `%` / `$`）展示生效的剩余值阈值，编辑时三个输入框纵向全宽排列（无响应式断点）。编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
+| `quota_ui_tests.rs` | Opt-in GPUI mock-window UI 回归测试（`#[cfg(all(test, feature = "ui-tests"))]`，运行 `just test-settings-ui` 或 `cargo test --lib --locked --features ui-tests ui::settings_window -- --test-threads=1`）— 真实渲染并点击步进器 / 阈值 section，经 `debug_selector` 定位断言布局与派发；只构造纯内存 AppState + no-op SettingsWriter，无真实配置 I/O |
 
 ### Tab 内容页
 

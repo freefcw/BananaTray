@@ -33,6 +33,7 @@ BananaTray — macOS/Linux system tray app for monitoring AI coding assistant qu
 cargo run                  # dev
 cargo build --release      # release
 cargo test --lib                        # tests (MUST use --lib, see below)
+just test-settings-ui      # opt-in GPUI mock-window UI 回归（settings 用量/阈值），无真实配置 I/O
 cargo clippy               # lint
 cargo fmt                  # format
 just ci-fast               # fast local gate, mirrors the main CI path

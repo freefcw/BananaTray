@@ -5,6 +5,8 @@ mod display_tab;
 mod general_tab;
 mod providers;
 mod quota_thresholds;
+#[cfg(all(test, feature = "ui-tests"))]
+mod quota_ui_tests;
 mod quota_usage;
 use crate::application::AppAction;
 use crate::application::FormIdentity;
