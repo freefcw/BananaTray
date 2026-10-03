@@ -41,6 +41,22 @@ fn parse_persisted_thresholds(
     thresholds
 }
 
+/// 与阈值组同级的容错：非法 step 值只处理该条，不拖垮整个设置文件。
+/// 非数字 → 丢弃该条（跟随全局）；数字越界 → clamp 到 0..=100（0 = 关闭该 provider 的提醒）。
+fn parse_persisted_step_pct(key: &str, raw: serde_json::Value) -> Option<u8> {
+    let step = raw.as_f64().map(|value| {
+        if value.is_finite() && value > 0.0 {
+            value.round().min(100.0) as u8
+        } else {
+            0
+        }
+    });
+    if step.is_none() {
+        log::warn!(target: "settings", "invalid quota usage step for {key}; ignoring");
+    }
+    step
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct PersistedQuotaRuleGroups {
@@ -100,8 +116,9 @@ impl PersistedQuotaRuleGroups {
 struct PersistedProviderConfig {
     credentials: ProviderSettings,
     hidden_quotas: HashMap<String, HashSet<String>>,
+    // 值先保留为 Value 再逐条解析：手改 JSON 的非法条目只丢弃该条，不拖垮整个文件
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    quota_usage_steps: HashMap<String, u8>,
+    quota_usage_steps: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     quota_threshold_overrides: HashMap<String, PersistedQuotaRuleGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -126,11 +143,16 @@ impl PersistedProviderConfig {
                 (!overrides.is_empty()).then_some((key, overrides))
             })
             .collect();
+        let quota_usage_steps = self
+            .quota_usage_steps
+            .into_iter()
+            .filter_map(|(key, raw)| parse_persisted_step_pct(&key, raw).map(|step| (key, step)))
+            .collect();
         let mut config = ProviderConfig {
             credentials: self.credentials,
             provider_layout: layout,
             hidden_quotas: self.hidden_quotas,
-            quota_usage_steps: self.quota_usage_steps,
+            quota_usage_steps,
             quota_threshold_overrides,
         };
         config.normalize_layout();
@@ -227,7 +249,12 @@ impl From<&AppSettings> for PersistedAppSettingsV1 {
             provider: PersistedProviderConfig {
                 credentials: value.provider.credentials.clone(),
                 hidden_quotas: value.provider.hidden_quotas.clone(),
-                quota_usage_steps: value.provider.quota_usage_steps.clone(),
+                quota_usage_steps: value
+                    .provider
+                    .quota_usage_steps
+                    .iter()
+                    .map(|(key, step)| (key.clone(), serde_json::Value::from(*step)))
+                    .collect(),
                 quota_threshold_overrides: value
                     .provider
                     .quota_threshold_overrides
@@ -1059,6 +1086,65 @@ mod tests {
                 .effective_quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Gemini), 10),
             10
         );
+    }
+
+    /// 手改 settings.json 写入非法 step 值：逐字段降级（clamp / 丢弃），
+    /// 整个设置文件与其它字段不受影响。
+    #[test]
+    fn invalid_quota_usage_step_values_degrade_per_field() {
+        use crate::models::{AppTheme, ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        fs::write(
+            &path,
+            r#"{
+                "notification": {"quota_usage_step_pct": 300},
+                "display": {"theme": "Dark"},
+                "provider": {
+                    "credentials": {},
+                    "hidden_quotas": {},
+                    "quota_usage_steps": {"codex": 300, "kiro": -5, "amp": "abc"}
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).expect("非法 step 不应让整个设置文件加载失败");
+        assert_eq!(
+            loaded.notification.quota_usage_step_pct, 100,
+            "全局越界值应 clamp 到 100"
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Codex)),
+            Some(100),
+            "Provider 越界值应 clamp 到 100"
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Kiro)),
+            Some(0),
+            "负数按 0（关闭）处理"
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Amp)),
+            None,
+            "非数字条目应被丢弃（跟随全局）"
+        );
+        assert_eq!(loaded.display.theme, AppTheme::Dark, "其它设置字段必须保留");
+    }
+
+    #[test]
+    fn negative_global_quota_usage_step_treated_as_disabled() {
+        let (_dir, path) = temp_settings_path();
+        fs::write(&path, r#"{"notification": {"quota_usage_step_pct": -1}}"#).unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        assert_eq!(loaded.notification.quota_usage_step_pct, 0);
     }
 
     #[test]

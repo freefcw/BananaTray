@@ -97,8 +97,22 @@ pub struct NotificationSettings {
     /// 通知是否带声音
     #[serde(default = "default_true")]
     pub notification_sound: bool,
-    #[serde(default)]
+    /// 全局用量步长提醒（百分比），0 表示关闭
+    #[serde(default, deserialize_with = "deserialize_step_pct")]
     pub quota_usage_step_pct: u8,
+}
+
+/// settings.json 可被手改：step 写入越界 / 负数 / 非整数时宽松解析并 clamp 到
+/// 0..=100（0 = 关闭提醒），避免单个非法字段让整个设置文件回退默认值。
+fn deserialize_step_pct<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<f64>::deserialize(deserializer)?;
+    Ok(match raw {
+        Some(value) if value.is_finite() && value > 0.0 => value.round().min(100.0) as u8,
+        _ => 0,
+    })
 }
 
 impl Default for NotificationSettings {

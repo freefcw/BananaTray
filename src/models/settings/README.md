@@ -60,7 +60,7 @@ AppSettings
 
 顶层 JSON 由 `settings_store::PersistedAppSettingsV1` 负责反序列化和默认值回填；缺失字段（或缺失的整个 section）从对应结构的 `Default` 回填，而非直接使用字段类型零值（例如 `auto_hide_window` 的语义默认是 `true`）。Provider 配置在该边界执行旧三字段到 `provider_layout` 的迁移，并区分缺失布局与显式空布局。回归测试锁定空 JSON、旧格式和新格式的兼容契约。
 
-用量步长提醒的 JSON 形状：`notification.quota_usage_step_pct`（缺省 0 = 关闭）是全局步长百分点；`provider.quota_usage_steps`（缺省 `{}`，空时省略序列化）是 `{ "<id_key>": <step_pct> }` 覆盖表，无条目表示跟随全局、显式 `0` 表示该 Provider 单独关闭。清除覆盖即删除对应 map 条目，保存时同步从磁盘移除。
+用量步长提醒的 JSON 形状：`notification.quota_usage_step_pct`（缺省 0 = 关闭）是全局步长百分点；`provider.quota_usage_steps`（缺省 `{}`，空时省略序列化）是 `{ "<id_key>": <step_pct> }` 覆盖表，无条目表示跟随全局、显式 `0` 表示该 Provider 单独关闭。清除覆盖即删除对应 map 条目，保存时同步从磁盘移除。两处 step 值均按数字宽松解析：手改写入越界值 clamp 到 100、负数按 0（关闭）处理；覆盖表中的非数字条目只丢弃该条（跟随全局），不破坏文件中的其它配置。
 
 额度阈值的 JSON 形状：顶层 `quota` 节保存全局规则（`{"percentage"|"currency"|"amount": {"warning", "critical", "notify"}}`，全部字段必填）；`provider.quota_threshold_overrides` 是 `{ "<id_key>": {"percentage"?|...} }` 覆盖表。加载时缺失 section 或缺失单位组回落对应单位默认值；某单位组数值非法（非正数、非有限、顺序反转、百分比 warning > 100）只回落该单位，Provider 覆盖中非法的单位组按未覆盖处理（继承全局），不破坏其它配置。整组必须三字段齐全，不支持半组手写配置。全局与 Provider 覆盖在持久化层共用同一组字段形状（settings_store 内部的 `PersistedQuotaRuleGroups`）。
 
