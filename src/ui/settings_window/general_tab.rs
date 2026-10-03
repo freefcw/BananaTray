@@ -171,7 +171,7 @@ impl SettingsView {
                     // Notification Sound
                     .child(Self::render_icon_switch_row(
                         IconSwitchRow {
-                            icon_path: "src/icons/usage.svg",
+                            icon_path: "src/icons/sound.svg",
                             icon_color: rgb(ICON_FG).into(),
                             icon_bg: rgb(ICON_BG_SOUND).into(),
                             title: &t!("settings.notification_sound"),
