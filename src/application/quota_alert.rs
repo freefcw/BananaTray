@@ -227,6 +227,12 @@ impl AlertEngine {
 }
 
 /// 状态阈值策略：只负责 Normal / Low / Exhausted / Recovered 状态迁移。
+///
+/// 状态机按 provider 维度只记单档 worst 状态，因此同一刷新内的反向变迁会被合并：
+/// 若 quota A 从 Exhausted 恢复、quota B 恰好首次跌入 Low，只会发出 Recovered(A)，
+/// B 的 LowQuota 不会补发（状态已记为 Low，后续同档去重），直到 B 耗尽或先回升
+/// 再跌回。按 quota_key 维度跟踪可消除该窗口，但一次快照可能产出多条通知，
+/// 单档合并是有意的降噪取舍。
 struct ThresholdAlertPolicy;
 
 impl ThresholdAlertPolicy {

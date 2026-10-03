@@ -582,6 +582,8 @@ pub struct AppSettings {
     pub logging: LoggingSettings,
     /// Provider 管理：启用状态、排序、隐藏配额、sidebar、以及 app-managed credentials
     pub provider: ProviderConfig,
+    /// 配额状态与提醒阈值规则（全局生效各单位的默认值；Provider 级覆盖见
+    /// `ProviderConfig::quota_threshold_overrides`）
     pub quota: QuotaRules,
 }
 
