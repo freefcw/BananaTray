@@ -100,7 +100,7 @@ fn render_quota_usage_card(
                 .w_full()
                 .flex_col()
                 .items_start()
-                .gap(px(8.0))
+                .gap(px(10.0))
                 .child(
                     div()
                         .text_size(px(12.0))
@@ -108,12 +108,10 @@ fn render_quota_usage_card(
                         .child(t!("provider.quota_usage.desc").to_string()),
                 )
                 .child(
-                    crate::ui::settings_window::quota_usage::render_quota_usage_dropdown(
+                    crate::ui::settings_window::quota_usage::render_quota_usage_stepper(
                         detail.quota_usage_step_pct,
                         Some(detail.global_quota_usage_step_pct),
-                        detail.quota_usage_dropdown_open,
                         theme,
-                        dispatcher.interactive_action(|| AppAction::ToggleQuotaUsageDropdown),
                         move |step, window, cx| {
                             select_dispatcher.dispatch(
                                 AppAction::UpdateSetting(

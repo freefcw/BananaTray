@@ -32,9 +32,6 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::ToggleCadenceDropdown => {
             settings::toggle_cadence_dropdown(session, &mut effects)
         }
-        AppAction::ToggleQuotaUsageDropdown => {
-            settings::toggle_quota_usage_dropdown(session, &mut effects)
-        }
         AppAction::SaveGlobalHotkey(hotkey) => {
             settings::save_global_hotkey(session, hotkey, &mut effects)
         }

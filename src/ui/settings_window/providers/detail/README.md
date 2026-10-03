@@ -16,8 +16,10 @@
   of which settings capability (token / NewAPI / script / none) the provider exposes —
   a `SettingsCapability::None` provider still gets the usage-step entry; non-monitorable providers
   never get it. Its state comes from the snapshot fields `quota_usage_step_pct` （provider override,
-  `None` = follow global), `global_quota_usage_step_pct`, and `quota_usage_dropdown_open`; options
-  dispatch `SettingChange::SetProviderQuotaUsageStep` through `DetailActionDispatcher`.
+  `None` = follow global) and `global_quota_usage_step_pct`; the shared stepper
+  (`quota_usage::render_quota_usage_stepper`) dispatches `SettingChange::SetProviderQuotaUsageStep`
+  through `DetailActionDispatcher` — `−`/`+` create an override starting from the effective value,
+  and「恢复跟随全局」dispatches `step_pct: None`.
   The quota-thresholds card is gated on `show_quota_thresholds`
   (`provider_capability == Monitorable`, likewise independent of `SettingsCapability`), so a
   monitorable provider with no interactive settings still gets per-unit threshold overrides, and

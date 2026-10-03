@@ -31,7 +31,6 @@ pub(super) fn set_settings_tab(
 ) {
     session.settings_ui.active_tab = tab;
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）。
     // NewAPI 表单和二次确认态保留，回到 Providers tab 仍能继续。
     if session.settings_ui.modal.is_adding_provider() {
@@ -42,11 +41,6 @@ pub(super) fn set_settings_tab(
 
 pub(super) fn toggle_cadence_dropdown(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.cadence_dropdown_open = !session.settings_ui.cadence_dropdown_open;
-    effects.push(ContextEffect::Render.into());
-}
-
-pub(super) fn toggle_quota_usage_dropdown(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
-    session.settings_ui.quota_usage_dropdown_open = !session.settings_ui.quota_usage_dropdown_open;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -177,7 +171,6 @@ pub(super) fn apply_setting_change(
             let old_step = session.settings.notification.quota_usage_step_pct;
             let new_step = step_pct.min(100);
             session.settings.notification.quota_usage_step_pct = new_step;
-            session.settings_ui.quota_usage_dropdown_open = false;
             if old_step != new_step {
                 let inherited_ids: Vec<ProviderId> = session
                     .provider_store
@@ -208,7 +201,6 @@ pub(super) fn apply_setting_change(
                 .settings
                 .provider
                 .effective_quota_usage_step(&provider_id, global_step);
-            session.settings_ui.quota_usage_dropdown_open = false;
             if old_effective != new_effective {
                 session.alert_engine.reset_usage(&provider_id);
             }
@@ -297,7 +289,6 @@ pub(super) fn open_settings(
     provider: Option<ProviderId>,
     effects: &mut Vec<AppEffect>,
 ) {
-    session.settings_ui.quota_usage_dropdown_open = false;
     if let Some(id) = provider {
         session.settings_ui.selected_provider = id;
         session.settings_ui.active_tab = SettingsTab::Providers;

@@ -28,6 +28,7 @@ widgets/
 | `action_button.rs` | `render_action_button()` | 主操作按钮，`ButtonVariant`（Primary/Danger/Outlined/Subtle）× `ButtonSize`（Compact/Panel/FullWidth） |
 | `icon_button.rs` | `render_icon_tooltip_button()` | 图标按钮 + 悬浮 tooltip |
 | `segmented_control.rs` | `render_segmented_control()` | 分段控件（类 iOS UISegmentedControl） |
+| `stepper.rs` | `render_stepper()` + `StepperOptions` | 紧凑步进器 `[−] value [+]`，边界自动禁用按钮；数值格式与步长策略由调用方决定；按钮带 `stepper-decrement` / `stepper-increment` debug_selector 供 GPUI mock 测试定位（非 test-support 构建为 no-op） |
 | `cadence_dropdown.rs` | `render_cadence_trigger()` | 刷新频率下拉菜单触发器 |
 | `dropdown.rs` | `render_dropdown_trigger()` / `render_dropdown_panel()` / `render_dropdown_row()` | 下拉触发器 / 浮层面板 / 选项行共享构件 |
 | `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 fc-ui HotkeyInputState |

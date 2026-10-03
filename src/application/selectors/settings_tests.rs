@@ -640,14 +640,12 @@ fn settings_detail_reports_quota_usage_snapshot() {
         .set_quota_usage_step(&pid(ProviderKind::Claude), Some(10));
 
     let provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
-    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
-    session.settings_ui.quota_usage_dropdown_open = true;
+    let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
 
     let detail = detail_snapshot(&session);
 
     assert_eq!(detail.quota_usage_step_pct, Some(10));
     assert_eq!(detail.global_quota_usage_step_pct, 5);
-    assert!(detail.quota_usage_dropdown_open);
     assert!(detail.can_refresh);
 }
 
@@ -662,7 +660,6 @@ fn settings_detail_quota_usage_defaults_to_inherit() {
 
     assert_eq!(detail.quota_usage_step_pct, None);
     assert_eq!(detail.global_quota_usage_step_pct, 0);
-    assert!(!detail.quota_usage_dropdown_open);
 }
 
 #[test]

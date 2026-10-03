@@ -375,7 +375,6 @@ fn build_initial_settings_ui_state(
         active_tab: SettingsTab::General,
         selected_provider,
         cadence_dropdown_open: false,
-        quota_usage_dropdown_open: false,
         token_editing_provider: None,
         modal: SettingsModalState::Idle,
         script_provider_testing: false,
@@ -493,7 +492,6 @@ pub struct SettingsUiState {
     pub active_tab: SettingsTab,
     pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
-    pub quota_usage_dropdown_open: bool,
     /// 正在编辑 Token 的 Provider ID（None = 未编辑）
     pub token_editing_provider: Option<ProviderId>,
     /// 右侧面板的互斥模态状态机。

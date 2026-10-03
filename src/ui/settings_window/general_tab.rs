@@ -53,9 +53,7 @@ impl SettingsView {
         let notif_checked = settings.notification.session_quota_notifications;
         let sound_state = state.clone();
         let sound_checked = settings.notification.notification_sound;
-        let usage_toggle_state = state.clone();
-        let usage_select_state = state.clone();
-        let usage_dropdown_open = state.borrow().session.settings_ui.quota_usage_dropdown_open;
+        let usage_state = state.clone();
 
         // Cadence dropdown (复用现有组件)
         let cadence_mins = if settings.system.refresh_interval_mins == 0 {
@@ -142,22 +140,13 @@ impl SettingsView {
                         &t!("settings.quota_usage"),
                         &t!("settings.quota_usage.desc"),
                         theme,
-                        super::quota_usage::render_quota_usage_dropdown(
+                        super::quota_usage::render_quota_usage_stepper(
                             Some(settings.notification.quota_usage_step_pct),
                             None,
-                            usage_dropdown_open,
                             theme,
-                            move |_, window, cx| {
-                                crate::bootstrap::dispatch_in_window(
-                                    &usage_toggle_state,
-                                    AppAction::ToggleQuotaUsageDropdown,
-                                    window,
-                                    cx,
-                                );
-                            },
                             move |step, window, cx| {
                                 crate::bootstrap::dispatch_in_window(
-                                    &usage_select_state,
+                                    &usage_state,
                                     AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(
                                         step.unwrap_or(0),
                                     )),

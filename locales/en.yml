@@ -70,7 +70,7 @@ settings.refresh_cadence.desc: "How often BananaTray polls providers in the back
 settings.session_quota_notifications: "Quota notifications"
 settings.session_quota_notifications.desc: "Master switch for quota threshold, exhausted, recovered, and usage-step notifications."
 settings.quota_usage: "Usage reminders"
-settings.quota_usage.desc: "Notify each time the remaining quota drops by the chosen number of percentage points."
+settings.quota_usage.desc: "Notify each time the remaining quota drops by the chosen number of percentage points. 0 turns it off."
 settings.notification_sound: "Notification sound"
 settings.notification_sound.desc: "Play a sound when sending quota notifications."
 settings.quota_thresholds.title: "Quota status & alert thresholds"
@@ -341,8 +341,9 @@ cadence.1_minute: "1 minute"
 cadence.n_minutes: "%{n} minutes"
 
 quota_usage.off: "Off"
-quota_usage.every: "Every %{n} percentage points"
-quota_usage.inherit: "Follow global (%{step})"
+quota_usage.every: "Every %{n}%"
+quota_usage.inherited: "Following global"
+quota_usage.follow_global: "Follow global"
 
 # ── Notifications ─────────────────────────────────────────
 notification.low_quota.title: "⚠️ %{name} Quota Low"

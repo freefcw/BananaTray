@@ -70,7 +70,7 @@ settings.refresh_cadence.desc: "BananaTray 在后台轮询服务商的间隔时�
 settings.session_quota_notifications: "额度通知"
 settings.session_quota_notifications.desc: "额度阈值提醒、耗尽、恢复和用量步长四类提醒的总开关。"
 settings.quota_usage: "用量提醒"
-settings.quota_usage.desc: "剩余额度每累计下降所设百分点时通知一次。"
+settings.quota_usage.desc: "剩余额度每累计下降所设百分点时通知一次，0 表示关闭。"
 settings.notification_sound: "通知声音"
 settings.notification_sound.desc: "发送配额通知时播放声音。"
 settings.quota_thresholds.title: "额度状态与提醒阈值"
@@ -341,8 +341,9 @@ cadence.1_minute: "1 分钟"
 cadence.n_minutes: "%{n} 分钟"
 
 quota_usage.off: "关闭"
-quota_usage.every: "每 %{n} 个百分点"
-quota_usage.inherit: "跟随全局（%{step}）"
+quota_usage.every: "每 %{n}%"
+quota_usage.inherited: "跟随全局"
+quota_usage.follow_global: "恢复跟随全局"
 
 # ── 通知 ──────────────────────────────────────────────────
 notification.low_quota.title: "⚠️ %{name} 余量不足"

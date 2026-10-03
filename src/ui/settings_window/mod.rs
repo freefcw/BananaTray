@@ -282,7 +282,6 @@ impl SettingsView {
         {
             let settings_ui = &mut state.borrow_mut().session.settings_ui;
             settings_ui.token_editing_provider = None;
-            settings_ui.quota_usage_dropdown_open = false;
         }
         let load_debug_diagnostics =
             state.borrow().session.settings_ui.active_tab == SettingsTab::Debug;

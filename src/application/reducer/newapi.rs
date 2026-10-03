@@ -21,7 +21,6 @@ pub(super) fn enter_add_newapi(session: &mut AppSession, effects: &mut Vec<AppEf
     // 进入新增表单时直接覆盖其他模态（picker / 旧的编辑回填 / 脚本表单）
     session.settings_ui.modal = SettingsModalState::AddingNewApi;
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -30,7 +29,6 @@ pub(super) fn cancel_add_newapi(session: &mut AppSession, effects: &mut Vec<AppE
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -90,7 +88,6 @@ pub(super) fn submit_newapi(
     // 避免写入失败时产生幽灵 Provider 或虚假成功通知。
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -204,7 +201,6 @@ pub(super) fn edit_newapi(
     // 磁盘 I/O 委托给 runtime effect handler，保持 reducer 纯函数
     // 切到 NewAPI 编辑面板时，token 编辑上下文需要结束。
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     session.settings_ui.modal = SettingsModalState::LoadingNewApi(provider_id.clone());
     effects.push(NewApiEffect::LoadConfig { provider_id }.into());
     effects.push(ContextEffect::Render.into());
@@ -219,7 +215,6 @@ pub(super) fn delete_newapi(
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     let request_id = session
         .settings_ui
         .begin_custom_provider_delete(provider_id.clone());
@@ -237,7 +232,6 @@ pub(super) fn delete_newapi(
 pub(super) fn confirm_delete_newapi(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.modal = SettingsModalState::ConfirmingDeleteNewApi;
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }
 
@@ -246,6 +240,5 @@ pub(super) fn cancel_delete_newapi(session: &mut AppSession, effects: &mut Vec<A
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     session.settings_ui.token_editing_provider = None;
-    session.settings_ui.quota_usage_dropdown_open = false;
     effects.push(ContextEffect::Render.into());
 }

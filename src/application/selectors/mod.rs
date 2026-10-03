@@ -250,7 +250,6 @@ pub struct SettingsProviderDetailViewState {
     pub quota_display_mode: QuotaDisplayMode,
     pub quota_usage_step_pct: Option<u8>,
     pub global_quota_usage_step_pct: u8,
-    pub quota_usage_dropdown_open: bool,
     pub show_quota_thresholds: bool,
     pub quota_thresholds: Vec<QuotaThresholdUnitViewState>,
     /// 配额可见性列表（用于设置 UI 中的勾选框）

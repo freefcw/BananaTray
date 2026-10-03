@@ -88,7 +88,7 @@
 - `Monitorable`
   - 真实可监控 provider。
   - 会进入启动 / 周期 / 手动 / Debug 刷新链路。
-  - 设置页会显示刷新按钮、quota visibility 配置、“用量提醒”步长覆盖（跟随全局 / 关闭 / 每 5/10/20 个百分点）和“额度状态与提醒阈值”覆盖（跟随全局 / 按单位自定义 warning / critical / notify 剩余值阈值）；阈值配置对 `SettingsCapability::None` 的可监控 provider 同样可见，`Informational` / `Placeholder` 不显示。
+  - 设置页会显示刷新按钮、quota visibility 配置、“用量提醒”步长覆盖（步进器：跟随全局 / 0 = 关闭；按钮从 0 起可选 1–10 逐整数及 15–100 的 5 倍数档位；配置文件可保存并显示 0–100 任意整数，旧非整档值按原值显示，点按 `−`/`+` 时按步进规则对齐到相邻档位）和“额度状态与提醒阈值”覆盖（跟随全局 / 按单位自定义 warning / critical / notify 剩余值阈值）；阈值配置对 `SettingsCapability::None` 的可监控 provider 同样可见，`Informational` / `Placeholder` 不显示。
   - 状态色与告警按各单位的**绝对剩余值**判定（Credit → 货币、Points / 纯余额 → 原生额度、其余 → 百分比），不再换算成百分比。推论：总额本身小于默认 warning 阈值的小额池会长期显示 Yellow 且永远到不了 Green——例如 Kiro 免费档的 50 credits（Amount 默认 warning 100），或 \$5–\$10 的信用余额（Currency 默认 warning \$10）。这是阈值模型的预期语义（小额池本来就该被关注），不是故障；可在设置中按单位或按单个 Provider 调整阈值。
   - `ProviderManager::refresh_by_id(id, provider_credentials)` 在进入 `check_availability(ctx) → refresh(ctx)` 前会检查 `supports_refresh()`，非 `Monitorable` 直接返回 `NoData`。
 - `Informational`
