@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 主路径快速门禁：不安装系统依赖、不安装 toolchain，只检查 GPUI-free lib surface。
+  # 主路径快速门禁：不安装系统依赖；Rust 版本和 rustfmt/clippy 由
+  # rust-toolchain.toml 固定，只检查 GPUI-free lib surface。
   linux-build:
     runs-on: ubuntu-latest
 
