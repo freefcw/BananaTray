@@ -141,7 +141,9 @@ pub fn run_app() {
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
             bootstrap::start_custom_provider_pump(&state, custom_provider_rx, cx);
-            if let Some(history_rx) = state.borrow_mut().take_history_receiver() {
+            // borrow_mut 的临时值会先释放，if let 条件里直接借用会撑满整个分支体。
+            let history_rx = state.borrow_mut().take_history_receiver();
+            if let Some(history_rx) = history_rx {
                 bootstrap::start_history_pump(&state, history_rx, cx);
                 crate::bootstrap::dispatch_in_app(
                     &state,
