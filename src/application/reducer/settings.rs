@@ -178,6 +178,10 @@ pub(super) fn apply_setting_change(
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.display.quota_display_mode = mode;
         }
+        SettingChange::ToggleMergeHistoryCharts => {
+            session.settings.display.merge_history_charts =
+                !session.settings.display.merge_history_charts;
+        }
         SettingChange::ToggleQuotaVisibility {
             provider_id,
             quota_key,

@@ -16,12 +16,24 @@ use chrono::{Datelike, Local, Timelike};
 
 /// 非 Charts 状态（空、全失败、无数值）统一返回空列表，由 UI 决定要不要占位。
 /// 少于 2 个点的序列画不出折线，只剩角落一个点，直接过滤。
-/// 每条配额各自一张图。托盘和设置页都用这个。
+/// 每条配额各自一张图。托盘用这个。
 pub fn history_charts_view(ready: &HistoryReady, mode: QuotaDisplayMode) -> Vec<HistoryChartView> {
-    build_history_charts(ready, mode)
+    build_history_charts(ready, mode, false)
 }
 
-fn build_history_charts(ready: &HistoryReady, mode: QuotaDisplayMode) -> Vec<HistoryChartView> {
+/// 单位和含义相同的配额合成一张图。单位不同的仍分开。设置页用这个。
+pub fn history_charts_view_merged(
+    ready: &HistoryReady,
+    mode: QuotaDisplayMode,
+) -> Vec<HistoryChartView> {
+    build_history_charts(ready, mode, true)
+}
+
+fn build_history_charts(
+    ready: &HistoryReady,
+    mode: QuotaDisplayMode,
+    merge: bool,
+) -> Vec<HistoryChartView> {
     let HistoryReadyState::Charts(series) = &ready.state else {
         return Vec::new();
     };
@@ -30,11 +42,58 @@ fn build_history_charts(ready: &HistoryReady, mode: QuotaDisplayMode) -> Vec<His
         .filter(|item| is_line_series(item))
         .map(|item| project_display_series(item, mode))
         .collect();
-    let groups: Vec<Vec<&HistorySeries>> = projected.iter().map(|item| vec![item]).collect();
+    let groups = if merge {
+        group_mergeable(&projected)
+    } else {
+        projected.iter().map(|item| vec![item]).collect()
+    };
     groups
         .iter()
         .map(|group| history_chart_view(group, ready.axis_start_ms, ready.axis_end_ms))
         .collect()
+}
+
+struct MergeGroup<'a> {
+    key: Option<(HistoryUnit, HistoryYKind)>,
+    series: Vec<&'a HistorySeries>,
+}
+
+/// 能共用一把纵轴的序列并进同一组。单位或已用/剩余含义混在一条序列里的，单独成图。
+fn group_mergeable(series: &[HistorySeries]) -> Vec<Vec<&HistorySeries>> {
+    let mut groups: Vec<MergeGroup<'_>> = Vec::new();
+    for item in series {
+        let key = merge_key(item);
+        if let Some(key) = key {
+            if let Some(group) = groups.iter_mut().find(|group| group.key == Some(key)) {
+                group.series.push(item);
+                continue;
+            }
+        }
+        groups.push(MergeGroup {
+            key,
+            series: vec![item],
+        });
+    }
+    groups.into_iter().map(|group| group.series).collect()
+}
+
+fn merge_key(series: &HistorySeries) -> Option<(HistoryUnit, HistoryYKind)> {
+    let first = series.segments.first()?;
+    if series
+        .segments
+        .iter()
+        .any(|segment| segment.unit != first.unit || segment.y_kind != first.y_kind)
+    {
+        return None;
+    }
+    if series
+        .segments
+        .iter()
+        .all(|segment| segment.points.is_empty())
+    {
+        return None;
+    }
+    Some((first.unit, first.y_kind))
 }
 
 /// 历史线程不读设置。剩余只在视图里由已用和 limit 换算。
@@ -846,6 +905,116 @@ mod tests {
         let (x, y) = hover_chip_origin(40.0, 4.0, 200.0, 80.0, 50.0, 16.0);
         assert!(y > 4.0);
         assert!(x >= 4.0 && y + 16.0 <= 76.0);
+    }
+
+    fn series_ys(
+        key: &str,
+        title: &str,
+        unit: HistoryUnit,
+        kind: HistoryYKind,
+        ys: &[f64],
+    ) -> HistorySeries {
+        HistorySeries {
+            quota_key: key.to_string(),
+            label_spec_json: format!("{{\"Raw\":\"{title}\"}}"),
+            segments: vec![HistorySegment {
+                unit,
+                y_kind: kind,
+                points: ys
+                    .iter()
+                    .enumerate()
+                    .map(|(index, y)| SeriesPoint {
+                        bucket_start_ms: index as i64 * 900_000,
+                        y: *y,
+                        limit: Some(100.0),
+                        gap_before: false,
+                    })
+                    .collect(),
+            }],
+        }
+    }
+
+    #[test]
+    fn merged_charts_share_a_scale_for_the_same_unit() {
+        let ready = ready(vec![
+            series_ys(
+                "daily",
+                "日配额",
+                HistoryUnit::Percentage,
+                HistoryYKind::MeteredUsed,
+                &[100.0, 100.0],
+            ),
+            series_ys(
+                "weekly",
+                "周配额",
+                HistoryUnit::Percentage,
+                HistoryYKind::MeteredUsed,
+                &[40.0, 40.0],
+            ),
+            series_ys(
+                "credit",
+                "余额",
+                HistoryUnit::Currency,
+                HistoryYKind::BalanceRemaining,
+                &[3.0, 3.0],
+            ),
+        ]);
+
+        assert_eq!(history_charts_view(&ready, QuotaDisplayMode::Used).len(), 3);
+        let merged = history_charts_view_merged(&ready, QuotaDisplayMode::Used);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].lines.len(), 2);
+        assert_eq!(merged[0].lines[0].title, "日配额");
+        assert_eq!(merged[0].lines[1].title, "周配额");
+        assert_eq!(merged[0].quota_key, "daily|weekly");
+        let high = merged[0].lines[0].segments[0].points[0].y_ratio;
+        let low = merged[0].lines[1].segments[0].points[0].y_ratio;
+        assert!(high > low);
+        assert!((high - low) > 0.2);
+        assert_eq!(merged[1].quota_key, "credit");
+        assert_eq!(merged[1].title, "余额");
+    }
+
+    #[test]
+    fn mixed_unit_series_stays_out_of_a_merged_chart() {
+        let mut mixed = series_ys(
+            "mixed",
+            "混合",
+            HistoryUnit::Percentage,
+            HistoryYKind::MeteredUsed,
+            &[20.0, 40.0],
+        );
+        mixed.segments.push(HistorySegment {
+            unit: HistoryUnit::Amount,
+            y_kind: HistoryYKind::BalanceRemaining,
+            points: vec![
+                SeriesPoint {
+                    bucket_start_ms: 0,
+                    y: 1.0,
+                    limit: None,
+                    gap_before: true,
+                },
+                SeriesPoint {
+                    bucket_start_ms: 900_000,
+                    y: 2.0,
+                    limit: None,
+                    gap_before: false,
+                },
+            ],
+        });
+        let percent = series_ys(
+            "daily",
+            "日配额",
+            HistoryUnit::Percentage,
+            HistoryYKind::MeteredUsed,
+            &[80.0, 70.0],
+        );
+        let merged =
+            history_charts_view_merged(&ready(vec![mixed, percent]), QuotaDisplayMode::Used);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].lines.len(), 1);
+        assert_eq!(merged[0].quota_key, "mixed");
+        assert_eq!(merged[1].quota_key, "daily");
     }
 
     #[test]

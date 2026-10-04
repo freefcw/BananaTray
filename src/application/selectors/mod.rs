@@ -283,7 +283,7 @@ pub enum SettingsProviderHistoryPhase {
 /// 折线图视图数据：设置页与托盘弹窗共用，坐标已归一到 0..1。
 ///
 /// `quota_key` 与 `QuotaInfo::stable_key` 相同，托盘用它把折线放进对应配额卡。
-/// 一张图可以有多条 `lines`，颜色按 `color_index` 区分。
+/// 一张图可以有多条 `lines`：设置页在合并打开时，把单位和含义相同的配额画在一起。
 /// `axis` 的横轴是样本起止时间，纵轴是留白后的共用刻度。
 #[derive(Debug, Clone)]
 pub struct HistoryChartView {

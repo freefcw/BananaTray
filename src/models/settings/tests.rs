@@ -195,6 +195,7 @@ fn display_settings_missing_tray_popup_uses_default() {
 
     let restored: DisplaySettings = serde_json::from_value(json).unwrap();
     assert_eq!(restored.tray_popup, TrayPopupSettings::default());
+    assert!(restored.merge_history_charts);
 }
 
 #[test]

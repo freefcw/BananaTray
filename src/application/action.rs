@@ -303,6 +303,7 @@ pub enum SettingChange {
     },
     SetTrayIconStyle(TrayIconStyle),
     SetQuotaDisplayMode(QuotaDisplayMode),
+    ToggleMergeHistoryCharts,
     ToggleQuotaVisibility {
         provider_id: ProviderId,
         quota_key: String,

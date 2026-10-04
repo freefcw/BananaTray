@@ -541,6 +541,8 @@ settings.quota_display_mode: "Quota Display"
 settings.quota_display_mode.desc: "Show remaining or used on quota cards and history charts."
 settings.quota_display_mode.remaining: "Remaining"
 settings.quota_display_mode.used: "Used"
+settings.merge_history_charts: "Merge lines"
+settings.merge_history_charts.desc: "Quotas with the same unit and remaining-or-used value share one chart."
 
 # ── NewAPI Quick Add ─────────────────────────────────────
 newapi.add_title: "Add NewAPI Relay"

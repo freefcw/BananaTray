@@ -23,7 +23,7 @@ AppSettings
   - 关联常量 `DEFAULT_REFRESH_INTERVAL_MINS: u64 = 5`，供 `RefreshScheduler` 等模块引用，保持默认值单一来源
   - 关联常量 `DEFAULT_GLOBAL_HOTKEY`，作为首次启动和无效配置回退时的默认全局热键；值使用 GPUI 可回读的持久化格式
 - **`NotificationSettings`** — `session_quota_notifications`（配额四类提醒总开关）/ `notification_sound` / `quota_usage_step_pct`（全局用量步长百分点，0 = 关闭）
-- **`DisplaySettings`** - `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `tray_popup` / 各 UI 开关
+- **`DisplaySettings`** - `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `merge_history_charts` / `tray_popup` / 各 UI 开关。`quota_display_mode` 同时决定配额卡片和历史折线画剩余还是已用；纯余额没有已用，折线仍画剩余。默认剩余。`merge_history_charts` 默认打开：设置页把单位和含义相同的历史折线画进同一张图；关掉后每条配额一张图。托盘不受这个开关影响。
 - **`LoggingSettings`** - `max_bytes` / `max_files`；日志轮转与启动清理阈值，默认 5 MiB × 4 份（磁盘硬上限约 25 MiB）。不在 UI 暴露，仅在 settings.json 持久化；`#[serde(default)]` 保证旧配置无需迁移。详见 `docs/logging.md`
 - **`QuotaRules`**（`AppSettings::quota`）— 全局额度状态/提醒阈值，按 `QuotaThresholdUnit` 分三组：百分比默认 50/20/10，货币默认 10/2/1，积分·额度默认 100/20/10（warning / critical / notify，全部为剩余值、inclusive `<=` 边界）。`AppSettings::effective_quota_rules(&ProviderId)` 叠加 Provider 覆盖后返回生效规则。
 - **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `quota_usage_steps` / `quota_threshold_overrides`

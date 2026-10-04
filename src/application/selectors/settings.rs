@@ -256,10 +256,12 @@ fn history_phase(session: &AppSession, id: &ProviderId) -> SettingsProviderHisto
             SettingsProviderHistoryPhase::Message(t!("provider.history.no_numeric").to_string())
         }
         HistoryReadyState::Charts(_) => {
-            let charts = super::history::history_charts_view(
-                ready,
-                session.settings.display.quota_display_mode,
-            );
+            let mode = session.settings.display.quota_display_mode;
+            let charts = if session.settings.display.merge_history_charts {
+                super::history::history_charts_view_merged(ready, mode)
+            } else {
+                super::history::history_charts_view(ready, mode)
+            };
             if charts.is_empty() {
                 SettingsProviderHistoryPhase::Message(
                     t!("provider.history.too_few_points").to_string(),

@@ -3,8 +3,11 @@ use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
 use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
 use crate::theme::Theme;
-use crate::ui::widgets::{render_segmented_control, SegmentedSize};
-use gpui::{div, px, rgb, App, Div, FontWeight, ParentElement, Styled, Window};
+use crate::ui::widgets::{render_segmented_control, render_toggle_switch, SegmentedSize};
+use gpui::{
+    div, px, rgb, App, Div, FontWeight, InteractiveElement, MouseButton, ParentElement, Styled,
+    Window,
+};
 use rust_i18n::t;
 
 // 设计稿颜色常量
@@ -45,6 +48,8 @@ impl SettingsView {
             .child(self.render_tray_icon_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_quota_display_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(self.render_merge_charts_setting(settings, theme))
     }
 
     fn render_theme_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
@@ -151,6 +156,49 @@ impl SettingsView {
                 );
             },
         )
+    }
+
+    fn render_merge_charts_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        let state = self.state.clone();
+        let enabled = settings.display.merge_history_charts;
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .w_full()
+            .py(px(10.0))
+            .gap(px(16.0))
+            .child(
+                div()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text.primary)
+                            .child(t!("settings.merge_history_charts").to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(theme.text.muted)
+                            .child(t!("settings.merge_history_charts.desc").to_string()),
+                    ),
+            )
+            .child(
+                render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
+                    .flex_shrink_0()
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        crate::bootstrap::dispatch_in_window(
+                            &state,
+                            AppAction::UpdateSetting(SettingChange::ToggleMergeHistoryCharts),
+                            window,
+                            cx,
+                        );
+                    }),
+            )
     }
 
     fn render_toolbar_card(&self, settings: &AppSettings, theme: &Theme) -> Div {

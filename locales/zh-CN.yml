@@ -541,6 +541,8 @@ settings.quota_display_mode: "额度显示"
 settings.quota_display_mode.desc: "配额卡片和历史折线显示剩余还是已用。"
 settings.quota_display_mode.remaining: "剩余"
 settings.quota_display_mode.used: "已用"
+settings.merge_history_charts: "合并折线"
+settings.merge_history_charts.desc: "单位和剩余/已用含义相同的配额画在一张图里。"
 
 # ── NewAPI 快速添加 ──────────────────────────────────────
 newapi.add_title: "新增 NewAPI 中转站"

@@ -520,6 +520,28 @@ fn set_quota_display_mode_round_trip() {
     );
 }
 
+#[test]
+fn toggle_merge_history_charts_flips_and_persists() {
+    let mut session = make_session();
+    assert!(session.settings.display.merge_history_charts);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleMergeHistoryCharts),
+    );
+    assert!(!session.settings.display.merge_history_charts);
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleMergeHistoryCharts),
+    );
+    assert!(session.settings.display.merge_history_charts);
+}
+
 // ── ToggleQuotaVisibility ──────────────────────────
 
 #[test]

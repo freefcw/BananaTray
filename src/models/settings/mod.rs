@@ -139,6 +139,9 @@ pub struct DisplaySettings {
     /// 额度显示模式：剩余 or 已用
     #[serde(default)]
     pub quota_display_mode: QuotaDisplayMode,
+    /// 设置页历史图是否把单位相同的配额画在一张图里。托盘仍是每张卡一条线。
+    #[serde(default = "default_true")]
+    pub merge_history_charts: bool,
     /// 是否在工具栏显示 Dashboard 按钮
     #[serde(default = "default_true")]
     pub show_dashboard_button: bool,
@@ -165,6 +168,7 @@ impl Default for DisplaySettings {
             language: default_language(),
             tray_icon_style: TrayIconStyle::default(),
             quota_display_mode: QuotaDisplayMode::default(),
+            merge_history_charts: true,
             show_dashboard_button: true,
             show_refresh_button: true,
             show_debug_tab: false,
