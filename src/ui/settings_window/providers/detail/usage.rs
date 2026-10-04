@@ -22,7 +22,7 @@ pub(super) fn render_usage_section(
             let mut section = usage_section(theme);
             for quota in quotas {
                 section = section.child(div().mt(px(10.0)).child(
-                    crate::ui::widgets::render_quota_bar(quota, theme, 0, display_mode),
+                    crate::ui::widgets::render_quota_bar(quota, theme, 0, display_mode, None),
                 ));
             }
             section

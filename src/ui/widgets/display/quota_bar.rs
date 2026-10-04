@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use crate::application::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_card_mode_label, format_quota_status_label, QuotaDisplayViewState,
+    format_quota_card_mode_label, format_quota_status_label, HistoryChartView,
+    QuotaDisplayViewState,
 };
-use crate::models::{QuotaDisplayMode, QuotaInfo};
+use crate::models::{PopupLayout, QuotaDisplayMode, QuotaInfo};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -182,12 +183,16 @@ fn render_quota_detail_row(detail_text: &str, theme: &Theme) -> Div {
     )
 }
 
-/// Lumina Bar 风格的 quota 卡片
+/// Lumina Bar 风格的 quota 卡片。
+///
+/// `history` 有值时把近 24 小时折线画在卡片底部，不再另起标题。
+/// 高度增量见 `PopupLayout::CARD_HISTORY_EXTRA`（卡片 `gap(6)` + 图表高度）。
 pub(crate) fn render_quota_bar(
     quota_view: &QuotaDisplayViewState,
     theme: &Theme,
     generation: u64,
     display_mode: QuotaDisplayMode,
+    history: Option<&HistoryChartView>,
 ) -> impl IntoElement {
     let q = &quota_view.quota;
     let status = quota_view.status_level;
@@ -200,22 +205,32 @@ pub(crate) fn render_quota_bar(
     let has_unit = format_quota_card_has_unit(q);
     let detail_text = format_quota_card_detail_text(quota_view);
     let hover_bg = theme.bg.card_inner_hovered;
-    let card = render_quota_card_frame(q, theme, hover_bg);
+    let mut card = render_quota_card_frame(q, theme, hover_bg)
+        .child(render_quota_header_row(
+            quota_view,
+            badge_color,
+            badge_label,
+            theme,
+        ))
+        .child(render_quota_value_row(
+            &display_text,
+            &mode_label,
+            has_unit,
+            theme,
+        ))
+        .when(!is_balance, |card: Stateful<Div>| {
+            card.child(render_quota_progress_row(q, fill_color, generation, theme))
+        })
+        .child(render_quota_detail_row(&detail_text, theme));
 
-    card.child(render_quota_header_row(
-        quota_view,
-        badge_color,
-        badge_label,
-        theme,
-    ))
-    .child(render_quota_value_row(
-        &display_text,
-        &mode_label,
-        has_unit,
-        theme,
-    ))
-    .when(!is_balance, |card: Stateful<Div>| {
-        card.child(render_quota_progress_row(q, fill_color, generation, theme))
-    })
-    .child(render_quota_detail_row(&detail_text, theme))
+    if let Some(history) = history {
+        card = card.child(crate::ui::widgets::render_history_line_chart(
+            &history.quota_key,
+            history.lines.clone(),
+            history.axis.clone(),
+            PopupLayout::CARD_HISTORY_PLOT_HEIGHT,
+            theme,
+        ));
+    }
+    card
 }

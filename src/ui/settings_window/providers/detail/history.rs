@@ -1,16 +1,19 @@
 use super::DetailActionDispatcher;
 use crate::application::{
-    AppAction, SettingChange, SettingsProviderDetailViewState, SettingsProviderHistoryPhase,
+    AppAction, HistoryChartView, HistoryLineView, SettingChange, SettingsProviderDetailViewState,
+    SettingsProviderHistoryPhase,
 };
 use crate::history::HistoryRange;
 use crate::models::RETENTION_PRESETS;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
 use crate::ui::widgets::{
-    render_detail_empty_card, render_detail_section_title, render_history_line_chart,
-    render_history_retention_dropdown, render_segmented_control, SegmentedSize,
+    history_line_color, render_detail_empty_card, render_detail_section_title,
+    render_history_line_chart, render_history_retention_dropdown, HistoryRetentionMenu,
 };
-use gpui::{div, px, Div, InteractiveElement, ParentElement, Styled};
+use gpui::{
+    div, px, transparent_black, App, Div, InteractiveElement, ParentElement, Styled, Window,
+};
 use rust_i18n::t;
 
 pub(super) fn render_history_section(
@@ -27,47 +30,107 @@ pub(super) fn render_history_section(
             &t!("provider.history.section"),
             theme,
         ))
-        .child(render_toolbar(detail, dispatcher, theme))
-        .child(render_retention_row(detail, dispatcher, theme));
+        .child(render_toolbar(detail, dispatcher, theme));
 
     section = match &history.phase {
         SettingsProviderHistoryPhase::Message(message) => {
             section.child(render_detail_empty_card(message, theme))
         }
         SettingsProviderHistoryPhase::Charts(charts) => {
-            let mut section = section.child(
-                div()
-                    .text_size(px(11.0))
-                    .text_color(theme.text.muted)
-                    .child(t!("provider.history.gap_hint").to_string()),
-            );
+            let mut section = section;
             for chart in charts {
-                section = section.child(
+                let heading = if chart.lines.len() > 1 {
+                    render_chart_legend(&chart.lines, theme)
+                } else {
                     div()
-                        .flex_col()
-                        .gap(px(6.0))
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(theme.text.secondary)
-                                .child(chart.title.clone()),
-                        )
-                        .child(render_history_line_chart(
-                            chart.segments.clone(),
-                            140.0,
-                            theme,
-                        )),
-                );
+                        .text_size(px(12.0))
+                        .text_color(theme.text.secondary)
+                        .child(chart.title.clone())
+                };
+                section = section.child(div().flex_col().gap(px(6.0)).child(heading).child(
+                    render_history_line_chart(
+                        &chart.quota_key,
+                        chart.lines.clone(),
+                        chart.axis.clone(),
+                        120.0,
+                        theme,
+                    ),
+                ));
             }
-            section.child(
-                div()
-                    .text_size(px(11.0))
-                    .text_color(theme.text.muted)
-                    .child(t!("provider.history.includes_hidden").to_string()),
-            )
+            if charts_have_gap(charts) {
+                section =
+                    section.child(render_history_note(&t!("provider.history.gap_hint"), theme));
+            }
+            if charts_include_hidden_quota(detail, charts) {
+                section = section.child(render_history_note(
+                    &t!("provider.history.includes_hidden"),
+                    theme,
+                ));
+            }
+            section
         }
     };
-    section
+    section.child(render_clear_control(
+        history.confirming_clear,
+        dispatcher,
+        theme,
+    ))
+}
+
+fn charts_have_gap(charts: &[HistoryChartView]) -> bool {
+    charts.iter().any(|chart| {
+        chart.lines.iter().any(|line| {
+            line.segments
+                .iter()
+                .any(|segment| segment.points.iter().any(|point| point.gap_before))
+        })
+    })
+}
+
+fn charts_include_hidden_quota(
+    detail: &SettingsProviderDetailViewState,
+    charts: &[HistoryChartView],
+) -> bool {
+    charts.iter().any(|chart| {
+        chart.lines.iter().any(|line| {
+            detail
+                .quota_visibility
+                .iter()
+                .any(|item| !item.visible && item.quota_key == line.quota_key)
+        })
+    })
+}
+
+fn render_chart_legend(lines: &[HistoryLineView], theme: &Theme) -> Div {
+    let mut row = div().flex().flex_wrap().items_center().gap(px(10.0));
+    for line in lines {
+        row = row.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .child(
+                    div()
+                        .size(px(8.0))
+                        .rounded_full()
+                        .bg(history_line_color(line.color_index, theme)),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.text.secondary)
+                        .child(line.title.clone()),
+                ),
+        );
+    }
+    row
+}
+
+fn render_history_note(text: &str, theme: &Theme) -> Div {
+    div()
+        .text_size(px(11.0))
+        .text_color(theme.text.muted)
+        .child(text.to_string())
 }
 
 fn render_toolbar(
@@ -94,18 +157,67 @@ fn render_toolbar(
         .flex()
         .items_center()
         .justify_between()
-        .child(render_segmented_control(
+        .gap(px(12.0))
+        .child(render_range_control(
             &options,
             &detail.history.range,
-            SegmentedSize::Compact,
             theme,
             move |range, window, cx| {
                 range_dispatcher.dispatch(AppAction::SetHistoryRange(range), window, cx);
             },
         ))
+        .child(render_retention_controls(detail, dispatcher, theme))
 }
 
-fn render_retention_row(
+fn render_range_control<F>(
+    options: &[(String, HistoryRange)],
+    current: &HistoryRange,
+    theme: &Theme,
+    on_select: F,
+) -> Div
+where
+    F: Fn(HistoryRange, &mut Window, &mut App) + Clone + 'static,
+{
+    let mut control = div()
+        .flex()
+        .items_center()
+        .gap(px(2.0))
+        .p(px(2.0))
+        .rounded(px(6.0))
+        .bg(theme.bg.subtle);
+    for (label, value) in options {
+        let is_active = current == value;
+        let value = *value;
+        let on_select = on_select.clone();
+        control = control.child(
+            div()
+                .h(px(22.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .rounded(px(4.0))
+                .bg(if is_active {
+                    theme.nav.pill_active_bg
+                } else {
+                    transparent_black()
+                })
+                .text_size(px(12.0))
+                .text_color(if is_active {
+                    theme.nav.pill_active_text
+                } else {
+                    theme.text.muted
+                })
+                .cursor_pointer()
+                .child(label.clone())
+                .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                    on_select(value, window, cx);
+                }),
+        );
+    }
+    control
+}
+
+fn render_retention_controls(
     detail: &SettingsProviderDetailViewState,
     dispatcher: &DetailActionDispatcher,
     theme: &Theme,
@@ -129,28 +241,28 @@ fn render_retention_row(
         )
     }));
 
-    let mut row = div()
+    div()
         .flex()
         .items_center()
-        .justify_between()
-        .gap(px(12.0))
+        .gap(px(8.0))
         .child(
-            div().flex_col().gap(px(2.0)).child(
-                div()
-                    .text_size(px(12.0))
-                    .text_color(theme.text.secondary)
-                    .child(
-                        t!(
-                            "provider.history.retention_effective",
-                            n = history.effective_days
-                        )
-                        .to_string(),
-                    ),
-            ),
+            div()
+                .text_size(px(12.0))
+                .text_color(theme.text.muted)
+                .child(
+                    t!(
+                        "provider.history.retention_effective",
+                        n = history.effective_days
+                    )
+                    .to_string(),
+                ),
         )
         .child(render_history_retention_dropdown(
             label,
-            history.dropdown_open,
+            HistoryRetentionMenu {
+                open: history.dropdown_open,
+                compact: true,
+            },
             options,
             &history.retention_override,
             theme,
@@ -171,14 +283,7 @@ fn render_retention_row(
                     cx,
                 );
             },
-        ));
-
-    row = row.child(render_clear_control(
-        history.confirming_clear,
-        dispatcher,
-        theme,
-    ));
-    row
+        ))
 }
 
 fn render_clear_control(
@@ -203,18 +308,12 @@ fn render_clear_control(
     }
     let begin = dispatcher.clone();
     div()
-        .h(px(24.0))
-        .px(px(8.0))
-        .flex()
-        .items_center()
-        .rounded(px(6.0))
-        .bg(theme.bg.subtle)
         .cursor_pointer()
         .hover(|style| style.opacity(0.8))
         .child(
             div()
                 .text_size(px(11.0))
-                .text_color(theme.text.secondary)
+                .text_color(theme.text.muted)
                 .child(t!("provider.history.clear").to_string()),
         )
         .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {

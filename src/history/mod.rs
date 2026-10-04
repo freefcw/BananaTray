@@ -17,8 +17,9 @@ pub use sample::{
     capture_sample, HistoryStatus, HistoryUnit, QuotaHistoryPoint, QuotaHistorySample,
 };
 pub use series::{
-    interpret, plot_segment, HistoryLoadOutcome, HistoryRange, HistoryReady, HistoryReadyState,
-    HistorySegment, HistorySeries, HistoryYKind, PlottedPoint, SeriesPoint,
+    interpret, is_line_series, plot_on_scale, plot_segment, series_x_bounds, shared_y_scale,
+    HistoryLoadOutcome, HistoryRange, HistoryReady, HistoryReadyState, HistorySegment,
+    HistorySeries, HistoryYKind, PlottedPoint, SeriesPoint, SeriesXBounds, SharedYScale,
 };
 pub use sqlite::SqliteQuotaHistoryStore;
 pub use store::{

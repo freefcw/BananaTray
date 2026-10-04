@@ -36,7 +36,9 @@ pub enum HistoryYKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SeriesPoint {
     pub bucket_start_ms: i64,
+    /// 计量配额这里是已用。剩余由视图按 `limit - y` 投影，不在历史线程里读设置。
     pub y: f64,
+    pub limit: Option<f64>,
     pub gap_before: bool,
 }
 
@@ -81,6 +83,16 @@ pub struct PlottedPoint {
     pub x_ratio: f64,
     pub y_ratio: f64,
     pub gap_before: bool,
+}
+
+/// 少于两个点只能画成一个角落的点，不当作折线。
+pub fn is_line_series(series: &HistorySeries) -> bool {
+    series
+        .segments
+        .iter()
+        .map(|segment| segment.points.len())
+        .sum::<usize>()
+        >= 2
 }
 
 pub fn interpret(
@@ -199,6 +211,7 @@ fn series_for_key(
         current.as_mut().unwrap().points.push(SeriesPoint {
             bucket_start_ms: bucket,
             y: drawable.y,
+            limit: drawable.limit,
             gap_before: gap || !same,
         });
         previous_bucket = Some(bucket);
@@ -224,6 +237,7 @@ struct Drawable {
     unit: HistoryUnit,
     y_kind: HistoryYKind,
     y: f64,
+    limit: Option<f64>,
 }
 
 fn drawable(point: &HistoryPointRow) -> Option<Drawable> {
@@ -235,6 +249,7 @@ fn drawable(point: &HistoryPointRow) -> Option<Drawable> {
                 unit,
                 y_kind: HistoryYKind::MeteredUsed,
                 y,
+                limit: point.limit_value,
             })
         }
         HistoryValueKind::Balance => {
@@ -244,6 +259,7 @@ fn drawable(point: &HistoryPointRow) -> Option<Drawable> {
                 unit,
                 y_kind: HistoryYKind::BalanceRemaining,
                 y,
+                limit: None,
             })
         }
         HistoryValueKind::NonNumeric => None,
@@ -254,15 +270,100 @@ fn floor_bucket(captured_at_ms: i64, width: i64) -> i64 {
     captured_at_ms.div_euclid(width) * width
 }
 
+/// 数据跨度两侧各留出的比例。折线不贴边，小波动也不会被整段刻度压扁。
+const Y_PAD_RATIO: f64 = 0.15;
+/// 样本时间跨度两侧各留出的比例。横轴按样本展开，不按空白窗口。
+const X_PAD_RATIO: f64 = 1.0 / 16.0;
+/// 所有点落在同一时刻时，横轴向两侧各扩这么多。
+const X_FLAT_PAD_MS: i64 = 15 * 60 * 1000;
+
+/// 整条序列能共用一把纵轴时的刻度。单位或已用/剩余含义不一致时返回 `None`。
+///
+/// 刻度跟着样本走，两侧留白。百分比不再钉死 0–100：用量接近 0 时，
+/// 整段刻度会把折线压成一条贴底的线，数字对不上这条线。
+pub struct SharedYScale {
+    pub min: f64,
+    pub max: f64,
+    pub unit: HistoryUnit,
+    pub y_kind: HistoryYKind,
+}
+
+/// 画出来的横轴。选中窗口只决定有哪些点；点都挤在窗口一端时，按窗口画会缩成一个点。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeriesXBounds {
+    pub start_ms: i64,
+    pub end_ms: i64,
+}
+
+pub fn shared_y_scale(segments: &[HistorySegment]) -> Option<SharedYScale> {
+    let first = segments.first()?;
+    if segments
+        .iter()
+        .any(|segment| segment.unit != first.unit || segment.y_kind != first.y_kind)
+    {
+        return None;
+    }
+    let (min, max) = y_extent(segments.iter().flat_map(|segment| &segment.points))?;
+    let (min, max) = padded_y_domain(min, max, first.unit);
+    Some(SharedYScale {
+        min,
+        max,
+        unit: first.unit,
+        y_kind: first.y_kind,
+    })
+}
+
+pub fn series_x_bounds(segments: &[HistorySegment]) -> Option<SeriesXBounds> {
+    let mut min = i64::MAX;
+    let mut max = i64::MIN;
+    let mut any = false;
+    for segment in segments {
+        for point in &segment.points {
+            any = true;
+            min = min.min(point.bucket_start_ms);
+            max = max.max(point.bucket_start_ms);
+        }
+    }
+    if !any {
+        return None;
+    }
+    let span = max.saturating_sub(min);
+    if span <= 0 {
+        return Some(SeriesXBounds {
+            start_ms: min.saturating_sub(X_FLAT_PAD_MS),
+            end_ms: max.saturating_add(X_FLAT_PAD_MS),
+        });
+    }
+    let pad = ((span as f64) * X_PAD_RATIO).round().max(1.0) as i64;
+    Some(SeriesXBounds {
+        start_ms: min.saturating_sub(pad),
+        end_ms: max.saturating_add(pad),
+    })
+}
+
 pub fn plot_segment(
     segment: &HistorySegment,
     axis_start_ms: i64,
     axis_end_ms: i64,
 ) -> (Option<&'static str>, Vec<PlottedPoint>) {
-    let span = (axis_end_ms - axis_start_ms).max(1) as f64;
     let (y_min, y_max) = y_domain(segment);
+    let suffix = (segment.unit == HistoryUnit::Percentage).then_some("%");
+    (
+        suffix,
+        plot_on_scale(segment, axis_start_ms, axis_end_ms, y_min, y_max),
+    )
+}
+
+pub fn plot_on_scale(
+    segment: &HistorySegment,
+    axis_start_ms: i64,
+    axis_end_ms: i64,
+    y_min: f64,
+    y_max: f64,
+) -> Vec<PlottedPoint> {
+    let span = (axis_end_ms - axis_start_ms).max(1) as f64;
     let y_span = (y_max - y_min).abs();
-    let points = segment
+    segment
         .points
         .iter()
         .map(|point| {
@@ -278,25 +379,45 @@ pub fn plot_segment(
                 gap_before: point.gap_before,
             }
         })
-        .collect();
-    let suffix = (segment.unit == HistoryUnit::Percentage).then_some("%");
-    (suffix, points)
+        .collect()
 }
 
 fn y_domain(segment: &HistorySegment) -> (f64, f64) {
+    y_extent(segment.points.iter())
+        .map(|(min, max)| padded_y_domain(min, max, segment.unit))
+        .unwrap_or((0.0, 0.0))
+}
+
+fn y_extent<'a>(points: impl Iterator<Item = &'a SeriesPoint>) -> Option<(f64, f64)> {
     let mut min = f64::MAX;
     let mut max = f64::MIN;
-    for point in &segment.points {
+    let mut any = false;
+    for point in points {
+        any = true;
         min = min.min(point.y);
         max = max.max(point.y);
     }
-    if segment.unit == HistoryUnit::Percentage {
-        return (0.0, max.max(100.0));
+    any.then_some((min, max))
+}
+
+/// 样本落在 0..=100 里时，留白不探出这段；样本本身超出时不裁掉。
+fn padded_y_domain(min: f64, max: f64, unit: HistoryUnit) -> (f64, f64) {
+    let span = (max - min).abs();
+    if span < f64::EPSILON {
+        return (min, max);
     }
-    if (max - min).abs() < f64::EPSILON {
-        return (min, min);
+    let pad = span * Y_PAD_RATIO;
+    let mut lo = min - pad;
+    let mut hi = max + pad;
+    if unit == HistoryUnit::Percentage {
+        if min >= 0.0 {
+            lo = lo.max(0.0);
+        }
+        if max <= 100.0 {
+            hi = hi.min(100.0);
+        }
     }
-    (min, max)
+    (lo, hi)
 }
 
 #[cfg(test)]
@@ -395,6 +516,7 @@ mod tests {
         };
         assert_eq!(series[0].segments[0].points.len(), 2);
         assert_eq!(series[0].segments[0].points[0].y, 40.0);
+        assert_eq!(series[0].segments[0].points[0].limit, Some(100.0));
         assert!(series[0].segments[0].points[1].gap_before);
     }
 
@@ -425,5 +547,52 @@ mod tests {
         assert_eq!(series[0].segments.len(), 2);
         let (_, points) = plot_segment(&series[0].segments[1], 0, 3_600_000);
         assert_eq!(points[0].y_ratio, 0.5);
+    }
+
+    fn segment(unit: HistoryUnit, points: Vec<(i64, f64)>) -> HistorySegment {
+        HistorySegment {
+            unit,
+            y_kind: HistoryYKind::MeteredUsed,
+            points: points
+                .into_iter()
+                .map(|(bucket_start_ms, y)| SeriesPoint {
+                    bucket_start_ms,
+                    y,
+                    limit: None,
+                    gap_before: false,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn percentage_scale_follows_samples_instead_of_zero_to_hundred() {
+        let low = segment(HistoryUnit::Percentage, vec![(1_000, 0.0), (61_000, 2.0)]);
+        let scale = shared_y_scale(std::slice::from_ref(&low)).expect("scale");
+        let expected_max = 2.0 + 2.0 * 0.15;
+        assert_eq!(scale.min, 0.0);
+        assert!((scale.max - expected_max).abs() < 1e-12);
+        assert!(scale.max < 10.0);
+
+        let full = segment(HistoryUnit::Percentage, vec![(1_000, 0.0), (61_000, 100.0)]);
+        let scale = shared_y_scale(std::slice::from_ref(&full)).expect("scale");
+        assert_eq!((scale.min, scale.max), (0.0, 100.0));
+
+        let flat = segment(HistoryUnit::Percentage, vec![(1_000, 0.0), (61_000, 0.0)]);
+        let scale = shared_y_scale(std::slice::from_ref(&flat)).expect("scale");
+        assert_eq!((scale.min, scale.max), (0.0, 0.0));
+    }
+
+    #[test]
+    fn x_bounds_follow_samples_not_the_empty_window() {
+        let samples = segment(
+            HistoryUnit::Percentage,
+            vec![(86_400_000 - 120_000, 1.0), (86_400_000 - 60_000, 2.0)],
+        );
+        let bounds = series_x_bounds(std::slice::from_ref(&samples)).expect("bounds");
+        let plotted = plot_on_scale(&samples, bounds.start_ms, bounds.end_ms, 0.0, 2.3);
+        assert!(plotted[0].x_ratio < 0.2);
+        assert!(plotted[1].x_ratio > 0.8);
+        assert!(bounds.end_ms - bounds.start_ms < 60 * 60 * 1000);
     }
 }

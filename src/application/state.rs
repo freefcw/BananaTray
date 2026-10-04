@@ -2,7 +2,7 @@
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
 use super::quota_alert::AlertEngine;
-use crate::history::{HistoryRange, HistoryReady};
+use crate::history::{is_line_series, HistoryRange, HistoryReady, HistoryReadyState};
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
     ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
@@ -250,7 +250,12 @@ impl AppSession {
             let rows = self.overview_card_rows();
             return crate::models::compute_popup_height_for_overview(&rows);
         }
-        compute_popup_height(&self.nav, &self.provider_store, &self.settings)
+        let base = compute_popup_height(&self.nav, &self.provider_store, &self.settings);
+        let extra = popup_embedded_history_extra(self);
+        (base + extra).clamp(
+            crate::models::PopupLayout::MIN_HEIGHT,
+            crate::models::PopupLayout::MAX_HEIGHT,
+        )
     }
 
     /// 各已启用 Provider 在 Overview 面板中占用的配额行数。
@@ -815,6 +820,53 @@ pub fn compute_popup_height(
         .unwrap_or((false, false));
 
     crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
+}
+
+/// 托盘配额卡里内嵌折线占用的额外高度。
+///
+/// 只算当前 provider 页上、可见配额里、至少两个点的序列。加载中、刷新中、
+/// 空状态，以及设置页 / Overview，都不加高。
+fn popup_embedded_history_extra(session: &AppSession) -> f32 {
+    let NavTab::Provider(id) = &session.nav.active_tab else {
+        return 0.0;
+    };
+    let HistoryLoadState::Ready {
+        provider_id, ready, ..
+    } = &session.popup_history_ui.load
+    else {
+        return 0.0;
+    };
+    if provider_id != id {
+        return 0.0;
+    }
+    let Some(provider) = session.provider_store.find_by_id(id) else {
+        return 0.0;
+    };
+    if provider.connection == ConnectionStatus::Refreshing
+        || (provider.connection == ConnectionStatus::Error && provider.quotas.is_empty())
+    {
+        return 0.0;
+    }
+    let visible = session
+        .settings
+        .provider
+        .visible_quotas(id, &provider.quotas);
+    if visible.is_empty() {
+        return 0.0;
+    }
+    let HistoryReadyState::Charts(series) = &ready.state else {
+        return 0.0;
+    };
+    let count = series
+        .iter()
+        .filter(|item| {
+            is_line_series(item)
+                && visible
+                    .iter()
+                    .any(|quota| quota.stable_key == item.quota_key)
+        })
+        .count();
+    count as f32 * crate::models::PopupLayout::CARD_HISTORY_EXTRA
 }
 
 /// 计算当前头部状态分类和可选的经过秒数

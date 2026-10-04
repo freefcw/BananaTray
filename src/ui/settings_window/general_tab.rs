@@ -11,7 +11,7 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
     render_action_button, render_history_retention_dropdown, render_hotkey_field_inline,
-    render_icon_row, ButtonSize, ButtonVariant,
+    render_icon_row, ButtonSize, ButtonVariant, HistoryRetentionMenu,
 };
 use adabraka_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
@@ -450,7 +450,10 @@ fn render_global_history_retention(
         .collect();
     render_history_retention_dropdown(
         t!("settings.history_retention.days", n = days).to_string(),
-        open,
+        HistoryRetentionMenu {
+            open,
+            compact: false,
+        },
         options,
         &days,
         theme,

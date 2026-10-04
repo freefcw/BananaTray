@@ -1,7 +1,6 @@
 use crate::application::{
     provider_detail_view_state, AccountInfoViewState, AppAction, DisabledProviderViewState,
-    HistoryChartView, ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction,
-    ProviderEmptyViewState,
+    ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
 };
 use crate::models::ProviderId;
 use crate::refresh::RefreshReason;
@@ -13,35 +12,6 @@ use gpui::{
     IntoElement, MouseButton, MouseDownEvent, ParentElement, Styled, TextAlign, Window,
 };
 use rust_i18n::t;
-
-/// 配额卡片下方的历史折线区块：每条可绘制序列一张小图，断档自然断开。
-fn render_history_section(charts: &[HistoryChartView], theme: &Theme) -> Div {
-    let mut card = div()
-        .w_full()
-        .flex_col()
-        .gap(px(4.0))
-        .px(px(16.0))
-        .py(px(12.0))
-        .rounded(px(12.0))
-        .bg(theme.bg.card_inner)
-        .border_1()
-        .border_color(theme.border.subtle);
-    for chart in charts {
-        card = card
-            .child(
-                div()
-                    .text_size(px(10.0))
-                    .text_color(theme.text.muted)
-                    .child(chart.title.clone()),
-            )
-            .child(crate::ui::widgets::render_history_line_chart(
-                chart.segments.clone(),
-                48.0,
-                theme,
-            ));
-    }
-    card
-}
 
 /// 账户行「更新时间」文本：刷新失败时用警示色并挂 tooltip 说明失败原因，
 /// 不让陈旧旧值默默冒充正常数据。
@@ -194,11 +164,16 @@ impl AppView {
                     if i > 0 {
                         cards = cards.child(div().h(px(8.0)));
                     }
+                    let history = vm
+                        .history_charts
+                        .iter()
+                        .find(|chart| chart.quota_key == quota.quota.stable_key);
                     cards = cards.child(crate::ui::widgets::render_quota_bar(
                         quota,
                         &theme,
                         *generation,
                         vm.quota_display_mode,
+                        history,
                     ));
                 }
                 cards
@@ -241,13 +216,6 @@ impl AppView {
         }
 
         container = container.child(quotas_container);
-
-        // 近 24 小时用量折线：没有成功样本时整个区块不出现
-        if !vm.history_charts.is_empty() {
-            container = container
-                .child(div().h(px(8.0)))
-                .child(render_history_section(&vm.history_charts, &theme));
-        }
 
         if let Some(row) = dashboard_row {
             container = container.child(div().mt(px(8.0)).child(row));

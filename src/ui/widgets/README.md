@@ -38,7 +38,8 @@ widgets/
 
 | 文件 | 组件 | 说明 |
 |------|------|------|
-| `quota_bar.rs` | `render_quota_bar()` | 额度进度条（带动画、渐变色、标签） |
+| `quota_bar.rs` | `render_quota_bar()` | 额度进度条（带动画、渐变色、标签）。可选在卡片底部内嵌历史折线 |
+| `history_chart.rs` | `render_history_line_chart()` | 归一化折线。一张图可以有多条线，颜色按 `color_index` 取。刻度跟着样本，数字画在绘图区内左侧，不写已用/剩余。百分比刻度取整，取整后上下相同再留小数。横轴同一天只标时分，跨天用 `10/4 19:51`。两个采样之间保持上一个值，用量相同的采样并成一段平线，数值变化时再跳，台阶带圆角，线下有一层淡填充。平时不画采样点。指针在折线区域里显示虚线指示线，读数吸到最近的真实采样并标出该点；多条线时逐条列出，读数块留在指针旁，断档中段不编值。孤立采样在点附近可读。横轴文字是样本起止。绘图区只留底边。设置页独立成图；托盘由配额卡调用 |
 | `info_row.rs` | `render_kv_info_row()` / `render_info_cell()` / `render_path_info_cell()` | Key-Value 信息行，路径行支持点击打开文件管理器。`render_kv_info_row` 的右值配色由 `url` 有无决定（组件内部处理），调用方不传颜色 |
 | `icon_row.rs` | `render_icon_row()` | 图标 + 文本行（三栏布局，用于设置项） |
 | `card.rs` | `render_detail_section_title()` / `render_detail_empty_card()` / `render_detail_error_card()` | Provider 详情区段标题、空态卡片、失败卡片 |

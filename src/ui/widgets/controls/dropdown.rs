@@ -2,7 +2,7 @@ use crate::theme::Theme;
 use gpui::{div, px, Div, FontWeight, InteractiveElement, ParentElement, Styled};
 
 /// 触发器的固定高度，浮层从触发器底部对齐展开。
-const DROPDOWN_TRIGGER_HEIGHT: f32 = 36.0;
+pub(crate) const DROPDOWN_TRIGGER_HEIGHT: f32 = 36.0;
 
 /// 下拉触发按钮外壳：尺寸、边框、开合高亮统一；
 /// `truncate` 控制标签超长省略，`enabled` 为 false 时标签置灰（禁用态）。
@@ -62,11 +62,16 @@ pub(crate) fn render_dropdown_trigger(
 
 /// 下拉选项浮层外壳：绝对定位、阴影、边框统一；`anchor_right` 控制左右锚点。
 /// 列表内容（含滚动容器）由调用方填充，并由调用方包 `deferred` + `with_priority`。
-pub(crate) fn render_dropdown_panel(width: f32, anchor_right: bool, theme: &Theme) -> Div {
+pub(crate) fn render_dropdown_panel(
+    width: f32,
+    anchor_top: f32,
+    anchor_right: bool,
+    theme: &Theme,
+) -> Div {
     let panel = div()
         .occlude()
         .absolute()
-        .top(px(DROPDOWN_TRIGGER_HEIGHT))
+        .top(px(anchor_top))
         .w(px(width))
         .p(px(6.0))
         .rounded(px(8.0))

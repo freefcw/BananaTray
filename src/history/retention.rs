@@ -9,7 +9,7 @@ pub fn cutoff_ms(now_ms: i64, days: u16) -> i64 {
     now_ms.saturating_sub(i64::from(days) * DAY_MS)
 }
 
-/// 读图窗口的起点不能早于这个 provider 的保留期限。横轴仍用选中的范围。
+/// 读图窗口的起点不能早于这个 provider 的保留期限。查询窗口仍是选中的范围；画出来的横轴跟样本走。
 pub fn query_window(range: HistoryRange, now_ms: i64, retention_days: u16) -> (i64, i64, i64, i64) {
     let (axis_start, axis_end) = range.window(now_ms);
     let from = axis_start.max(cutoff_ms(now_ms, retention_days));

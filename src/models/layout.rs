@@ -44,7 +44,27 @@ impl PopupLayout {
     ///
     /// 经过极限逼近：W(1)∈(360,376)->368，W(2)∈(502,508)->505，W(3)∈(640,644)->642。
     /// 精确得出：卡片高度斜率 CARD_HEIGHT = 129.0。
+    /// 这个高度不含内嵌折线。有折线的卡片另加 `CARD_HISTORY_EXTRA`。
     pub const CARD_HEIGHT: f32 = 129.0;
+
+    /// 配额卡内嵌折线的绘图区高度，不含坐标文字。
+    pub const CARD_HISTORY_PLOT_HEIGHT: f32 = 44.0;
+    /// 横轴时间行，以及它和绘图区之间的间距。纵轴不单独占一行。
+    pub const CARD_HISTORY_AXIS_TIME: f32 = 16.0;
+    pub const CARD_HISTORY_AXIS_GAP: f32 = 4.0;
+    /// 绘图框内左侧留给纵轴数字的宽度。折线从这列右边起笔，横轴起点和折线对齐。
+    /// 绘图框本身不再为这列往右退。
+    pub const CARD_HISTORY_Y_GUTTER: f32 = 44.0;
+    pub const CARD_HISTORY_AXIS_CHROME: f32 =
+        Self::CARD_HISTORY_AXIS_TIME + Self::CARD_HISTORY_AXIS_GAP;
+    /// 绘图区 + 坐标文字。设置页只复用坐标尺寸，绘图区更高。
+    pub const CARD_HISTORY_CHART_HEIGHT: f32 =
+        Self::CARD_HISTORY_PLOT_HEIGHT + Self::CARD_HISTORY_AXIS_CHROME;
+
+    /// 一张有折线的配额卡比 `CARD_HEIGHT` 多出来的高度。
+    ///
+    /// 卡片是 `flex_col` + `gap(6)`，多一个图表子节点就多一段 6px 间距，再加上图表自身高度。
+    pub const CARD_HISTORY_EXTRA: f32 = 6.0 + Self::CARD_HISTORY_CHART_HEIGHT;
 
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;

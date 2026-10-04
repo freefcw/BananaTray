@@ -10,7 +10,7 @@ use crate::ui::widgets::{
     render_action_button, render_colored_icon_sized, render_dropdown_panel, render_dropdown_row,
     render_dropdown_trigger, render_icon_row, render_icon_tooltip_button, render_info_cell,
     render_path_info_cell, render_segmented_control, ButtonSize, ButtonVariant,
-    IconTooltipButtonOptions, SegmentedSize,
+    IconTooltipButtonOptions, SegmentedSize, DROPDOWN_TRIGGER_HEIGHT,
 };
 use gpui::{
     deferred, div, px, rgb, AnyElement, Context, Deferred, Div, FontWeight, InteractiveElement,
@@ -525,7 +525,13 @@ impl SettingsView {
         let state = self.state.clone();
 
         deferred(
-            render_dropdown_panel(PROVIDER_DROPDOWN_WIDTH, false, theme).child(
+            render_dropdown_panel(
+                PROVIDER_DROPDOWN_WIDTH,
+                DROPDOWN_TRIGGER_HEIGHT,
+                false,
+                theme,
+            )
+            .child(
                 div()
                     .id("debug-provider-dropdown")
                     .w_full()

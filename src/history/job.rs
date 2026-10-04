@@ -22,7 +22,7 @@ pub enum HistoryJob {
 pub struct HistoryLoadRequest {
     pub request_id: u64,
     pub provider_id: String,
-    /// 折线横轴使用的窗口，等于用户选中的范围。
+    /// 选中的查询窗口。画出来的横轴是窗口内样本的起止时间。
     pub axis_start_ms: i64,
     pub axis_end_ms: i64,
     /// 实际查询起点。不早于保留期限。

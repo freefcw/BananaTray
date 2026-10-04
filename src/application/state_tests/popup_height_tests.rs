@@ -1,8 +1,13 @@
 use super::super::*;
 use super::common::*;
 use crate::application::{overview_view_state, OverviewItemStatus};
+use crate::history::{
+    HistoryRange, HistoryReady, HistoryReadyState, HistorySegment, HistorySeries, HistoryUnit,
+    HistoryYKind, SeriesPoint,
+};
 use crate::models::{
-    FailureReason, NavTab, ProviderCapability, ProviderFailure, ProviderKind, QuotaInfo, QuotaType,
+    FailureReason, NavTab, PopupLayout, ProviderCapability, ProviderFailure, ProviderKind,
+    QuotaInfo, QuotaType,
 };
 
 #[test]
@@ -230,5 +235,83 @@ fn popup_height_overview_non_monitorable_card_stays_single_row() {
     assert_eq!(
         session.popup_height(),
         crate::models::PopupLayout::MIN_OVERVIEW_HEIGHT
+    );
+}
+
+fn line_series(key: &str, points: usize) -> HistorySeries {
+    HistorySeries {
+        quota_key: key.to_string(),
+        label_spec_json: "{}".to_string(),
+        segments: vec![HistorySegment {
+            unit: HistoryUnit::Percentage,
+            y_kind: HistoryYKind::MeteredUsed,
+            points: (0..points)
+                .map(|i| SeriesPoint {
+                    bucket_start_ms: i as i64,
+                    y: 40.0,
+                    limit: None,
+                    gap_before: false,
+                })
+                .collect(),
+        }],
+    }
+}
+
+fn ready_charts(series: Vec<HistorySeries>) -> HistoryReady {
+    HistoryReady {
+        range: HistoryRange::Last24Hours,
+        axis_start_ms: 0,
+        axis_end_ms: 1,
+        state: HistoryReadyState::Charts(series),
+    }
+}
+
+/// 只有当前 provider 页上、可见配额里、至少两个点的折线才把窗口加高。
+#[test]
+fn popup_height_grows_only_for_embedded_history_lines() {
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].quotas = vec![
+        QuotaInfo::new("Session", 50.0, 100.0),
+        QuotaInfo::new("Weekly", 20.0, 100.0),
+    ];
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    session.nav.active_tab = NavTab::Provider(pid(ProviderKind::Claude));
+    let two_cards = session.popup_height();
+
+    session.popup_history_ui.load = HistoryLoadState::Ready {
+        provider_id: pid(ProviderKind::Claude),
+        request_id: 1,
+        ready: ready_charts(vec![
+            line_series("session", 3),
+            line_series("weekly", 1),
+            line_series("other", 4),
+        ]),
+    };
+    assert_eq!(
+        session.popup_height(),
+        two_cards + PopupLayout::CARD_HISTORY_EXTRA
+    );
+
+    session
+        .settings
+        .provider
+        .toggle_quota_visibility(&pid(ProviderKind::Claude), "session".to_string());
+    assert_eq!(
+        session.popup_height(),
+        crate::models::compute_popup_height_detailed(1, true, false)
+    );
+
+    session
+        .settings
+        .provider
+        .toggle_quota_visibility(&pid(ProviderKind::Claude), "session".to_string());
+    session.provider_store.providers[0].connection = crate::models::ConnectionStatus::Refreshing;
+    assert_eq!(session.popup_height(), two_cards);
+
+    session.nav.active_tab = NavTab::Overview;
+    session.provider_store.providers[0].connection = crate::models::ConnectionStatus::Connected;
+    assert_eq!(
+        session.popup_height(),
+        crate::models::compute_popup_height_for_overview(&[1])
     );
 }

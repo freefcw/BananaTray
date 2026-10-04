@@ -141,7 +141,9 @@ pub fn provider_detail_view_state(
     let history_charts = match &session.popup_history_ui.load {
         HistoryLoadState::Ready {
             provider_id, ready, ..
-        } if provider_id == id => super::history::history_charts_view(ready),
+        } if provider_id == id => {
+            super::history::history_charts_view(ready, session.settings.display.quota_display_mode)
+        }
         _ => Vec::new(),
     };
 

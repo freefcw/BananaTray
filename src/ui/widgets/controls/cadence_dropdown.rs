@@ -1,4 +1,6 @@
-use super::dropdown::{render_dropdown_panel, render_dropdown_row, render_dropdown_trigger};
+use super::dropdown::{
+    render_dropdown_panel, render_dropdown_row, render_dropdown_trigger, DROPDOWN_TRIGGER_HEIGHT,
+};
 use crate::application::{AppAction, SettingChange};
 use crate::runtime::AppState;
 use crate::theme::Theme;
@@ -76,7 +78,7 @@ fn render_cadence_options(
     let state = state.clone();
 
     deferred(
-        render_dropdown_panel(DROPDOWN_WIDTH, true, theme)
+        render_dropdown_panel(DROPDOWN_WIDTH, DROPDOWN_TRIGGER_HEIGHT, true, theme)
             .flex()
             .flex_col()
             .gap(px(2.0))

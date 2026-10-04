@@ -3,6 +3,9 @@ mod dbus_dto;
 mod debug;
 mod format;
 mod history;
+pub use history::{
+    history_hover_hit, history_hover_lines, hover_chip_origin, HistoryHoverHit, HistoryHoverMark,
+};
 mod issue_report;
 mod settings;
 mod tray;
@@ -12,6 +15,7 @@ mod tray;
 // ============================================================================
 
 use super::state::{FormIdentity, HeaderStatusKind};
+use crate::history::HistoryUnit;
 use crate::models::{
     NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
     QuotaThresholdUnit, QuotaThresholds, ScriptProviderEditData, ScriptProviderTestResult,
@@ -277,19 +281,52 @@ pub enum SettingsProviderHistoryPhase {
 }
 
 /// 折线图视图数据：设置页与托盘弹窗共用，坐标已归一到 0..1。
+///
+/// `quota_key` 与 `QuotaInfo::stable_key` 相同，托盘用它把折线放进对应配额卡。
+/// 一张图可以有多条 `lines`，颜色按 `color_index` 区分。
+/// `axis` 的横轴是样本起止时间，纵轴是留白后的共用刻度。
 #[derive(Debug, Clone)]
 pub struct HistoryChartView {
+    pub quota_key: String,
     pub title: String,
+    pub lines: Vec<HistoryLineView>,
+    pub axis: HistoryChartAxisView,
+}
+
+/// 图上的一条配额折线。`color_index` 只决定颜色顺序，具体颜色由界面取。
+#[derive(Debug, Clone)]
+pub struct HistoryLineView {
+    pub quota_key: String,
+    pub title: String,
+    pub color_index: usize,
     pub segments: Vec<HistorySegmentView>,
+}
+
+/// 折线坐标文字。纵轴数字只在整条序列共用一把刻度时有值；持平时 `y_min` 为空。
+/// `x_start` / `x_end` 是第一个和最后一个样本的本地时间。
+/// `x_start_ms` / `x_end_ms` 含两端留白，悬停用它把指针换回时间。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryChartAxisView {
+    pub y_label: String,
+    pub y_max: String,
+    pub y_min: String,
+    pub x_start: String,
+    pub x_end: String,
+    pub x_start_ms: i64,
+    pub x_end_ms: i64,
 }
 
 #[derive(Debug, Clone)]
 pub struct HistorySegmentView {
+    pub unit: HistoryUnit,
     pub points: Vec<HistoryPointView>,
 }
 
+/// 一个已经投影到当前额度显示的样本。`y` 是图上的数值，不是格式化后的刻度文字。
 #[derive(Debug, Clone)]
 pub struct HistoryPointView {
+    pub at_ms: i64,
+    pub y: f64,
     pub x_ratio: f64,
     pub y_ratio: f64,
     pub gap_before: bool,
