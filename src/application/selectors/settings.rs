@@ -256,7 +256,14 @@ fn history_phase(session: &AppSession, id: &ProviderId) -> SettingsProviderHisto
             SettingsProviderHistoryPhase::Message(t!("provider.history.no_numeric").to_string())
         }
         HistoryReadyState::Charts(_) => {
-            SettingsProviderHistoryPhase::Charts(super::history::history_charts_view(ready))
+            let charts = super::history::history_charts_view(ready);
+            if charts.is_empty() {
+                SettingsProviderHistoryPhase::Message(
+                    t!("provider.history.too_few_points").to_string(),
+                )
+            } else {
+                SettingsProviderHistoryPhase::Charts(charts)
+            }
         }
     }
 }

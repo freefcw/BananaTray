@@ -13,10 +13,12 @@ mod store;
 pub use job::{HistoryJob, HistoryLoadRequest, ProviderRetentionCutoff};
 pub use redact::scrub_history_detail;
 pub use retention::{cutoff_ms, query_window, retention_cutoffs, DAY_MS};
-pub use sample::{capture_sample, HistoryStatus, QuotaHistoryPoint, QuotaHistorySample};
+pub use sample::{
+    capture_sample, HistoryStatus, HistoryUnit, QuotaHistoryPoint, QuotaHistorySample,
+};
 pub use series::{
     interpret, plot_segment, HistoryLoadOutcome, HistoryRange, HistoryReady, HistoryReadyState,
-    HistorySegment, HistorySeries, PlottedPoint,
+    HistorySegment, HistorySeries, HistoryYKind, PlottedPoint, SeriesPoint,
 };
 pub use sqlite::SqliteQuotaHistoryStore;
 pub use store::{
