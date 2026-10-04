@@ -1,5 +1,6 @@
 mod actions;
 mod header;
+mod history;
 mod info;
 mod quota_visibility;
 mod settings_section;
@@ -119,6 +120,7 @@ fn render_detail_content(
             theme,
             detail.quota_display_mode,
         ))
+        .child(history::render_history_section(detail, dispatcher, theme))
 }
 
 fn render_detail_scroll(content: Div) -> Div {

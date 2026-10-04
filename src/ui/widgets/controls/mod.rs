@@ -1,6 +1,7 @@
 mod action_button;
 mod cadence_dropdown;
 mod dropdown;
+mod history_retention_dropdown;
 mod hotkey_field;
 mod icon_button;
 mod input_actions;
@@ -10,6 +11,7 @@ mod stepper;
 pub(crate) use action_button::{render_action_button, ButtonSize, ButtonVariant};
 pub(crate) use cadence_dropdown::render_cadence_trigger;
 pub(crate) use dropdown::{render_dropdown_panel, render_dropdown_row, render_dropdown_trigger};
+pub(crate) use history_retention_dropdown::render_history_retention_dropdown;
 pub(crate) use hotkey_field::render_hotkey_field_inline;
 pub(crate) use icon_button::{render_icon_tooltip_button, IconTooltipButtonOptions};
 pub(crate) use input_actions::register_input_actions;

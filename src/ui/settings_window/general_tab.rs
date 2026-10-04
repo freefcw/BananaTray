@@ -4,13 +4,14 @@ use super::components::{
 };
 use super::SettingsView;
 use crate::application::{
-    AppAction, GlobalHotkeyError, QuotaThresholdUnitViewState, SettingChange,
+    AppAction, GlobalHotkeyError, QuotaThresholdUnitViewState, SettingChange, SettingsModalState,
 };
-use crate::models::{AppSettings, QuotaThresholdTarget, QuotaThresholdUnit};
+use crate::models::{AppSettings, QuotaThresholdTarget, QuotaThresholdUnit, RETENTION_PRESETS};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
-    render_action_button, render_hotkey_field_inline, render_icon_row, ButtonSize, ButtonVariant,
+    render_action_button, render_history_retention_dropdown, render_hotkey_field_inline,
+    render_icon_row, ButtonSize, ButtonVariant,
 };
 use adabraka_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
@@ -64,6 +65,14 @@ impl SettingsView {
         } else {
             Some(settings.system.refresh_interval_mins)
         };
+        let history_days = settings.history.retention_days;
+        let history_open = state
+            .borrow()
+            .session
+            .settings_ui
+            .history_retention_dropdown_open;
+        let confirming_clear_all = state.borrow().session.settings_ui.modal
+            == SettingsModalState::ConfirmingClearAllHistory;
 
         div()
             .flex_col()
@@ -111,6 +120,22 @@ impl SettingsView {
                         &t!("settings.refresh_cadence.desc"),
                         theme,
                         crate::ui::widgets::render_cadence_trigger(&state, cadence_mins, theme),
+                    ))
+                    .child(render_divider(theme))
+                    .child(Self::render_icon_dropdown_row(
+                        "src/icons/usage.svg",
+                        rgb(ICON_FG).into(),
+                        rgb(ICON_BG_USAGE).into(),
+                        &t!("settings.history_retention"),
+                        &t!("settings.history_retention.desc"),
+                        theme,
+                        render_global_history_retention(&state, history_days, history_open, theme),
+                    ))
+                    .child(render_divider(theme))
+                    .child(render_clear_all_history_row(
+                        confirming_clear_all,
+                        &state,
+                        theme,
                     ))
                     .child(render_divider(theme))
                     // Quota Notifications
@@ -404,6 +429,135 @@ impl SettingsView {
                 },
             )))
     }
+}
+
+fn render_global_history_retention(
+    state: &std::rc::Rc<std::cell::RefCell<runtime::AppState>>,
+    days: u16,
+    open: bool,
+    theme: &Theme,
+) -> Div {
+    let toggle_state = state.clone();
+    let select_state = state.clone();
+    let options = RETENTION_PRESETS
+        .into_iter()
+        .map(|days| {
+            (
+                t!("settings.history_retention.days", n = days).to_string(),
+                days,
+            )
+        })
+        .collect();
+    render_history_retention_dropdown(
+        t!("settings.history_retention.days", n = days).to_string(),
+        open,
+        options,
+        &days,
+        theme,
+        move |_, window, cx| {
+            crate::bootstrap::dispatch_in_window(
+                &toggle_state,
+                AppAction::ToggleHistoryRetentionDropdown,
+                window,
+                cx,
+            );
+        },
+        move |days, window, cx| {
+            crate::bootstrap::dispatch_in_window(
+                &select_state,
+                AppAction::UpdateSetting(SettingChange::SetHistoryRetentionDays(days)),
+                window,
+                cx,
+            );
+        },
+    )
+}
+
+fn render_clear_all_history_row(
+    confirming: bool,
+    state: &std::rc::Rc<std::cell::RefCell<runtime::AppState>>,
+    theme: &Theme,
+) -> Div {
+    if confirming {
+        let confirm_state = state.clone();
+        let cancel_state = state.clone();
+        return div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px(px(16.0))
+            .py(px(12.0))
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .text_color(theme.text.primary)
+                    .child(t!("settings.history_clear_all.confirm").to_string()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap(px(8.0))
+                    .child(render_action_button(
+                        &t!("common.confirm"),
+                        None,
+                        ButtonVariant::Danger,
+                        ButtonSize::Compact,
+                        theme,
+                        move |_, window, cx| {
+                            crate::bootstrap::dispatch_in_window(
+                                &confirm_state,
+                                AppAction::ConfirmClearAllHistory,
+                                window,
+                                cx,
+                            );
+                        },
+                    ))
+                    .child(render_action_button(
+                        &t!("common.cancel"),
+                        None,
+                        ButtonVariant::Subtle,
+                        ButtonSize::Compact,
+                        theme,
+                        move |_, window, cx| {
+                            crate::bootstrap::dispatch_in_window(
+                                &cancel_state,
+                                AppAction::CancelClearAllHistory,
+                                window,
+                                cx,
+                            );
+                        },
+                    )),
+            );
+    }
+
+    let clear_state = state.clone();
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .px(px(16.0))
+        .py(px(12.0))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .text_color(theme.text.primary)
+                .child(t!("settings.history_clear_all").to_string()),
+        )
+        .child(render_action_button(
+            &t!("settings.history_clear_all"),
+            None,
+            ButtonVariant::Danger,
+            ButtonSize::Compact,
+            theme,
+            move |_, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &clear_state,
+                    AppAction::BeginClearAllHistory,
+                    window,
+                    cx,
+                );
+            },
+        ))
 }
 
 fn displayed_hotkey_error(
