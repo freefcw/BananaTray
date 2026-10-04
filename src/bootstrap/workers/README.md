@@ -9,6 +9,7 @@ Foreground bridges for background work owned by the app shell.
 | `refresh.rs` | Starts the refresh coordinator thread, bridges `RefreshEvent` back to the GPUI foreground executor, and sends startup refresh requests. |
 | `custom_provider.rs` | Owns the serial NewAPI / script-provider CRUD worker (including edit loads and save-time settings flush) and returns finished actions to the reducer. |
 | `script_test.rs` | Owns the independent serial script Run Test worker and returns `ScriptProviderTestFinished` to the reducer. |
+| `history.rs` | Owns the quota-history SQLite thread. It appends, loads, and purges jobs, then wakes the foreground with `QuotaHistoryLoaded`. It does not read settings or call the reducer. |
 | `linux_dbus.rs` | Linux-only D-Bus snapshot emission after foreground state changes. |
 
 ## Boundary
@@ -22,4 +23,6 @@ worker within the shared 60 ms deadline; overdue workers detach, so unfinished t
 late results are not guaranteed to settle. Its worker writes each finished action to the reliable result ledger before
 sending a lightweight foreground wake-up; if the foreground pump has stopped, quit settlement still
 reduces the ledger. Refresh receives a Shutdown request and script-test uses out-of-band cancellation; both share
-the bounded 60 ms join deadline with CRUD.
+the bounded 60 ms join deadline with CRUD. The history queue is also persistent: shutdown closes
+its enqueue side and joins within that same deadline. Loaded chart results still sitting in its
+ledger are dropped instead of reduced into the quitting session.

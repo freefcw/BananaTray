@@ -139,6 +139,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
   - 在 facade 边界返回 `RefreshData` 或 `ProviderError`
 - `ProviderError::to_failure()` / `error_kind()` 负责把 provider 错误映射为稳定失败语义和刷新状态分类
 - selector 层负责把失败语义转换成最终展示文本
+- 用量历史不由 provider 写入。reducer 采纳 `Success`、`Unavailable` 或 `Failed` 之后才采样；`Skipped*`、脚本 Run Test、Informational / Placeholder 不进历史库。失败会保存并标出，折线只用成功且能数值化的点。
 - quota 标题和详情也走稳定语义：
   - 标题使用 `QuotaLabelSpec`（如 `Daily`、`Weekly`、`MonthlyCredits`、`Credits`）
   - 第四行详情使用 `QuotaDetailSpec`

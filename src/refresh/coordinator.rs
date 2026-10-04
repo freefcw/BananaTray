@@ -39,6 +39,7 @@ enum TaskMessage {
 struct ActiveRefresh {
     task_id: u64,
     generation: u64,
+    reason: RefreshReason,
     /// timeout 或配置失效已经向前台发送了终态；底层完成时只释放 single-flight。
     result_reported: bool,
     /// result_reported 的来源是 UI 超时（已报 Failed）。区别于配置失效：
@@ -130,6 +131,7 @@ impl RefreshCoordinator {
                     data.account_tier,
                 );
                 RefreshOutcome {
+                    reason: None,
                     id,
                     result: RefreshResult::Success { data },
                 }
@@ -138,6 +140,7 @@ impl RefreshCoordinator {
                 ProviderError::Unavailable { .. } => {
                     log::info!(target: "refresh", "provider {} unavailable: {}", id, error);
                     RefreshOutcome {
+                        reason: None,
                         id,
                         result: RefreshResult::Unavailable {
                             failure: error.to_failure(),
@@ -148,6 +151,7 @@ impl RefreshCoordinator {
                     log::warn!(target: "refresh", "provider {} failed: {}", id, error);
                     let error_kind = error.error_kind();
                     RefreshOutcome {
+                        reason: None,
                         id,
                         result: RefreshResult::Failed {
                             failure: error.to_failure(),
@@ -163,24 +167,34 @@ impl RefreshCoordinator {
     // 事件发送
     // ========================================================================
 
-    async fn emit_finished(&self, id: ProviderId, result: RefreshResult) {
+    async fn emit_finished(
+        &self,
+        id: ProviderId,
+        result: RefreshResult,
+        reason: Option<RefreshReason>,
+    ) {
         let _ = self
             .event_tx
-            .send(RefreshEvent::Finished(RefreshOutcome { id, result }))
+            .send(RefreshEvent::Finished(RefreshOutcome {
+                id,
+                result,
+                reason,
+            }))
             .await;
     }
 
-    async fn send_skip(&self, id: ProviderId, result: RefreshResult) {
-        self.emit_finished(id, result).await;
+    async fn send_skip(&self, id: ProviderId, result: RefreshResult, reason: RefreshReason) {
+        self.emit_finished(id, result, Some(reason)).await;
     }
 
-    async fn begin_refresh(&mut self, id: &ProviderId, task_id: u64) {
+    async fn begin_refresh(&mut self, id: &ProviderId, task_id: u64, reason: RefreshReason) {
         self.scheduler.mark_in_flight(id);
         self.active_refreshes.insert(
             id.clone(),
             ActiveRefresh {
                 task_id,
                 generation: self.config_generation,
+                reason,
                 result_reported: false,
                 timed_out: false,
             },
@@ -234,12 +248,12 @@ impl RefreshCoordinator {
     /// 启动刷新但不等待结果；主循环继续处理配置、reload 和 shutdown。
     async fn start_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
         if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
-            self.send_skip(id, skip).await;
+            self.send_skip(id, skip, reason).await;
             return;
         }
 
         let task_id = self.allocate_task_id();
-        self.begin_refresh(&id, task_id).await;
+        self.begin_refresh(&id, task_id, reason).await;
 
         let completion_tx = self.task_tx.clone();
         let completion_id = id.clone();
@@ -310,13 +324,14 @@ impl RefreshCoordinator {
                     Self::provider_refresh_timeout(),
                     reason
                 );
-                let outcome = Self::build_outcome(id, Err(ProviderError::Timeout));
+                let mut outcome = Self::build_outcome(id, Err(ProviderError::Timeout));
+                outcome.reason = Some(reason);
                 let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
             }
             TaskMessage::Completed {
                 id,
                 task_id,
-                outcome,
+                mut outcome,
             } => {
                 let Some(active) = self.active_refreshes.get(&id) else {
                     return;
@@ -329,11 +344,12 @@ impl RefreshCoordinator {
                     .remove(&id)
                     .expect("active refresh checked above");
                 self.scheduler.clear_in_flight(&id);
+                outcome.reason = Some(active.reason);
 
                 if active.result_reported {
                     // 超时已报 Failed 的任务随后成功：转发迟到结果并补记成功，
                     // 否则 UI 会一直停在错误状态直到下一次刷新。配置失效的过期
-                    // 结果仍按原逻辑丢弃。
+                    // 结果仍按原逻辑丢弃。两次结果都保留原来的触发原因。
                     if active.timed_out
                         && matches!(outcome.result, RefreshResult::Success { .. })
                         && active.generation == self.config_generation
@@ -347,7 +363,8 @@ impl RefreshCoordinator {
                 if active.generation != self.config_generation
                     || !self.scheduler.enabled_providers().contains(&id)
                 {
-                    self.emit_finished(id, RefreshResult::SkippedStale).await;
+                    self.emit_finished(id, RefreshResult::SkippedStale, Some(active.reason))
+                        .await;
                     return;
                 }
                 if matches!(outcome.result, RefreshResult::Success { .. }) {
@@ -371,10 +388,10 @@ impl RefreshCoordinator {
             } else {
                 RefreshResult::SkippedStale
             };
-            invalidated.push((id.clone(), result));
+            invalidated.push((id.clone(), result, active.reason));
         }
-        for (id, result) in invalidated {
-            self.emit_finished(id, result).await;
+        for (id, result, reason) in invalidated {
+            self.emit_finished(id, result, Some(reason)).await;
         }
     }
 

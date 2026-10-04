@@ -252,6 +252,8 @@ pub struct ProviderConfig {
     pub hidden_quotas: HashMap<String, HashSet<String>>,
     pub quota_usage_steps: HashMap<String, u8>,
     pub quota_threshold_overrides: HashMap<String, QuotaRuleOverrides>,
+    /// 按 provider 覆盖的历史保留天数。缺项表示跟随全局。
+    pub history_retention_days: HashMap<String, u16>,
 }
 
 impl Default for ProviderConfig {
@@ -262,6 +264,7 @@ impl Default for ProviderConfig {
             hidden_quotas: HashMap::new(),
             quota_usage_steps: HashMap::new(),
             quota_threshold_overrides: HashMap::new(),
+            history_retention_days: HashMap::new(),
         }
     }
 }
@@ -315,6 +318,7 @@ impl ProviderConfig {
         self.hidden_quotas.remove(&key);
         self.quota_usage_steps.remove(&key);
         self.quota_threshold_overrides.remove(&key);
+        self.history_retention_days.remove(&key);
     }
 
     /// 清除已不存在的自定义 Provider ID（热重载后清理残留）。
@@ -330,7 +334,8 @@ impl ProviderConfig {
         let before = self.provider_layout.len()
             + self.hidden_quotas.len()
             + self.quota_usage_steps.len()
-            + self.quota_threshold_overrides.len();
+            + self.quota_threshold_overrides.len()
+            + self.history_retention_days.len();
         self.provider_layout.retain(|item| {
             ProviderKind::from_id_key(&item.id).is_some() || existing.contains(&item.id)
         });
@@ -340,11 +345,14 @@ impl ProviderConfig {
             .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
         self.quota_threshold_overrides
             .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
+        self.history_retention_days
+            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
         let normalized = self.normalize_layout();
         let after = self.provider_layout.len()
             + self.hidden_quotas.len()
             + self.quota_usage_steps.len()
-            + self.quota_threshold_overrides.len();
+            + self.quota_threshold_overrides.len()
+            + self.history_retention_days.len();
         normalized || before != after
     }
 
@@ -352,6 +360,23 @@ impl ProviderConfig {
         self.quota_usage_steps
             .get(&id.id_key())
             .map(|step| (*step).min(100))
+    }
+
+    pub fn history_retention_days(&self, id: &ProviderId) -> Option<u16> {
+        self.history_retention_days.get(&id.id_key()).copied()
+    }
+
+    /// `None` 表示删除覆盖，重新跟随全局。非法天数被丢掉。
+    pub fn set_history_retention_days(&mut self, id: &ProviderId, days: Option<u16>) {
+        let key = id.id_key();
+        match days.filter(|days| valid_retention_days(*days)) {
+            Some(days) => {
+                self.history_retention_days.insert(key, days);
+            }
+            None => {
+                self.history_retention_days.remove(&key);
+            }
+        }
     }
 
     pub fn set_quota_usage_step(&mut self, id: &ProviderId, step_pct: Option<u8>) {
@@ -566,7 +591,47 @@ impl ProviderSettings {
 // 应用设置（顶层）
 // ============================================================================
 
-/// 应用运行时配置 — 按职责分为六组子设置。
+pub const DEFAULT_RETENTION_DAYS: u16 = 90;
+pub const MIN_RETENTION_DAYS: u16 = 1;
+pub const MAX_RETENTION_DAYS: u16 = 365;
+pub const RETENTION_PRESETS: [u16; 5] = [7, 30, 90, 180, 365];
+
+pub fn valid_retention_days(days: u16) -> bool {
+    (MIN_RETENTION_DAYS..=MAX_RETENTION_DAYS).contains(&days)
+}
+
+/// 用量历史保留策略。天数只活在设置里，不写进 sqlite。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct HistorySettings {
+    pub retention_days: u16,
+}
+
+impl Default for HistorySettings {
+    fn default() -> Self {
+        Self {
+            retention_days: DEFAULT_RETENTION_DAYS,
+        }
+    }
+}
+
+impl HistorySettings {
+    pub fn normalized(self) -> Self {
+        if valid_retention_days(self.retention_days) {
+            self
+        } else {
+            log::warn!(
+                target: "settings",
+                "invalid history retention {}, falling back to {}",
+                self.retention_days,
+                DEFAULT_RETENTION_DAYS
+            );
+            Self::default()
+        }
+    }
+}
+
+/// 应用运行时配置 — 按职责分为七组子设置。
 ///
 /// 顶层磁盘格式由 `settings_store::PersistedAppSettingsV1` 负责；这里不直接派生
 /// serde，避免领域模型与 settings.json 的版本演进绑定。
@@ -585,6 +650,8 @@ pub struct AppSettings {
     /// 配额状态与提醒阈值规则（全局生效各单位的默认值；Provider 级覆盖见
     /// `ProviderConfig::quota_threshold_overrides`）
     pub quota: QuotaRules,
+    /// 用量历史保留天数。Provider 级覆盖见 `ProviderConfig::history_retention_days`。
+    pub history: HistorySettings,
 }
 
 impl AppSettings {
@@ -594,6 +661,12 @@ impl AppSettings {
             .get(&id.id_key())
             .map(|overrides| self.quota.resolve(overrides))
             .unwrap_or(self.quota)
+    }
+
+    pub fn effective_history_retention_days(&self, id: &ProviderId) -> u16 {
+        self.provider
+            .history_retention_days(id)
+            .unwrap_or(self.history.retention_days)
     }
 }
 

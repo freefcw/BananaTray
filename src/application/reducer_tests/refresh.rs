@@ -25,6 +25,7 @@ fn refresh_success_in_dynamic_mode_produces_tray_icon_effect() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -60,6 +61,7 @@ fn refresh_success_in_static_mode_does_not_produce_tray_icon_effect() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -94,6 +96,7 @@ fn refresh_success_in_dynamic_mode_no_effect_when_status_unchanged() {
     reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -110,6 +113,7 @@ fn refresh_success_in_dynamic_mode_no_effect_when_status_unchanged() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -144,6 +148,7 @@ fn refresh_non_selected_enabled_provider_produces_tray_icon_effect() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Gemini),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -174,6 +179,7 @@ fn refresh_disabled_provider_ignores_late_result() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: provider_id.clone(),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -210,6 +216,7 @@ fn refresh_deferred_while_popup_visible() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -460,6 +467,7 @@ fn dispatch_skipped(session: &mut AppSession, result: RefreshResult) {
     reduce(
         session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result,
         })),
@@ -480,6 +488,7 @@ fn skipped_cooldown_converges_refreshing_without_data_to_disconnected() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::SkippedCooldown,
         })),
@@ -539,6 +548,7 @@ fn skipped_in_flight_and_disabled_also_converge() {
         let effects = reduce(
             &mut s,
             AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+                reason: None,
                 id: pid(ProviderKind::Claude),
                 result,
             })),
@@ -574,6 +584,7 @@ fn skipped_does_not_touch_non_refreshing_provider() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::SkippedCooldown,
         })),
@@ -596,6 +607,7 @@ fn refresh_success(
     reduce(
         session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: id.clone(),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -920,6 +932,7 @@ fn usage_step_failed_skipped_disabled_results_do_not_advance_baseline() {
     reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: claude.clone(),
             result: RefreshResult::Failed {
                 failure: ProviderFailure {
@@ -934,6 +947,7 @@ fn usage_step_failed_skipped_disabled_results_do_not_advance_baseline() {
     reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: claude.clone(),
             result: RefreshResult::SkippedCooldown,
         })),

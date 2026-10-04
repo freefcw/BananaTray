@@ -406,6 +406,7 @@ fn popup_closed_syncs_dynamic_icon() {
     reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: pid(ProviderKind::Claude),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -619,6 +620,7 @@ fn toggle_session_quota_notifications_resets_usage_baselines() {
     reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: claude.clone(),
             result: RefreshResult::Success {
                 data: RefreshData {
@@ -643,6 +645,7 @@ fn toggle_session_quota_notifications_resets_usage_baselines() {
     let effects = reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
             id: claude,
             result: RefreshResult::Success {
                 data: RefreshData {

@@ -1,4 +1,5 @@
 use super::state::{GlobalHotkeyError, SettingsTab};
+use crate::history::{HistoryLoadOutcome, HistoryRange};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
     ProviderId, QuotaDisplayMode, QuotaThresholdUnit, QuotaThresholds, ScriptProviderConfig,
@@ -14,6 +15,23 @@ pub enum AppAction {
     SetSettingsTab(SettingsTab),
     SelectSettingsProvider(ProviderId),
     ToggleCadenceDropdown,
+    ToggleHistoryRetentionDropdown,
+    ToggleProviderHistoryRetentionDropdown,
+    SetHistoryRange(HistoryRange),
+    BeginClearProviderHistory,
+    CancelClearProviderHistory,
+    ConfirmClearProviderHistory,
+    BeginClearAllHistory,
+    CancelClearAllHistory,
+    ConfirmClearAllHistory,
+    /// 启动或保留天数变化后，按当前名单裁掉过期样本。
+    ApplyHistoryRetention,
+    /// 历史线程读完一个 provider 的窗口。过期请求由 reducer 丢掉。
+    QuotaHistoryLoaded {
+        request_id: u64,
+        provider_id: ProviderId,
+        outcome: HistoryLoadOutcome,
+    },
     SetTokenEditing {
         provider_id: ProviderId,
         editing: bool,
@@ -179,11 +197,22 @@ impl AppAction {
             | Self::ScriptProviderSaveFinished { .. }
             | Self::ScriptProviderLoadFinished { .. }
             | Self::ScriptProviderDeleteFinished { .. }
-            | Self::GlobalHotkeyApplyFinished { .. } => true,
+            | Self::GlobalHotkeyApplyFinished { .. }
+            | Self::ApplyHistoryRetention
+            | Self::QuotaHistoryLoaded { .. } => true,
             Self::SelectNavTab(_)
             | Self::SetSettingsTab(_)
             | Self::SelectSettingsProvider(_)
             | Self::ToggleCadenceDropdown
+            | Self::ToggleHistoryRetentionDropdown
+            | Self::ToggleProviderHistoryRetentionDropdown
+            | Self::SetHistoryRange(_)
+            | Self::BeginClearProviderHistory
+            | Self::CancelClearProviderHistory
+            | Self::ConfirmClearProviderHistory
+            | Self::BeginClearAllHistory
+            | Self::CancelClearAllHistory
+            | Self::ConfirmClearAllHistory
             | Self::SetTokenEditing { .. }
             | Self::SaveProviderToken { .. }
             | Self::MoveProviderToIndex { .. }
@@ -266,6 +295,12 @@ pub enum SettingChange {
     Theme(AppTheme),
     Language(String),
     RefreshCadence(Option<u64>),
+    SetHistoryRetentionDays(u16),
+    /// `None` 表示删除这个 provider 的覆盖，重新跟随全局。
+    SetProviderHistoryRetentionDays {
+        provider_id: ProviderId,
+        days: Option<u16>,
+    },
     SetTrayIconStyle(TrayIconStyle),
     SetQuotaDisplayMode(QuotaDisplayMode),
     ToggleQuotaVisibility {

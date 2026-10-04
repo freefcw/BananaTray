@@ -71,6 +71,7 @@ src/
                            effects/             — GPUI-free CommonEffect executors by domain
   providers/             — AiProvider trait, built-in/custom providers, ProviderManager
   refresh/               — Background refresh coordinator and scheduling
+  history/               — Quota history: adopted samples, retention, chart series, SQLite
   dbus/                  — D-Bus service for GNOME Shell Extension (Linux only, `app` feature); zbus iface + signal bridge
   tray/                  — Tray popup lifecycle controller, command policy, activation state machine, observers, positioning, Linux popup behavior, icon management
   platform/              — OS integration; `paths` / `system` / log readers stay lib-safe, `assets` / `single_instance` / `notification` / `auto_launch` are app-only
@@ -99,7 +100,7 @@ This map is intentionally high-level. File-level structure and public APIs live 
 - `cargo fmt` + `cargo clippy`
 - Comments in Chinese for domain-specific logic
 - Providers return `ProviderError` variants (not raw strings)
-- Primary log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`; focused helper targets such as `"http"` / `"notification"` / `"single_instance"` may appear for subsystem diagnostics.
+- Primary log targets: `"app"`, `"tray"`, `"refresh"`, `"providers"`, `"settings"`, `"dbus"`, `"history"`; focused helper targets such as `"http"` / `"notification"` / `"single_instance"` may appear for subsystem diagnostics. `history` must not log sample detail or credentials.
 - When a setting affects background refresh credentials, synchronize through `RefreshRequest::UpdateConfig`; providers read app-managed credentials from `ProviderExecutionContext`, and foreground settings UI state is not the refresh runtime state.
 
 ## Reference Docs

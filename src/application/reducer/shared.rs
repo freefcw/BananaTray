@@ -89,4 +89,5 @@ pub(super) fn commit_deleted_provider(
         session.settings_ui.selected_provider = session.first_sidebar_provider();
     }
     effects.push(SettingsEffect::PersistSettings.into());
+    super::history::note_deleted_provider(session, provider_id, effects);
 }

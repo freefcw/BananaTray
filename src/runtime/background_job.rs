@@ -7,12 +7,13 @@ use crate::utils::BoundedThreadOwner;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// 后台线程回投到前台的 Action 缓冲队列，由前台 pump 统一 drain。
 #[derive(Clone, Default)]
-pub(crate) struct CustomProviderResults {
+pub(crate) struct WorkerResults {
     pending: Arc<Mutex<std::collections::VecDeque<AppAction>>>,
 }
 
-impl CustomProviderResults {
+impl WorkerResults {
     pub(crate) fn push(&self, action: AppAction) {
         self.pending
             .lock()
@@ -77,6 +78,18 @@ pub(crate) struct PersistentJobReceiver<J> {
 impl<J> PersistentJobSender<J> {
     pub(crate) fn channel(capacity: usize) -> (Self, PersistentJobReceiver<J>) {
         let (tx, rx) = smol::channel::bounded(capacity);
+        Self::from_channel(tx, rx)
+    }
+
+    pub(crate) fn unbounded() -> (Self, PersistentJobReceiver<J>) {
+        let (tx, rx) = smol::channel::unbounded();
+        Self::from_channel(tx, rx)
+    }
+
+    fn from_channel(
+        tx: smol::channel::Sender<J>,
+        rx: smol::channel::Receiver<J>,
+    ) -> (Self, PersistentJobReceiver<J>) {
         (
             Self {
                 tx,

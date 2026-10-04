@@ -2,16 +2,17 @@
 //!
 //! 将 AppSession → Settings ViewModel 的转换逻辑集中于此。
 
-use super::super::state::AppSession;
-use super::super::state::SettingsModalState;
+use super::super::state::{AppSession, HistoryLoadState, SettingsModalState};
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_label,
     format_relative_refresh_age, format_user_failure_message, provider_source_label,
     quota_display_view_state,
 };
 use super::*;
+use crate::history::{plot_segment, HistoryReadyState};
 use crate::models::{
-    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus, UpdateStatus,
+    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus, QuotaInfo,
+    QuotaLabelSpec, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -121,7 +122,9 @@ fn settings_provider_right_pane_view_state(
         | SettingsModalState::LoadingScriptProvider(_)
         | SettingsModalState::ConfirmingRemoveProvider
         | SettingsModalState::ConfirmingDeleteNewApi
-        | SettingsModalState::ConfirmingDeleteScriptProvider => {
+        | SettingsModalState::ConfirmingDeleteScriptProvider
+        | SettingsModalState::ConfirmingClearProviderHistory
+        | SettingsModalState::ConfirmingClearAllHistory => {
             SettingsProviderRightPaneViewState::Detail
         }
     }
@@ -206,7 +209,105 @@ fn settings_provider_detail_view_state(
         show_quota_thresholds: provider_capability == ProviderCapability::Monitorable,
         quota_thresholds,
         quota_visibility,
+        history: settings_provider_history_view_state(session, id),
     }
+}
+
+fn settings_provider_history_view_state(
+    session: &AppSession,
+    id: &ProviderId,
+) -> SettingsProviderHistoryViewState {
+    SettingsProviderHistoryViewState {
+        range: session.history_ui.range,
+        retention_override: session.settings.provider.history_retention_days(id),
+        effective_days: session.settings.effective_history_retention_days(id),
+        dropdown_open: session.settings_ui.provider_history_retention_dropdown_open,
+        confirming_clear: session
+            .settings_ui
+            .modal
+            .is_confirming_clear_provider_history(),
+        phase: history_phase(session, id),
+    }
+}
+
+fn history_phase(session: &AppSession, id: &ProviderId) -> SettingsProviderHistoryPhase {
+    let ready = match &session.history_ui.load {
+        HistoryLoadState::Ready {
+            provider_id, ready, ..
+        } if provider_id == id => ready,
+        HistoryLoadState::Unavailable { provider_id, .. } if provider_id == id => {
+            return SettingsProviderHistoryPhase::Message(
+                t!("provider.history.unavailable").to_string(),
+            );
+        }
+        _ => {
+            return SettingsProviderHistoryPhase::Message(
+                t!("provider.history.loading").to_string(),
+            );
+        }
+    };
+    match &ready.state {
+        HistoryReadyState::Empty => {
+            SettingsProviderHistoryPhase::Message(t!("provider.history.empty").to_string())
+        }
+        HistoryReadyState::OnlyFailures { count } => SettingsProviderHistoryPhase::Message(
+            t!("provider.history.only_failures", count = count).to_string(),
+        ),
+        HistoryReadyState::NoNumeric => {
+            SettingsProviderHistoryPhase::Message(t!("provider.history.no_numeric").to_string())
+        }
+        HistoryReadyState::Charts(series) => SettingsProviderHistoryPhase::Charts(
+            series
+                .iter()
+                .map(|item| history_chart_view(item, ready.axis_start_ms, ready.axis_end_ms))
+                .collect(),
+        ),
+    }
+}
+
+fn history_chart_view(
+    series: &crate::history::HistorySeries,
+    axis_start_ms: i64,
+    axis_end_ms: i64,
+) -> SettingsHistoryChartView {
+    let mut title = history_series_title(&series.label_spec_json);
+    let mut suffix = None;
+    let mut mixed_suffix = false;
+    let segments = series
+        .segments
+        .iter()
+        .map(|segment| {
+            let (next_suffix, points) = plot_segment(segment, axis_start_ms, axis_end_ms);
+            match (suffix, next_suffix) {
+                (None, Some(next)) => suffix = Some(next),
+                (Some(current), Some(next)) if current != next => mixed_suffix = true,
+                _ => {}
+            }
+            SettingsHistorySegmentView {
+                points: points
+                    .into_iter()
+                    .map(|point| SettingsHistoryPointView {
+                        x_ratio: point.x_ratio,
+                        y_ratio: point.y_ratio,
+                        gap_before: point.gap_before,
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
+    if let Some(suffix) = suffix.filter(|_| !mixed_suffix) {
+        title.push(' ');
+        title.push_str(suffix);
+    }
+    SettingsHistoryChartView { title, segments }
+}
+
+fn history_series_title(label_spec_json: &str) -> String {
+    let label_spec = serde_json::from_str::<QuotaLabelSpec>(label_spec_json)
+        .unwrap_or_else(|_| QuotaLabelSpec::Raw(label_spec_json.to_string()));
+    let mut quota = QuotaInfo::new(String::new(), 0.0, 0.0);
+    quota.label_spec = label_spec;
+    format_quota_label(&quota)
 }
 
 fn settings_provider_info_view_state(

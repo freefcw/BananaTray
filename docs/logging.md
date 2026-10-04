@@ -92,10 +92,13 @@ Debug Tab 当前提供这些与日志相关的能力：
 - `providers`
 - `settings`
 - `dbus`
+- `history`
 
 另外还有一些聚焦子系统的辅助 target，例如 `http`、`notification`、`single_instance`、`auto_launch`、`interactive_runner`、`providers::custom`。这些用于更细的局部诊断，不代表稳定的顶层模块边界。
 
 排查问题时，优先按 target 过滤日志，而不是只看 message 文本。
+
+`history` 只记录数据库打不开、写入或清理失败，以及同一条响应里重复的 quota key。不要把样本的 `detail`、请求正文或凭证打进这个 target。issue report 附带的最后 10 条 `WARN` / `ERROR` 因此也不会带上这些内容。
 
 ## Issue Report
 

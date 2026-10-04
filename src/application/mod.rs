@@ -24,8 +24,9 @@ pub use selectors::{
     EnvironmentRowKind, IssueReportContext, LogLevelColor, OverviewItemStatus,
     OverviewItemViewState, OverviewQuotaItem, ProviderBodyViewState, ProviderDetailViewState,
     ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState, QuotaDisplayViewState,
-    QuotaThresholdUnitViewState, QuotaVisibilityItem, RefreshTarget,
-    SettingsProviderDetailViewState, SettingsProviderInfoViewState,
+    QuotaThresholdUnitViewState, QuotaVisibilityItem, RefreshTarget, SettingsHistoryChartView,
+    SettingsHistoryPointView, SettingsHistorySegmentView, SettingsProviderDetailViewState,
+    SettingsProviderHistoryPhase, SettingsProviderHistoryViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
     SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };

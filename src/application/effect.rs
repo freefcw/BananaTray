@@ -1,5 +1,6 @@
 use super::quota_alert::QuotaNotificationEvent;
 use crate::application::DebugNotificationKind;
+use crate::history::HistoryJob;
 use crate::models::{NewApiConfig, ProviderId, ScriptProviderConfig, StatusLevel, TrayIconStyle};
 use crate::refresh::RefreshRequest;
 
@@ -47,6 +48,7 @@ pub enum CommonEffect {
     Debug(DebugEffect),
     NewApi(NewApiEffect),
     ScriptProvider(ScriptProviderEffect),
+    History(HistoryJob),
 }
 
 #[derive(Debug)]
@@ -193,6 +195,18 @@ impl_common_effect_from!(RefreshEffect => Refresh);
 impl_common_effect_from!(DebugEffect => Debug);
 impl_common_effect_from!(NewApiEffect => NewApi);
 impl_common_effect_from!(ScriptProviderEffect => ScriptProvider);
+
+impl From<HistoryJob> for CommonEffect {
+    fn from(job: HistoryJob) -> Self {
+        Self::History(job)
+    }
+}
+
+impl From<HistoryJob> for AppEffect {
+    fn from(job: HistoryJob) -> Self {
+        CommonEffect::from(job).into()
+    }
+}
 
 #[cfg(test)]
 mod tests {

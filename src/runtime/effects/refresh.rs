@@ -41,6 +41,7 @@ pub(super) fn send_request(
 
 fn refresh_request_send_failed_action(id: ProviderId, detail: String) -> AppAction {
     AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+        reason: None,
         id,
         result: RefreshResult::Failed {
             failure: ProviderFailure {

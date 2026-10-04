@@ -13,6 +13,7 @@ pub mod bootstrap;
 mod builtin_provider_manifest;
 #[cfg(all(target_os = "linux", feature = "app"))]
 mod dbus;
+pub mod history;
 pub mod i18n;
 pub mod models;
 pub mod platform;
@@ -140,6 +141,14 @@ pub fn run_app() {
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
             bootstrap::start_custom_provider_pump(&state, custom_provider_rx, cx);
+            if let Some(history_rx) = state.borrow_mut().take_history_receiver() {
+                bootstrap::start_history_pump(&state, history_rx, cx);
+                crate::bootstrap::dispatch_in_app(
+                    &state,
+                    crate::application::AppAction::ApplyHistoryRetention,
+                    cx,
+                );
+            }
 
             // 7. 初始刷新
             bootstrap::trigger_initial_refresh(&state);

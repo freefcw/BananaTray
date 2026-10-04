@@ -41,6 +41,9 @@ pub(super) fn set_settings_tab(
 
 pub(super) fn toggle_cadence_dropdown(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     session.settings_ui.cadence_dropdown_open = !session.settings_ui.cadence_dropdown_open;
+    if session.settings_ui.cadence_dropdown_open {
+        session.settings_ui.history_retention_dropdown_open = false;
+    }
     effects.push(ContextEffect::Render.into());
 }
 
@@ -148,6 +151,16 @@ pub(super) fn apply_setting_change(
             session.settings.system.refresh_interval_mins = mins.unwrap_or(0);
             session.settings_ui.cadence_dropdown_open = false;
             effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
+        }
+        SettingChange::SetHistoryRetentionDays(days) => {
+            if !super::history::set_global_retention(session, days, effects) {
+                return;
+            }
+        }
+        SettingChange::SetProviderHistoryRetentionDays { provider_id, days } => {
+            if !super::history::set_provider_retention(session, provider_id, days, effects) {
+                return;
+            }
         }
         SettingChange::SetTrayIconStyle(style) => {
             session.settings.display.tray_icon_style = style;
@@ -293,6 +306,7 @@ pub(super) fn open_settings(
         session.settings_ui.selected_provider = id;
         session.settings_ui.active_tab = SettingsTab::Providers;
     }
+    super::history::begin_history_load(session, effects);
     effects.push(ContextEffect::OpenSettingsWindow.into());
 }
 

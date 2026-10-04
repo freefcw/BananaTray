@@ -321,6 +321,7 @@ fn test_late_success_after_timeout_is_forwarded_and_records_success() {
         assert!(events.iter().any(|event| matches!(
             event,
             RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::Manual),
                 result: RefreshResult::Failed {
                     error_kind: ErrorKind::NetworkError,
                     ..
@@ -331,6 +332,7 @@ fn test_late_success_after_timeout_is_forwarded_and_records_success() {
         assert!(events.iter().any(|event| matches!(
             event,
             RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::Manual),
                 result: RefreshResult::Success { .. },
                 ..
             })
@@ -437,6 +439,7 @@ fn test_config_change_discards_old_result_and_releases_ui_immediately() {
         assert!(events_before_completion.iter().any(|event| matches!(
             event,
             RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::Manual),
                 result: RefreshResult::SkippedStale,
                 ..
             })
@@ -446,6 +449,7 @@ fn test_config_change_discards_old_result_and_releases_ui_immediately() {
         assert!(drain_events(&event_rx).into_iter().all(|event| !matches!(
             event,
             RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::Manual),
                 result: RefreshResult::Success { .. },
                 ..
             })

@@ -1,4 +1,5 @@
 mod debug;
+mod history;
 mod newapi;
 mod provider_sidebar;
 mod refresh;
@@ -32,6 +33,37 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::ToggleCadenceDropdown => {
             settings::toggle_cadence_dropdown(session, &mut effects)
         }
+        AppAction::ToggleHistoryRetentionDropdown => {
+            history::toggle_history_retention_dropdown(session, &mut effects)
+        }
+        AppAction::ToggleProviderHistoryRetentionDropdown => {
+            history::toggle_provider_history_retention_dropdown(session, &mut effects)
+        }
+        AppAction::SetHistoryRange(range) => {
+            history::set_history_range(session, range, &mut effects)
+        }
+        AppAction::BeginClearProviderHistory => {
+            history::begin_clear_provider_history(session, &mut effects)
+        }
+        AppAction::CancelClearProviderHistory => {
+            history::cancel_clear_provider_history(session, &mut effects)
+        }
+        AppAction::ConfirmClearProviderHistory => {
+            history::confirm_clear_provider_history(session, &mut effects)
+        }
+        AppAction::BeginClearAllHistory => history::begin_clear_all_history(session, &mut effects),
+        AppAction::CancelClearAllHistory => {
+            history::cancel_clear_all_history(session, &mut effects)
+        }
+        AppAction::ConfirmClearAllHistory => {
+            history::confirm_clear_all_history(session, &mut effects)
+        }
+        AppAction::ApplyHistoryRetention => history::push_apply_retention(session, &mut effects),
+        AppAction::QuotaHistoryLoaded {
+            request_id,
+            provider_id,
+            outcome,
+        } => history::apply_loaded(session, request_id, provider_id, outcome, &mut effects),
         AppAction::SaveGlobalHotkey(hotkey) => {
             settings::save_global_hotkey(session, hotkey, &mut effects)
         }

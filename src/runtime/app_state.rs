@@ -1,4 +1,5 @@
 use crate::application::AppSession;
+use crate::history::HistoryJob;
 use crate::models::AppSettings;
 use crate::providers::ProviderManagerHandle;
 use crate::refresh::{RefreshRequest, RefreshWorker};
@@ -7,8 +8,8 @@ use std::path::PathBuf;
 
 use super::SettingsWriter;
 use super::{
-    BackgroundJobSender, CustomProviderJob, CustomProviderResults, PersistentJobSender,
-    ScriptTestJob,
+    BackgroundJobSender, CustomProviderJob, PersistentJobReceiver, PersistentJobSender,
+    ScriptTestJob, WorkerResults,
 };
 
 // ============================================================================
@@ -24,9 +25,13 @@ pub struct AppState {
     /// 向专用阻塞线程发送 NewAPI / Script Provider CRUD 文件 I/O。
     pub(crate) custom_provider_tx: PersistentJobSender<CustomProviderJob>,
     /// worker 已完成但前台 reducer 尚未结算的持久事务结果。
-    pub(crate) custom_provider_results: CustomProviderResults,
+    pub(crate) custom_provider_results: WorkerResults,
     /// 向独立阻塞线程发送脚本 Run Test，避免长 timeout 阻塞 CRUD。
     pub(crate) script_test_tx: BackgroundJobSender<ScriptTestJob>,
+    /// 用量历史 SQLite 线程。关闭后继续 drain 已入队的写入。
+    pub(crate) history_tx: PersistentJobSender<HistoryJob>,
+    history_rx: Option<PersistentJobReceiver<HistoryJob>>,
+    pub(crate) history_results: WorkerResults,
     /// 设置文件 debounce 写入器（所有持久化统一通过此句柄串行化）
     pub(crate) settings_writer: SettingsWriter,
     /// 日志文件路径（Debug Tab 展示用）
@@ -49,6 +54,7 @@ impl AppState {
         debug!(target: "app", "initializing AppState");
         let providers = manager.snapshot().initial_statuses();
         let session = AppSession::new(settings, providers);
+        let (history_tx, history_rx) = PersistentJobSender::unbounded();
         debug!(
             target: "app",
             "default active tab: {:?}",
@@ -60,8 +66,11 @@ impl AppState {
             manager,
             refresh_worker,
             custom_provider_tx,
-            custom_provider_results: CustomProviderResults::default(),
+            custom_provider_results: WorkerResults::default(),
             script_test_tx,
+            history_tx,
+            history_rx: Some(history_rx),
+            history_results: WorkerResults::default(),
             settings_writer: SettingsWriter::spawn(),
             log_path,
             #[cfg(target_os = "linux")]
@@ -69,6 +78,10 @@ impl AppState {
             #[cfg(target_os = "linux")]
             linux_popup_position_save_requested: false,
         }
+    }
+
+    pub(crate) fn take_history_receiver(&mut self) -> Option<PersistentJobReceiver<HistoryJob>> {
+        self.history_rx.take()
     }
 
     /// 向 RefreshCoordinator 发送请求（非阻塞）。
@@ -94,7 +107,10 @@ impl AppState {
     ) -> bool {
         self.custom_provider_tx.close();
         self.script_test_tx.request_shutdown();
-        self.custom_provider_tx.join_before(deadline) & self.script_test_tx.join_before(deadline)
+        self.history_tx.close();
+        self.custom_provider_tx.join_before(deadline)
+            & self.script_test_tx.join_before(deadline)
+            & self.history_tx.join_before(deadline)
     }
 
     /// 先有界等待后台工作，再结算已收到的事务结果，最后完成 settings 快照落盘。
@@ -105,10 +121,18 @@ impl AppState {
         self.refresh_worker.request_shutdown();
         self.custom_provider_tx.close();
         self.script_test_tx.request_shutdown();
+        self.history_tx.close();
 
         let _ = self.refresh_worker.join_before(deadline);
         let _ = self.script_test_tx.join_before(deadline);
         let custom_provider_stopped = self.custom_provider_tx.join_before(deadline);
+        let history_stopped = self.history_tx.join_before(deadline);
+        if !history_stopped {
+            log::warn!(
+                target: "history",
+                "quota history worker did not stop before quit deadline"
+            );
+        }
         if !custom_provider_stopped {
             log::warn!(
                 target: "settings",
@@ -119,6 +143,8 @@ impl AppState {
             // 退出阶段只结算领域状态；通知、render、reload 等非持久 effect 无需执行。
             let _ = crate::application::reduce(&mut self.session, action);
         }
+        // 退出时丢掉还没画到界面上的历史读结果，避免把加载态写进这次会话。
+        let _ = self.history_results.drain();
         // 将所有事务完成动作归并后的权威状态作为 writer 的最后一份快照。
         self.settings_writer.schedule(self.session.settings.clone());
         self.settings_writer.shutdown_and_join();

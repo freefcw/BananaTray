@@ -200,6 +200,7 @@ fn finished_event_restores_debug_state() {
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
     let outcome = RefreshOutcome {
+        reason: None,
         id,
         result: RefreshResult::Failed {
             failure: crate::models::ProviderFailure {
@@ -234,6 +235,7 @@ fn finished_event_for_other_provider_does_not_restore() {
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
     let outcome = RefreshOutcome {
+        reason: None,
         id: pid(ProviderKind::Gemini),
         result: RefreshResult::SkippedCooldown,
     };
@@ -260,6 +262,7 @@ fn finished_restore_survives_unknown_provider() {
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Warn);
 
     let outcome = RefreshOutcome {
+        reason: None,
         id,
         result: RefreshResult::Failed {
             failure: crate::models::ProviderFailure {

@@ -189,6 +189,7 @@
 - `settings.json`、BananaTray 代写的外部 OAuth 凭证和自定义 provider YAML 复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 使用不可变版本化脚本，最后原子提交引用它的 YAML；成功后再清理旧脚本，避免崩溃窗口产生跨版本文件对。
 - `settings.json` 加载失败（JSON 损坏等）时，启动路径会先把原文件 rename 备份为 `settings.json.corrupt-<epoch>` 再回退默认值，避免后续 persist 覆盖后原始内容不可恢复；备份成功时启动后发送系统通知告知备份位置。
 - 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。
+- 用量历史是另一份本地库 `quota_history.sqlite`，和 `settings.json` 放在同一个配置目录。reducer 只把已采纳的 `Success` / `Unavailable` / `Failed` 交给历史线程；跳过的刷新不写入。失败样本会留下，但不会进入折线。保留天数在 `settings.json` 的 `history.retention_days`（默认 90，范围 1 到 365），provider 可以用 `history_retention_days` 覆盖。历史线程不读设置，cutoff 由 reducer 放进任务。缩短保留会立刻按 provider 删除更早的行；加长不会删数据。设置页读图时，查询起点也不会早于当前保留期限。手动清除和改天数是两件事，清除需要确认。退出时历史线程和其它 worker 共用 60ms，未画完的读取结果直接丢掉，不写回这次会话。
 
 ## Localization Boundary
 

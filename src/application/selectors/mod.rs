@@ -254,6 +254,41 @@ pub struct SettingsProviderDetailViewState {
     pub quota_thresholds: Vec<QuotaThresholdUnitViewState>,
     /// 配额可见性列表（用于设置 UI 中的勾选框）
     pub quota_visibility: Vec<QuotaVisibilityItem>,
+    pub history: SettingsProviderHistoryViewState,
+}
+
+#[derive(Debug, Clone)]
+pub struct SettingsProviderHistoryViewState {
+    pub range: crate::history::HistoryRange,
+    pub retention_override: Option<u16>,
+    pub effective_days: u16,
+    pub dropdown_open: bool,
+    pub confirming_clear: bool,
+    pub phase: SettingsProviderHistoryPhase,
+}
+
+#[derive(Debug, Clone)]
+pub enum SettingsProviderHistoryPhase {
+    Message(String),
+    Charts(Vec<SettingsHistoryChartView>),
+}
+
+#[derive(Debug, Clone)]
+pub struct SettingsHistoryChartView {
+    pub title: String,
+    pub segments: Vec<SettingsHistorySegmentView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SettingsHistorySegmentView {
+    pub points: Vec<SettingsHistoryPointView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SettingsHistoryPointView {
+    pub x_ratio: f64,
+    pub y_ratio: f64,
+    pub gap_before: bool,
 }
 
 /// 单个配额在托盘弹窗中的可见性状态

@@ -67,6 +67,7 @@ pub(super) fn request_provider_refresh(
 fn process_refresh_outcome(
     session: &mut AppSession,
     outcome_id: &ProviderId,
+    reason: Option<RefreshReason>,
     result: RefreshResult,
     effects: &mut Vec<AppEffect>,
 ) {
@@ -74,7 +75,7 @@ fn process_refresh_outcome(
         return;
     }
     if !session.settings.provider.is_enabled(outcome_id) {
-        // 用户禁用后到达的旧结果不再更新 quota、错误或通知。
+        // 用户禁用后到达的旧结果不再更新 quota、错误或通知，也不写入历史。
         if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
             if provider.mark_skipped() {
                 effects.push(ContextEffect::Render.into());
@@ -82,6 +83,8 @@ fn process_refresh_outcome(
         }
         return;
     }
+
+    super::history::record_adopted_refresh(session, outcome_id, reason, &result, effects);
 
     match result {
         RefreshResult::Success { data } => {
@@ -178,7 +181,13 @@ pub(super) fn apply_refresh_event(
             let prev_status = session.worst_enabled_provider_status();
             let outcome_id = outcome.id.clone();
 
-            process_refresh_outcome(session, &outcome_id, outcome.result, effects);
+            process_refresh_outcome(
+                session,
+                &outcome_id,
+                outcome.reason,
+                outcome.result,
+                effects,
+            );
 
             // 动态图标：任一已启用 Provider 的综合状态变化都会反映到图标
             sync_dynamic_icon_if_needed(session, prev_status, effects);

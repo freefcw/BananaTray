@@ -6,6 +6,7 @@ use crate::application::{AppAction, CommonEffect};
 use super::AppState;
 
 mod debug;
+pub(super) mod history;
 pub(super) mod newapi;
 mod notification;
 mod refresh;
@@ -29,5 +30,6 @@ pub(super) fn run_common_effect(
         CommonEffect::Debug(effect) => debug::run(state, effect),
         CommonEffect::NewApi(effect) => newapi::run(state, effect),
         CommonEffect::ScriptProvider(effect) => script_provider::run(state, effect),
+        CommonEffect::History(job) => history::run(state, job),
     }
 }

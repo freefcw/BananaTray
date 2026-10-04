@@ -2,6 +2,7 @@
 //! Extracted for testability (GPUI proc macros crash during test compilation).
 
 use super::quota_alert::AlertEngine;
+use crate::history::{HistoryRange, HistoryReady};
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
     ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
@@ -184,6 +185,7 @@ pub struct AppSession {
     pub settings_ui: SettingsUiState,
     pub debug_ui: DebugUiState,
     pub settings: AppSettings,
+    pub history_ui: HistoryUiState,
     pub alert_engine: AlertEngine,
     /// 弹窗是否可见（Dynamic 图标在弹窗可见时延迟更新，关闭后同步）
     pub popup_visible: bool,
@@ -213,6 +215,7 @@ impl AppSession {
             settings_ui,
             debug_ui: DebugUiState::default(),
             settings,
+            history_ui: HistoryUiState::default(),
             alert_engine: AlertEngine::new(),
             popup_visible: false,
             overview_expanded: Default::default(),
@@ -375,6 +378,8 @@ fn build_initial_settings_ui_state(
         active_tab: SettingsTab::General,
         selected_provider,
         cadence_dropdown_open: false,
+        history_retention_dropdown_open: false,
+        provider_history_retention_dropdown_open: false,
         token_editing_provider: None,
         modal: SettingsModalState::Idle,
         script_provider_testing: false,
@@ -492,6 +497,8 @@ pub struct SettingsUiState {
     pub active_tab: SettingsTab,
     pub selected_provider: ProviderId,
     pub cadence_dropdown_open: bool,
+    pub history_retention_dropdown_open: bool,
+    pub provider_history_retention_dropdown_open: bool,
     /// 正在编辑 Token 的 Provider ID（None = 未编辑）
     pub token_editing_provider: Option<ProviderId>,
     /// 右侧面板的互斥模态状态机。
@@ -603,6 +610,10 @@ pub enum SettingsModalState {
     ConfirmingDeleteNewApi,
     /// 详情页：对当前脚本 Provider 的"删除配置文件"二次确认。
     ConfirmingDeleteScriptProvider,
+    /// 详情页：清除当前 provider 的用量历史。
+    ConfirmingClearProviderHistory,
+    /// General：清除所有 provider 的用量历史。
+    ConfirmingClearAllHistory,
     /// 右面板：显示"添加 Provider"选择列表（picker）。
     AddingProvider,
     /// 右面板：NewAPI 新增表单（空表单，提交后会预注册新 provider）。
@@ -643,6 +654,14 @@ impl SettingsModalState {
     /// 是否正在确认"删除当前脚本 provider"。
     pub fn is_confirming_delete_script_provider(&self) -> bool {
         matches!(self, Self::ConfirmingDeleteScriptProvider)
+    }
+
+    pub fn is_confirming_clear_provider_history(&self) -> bool {
+        matches!(self, Self::ConfirmingClearProviderHistory)
+    }
+
+    pub fn is_confirming_clear_all_history(&self) -> bool {
+        matches!(self, Self::ConfirmingClearAllHistory)
     }
 
     /// 当前是否正在展示脚本 Provider 表单（新增或编辑）。
@@ -689,6 +708,42 @@ impl SettingsModalState {
             _ => None,
         }
     }
+}
+
+/// 设置页用量历史的本次查看状态。不写入 settings.json。
+#[derive(Debug)]
+pub struct HistoryUiState {
+    pub range: HistoryRange,
+    pub request_id: u64,
+    pub load: HistoryLoadState,
+}
+
+impl Default for HistoryUiState {
+    fn default() -> Self {
+        Self {
+            range: HistoryRange::Last24Hours,
+            request_id: 0,
+            load: HistoryLoadState::Idle,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum HistoryLoadState {
+    Idle,
+    Loading {
+        provider_id: ProviderId,
+        request_id: u64,
+    },
+    Ready {
+        provider_id: ProviderId,
+        request_id: u64,
+        ready: HistoryReady,
+    },
+    Unavailable {
+        provider_id: ProviderId,
+        request_id: u64,
+    },
 }
 
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）

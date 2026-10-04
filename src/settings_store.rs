@@ -121,6 +121,8 @@ struct PersistedProviderConfig {
     quota_usage_steps: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     quota_threshold_overrides: HashMap<String, PersistedQuotaRuleGroups>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    history_retention_days: HashMap<String, u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider_layout: Option<Vec<ProviderLayoutItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,12 +150,29 @@ impl PersistedProviderConfig {
             .into_iter()
             .filter_map(|(key, raw)| parse_persisted_step_pct(&key, raw).map(|step| (key, step)))
             .collect();
+        let history_retention_days = self
+            .history_retention_days
+            .into_iter()
+            .filter(|(key, days)| {
+                let keep = crate::models::valid_retention_days(*days);
+                if !keep {
+                    log::warn!(
+                        target: "settings",
+                        "dropping invalid history retention {} for {}",
+                        days,
+                        key
+                    );
+                }
+                keep
+            })
+            .collect();
         let mut config = ProviderConfig {
             credentials: self.credentials,
             provider_layout: layout,
             hidden_quotas: self.hidden_quotas,
             quota_usage_steps,
             quota_threshold_overrides,
+            history_retention_days,
         };
         config.normalize_layout();
         config
@@ -224,6 +243,7 @@ struct PersistedAppSettingsV1 {
     logging: LoggingSettings,
     provider: PersistedProviderConfig,
     quota: PersistedQuotaRuleGroups,
+    history: crate::models::HistorySettings,
 }
 
 impl From<PersistedAppSettingsV1> for AppSettings {
@@ -235,6 +255,7 @@ impl From<PersistedAppSettingsV1> for AppSettings {
             logging: value.logging,
             provider: value.provider.into_domain(),
             quota: value.quota.into_rules(),
+            history: value.history.normalized(),
         }
     }
 }
@@ -268,9 +289,11 @@ impl From<&AppSettings> for PersistedAppSettingsV1 {
                     })
                     .collect(),
                 provider_layout: Some(value.provider.provider_layout.clone()),
+                history_retention_days: value.provider.history_retention_days.clone(),
                 ..Default::default()
             },
             quota: PersistedQuotaRuleGroups::from_rules(&value.quota),
+            history: value.history.clone(),
         }
     }
 }

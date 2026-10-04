@@ -25,6 +25,10 @@ pub fn settings_path() -> PathBuf {
     app_config_dir().join("settings.json")
 }
 
+pub fn quota_history_path() -> PathBuf {
+    app_config_dir().join("quota_history.sqlite")
+}
+
 pub fn custom_providers_dir() -> PathBuf {
     app_config_dir().join("providers")
 }

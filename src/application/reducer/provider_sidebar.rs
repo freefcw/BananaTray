@@ -24,9 +24,10 @@ pub(super) fn select_settings_provider(
     }
     session.settings_ui.selected_provider = id;
     session.settings_ui.token_editing_provider = None;
+    session.settings_ui.provider_history_retention_dropdown_open = false;
     // 点选已有服务商时退出 picker / 取消正在确认中的二次状态
     session.settings_ui.modal = SettingsModalState::Idle;
-    effects.push(ContextEffect::Render.into());
+    super::history::begin_history_load(session, effects);
 }
 
 pub(super) fn set_token_editing(

@@ -52,6 +52,8 @@ pub enum RefreshEvent {
 pub struct RefreshOutcome {
     pub id: ProviderId,
     pub result: RefreshResult,
+    /// 这次拉取的触发原因。通道死亡合成的事件为 `None`。
+    pub reason: Option<RefreshReason>,
 }
 
 /// 刷新结果类型

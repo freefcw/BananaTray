@@ -14,8 +14,8 @@ use std::rc::Rc;
 
 pub use app_state::AppState;
 pub(crate) use background_job::{
-    BackgroundJobReceiver, BackgroundJobSender, CustomProviderJob, CustomProviderResults,
-    PersistentJobReceiver, PersistentJobSender, ScriptTestJob,
+    BackgroundJobReceiver, BackgroundJobSender, CustomProviderJob, PersistentJobReceiver,
+    PersistentJobSender, ScriptTestJob, WorkerResults,
 };
 pub(crate) use diagnostics_context::{
     collect_debug_diagnostics, collect_issue_report_context, debug_context_from_diagnostics,
@@ -45,6 +45,13 @@ pub(crate) fn execute_custom_provider_job(
             effects::script_provider::execute(effect, settings, settings_writer)
         }
     }
+}
+
+pub(crate) fn execute_history_job(
+    store: &mut Option<Box<dyn crate::history::QuotaHistoryStore>>,
+    job: crate::history::HistoryJob,
+) -> Option<AppAction> {
+    effects::history::execute_job(store, job)
 }
 
 pub(crate) fn execute_script_test_job(job: ScriptTestJob) -> AppAction {
