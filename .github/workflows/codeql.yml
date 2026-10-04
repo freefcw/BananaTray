@@ -52,7 +52,7 @@ jobs:
           languages: rust, javascript
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Build analyzable surfaces
         run: |
