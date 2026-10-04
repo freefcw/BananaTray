@@ -9,10 +9,9 @@ use super::format::{
     quota_display_view_state,
 };
 use super::*;
-use crate::history::{plot_segment, HistoryReadyState};
+use crate::history::HistoryReadyState;
 use crate::models::{
-    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus, QuotaInfo,
-    QuotaLabelSpec, UpdateStatus,
+    ConnectionStatus, ProviderCapability, ProviderId, ProviderKind, ProviderStatus, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -256,58 +255,10 @@ fn history_phase(session: &AppSession, id: &ProviderId) -> SettingsProviderHisto
         HistoryReadyState::NoNumeric => {
             SettingsProviderHistoryPhase::Message(t!("provider.history.no_numeric").to_string())
         }
-        HistoryReadyState::Charts(series) => SettingsProviderHistoryPhase::Charts(
-            series
-                .iter()
-                .map(|item| history_chart_view(item, ready.axis_start_ms, ready.axis_end_ms))
-                .collect(),
-        ),
+        HistoryReadyState::Charts(_) => {
+            SettingsProviderHistoryPhase::Charts(super::history::history_charts_view(ready))
+        }
     }
-}
-
-fn history_chart_view(
-    series: &crate::history::HistorySeries,
-    axis_start_ms: i64,
-    axis_end_ms: i64,
-) -> SettingsHistoryChartView {
-    let mut title = history_series_title(&series.label_spec_json);
-    let mut suffix = None;
-    let mut mixed_suffix = false;
-    let segments = series
-        .segments
-        .iter()
-        .map(|segment| {
-            let (next_suffix, points) = plot_segment(segment, axis_start_ms, axis_end_ms);
-            match (suffix, next_suffix) {
-                (None, Some(next)) => suffix = Some(next),
-                (Some(current), Some(next)) if current != next => mixed_suffix = true,
-                _ => {}
-            }
-            SettingsHistorySegmentView {
-                points: points
-                    .into_iter()
-                    .map(|point| SettingsHistoryPointView {
-                        x_ratio: point.x_ratio,
-                        y_ratio: point.y_ratio,
-                        gap_before: point.gap_before,
-                    })
-                    .collect(),
-            }
-        })
-        .collect();
-    if let Some(suffix) = suffix.filter(|_| !mixed_suffix) {
-        title.push(' ');
-        title.push_str(suffix);
-    }
-    SettingsHistoryChartView { title, segments }
-}
-
-fn history_series_title(label_spec_json: &str) -> String {
-    let label_spec = serde_json::from_str::<QuotaLabelSpec>(label_spec_json)
-        .unwrap_or_else(|_| QuotaLabelSpec::Raw(label_spec_json.to_string()));
-    let mut quota = QuotaInfo::new(String::new(), 0.0, 0.0);
-    quota.label_spec = label_spec;
-    format_quota_label(&quota)
 }
 
 fn settings_provider_info_view_state(

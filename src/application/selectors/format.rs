@@ -215,7 +215,11 @@ fn format_failure_advice(advice: &FailureAdvice) -> String {
 
 /// 格式化配额标题。
 pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
-    match &quota.label_spec {
+    format_quota_label_spec(&quota.label_spec)
+}
+
+pub(crate) fn format_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
+    match label_spec {
         QuotaLabelSpec::Raw(label) => label.clone(),
         QuotaLabelSpec::Daily => t!("quota.label.daily").to_string(),
         QuotaLabelSpec::Session => t!("quota.label.session").to_string(),

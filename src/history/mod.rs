@@ -15,8 +15,8 @@ pub use redact::scrub_history_detail;
 pub use retention::{cutoff_ms, query_window, retention_cutoffs, DAY_MS};
 pub use sample::{capture_sample, HistoryStatus, QuotaHistoryPoint, QuotaHistorySample};
 pub use series::{
-    interpret, plot_segment, HistoryChart, HistoryLoadOutcome, HistoryRange, HistoryReady,
-    HistoryReadyState, HistorySegment, HistorySeries, PlottedPoint,
+    interpret, plot_segment, HistoryLoadOutcome, HistoryRange, HistoryReady, HistoryReadyState,
+    HistorySegment, HistorySeries, PlottedPoint,
 };
 pub use sqlite::SqliteQuotaHistoryStore;
 pub use store::{

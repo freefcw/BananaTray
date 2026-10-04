@@ -1,9 +1,10 @@
 use super::common::{has_effect, make_session, pid};
+use crate::application::state::HistoryLoadState;
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, SettingChange, SettingsModalState,
+    reduce, AppAction, AppEffect, CommonEffect, SettingChange, SettingsModalState, SettingsTab,
 };
-use crate::history::{HistoryJob, HistoryRange};
-use crate::models::{ProviderKind, QuotaInfo, RefreshData};
+use crate::history::{HistoryJob, HistoryLoadOutcome, HistoryRange};
+use crate::models::{NavTab, ProviderKind, QuotaInfo, RefreshData};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshReason, RefreshResult};
 
 fn finished(result: RefreshResult) -> AppAction {
@@ -89,6 +90,24 @@ fn chart_query_starts_at_the_retention_cutoff() {
 }
 
 #[test]
+fn switching_settings_tab_closes_history_clear_confirmation() {
+    let mut session = make_session();
+    session.settings_ui.modal = SettingsModalState::ConfirmingClearAllHistory;
+    reduce(
+        &mut session,
+        AppAction::SetSettingsTab(SettingsTab::Providers),
+    );
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
+
+    session.settings_ui.modal = SettingsModalState::ConfirmingClearProviderHistory;
+    reduce(
+        &mut session,
+        AppAction::SetSettingsTab(SettingsTab::General),
+    );
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
+}
+
+#[test]
 fn invalid_retention_days_are_ignored() {
     let mut session = make_session();
     let effects = reduce(
@@ -151,4 +170,98 @@ fn startup_retention_includes_builtins_only_from_the_loaded_set() {
     assert!(targets
         .iter()
         .all(|target| target.provider_id != "relay:script"));
+}
+
+#[test]
+fn switching_to_provider_tab_loads_popup_history_but_overview_does_not() {
+    let mut session = make_session();
+    let effects = reduce(
+        &mut session,
+        AppAction::SelectNavTab(NavTab::Provider(pid(ProviderKind::Claude))),
+    );
+    let request = effects.iter().find_map(|effect| match effect {
+        AppEffect::Common(CommonEffect::History(HistoryJob::Load(request))) => Some(request),
+        _ => None,
+    });
+    let request = request.expect("provider tab loads popup history");
+    assert_eq!(request.provider_id, "claude");
+    assert_eq!(request.range, HistoryRange::Last24Hours);
+    assert!(matches!(
+        session.popup_history_ui.load,
+        HistoryLoadState::Loading { .. }
+    ));
+
+    let effects = reduce(&mut session, AppAction::SelectNavTab(NavTab::Overview));
+    assert!(!has_effect(&effects, |effect| {
+        matches!(
+            effect,
+            AppEffect::Common(CommonEffect::History(HistoryJob::Load(_)))
+        )
+    }));
+}
+
+#[test]
+fn opening_popup_with_provider_tab_loads_popup_history() {
+    let mut session = make_session();
+    session
+        .nav
+        .switch_to(NavTab::Provider(pid(ProviderKind::Claude)));
+    let effects = reduce(&mut session, AppAction::PopupVisibilityChanged(true));
+    assert!(has_effect(&effects, |effect| {
+        matches!(
+            effect,
+            AppEffect::Common(CommonEffect::History(HistoryJob::Load(request)))
+                if request.provider_id == "claude"
+        )
+    }));
+}
+
+#[test]
+fn adopted_refresh_reloads_the_active_popup_provider_chart() {
+    let mut session = make_session();
+    session
+        .nav
+        .switch_to(NavTab::Provider(pid(ProviderKind::Claude)));
+    session
+        .settings
+        .provider
+        .set_enabled(&pid(ProviderKind::Claude), true);
+    let effects = reduce(&mut session, finished(success()));
+    assert!(appends_claude(&effects));
+    assert!(has_effect(&effects, |effect| {
+        matches!(
+            effect,
+            AppEffect::Common(CommonEffect::History(HistoryJob::Load(request)))
+                if request.provider_id == "claude"
+        )
+    }));
+}
+
+#[test]
+fn load_result_settles_popup_scope_without_touching_settings_scope() {
+    let mut session = make_session();
+    session.popup_history_ui.request_id = 7;
+    session.popup_history_ui.load = HistoryLoadState::Loading {
+        provider_id: pid(ProviderKind::Claude),
+        request_id: 7,
+    };
+    let ready = crate::history::HistoryReady {
+        range: HistoryRange::Last24Hours,
+        axis_start_ms: 0,
+        axis_end_ms: 1,
+        state: crate::history::HistoryReadyState::Empty,
+    };
+    reduce(
+        &mut session,
+        AppAction::QuotaHistoryLoaded {
+            request_id: 7,
+            provider_id: pid(ProviderKind::Claude),
+            outcome: HistoryLoadOutcome::Ready(ready),
+        },
+    );
+    assert!(matches!(
+        session.popup_history_ui.load,
+        HistoryLoadState::Ready { .. }
+    ));
+    assert!(matches!(session.history_ui.load, HistoryLoadState::Idle));
 }

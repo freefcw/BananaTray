@@ -3,7 +3,7 @@ use crate::history::{
     capture_sample, cutoff_ms, now_ms, query_window, retention_cutoffs, HistoryJob,
     HistoryLoadOutcome, HistoryLoadRequest, HistoryRange,
 };
-use crate::models::{valid_retention_days, ProviderId};
+use crate::models::{valid_retention_days, NavTab, ProviderId};
 use crate::refresh::{RefreshReason, RefreshResult};
 
 use super::super::state::{AppSession, HistoryLoadState, SettingsModalState};
@@ -30,21 +30,61 @@ pub(super) fn record_adopted_refresh(
     if &session.settings_ui.selected_provider == id {
         begin_history_load(session, effects);
     }
+    if session.nav.active_tab == NavTab::Provider(id.clone()) {
+        begin_popup_history_load(session, effects);
+    }
 }
 
 pub(super) fn begin_history_load(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
     let provider_id = session.settings_ui.selected_provider.clone();
     session.history_ui.request_id = session.history_ui.request_id.wrapping_add(1);
     let request_id = session.history_ui.request_id;
-    let days = session
-        .settings
-        .effective_history_retention_days(&provider_id);
-    let (axis_start_ms, axis_end_ms, captured_from_ms, captured_to_ms) =
-        query_window(session.history_ui.range, now_ms(), days);
     session.history_ui.load = HistoryLoadState::Loading {
         provider_id: provider_id.clone(),
         request_id,
     };
+    push_load_job(
+        session,
+        &provider_id,
+        session.history_ui.range,
+        request_id,
+        effects,
+    );
+}
+
+/// 托盘弹窗固定看近 24 小时。切到 Overview/Settings 页时不发请求。
+pub(super) fn begin_popup_history_load(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+    let NavTab::Provider(provider_id) = &session.nav.active_tab else {
+        return;
+    };
+    let provider_id = provider_id.clone();
+    session.popup_history_ui.request_id = session.popup_history_ui.request_id.wrapping_add(1);
+    let request_id = session.popup_history_ui.request_id;
+    session.popup_history_ui.load = HistoryLoadState::Loading {
+        provider_id: provider_id.clone(),
+        request_id,
+    };
+    push_load_job(
+        session,
+        &provider_id,
+        HistoryRange::Last24Hours,
+        request_id,
+        effects,
+    );
+}
+
+fn push_load_job(
+    session: &AppSession,
+    provider_id: &ProviderId,
+    range: HistoryRange,
+    request_id: u64,
+    effects: &mut Vec<AppEffect>,
+) {
+    let days = session
+        .settings
+        .effective_history_retention_days(provider_id);
+    let (axis_start_ms, axis_end_ms, captured_from_ms, captured_to_ms) =
+        query_window(range, now_ms(), days);
     effects.push(
         HistoryJob::Load(HistoryLoadRequest {
             request_id,
@@ -54,7 +94,7 @@ pub(super) fn begin_history_load(session: &mut AppSession, effects: &mut Vec<App
             captured_from_ms,
             // 查询是左闭右开。窗口终点那一毫秒的样本也要能读到。
             captured_to_ms: captured_to_ms.saturating_add(1),
-            range: session.history_ui.range,
+            range,
         })
         .into(),
     );
@@ -79,17 +119,37 @@ pub(super) fn apply_loaded(
     outcome: HistoryLoadOutcome,
     effects: &mut Vec<AppEffect>,
 ) {
-    let current = matches!(
-        &session.history_ui.load,
+    // 设置页和托盘弹窗各自计号，同一条响应可能同时满足两边，两个作用域都要结算。
+    let mut applied = false;
+    if is_current_load(&session.history_ui.load, &provider_id, request_id) {
+        session.history_ui.load = loaded_state(provider_id.clone(), request_id, outcome.clone());
+        applied = true;
+    }
+    if is_current_load(&session.popup_history_ui.load, &provider_id, request_id) {
+        session.popup_history_ui.load = loaded_state(provider_id, request_id, outcome);
+        applied = true;
+    }
+    if applied {
+        effects.push(ContextEffect::Render.into());
+    }
+}
+
+fn is_current_load(load: &HistoryLoadState, provider_id: &ProviderId, request_id: u64) -> bool {
+    matches!(
+        load,
         HistoryLoadState::Loading {
             provider_id: expected,
             request_id: expected_id,
-        } if expected == &provider_id && *expected_id == request_id
-    );
-    if !current {
-        return;
-    }
-    session.history_ui.load = match outcome {
+        } if expected == provider_id && *expected_id == request_id
+    )
+}
+
+fn loaded_state(
+    provider_id: ProviderId,
+    request_id: u64,
+    outcome: HistoryLoadOutcome,
+) -> HistoryLoadState {
+    match outcome {
         HistoryLoadOutcome::Ready(ready) => HistoryLoadState::Ready {
             provider_id,
             request_id,
@@ -99,8 +159,7 @@ pub(super) fn apply_loaded(
             provider_id,
             request_id,
         },
-    };
-    effects.push(ContextEffect::Render.into());
+    }
 }
 
 pub(super) fn set_history_range(

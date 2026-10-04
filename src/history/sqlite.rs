@@ -3,7 +3,9 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
-use super::sample::{HistoryStatus, QuotaHistoryPoint, QuotaHistorySample};
+use super::sample::{
+    HistoryStatus, HistoryUnit, HistoryValueKind, QuotaHistoryPoint, QuotaHistorySample,
+};
 use super::store::{
     HistoryError, HistoryPointRow, HistoryRangeQuery, HistoryRow, QuotaHistoryReader,
     QuotaHistoryWriter,
@@ -105,7 +107,6 @@ impl SqliteQuotaHistoryStore {
             return;
         };
         tighten(path);
-        tighten(&path.with_extension("sqlite-wal"));
         let mut wal = path.as_os_str().to_owned();
         wal.push("-wal");
         tighten(Path::new(&wal));
@@ -125,6 +126,22 @@ fn tighten(path: &Path) {
 
 fn sqlite_err(err: rusqlite::Error) -> HistoryError {
     HistoryError::new(err.to_string())
+}
+
+fn history_point(row: &rusqlite::Row<'_>, quota_key: String) -> HistoryPointRow {
+    let value_kind: String = row.get(13).unwrap_or_default();
+    let unit: Option<String> = row.get(14).ok().flatten();
+    HistoryPointRow {
+        quota_key,
+        quota_type: row.get(11).unwrap_or_default(),
+        label_spec_json: row.get(12).unwrap_or_default(),
+        value_kind: HistoryValueKind::parse(&value_kind).unwrap_or(HistoryValueKind::NonNumeric),
+        unit: unit.as_deref().and_then(HistoryUnit::parse),
+        used: row.get(15).ok().flatten(),
+        remaining: row.get(16).ok().flatten(),
+        limit_value: row.get(17).ok().flatten(),
+        reset_at_secs: row.get(18).ok().flatten(),
+    }
 }
 
 impl QuotaHistoryWriter for SqliteQuotaHistoryStore {
@@ -254,17 +271,7 @@ impl QuotaHistoryReader for SqliteQuotaHistoryStore {
             let point = row
                 .get::<_, Option<String>>(10)
                 .map_err(sqlite_err)?
-                .map(|quota_key| HistoryPointRow {
-                    quota_key,
-                    quota_type: row.get(11).unwrap_or_default(),
-                    label_spec_json: row.get(12).unwrap_or_default(),
-                    value_kind: row.get(13).unwrap_or_default(),
-                    unit: row.get(14).ok().flatten(),
-                    used: row.get(15).ok().flatten(),
-                    remaining: row.get(16).ok().flatten(),
-                    limit_value: row.get(17).ok().flatten(),
-                    reset_at_secs: row.get(18).ok().flatten(),
-                });
+                .map(|quota_key| history_point(row, quota_key));
             if grouped
                 .last()
                 .is_some_and(|sample| sample.sample_id == sample_id)

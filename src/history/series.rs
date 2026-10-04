@@ -1,4 +1,4 @@
-use super::sample::{HistoryStatus, HistoryUnit};
+use super::sample::{HistoryStatus, HistoryUnit, HistoryValueKind};
 use super::store::{HistoryPointRow, HistoryRow};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,13 +81,6 @@ pub struct PlottedPoint {
     pub x_ratio: f64,
     pub y_ratio: f64,
     pub gap_before: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct HistoryChart {
-    pub title: String,
-    pub unit_suffix: Option<&'static str>,
-    pub points: Vec<PlottedPoint>,
 }
 
 pub fn interpret(
@@ -234,26 +227,26 @@ struct Drawable {
 }
 
 fn drawable(point: &HistoryPointRow) -> Option<Drawable> {
-    match point.value_kind.as_str() {
-        "metered" => {
+    match point.value_kind {
+        HistoryValueKind::Metered => {
             let y = point.used?;
-            let unit = HistoryUnit::parse(point.unit.as_deref()?)?;
+            let unit = point.unit?;
             Some(Drawable {
                 unit,
                 y_kind: HistoryYKind::MeteredUsed,
                 y,
             })
         }
-        "balance" => {
+        HistoryValueKind::Balance => {
             let y = point.remaining?;
-            let unit = HistoryUnit::parse(point.unit.as_deref()?)?;
+            let unit = point.unit?;
             Some(Drawable {
                 unit,
                 y_kind: HistoryYKind::BalanceRemaining,
                 y,
             })
         }
-        _ => None,
+        HistoryValueKind::NonNumeric => None,
     }
 }
 
@@ -308,6 +301,7 @@ fn y_domain(segment: &HistorySegment) -> (f64, f64) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::sample::{HistoryUnit, HistoryValueKind};
     use super::*;
     use crate::history::{HistoryPointRow, HistoryRow, HistoryStatus};
 
@@ -332,13 +326,13 @@ mod tests {
         }
     }
 
-    fn metered(key: &str, used: f64, unit: &str) -> HistoryPointRow {
+    fn metered(key: &str, used: f64, unit: HistoryUnit) -> HistoryPointRow {
         HistoryPointRow {
             quota_key: key.to_string(),
             quota_type: "general".to_string(),
             label_spec_json: "{\"Session\":null}".to_string(),
-            value_kind: "metered".to_string(),
-            unit: Some(unit.to_string()),
+            value_kind: HistoryValueKind::Metered,
+            unit: Some(unit),
             used: Some(used),
             remaining: None,
             limit_value: Some(100.0),
@@ -377,19 +371,19 @@ mod tests {
                     1,
                     width,
                     HistoryStatus::Success,
-                    vec![metered("session", 10.0, "percentage")],
+                    vec![metered("session", 10.0, HistoryUnit::Percentage)],
                 ),
                 row(
                     2,
                     width + 1,
                     HistoryStatus::Success,
-                    vec![metered("session", 40.0, "percentage")],
+                    vec![metered("session", 40.0, HistoryUnit::Percentage)],
                 ),
                 row(
                     3,
                     width * 3,
                     HistoryStatus::Success,
-                    vec![metered("session", 80.0, "percentage")],
+                    vec![metered("session", 80.0, HistoryUnit::Percentage)],
                 ),
             ],
             HistoryRange::Last24Hours,
@@ -412,13 +406,13 @@ mod tests {
                     1,
                     0,
                     HistoryStatus::Success,
-                    vec![metered("weekly", 10.0, "percentage")],
+                    vec![metered("weekly", 10.0, HistoryUnit::Percentage)],
                 ),
                 row(
                     2,
                     HistoryRange::Last24Hours.bucket_width_ms(),
                     HistoryStatus::Success,
-                    vec![metered("weekly", 200.0, "amount")],
+                    vec![metered("weekly", 200.0, HistoryUnit::Amount)],
                 ),
             ],
             HistoryRange::Last24Hours,

@@ -2,6 +2,7 @@
 mod dbus_dto;
 mod debug;
 mod format;
+mod history;
 mod issue_report;
 mod settings;
 mod tray;
@@ -70,6 +71,8 @@ pub struct ProviderPanelViewState {
     pub account: Option<AccountInfoViewState>,
     pub body: ProviderBodyViewState,
     pub quota_display_mode: QuotaDisplayMode,
+    /// 近 24 小时用量折线；无成功样本或尚未加载时为空，UI 不渲染。
+    pub history_charts: Vec<HistoryChartView>,
 }
 
 /// 账户信息卡片 ViewModel
@@ -270,22 +273,23 @@ pub struct SettingsProviderHistoryViewState {
 #[derive(Debug, Clone)]
 pub enum SettingsProviderHistoryPhase {
     Message(String),
-    Charts(Vec<SettingsHistoryChartView>),
+    Charts(Vec<HistoryChartView>),
 }
 
+/// 折线图视图数据：设置页与托盘弹窗共用，坐标已归一到 0..1。
 #[derive(Debug, Clone)]
-pub struct SettingsHistoryChartView {
+pub struct HistoryChartView {
     pub title: String,
-    pub segments: Vec<SettingsHistorySegmentView>,
+    pub segments: Vec<HistorySegmentView>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SettingsHistorySegmentView {
-    pub points: Vec<SettingsHistoryPointView>,
+pub struct HistorySegmentView {
+    pub points: Vec<HistoryPointView>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SettingsHistoryPointView {
+pub struct HistoryPointView {
     pub x_ratio: f64,
     pub y_ratio: f64,
     pub gap_before: bool,

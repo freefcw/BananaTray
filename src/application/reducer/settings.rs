@@ -13,6 +13,7 @@ use super::shared::{
 pub(super) fn select_nav_tab(session: &mut AppSession, tab: NavTab, effects: &mut Vec<AppEffect>) {
     session.nav.switch_to(tab);
     effects.push(ContextEffect::Render.into());
+    super::history::begin_popup_history_load(session, effects);
 }
 
 pub(super) fn toggle_overview_expanded(
@@ -31,9 +32,15 @@ pub(super) fn set_settings_tab(
 ) {
     session.settings_ui.active_tab = tab;
     session.settings_ui.token_editing_provider = None;
-    // 切换 tab 时退出添加内置服务商的 picker（轻量操作，点走即退）。
-    // NewAPI 表单和二次确认态保留，回到 Providers tab 仍能继续。
-    if session.settings_ui.modal.is_adding_provider() {
+    // 历史清空确认画在某一个标签上。切走后按钮消失，但确认还挂着会挡住另一个清空。
+    // NewAPI / 脚本表单和删除确认仍留在 Providers，切回来可以继续。
+    if session.settings_ui.modal.is_adding_provider()
+        || session
+            .settings_ui
+            .modal
+            .is_confirming_clear_provider_history()
+        || session.settings_ui.modal.is_confirming_clear_all_history()
+    {
         session.settings_ui.modal = SettingsModalState::Idle;
     }
     effects.push(ContextEffect::Render.into());
@@ -320,7 +327,9 @@ pub(super) fn popup_visibility_changed(
     effects: &mut Vec<AppEffect>,
 ) {
     session.popup_visible = visible;
-    if !visible {
+    if visible {
+        super::history::begin_popup_history_load(session, effects);
+    } else {
         // 弹窗关闭时同步图标为已启用 Provider 的综合状态
         if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {
             effects.push(

@@ -1,4 +1,4 @@
-use super::sample::{HistoryStatus, QuotaHistorySample};
+use super::sample::{HistoryStatus, HistoryUnit, HistoryValueKind, QuotaHistorySample};
 
 #[derive(Debug)]
 pub struct HistoryError {
@@ -34,8 +34,8 @@ pub struct HistoryPointRow {
     pub quota_key: String,
     pub quota_type: String,
     pub label_spec_json: String,
-    pub value_kind: String,
-    pub unit: Option<String>,
+    pub value_kind: HistoryValueKind,
+    pub unit: Option<HistoryUnit>,
     pub used: Option<f64>,
     pub remaining: Option<f64>,
     pub limit_value: Option<f64>,

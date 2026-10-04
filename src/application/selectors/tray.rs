@@ -2,7 +2,9 @@
 //!
 //! 将 AppSession → Tray ViewModel 的转换逻辑集中于此。
 
-use super::super::state::{overview_provider_renders_quotas, provider_panel_flags, AppSession};
+use super::super::state::{
+    overview_provider_renders_quotas, provider_panel_flags, AppSession, HistoryLoadState,
+};
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_card_display_text,
     format_quota_card_has_unit, format_quota_label, format_user_failure_message,
@@ -136,12 +138,20 @@ pub fn provider_detail_view_state(
 
     let body = provider_body_view_state(&session.settings, session.nav.generation, &provider);
 
+    let history_charts = match &session.popup_history_ui.load {
+        HistoryLoadState::Ready {
+            provider_id, ready, ..
+        } if provider_id == id => super::history::history_charts_view(ready),
+        _ => Vec::new(),
+    };
+
     ProviderDetailViewState::Panel(ProviderPanelViewState {
         id: id.clone(),
         show_dashboard,
         account,
         body,
         quota_display_mode: session.settings.display.quota_display_mode,
+        history_charts,
     })
 }
 

@@ -47,6 +47,15 @@ impl HistoryValueKind {
             Self::NonNumeric => "non_numeric",
         }
     }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "metered" => Some(Self::Metered),
+            "balance" => Some(Self::Balance),
+            "non_numeric" => Some(Self::NonNumeric),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,19 +220,16 @@ fn point_from_quota(quota: &QuotaInfo) -> QuotaHistoryPoint {
         point.value_kind = HistoryValueKind::Metered;
         point.used = Some(quota.used);
         point.limit_value = Some(quota.limit);
-        let percentage_limit = (quota.limit - 100.0).abs() < 1e-9;
-        point.unit = Some(
-            if quota.quota_type != QuotaType::Credit
-                && quota.quota_type != QuotaType::Points
-                && percentage_limit
-            {
-                HistoryUnit::Percentage
-            } else if quota.quota_type == QuotaType::Credit {
-                HistoryUnit::Currency
-            } else {
-                HistoryUnit::Amount
-            },
-        );
+        let percentage = quota.is_percentage_mode()
+            && quota.quota_type != QuotaType::Credit
+            && quota.quota_type != QuotaType::Points;
+        point.unit = Some(if percentage {
+            HistoryUnit::Percentage
+        } else if quota.quota_type == QuotaType::Credit {
+            HistoryUnit::Currency
+        } else {
+            HistoryUnit::Amount
+        });
         return point;
     }
     point

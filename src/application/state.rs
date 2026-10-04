@@ -186,6 +186,7 @@ pub struct AppSession {
     pub debug_ui: DebugUiState,
     pub settings: AppSettings,
     pub history_ui: HistoryUiState,
+    pub popup_history_ui: PopupHistoryUiState,
     pub alert_engine: AlertEngine,
     /// 弹窗是否可见（Dynamic 图标在弹窗可见时延迟更新，关闭后同步）
     pub popup_visible: bool,
@@ -216,6 +217,7 @@ impl AppSession {
             debug_ui: DebugUiState::default(),
             settings,
             history_ui: HistoryUiState::default(),
+            popup_history_ui: PopupHistoryUiState::default(),
             alert_engine: AlertEngine::new(),
             popup_visible: false,
             overview_expanded: Default::default(),
@@ -728,8 +730,16 @@ impl Default for HistoryUiState {
     }
 }
 
-#[derive(Debug)]
+/// 托盘弹窗 provider 页的折线查看状态。固定 24 小时窗口，不写入 settings.json。
+#[derive(Debug, Default)]
+pub struct PopupHistoryUiState {
+    pub request_id: u64,
+    pub load: HistoryLoadState,
+}
+
+#[derive(Debug, Default)]
 pub enum HistoryLoadState {
+    #[default]
     Idle,
     Loading {
         provider_id: ProviderId,
