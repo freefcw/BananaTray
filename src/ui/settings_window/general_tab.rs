@@ -1,6 +1,6 @@
 use super::components::{
     render_dark_card, render_divider, render_section_header, render_section_header_with_desc,
-    IconSwitchRow,
+    IconSwitchRow, ICON_BG_ACCENT, ICON_BG_NOTIF, ICON_BG_REFRESH, ICON_FG,
 };
 use super::SettingsView;
 use crate::application::{
@@ -21,13 +21,9 @@ use gpui::{
 use rust_i18n::t;
 
 // 设计稿颜色常量 — 各设置项的彩色图标背景
-const ICON_BG_LOGIN: u32 = 0x3b30a6; // 紫蓝色 (Start at Login)
-const ICON_BG_REFRESH: u32 = 0xb55a10; // 琥珀橙色 (Refresh Rate)
-const ICON_BG_NOTIF: u32 = 0xa62828; // 深红色 (Quota Notifications)
 const ICON_BG_USAGE: u32 = 0x0e7490;
 const ICON_BG_SOUND: u32 = 0x6b3fa0; // 紫色 (Notification Sound)
 const ICON_BG_HOTKEY: u32 = 0x165a93; // 深蓝色 (Global Hotkey)
-const ICON_FG: u32 = 0xffffff; // 图标前景色统一白色
 
 impl SettingsView {
     /// Render General settings tab — 匹配设计稿风格
@@ -86,7 +82,7 @@ impl SettingsView {
                         IconSwitchRow {
                             icon_path: "src/icons/switch.svg",
                             icon_color: rgb(ICON_FG).into(),
-                            icon_bg: rgb(ICON_BG_LOGIN).into(),
+                            icon_bg: rgb(ICON_BG_ACCENT).into(),
                             title: &t!("settings.start_at_login"),
                             description: &t!("settings.start_at_login.desc"),
                             enabled: login_checked,

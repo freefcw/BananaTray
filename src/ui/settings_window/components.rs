@@ -6,6 +6,15 @@ use gpui::{
     ParentElement, Styled, Window,
 };
 
+/// 图标 tile 通用配色（三个设置 Tab 共用，避免各自拷贝一份后漂移）。
+///
+/// 各 Tab 专属色（如 Debug 的 LOG/FILE/ENV）留在各自文件内。
+/// `ICON_BG_ACCENT` 由 general（Start at Login）与 display（Dashboard）两处品牌紫蓝复用。
+pub(super) const ICON_FG: u32 = 0xffffff; // 图标前景色统一白色
+pub(super) const ICON_BG_ACCENT: u32 = 0x3b30a6; // 品牌紫蓝 (Start at Login / Dashboard)
+pub(super) const ICON_BG_REFRESH: u32 = 0xb55a10; // 琥珀橙色 (Refresh Rate / Refresh)
+pub(super) const ICON_BG_NOTIF: u32 = 0xa62828; // 深红色 (Quota Notifications / Test Notification)
+
 // ============================================================================
 // 设计稿风格的段落标题和卡片
 // ============================================================================

@@ -1,4 +1,6 @@
-use super::components::{render_dark_card, render_divider, render_section_header};
+use super::components::{
+    render_dark_card, render_divider, render_section_header, ICON_BG_NOTIF, ICON_FG,
+};
 use super::SettingsView;
 use crate::application::{
     build_debug_info_text, debug_tab_view_state, format_debug_console_logs, AppAction,
@@ -21,9 +23,7 @@ use rust_i18n::t;
 // 设计稿颜色常量
 const ICON_BG_LOG: u32 = 0x2d6a4f; // 深绿色 (Log Level)
 const ICON_BG_FILE: u32 = 0x1a5276; // 深蓝色 (Log File)
-const ICON_BG_NOTIF: u32 = 0xa62828; // 深红色 (Test Notification)
 const ICON_BG_ENV: u32 = 0x4a1a6b; // 深紫色 (Environment)
-const ICON_FG: u32 = 0xffffff;
 
 /// 当前支持的日志级别
 const LOG_LEVELS: &[(&str, &str)] = &[
