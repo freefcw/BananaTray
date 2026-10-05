@@ -588,11 +588,13 @@ mod tests {
         use crate::models::{QuotaRules, QuotaThresholdUnit, QuotaThresholds, StatusLevel};
 
         let _locale_guard = crate::i18n::test_locale_guard("en");
-        let mut rules = QuotaRules::default();
-        rules.currency = QuotaThresholds {
-            warning: 0.5,
-            critical: 0.01,
-            notify: 0.01,
+        let rules = QuotaRules {
+            currency: QuotaThresholds {
+                warning: 0.5,
+                critical: 0.01,
+                notify: 0.01,
+            },
+            ..QuotaRules::default()
         };
         rules
             .currency

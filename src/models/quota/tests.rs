@@ -463,11 +463,13 @@ fn test_measurement_comparison_scale_matches_unit() {
     assert!((m_big.remaining - 0.01).abs() < 1e-9);
     assert!((m_big.comparison_scale - 100.0).abs() < 1e-9);
 
-    let mut rules = QuotaRules::default();
-    rules.percentage = QuotaThresholds {
-        warning: 1.0,
-        critical: 0.01,
-        notify: 0.01,
+    let rules = QuotaRules {
+        percentage: QuotaThresholds {
+            warning: 1.0,
+            critical: 0.01,
+            notify: 0.01,
+        },
+        ..QuotaRules::default()
     };
     for (name, quota) in [("q", &q), ("big", &big)] {
         let m = quota.threshold_measurement().unwrap();

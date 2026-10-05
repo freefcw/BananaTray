@@ -291,16 +291,8 @@ pub(crate) fn failure_reason_payload(reason: &FailureReason) -> (&'static str, O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{FailureAdvice, ProviderFailure, QuotaInfo, QuotaType};
+    use crate::models::{FailureAdvice, QuotaInfo, QuotaType};
     use crate::providers::ProviderError;
-
-    fn failure(reason: FailureReason, advice: Option<FailureAdvice>) -> ProviderFailure {
-        ProviderFailure {
-            reason,
-            advice,
-            raw_detail: None,
-        }
-    }
 
     #[test]
     fn skipped_results_are_not_samples() {

@@ -667,11 +667,13 @@ mod tests {
     #[test]
     fn test_credit_decimal_boundary_alerts_red_and_low() {
         let _locale_guard = crate::i18n::test_locale_guard("en");
-        let mut rules = crate::models::QuotaRules::default();
-        rules.currency = crate::models::QuotaThresholds {
-            warning: 0.5,
-            critical: 0.1,
-            notify: 0.1,
+        let rules = crate::models::QuotaRules {
+            currency: crate::models::QuotaThresholds {
+                warning: 0.5,
+                critical: 0.1,
+                notify: 0.1,
+            },
+            ..crate::models::QuotaRules::default()
         };
         rules
             .currency

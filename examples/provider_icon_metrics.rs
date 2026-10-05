@@ -77,7 +77,7 @@ fn measure_svg(data: &[u8]) -> Result<OpticalMetrics, String> {
     let mut visible_pixels = 0_u32;
     let mut alpha_sum = 0.0_f32;
 
-    for (index, pixel) in pixmap.data().chunks_exact(4).enumerate() {
+    for (index, pixel) in pixmap.data().as_chunks::<4>().0.iter().enumerate() {
         let alpha = pixel[3];
         alpha_sum += f32::from(alpha) / 255.0;
         if alpha < ALPHA_THRESHOLD {
