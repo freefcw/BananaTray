@@ -25,9 +25,9 @@ widgets/
 
 | 文件 | 组件 | 说明 |
 |------|------|------|
-| `action_button.rs` | `render_action_button()` | 主操作按钮，`ButtonVariant`（Primary/Danger/Outlined/Subtle）× `ButtonSize`（Compact/Panel/FullWidth） |
+| `action_button.rs` | `render_action_button()` | 主操作按钮，`ButtonVariant`（Primary/Danger/Outlined/Subtle）× `ButtonSize`（Compact/Panel/FullWidth/Pill） |
 | `icon_button.rs` | `render_icon_tooltip_button()` | 图标按钮 + 悬浮 tooltip |
-| `segmented_control.rs` | `render_segmented_control()` | 分段控件（类 iOS UISegmentedControl） |
+| `segmented_control.rs` | `render_segmented_control()` | 分段控件（类 iOS UISegmentedControl），`SegmentedSize`（Compact/Inline/HistoryRange）决定尺寸、边框与选中配色 |
 | `stepper.rs` | `render_stepper()` + `StepperOptions` | 紧凑步进器 `[−] value [+]`，边界自动禁用按钮；数值格式与步长策略由调用方决定；按钮带 `stepper-decrement` / `stepper-increment` debug_selector 供 GPUI mock 测试定位（非 test-support 构建为 no-op） |
 | `cadence_dropdown.rs` | `render_cadence_trigger()` | 刷新频率下拉菜单触发器 |
 | `dropdown.rs` | `render_dropdown_trigger()` / `render_dropdown_panel()` / `render_dropdown_row()` | 下拉触发器 / 浮层面板 / 选项行共享构件 |
@@ -62,11 +62,14 @@ use crate::ui::widgets::{render_quota_bar, render_svg_icon};
 
 ## 约束
 
-- `ButtonSize` 三档的选择依据（Panel 和 FullWidth 视觉很接近，别凭感觉挑）：
+- `ButtonSize` 四档的选择依据（Panel 和 FullWidth 视觉很接近，别凭感觉挑）：
   - `Compact` — 挂在信息行右侧的内联操作，固定 32 高
   - `Panel` — 卡片内成对出现的主/次操作，自带 `flex_1`，必须放在 `flex` 行里均分宽度
   - `FullWidth` — 独占一行的操作，宽度由调用方用 `div().flex_1()` / `w()` 包一层决定
+  - `Pill` — 卡片内居中的单个主操作（如 Provider 面板的打开设置/重试），宽度随内容，
+    调用方用 `w_full + justify_center` 包一层实现居中
 - 不要在调用方另写一套按钮样式：Token 面板和自定义 provider 的编辑/删除曾各写一份，
-  尺寸和圆角对不上，已收敛到 `ButtonSize::Panel`
+  尺寸和圆角对不上，已收敛到 `ButtonSize::Panel`；Provider 面板的手写 pill 同理收敛到
+  `ButtonSize::Pill`
 - 所有组件接受 `&Theme` 参数获取颜色（不直接读 `cx.global::<Theme>()`），保持纯渲染逻辑
 - 文本输入使用 `fc-ui` 的 `InputState`（单行）和 `TextareaState`（多行），配合 `input_actions.rs` 注册快捷键
