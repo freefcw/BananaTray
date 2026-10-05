@@ -171,15 +171,6 @@ impl TrayController {
             .borrow_mut()
             .suppress_linux_popup_auto_hide_for(GRACE_PERIOD);
         crate::bootstrap::dispatch_in_app(&self.state, AppAction::PopupVisibilityChanged(true), cx);
-        let _ = handle.update(cx, |_, window, cx| {
-            #[cfg(target_os = "linux")]
-            window.set_mouse_passthrough(false);
-            if !window.is_window_visible() {
-                window.show_window();
-            }
-            window.activate_window();
-            cx.notify();
-        });
         Self::ensure_popup_visible(handle, cx);
     }
 
@@ -197,7 +188,16 @@ impl TrayController {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn ensure_popup_visible(_handle: WindowHandle<crate::ui::AppView>, _cx: &mut App) {}
+    fn ensure_popup_visible(handle: WindowHandle<crate::ui::AppView>, cx: &mut App) {
+        // 与非 Linux 平台原行为一致：仅当窗口尚未显示时才显示，随后激活并刷新。
+        let _ = handle.update(cx, |_, window, cx| {
+            if !window.is_window_visible() {
+                window.show_window();
+            }
+            window.activate_window();
+            cx.notify();
+        });
+    }
 
     /// 计算弹窗的首选位置和目标显示器。
     ///
