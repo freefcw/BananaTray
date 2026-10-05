@@ -10,7 +10,6 @@ use crate::models::{
     SettingsCapability, TokenEditMode, TokenInputCapability, TokenInputState,
 };
 use crate::providers::common::http_client::HttpError;
-use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use std::borrow::Cow;
@@ -121,9 +120,9 @@ impl AiProvider for CopilotProvider {
         let settings_token = ctx.provider_credentials.get_credential("github_token");
         let token_status = resolve_token(settings_token);
 
-        let token = token_status.token.context(
-            "GitHub token not configured. Set github_token in settings, or GITHUB_TOKEN environment variable.",
-        )?;
+        let token = token_status
+            .token
+            .ok_or_else(|| ProviderError::config_missing("github_token / GITHUB_TOKEN"))?;
 
         debug!(target: "providers", "copilot: fetching quota from api.github.com/copilot_internal/user");
         let body = match fetch_user_info(&token) {
@@ -266,5 +265,24 @@ mod tests {
             provider_credentials: &credentials,
         };
         assert!(smol::block_on(provider.check_availability(&ctx)).is_ok());
+    }
+
+    #[test]
+    fn refresh_without_token_classifies_as_config_missing() {
+        let _guard = env_lock().lock().unwrap();
+        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+        crate::providers::copilot::token::set_test_cache(None, None);
+
+        let provider = CopilotProvider::new();
+        let credentials = crate::models::ProviderSettings::default();
+        let ctx = ProviderExecutionContext {
+            provider_credentials: &credentials,
+        };
+        let err = smol::block_on(provider.refresh(&ctx)).unwrap_err();
+        // 缺 token 必须走到“配置缺失”，而不是降级成 FetchFailed / 其他未知错误。
+        assert!(
+            matches!(err, ProviderError::ConfigMissing { .. }),
+            "期望 ConfigMissing，实际: {err:?}"
+        );
     }
 }
