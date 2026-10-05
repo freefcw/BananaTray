@@ -29,6 +29,8 @@ pub(crate) enum ButtonSize {
     Panel,
     /// 卡片内全宽主操作
     FullWidth,
+    /// 居中主操作 pill（非全宽、圆角较大），如 Provider 面板的打开设置/重试
+    Pill,
 }
 
 /// 渲染操作按钮
@@ -46,6 +48,7 @@ pub(crate) enum ButtonSize {
 /// - `settings_window/about_tab.rs` — Check for Updates 按钮 (Outlined / FullWidth)
 /// - `settings_window/debug_tab.rs` — Send 按钮 (Subtle / Compact)
 /// - `settings_window/providers/` — Token 面板与自定义 provider 的编辑/删除按钮 (Panel)
+/// - `views/provider_panel.rs` — Provider 面板的打开设置/重试按钮 (Primary / Pill)
 pub(crate) fn render_action_button<F>(
     label: &str,
     icon: Option<(&'static str, Hsla)>,
@@ -97,12 +100,13 @@ where
         .justify_center()
         .gap(px(match size {
             ButtonSize::Compact => 6.0,
-            ButtonSize::Panel | ButtonSize::FullWidth => 8.0,
+            ButtonSize::Panel | ButtonSize::FullWidth | ButtonSize::Pill => 8.0,
         }))
         .rounded(px(match size {
             ButtonSize::Compact => 6.0,
             ButtonSize::Panel => 8.0,
             ButtonSize::FullWidth => 12.0,
+            ButtonSize::Pill => 10.0,
         }))
         .bg(bg)
         .border_1()
@@ -113,6 +117,7 @@ where
         ButtonSize::Compact => btn.h(px(32.0)).px(px(12.0)),
         ButtonSize::Panel => btn.flex_1().px(px(16.0)).py(px(10.0)),
         ButtonSize::FullWidth => btn.w_full().py(px(12.0)),
+        ButtonSize::Pill => btn.px(px(16.0)).py(px(8.0)),
     };
 
     // hover 效果
@@ -129,6 +134,7 @@ where
         ButtonSize::Compact => (12.0, 16.0),
         ButtonSize::Panel => (13.0, 17.0),
         ButtonSize::FullWidth => (14.0, 18.0),
+        ButtonSize::Pill => (12.0, 16.0),
     };
 
     if let Some((icon_path, icon_color)) = icon {

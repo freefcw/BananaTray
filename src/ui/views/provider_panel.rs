@@ -43,25 +43,24 @@ fn render_account_updated_text(
     }
 }
 
-/// 通用操作按钮（Lumina风格：半透明背景+圆角）
+/// 通用操作按钮：居中主操作 pill（打开设置 / 重试）。
+///
+/// 委托给共享的 `render_action_button`（Primary + Pill 尺寸），
+/// 避免在调用方重复手写一套按钮样式（约定见 widgets/README）。
 fn render_action_button(
     label: &str,
     theme: &Theme,
     handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
     div().w_full().flex().justify_center().mt(px(8.0)).child(
-        div()
-            .px(px(16.0))
-            .py(px(8.0))
-            .rounded(px(10.0))
-            .bg(theme.text.accent)
-            .text_size(px(12.0))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.element.active)
-            .cursor_pointer()
-            .hover(|style| style.opacity(0.85))
-            .child(label.to_string())
-            .on_mouse_down(MouseButton::Left, handler),
+        crate::ui::widgets::render_action_button(
+            label,
+            None,
+            crate::ui::widgets::ButtonVariant::Primary,
+            crate::ui::widgets::ButtonSize::Pill,
+            theme,
+            handler,
+        ),
     )
 }
 
@@ -123,28 +122,20 @@ impl AppView {
                     .line_height(relative(1.4))
                     .child(vm.hint.clone()),
             )
-            .child(
-                div()
-                    .px(px(16.0))
-                    .py(px(8.0))
-                    .rounded(px(10.0))
-                    .bg(theme.text.accent)
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.element.active)
-                    .cursor_pointer()
-                    .child(t!("provider.open_settings").to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        crate::bootstrap::dispatch_in_window(
-                            &state,
-                            AppAction::OpenSettings {
-                                provider: Some(id.clone()),
-                            },
-                            window,
-                            cx,
-                        );
-                    }),
-            )
+            .child(render_action_button(
+                &t!("provider.open_settings"),
+                theme,
+                move |_, window, cx| {
+                    crate::bootstrap::dispatch_in_window(
+                        &state,
+                        AppAction::OpenSettings {
+                            provider: Some(id.clone()),
+                        },
+                        window,
+                        cx,
+                    );
+                },
+            ))
             .into_any_element()
     }
 
