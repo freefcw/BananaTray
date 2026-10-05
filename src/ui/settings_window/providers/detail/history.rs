@@ -9,11 +9,10 @@ use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
 use crate::ui::widgets::{
     history_line_color, render_detail_empty_card, render_detail_section_title,
-    render_history_line_chart, render_history_retention_dropdown, HistoryRetentionMenu,
+    render_history_line_chart, render_history_retention_dropdown, render_segmented_control,
+    HistoryRetentionMenu, SegmentedSize,
 };
-use gpui::{
-    div, px, transparent_black, App, Div, InteractiveElement, ParentElement, Styled, Window,
-};
+use gpui::{div, px, App, Div, InteractiveElement, ParentElement, Styled, Window};
 use rust_i18n::t;
 
 pub(super) fn render_history_section(
@@ -178,43 +177,15 @@ fn render_range_control<F>(
 where
     F: Fn(HistoryRange, &mut Window, &mut App) + Clone + 'static,
 {
-    let mut control = div()
-        .flex()
-        .items_center()
-        .gap(px(2.0))
-        .p(px(2.0))
-        .rounded(px(6.0))
-        .bg(theme.bg.subtle);
-    for (label, value) in options {
-        let is_active = current == value;
-        let value = *value;
-        let on_select = on_select.clone();
-        control = control.child(
-            div()
-                .h(px(22.0))
-                .px(px(8.0))
-                .flex()
-                .items_center()
-                .rounded(px(4.0))
-                .bg(if is_active {
-                    theme.nav.pill_active_bg
-                } else {
-                    transparent_black()
-                })
-                .text_size(px(12.0))
-                .text_color(if is_active {
-                    theme.nav.pill_active_text
-                } else {
-                    theme.text.muted
-                })
-                .cursor_pointer()
-                .child(label.clone())
-                .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                    on_select(value, window, cx);
-                }),
-        );
-    }
-    control
+    // 24h/7d/30d 三档 pill 组与外层容器均由分段控件提供：
+    // SegmentedSize::HistoryRange 复现本页所需的紧凑尺寸与配色，避免重复手写一套控件。
+    render_segmented_control(
+        options,
+        current,
+        SegmentedSize::HistoryRange,
+        theme,
+        on_select,
+    )
 }
 
 fn render_retention_controls(
