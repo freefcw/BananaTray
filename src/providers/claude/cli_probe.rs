@@ -4,6 +4,7 @@
 
 use super::probe::UsageProbe;
 use crate::models::{FailureAdvice, QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::providers::common::cli;
 use crate::providers::common::runner::{InteractiveOptions, InteractiveRunner};
 use crate::providers::{ProviderError, ProviderResult};
 use crate::utils::text_utils;
@@ -255,7 +256,7 @@ impl UsageProbe for ClaudeCliProbe {
     }
 
     fn is_available(&self) -> bool {
-        which::which("claude").is_ok()
+        cli::command_exists(CLAUDE_CLI)
     }
 }
 
