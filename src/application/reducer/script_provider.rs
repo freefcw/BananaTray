@@ -1,6 +1,5 @@
 use crate::application::{
     script_provider_ops, AppEffect, ContextEffect, RefreshEffect, ScriptProviderEffect,
-    SettingsEffect,
 };
 use crate::models::{
     unique_script_provider_id as unique_script_provider_id_for_name,
@@ -127,37 +126,30 @@ pub(super) fn script_provider_save_finished(
         is_editing,
         result,
     } = completion;
-    let restore_submission_ui = session.settings_ui.settle_custom_provider_save(request_id);
-    match result {
-        Ok(success) => {
-            let (title_key, body_key) = script_provider_ops::script_provider_save_notification_keys(
-                is_editing,
-                success.settings_saved,
-            );
-            super::shared::notify_plain_i18n(effects, title_key, body_key);
-            effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
-        }
-        Err(_failure) => {
-            if is_editing && restore_submission_ui {
+    let config = &config;
+    super::shared::settle_custom_provider_save(
+        session,
+        effects,
+        request_id,
+        is_editing,
+        result,
+        super::shared::ProviderSavePolicy {
+            rollback_edit: Box::new(|session| {
                 script_provider_ops::rollback_script_provider_edit(
                     session,
-                    &config,
+                    config,
                     &yaml_filename,
                     &script_filename,
                 );
-            } else if !is_editing {
-                script_provider_ops::rollback_script_provider_create_registration(session, &config);
-                if restore_submission_ui {
-                    script_provider_ops::restore_script_provider_create_form(session);
-                }
-                effects.push(SettingsEffect::PersistSettings.into());
-            }
-            let (title_key, body_key) =
-                script_provider_ops::script_provider_save_failed_notification_keys();
-            super::shared::notify_plain_i18n(effects, title_key, body_key);
-            effects.push(ContextEffect::Render.into());
-        }
-    }
+            }),
+            rollback_create: Box::new(|session| {
+                script_provider_ops::rollback_script_provider_create_registration(session, config)
+            }),
+            restore_create_form: Box::new(script_provider_ops::restore_script_provider_create_form),
+            success_keys: script_provider_ops::script_provider_save_notification_keys,
+            failure_keys: script_provider_ops::script_provider_save_failed_notification_keys,
+        },
+    );
 }
 
 fn unique_script_provider_id_for_session(session: &AppSession, display_name: &str) -> String {

@@ -10,8 +10,8 @@ pub(crate) mod test_helpers;
 
 // 统一 re-export，保持外部 `use crate::models::Xxx` 路径不变
 pub use custom_provider_lifecycle::{
-    CustomProviderLifecycleFailure, NewApiSaveSuccess, ScriptProviderDeleteSuccess,
-    ScriptProviderSaveSuccess,
+    CustomProviderLifecycleFailure, CustomProviderSaveSuccess, NewApiSaveSuccess,
+    ScriptProviderDeleteSuccess, ScriptProviderSaveSuccess,
 };
 pub use layout::{
     compute_popup_height_detailed, compute_popup_height_for_overview,

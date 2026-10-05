@@ -1,6 +1,4 @@
-use crate::application::{
-    newapi_ops, AppEffect, ContextEffect, NewApiEffect, RefreshEffect, SettingsEffect,
-};
+use crate::application::{newapi_ops, AppEffect, ContextEffect, NewApiEffect, RefreshEffect};
 use crate::models::{
     CustomProviderLifecycleFailure, NewApiConfig, NewApiEditData, NewApiSaveSuccess, ProviderId,
 };
@@ -110,34 +108,30 @@ pub(super) fn newapi_save_finished(
         is_editing,
         result,
     } = completion;
-    let restore_submission_ui = session.settings_ui.settle_custom_provider_save(request_id);
-    match result {
-        Ok(success) => {
-            let (title_key, body_key) =
-                newapi_ops::newapi_save_notification_keys(is_editing, success.settings_saved);
-            super::shared::notify_plain_i18n(effects, title_key, body_key);
-            effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
-        }
-        Err(_failure) => {
-            if is_editing && restore_submission_ui {
+    let config = &config;
+    super::shared::settle_custom_provider_save(
+        session,
+        effects,
+        request_id,
+        is_editing,
+        result,
+        super::shared::ProviderSavePolicy {
+            rollback_edit: Box::new(|session| {
                 newapi_ops::rollback_newapi_edit(
                     session,
-                    &config,
+                    config,
                     &filename,
                     original_id.as_deref(),
                 );
-            } else if !is_editing {
-                newapi_ops::rollback_newapi_create_registration(session, &config);
-                if restore_submission_ui {
-                    newapi_ops::restore_newapi_create_form(session);
-                }
-                effects.push(SettingsEffect::PersistSettings.into());
-            }
-            let (title_key, body_key) = newapi_ops::newapi_save_failed_notification_keys();
-            super::shared::notify_plain_i18n(effects, title_key, body_key);
-            effects.push(ContextEffect::Render.into());
-        }
-    }
+            }),
+            rollback_create: Box::new(|session| {
+                newapi_ops::rollback_newapi_create_registration(session, config)
+            }),
+            restore_create_form: Box::new(newapi_ops::restore_newapi_create_form),
+            success_keys: newapi_ops::newapi_save_notification_keys,
+            failure_keys: newapi_ops::newapi_save_failed_notification_keys,
+        },
+    );
 }
 
 pub(super) fn newapi_load_finished(

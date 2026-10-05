@@ -13,6 +13,25 @@ pub struct ScriptProviderSaveSuccess {
     pub settings_saved: bool,
 }
 
+/// 自定义 Provider 保存成功负载的统一入口：都携带“设置是否已落盘”标志。
+///
+/// 供 reducer 共享的保存结算流程读取，而无需同时感知两种自定义 Provider 的字段差异。
+pub trait CustomProviderSaveSuccess {
+    fn settings_saved(&self) -> bool;
+}
+
+impl CustomProviderSaveSuccess for NewApiSaveSuccess {
+    fn settings_saved(&self) -> bool {
+        self.settings_saved
+    }
+}
+
+impl CustomProviderSaveSuccess for ScriptProviderSaveSuccess {
+    fn settings_saved(&self) -> bool {
+        self.settings_saved
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScriptProviderDeleteSuccess {
     DeletedAll {
