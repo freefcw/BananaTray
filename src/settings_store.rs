@@ -459,18 +459,19 @@ fn merge_preserving_unknown_fields(
     serde_json::Value::Object(std::mem::take(existing))
 }
 
-/// Provider 布局、凭证和 quota 可见性都是当前领域状态的完整快照。
+/// Provider 动态配置字段都是当前领域状态的完整快照。
 ///
 /// 保存时整体替换这些字段，并删除已经迁移的旧字段，避免通用未知字段合并把旧状态
 /// 再次带回，造成新旧 Provider 配置同时存在。
 fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
     const LEGACY_FIELDS: [&str; 3] = ["enabled_providers", "provider_order", "sidebar_providers"];
-    const CURRENT_FIELDS: [&str; 5] = [
+    const CURRENT_FIELDS: [&str; 6] = [
         "credentials",
         "hidden_quotas",
         "provider_layout",
         "quota_usage_steps",
         "quota_threshold_overrides",
+        "history_retention_days",
     ];
 
     let Some(existing_provider) = existing
@@ -1201,6 +1202,76 @@ mod tests {
                 .provider
                 .quota_usage_step(&ProviderId::BuiltIn(ProviderKind::Claude)),
             None
+        );
+    }
+
+    #[test]
+    fn save_removes_cleared_history_retention_override() {
+        use crate::models::{ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .set_history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude), Some(5));
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .set_history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude), None);
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"].get("history_retention_days").is_none()
+                || saved["provider"]["history_retention_days"]
+                    .as_object()
+                    .is_some_and(|map| map.is_empty()),
+            "清空后的 history_retention_days 不应残留旧覆盖"
+        );
+
+        let loaded = load_from(&path).unwrap();
+        assert_eq!(
+            loaded
+                .provider
+                .history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude)),
+            None
+        );
+    }
+
+    #[test]
+    fn save_partial_clears_other_history_retention_override() {
+        use crate::models::{ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .set_history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude), Some(5));
+        settings
+            .provider
+            .set_history_retention_days(&ProviderId::BuiltIn(ProviderKind::Kiro), Some(3));
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .set_history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude), None);
+        save_to(&settings, &path).unwrap();
+
+        let loaded = load_from(&path).unwrap();
+        assert_eq!(
+            loaded
+                .provider
+                .history_retention_days(&ProviderId::BuiltIn(ProviderKind::Claude)),
+            None,
+            "仅清除 Claude 覆盖，不应残留"
+        );
+        assert_eq!(
+            loaded
+                .provider
+                .history_retention_days(&ProviderId::BuiltIn(ProviderKind::Kiro)),
+            Some(3),
+            "未清除的保留天数必须保留"
         );
     }
 
