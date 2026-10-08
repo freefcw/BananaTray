@@ -30,12 +30,9 @@ pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
         };
         crate::tray::apply_tray_icon(cx, icon_request);
         cx.set_tray_tooltip(&t!("tray.tooltip"));
-        #[cfg(target_os = "macos")]
-        {
-            // macOS status item defaults to NSMenu mode; panel mode is required for
-            // clicks to reach `on_tray_icon_event` and toggle the GPUI popup.
-            cx.set_tray_panel_mode(true);
-        }
+        // macOS 不挂托盘菜单，fc-gpui 0.10 起 status item 点击直达
+        // `on_tray_icon_click_event`，无需手动开启 panel mode（历史 workaround 见
+        // docs/architecture.md Workaround Register）。
     } else {
         info!(target: "tray", "GNOME extension mode detected, skipping GPUI tray bootstrap");
     }

@@ -50,7 +50,7 @@
 **托盘交互入口**：
 
 - 使用 `on_tray_icon_click_event` 注册点击回调（替代 `on_tray_icon_event`），获取 `TrayIconClickEvent`（含 kind + 可选 position）
-- macOS 启动时必须通过 GPUI `set_tray_panel_mode(true)` 切到 panel callback 模式，否则 status item 会走 NSMenu 模式，点击不会稳定进入回调，也就不会打开弹窗
+- macOS 不挂托盘菜单，fc-gpui 0.10 起点击 handler 在建 tray 时接线，无需 `set_tray_panel_mode(true)` 即可直达回调；若将来给 macOS 挂菜单，panel mode 会重新变成必需（上游对此组合只打一次性 log 警告）
 - Linux 仍保留 tray menu fallback（Open / Settings / Quit），用于覆盖不同 tray host 对点击事件转发不一致的情况
 - GNOME Shell Extension 已启用且处于 `State: ACTIVE` 时，Rust 侧完全跳过 GPUI/KSNI 托盘 bootstrap、点击回调和菜单安装，由 Extension 独占面板入口；扩展 `OUT OF DATE` 或加载失败时继续保留传统托盘 fallback
 - Nested GNOME 调试的 `--app-daemon` 模式会设置 `BANANATRAY_FORCE_GNOME_EXTENSION=1`，即使 nested Shell 尚未完成 `gnome-extensions info` 注册，调试用 app 也会跳过 KSNI fallback，避免主会话里出现第二个传统托盘图标
