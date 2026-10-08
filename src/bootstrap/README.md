@@ -11,7 +11,7 @@ the `app` feature and may depend on GPUI.
 | `../bootstrap.rs` | Thin module root; declares bootstrap submodules and re-exports the stable shell entry points used by `main`, `ui`, `tray`, and `dbus`. |
 | `capabilities.rs` | Implements `WindowShellCaps` / `AppShellCaps` and exposes `dispatch_in_window()` / `dispatch_in_app()` as the full-context runtime dispatch facade. |
 | `settings_window.rs` | Holds the shell hook registry for popup/settings view factories and owns settings window open, reuse, display targeting, and activation workarounds. |
-| `ui_bootstrap.rs` | Initializes locale, UI toolkit, idle GPU cache trim, initial tray icon/tooltip, macOS tray panel mode, and notification authorization. |
+| `ui_bootstrap.rs` | Initializes locale, UI toolkit, idle GPU cache trim, initial tray icon/tooltip, and notification authorization. |
 | `workers/` | Background worker bootstrap and foreground event pumps: refresh coordinator, independent custom-provider I/O and script-test pumps, and Linux D-Bus snapshot emission. |
 | `event_sources/` | External app event registration: app shutdown, tray callbacks/menu fallback, startup global hotkey, and secondary instance SHOW bridge. |
 
@@ -46,9 +46,8 @@ registration internals, channel bridge loops, or settings window lifecycle worka
 
 ## Workarounds Owned Here
 
-- `settings_window.rs`: 10 ms delayed settings open after popup close, plus the `+1px` resize nudge
-  after creating the settings window.
-- `ui_bootstrap.rs`: macOS `set_tray_panel_mode(true)` and idle GPU cache trim observer registration.
+- `settings_window.rs`: 10 ms delayed settings open after popup close.
+- `ui_bootstrap.rs`: idle GPU cache trim observer registration.
 - `event_sources/shutdown.rs`: closes the custom-provider CRUD enqueue side (the worker drains accepted jobs within the shared 60ms join deadline and detaches if overdue), requests shutdown for refresh/script-test workers and joins them within a shared 60ms bound, then settles already received ledger results before scheduling the final settings snapshot. Linux D-Bus has a separate 20ms bounded drop hook; the settings writer's explicit final flush and launch-at-login state complete before the quit observer returns.
 - `event_sources/tray.rs`: Linux tray menu fallback for tray hosts that do not consistently forward click
   activation events.

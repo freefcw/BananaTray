@@ -489,8 +489,8 @@ mod provider_config_sidebar;
 /// 自动着色（浅色模式 → 深色图标，深色模式 → 浅色图标）。
 ///
 /// 为了支持彩色图标，`Monochrome` 使用 template 模式（跟随系统），
-/// 而 `Yellow` / `Colorful` 则通过运行时 hack 将 `setTemplate` 关闭，
-/// 使图标显示原始颜色。
+/// 而 `Yellow` / `Colorful` 通过 fc-gpui 的 `TrayIconRenderingMode::Original`
+/// 将 `setTemplate` 关闭，使图标显示原始颜色。
 ///
 /// 在 Windows / Linux 上没有 template 概念，PNG 颜色直接生效。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
