@@ -195,9 +195,6 @@ fn install_new_settings_window(handle: SettingsWindowHandle, cx: &mut App) {
     let _ = handle.update(cx, |view, window, cx| {
         window.show_window();
         window.activate_window();
-        let viewport = window.viewport_size();
-        window.resize(size(viewport.width + px(1.0), viewport.height));
-        window.resize(viewport);
         let appearance_sub = cx.observe_window_appearance(window, |_view, _window, cx| {
             cx.notify();
             log::debug!(
