@@ -18,9 +18,9 @@ use crate::runtime;
 use crate::runtime::AppState;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
-use adabraka_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
-use adabraka_ui::components::input_state::InputState;
-use adabraka_ui::components::textarea_state::TextareaState;
+use fc_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
+use fc_ui::components::input_state::InputState;
+use fc_ui::components::textarea_state::TextareaState;
 use gpui::{
     div, linear_color_stop, multi_stop_linear_gradient, px, relative, rgba, svg, transparent_black,
     AnyElement, App, AppContext, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,

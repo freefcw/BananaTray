@@ -7,7 +7,7 @@
 //! 紧凑内联 chip 样式 — 用于设置行 trailing 控件位置，与 toggle / dropdown 行保持一致风格。
 
 use crate::theme::Theme;
-use adabraka_ui::components::hotkey_input::HotkeyInputState;
+use fc_ui::components::hotkey_input::HotkeyInputState;
 use gpui::{
     div, prelude::FluentBuilder, px, Entity, Focusable, InteractiveElement, MouseButton,
     ParentElement, SharedString, Stateful, Styled, Window,

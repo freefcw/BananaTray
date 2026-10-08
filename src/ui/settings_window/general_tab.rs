@@ -13,7 +13,7 @@ use crate::ui::widgets::{
     render_action_button, render_history_retention_dropdown, render_hotkey_field_inline,
     render_icon_row, ButtonSize, ButtonVariant, HistoryRetentionMenu,
 };
-use adabraka_ui::components::hotkey_input::HotkeyValue;
+use fc_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
     div, prelude::FluentBuilder, px, relative, rgb, Context, Div, Entity, InteractiveElement,
     Keystroke, MouseButton, ParentElement, Styled, Window,
@@ -305,7 +305,7 @@ impl SettingsView {
 
     fn render_global_hotkey_actions(
         &self,
-        input_entity: &Entity<adabraka_ui::components::hotkey_input::HotkeyInputState>,
+        input_entity: &Entity<fc_ui::components::hotkey_input::HotkeyInputState>,
         show_save: bool,
         theme: &Theme,
         window: &mut Window,

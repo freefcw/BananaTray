@@ -25,7 +25,7 @@ use rust_i18n::t;
 #[derive(IntoElement)]
 struct TokenInputBox {
     provider_id: ProviderId,
-    input_entity: Entity<adabraka_ui::components::input_state::InputState>,
+    input_entity: Entity<fc_ui::components::input_state::InputState>,
     theme: Theme,
     focus_handle: FocusHandle,
 }
@@ -198,7 +198,7 @@ fn render_token_panel_description(capability: TokenInputCapability, theme: &Them
 
 fn render_token_value(
     provider_id: &ProviderId,
-    input_entity: Option<Entity<adabraka_ui::components::input_state::InputState>>,
+    input_entity: Option<Entity<fc_ui::components::input_state::InputState>>,
     has_token: bool,
     is_editing: bool,
     theme: &Theme,

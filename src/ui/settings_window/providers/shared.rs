@@ -1,7 +1,7 @@
 use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::register_input_actions;
-use adabraka_ui::components::input_state::InputState;
-use adabraka_ui::components::textarea_state::TextareaState;
+use fc_ui::components::input_state::InputState;
+use fc_ui::components::textarea_state::TextareaState;
 use gpui::{
     div, hsla, px, relative, App, Div, Entity, Focusable, FontWeight, InteractiveElement,
     MouseButton, MouseDownEvent, ParentElement, Pixels, Stateful, StatefulInteractiveElement,

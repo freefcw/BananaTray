@@ -7,7 +7,7 @@ use crate::models::{
     ProviderId, QuotaThresholdTarget, QuotaThresholdUnit, QuotaThresholds, QuotaThresholdsError,
 };
 use crate::theme::Theme;
-use adabraka_ui::components::input_state::InputState;
+use fc_ui::components::input_state::InputState;
 use gpui::{
     div, px, AppContext, Context, Div, Entity, FontWeight, Hsla, InteractiveElement, MouseButton,
     MouseDownEvent, ParentElement, Styled, Window,

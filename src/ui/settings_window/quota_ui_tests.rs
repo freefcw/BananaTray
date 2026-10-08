@@ -410,7 +410,7 @@ fn threshold_edit_fields_stack_full_width_in_provider_section(cx: &mut TestAppCo
 #[gpui::test]
 fn threshold_global_save_via_real_input_chain(cx: &mut TestAppContext) {
     let _locale_guard = test_locale_guard("en");
-    cx.update(adabraka_ui::init);
+    cx.update(fc_ui::init);
     let changes = Rc::new(RefCell::new(Vec::new()));
     let (harness, cx) = add_threshold_window(cx, QuotaThresholdTarget::Global, false, &changes);
     cx.simulate_resize(size(px(600.0), px(800.0)));
@@ -472,7 +472,7 @@ fn threshold_global_save_via_real_input_chain(cx: &mut TestAppContext) {
 #[gpui::test]
 fn threshold_provider_save_dispatches_provider_change(cx: &mut TestAppContext) {
     let _locale_guard = test_locale_guard("en");
-    cx.update(adabraka_ui::init);
+    cx.update(fc_ui::init);
     let changes = Rc::new(RefCell::new(Vec::new()));
     let provider = ProviderId::BuiltIn(ProviderKind::Claude);
     let target = QuotaThresholdTarget::Provider(provider.clone());
