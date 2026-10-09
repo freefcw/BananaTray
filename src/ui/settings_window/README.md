@@ -13,6 +13,7 @@
 | `quota_usage.rs` | 用量步长步进器共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」） |
 | `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情卡带标题并按单位展示继承 / 自定义身份；三个单位（百分比 / 货币 / 积分·额度）各一行，以彩色徽章（黄=预警、红=严重、强调色=通知，数值按单位带 `%` / `$`）展示生效的剩余值阈值，编辑时三个输入框纵向全宽排列（无响应式断点）。编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
 | `quota_ui_tests.rs` | Opt-in GPUI mock-window UI 回归测试（`#[cfg(all(test, feature = "ui-tests"))]`，运行 `just test-settings-ui` 或 `cargo test --lib --locked --features ui-tests ui::settings_window -- --test-threads=1`）— 真实渲染并点击步进器 / 阈值 section，经 `debug_selector` 定位断言布局与派发；只构造纯内存 AppState + no-op SettingsWriter，无真实配置 I/O |
+| `form_ui_tests.rs` | 同门槛的表单校验回归 — NewAPI / Script Provider 表单的 `collect_*` 提交路径：必填 / 格式校验失败落到字段 state 的 `validation_error`，修正后复验清除；同时钉住 fc-ui 内置 required 文案（本地化映射的耦合点，见「约束」） |
 
 ### Tab 内容页
 
@@ -30,7 +31,7 @@
 | 文件 | 职责 |
 |------|------|
 | `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换），右侧表单 identity 由 selector 显式下发 |
-| `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮） |
+| `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮、字段级校验错误展示） |
 | `providers/sidebar.rs` | 左侧 Sidebar — Provider 列表（拖拽排序、添加/删除按钮） |
 | `providers/detail/` | 右侧详情模块 — shell、section renderer、配额可见性和 editable-provider actions；模块契约见 `providers/detail/README.md` |
 | `providers/picker.rs` | 添加面板 — 可选 Provider 列表（从 sidebar 中排除已添加的） |
@@ -67,4 +68,5 @@ SettingsView::render()
 - macOS 下该保存流现在会落到系统级 `RegisterEventHotKey` 注册，而不是旧的 `NSEvent` monitor 监听
 - `NewApiFormInputs` 使用 fc-ui 的 `InputState`（单行输入）和 `TextareaState`（Cookie 等长文本多行编辑）；右侧面板 selector 会显式传入当前 form identity，同一 identity 复用输入实体，不同 identity 重建，避免跨 provider 串用旧草稿
 - `ScriptProviderFormInputs` 同样使用 `InputState` + `TextareaState`，provider id 由名称生成并只读展示；编辑模式保留原始 YAML / 脚本文件名，避免保存时改名造成残留文件；缓存重建规则与 NewAPI 表单一致
+- NewAPI / Script Provider 表单的**字段级校验走 fc-ui state 机制**（fc-ui 0.9.3+）：构造时在 `newapi_input` / `ScriptProviderFormInputs` 里配置 `validation_rules`（`required` / `custom_validator`），并开启 `validate_on_change` 即时复验；`collect_*` 提交前对全部字段 `validate()`（不短路），失败写入各 state 的 `validation_error`，由 `providers::shared` 的 `input_field_error` / `textarea_field_error` 读取并画红描边 + 字段下文案。fc-ui 内置规则的英文 message（如 `"This field is required"`）在 shared 层映射到 i18n key（`common.validation.required`），`custom_validator` 的 message 构造时已本地化直接透传；新增表单字段按此接线，不要回退到静默 `is_empty()` 拦截
 - Debug 环境诊断在进入 Tab 或点击刷新按钮时由后台执行器采集；`render_debug_tab()` 只能读取缓存，不得执行文件 metadata、外部命令等阻塞操作

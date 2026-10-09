@@ -437,7 +437,9 @@ fn render_draft_editor(
                                 .child(label),
                         ),
                 )
-                .child(render_input_box(is_focused, &entity, theme, window, cx)),
+                .child(render_input_box(
+                    is_focused, false, &entity, theme, window, cx,
+                )),
         );
     }
 

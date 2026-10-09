@@ -68,6 +68,19 @@ pub struct ScriptProviderTestResult {
 pub const DEFAULT_SCRIPT_INTERPRETER: &str = "python3";
 pub const DEFAULT_SCRIPT_TIMEOUT_MS: u64 = 20_000;
 
+/// 解析脚本超时输入（秒）：返回 `Some(secs)` 表示合法（正整数），
+/// `None` 表示空白或非法输入。
+///
+/// 「什么是合法超时」的唯一出处，设置表单的字段校验器和提交组装共用：
+/// 校验器借此拒绝非法输入，组装逻辑对 `None` 回退默认值（与
+/// `parse_divisor_input` 的空白语义一致）。规则变更只改这里。
+pub fn parse_script_timeout_secs(input: &str) -> Option<u64> {
+    match input.trim().parse::<u64>() {
+        Ok(secs) if secs > 0 => Some(secs),
+        _ => None,
+    }
+}
+
 /// Slugify a user-facing name for provider IDs and filenames.
 pub fn script_provider_slug(name: &str) -> String {
     let slug = name
@@ -174,6 +187,19 @@ fn string_field(json: &Value, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_script_timeout_secs_rules() {
+        // 空白与非法输入一律 None（调用方回退默认值或提示校验错误）
+        assert_eq!(parse_script_timeout_secs(""), None);
+        assert_eq!(parse_script_timeout_secs("   "), None);
+        assert_eq!(parse_script_timeout_secs("abc"), None);
+        assert_eq!(parse_script_timeout_secs("0"), None);
+        assert_eq!(parse_script_timeout_secs("-5"), None);
+        assert_eq!(parse_script_timeout_secs("1.5"), None);
+        assert_eq!(parse_script_timeout_secs("45"), Some(45));
+        assert_eq!(parse_script_timeout_secs(" 45 "), Some(45));
+    }
 
     #[test]
     fn script_provider_id_slugifies_name() {

@@ -2,6 +2,8 @@ mod about_tab;
 mod components;
 mod debug_tab;
 mod display_tab;
+#[cfg(all(test, feature = "ui-tests"))]
+mod form_ui_tests;
 mod general_tab;
 mod providers;
 mod quota_thresholds;
@@ -19,7 +21,7 @@ use crate::runtime::AppState;
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use fc_ui::components::hotkey_input::{HotkeyInputState, HotkeyValue};
-use fc_ui::components::input_state::InputState;
+use fc_ui::components::input_state::{InputState, ValidationError, ValidationRules};
 use fc_ui::components::textarea_state::TextareaState;
 use gpui::{
     div, linear_color_stop, multi_stop_linear_gradient, px, relative, rgba, svg, transparent_black,
@@ -58,6 +60,7 @@ pub(crate) struct NewApiFormInputs {
 }
 
 /// Script Provider 表单输入状态。
+#[derive(Clone)]
 pub(crate) struct ScriptProviderFormInputs {
     pub name: Entity<InputState>,
     pub provider_id: Entity<InputState>,
@@ -73,11 +76,12 @@ pub(crate) struct FormInputsCache<T> {
 
 impl ScriptProviderFormInputs {
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
-        Self {
+        let inputs = Self {
             name: cx.new(|cx| {
                 InputState::new(cx)
                     .placeholder(t!("script_provider.field.name.placeholder").to_string())
                     .trim_on_blur(false)
+                    .required(true)
             }),
             provider_id: cx.new(|cx| {
                 InputState::new(cx)
@@ -88,28 +92,34 @@ impl ScriptProviderFormInputs {
                 InputState::new(cx)
                     .value(crate::models::DEFAULT_SCRIPT_INTERPRETER)
                     .trim_on_blur(false)
+                    .required(true)
             }),
             timeout: cx.new(|cx| {
                 InputState::new(cx)
                     .value((crate::models::DEFAULT_SCRIPT_TIMEOUT_MS / 1000).to_string())
                     .trim_on_blur(false)
+                    .validation_rules(script_timeout_rules())
             }),
             script: cx.new(|cx| {
                 TextareaState::new(cx)
                     .value(crate::providers::custom::api::default_script_template())
+                    .required(true)
             }),
-        }
+        };
+        inputs.enable_live_validation(cx);
+        inputs
     }
 
     pub fn new_edit(
         data: &crate::models::ScriptProviderEditData,
         cx: &mut Context<SettingsView>,
     ) -> Self {
-        Self {
+        let inputs = Self {
             name: cx.new(|cx| {
                 InputState::new(cx)
                     .value(data.display_name.clone())
                     .trim_on_blur(false)
+                    .required(true)
             }),
             provider_id: cx.new(|cx| {
                 InputState::new(cx)
@@ -120,14 +130,32 @@ impl ScriptProviderFormInputs {
                 InputState::new(cx)
                     .value(data.interpreter.clone())
                     .trim_on_blur(false)
+                    .required(true)
             }),
             timeout: cx.new(|cx| {
                 InputState::new(cx)
                     .value((data.timeout_ms / 1000).to_string())
                     .trim_on_blur(false)
+                    .validation_rules(script_timeout_rules())
             }),
-            script: cx.new(|cx| TextareaState::new(cx).value(data.script.clone())),
+            script: cx.new(|cx| {
+                TextareaState::new(cx)
+                    .value(data.script.clone())
+                    .required(true)
+            }),
+        };
+        inputs.enable_live_validation(cx);
+        inputs
+    }
+
+    /// 打开 change 触发复验（fc-ui 默认仅在 blur 时校验），
+    /// 让用户修正输入后错误立即消失，而不必等到下次失焦或提交。
+    fn enable_live_validation(&self, cx: &mut Context<SettingsView>) {
+        for field in [&self.name, &self.interpreter, &self.timeout] {
+            field.update(cx, |state, _| state.validate_on_change = true);
         }
+        self.script
+            .update(cx, |state, _| state.validate_on_change = true);
     }
 
     pub fn focused_states(&self, window: &Window, cx: &App) -> [bool; 5] {
@@ -150,44 +178,89 @@ impl ScriptProviderFormInputs {
 impl NewApiFormInputs {
     /// 新增模式：创建空表单
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
-        Self {
-            name: newapi_input(cx, t!("newapi.field.name.placeholder").to_string(), ""),
-            url: newapi_input(cx, t!("newapi.field.url.placeholder").to_string(), ""),
-            cookie: newapi_textarea(cx, t!("newapi.field.cookie.placeholder").to_string(), ""),
-            user_id: newapi_input(cx, t!("newapi.field.user_id.placeholder").to_string(), ""),
-            divisor: newapi_input(cx, t!("newapi.field.divisor.placeholder").to_string(), ""),
-        }
+        let inputs = Self {
+            name: newapi_input(
+                cx,
+                t!("newapi.field.name.placeholder").to_string(),
+                "",
+                required_rules(),
+            ),
+            url: newapi_input(
+                cx,
+                t!("newapi.field.url.placeholder").to_string(),
+                "",
+                required_rules(),
+            ),
+            cookie: newapi_textarea(
+                cx,
+                t!("newapi.field.cookie.placeholder").to_string(),
+                "",
+                required_rules(),
+            ),
+            user_id: newapi_input(
+                cx,
+                t!("newapi.field.user_id.placeholder").to_string(),
+                "",
+                ValidationRules::default(),
+            ),
+            divisor: newapi_input(
+                cx,
+                t!("newapi.field.divisor.placeholder").to_string(),
+                "",
+                newapi_divisor_rules(),
+            ),
+        };
+        inputs.enable_live_validation(cx);
+        inputs
     }
 
     /// 编辑模式：用已有数据预填表单
     pub fn new_edit(data: &crate::models::NewApiEditData, cx: &mut Context<SettingsView>) -> Self {
-        Self {
+        let inputs = Self {
             name: newapi_input(
                 cx,
                 t!("newapi.field.name.placeholder").to_string(),
                 data.display_name.clone(),
+                required_rules(),
             ),
             url: newapi_input(
                 cx,
                 t!("newapi.field.url.placeholder").to_string(),
                 data.base_url.clone(),
+                required_rules(),
             ),
             cookie: newapi_textarea(
                 cx,
                 t!("newapi.field.cookie.placeholder").to_string(),
                 data.cookie.clone(),
+                required_rules(),
             ),
             user_id: newapi_input(
                 cx,
                 t!("newapi.field.user_id.placeholder").to_string(),
                 data.user_id.clone().unwrap_or_default(),
+                ValidationRules::default(),
             ),
             divisor: newapi_input(
                 cx,
                 t!("newapi.field.divisor.placeholder").to_string(),
                 format_optional_divisor_value(data.divisor),
+                newapi_divisor_rules(),
             ),
+        };
+        inputs.enable_live_validation(cx);
+        inputs
+    }
+
+    /// 打开 change 触发复验（fc-ui 默认仅在 blur 时校验），
+    /// 让用户修正输入后错误立即消失，而不必等到下次失焦或提交。
+    /// user_id 无校验规则，无需开启。
+    fn enable_live_validation(&self, cx: &mut Context<SettingsView>) {
+        for field in [&self.name, &self.url, &self.divisor] {
+            field.update(cx, |state, _| state.validate_on_change = true);
         }
+        self.cookie
+            .update(cx, |state, _| state.validate_on_change = true);
     }
 
     /// 返回每个字段是否获得焦点的数组
@@ -206,12 +279,14 @@ fn newapi_input(
     cx: &mut Context<SettingsView>,
     placeholder: String,
     content: impl Into<String>,
+    rules: ValidationRules,
 ) -> Entity<InputState> {
     cx.new(|cx| {
         InputState::new(cx)
             .placeholder(placeholder)
             .value(content.into())
             .trim_on_blur(false)
+            .validation_rules(rules)
     })
 }
 
@@ -219,12 +294,58 @@ fn newapi_textarea(
     cx: &mut Context<SettingsView>,
     placeholder: String,
     content: impl Into<String>,
+    rules: ValidationRules,
 ) -> Entity<TextareaState> {
     cx.new(|cx| {
         TextareaState::new(cx)
             .placeholder(placeholder)
             .value(content.into())
+            .validation_rules(rules)
     })
+}
+
+/// 必填字段的校验规则。错误文案由渲染层把 fc-ui 内置英文 message
+/// 映射为 `common.validation.required`（见 `providers::shared`）。
+fn required_rules() -> ValidationRules {
+    ValidationRules {
+        required: true,
+        ..Default::default()
+    }
+}
+
+/// 脚本超时字段：规则唯一出处是 `models::parse_script_timeout_secs`；
+/// 空值不走到这里（fc-ui 对非必填空值直接放行），由提交逻辑回退默认值。
+fn script_timeout_rules() -> ValidationRules {
+    ValidationRules {
+        custom_validator: Some(std::sync::Arc::new(|value: &str| {
+            if crate::models::parse_script_timeout_secs(value).is_some() {
+                Ok(())
+            } else {
+                Err(ValidationError {
+                    message: t!("script_provider.validation.invalid_timeout")
+                        .to_string()
+                        .into(),
+                    field_name: None,
+                })
+            }
+        })),
+        ..Default::default()
+    }
+}
+
+/// NewAPI 积分换算字段：复用 models 层的解析逻辑，空值 = 默认值。
+fn newapi_divisor_rules() -> ValidationRules {
+    ValidationRules {
+        custom_validator: Some(std::sync::Arc::new(|value: &str| {
+            crate::models::parse_divisor_input(value)
+                .map(|_| ())
+                .map_err(|_| ValidationError {
+                    message: t!("newapi.validation.invalid_divisor").to_string().into(),
+                    field_name: None,
+                })
+        })),
+        ..Default::default()
+    }
 }
 
 /// Token 输入框的 view-local 草稿状态。

@@ -10,7 +10,8 @@
 
 use super::super::{FormInputsCache, NewApiFormInputs, SettingsView};
 use super::shared::{
-    render_input_field, render_readonly_field, render_textarea_field, FormFieldSpec,
+    input_field_error, render_input_field, render_readonly_field, render_textarea_field,
+    textarea_field_error, FormFieldSpec,
 };
 use crate::application::AppAction;
 use crate::application::FormIdentity;
@@ -18,8 +19,8 @@ use crate::models::{build_newapi_config_from_fields, NewApiEditData, NewApiFormE
 use crate::theme::Theme;
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, px, relative, App, Context, Div, FontWeight, InteractiveElement, MouseButton,
-    ParentElement, StatefulInteractiveElement, Styled, Window,
+    div, px, relative, Context, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
+    StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -77,6 +78,7 @@ impl SettingsView {
                     hint: Some(&t!("newapi.field.name.placeholder")),
                     is_focused: focused[0],
                     margin_top: px(24.0),
+                    error: input_field_error(&inputs.name, cx),
                 },
                 &inputs.name,
                 theme,
@@ -99,6 +101,7 @@ impl SettingsView {
                         hint: Some(&t!("newapi.field.url.placeholder")),
                         is_focused: focused[1],
                         margin_top: px(16.0),
+                        error: input_field_error(&inputs.url, cx),
                     },
                     &inputs.url,
                     theme,
@@ -112,6 +115,7 @@ impl SettingsView {
                     hint: Some(&t!("newapi.field.cookie.hint")),
                     is_focused: focused[2],
                     margin_top: px(16.0),
+                    error: textarea_field_error(&inputs.cookie, cx),
                 },
                 &inputs.cookie,
                 theme,
@@ -124,6 +128,7 @@ impl SettingsView {
                     hint: Some(&t!("newapi.field.user_id.placeholder")),
                     is_focused: focused[3],
                     margin_top: px(16.0),
+                    error: input_field_error(&inputs.user_id, cx),
                 },
                 &inputs.user_id,
                 theme,
@@ -136,6 +141,7 @@ impl SettingsView {
                     hint: Some(&t!("newapi.field.divisor.placeholder")),
                     is_focused: focused[4],
                     margin_top: px(16.0),
+                    error: input_field_error(&inputs.divisor, cx),
                 },
                 &inputs.divisor,
                 theme,
@@ -162,8 +168,37 @@ impl SettingsView {
         )
     }
 
+    /// 对全部字段运行 fc-ui state 校验；错误写入各 state 的 `validation_error`，
+    /// 由渲染层以红描边 + 字段下文案展示。返回是否全部通过。
+    fn validate_newapi_fields(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(inputs) = self
+            .newapi_inputs
+            .as_ref()
+            .map(|cache| cache.inputs.clone())
+        else {
+            return false;
+        };
+        // 不短路：让所有无效字段同时亮出错误
+        let mut valid = true;
+        for field in [&inputs.name, &inputs.url, &inputs.divisor] {
+            valid &= field.update(cx, |state, cx| state.validate(cx).is_ok());
+        }
+        valid &= inputs
+            .cookie
+            .update(cx, |state, cx| state.validate(cx).is_ok());
+        valid
+    }
+
     /// 从表单当前值构造提交 Action；校验失败时记下错误并返回 None。
-    fn collect_submit_action(&mut self, cx: &App) -> Option<AppAction> {
+    pub(in crate::ui::settings_window) fn collect_submit_action(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<AppAction> {
+        // 字段级校验先行：失败时错误已写到各字段 state，重绘即可见
+        if !self.validate_newapi_fields(cx) {
+            self.newapi_form_error = None;
+            return None;
+        }
         let inputs = self.newapi_inputs.as_ref()?;
         let inputs = &inputs.inputs;
         match build_newapi_config_from_fields(

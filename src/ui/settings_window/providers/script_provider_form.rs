@@ -2,7 +2,10 @@
 
 use super::super::{FormInputsCache, ScriptProviderFormInputs, SettingsView};
 use super::newapi_form::should_rebuild_form_inputs_cache;
-use super::shared::{render_code_field, render_input_field, render_readonly_field, FormFieldSpec};
+use super::shared::{
+    input_field_error, render_code_field, render_input_field, render_readonly_field,
+    textarea_field_error, FormFieldSpec,
+};
 use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::models::{
@@ -12,7 +15,7 @@ use crate::models::{
 use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::render_svg_icon;
 use gpui::{
-    div, prelude::FluentBuilder as _, px, AnyElement, App, Context, Div, FontWeight, Hsla,
+    div, prelude::FluentBuilder as _, px, AnyElement, Context, Div, FontWeight, Hsla,
     InteractiveElement, IntoElement, MouseButton, ParentElement, StatefulInteractiveElement,
     Styled, Window,
 };
@@ -261,6 +264,7 @@ impl SettingsView {
                     hint: Some(&t!("script_provider.field.name.placeholder")),
                     is_focused: focused[0],
                     margin_top: px(24.0),
+                    error: input_field_error(&inputs.name, cx),
                 },
                 &inputs.name,
                 theme,
@@ -280,6 +284,7 @@ impl SettingsView {
                     hint: Some(&t!("script_provider.field.interpreter.hint")),
                     is_focused: focused[2],
                     margin_top: px(16.0),
+                    error: input_field_error(&inputs.interpreter, cx),
                 },
                 &inputs.interpreter,
                 theme,
@@ -292,6 +297,7 @@ impl SettingsView {
                     hint: Some(&t!("script_provider.field.timeout.hint")),
                     is_focused: focused[3],
                     margin_top: px(16.0),
+                    error: input_field_error(&inputs.timeout, cx),
                 },
                 &inputs.timeout,
                 theme,
@@ -304,6 +310,7 @@ impl SettingsView {
                     hint: Some(&t!("script_provider.field.script.hint")),
                     is_focused: focused[4],
                     margin_top: px(16.0),
+                    error: textarea_field_error(&inputs.script, cx),
                 },
                 &inputs.script,
                 &t!("script_provider.field.script.cf_hint"),
@@ -324,7 +331,36 @@ impl SettingsView {
         )
     }
 
-    fn collect_script_provider_config(&self, cx: &App) -> Option<ScriptProviderConfig> {
+    /// 对全部字段运行 fc-ui state 校验；错误写入各 state 的 `validation_error`，
+    /// 由渲染层以红描边 + 字段下文案展示。返回是否全部通过。
+    fn validate_script_provider_fields(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(inputs) = self
+            .script_provider_inputs
+            .as_ref()
+            .map(|cache| cache.inputs.clone())
+        else {
+            return false;
+        };
+        // 不短路：让所有无效字段同时亮出错误
+        let mut valid = true;
+        for field in [&inputs.name, &inputs.interpreter, &inputs.timeout] {
+            valid &= field.update(cx, |state, cx| state.validate(cx).is_ok());
+        }
+        valid &= inputs
+            .script
+            .update(cx, |state, cx| state.validate(cx).is_ok());
+        valid
+    }
+
+    pub(in crate::ui::settings_window) fn collect_script_provider_config(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<ScriptProviderConfig> {
+        // 字段级校验先行：失败时错误已写到各字段 state，重绘即可见
+        if !self.validate_script_provider_fields(cx) {
+            cx.notify();
+            return None;
+        }
         let inputs = self.script_provider_inputs.as_ref()?;
         let inputs = &inputs.inputs;
         let display_name = inputs.name.read(cx).content().trim().to_string();
@@ -342,21 +378,17 @@ impl SettingsView {
             self.unique_script_provider_id_for_name(&display_name)
         };
         let interpreter = inputs.interpreter.read(cx).content().trim().to_string();
-        let timeout_secs = inputs
-            .timeout
-            .read(cx)
-            .content()
-            .trim()
-            .parse::<u64>()
-            .ok()
-            .unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS / 1000);
+        let timeout_secs =
+            crate::models::parse_script_timeout_secs(inputs.timeout.read(cx).content())
+                .unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MS / 1000);
         let script = inputs.script.read(cx).content().to_string();
 
+        // 字段级校验已在上方拦住空 name / interpreter / script 与非法 timeout；
+        // 这里的判空是最后一道防线（provider_id 派生依赖 name 非空）
         if display_name.is_empty()
             || provider_id.is_empty()
             || interpreter.is_empty()
             || script.trim().is_empty()
-            || timeout_secs == 0
         {
             return None;
         }

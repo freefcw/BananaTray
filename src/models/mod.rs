@@ -33,10 +33,10 @@ pub use quota::{
     RefreshData, StatusLevel, UpdateStatus,
 };
 pub use script_provider::{
-    parse_script_stdout, script_provider_id, script_provider_id_from_slug, script_provider_slug,
-    unique_script_provider_id, ScriptProviderConfig, ScriptProviderEditData,
-    ScriptProviderQuotaPreview, ScriptProviderTestResult, DEFAULT_SCRIPT_INTERPRETER,
-    DEFAULT_SCRIPT_TIMEOUT_MS,
+    parse_script_stdout, parse_script_timeout_secs, script_provider_id,
+    script_provider_id_from_slug, script_provider_slug, unique_script_provider_id,
+    ScriptProviderConfig, ScriptProviderEditData, ScriptProviderQuotaPreview,
+    ScriptProviderTestResult, DEFAULT_SCRIPT_INTERPRETER, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 pub use settings::{
     valid_retention_days, AppSettings, AppTheme, DisplaySettings, HistorySettings, LoggingSettings,

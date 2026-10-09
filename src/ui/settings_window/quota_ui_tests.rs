@@ -17,7 +17,7 @@ use gpui::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-fn make_state() -> Rc<RefCell<AppState>> {
+pub(super) fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
