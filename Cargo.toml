@@ -47,7 +47,7 @@ gpui = { package = "fc-gpui", version = "0.11.2", default-features = false, feat
 # fc-ui 在 default-features = false 时不再注册内置字体；
 # 这里只启用实际 UI 权重，避免拉入完整 JetBrains Mono Bold 等未用资产。
 # fc-ui 0.9 起 crate root 即 fc_ui，无需 package 别名。
-fc-ui = { version = "0.9.2", default-features = false, features = ["font-inter-regular", "font-inter-medium", "font-inter-semibold", "font-inter-bold", "font-mono-regular"], optional = true }
+fc-ui = { version = "0.9.3", default-features = false, features = ["font-inter-regular", "font-inter-medium", "font-inter-semibold", "font-inter-bold", "font-mono-regular"], optional = true }
 
 anyhow = "1.0"
 async-trait = "0.1"
