@@ -73,7 +73,6 @@ impl SettingsView {
             // ── 表单字段 ──
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "newapi-name",
                     label: &t!("newapi.field.name"),
                     hint: Some(&t!("newapi.field.name.placeholder")),
                     is_focused: focused[0],
@@ -96,7 +95,6 @@ impl SettingsView {
             } else {
                 render_input_field(
                     FormFieldSpec {
-                        id: "newapi-url",
                         label: &t!("newapi.field.url"),
                         hint: Some(&t!("newapi.field.url.placeholder")),
                         is_focused: focused[1],
@@ -110,7 +108,6 @@ impl SettingsView {
             })
             .child(render_textarea_field(
                 FormFieldSpec {
-                    id: "newapi-cookie",
                     label: &t!("newapi.field.cookie"),
                     hint: Some(&t!("newapi.field.cookie.hint")),
                     is_focused: focused[2],
@@ -123,7 +120,6 @@ impl SettingsView {
             ))
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "newapi-userid",
                     label: &t!("newapi.field.user_id"),
                     hint: Some(&t!("newapi.field.user_id.placeholder")),
                     is_focused: focused[3],
@@ -136,7 +132,6 @@ impl SettingsView {
             ))
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "newapi-divisor",
                     label: &t!("newapi.field.divisor"),
                     hint: Some(&t!("newapi.field.divisor.placeholder")),
                     is_focused: focused[4],

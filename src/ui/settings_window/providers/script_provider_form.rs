@@ -257,7 +257,6 @@ impl SettingsView {
             .child(render_script_provider_header(title, theme))
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "script-provider-name",
                     label: &t!("script_provider.field.name"),
                     hint: Some(&t!("script_provider.field.name.placeholder")),
                     is_focused: focused[0],
@@ -277,7 +276,6 @@ impl SettingsView {
             ))
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "script-provider-interpreter",
                     label: &t!("script_provider.field.interpreter"),
                     hint: Some(&t!("script_provider.field.interpreter.hint")),
                     is_focused: focused[2],
@@ -290,7 +288,6 @@ impl SettingsView {
             ))
             .child(render_input_field(
                 FormFieldSpec {
-                    id: "script-provider-timeout",
                     label: &t!("script_provider.field.timeout"),
                     hint: Some(&t!("script_provider.field.timeout.hint")),
                     is_focused: focused[3],
@@ -303,7 +300,6 @@ impl SettingsView {
             ))
             .child(render_code_field(
                 FormFieldSpec {
-                    id: "script-provider-code",
                     label: &t!("script_provider.field.script"),
                     hint: Some(&t!("script_provider.field.script.hint")),
                     is_focused: focused[4],

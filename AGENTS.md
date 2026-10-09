@@ -63,7 +63,7 @@ src/
                            views/               — Tray popup views (app_view, nav, panels, global_actions)
                            widgets/             — Reusable UI components, organized into sub-modules:
                              primitives/        — Atomic visual building blocks (icon, colored_icon, toggle, tooltip)
-                             controls/          — Interactive controls (action_button, icon_button, segmented_control, stepper, cadence_dropdown, dropdown, hotkey_field, input_actions)
+                             controls/          — Interactive controls (action_button, icon_button, segmented_control, stepper, cadence_dropdown, dropdown, history_retention_dropdown, hotkey_field)
                              display/           — Data display components (quota_bar, info_row, icon_row, card, provider_icon)
                            settings_window/providers/ — Settings Providers tab sidebar/detail/picker/NewAPI/script provider form/token panels
                              detail/          — Provider detail panel shell, section renderers, quota visibility, editable-provider actions

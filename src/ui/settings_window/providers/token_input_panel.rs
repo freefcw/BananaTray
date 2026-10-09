@@ -10,11 +10,11 @@ use super::shared;
 use crate::application::AppAction;
 use crate::models::{ProviderId, TokenEditMode, TokenInputCapability, TokenInputState};
 use crate::theme::Theme;
-use crate::ui::widgets::{register_input_actions, render_action_button, ButtonSize, ButtonVariant};
+use crate::ui::widgets::{render_action_button, ButtonSize, ButtonVariant};
+use fc_ui::components::input_state::wire_actions as wire_input_actions;
 use gpui::{
-    div, hsla, px, relative, AnyElement, App, Context, Div, ElementId, Entity, FocusHandle,
-    FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled,
-    Window,
+    div, hsla, px, relative, AnyElement, App, Context, Div, Entity, FocusHandle, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -24,25 +24,20 @@ use rust_i18n::t;
 
 #[derive(IntoElement)]
 struct TokenInputBox {
-    provider_id: ProviderId,
     input_entity: Entity<fc_ui::components::input_state::InputState>,
     theme: Theme,
     focus_handle: FocusHandle,
 }
 
 impl RenderOnce for TokenInputBox {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = self.theme;
         let input_entity = self.input_entity;
         let is_focused = self.focus_handle.is_focused(window);
 
         let success = theme.status.success;
-        let input_div = div()
-            .id(ElementId::Name(
-                format!("token_input_box_{}", self.provider_id.id_key()).into(),
-            ))
-            .key_context("Input")
-            .track_focus(&self.focus_handle)
+        // 官方 wiring 自带 key_context / track_focus / 全部编辑 action，这里只做外壳样式
+        wire_input_actions(&input_entity, window, cx)
             .w_full()
             .flex()
             .items_center()
@@ -62,15 +57,14 @@ impl RenderOnce for TokenInputBox {
             .on_mouse_down(MouseButton::Left, {
                 let handle = self.focus_handle.clone();
                 move |_, window, _| handle.focus(window)
-            });
-
-        register_input_actions(input_div, &input_entity, window).child(
-            div()
-                .flex_1()
-                .overflow_hidden()
-                .text_size(px(13.0))
-                .child(input_entity),
-        )
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .text_size(px(13.0))
+                    .child(input_entity),
+            )
     }
 }
 
@@ -131,7 +125,6 @@ pub(crate) fn render_token_input_panel(
 
     card = card
         .child(render_token_value(
-            provider_id,
             token_input_entity,
             has_token,
             is_editing,
@@ -197,7 +190,6 @@ fn render_token_panel_description(capability: TokenInputCapability, theme: &Them
 }
 
 fn render_token_value(
-    provider_id: &ProviderId,
     input_entity: Option<Entity<fc_ui::components::input_state::InputState>>,
     has_token: bool,
     is_editing: bool,
@@ -207,7 +199,6 @@ fn render_token_value(
     if let (true, Some(input_entity)) = (is_editing, input_entity) {
         let focus_handle = input_entity.read(cx).focus_handle(cx);
         return TokenInputBox {
-            provider_id: provider_id.clone(),
             input_entity,
             theme: theme.clone(),
             focus_handle,

@@ -216,6 +216,12 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 - `src/bootstrap/settings_window.rs` 的 `+1px` resize nudge —— 0.10.0 的重入 resize 通知修复 + 建窗强制首绘大概率已根治首屏布局问题；已删除。设置窗口布局经 mock-window UI 回归验证；真实多显示器/主题切换下的视觉复核仍建议做一次人工确认。
 - `Cargo.toml` 指向本地 fork 路径的 `fc-gpui` `[patch]` —— 为携带 0.11.1 的两处 macOS objc2 迁移遗留修复（关窗 `let _: () = msg_send![window, autorelease]` 的 '@' vs 'v' debug panic；建窗 `NSAutoreleasePool` 显式 `drain()` + Retained drop 双重释放）。上游已作为 fc-gpui 0.11.2 发布（另见 fc-ui 0.9.2 对齐），patch 行已随本次升级删除，全仓回到纯 crates.io 正式版。
 
+**2026-10-09 随 fc-ui 0.9 官方 API 采纳删除的条目**（fc-ui 0.9.0 补齐了此前应用侧手写的三层 workaround）：
+
+- `src/ui/widgets/controls/input_actions.rs` 与 `providers/shared.rs::register_textarea_actions` 的手写键盘 wiring —— fc-ui 0.9.0 新增公开的 `input_state::wire_actions` / `textarea_state::wire_actions`（自带 key_context / track_focus / track_scroll / disabled 判空，内置组件自身也走同一 helper；input 版补齐了手写版长期缺失的 enter/tab/shift_tab/escape 四个 action）。已整文件 / 整函数删除。
+- 各 `InputState` / `TextareaState` 构造点的 `s.placeholder = ...` / `s.content = ...` / `s.trim_on_blur = false` 裸字段赋值 —— fc-ui 0.9.0 新增 `value()` / `placeholder()` / `trim_on_blur()` 等链式 builder，已全量替换。注意 0.9 起 `trim_on_blur` 默认 true 且 blur 时真实生效（0.8 时代该字段是摆设），显式 `trim_on_blur(false)` 的语义从"随手写的保险"变为"实打实关闭 trim"，替换时已逐处保留。
+- `src/bootstrap/ui_bootstrap.rs` 装死 `Theme::light()` 后不再切换的 fc-ui 主题安装 —— fc-ui 0.9 起输入框光标 / 选区改用 `tokens.primary` 绘制（0.8 是硬编码蓝），light preset 的 primary 为纯黑，叠在深色输入底色上不可见，属于升级引入的实际回归。修复为 `src/ui/fc_ui_theme.rs::sync_fc_ui_theme()`：按用户主题偏好 + 系统外观选 fc-ui preset 并将 primary 覆盖为 BananaTray accent；同步时机为启动、设置窗口打开、窗口外观变化、Display Tab 切换主题偏好四处（`install_theme` 0.9 起自带 `refresh_windows()`，重装即时生效）。
+
 | 位置 | 目的 | 触发条件 / 根因 | 删除条件 | 创建日期 | 上游追踪 | 优先级 |
 |------|------|-----------------|----------|---------|---------|--------|
 | `AppView` 在 Overview 停留期间不随展开/折叠改窗口高度 | 展开/折叠只改卡片，不触发原生窗口 resize，避免整窗抖动 | GPUI PopUp 改 `contentSize` / drawable 无法做到无闪的实时长高；0.10.0 的 `resize_anchored` 已提供钉顶边无动画 resize，但"展开跟随高度"的交互改版未做 | 当基于 `resize_anchored` 重做展开/折叠跟随高度并实测稳定无抖 | 2026-08 | fc-gpui macOS PopUp resize（0.10.0 `resize_anchored` 可用） | P1 |

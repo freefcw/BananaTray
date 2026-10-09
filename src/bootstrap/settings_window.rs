@@ -195,7 +195,9 @@ fn install_new_settings_window(handle: SettingsWindowHandle, cx: &mut App) {
     let _ = handle.update(cx, |view, window, cx| {
         window.show_window();
         window.activate_window();
-        let appearance_sub = cx.observe_window_appearance(window, |_view, _window, cx| {
+        let appearance_sub = cx.observe_window_appearance(window, |view, window, cx| {
+            let user_theme = view.state.borrow().session.settings.display.theme;
+            crate::ui::sync_fc_ui_theme(user_theme, window.appearance(), cx);
             cx.notify();
             log::debug!(
                 target: "settings",

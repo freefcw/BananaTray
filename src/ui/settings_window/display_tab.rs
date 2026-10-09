@@ -70,6 +70,7 @@ impl SettingsView {
                     window,
                     cx,
                 );
+                crate::ui::sync_fc_ui_theme(variant, window.appearance(), cx);
             },
         )
     }

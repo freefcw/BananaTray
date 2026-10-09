@@ -75,37 +75,28 @@ impl ScriptProviderFormInputs {
     pub fn new_add(cx: &mut Context<SettingsView>) -> Self {
         Self {
             name: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = t!("script_provider.field.name.placeholder")
-                    .to_string()
-                    .into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .placeholder(t!("script_provider.field.name.placeholder").to_string())
+                    .trim_on_blur(false)
             }),
             provider_id: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.placeholder = "ccswitch:script".to_string().into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .placeholder("ccswitch:script")
+                    .trim_on_blur(false)
             }),
             interpreter: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = crate::models::DEFAULT_SCRIPT_INTERPRETER.into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value(crate::models::DEFAULT_SCRIPT_INTERPRETER)
+                    .trim_on_blur(false)
             }),
             timeout: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = (crate::models::DEFAULT_SCRIPT_TIMEOUT_MS / 1000)
-                    .to_string()
-                    .into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value((crate::models::DEFAULT_SCRIPT_TIMEOUT_MS / 1000).to_string())
+                    .trim_on_blur(false)
             }),
             script: cx.new(|cx| {
-                let mut s = TextareaState::new(cx);
-                s.content = crate::providers::custom::api::default_script_template().into();
-                s
+                TextareaState::new(cx)
+                    .value(crate::providers::custom::api::default_script_template())
             }),
         }
     }
@@ -116,34 +107,26 @@ impl ScriptProviderFormInputs {
     ) -> Self {
         Self {
             name: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = data.display_name.clone().into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value(data.display_name.clone())
+                    .trim_on_blur(false)
             }),
             provider_id: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = data.provider_id.clone().into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value(data.provider_id.clone())
+                    .trim_on_blur(false)
             }),
             interpreter: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = data.interpreter.clone().into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value(data.interpreter.clone())
+                    .trim_on_blur(false)
             }),
             timeout: cx.new(|cx| {
-                let mut s = InputState::new(cx);
-                s.content = (data.timeout_ms / 1000).to_string().into();
-                s.trim_on_blur = false;
-                s
+                InputState::new(cx)
+                    .value((data.timeout_ms / 1000).to_string())
+                    .trim_on_blur(false)
             }),
-            script: cx.new(|cx| {
-                let mut s = TextareaState::new(cx);
-                s.content = data.script.clone().into();
-                s
-            }),
+            script: cx.new(|cx| TextareaState::new(cx).value(data.script.clone())),
         }
     }
 
@@ -225,11 +208,10 @@ fn newapi_input(
     content: impl Into<String>,
 ) -> Entity<InputState> {
     cx.new(|cx| {
-        let mut state = InputState::new(cx);
-        state.placeholder = placeholder.into();
-        state.content = content.into().into();
-        state.trim_on_blur = false;
-        state
+        InputState::new(cx)
+            .placeholder(placeholder)
+            .value(content.into())
+            .trim_on_blur(false)
     })
 }
 
@@ -239,10 +221,9 @@ fn newapi_textarea(
     content: impl Into<String>,
 ) -> Entity<TextareaState> {
     cx.new(|cx| {
-        let mut state = TextareaState::new(cx);
-        state.placeholder = placeholder.into();
-        state.content = content.into().into();
-        state
+        TextareaState::new(cx)
+            .placeholder(placeholder)
+            .value(content.into())
     })
 }
 
@@ -281,10 +262,11 @@ impl SettingsView {
     pub(crate) fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
         // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记
-        {
-            let settings_ui = &mut state.borrow_mut().session.settings_ui;
-            settings_ui.token_editing_provider = None;
-        }
+        let user_theme = {
+            let session = &mut state.borrow_mut().session;
+            session.settings_ui.token_editing_provider = None;
+            session.settings.display.theme
+        };
         let load_debug_diagnostics =
             state.borrow().session.settings_ui.active_tab == SettingsTab::Debug;
         let mut view = Self {
@@ -304,6 +286,9 @@ impl SettingsView {
         if load_debug_diagnostics {
             view.refresh_debug_diagnostics(cx);
         }
+        // fc-ui 全局主题在启动后可能已因系统外观变化而过期（启动时装的是当时的），
+        // 设置窗口打开时按当前偏好与外观重新同步。
+        crate::ui::sync_fc_ui_theme(user_theme, cx.window_appearance(), cx);
         view
     }
 
@@ -370,11 +355,10 @@ impl SettingsView {
             None
         };
         let input = cx.new(|cx| {
-            let mut state = InputState::new(cx);
-            state.placeholder = placeholder.into();
-            state.content = initial_value.unwrap_or_default().into();
-            state.trim_on_blur = false;
-            state
+            InputState::new(cx)
+                .placeholder(placeholder)
+                .value(initial_value.unwrap_or_default())
+                .trim_on_blur(false)
         });
         self.token_input = Some(TokenInputDraft {
             provider_id: provider_id.clone(),

@@ -1,11 +1,9 @@
 use crate::theme::{monospace_font_family, Theme};
-use crate::ui::widgets::register_input_actions;
-use fc_ui::components::input_state::InputState;
-use fc_ui::components::textarea_state::TextareaState;
+use fc_ui::components::input_state::{wire_actions as wire_input_actions, InputState};
+use fc_ui::components::textarea_state::{wire_actions as wire_textarea_actions, TextareaState};
 use gpui::{
-    div, hsla, px, relative, App, Div, Entity, Focusable, FontWeight, InteractiveElement,
-    MouseButton, MouseDownEvent, ParentElement, Pixels, Stateful, StatefulInteractiveElement,
-    Styled, Window,
+    div, hsla, px, relative, App, Div, Entity, FontWeight, InteractiveElement, MouseButton,
+    MouseDownEvent, ParentElement, Pixels, Stateful, Styled, Window,
 };
 
 /// Provider 设置区的卡片外壳。Token 面板和自定义 provider 的编辑区共用这一套容器规格，
@@ -38,7 +36,6 @@ pub(in crate::ui::settings_window) fn render_settings_card_title(
 /// 表单字段的共享布局规格。
 #[derive(Clone, Copy)]
 pub(in crate::ui::settings_window) struct FormFieldSpec<'a> {
-    pub id: &'static str,
     pub label: &'a str,
     pub hint: Option<&'a str>,
     pub is_focused: bool,
@@ -79,7 +76,6 @@ pub(in crate::ui::settings_window) fn render_input_field(
         .mt(field.margin_top)
         .child(render_field_label(field.label, field.hint, theme))
         .child(render_input_box(
-            field.id,
             field.is_focused,
             input_entity,
             theme,
@@ -88,9 +84,10 @@ pub(in crate::ui::settings_window) fn render_input_field(
         ))
 }
 
-/// 不带标签的单行输入框外壳（聚焦高亮 + 输入快捷键），供自定义标签布局复用。
+/// 不带标签的单行输入框外壳（聚焦高亮 + 完整键盘编辑），供自定义标签布局复用。
+/// 键盘 wiring 走 fc-ui 官方 `wire_actions`（自带 key_context / track_focus /
+/// 全部编辑 action），这里只负责外壳样式与点击聚焦。
 pub(in crate::ui::settings_window) fn render_input_box(
-    id: &'static str,
     is_focused: bool,
     input_entity: &Entity<InputState>,
     theme: &Theme,
@@ -98,10 +95,7 @@ pub(in crate::ui::settings_window) fn render_input_box(
     cx: &App,
 ) -> Stateful<Div> {
     let focus_handle = input_entity.read(cx).focus_handle(cx);
-    let input_div = div()
-        .id(id)
-        .key_context("Input")
-        .track_focus(&focus_handle)
+    wire_input_actions(input_entity, window, cx)
         .w_full()
         .flex()
         .items_center()
@@ -121,9 +115,7 @@ pub(in crate::ui::settings_window) fn render_input_box(
         .on_mouse_down(MouseButton::Left, {
             let handle = focus_handle.clone();
             move |_, window, _| handle.focus(window)
-        });
-
-    register_input_actions(input_div, input_entity, window)
+        })
         .child(div().flex_1().overflow_hidden().child(input_entity.clone()))
 }
 
@@ -134,12 +126,8 @@ pub(super) fn render_textarea_field(
     window: &mut Window,
     cx: &App,
 ) -> Div {
-    let focus_handle = textarea_entity.read(cx).focus_handle(cx);
-
-    let textarea_div = div()
-        .id(field.id)
-        .key_context("Textarea")
-        .track_focus(&focus_handle)
+    // 官方 wiring 自带 key_context / track_focus / track_scroll / 点击聚焦 / 全部编辑 action
+    let textarea_div = wire_textarea_actions(textarea_entity, window, cx)
         .w_full()
         .px(px(12.0))
         .py(px(8.0))
@@ -154,14 +142,7 @@ pub(super) fn render_textarea_field(
             theme.border.strong
         })
         .text_size(px(13.0))
-        .text_color(theme.text.primary)
-        .overflow_y_scroll()
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-
-    let textarea_div = register_textarea_actions(textarea_div, textarea_entity, window);
+        .text_color(theme.text.primary);
 
     div()
         .flex_col()
@@ -180,12 +161,7 @@ pub(super) fn render_code_field(
     window: &mut Window,
     cx: &App,
 ) -> Div {
-    let focus_handle = textarea_entity.read(cx).focus_handle(cx);
-
-    let textarea_div = div()
-        .id(field.id)
-        .key_context("Textarea")
-        .track_focus(&focus_handle)
+    let textarea_div = wire_textarea_actions(textarea_entity, window, cx)
         .w_full()
         .px(px(12.0))
         .py(px(10.0))
@@ -201,14 +177,7 @@ pub(super) fn render_code_field(
         })
         .font_family(monospace_font_family())
         .text_size(px(12.0))
-        .text_color(theme.text.primary)
-        .overflow_y_scroll()
-        .on_mouse_down(MouseButton::Left, {
-            let handle = focus_handle.clone();
-            move |_, window, _| handle.focus(window)
-        });
-
-    let textarea_div = register_textarea_actions(textarea_div, textarea_entity, window);
+        .text_color(theme.text.primary);
 
     div()
         .flex_col()
@@ -257,38 +226,6 @@ pub(super) fn render_readonly_field(
                         .child(value.to_string()),
                 ),
         )
-}
-
-pub(super) fn register_textarea_actions(
-    div: Stateful<Div>,
-    entity: &Entity<TextareaState>,
-    window: &mut Window,
-) -> Stateful<Div> {
-    div.on_action(window.listener_for(entity, TextareaState::backspace))
-        .on_action(window.listener_for(entity, TextareaState::delete))
-        .on_action(window.listener_for(entity, TextareaState::left))
-        .on_action(window.listener_for(entity, TextareaState::right))
-        .on_action(window.listener_for(entity, TextareaState::up))
-        .on_action(window.listener_for(entity, TextareaState::down))
-        .on_action(window.listener_for(entity, TextareaState::select_left))
-        .on_action(window.listener_for(entity, TextareaState::select_right))
-        .on_action(window.listener_for(entity, TextareaState::select_up))
-        .on_action(window.listener_for(entity, TextareaState::select_down))
-        .on_action(window.listener_for(entity, TextareaState::select_all))
-        .on_action(window.listener_for(entity, TextareaState::home))
-        .on_action(window.listener_for(entity, TextareaState::end))
-        .on_action(window.listener_for(entity, TextareaState::copy))
-        .on_action(window.listener_for(entity, TextareaState::cut))
-        .on_action(window.listener_for(entity, TextareaState::paste))
-        .on_action(window.listener_for(entity, TextareaState::enter))
-        .on_action(window.listener_for(entity, TextareaState::shift_enter))
-        .on_action(window.listener_for(entity, TextareaState::tab))
-        .on_action(window.listener_for(entity, TextareaState::shift_tab))
-        .on_action(window.listener_for(entity, TextareaState::escape))
-        .on_action(window.listener_for(entity, TextareaState::word_left))
-        .on_action(window.listener_for(entity, TextareaState::word_right))
-        .on_action(window.listener_for(entity, TextareaState::select_word_left))
-        .on_action(window.listener_for(entity, TextareaState::select_word_right))
 }
 
 pub(super) fn render_confirm_cancel_buttons(

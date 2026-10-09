@@ -31,8 +31,8 @@ widgets/
 | `stepper.rs` | `render_stepper()` + `StepperOptions` | 紧凑步进器 `[−] value [+]`，边界自动禁用按钮；数值格式与步长策略由调用方决定；按钮带 `stepper-decrement` / `stepper-increment` debug_selector 供 GPUI mock 测试定位（非 test-support 构建为 no-op） |
 | `cadence_dropdown.rs` | `render_cadence_trigger()` | 刷新频率下拉菜单触发器 |
 | `dropdown.rs` | `render_dropdown_trigger()` / `render_dropdown_panel()` / `render_dropdown_row()` | 下拉触发器 / 浮层面板 / 选项行共享构件 |
+| `history_retention_dropdown.rs` | `render_history_retention_dropdown()` + `HistoryRetentionMenu` | 历史保留时长下拉（全局 / 单 Provider 两种粒度共用） |
 | `hotkey_field.rs` | `render_hotkey_field_inline()` | 紧凑内联热键录入 chip，包裹 fc-ui HotkeyInputState |
-| `input_actions.rs` | `register_input_actions()` | 注册 Ctrl+A/C/V/X 等输入快捷键 |
 
 ## display/ — 数据展示
 
@@ -72,4 +72,6 @@ use crate::ui::widgets::{render_quota_bar, render_svg_icon};
   尺寸和圆角对不上，已收敛到 `ButtonSize::Panel`；Provider 面板的手写 pill 同理收敛到
   `ButtonSize::Pill`
 - 所有组件接受 `&Theme` 参数获取颜色（不直接读 `cx.global::<Theme>()`），保持纯渲染逻辑
-- 文本输入使用 `fc-ui` 的 `InputState`（单行）和 `TextareaState`（多行），配合 `input_actions.rs` 注册快捷键
+- 文本输入使用 `fc-ui` 的 `InputState`（单行）和 `TextareaState`（多行）；键盘编辑 wiring 统一走 fc-ui 官方
+  `input_state::wire_actions` / `textarea_state::wire_actions`（自带 key_context / track_focus / 全部编辑 action），
+  调用方只负责外壳样式，不要再手写 `on_action` 注册

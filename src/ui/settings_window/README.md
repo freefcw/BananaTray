@@ -59,7 +59,8 @@ SettingsView::render()
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - 设置窗口的异步调度与多显示器复用逻辑已迁至 `bootstrap::schedule_open_settings_window()`
-- Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器必须注册 `key_context("Input")` 才能接收标准编辑动作
+- Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器的键盘 wiring 统一走 fc-ui 官方 `input_state::wire_actions`（自带 `key_context("Input")` / `track_focus` / 全部编辑 action），不要手写 `on_action` 注册——手写版曾长期漏掉 enter/tab/escape 与 disabled 判空
+- 所有 `InputState` / `TextareaState` 实体由 fc-ui 全局 `ThemeState` 提供光标 / 选区 / 占位色，该主题由 `sync_fc_ui_theme()`（`src/ui/fc_ui_theme.rs`）按用户主题偏好 + 系统外观同步安装，primary 覆盖为 BananaTray accent；修改主题链路时不要绕过它单独 `install_theme`
 - 阈值编辑草稿 `QuotaThresholdDraft` 同样为 view-local：target 区分 Global / Provider(id)，渲染非归属目标区域时丢弃（切 Tab / 切 Provider / 离开 detail 都不会串草稿）；输入通过 `QuotaThresholds::parse` 与 reducer 共用同一套校验，错误内联展示
 - General Tab 的全局热键区域使用 view-local `HotkeyInputState` 做键捕获，`SettingsView` 额外维护一个已同步快照，避免成功保存前覆盖用户正在录制的候选值
 - 真正的热键预检、重绑与错误回填仍由 `AppAction::SaveGlobalHotkey` → runtime effect 完成；设置页只会在当前候选值仍等于上次失败候选时显示 runtime 错误，避免把旧失败提示错误地挂到新录制结果上

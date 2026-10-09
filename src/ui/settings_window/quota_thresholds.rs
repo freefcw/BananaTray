@@ -39,10 +39,9 @@ impl SettingsView {
         }
         let threshold_input = |value: f64, cx: &mut Context<Self>| {
             cx.new(|cx| {
-                let mut state = InputState::new(cx);
-                state.content = format!("{value}").into();
-                state.trim_on_blur = false;
-                state
+                InputState::new(cx)
+                    .value(format!("{value}"))
+                    .trim_on_blur(false)
             })
         };
         self.quota_threshold_draft = Some(QuotaThresholdDraft {
@@ -438,7 +437,7 @@ fn render_draft_editor(
                                 .child(label),
                         ),
                 )
-                .child(render_input_box(id, is_focused, &entity, theme, window, cx)),
+                .child(render_input_box(is_focused, &entity, theme, window, cx)),
         );
     }
 
