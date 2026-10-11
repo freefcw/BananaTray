@@ -411,9 +411,10 @@ mod tests {
         let credit = parsed
             .quotas
             .iter()
-            .find(|quota| quota.is_credit())
+            .find(|quota| quota.stable_key == "credit")
             .unwrap();
 
+        assert_eq!(credit.quota_type, QuotaType::Points);
         assert!(credit.is_balance_only());
         assert_eq!(credit.remaining_balance, Some(7.25));
     }
@@ -452,7 +453,10 @@ mod tests {
         let parsed = parse_rate_limits(raw).unwrap();
 
         assert_eq!(parsed.quotas.len(), 1);
-        assert!(parsed.quotas.iter().all(|quota| !quota.is_credit()));
+        assert!(parsed
+            .quotas
+            .iter()
+            .all(|quota| quota.stable_key != "credit"));
     }
 
     #[test]

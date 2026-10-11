@@ -1,6 +1,5 @@
 use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::{ProviderError, ProviderResult};
-
 use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
 use super::resets;
 
@@ -100,13 +99,7 @@ fn parse_header_response(headers: &str) -> Option<Vec<QuotaInfo>> {
         ));
     }
     if let Some(credits) = credits_balance {
-        quotas.push(QuotaInfo::with_details(
-            QuotaLabelSpec::Credits,
-            0.0,
-            credits,
-            QuotaType::Credit,
-            None,
-        ));
+        quotas.push(quota::build_credit_balance_quota(credits));
     }
     Some(quotas)
 }
@@ -202,6 +195,9 @@ mod tests {
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::Session);
         assert_eq!(quotas[1].label_spec, QuotaLabelSpec::Weekly);
         assert_eq!(quotas[2].label_spec, QuotaLabelSpec::Credits);
+        assert_eq!(quotas[2].quota_type, QuotaType::Points);
+        assert_eq!(quotas[2].stable_key, "credit");
+        assert!(quotas[2].is_balance_only());
     }
 
     #[test]
@@ -301,7 +297,11 @@ mod tests {
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
         assert_eq!(quotas.len(), 2);
-        let credit = quotas.iter().find(|q| q.is_credit()).expect("credits");
+        let credit = quotas
+            .iter()
+            .find(|q| q.stable_key == "credit")
+            .expect("credits");
+        assert_eq!(credit.quota_type, QuotaType::Points);
         assert!(credit.is_balance_only());
         assert!((credit.remaining_balance.unwrap() - 3.75).abs() < f64::EPSILON);
     }
@@ -320,7 +320,7 @@ mod tests {
             "credits": { "has_credits": true, "unlimited": true, "balance": 0 }
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
-        assert!(quotas.iter().all(|q| !q.is_credit()));
+        assert!(quotas.iter().all(|q| q.stable_key != "credit"));
     }
 
     #[test]
@@ -338,7 +338,11 @@ mod tests {
             "credits": { "has_credits": true, "unlimited": false, "balance": "7.25" }
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
-        let credit = quotas.iter().find(|q| q.is_credit()).expect("credits");
+        let credit = quotas
+            .iter()
+            .find(|q| q.stable_key == "credit")
+            .expect("credits");
+        assert_eq!(credit.quota_type, QuotaType::Points);
         assert!(credit.is_balance_only());
         assert!((credit.remaining_balance.unwrap() - 7.25).abs() < f64::EPSILON);
     }
@@ -358,7 +362,7 @@ mod tests {
             "credits": { "balance": 99.0 }
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
-        assert!(quotas.iter().all(|q| !q.is_credit()));
+        assert!(quotas.iter().all(|q| q.stable_key != "credit"));
     }
 
     #[test]
@@ -375,7 +379,7 @@ mod tests {
             "credits": { "has_credits": false, "balance": 10.0 }
         }"#;
         let quotas = parse_usage_response(raw).unwrap().quotas;
-        assert!(quotas.iter().all(|q| !q.is_credit()));
+        assert!(quotas.iter().all(|q| q.stable_key != "credit"));
     }
 
     #[test]
@@ -519,9 +523,11 @@ mod tests {
         }"#;
         let parsed = parse_usage_response(raw).unwrap();
         assert_eq!(parsed.quotas.len(), 2);
-        assert!(parsed.quotas.iter().any(|quota| quota.is_credit()));
+        assert!(parsed.quotas.iter().any(|quota| quota.stable_key == "credit"));
+        assert!(parsed.quotas.iter().any(|quota| quota.quota_type == QuotaType::Points));
         assert_eq!(parsed.resets.available_count, Some(2));
         assert!(!parsed.resets.details_known);
         assert!(parsed.resets.resets.is_empty());
     }
 }
+

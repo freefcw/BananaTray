@@ -123,11 +123,15 @@ pub(super) fn read_credits_balance(input: CreditsInput<'_>) -> Option<f64> {
 }
 
 pub(super) fn build_credit_balance_quota(balance: f64) -> QuotaInfo {
-    QuotaInfo::balance_only(
+    // Codex credits 是积分点数而非美元金额，用 Points 不显示 `$`；
+    // 且 `Credits + Points` 的 stable_key 是 Kiro 遗留的 "general"，
+    // 必须显式指定 "credit" 以保持 hidden_quotas 设置与历史数据连续。
+    QuotaInfo::balance_only_with_key(
+        "credit",
         QuotaLabelSpec::Credits,
         balance,
         None,
-        QuotaType::Credit,
+        QuotaType::Points,
         None,
     )
 }
@@ -266,7 +270,9 @@ mod tests {
         let quota = build_credit_balance_quota(12.5);
 
         assert_eq!(quota.label_spec, QuotaLabelSpec::Credits);
-        assert_eq!(quota.quota_type, QuotaType::Credit);
+        // credits 是积分而非美元：Points 类型 + 显式 "credit" key
+        assert_eq!(quota.quota_type, QuotaType::Points);
+        assert_eq!(quota.stable_key, "credit");
         assert!(quota.is_balance_only());
         assert_eq!(quota.remaining_balance, Some(12.5));
     }

@@ -241,7 +241,7 @@ Weekly limit: [##] 25% left
         let credits = parsed
             .quotas
             .iter()
-            .find(|q| q.is_credit())
+            .find(|q| q.stable_key == "credit")
             .expect("credits");
         assert!(credits.is_balance_only());
         assert!((credits.remaining_balance.unwrap() - 980.0).abs() < f64::EPSILON);
@@ -263,7 +263,7 @@ Weekly limit: [███████   ] 85% left (resets 04:01 on 27 Nov)
         let credits = parsed
             .quotas
             .iter()
-            .find(|q| q.is_credit())
+            .find(|q| q.stable_key == "credit")
             .expect("credits");
         assert!((credits.remaining_balance.unwrap() - 557.0).abs() < f64::EPSILON);
     }
@@ -333,7 +333,8 @@ Weekly limit: [##] 25% left
         let parsed = parse(sample).unwrap();
         assert_eq!(parsed.quotas.len(), 1);
         let q = &parsed.quotas[0];
-        assert_eq!(q.quota_type, QuotaType::Credit);
+        assert_eq!(q.quota_type, QuotaType::Points);
+        assert_eq!(q.stable_key, "credit");
         assert!(q.is_balance_only());
         assert!((q.remaining_balance.unwrap() - 50.0).abs() < f64::EPSILON);
     }

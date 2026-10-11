@@ -11,7 +11,7 @@ OpenAI Codex（ChatGPT 后端）配额抓取实现。对应 `~/.codex/auth.json`
 | `config.rs` | `~/.codex/config.toml` 读取，`chatgpt_base_url` 解析与归一化（支持自托管 ChatGPT 网关） |
 | `client.rs` | usage API HTTP 请求构造（含 `ChatGPT-Account-Id` 头） |
 | `parser.rs` | OAuth `/wham/usage` JSON 响应解析；把 snake_case HTTP 字段规范化后交给 `quota.rs`；抽取 `plan_type`；把 `rate_limit_reset_credits` 交给 `resets.rs`，不放进配额列表 |
-| `quota.rs` | Codex quota 共享规则：窗口角色解析、窗口 `QuotaInfo` 构建、重复角色去重、credits balance 读取 |
+| `quota.rs` | Codex quota 共享规则：窗口角色解析、窗口 `QuotaInfo` 构建、重复角色去重、credits balance 读取；credits 按积分点数展示并保持 stable key 兼容 |
 | `resets.rs` | 可兑换限流重置：数量、类型、获取时间、到期时间。接受 usage / 详情 / app-server 的 snake_case 与 camelCase |
 | `rpc_probe.rs` | OAuth 可恢复失败时优先启动 `codex app-server`，通过 JSON-RPC `account/rateLimits/read` 读取结构化配额；把 camelCase RPC 字段规范化后交给 `quota.rs` |
 | `status_probe.rs` | RPC 也失败时通过 PTY 启动 `codex /status` 做最后兜底解析 |
