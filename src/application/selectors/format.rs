@@ -239,6 +239,8 @@ pub(crate) fn format_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
         QuotaLabelSpec::MonthlyCredits => t!("quota.label.monthly_credits").to_string(),
         QuotaLabelSpec::Credits => t!("quota.label.credits").to_string(),
         QuotaLabelSpec::BonusCredits => t!("quota.label.bonus_credits").to_string(),
+        QuotaLabelSpec::CloudCredits => t!("quota.label.cloud_credits").to_string(),
+        QuotaLabelSpec::LimitResetCredits => t!("quota.label.limit_reset_credits").to_string(),
         QuotaLabelSpec::ExtraUsage => t!("quota.label.extra_usage").to_string(),
         QuotaLabelSpec::PremiumRequests { plan } => {
             t!("quota.label.premium_requests", plan = plan).to_string()
@@ -397,10 +399,10 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
 pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> String {
     if quota.is_balance_only() {
         let balance = quota.remaining_balance.unwrap_or(0.0);
-        return if matches!(quota.quota_type, QuotaType::Credit) {
-            format!("${:.2}", balance)
-        } else {
-            format!("{:.2}", balance)
+        return match quota.quota_type {
+            QuotaType::Credit => format!("${:.2}", balance),
+            QuotaType::Count => format!("{:.0}", balance),
+            _ => format!("{:.2}", balance),
         };
     }
 
@@ -417,8 +419,11 @@ pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisp
 
 /// 设置页 quota 卡片的模式标签。
 #[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
-pub fn format_quota_card_mode_label(is_balance: bool, display_mode: QuotaDisplayMode) -> String {
-    if is_balance {
+pub fn format_quota_card_mode_label(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> String {
+    if quota.quota_type == QuotaType::Count {
+        return t!("quota.mode.available").to_string();
+    }
+    if quota.is_balance_only() {
         return t!("quota.mode.balance").to_string();
     }
 
@@ -431,7 +436,11 @@ pub fn format_quota_card_mode_label(is_balance: bool, display_mode: QuotaDisplay
 /// 设置页 quota 卡片是否需要额外的百分号单位。
 #[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_has_unit(quota: &QuotaInfo) -> bool {
-    !quota.is_balance_only() && !matches!(quota.quota_type, QuotaType::Credit | QuotaType::Points)
+    !quota.is_balance_only()
+        && !matches!(
+            quota.quota_type,
+            QuotaType::Credit | QuotaType::Points | QuotaType::Count
+        )
 }
 
 /// 设置页 quota 卡片的第四行详情文本。
@@ -916,10 +925,32 @@ mod tests {
     #[test]
     fn quota_card_mode_label_uses_balance_variant() {
         let _locale_guard = setup_locale();
+        let q = QuotaInfo::balance_only("Balance", 10.0, None, QuotaType::Credit, None);
         assert_eq!(
-            format_quota_card_mode_label(true, QuotaDisplayMode::Remaining),
+            format_quota_card_mode_label(&q, QuotaDisplayMode::Remaining),
             "Balance"
         );
+    }
+
+    #[test]
+    fn quota_card_count_shows_integer_balance_and_available_label() {
+        let _locale_guard = crate::i18n::test_locale_guard("en");
+        let q = QuotaInfo::balance_only(
+            QuotaLabelSpec::LimitResetCredits,
+            2.0,
+            None,
+            QuotaType::Count,
+            None,
+        );
+        assert_eq!(
+            format_quota_card_display_text(&q, QuotaDisplayMode::Remaining),
+            "2"
+        );
+        assert_eq!(
+            format_quota_card_mode_label(&q, QuotaDisplayMode::Remaining),
+            "Available"
+        );
+        assert!(!format_quota_card_has_unit(&q));
     }
 
     #[test]

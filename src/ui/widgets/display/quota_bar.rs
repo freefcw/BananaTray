@@ -201,7 +201,7 @@ pub(crate) fn render_quota_bar(
     let fill_color = theme.status_bar_color(status);
     let is_balance = q.is_balance_only();
     let display_text = format_quota_card_display_text(q, display_mode);
-    let mode_label = format_quota_card_mode_label(is_balance, display_mode);
+    let mode_label = format_quota_card_mode_label(q, display_mode);
     let has_unit = format_quota_card_has_unit(q);
     let detail_text = format_quota_card_detail_text(quota_view);
     let hover_bg = theme.bg.card_inner_hovered;

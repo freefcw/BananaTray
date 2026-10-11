@@ -101,6 +101,17 @@ pub fn format_minute_at_offset(epoch_secs: i64, offset_secs: i32) -> Option<Stri
     )
 }
 
+/// 计算从 `now_secs` 到 `epoch_secs` 的剩余天数（向上取整，最小 1 天）。
+///
+/// 已到期或刚好到期（`epoch_secs <= now_secs`）返回 None。
+pub fn days_until_epoch(epoch_secs: i64, now_secs: i64) -> Option<u32> {
+    if epoch_secs <= now_secs {
+        return None;
+    }
+    let delta = (epoch_secs - now_secs) as u64;
+    Some(delta.div_ceil(86400).max(1) as u32)
+}
+
 /// Check if a token with the given expiry (epoch seconds as f64) has expired.
 pub fn is_expired_epoch_secs(expiry_secs: f64) -> bool {
     let now = std::time::SystemTime::now()
@@ -185,6 +196,18 @@ mod tests {
     fn test_is_older_than() {
         // A date far in the past should be "older than" 1 day
         assert!(is_older_than("2020-01-01T00:00:00Z", 86400));
+    }
+
+    #[test]
+    fn test_days_until_epoch() {
+        let now = 1_735_689_600;
+        // 已到期 / 刚好到期 → None
+        assert_eq!(days_until_epoch(now - 1, now), None);
+        assert_eq!(days_until_epoch(now, now), None);
+        // 任意不足一天的余量都按 1 天计
+        assert_eq!(days_until_epoch(now + 1, now), Some(1));
+        assert_eq!(days_until_epoch(now + 86400, now), Some(1));
+        assert_eq!(days_until_epoch(now + 86401, now), Some(2));
     }
 
     #[test]

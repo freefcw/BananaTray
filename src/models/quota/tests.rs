@@ -16,6 +16,7 @@ fn quota_type_stable_key_is_language_independent() {
     );
     assert_eq!(QuotaType::Credit.stable_key(), "credit");
     assert_eq!(QuotaType::Points.stable_key(), "points");
+    assert_eq!(QuotaType::Count.stable_key(), "count");
     assert_eq!(QuotaType::General.stable_key(), "general");
 }
 
@@ -447,6 +448,22 @@ fn test_threshold_measurement_units() {
         invalid.status_level(&QuotaRules::default()),
         StatusLevel::Green
     );
+}
+
+#[test]
+fn count_quota_is_informational_only() {
+    // 纯信息型数量：不参与阈值 / 状态 / 耗尽判定
+    let q = QuotaInfo::balance_only(
+        QuotaLabelSpec::LimitResetCredits,
+        2.0,
+        None,
+        QuotaType::Count,
+        None,
+    );
+    assert_eq!(q.stable_key, "limit-reset-credits");
+    assert!(q.threshold_measurement().is_none());
+    assert_eq!(q.status_level(&QuotaRules::default()), StatusLevel::Green);
+    assert!(!q.is_depleted());
 }
 
 #[test]

@@ -305,6 +305,11 @@ impl QuotaInfo {
     // ========================================================================
 
     pub fn threshold_measurement(&self) -> Option<QuotaMeasurement> {
+        // 纯信息型数量不参与阈值判定
+        if self.quota_type == QuotaType::Count {
+            return None;
+        }
+
         // 余额模式：Credit → Currency，其余 → Amount
         if let Some(balance) = self.remaining_balance {
             if !balance.is_finite() {

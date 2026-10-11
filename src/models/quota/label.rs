@@ -27,6 +27,10 @@ pub enum QuotaLabelSpec {
     MonthlyCredits,
     Credits,
     BonusCredits,
+    /// 云端赠送额度（Claude `iguana_necktie`，金额为 USD）
+    CloudCredits,
+    /// 限额重置次数（Claude `cedar_ember` / Codex reset credits 的可用库存数）
+    LimitResetCredits,
     ExtraUsage,
     PremiumRequests {
         plan: String,
@@ -74,6 +78,8 @@ impl QuotaLabelSpec {
                 }
             }
             Self::BonusCredits => "bonus-credits".into(),
+            Self::CloudCredits => "cloud-credits".into(),
+            Self::LimitResetCredits => "limit-reset-credits".into(),
             Self::ExtraUsage => "extra-usage".into(),
             Self::PremiumRequests { .. } => "premium-requests".into(),
             Self::ChatCompletions { .. } => "chat-completions".into(),

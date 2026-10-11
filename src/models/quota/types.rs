@@ -20,6 +20,11 @@ pub enum QuotaType {
     /// 注意：状态与通知阈值同样按原生积分值（`QuotaThresholdUnit::Amount`）判定，
     /// 即使 `limit` 恰好为 100 也不进入百分比分支；只有文本展示走专属分支。
     Points,
+    /// 纯信息型的可用数量（如免费重置次数）。
+    ///
+    /// 只以整数余额展示，不参与状态颜色与告警：`threshold_measurement()` 恒为
+    /// `None`，因此 `status_level()` 恒为 Green、`is_depleted()` 恒为 false。
+    Count,
     /// 通用/不确定类型
     General,
 }
@@ -35,6 +40,7 @@ impl QuotaType {
             QuotaType::ModelSpecific(model) => format!("model:{model}"),
             QuotaType::Credit => "credit".into(),
             QuotaType::Points => "points".into(),
+            QuotaType::Count => "count".into(),
             QuotaType::General => "general".into(),
         }
     }
