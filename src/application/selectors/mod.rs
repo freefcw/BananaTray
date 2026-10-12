@@ -77,6 +77,10 @@ pub struct ProviderPanelViewState {
     pub quota_display_mode: QuotaDisplayMode,
     /// 近 24 小时用量折线；无成功样本或尚未加载时为空，UI 不渲染。
     pub history_charts: Vec<HistoryChartView>,
+    /// Codex 可兑换限流重置。不是配额卡。
+    ///
+    /// 装箱是为了不把 `ProviderDetailViewState::Panel` 撑过 clippy 的枚举体积阈值。
+    pub resets: Option<Box<RateLimitResetSectionView>>,
 }
 
 /// 账户信息卡片 ViewModel
@@ -185,6 +189,21 @@ pub struct QuotaDisplayViewState {
     pub label: String,
     pub detail: String,
     pub status_level: StatusLevel,
+}
+
+/// 一条限流重置的展示文案。时间未知时用本地化占位，不画成额度或次数。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateLimitResetRowView {
+    pub reset_type: String,
+    pub granted_at: String,
+    pub expires_at: String,
+}
+
+/// 重置区：有明细时逐条展示类型和时间；缺明细时只留一句数量说明。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateLimitResetSectionView {
+    pub rows: Vec<RateLimitResetRowView>,
+    pub summary: Option<String>,
 }
 
 // ── Settings 窗口 ──
@@ -361,11 +380,23 @@ pub enum SettingsProviderStatusKind {
 
 #[derive(Debug, Clone)]
 pub enum SettingsProviderUsageViewState {
-    Disabled { message: String },
-    Quotas { quotas: Vec<QuotaDisplayViewState> },
-    Error { title: String, message: String },
-    Empty { message: String },
-    Missing { message: String },
+    Disabled {
+        message: String,
+    },
+    Quotas {
+        quotas: Vec<QuotaDisplayViewState>,
+        resets: Option<RateLimitResetSectionView>,
+    },
+    Error {
+        title: String,
+        message: String,
+    },
+    Empty {
+        message: String,
+    },
+    Missing {
+        message: String,
+    },
 }
 
 // ============================================================================
@@ -373,7 +404,9 @@ pub enum SettingsProviderUsageViewState {
 // ============================================================================
 
 #[cfg(any(target_os = "linux", test))]
-pub use dbus_dto::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
+pub use dbus_dto::{
+    DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot, DBusRateLimitReset,
+};
 pub use debug::{
     build_debug_info_text, debug_tab_view_state, format_debug_console_logs, DebugContext,
     DebugTabViewState, EnvironmentRowKind, LogLevelColor,

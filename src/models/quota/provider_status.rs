@@ -5,7 +5,9 @@ use crate::models::provider::{
     ProviderCapability, ProviderId, ProviderKind, ProviderMetadata, SettingsCapability,
 };
 
-use super::{ProviderFailure, QuotaInfo, QuotaRules, RefreshData, StatusLevel};
+use super::{
+    ProviderFailure, QuotaInfo, QuotaRules, RateLimitResetSnapshot, RefreshData, StatusLevel,
+};
 
 /// 元数据代理方法生成宏：保持 `provider.display_name()` 等 API 不变，
 /// 消除手写代理的样板代码。新增 ProviderMetadata 字段时只需加一行。
@@ -75,6 +77,9 @@ pub struct ProviderStatus {
     pub metadata: ProviderMetadata,
     pub connection: ConnectionStatus,
     pub quotas: Vec<QuotaInfo>,
+    /// 可兑换的限流重置。与配额分开保存，避免被画成额度、积分或次数。
+    #[serde(default)]
+    pub rate_limit_resets: RateLimitResetSnapshot,
     /// 账号邮箱（可选，用于 UI 展示）
     pub account_email: Option<String>,
     /// 账号层级（如 "Pro", "Max", "Free", "Business"）
@@ -131,6 +136,7 @@ impl ProviderStatus {
             metadata,
             connection: ConnectionStatus::Disconnected,
             quotas: vec![],
+            rate_limit_resets: RateLimitResetSnapshot::default(),
             account_email: None,
             account_tier: None,
             runtime_source_label: None,
@@ -149,6 +155,7 @@ impl ProviderStatus {
 
     pub fn mark_refresh_succeeded(&mut self, data: RefreshData) {
         self.quotas = data.quotas;
+        self.rate_limit_resets = data.rate_limit_resets;
         self.account_email = data.account_email;
         self.account_tier = data.account_tier;
         self.runtime_source_label = data.source_label;

@@ -87,6 +87,18 @@ msgstr "刷新中"
 msgid "Refreshing quota data"
 msgstr "正在刷新配额数据"
 
+msgid "Resets"
+msgstr "重置"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Granted"
+msgstr "获取"
+
+msgid "Expires"
+msgstr "到期"
+
 msgid "Syncing"
 msgstr "同步中"
 

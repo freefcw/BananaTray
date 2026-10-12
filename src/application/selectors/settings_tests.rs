@@ -787,7 +787,7 @@ fn custom_percentage_thresholds_apply_across_all_surfaces() {
     assert_panel_red(&session);
 
     match detail_snapshot(&session).usage {
-        SettingsProviderUsageViewState::Quotas { quotas } => {
+        SettingsProviderUsageViewState::Quotas { quotas, .. } => {
             assert_eq!(quotas[0].status_level, StatusLevel::Red);
         }
         other => panic!("expected Quotas usage, got {:?}", other),

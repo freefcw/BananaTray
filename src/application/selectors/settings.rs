@@ -375,13 +375,15 @@ fn settings_provider_usage_view_state(
         };
     }
 
-    if !provider.quotas.is_empty() {
+    let resets = super::format::rate_limit_reset_section(&provider.rate_limit_resets);
+    if !provider.quotas.is_empty() || resets.is_some() {
         return SettingsProviderUsageViewState::Quotas {
             quotas: provider
                 .quotas
                 .iter()
                 .map(|quota| quota_display_view_state(quota, quota_rules))
                 .collect(),
+            resets,
         };
     }
 

@@ -507,6 +507,16 @@ hint.no_quota_in_response: "No quota data found in API response."
 hint.opencode_go_required: "OpenCode Go subscription required, or the API key is invalid. Connect OpenCode Go in the OpenCode TUI and ensure auth.json has an opencode-go / opencode API key."
 
 # ── Quota labels ──────────────────────────────────────────
+codex.reset.heading: "Resets"
+codex.reset.type: "Type"
+codex.reset.granted: "Granted"
+codex.reset.expires: "Expires"
+codex.reset.time_unknown: "—"
+codex.reset.type.codex_rate_limits: "Rate limit reset"
+codex.reset.type.unknown: "Reset"
+codex.reset.summary_only: "%{n} available, details unavailable"
+codex.reset.more_without_details: "%{n} more without type or expiry"
+
 quota.label.session: "Session (5h)"
 quota.label.daily: "Daily"
 quota.label.weekly: "Weekly"

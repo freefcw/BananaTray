@@ -959,3 +959,42 @@ fn header_view_state_stale_hours() {
     assert_eq!(header.status_kind, HeaderStatusKind::Stale);
     assert_eq!(header.status_text, "2h ago");
 }
+
+#[test]
+fn provider_panel_shows_reset_type_and_times_outside_quota_cards() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Codex, true);
+
+    let mut provider = make_provider(ProviderKind::Codex, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("session", 20.0, 100.0)];
+    provider.rate_limit_resets = crate::models::RateLimitResetSnapshot {
+        available_count: Some(1),
+        details_known: true,
+        resets: vec![crate::models::RateLimitReset {
+            reset_type: "codex_rate_limits".into(),
+            title: Some("Full reset (Weekly + 5 hr)".into()),
+            granted_at_secs: Some(1_735_689_600),
+            expires_at_secs: None,
+        }],
+    };
+    let session = make_session_with_provider(settings, provider);
+
+    let ProviderDetailViewState::Panel(panel) =
+        provider_detail_view_state(&session, &pid(ProviderKind::Codex))
+    else {
+        panic!("expected provider panel");
+    };
+    let ProviderBodyViewState::Quotas { quotas, .. } = panel.body else {
+        panic!("expected quota cards");
+    };
+    assert_eq!(quotas.len(), 1);
+    let resets = panel.resets.expect("reset section");
+    assert_eq!(resets.rows.len(), 1);
+    assert_eq!(resets.rows[0].reset_type, "Full reset (Weekly + 5 hr)");
+    assert_ne!(resets.rows[0].granted_at, "—");
+    assert_eq!(resets.rows[0].expires_at, "—");
+    assert!(resets.summary.is_none());
+}

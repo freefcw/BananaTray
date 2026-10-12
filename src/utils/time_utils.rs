@@ -84,6 +84,23 @@ pub fn format_reset_from_epoch(epoch_secs: i64) -> String {
     format_countdown(delta)
 }
 
+/// 把 Unix 秒格式化成本地时区的 `YYYY-MM-DD HH:MM`。
+pub fn format_local_minute(epoch_secs: i64) -> Option<String> {
+    let offset = chrono::Local::now().offset().local_minus_utc();
+    format_minute_at_offset(epoch_secs, offset)
+}
+
+/// 用固定 UTC 偏移（秒）格式化到分钟，供测试锁定时区。
+pub fn format_minute_at_offset(epoch_secs: i64, offset_secs: i32) -> Option<String> {
+    let offset = chrono::FixedOffset::east_opt(offset_secs)?;
+    let utc = chrono::DateTime::from_timestamp(epoch_secs, 0)?;
+    Some(
+        utc.with_timezone(&offset)
+            .format("%Y-%m-%d %H:%M")
+            .to_string(),
+    )
+}
+
 /// Check if a token with the given expiry (epoch seconds as f64) has expired.
 pub fn is_expired_epoch_secs(expiry_secs: f64) -> bool {
     let now = std::time::SystemTime::now()
@@ -150,6 +167,18 @@ mod tests {
         assert_eq!(format_countdown(3600), "⏱ Resets in 1h");
         assert_eq!(format_countdown(90000), "⏱ Resets in 1d 1h");
         assert_eq!(format_countdown(86400), "⏱ Resets in 1d");
+    }
+
+    #[test]
+    fn test_format_minute_at_offset_uses_the_given_zone() {
+        assert_eq!(
+            format_minute_at_offset(1_735_689_600, 0).as_deref(),
+            Some("2025-01-01 00:00")
+        );
+        assert_eq!(
+            format_minute_at_offset(1_735_689_600, 8 * 3600).as_deref(),
+            Some("2025-01-01 08:00")
+        );
     }
 
     #[test]

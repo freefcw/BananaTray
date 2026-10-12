@@ -26,9 +26,9 @@ pub use selectors::{
     HistoryLineView, HistoryPointView, HistorySegmentView, IssueReportContext, LogLevelColor,
     OverviewItemStatus, OverviewItemViewState, OverviewQuotaItem, ProviderBodyViewState,
     ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState,
-    QuotaDisplayViewState, QuotaThresholdUnitViewState, QuotaVisibilityItem, RefreshTarget,
-    SettingsProviderDetailViewState, SettingsProviderHistoryPhase,
-    SettingsProviderHistoryViewState, SettingsProviderInfoViewState,
+    QuotaDisplayViewState, QuotaThresholdUnitViewState, QuotaVisibilityItem, RateLimitResetRowView,
+    RateLimitResetSectionView, RefreshTarget, SettingsProviderDetailViewState,
+    SettingsProviderHistoryPhase, SettingsProviderHistoryViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
     SettingsProviderStatusKind, SettingsProviderUsageViewState,
 };
@@ -40,7 +40,9 @@ pub(crate) use selectors::{
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]
-pub use selectors::{DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot};
+pub use selectors::{
+    DBusHeaderInfo, DBusProviderEntry, DBusQuotaEntry, DBusQuotaSnapshot, DBusRateLimitReset,
+};
 #[allow(unused_imports)] // app/UI 和 reducer 测试通过 application facade 使用这些状态类型
 pub use state::{
     AppSession, FormIdentity, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab,

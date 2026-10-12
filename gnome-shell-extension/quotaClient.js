@@ -103,6 +103,25 @@ function validateProvider(provider, index, warn) {
         throw new Error(`provider ${provider.id} quotas must be an array`);
 
     provider.quotas.forEach((quota, quotaIndex) => validateQuota(quota, provider.id, quotaIndex, warn));
+    validateRateLimitResets(provider);
+}
+
+function validateRateLimitResets(provider) {
+    if (provider.rate_limit_resets === undefined || provider.rate_limit_resets === null)
+        return;
+    if (!Array.isArray(provider.rate_limit_resets))
+        throw new Error(`provider ${provider.id} rate_limit_resets must be an array`);
+
+    provider.rate_limit_resets.forEach((reset, index) => {
+        if (!isPlainObject(reset))
+            throw new Error(`provider ${provider.id} rate_limit_resets #${index} is not an object`);
+        if (!isString(reset.reset_type))
+            throw new Error(`provider ${provider.id} rate_limit_resets #${index} missing string reset_type`);
+        for (const field of ['granted_at', 'expires_at']) {
+            if (reset[field] !== null && reset[field] !== undefined && !isString(reset[field]))
+                throw new Error(`provider ${provider.id} rate_limit_resets #${index} ${field} must be string or null`);
+        }
+    });
 }
 
 export function validateSnapshot(data, warn) {

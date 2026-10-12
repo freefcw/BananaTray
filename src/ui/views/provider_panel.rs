@@ -208,6 +208,12 @@ impl AppView {
 
         container = container.child(quotas_container);
 
+        if let Some(resets) = &vm.resets {
+            container = container
+                .child(div().h(px(8.0)))
+                .child(crate::ui::widgets::render_rate_limit_resets(resets, &theme));
+        }
+
         if let Some(row) = dashboard_row {
             container = container.child(div().mt(px(8.0)).child(row));
         } else {

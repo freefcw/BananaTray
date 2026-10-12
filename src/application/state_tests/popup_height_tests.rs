@@ -7,7 +7,7 @@ use crate::history::{
 };
 use crate::models::{
     FailureReason, NavTab, PopupLayout, ProviderCapability, ProviderFailure, ProviderKind,
-    QuotaInfo, QuotaType,
+    QuotaInfo, QuotaType, RateLimitReset, RateLimitResetSnapshot,
 };
 
 #[test]
@@ -30,6 +30,36 @@ fn popup_height_empty_quotas_with_dashboard() {
     let h = compute_popup_height(&nav, &store, &settings);
     let expected = crate::models::compute_popup_height_detailed(1, true, false);
     assert_eq!(h, expected);
+}
+
+#[test]
+fn popup_height_adds_reset_card_without_changing_quota_slots() {
+    let nav = make_nav(ProviderKind::Codex);
+    let settings = AppSettings::default();
+    let mut provider = make_provider(ProviderKind::Codex);
+    provider.connection = crate::models::ConnectionStatus::Connected;
+    provider.quotas = vec![QuotaInfo::new("session", 10.0, 100.0)];
+    let store = ProviderStore {
+        providers: vec![provider.clone()],
+    };
+    let without = compute_popup_height(&nav, &store, &settings);
+
+    provider.rate_limit_resets = RateLimitResetSnapshot {
+        available_count: Some(1),
+        details_known: true,
+        resets: vec![RateLimitReset {
+            reset_type: "codex_rate_limits".into(),
+            title: Some("Full reset".into()),
+            granted_at_secs: Some(1_735_689_600),
+            expires_at_secs: Some(1_738_368_000),
+        }],
+    };
+    let store = ProviderStore {
+        providers: vec![provider],
+    };
+    let with_reset = compute_popup_height(&nav, &store, &settings);
+    let extra = crate::models::reset_popup_extra(1, false);
+    assert!((with_reset - without - extra).abs() < f32::EPSILON);
 }
 
 #[test]
