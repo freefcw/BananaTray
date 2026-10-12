@@ -152,6 +152,7 @@ pub(super) fn parse(raw: &str) -> ProviderResult<ParsedUsage> {
     Ok(ParsedUsage {
         quotas,
         plan_type: None,
+        resets: Default::default(),
     })
 }
 

@@ -22,6 +22,7 @@ fn success() -> RefreshResult {
             account_email: None,
             account_tier: None,
             source_label: None,
+            rate_limit_resets: Default::default(),
         },
     }
 }

@@ -2,6 +2,7 @@ use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
 use crate::providers::{ProviderError, ProviderResult};
 
 use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
+use super::resets;
 
 fn parse_window_quota(window: &serde_json::Value, default_role: WindowRole) -> QuotaInfo {
     let used_percent = window
@@ -32,6 +33,7 @@ pub(super) fn parse_usage_response(raw: &str) -> ProviderResult<ParsedUsage> {
         return Ok(ParsedUsage {
             quotas,
             plan_type: None,
+            resets: Default::default(),
         });
     }
 
@@ -138,7 +140,12 @@ fn parse_json_response(body: &str) -> ProviderResult<ParsedUsage> {
         }
     }
 
-    if quotas.is_empty() {
+    // 限流重置和 credits 余额是两套数据。这里只读取，不做成配额条。
+    let resets = resets::find_reset_credits(&json)
+        .map(resets::snapshot_from_value)
+        .unwrap_or_default();
+
+    if quotas.is_empty() && resets.presentation().is_none() {
         return Err(ProviderError::no_data());
     }
 
@@ -149,7 +156,11 @@ fn parse_json_response(body: &str) -> ProviderResult<ParsedUsage> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
-    Ok(ParsedUsage { quotas, plan_type })
+    Ok(ParsedUsage {
+        quotas,
+        plan_type,
+        resets,
+    })
 }
 
 fn read_json_credits_balance(credits: &serde_json::Value) -> Option<f64> {
@@ -490,5 +501,27 @@ mod tests {
         let parsed = parse_usage_response(raw).unwrap();
         assert!(parsed.plan_type.is_none());
         assert_eq!(parsed.quotas.len(), 1);
+        assert!(parsed.resets.presentation().is_none());
+    }
+
+    #[test]
+    fn test_parse_json_reset_credits_stay_out_of_quota_list() {
+        let raw = r#"{
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 10,
+                    "reset_at": 1767225600,
+                    "limit_window_seconds": 18000
+                }
+            },
+            "credits": { "has_credits": true, "unlimited": false, "balance": 3.75 },
+            "rate_limit_reset_credits": { "available_count": 2 }
+        }"#;
+        let parsed = parse_usage_response(raw).unwrap();
+        assert_eq!(parsed.quotas.len(), 2);
+        assert!(parsed.quotas.iter().any(|quota| quota.is_credit()));
+        assert_eq!(parsed.resets.available_count, Some(2));
+        assert!(!parsed.resets.details_known);
+        assert!(parsed.resets.resets.is_empty());
     }
 }

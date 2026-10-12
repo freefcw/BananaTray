@@ -507,6 +507,16 @@ hint.no_quota_in_response: "API 响应中未找到配额数据。"
 hint.opencode_go_required: "需要 OpenCode Go 订阅，或 API Key 无效。请在 OpenCode TUI 中连接 OpenCode Go，并确认 auth.json 中有 opencode-go / opencode 的 API Key。"
 
 # ── 配额标签 ──────────────────────────────────────────────
+codex.reset.heading: "重置"
+codex.reset.type: "类型"
+codex.reset.granted: "获取"
+codex.reset.expires: "到期"
+codex.reset.time_unknown: "—"
+codex.reset.type.codex_rate_limits: "限流重置"
+codex.reset.type.unknown: "重置"
+codex.reset.summary_only: "有 %{n} 个可兑换重置，这次没有类型和到期时间"
+codex.reset.more_without_details: "另有 %{n} 个没有类型或到期时间"
+
 quota.label.session: "会话 (5小时)"
 quota.label.daily: "日配额"
 quota.label.weekly: "周配额"

@@ -311,6 +311,17 @@ mod tests {
                     account_email: Some("a@b.co".to_string()),
                     account_tier: None,
                     source_label: None,
+                    // 限流重置不是配额采样。
+                    rate_limit_resets: crate::models::RateLimitResetSnapshot {
+                        available_count: Some(1),
+                        details_known: true,
+                        resets: vec![crate::models::RateLimitReset {
+                            reset_type: "codex_rate_limits".into(),
+                            title: Some("Full reset".into()),
+                            granted_at_secs: Some(1_735_689_600),
+                            expires_at_secs: Some(1_738_368_000),
+                        }],
+                    },
                 },
             },
             Some(RefreshReason::Manual),

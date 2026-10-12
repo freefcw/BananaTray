@@ -819,7 +819,18 @@ pub fn compute_popup_height(
         })
         .unwrap_or((false, false));
 
-    crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account)
+    let reset_extra = provider
+        .and_then(|status| status.rate_limit_resets.presentation())
+        .map(|section| {
+            crate::models::reset_popup_extra(section.resets.len(), section.undisclosed > 0)
+        })
+        .unwrap_or(0.0);
+    let raw =
+        crate::models::compute_popup_height_detailed(quota_count, show_dashboard, show_account);
+    (raw + reset_extra).clamp(
+        crate::models::PopupLayout::MIN_HEIGHT,
+        crate::models::PopupLayout::MAX_HEIGHT,
+    )
 }
 
 /// 托盘配额卡里内嵌折线占用的额外高度。

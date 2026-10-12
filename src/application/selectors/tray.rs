@@ -8,7 +8,7 @@ use super::super::state::{
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_card_display_text,
     format_quota_card_has_unit, format_quota_label, format_user_failure_message,
-    quota_display_view_state, split_stale_age, StaleAgeUnit,
+    quota_display_view_state, rate_limit_reset_section, split_stale_age, StaleAgeUnit,
 };
 use super::*;
 use crate::models::{
@@ -154,6 +154,7 @@ pub fn provider_detail_view_state(
         body,
         quota_display_mode: session.settings.display.quota_display_mode,
         history_charts,
+        resets: rate_limit_reset_section(&provider.rate_limit_resets).map(Box::new),
     })
 }
 

@@ -18,6 +18,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
+use super::resets;
 
 const CODEX_BINARY: &str = "codex";
 const RPC_TIMEOUT: Duration = Duration::from_secs(8);
@@ -259,6 +260,9 @@ struct RateLimitWindow {
 }
 
 fn parse_rate_limits(value: Value) -> ProviderResult<ParsedUsage> {
+    let resets = resets::find_reset_credits(&value)
+        .map(resets::snapshot_from_value)
+        .unwrap_or_default();
     let response: GetAccountRateLimitsResponse = serde_json::from_value(value)
         .map_err(|_| ProviderError::parse_failed("codex app-server rate limits"))?;
 
@@ -277,7 +281,7 @@ fn parse_rate_limits(value: Value) -> ProviderResult<ParsedUsage> {
         }
     }
 
-    if quotas.is_empty() {
+    if quotas.is_empty() && resets.presentation().is_none() {
         return Err(ProviderError::no_data());
     }
 
@@ -288,6 +292,7 @@ fn parse_rate_limits(value: Value) -> ProviderResult<ParsedUsage> {
             .plan_type
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty()),
+        resets,
     })
 }
 
@@ -356,6 +361,37 @@ mod tests {
         assert_eq!(parsed.quotas[1].used, 50.0);
         assert_eq!(parsed.quotas[2].label_spec, QuotaLabelSpec::Credits);
         assert_eq!(parsed.quotas[2].remaining_balance, Some(12.5));
+        assert!(parsed.resets.presentation().is_none());
+    }
+
+    #[test]
+    fn parse_rate_limits_reads_reset_credit_details_without_a_quota() {
+        let raw = json!({
+            "rateLimits": {
+                "primary": { "usedPercent": 10, "windowDurationMins": 300 }
+            },
+            "rateLimitResetCredits": {
+                "availableCount": 1,
+                "credits": [{
+                    "resetType": "codex_rate_limits",
+                    "status": "available",
+                    "grantedAt": 1735689600,
+                    "expiresAt": 1738368000,
+                    "title": "Full reset (Weekly + 5 hr)"
+                }]
+            }
+        });
+
+        let parsed = parse_rate_limits(raw).unwrap();
+        assert_eq!(parsed.quotas.len(), 1);
+        assert_eq!(parsed.resets.available_count, Some(1));
+        assert_eq!(parsed.resets.resets.len(), 1);
+        assert_eq!(
+            parsed.resets.resets[0].title.as_deref(),
+            Some("Full reset (Weekly + 5 hr)")
+        );
+        assert_eq!(parsed.resets.resets[0].granted_at_secs, Some(1_735_689_600));
+        assert_eq!(parsed.resets.resets[0].expires_at_secs, Some(1_738_368_000));
     }
 
     #[test]

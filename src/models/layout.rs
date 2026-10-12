@@ -69,6 +69,19 @@ impl PopupLayout {
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;
 
+    /// 限流重置卡的垂直内边距：`py(12)` 上下各一份。
+    pub const RESET_CARD_PAD_Y: f32 = 24.0;
+    /// 重置卡 1px 边框的上下合计。
+    pub const RESET_CARD_BORDER: f32 = 2.0;
+    /// 重置卡标题、类型/时间行、数量说明行的固定行高。
+    pub const RESET_LINE_HEIGHT: f32 = 15.0;
+    /// 标题、每一条重置、数量说明之间的间距。
+    pub const RESET_CARD_GAP: f32 = 8.0;
+    /// 同一条重置里三行文字的间距。
+    pub const RESET_ROW_GAP: f32 = 2.0;
+    /// 一条重置：类型、获取时间、到期时间各一行。
+    pub const RESET_ITEM_HEIGHT: f32 = Self::RESET_LINE_HEIGHT * 3.0 + Self::RESET_ROW_GAP * 2.0;
+
     /// Dashboard 链接行高度: mt(8) + py(10)×2 + icon(16)
     pub const DASHBOARD_ROW_HEIGHT: f32 = 44.0;
 
@@ -127,6 +140,38 @@ impl PopupLayout {
     pub const MIN_OVERVIEW_HEIGHT: f32 = Self::FIXED_HEIGHT + Self::OVERVIEW_ITEM_HEIGHT;
     /// 最大窗口高度
     pub const MAX_HEIGHT: f32 = 720.0;
+}
+
+/// 限流重置卡高度。没有明细也没有数量说明时为 0。
+///
+/// 行高和 `ui/widgets/display/reset_card.rs` 使用同一组常量，避免弹窗裁切。
+pub fn reset_card_height(detail_rows: usize, summary_line: bool) -> f32 {
+    if detail_rows == 0 && !summary_line {
+        return 0.0;
+    }
+
+    let mut pieces = 1.0;
+    let mut content = PopupLayout::RESET_LINE_HEIGHT;
+    if detail_rows > 0 {
+        pieces += detail_rows as f32;
+        content += detail_rows as f32 * PopupLayout::RESET_ITEM_HEIGHT;
+    }
+    if summary_line {
+        pieces += 1.0;
+        content += PopupLayout::RESET_LINE_HEIGHT;
+    }
+    let gaps = (pieces - 1.0) * PopupLayout::RESET_CARD_GAP;
+    PopupLayout::RESET_CARD_PAD_Y + PopupLayout::RESET_CARD_BORDER + content + gaps
+}
+
+/// 重置卡加上它和上方内容之间的 8px 间距。
+pub fn reset_popup_extra(detail_rows: usize, summary_line: bool) -> f32 {
+    let card = reset_card_height(detail_rows, summary_line);
+    if card <= 0.0 {
+        0.0
+    } else {
+        PopupLayout::CARD_SPACER + card
+    }
 }
 
 /// 根据 quota 数量和是否有 dashboard 行，计算弹出窗口高度
@@ -284,6 +329,22 @@ mod tests {
         let with = compute_popup_height_detailed(2, true, true);
         assert!(with > without);
         assert!((with - without - PopupLayout::ACCOUNT_INFO_HEIGHT).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reset_card_height_counts_type_and_both_timestamps() {
+        assert_eq!(reset_card_height(0, false), 0.0);
+        let one = reset_card_height(1, false);
+        let expected = PopupLayout::RESET_CARD_PAD_Y
+            + PopupLayout::RESET_CARD_BORDER
+            + PopupLayout::RESET_LINE_HEIGHT
+            + PopupLayout::RESET_CARD_GAP
+            + PopupLayout::RESET_ITEM_HEIGHT;
+        assert!((one - expected).abs() < f32::EPSILON);
+        assert!(
+            (reset_popup_extra(1, false) - (PopupLayout::CARD_SPACER + one)).abs() < f32::EPSILON
+        );
+        assert!(reset_card_height(1, true) > one);
     }
 
     // ── Overview 高度计算 ──────────────────────────────────

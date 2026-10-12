@@ -252,6 +252,7 @@ class BananaTrayProviderRow extends St.BoxLayout {
             x_expand: true,
         });
         this.add_child(this._quotaContainer);
+        this._addResetSection(provider);
 
         if (isExpandable) {
             // 折叠态：显示最差配额的摘要行
@@ -332,5 +333,56 @@ class BananaTrayProviderRow extends St.BoxLayout {
 
         for (const quota of quotas)
             this._quotaContainer.add_child(new BananaTrayQuotaRow(quota));
+    }
+
+    _addResetSection(provider) {
+        const resets = provider.rate_limit_resets;
+        if (!Array.isArray(resets) || resets.length === 0)
+            return;
+
+        const block = new St.BoxLayout({
+            style_class: 'bananatray-reset-block',
+            vertical: true,
+            x_expand: true,
+        });
+        block.add_child(createLabel({
+            text: _('Resets'),
+            style_class: 'bananatray-reset-heading',
+            x_expand: true,
+        }, false));
+
+        for (const reset of resets) {
+            if (reset.granted_at || reset.expires_at) {
+                block.add_child(this._resetLine(_('Type'), reset.reset_type));
+                block.add_child(this._resetLine(_('Granted'), reset.granted_at || '—'));
+                block.add_child(this._resetLine(_('Expires'), reset.expires_at || '—'));
+            } else if (reset.reset_type) {
+                block.add_child(createLabel({
+                    text: reset.reset_type,
+                    style_class: 'bananatray-reset-summary',
+                    x_expand: true,
+                }, false));
+            }
+        }
+        this.add_child(block);
+    }
+
+    _resetLine(label, value) {
+        const line = new St.BoxLayout({
+            style_class: 'bananatray-reset-line',
+            vertical: false,
+            x_expand: true,
+        });
+        line.add_child(createLabel({
+            text: label,
+            style_class: 'bananatray-reset-label',
+        }, false));
+        line.add_child(createLabel({
+            text: value,
+            style_class: 'bananatray-reset-value',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.END,
+        }, false));
+        return line;
     }
 });

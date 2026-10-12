@@ -3,6 +3,7 @@ mod client;
 mod config;
 mod parser;
 mod quota;
+mod resets;
 mod rpc_probe;
 mod status_probe;
 
@@ -90,11 +91,10 @@ impl AiProvider for CodexProvider {
         let account = resolve_account(&credentials);
         // 响应中的 plan_type 优先于 JWT fallback，与 CodexBar `resolvePlan` 一致。
         let account_tier = parsed.plan_type.or(account.plan);
-        Ok(RefreshData::with_account(
-            parsed.quotas,
-            account.email,
-            account_tier,
-        ))
+        Ok(
+            RefreshData::with_account(parsed.quotas, account.email, account_tier)
+                .with_rate_limit_resets(parsed.resets),
+        )
     }
 }
 
@@ -109,7 +109,11 @@ fn obtain_parsed_usage(
     usage_url: &str,
 ) -> ProviderResult<ParsedUsage> {
     match fetch_usage(credentials, usage_url) {
-        Ok(raw) => parse_usage_response(&raw),
+        Ok(raw) => {
+            let mut parsed = parse_usage_response(&raw)?;
+            enrich_reset_details(&mut parsed, credentials, usage_url);
+            Ok(parsed)
+        }
         Err(oauth_err) if should_fallback_to_cli(&oauth_err) => {
             log::info!(
                 target: "providers",
@@ -169,6 +173,57 @@ fn fetch_usage(credentials: &mut CodexCredentials, url: &str) -> Result<String> 
             attempt_usage(credentials, url)
         }
         Err(e) => Err(e),
+    }
+}
+
+/// usage 只有可兑换数量时，再读一次重置明细。
+///
+/// 明细请求失败不影响已经拿到的会话/周配额；界面退回到“有数量、没有类型和时间”。
+fn enrich_reset_details(parsed: &mut ParsedUsage, credentials: &CodexCredentials, usage_url: &str) {
+    if !parsed.resets.needs_detail_fetch() {
+        return;
+    }
+    let Some(url) = config::reset_credits_url_from_usage(usage_url) else {
+        log::debug!(
+            target: "providers",
+            "Codex usage URL has no rate-limit reset details path"
+        );
+        return;
+    };
+
+    let account = resolve_account(credentials);
+    match call_usage_api(
+        &url,
+        &credentials.access_token,
+        account.account_id.as_deref(),
+    ) {
+        Ok(raw) => match resets::parse_reset_details_response(&raw) {
+            Some(snapshot) => {
+                log::debug!(
+                    target: "providers",
+                    "Codex reset details: available={:?}, rows={}",
+                    snapshot.available_count,
+                    snapshot.resets.len()
+                );
+                parsed.resets = snapshot;
+            }
+            None => {
+                log::warn!(
+                    target: "providers",
+                    "Codex reset details response could not be parsed"
+                );
+            }
+        },
+        Err(err) => {
+            let status = err
+                .downcast_ref::<HttpError>()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "request failed".to_string());
+            log::warn!(
+                target: "providers",
+                "Codex reset details request failed: {status}"
+            );
+        }
     }
 }
 

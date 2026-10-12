@@ -15,7 +15,7 @@ pub use custom_provider_lifecycle::{
 };
 pub use layout::{
     compute_popup_height_detailed, compute_popup_height_for_overview,
-    compute_popup_height_for_quotas, PopupLayout,
+    compute_popup_height_for_quotas, reset_card_height, reset_popup_extra, PopupLayout,
 };
 pub use newapi::{
     build_newapi_config_from_fields, format_divisor_value, format_optional_divisor_value,
@@ -30,7 +30,8 @@ pub use quota::{
     ConnectionStatus, ErrorKind, FailureAdvice, FailureReason, ProviderFailure, ProviderStatus,
     QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaMeasurement, QuotaRuleOverrides, QuotaRules,
     QuotaThresholdTarget, QuotaThresholdUnit, QuotaThresholds, QuotaThresholdsError, QuotaType,
-    RefreshData, StatusLevel, UpdateStatus,
+    RateLimitReset, RateLimitResetPresentation, RateLimitResetSnapshot, RefreshData, StatusLevel,
+    UpdateStatus,
 };
 pub use script_provider::{
     parse_script_stdout, parse_script_timeout_secs, script_provider_id,

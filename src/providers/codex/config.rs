@@ -147,6 +147,17 @@ fn extract_host(url: &str) -> Option<&str> {
     }
 }
 
+/// 由 usage URL 推出重置明细 URL。
+///
+/// 自托管网关如果没有这条 path，请求失败时调用方会保留 usage 里的数量摘要。
+pub(super) fn reset_credits_url_from_usage(usage_url: &str) -> Option<String> {
+    let base = usage_url.strip_suffix("/wham/usage")?;
+    if base.is_empty() {
+        return None;
+    }
+    Some(format!("{base}/wham/rate-limit-reset-credits"))
+}
+
 /// 纯函数：根据 base 是否含 `/backend-api` 选择 path 并拼接最终 URL。
 fn assemble_usage_url(base: &str) -> String {
     let path = if base.contains("/backend-api") {
@@ -384,6 +395,19 @@ mod tests {
             assemble_usage_url("https://gateway.example.com"),
             "https://gateway.example.com/wham/usage"
         );
+    }
+
+    #[test]
+    fn reset_credits_url_replaces_usage_suffix() {
+        assert_eq!(
+            reset_credits_url_from_usage("https://chatgpt.com/backend-api/wham/usage").as_deref(),
+            Some("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
+        );
+        assert_eq!(
+            reset_credits_url_from_usage("https://gateway.example.com/wham/usage").as_deref(),
+            Some("https://gateway.example.com/wham/rate-limit-reset-credits")
+        );
+        assert!(reset_credits_url_from_usage("https://example.com/usage").is_none());
     }
 
     // ────────────────────────────────────────────────────────────────────────

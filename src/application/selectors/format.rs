@@ -8,8 +8,10 @@ use super::QuotaDisplayViewState;
 use crate::models::{
     ConnectionStatus, FailureAdvice, FailureReason, ProviderCapability, ProviderFailure,
     ProviderKind, ProviderStatus, QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec,
-    QuotaRules, QuotaThresholdUnit, QuotaType, StatusLevel, UpdateStatus,
+    QuotaRules, QuotaThresholdUnit, QuotaType, RateLimitReset, RateLimitResetSnapshot, StatusLevel,
+    UpdateStatus,
 };
+use crate::utils::time_utils::format_local_minute;
 use rust_i18n::t;
 
 /// 将内部 `source_label` 转为设置页副标题用的用户向文案。
@@ -450,6 +452,61 @@ pub fn format_quota_card_detail_text(quota_view: &QuotaDisplayViewState) -> Stri
     }
 }
 
+/// 把限流重置快照变成重置卡文案。没有可展示内容时返回 None。
+pub(crate) fn rate_limit_reset_section(
+    snapshot: &RateLimitResetSnapshot,
+) -> Option<super::RateLimitResetSectionView> {
+    let presentation = snapshot.presentation()?;
+    let rows = presentation
+        .resets
+        .iter()
+        .map(rate_limit_reset_row)
+        .collect();
+    let summary = (presentation.undisclosed > 0).then(|| {
+        if presentation.resets.is_empty() {
+            t!("codex.reset.summary_only", n = presentation.undisclosed).to_string()
+        } else {
+            t!(
+                "codex.reset.more_without_details",
+                n = presentation.undisclosed
+            )
+            .to_string()
+        }
+    });
+    Some(super::RateLimitResetSectionView { rows, summary })
+}
+
+fn rate_limit_reset_row(reset: &RateLimitReset) -> super::RateLimitResetRowView {
+    super::RateLimitResetRowView {
+        reset_type: display_reset_type(reset),
+        granted_at: format_reset_timestamp(reset.granted_at_secs),
+        expires_at: format_reset_timestamp(reset.expires_at_secs),
+    }
+}
+
+fn display_reset_type(reset: &RateLimitReset) -> String {
+    if let Some(title) = reset
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+    {
+        return title.to_string();
+    }
+    match reset.reset_type.as_str() {
+        "codex_rate_limits" => t!("codex.reset.type.codex_rate_limits").to_string(),
+        "" => t!("codex.reset.type.unknown").to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn format_reset_timestamp(epoch_secs: Option<i64>) -> String {
+    epoch_secs
+        .and_then(format_local_minute)
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| t!("codex.reset.time_unknown").to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,8 +515,8 @@ mod tests {
     };
     use crate::models::{
         ConnectionStatus, FailureAdvice, FailureReason, ProviderFailure, ProviderKind,
-        QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec, QuotaType, StatusLevel,
-        UpdateStatus,
+        QuotaDetailSpec, QuotaDisplayMode, QuotaInfo, QuotaLabelSpec, QuotaType, RateLimitReset,
+        RateLimitResetSnapshot, StatusLevel, UpdateStatus,
     };
 
     // ── display_source_label ─────────────────────────────────
@@ -917,5 +974,57 @@ mod tests {
 
         let no_measurement = QuotaInfo::new("Zero", 1.0, 0.0);
         assert_eq!(format_quota_remaining_text(&no_measurement), "");
+    }
+
+    #[test]
+    fn rate_limit_reset_section_prefers_title_and_keeps_unknown_expiry() {
+        let _locale_guard = setup_locale();
+        let snapshot = RateLimitResetSnapshot {
+            available_count: Some(1),
+            details_known: true,
+            resets: vec![RateLimitReset {
+                reset_type: "codex_rate_limits".into(),
+                title: Some("Full reset (Weekly + 5 hr)".into()),
+                granted_at_secs: Some(1_735_689_600),
+                expires_at_secs: None,
+            }],
+        };
+
+        let section = rate_limit_reset_section(&snapshot).unwrap();
+        assert!(section.summary.is_none());
+        assert_eq!(section.rows.len(), 1);
+        assert_eq!(section.rows[0].reset_type, "Full reset (Weekly + 5 hr)");
+        assert_ne!(section.rows[0].granted_at, "—");
+        assert_eq!(section.rows[0].expires_at, "—");
+    }
+
+    #[test]
+    fn rate_limit_reset_section_uses_type_name_and_count_only_summary() {
+        let _locale_guard = setup_locale();
+        let detailed = RateLimitResetSnapshot {
+            available_count: Some(1),
+            details_known: true,
+            resets: vec![RateLimitReset {
+                reset_type: "codex_rate_limits".into(),
+                title: None,
+                granted_at_secs: None,
+                expires_at_secs: None,
+            }],
+        };
+        let section = rate_limit_reset_section(&detailed).unwrap();
+        assert_eq!(section.rows[0].reset_type, "Rate limit reset");
+        assert_eq!(section.rows[0].granted_at, "—");
+
+        let summary_only = RateLimitResetSnapshot {
+            available_count: Some(2),
+            details_known: false,
+            resets: Vec::new(),
+        };
+        let summary = rate_limit_reset_section(&summary_only).unwrap();
+        assert!(summary.rows.is_empty());
+        assert_eq!(
+            summary.summary.as_deref(),
+            Some("2 available, details unavailable")
+        );
     }
 }

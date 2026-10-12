@@ -4,6 +4,7 @@ mod label;
 mod policy;
 mod provider_status;
 mod refresh_data;
+mod reset;
 mod types;
 mod units;
 
@@ -16,6 +17,7 @@ pub use policy::{
 };
 pub use provider_status::{ConnectionStatus, ErrorKind, ProviderStatus, UpdateStatus};
 pub use refresh_data::RefreshData;
+pub use reset::{RateLimitReset, RateLimitResetPresentation, RateLimitResetSnapshot};
 pub use types::{QuotaType, StatusLevel};
 
 pub(super) use label::slugify_key;

@@ -288,6 +288,10 @@ fn merge_refresh_data(target: &mut RefreshData, data: RefreshData) {
     if target.account_tier.is_none() {
         target.account_tier = data.account_tier;
     }
+    // 限流重置不是配额。先到的来源已经带了重置时，不让后一步覆盖。
+    if target.rate_limit_resets.presentation().is_none() {
+        target.rate_limit_resets = data.rate_limit_resets;
+    }
 }
 
 fn format_errors(errors: &[String]) -> String {

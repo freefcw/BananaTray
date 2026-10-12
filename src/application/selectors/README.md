@@ -15,7 +15,7 @@ ViewModel 选择器层，从 `AppSession` 中派生 UI 所需的 ViewModel 结�
 | `dbus_dto.rs` | `&AppSession` | `DBusQuotaSnapshot` | D-Bus JSON DTO：扁平化配额快照，供 GNOME Shell Extension 消费 |
 | `debug.rs` | `&AppSession` + `DebugContext` | `DebugTabViewState` | Debug Tab（系统信息、日志捕获） |
 | `issue_report.rs` | `&AppSession` + `IssueReportContext` | `IssueReport` | About 页 Issue 上报（环境 + 日志 → GitHub URL） |
-| `format.rs` | `ProviderStatus`, `QuotaInfo` | `String` | 上次更新时间、配额使用详情文本 |
+| `format.rs` | `ProviderStatus`, `QuotaInfo`, `RateLimitResetSnapshot` | `String` / `RateLimitResetSectionView` | 上次更新时间、配额使用详情文本、限流重置的类型和时间 |
 
 ### 类型定义
 

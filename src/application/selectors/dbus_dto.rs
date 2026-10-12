@@ -68,8 +68,21 @@ pub struct DBusProviderEntry {
     pub account_tier: Option<String>,
     /// 配额列表
     pub quotas: Vec<DBusQuotaEntry>,
+    /// 可兑换的限流重置。空列表省略，旧扩展忽略未知字段。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rate_limit_resets: Vec<DBusRateLimitReset>,
     /// 最高严重状态等级（"Green" / "Yellow" / "Red"）
     pub worst_status: String,
+}
+
+/// 一条限流重置。`granted_at` / `expires_at` 缺省表示这次没有对应时间。
+///
+/// 只有数量、没有明细时，`reset_type` 是一句说明，两个时间都为空。
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DBusRateLimitReset {
+    pub reset_type: String,
+    pub granted_at: Option<String>,
+    pub expires_at: Option<String>,
 }
 
 // ============================================================================
@@ -151,9 +164,35 @@ impl DBusProviderEntry {
             account_email: provider.account_email.clone(),
             account_tier: provider.account_tier.clone(),
             quotas,
+            rate_limit_resets: dbus_rate_limit_resets(&provider.rate_limit_resets),
             worst_status: format_status_level(worst),
         }
     }
+}
+
+fn dbus_rate_limit_resets(
+    snapshot: &crate::models::RateLimitResetSnapshot,
+) -> Vec<DBusRateLimitReset> {
+    let Some(section) = super::format::rate_limit_reset_section(snapshot) else {
+        return Vec::new();
+    };
+    let mut entries = section
+        .rows
+        .into_iter()
+        .map(|row| DBusRateLimitReset {
+            reset_type: row.reset_type,
+            granted_at: Some(row.granted_at),
+            expires_at: Some(row.expires_at),
+        })
+        .collect::<Vec<_>>();
+    if let Some(summary) = section.summary {
+        entries.push(DBusRateLimitReset {
+            reset_type: summary,
+            granted_at: None,
+            expires_at: None,
+        });
+    }
+    entries
 }
 
 impl DBusQuotaEntry {

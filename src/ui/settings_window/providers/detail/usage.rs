@@ -18,12 +18,19 @@ pub(super) fn render_usage_section(
         | SettingsProviderUsageViewState::Missing { message } => {
             usage_section(theme).child(render_detail_empty_card(message, theme))
         }
-        SettingsProviderUsageViewState::Quotas { quotas } => {
+        SettingsProviderUsageViewState::Quotas { quotas, resets } => {
             let mut section = usage_section(theme);
             for quota in quotas {
                 section = section.child(div().mt(px(10.0)).child(
                     crate::ui::widgets::render_quota_bar(quota, theme, 0, display_mode, None),
                 ));
+            }
+            if let Some(resets) = resets {
+                section = section.child(
+                    div()
+                        .mt(px(10.0))
+                        .child(crate::ui::widgets::render_rate_limit_resets(resets, theme)),
+                );
             }
             section
         }

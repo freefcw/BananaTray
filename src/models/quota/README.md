@@ -14,8 +14,9 @@
 - `policy.rs` — 额度状态 / 告警阈值 policy：`QuotaThresholdUnit`（Percentage / Currency / Amount）、`QuotaThresholds`（warning / critical / notify 三档剩余值阈值，含校验、字符串解析与 `notify_threshold_reached` 判定）、`QuotaRules`（三单位全局规则）、`QuotaRuleOverrides`（Provider 级按单位整组覆盖）、`QuotaMeasurement`（单位化剩余值度量，附带 `comparison_scale` 记录计算 remaining 的原始操作数量级）与 `QuotaThresholdTarget`（设置草稿归属）。默认阈值：百分比 50/20/10，货币 10/2/1，积分·额度 100/20/10。
 - `units.rs` — 百分比 / fraction 归一化常量与纯函数，仅供 quota 模块内部构造器使用；provider 应通过 `QuotaInfo` 的百分比构造器表达语义。
 - `failure.rs` — `ProviderFailure`、`FailureReason`、`FailureAdvice` 的结构化失败语义。
-- `refresh_data.rs` — provider 刷新成功后传回 runtime state 的 `RefreshData`。
-- `provider_status.rs` — `ConnectionStatus`、`UpdateStatus`、`ErrorKind`、`ProviderStatus` 及状态转换方法。
+- `refresh_data.rs` — provider 刷新成功后传回 runtime state 的 `RefreshData`。`rate_limit_resets` 是可兑换限流重置，不是 `quotas` 的一条。
+- `reset.rs` — `RateLimitReset` / `RateLimitResetSnapshot`。数量为 0 时不展示；只有数量、没有明细时 `needs_detail_fetch()` 为 true。
+- `provider_status.rs` — `ConnectionStatus`、`UpdateStatus`、`ErrorKind`、`ProviderStatus` 及状态转换方法。成功刷新会整份替换 `rate_limit_resets`；失败保留上一份。
 - `tests.rs` — quota 模块单元测试，覆盖 stable key、状态阈值、构造器和 ProviderStatus 转换。
 
 ## Compatibility Notes

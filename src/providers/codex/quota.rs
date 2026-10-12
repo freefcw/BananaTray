@@ -1,4 +1,6 @@
-use crate::models::{QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::models::{
+    QuotaDetailSpec, QuotaInfo, QuotaLabelSpec, QuotaType, RateLimitResetSnapshot,
+};
 
 const SECONDS_PER_MINUTE: i64 = 60;
 const MINUTES_PER_HOUR: i64 = 60;
@@ -16,6 +18,8 @@ const WEEKLY_WINDOW_MINUTES: i64 = DAYS_PER_WEEK * HOURS_PER_DAY * MINUTES_PER_H
 pub(super) struct ParsedUsage {
     pub quotas: Vec<QuotaInfo>,
     pub plan_type: Option<String>,
+    /// 可兑换的限流重置。缺省为空，不从会话/周窗口推断。
+    pub resets: RateLimitResetSnapshot,
 }
 
 /// Codex rate-limit 窗口的语义角色。
