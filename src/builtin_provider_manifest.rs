@@ -21,6 +21,7 @@ macro_rules! builtin_provider_manifest {
             Antigravity => "antigravity" => antigravity::AntigravityProvider,
             Windsurf => "windsurf" => windsurf::WindsurfProvider,
             Grok => "grok" => grok::GrokProvider,
+            ZCode => "zcode" => zcode::ZCodeProvider,
         }
     };
 }

@@ -5,7 +5,7 @@
 ## 功能特性
 
 - **系统托盘集成** — 左键点击打开紧凑配额弹窗；Linux 采用双模模式：已安装扩展的 GNOME 桌面使用原生 GNOME Shell Extension 弹窗，其他环境回退到 ksni SNI 托盘加右键菜单
-- **16 个内置提供商条目加 YAML 自定义提供商** — 通过 API、CLI 和本地凭据文件提供配额监控以及参考/占位条目
+- **17 个内置提供商条目加 YAML 自定义提供商** — 通过 API、CLI 和本地凭据文件提供配额监控以及参考/占位条目
 - **设置窗口** — 独立的桌面设置窗口，用于完整配置（不受托盘面板尺寸限制）
 - **自动刷新** — 可配置的轮询间隔，支持按提供商冷却和去重
 - **配额告警** — 当使用量低于 10% 或配额耗尽时发送系统通知
@@ -35,6 +35,7 @@
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | 可监控 | 完整配额刷新 |
 | **OpenCode Go** | HTTP API (`opencode.ai/zen/go/v1/usage`) + 本地 `auth.json` | 可监控 | 滚动 5 小时 / 周 / 月；设置稳定 key 仍为 `opencode` |
 | **Grok** | HTTP API (`cli-chat-proxy.grok.com`) + 本地 OAuth | 可监控 | 完整配额刷新 |
+| **ZCode** | GLM Coding Plan 配额 API + 本地 / API Key 凭据 | 可监控 | 5 小时、每周、以及旧套餐每月 MCP 分开重置 |
 | **自定义 YAML** | HTTP / CLI | 可监控 | 取决于 YAML plan |
 
 ### 参考 / TODO 条目

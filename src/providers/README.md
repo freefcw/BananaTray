@@ -1,6 +1,6 @@
 # src/providers/
 
-Provider abstraction layer and all 16 AI provider implementations.
+Provider abstraction layer and all 17 AI provider implementations.
 
 ## Core Abstractions
 
@@ -87,6 +87,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 | `opencode/` | OpenCode Go | `opencode` | `opencode:api` | `Monitorable` | OpenCode Go usage API | Display name is OpenCode Go; stable settings key remains `opencode`. Reads `auth.json` (`opencode-go` / `opencode`); maps rolling / weekly / monthly used percent |
 | `vertex_ai.rs` | Vertex AI | `vertexai` | `vertexai:gcloud` | `Informational` | Gemini CLI config detection | Reference-only entry for Gemini Vertex AI auth mode |
 | `grok/` | Grok | `grok` | `grok:api` | `Monitorable` | Grok Build billing API | Reads `~/.grok/auth.json`; SuperGrok / subscription weekly pool via `cli-chat-proxy` `?format=credits`. Omitted `creditUsagePercent` with a billing window is 0%, not `NoData`. See `grok/README.md` |
+| `zcode/` | ZCode | `zcode` | `zcode:api` | `Monitorable` | GLM Coding Plan quota API | Separate 5-hour, weekly, and legacy monthly MCP windows keyed by `unit`, not array order. `unit: 6` with `number` 1 or 7 is the same weekly reset. See `zcode/README.md` |
 
 ## Design Notes
 

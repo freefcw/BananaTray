@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1326" viewBox="0 0 800 1326">
-  <rect x="0" y="0" width="800" height="1326" fill="#eef0f3" />
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1394" viewBox="0 0 800 1394">
+  <rect x="0" y="0" width="800" height="1394" fill="#eef0f3" />
   <text x="24" y="27" fill="#20242a" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="600">BananaTray provider icon optical review</text>
   <text x="180" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">LIGHT</text>
   <text x="452" y="52" fill="#4e555f" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" font-weight="600">DARK</text>
@@ -934,5 +934,44 @@
   <g color="#8a9099" transform="translate(744 1266) scale(0.666667)">
     <path d="M12 4L20 20H4L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
     <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="1.5" />
+  </g>
+  <text x="24" y="1346" fill="#30353c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="500">zcode</text>
+  <rect x="180" y="1314" width="252" height="56" fill="#ffffff" rx="4" />
+  <g color="#30343b" transform="translate(194.5 1334.5) scale(0.625)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(238 1334) scale(0.666667)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(280 1332) scale(0.833333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#30343b" transform="translate(322 1326) scale(1.33333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="370" y="1314" width="56" height="56" fill="#e8eaed" rx="8" />
+  <g color="#30343b" transform="translate(382 1326) scale(1.33333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="452" y="1314" width="252" height="56" fill="#17191d" rx="4" />
+  <g color="#f1f2f4" transform="translate(466.5 1334.5) scale(0.625)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(510 1334) scale(0.666667)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(552 1332) scale(0.833333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g color="#f1f2f4" transform="translate(594 1326) scale(1.33333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="642" y="1314" width="56" height="56" fill="#2b2e34" rx="8" />
+  <g color="#f1f2f4" transform="translate(654 1326) scale(1.33333)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <rect x="724" y="1314" width="56" height="56" fill="#ffffff" rx="4" />
+  <g color="#8a9099" transform="translate(744 1334) scale(0.666667)">
+    <path d="M4 5H20L4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
   </g>
 </svg>

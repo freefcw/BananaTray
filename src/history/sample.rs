@@ -291,7 +291,7 @@ pub(crate) fn failure_reason_payload(reason: &FailureReason) -> (&'static str, O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{FailureAdvice, QuotaInfo, QuotaType};
+    use crate::models::{FailureAdvice, QuotaInfo, QuotaLabelSpec, QuotaType};
     use crate::providers::ProviderError;
 
     #[test]
@@ -369,6 +369,23 @@ mod tests {
         quota.quota_type = QuotaType::Points;
         let point = point_from_quota(&quota);
         assert_eq!(point.unit, Some(HistoryUnit::Amount));
+    }
+
+    #[test]
+    fn zcode_rolling_window_is_recorded_as_percentage_history() {
+        let quota = QuotaInfo::with_key_from_used_percent(
+            "rolling-10h",
+            QuotaLabelSpec::RollingHours { hours: 10 },
+            25.0,
+            QuotaType::Session,
+            None,
+        );
+        let point = point_from_quota(&quota);
+        assert_eq!(point.quota_key, "rolling-10h");
+        assert_eq!(point.value_kind, HistoryValueKind::Metered);
+        assert_eq!(point.unit, Some(HistoryUnit::Percentage));
+        assert_eq!(point.used, Some(25.0));
+        assert_eq!(point.limit_value, Some(100.0));
     }
 
     #[test]

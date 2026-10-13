@@ -5,7 +5,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Features
 
 - **System tray integration** — left-click opens a compact quota popover; Linux offers dual-mode: native GNOME Shell Extension popup (GNOME + extension installed) or ksni SNI fallback with right-click menu
-- **16 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
+- **17 built-in provider entries plus YAML custom providers** — quota monitoring plus reference/placeholder entries via APIs, CLIs, and local credential files
 - **Settings window** — separate desktop window for full configuration (not constrained by tray panel size)
 - **Auto-refresh** — configurable polling interval with per-provider cooldown and deduplication
 - **Quota alerts** — configurable system notifications for low, exhausted, recovered, and usage-step states; percentage quotas default to a 10% low-alert threshold, while currency and points quotas use their native remaining values
@@ -35,6 +35,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 | **Kiro** | CLI (`kiro-cli chat --no-interactive /usage`) | Monitorable | Full quota refresh |
 | **OpenCode Go** | HTTP API (`opencode.ai/zen/go/v1/usage`) + local `auth.json` | Monitorable | OpenCode Go 5h / weekly / monthly; stable settings key remains `opencode` |
 | **Grok** | HTTP API (`cli-chat-proxy.grok.com`) + local OAuth | Monitorable | Full quota refresh |
+| **ZCode** | GLM Coding Plan quota API + local / API key credentials | Monitorable | Separate 5-hour, weekly, and legacy monthly MCP resets |
 | **Custom YAML** | HTTP / CLI | Monitorable | Depends on the YAML plan |
 
 ### Reference / TODO Entries

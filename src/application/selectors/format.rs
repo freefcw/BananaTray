@@ -37,6 +37,7 @@ pub fn display_source_label(raw: &str) -> String {
         "minimax api" => t!("provider.source_label.minimax_api").to_string(),
         "opencode api" => t!("provider.source_label.opencode_api").to_string(),
         "grok api" => t!("provider.source_label.grok_api").to_string(),
+        "zcode api" => t!("provider.source_label.zcode_api").to_string(),
         "newapi api" => t!("provider.source_label.newapi_api").to_string(),
         "merged" => t!("provider.source_label.merged").to_string(),
         "" => t!("provider.source_label.auto").to_string(),
@@ -232,6 +233,9 @@ pub(crate) fn format_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
         }
         QuotaLabelSpec::ModelSpecificSession { model } => {
             t!("quota.label.session_model", model = model).to_string()
+        }
+        QuotaLabelSpec::RollingHours { hours } => {
+            t!("quota.label.rolling_hours", hours = hours).to_string()
         }
         QuotaLabelSpec::WeeklyTier { tier } => {
             format!("{} ({})", t!("quota.label.weekly"), tier)
@@ -583,6 +587,7 @@ mod tests {
         assert_eq!(display_source_label("local api"), "Local language server");
         assert_eq!(display_source_label("cline api"), "Cline API");
         assert_eq!(display_source_label("grok api"), "Grok");
+        assert_eq!(display_source_label("zcode api"), "ZCode");
     }
 
     #[test]
@@ -807,6 +812,23 @@ mod tests {
             None,
         );
         assert_eq!(format_quota_label(&quota), "Weekly (Moderato)");
+    }
+
+    #[test]
+    fn format_quota_label_rolling_hours() {
+        let _locale_guard = setup_locale();
+        let quota = QuotaInfo::with_details(
+            QuotaLabelSpec::RollingHours { hours: 10 },
+            25.0,
+            100.0,
+            QuotaType::Session,
+            None,
+        );
+        assert_eq!(format_quota_label(&quota), "10h rolling");
+        assert_eq!(
+            QuotaLabelSpec::RollingHours { hours: 10 }.stable_key(&QuotaType::Session),
+            "rolling-10h"
+        );
     }
 
     #[test]

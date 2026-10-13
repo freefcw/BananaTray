@@ -20,6 +20,12 @@ pub enum QuotaLabelSpec {
     ModelSpecificSession {
         model: String,
     },
+    /// 小时数不是 5 的滚动窗口（ZCode 的 `unit: 3` 以 `number` 标明小时数）。
+    ///
+    /// 5 小时仍用 [`QuotaLabelSpec::Session`]，避免和 Claude / Codex 的「会话 (5小时)」分叉。
+    RollingHours {
+        hours: u32,
+    },
     /// 周配额 + 套餐层级（如 Kimi 的 Moderato）
     WeeklyTier {
         tier: String,
@@ -66,6 +72,7 @@ impl QuotaLabelSpec {
             Self::Monthly => "monthly".into(),
             Self::WeeklyModel { model } => format!("model:{model}"),
             Self::ModelSpecificSession { model } => format!("model-session:{model}"),
+            Self::RollingHours { hours } => format!("rolling-{hours}h"),
             Self::MonthlyCredits => "monthly-credits".into(),
             Self::Credits => {
                 match quota_type {

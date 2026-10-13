@@ -1,11 +1,15 @@
 #![allow(deprecated)]
 use super::*;
+use crate::history::{
+    HistoryRange, HistoryReady, HistoryReadyState, HistorySegment, HistorySeries, HistoryUnit,
+    HistoryYKind, SeriesPoint,
+};
 use crate::models::test_helpers::{
     make_test_provider as make_provider, setup_test_locale as setup_locale,
 };
 use crate::models::{
     AppSettings, ConnectionStatus, FailureReason, ProviderFailure, ProviderKind, QuotaInfo,
-    UpdateStatus,
+    QuotaLabelSpec, UpdateStatus,
 };
 
 fn pid(kind: ProviderKind) -> ProviderId {
@@ -997,4 +1001,63 @@ fn provider_panel_shows_reset_type_and_times_outside_quota_cards() {
     assert_ne!(resets.rows[0].granted_at, "—");
     assert_eq!(resets.rows[0].expires_at, "—");
     assert!(resets.summary.is_none());
+}
+
+#[test]
+fn zcode_quota_card_matches_its_history_series() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::ZCode, true);
+
+    let mut provider = make_provider(ProviderKind::ZCode, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::with_key_from_used_percent(
+        "rolling-10h",
+        QuotaLabelSpec::RollingHours { hours: 10 },
+        20.0,
+        crate::models::QuotaType::Session,
+        None,
+    )];
+    let mut session = make_session_with_provider(settings, provider);
+    session.popup_history_ui.load = HistoryLoadState::Ready {
+        provider_id: pid(ProviderKind::ZCode),
+        request_id: 1,
+        ready: HistoryReady {
+            range: HistoryRange::Last24Hours,
+            axis_start_ms: 0,
+            axis_end_ms: 1_800_000,
+            state: HistoryReadyState::Charts(vec![HistorySeries {
+                quota_key: "rolling-10h".to_string(),
+                label_spec_json: serde_json::to_string(&QuotaLabelSpec::RollingHours { hours: 10 })
+                    .unwrap(),
+                segments: vec![HistorySegment {
+                    unit: HistoryUnit::Percentage,
+                    y_kind: HistoryYKind::MeteredUsed,
+                    points: vec![
+                        SeriesPoint {
+                            bucket_start_ms: 0,
+                            y: 10.0,
+                            limit: Some(100.0),
+                            gap_before: false,
+                        },
+                        SeriesPoint {
+                            bucket_start_ms: 900_000,
+                            y: 20.0,
+                            limit: Some(100.0),
+                            gap_before: false,
+                        },
+                    ],
+                }],
+            }]),
+        },
+    };
+
+    let ProviderDetailViewState::Panel(panel) =
+        provider_detail_view_state(&session, &pid(ProviderKind::ZCode))
+    else {
+        panic!("expected provider panel");
+    };
+    assert_eq!(panel.history_charts.len(), 1);
+    assert_eq!(panel.history_charts[0].quota_key, "rolling-10h");
 }

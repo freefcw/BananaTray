@@ -232,6 +232,7 @@ provider.source_label.kimi_api: "Kimi 官方"
 provider.source_label.minimax_api: "MiniMax 官方"
 provider.source_label.opencode_api: "OpenCode Go"
 provider.source_label.grok_api: "Grok 官方"
+provider.source_label.zcode_api: "ZCode 官方"
 provider.source_label.newapi_api: "API 中转站"
 provider.source_label.merged: "多源合并"
 provider.source_label.auto: "自动检测"
@@ -445,6 +446,15 @@ cline_pass.source.local_api_key: "自动检测的 Cline API Key"
 cline_pass.source.cline_login: "自动检测的 Cline 登录态"
 cline_pass.token_sources_tip: "凭据获取优先级：\n① BananaTray 中的 Cline API Key\n② 环境变量 CLINE_API_KEY\n③ providers.json 中的 Cline API Key\n④ providers.json 中的 Cline 登录态（短效，打开 Cline 扩展或 CLI 可自动刷新）"
 
+# ── ZCode 设置 UI ────────────────────────────────────────
+zcode.api_key: "Z.ai API Key"
+zcode.requires_auth: "需要 Z.ai 或智谱 BigModel 的 GLM Coding Plan API Key。"
+zcode.token_placeholder: "粘贴 Z.ai / BigModel API Key"
+zcode.source.config_file: "BananaTray 设置"
+zcode.source.env_var: "环境变量 ZAI_API_KEY / GLM_API_KEY"
+zcode.source.local_api_key: "自动检测的 ZCode 配置"
+zcode.token_sources_tip: "凭据获取优先级：\n① BananaTray 中的 Z.ai API Key\n② 环境变量 ZAI_API_KEY，其次 GLM_API_KEY\n③ ~/.zcode 里的明文 apiKey（先 v2 provider 配置，再 CLI 配置）\n不读取加密的 ZCode 登录态。设置 ZAI_REGION=china 或 ZAI_REGION=global 可固定网关；未设置时，国际站拒绝后再试 open.bigmodel.cn。"
+
 # ── 语言名称 ─────────────────────────────────────────────
 lang.system: "跟随系统"
 lang.en: "English"
@@ -519,6 +529,7 @@ codex.reset.summary_only: "有 %{n} 个可兑换重置，这次没有类型和�
 codex.reset.more_without_details: "另有 %{n} 个没有类型或到期时间"
 
 quota.label.session: "会话 (5小时)"
+quota.label.rolling_hours: "%{hours}小时滚动"
 quota.label.daily: "日配额"
 quota.label.weekly: "周配额"
 quota.label.monthly: "月配额"
