@@ -83,6 +83,14 @@ pub struct ProviderPanelViewState {
     pub resets: Option<Box<RateLimitResetSectionView>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetExpiryUrgency {
+    Unknown,
+    Critical,
+    Warning,
+    Safe,
+}
+
 /// 账户信息卡片 ViewModel
 #[derive(Debug, Clone)]
 pub struct AccountInfoViewState {
@@ -197,6 +205,7 @@ pub struct RateLimitResetRowView {
     pub reset_type: String,
     pub granted_at: String,
     pub expires_at: String,
+    pub expiry_urgency: ResetExpiryUrgency,
 }
 
 /// 重置区：有明细时逐条展示类型和时间；缺明细时只留一句数量说明。

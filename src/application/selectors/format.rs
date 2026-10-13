@@ -11,7 +11,7 @@ use crate::models::{
     QuotaRules, QuotaThresholdUnit, QuotaType, RateLimitReset, RateLimitResetSnapshot, StatusLevel,
     UpdateStatus,
 };
-use crate::utils::time_utils::format_local_minute;
+use crate::utils::time_utils::{format_local_minute, now_epoch_secs};
 use rust_i18n::t;
 
 /// 将内部 `source_label` 转为设置页副标题用的用户向文案。
@@ -490,6 +490,28 @@ fn rate_limit_reset_row(reset: &RateLimitReset) -> super::RateLimitResetRowView 
         reset_type: display_reset_type(reset),
         granted_at: format_reset_timestamp(reset.granted_at_secs),
         expires_at: format_reset_timestamp(reset.expires_at_secs),
+        expiry_urgency: reset_expiry_urgency(reset.expires_at_secs),
+    }
+}
+
+fn reset_expiry_urgency(epoch_secs: Option<i64>) -> super::ResetExpiryUrgency {
+    reset_expiry_urgency_at(epoch_secs, now_epoch_secs())
+}
+
+fn reset_expiry_urgency_at(epoch_secs: Option<i64>, now_secs: i64) -> super::ResetExpiryUrgency {
+    const THREE_DAYS: i64 = 3 * 24 * 60 * 60;
+    const FIVE_DAYS: i64 = 5 * 24 * 60 * 60;
+
+    let Some(epoch_secs) = epoch_secs else {
+        return super::ResetExpiryUrgency::Unknown;
+    };
+    let remaining = epoch_secs.saturating_sub(now_secs);
+    if remaining <= THREE_DAYS {
+        super::ResetExpiryUrgency::Critical
+    } else if remaining <= FIVE_DAYS {
+        super::ResetExpiryUrgency::Warning
+    } else {
+        super::ResetExpiryUrgency::Safe
     }
 }
 
@@ -500,6 +522,12 @@ fn display_reset_type(reset: &RateLimitReset) -> String {
         .map(str::trim)
         .filter(|title| !title.is_empty())
     {
+        if reset.reset_type == "codex_rate_limits"
+            && title.to_ascii_lowercase().contains("weekly")
+            && title.to_ascii_lowercase().contains("5 hr")
+        {
+            return t!("codex.reset.type.full").to_string();
+        }
         return title.to_string();
     }
     match reset.reset_type.as_str() {
@@ -519,6 +547,7 @@ fn format_reset_timestamp(epoch_secs: Option<i64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::ResetExpiryUrgency;
     use crate::models::test_helpers::{
         make_test_provider as make_provider, setup_test_locale as setup_locale,
     };
@@ -1024,7 +1053,7 @@ mod tests {
         let section = rate_limit_reset_section(&snapshot).unwrap();
         assert!(section.summary.is_none());
         assert_eq!(section.rows.len(), 1);
-        assert_eq!(section.rows[0].reset_type, "Full reset (Weekly + 5 hr)");
+        assert_eq!(section.rows[0].reset_type, "Full reset");
         assert_ne!(section.rows[0].granted_at, "—");
         assert_eq!(section.rows[0].expires_at, "—");
     }
@@ -1056,6 +1085,31 @@ mod tests {
         assert_eq!(
             summary.summary.as_deref(),
             Some("2 available, details unavailable")
+        );
+    }
+
+    #[test]
+    fn reset_expiry_urgency_uses_three_and_five_day_boundaries() {
+        let now = 1_800_000_000;
+        assert_eq!(
+            reset_expiry_urgency_at(Some(now + 3 * 24 * 60 * 60), now),
+            ResetExpiryUrgency::Critical
+        );
+        assert_eq!(
+            reset_expiry_urgency_at(Some(now + 4 * 24 * 60 * 60), now),
+            ResetExpiryUrgency::Warning
+        );
+        assert_eq!(
+            reset_expiry_urgency_at(Some(now + 5 * 24 * 60 * 60), now),
+            ResetExpiryUrgency::Warning
+        );
+        assert_eq!(
+            reset_expiry_urgency_at(Some(now + 6 * 24 * 60 * 60), now),
+            ResetExpiryUrgency::Safe
+        );
+        assert_eq!(
+            reset_expiry_urgency_at(None, now),
+            ResetExpiryUrgency::Unknown
         );
     }
 }

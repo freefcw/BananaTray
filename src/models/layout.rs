@@ -74,13 +74,11 @@ impl PopupLayout {
     /// 重置卡 1px 边框的上下合计。
     pub const RESET_CARD_BORDER: f32 = 2.0;
     /// 重置卡标题、类型/时间行、数量说明行的固定行高。
-    pub const RESET_LINE_HEIGHT: f32 = 15.0;
+    pub const RESET_LINE_HEIGHT: f32 = 20.0;
     /// 标题、每一条重置、数量说明之间的间距。
-    pub const RESET_CARD_GAP: f32 = 8.0;
-    /// 同一条重置里三行文字的间距。
-    pub const RESET_ROW_GAP: f32 = 2.0;
-    /// 一条重置：类型、获取时间、到期时间各一行。
-    pub const RESET_ITEM_HEIGHT: f32 = Self::RESET_LINE_HEIGHT * 3.0 + Self::RESET_ROW_GAP * 2.0;
+    pub const RESET_CARD_GAP: f32 = 14.0;
+    /// 一条重置的紧凑单行高度。
+    pub const RESET_ITEM_HEIGHT: f32 = Self::RESET_LINE_HEIGHT;
 
     /// Dashboard 链接行高度: mt(8) + py(10)×2 + icon(16)
     pub const DASHBOARD_ROW_HEIGHT: f32 = 44.0;

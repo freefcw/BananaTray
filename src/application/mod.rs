@@ -27,7 +27,7 @@ pub use selectors::{
     OverviewItemStatus, OverviewItemViewState, OverviewQuotaItem, ProviderBodyViewState,
     ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState, ProviderPanelViewState,
     QuotaDisplayViewState, QuotaThresholdUnitViewState, QuotaVisibilityItem, RateLimitResetRowView,
-    RateLimitResetSectionView, RefreshTarget, SettingsProviderDetailViewState,
+    RateLimitResetSectionView, RefreshTarget, ResetExpiryUrgency, SettingsProviderDetailViewState,
     SettingsProviderHistoryPhase, SettingsProviderHistoryViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
     SettingsProviderStatusKind, SettingsProviderUsageViewState,

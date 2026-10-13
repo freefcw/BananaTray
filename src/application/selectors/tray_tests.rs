@@ -993,7 +993,7 @@ fn provider_panel_shows_reset_type_and_times_outside_quota_cards() {
     assert_eq!(quotas.len(), 1);
     let resets = panel.resets.expect("reset section");
     assert_eq!(resets.rows.len(), 1);
-    assert_eq!(resets.rows[0].reset_type, "Full reset (Weekly + 5 hr)");
+    assert_eq!(resets.rows[0].reset_type, "Full reset");
     assert_ne!(resets.rows[0].granted_at, "—");
     assert_eq!(resets.rows[0].expires_at, "—");
     assert!(resets.summary.is_none());

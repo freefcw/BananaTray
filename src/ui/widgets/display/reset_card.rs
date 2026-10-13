@@ -1,9 +1,9 @@
 //! 限流重置卡。
 //!
 //! 不复用额度卡：没有大数字、百分号、进度条和 OK/WARN/LOW 徽章。
-//! 每一条只放重置类型、获取时间和到期时间。行高跟 `PopupLayout` 的重置常量对齐。
+//! 每一条只放重置类型和到期时间；完整时间信息通过悬浮提示查看。
 
-use crate::application::RateLimitResetSectionView;
+use crate::application::{RateLimitResetSectionView, ResetExpiryUrgency};
 use crate::models::PopupLayout;
 use crate::theme::Theme;
 use gpui::{
@@ -27,14 +27,10 @@ pub(crate) fn render_rate_limit_resets(
         .bg(theme.bg.card_inner)
         .border_1()
         .border_color(theme.border.subtle)
-        .child(reset_line(
-            &t!("codex.reset.heading").to_uppercase(),
-            theme.text.muted,
-            FontWeight::SEMIBOLD,
-        ));
+        .child(reset_heading(section, theme));
 
-    for row in &section.rows {
-        card = card.child(render_reset_row(row, theme));
+    for (index, row) in section.rows.iter().enumerate() {
+        card = card.child(render_reset_row(row, index, theme));
     }
     if let Some(summary) = &section.summary {
         card = card.child(reset_line(
@@ -46,29 +42,59 @@ pub(crate) fn render_rate_limit_resets(
     card
 }
 
-fn render_reset_row(row: &crate::application::RateLimitResetRowView, theme: &Theme) -> Div {
+fn reset_heading(section: &RateLimitResetSectionView, theme: &Theme) -> Div {
+    let color = section
+        .rows
+        .iter()
+        .map(|row| row.expiry_urgency)
+        .min_by_key(reset_urgency_rank)
+        .map(|urgency| reset_urgency_color(urgency, theme))
+        .unwrap_or(theme.text.muted);
+
     div()
-        .flex_col()
-        .gap(px(PopupLayout::RESET_ROW_GAP))
-        .child(labeled_line(
-            &t!("codex.reset.type"),
-            &row.reset_type,
-            theme,
-        ))
-        .child(labeled_line(
-            &t!("codex.reset.granted"),
-            &row.granted_at,
-            theme,
-        ))
-        .child(labeled_line(
-            &t!("codex.reset.expires"),
-            &row.expires_at,
-            theme,
-        ))
+        .w_full()
+        .h(px(PopupLayout::RESET_LINE_HEIGHT))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(color))
+        .child(
+            div()
+                .overflow_hidden()
+                .text_size(px(11.0))
+                .line_height(relative(1.3))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text.secondary)
+                .whitespace_nowrap()
+                .child(t!("codex.reset.heading").to_uppercase()),
+        )
 }
 
-fn labeled_line(label: &str, value: &str, theme: &Theme) -> Div {
-    div()
+fn reset_urgency_rank(urgency: &ResetExpiryUrgency) -> u8 {
+    match urgency {
+        ResetExpiryUrgency::Critical => 0,
+        ResetExpiryUrgency::Warning => 1,
+        ResetExpiryUrgency::Safe => 2,
+        ResetExpiryUrgency::Unknown => 3,
+    }
+}
+
+fn reset_urgency_color(urgency: ResetExpiryUrgency, theme: &Theme) -> gpui::Hsla {
+    match urgency {
+        ResetExpiryUrgency::Critical => theme.status.error,
+        ResetExpiryUrgency::Warning => theme.status.warning,
+        ResetExpiryUrgency::Safe => theme.status.success,
+        ResetExpiryUrgency::Unknown => theme.text.muted,
+    }
+}
+
+fn render_reset_row(
+    row: &crate::application::RateLimitResetRowView,
+    index: usize,
+    theme: &Theme,
+) -> impl gpui::IntoElement {
+    let expiry_color = reset_urgency_color(row.expiry_urgency, theme);
+    let content = div()
         .h(px(PopupLayout::RESET_LINE_HEIGHT))
         .flex()
         .items_center()
@@ -77,27 +103,41 @@ fn labeled_line(label: &str, value: &str, theme: &Theme) -> Div {
         .child(
             div()
                 .flex_shrink_0()
-                .text_size(px(11.0))
+                .text_size(px(13.0))
                 .line_height(relative(1.0))
-                .text_color(theme.text.muted)
-                .child(label.to_string()),
+                .text_color(theme.text.primary)
+                .child(row.reset_type.clone()),
         )
         .child(
             div()
                 .overflow_hidden()
-                .text_size(px(11.0))
+                .text_size(px(13.0))
                 .line_height(relative(1.0))
-                .text_color(theme.text.primary)
+                .text_color(expiry_color)
                 .whitespace_nowrap()
-                .child(value.to_string()),
-        )
+                .child(row.expires_at.clone()),
+        );
+
+    crate::ui::widgets::with_multiline_tooltip(
+        format!("rate-limit-reset-{index}"),
+        &format!(
+            "{}\n{}: {}\n{}: {}",
+            row.reset_type,
+            t!("codex.reset.granted"),
+            row.granted_at,
+            t!("codex.reset.expires"),
+            row.expires_at
+        ),
+        theme,
+        content,
+    )
 }
 
 fn reset_line(text: &str, color: gpui::Hsla, weight: FontWeight) -> Div {
     div()
         .h(px(PopupLayout::RESET_LINE_HEIGHT))
         .overflow_hidden()
-        .text_size(px(11.0))
+        .text_size(px(12.0))
         .line_height(relative(1.0))
         .font_weight(weight)
         .text_color(color)
