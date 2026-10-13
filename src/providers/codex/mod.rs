@@ -22,7 +22,7 @@ use auth::{
     auth_path, ensure_access_token, load_credentials, refresh_access_token, resolve_account,
     CodexCredentials,
 };
-use client::call_usage_api;
+use client::{call_reset_credits_api, call_usage_api};
 use parser::parse_usage_response;
 use quota::ParsedUsage;
 
@@ -192,7 +192,7 @@ fn enrich_reset_details(parsed: &mut ParsedUsage, credentials: &CodexCredentials
     };
 
     let account = resolve_account(credentials);
-    match call_usage_api(
+    match call_reset_credits_api(
         &url,
         &credentials.access_token,
         account.account_id.as_deref(),
@@ -268,6 +268,70 @@ impl ProviderCapabilities for CodexProvider {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_detail_timeout_keeps_successful_usage_and_summary() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let usage_url = format!("http://{}/wham/usage", listener.local_addr().unwrap());
+        let (release_tx, release_rx) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            for path in ["/wham/usage", "/wham/rate-limit-reset-credits"] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(&stream);
+                let mut request = String::new();
+                loop {
+                    let mut line = String::new();
+                    assert_ne!(reader.read_line(&mut line).unwrap(), 0);
+                    request.push_str(&line);
+                    if line == "\r\n" {
+                        break;
+                    }
+                }
+                assert!(request.starts_with(&format!("GET {path} HTTP/1.1\r\n")));
+                let headers = request.to_ascii_lowercase();
+                assert!(headers.contains("authorization: bearer test-access-token\r\n"));
+                assert!(headers.contains("chatgpt-account-id: test-account\r\n"));
+                if path == "/wham/usage" {
+                    let body = r#"{"rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":18000}},"rate_limit_reset_credits":{"available_count":2}}"#;
+                    write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .unwrap();
+                } else {
+                    let _ = release_rx.recv_timeout(Duration::from_secs(5));
+                }
+            }
+        });
+        let mut credentials = CodexCredentials {
+            access_token: "test-access-token".into(),
+            refresh_token: "test-refresh-token".into(),
+            id_token: None,
+            account_id: Some("test-account".into()),
+            last_refresh: None,
+        };
+        let started = Instant::now();
+        let result = obtain_parsed_usage(&mut credentials, &usage_url);
+        let elapsed = started.elapsed();
+        let _ = release_tx.send(());
+        server.join().unwrap();
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.quotas.len(), 1);
+        assert_eq!(parsed.quotas[0].used, 10.0);
+        assert_eq!(parsed.resets.available_count, Some(2));
+        assert!(!parsed.resets.details_known);
+        assert!(elapsed < Duration::from_secs(3), "elapsed: {elapsed:?}");
+    }
 
     #[test]
     fn codex_auth_error_detection_only_matches_401_and_403() {

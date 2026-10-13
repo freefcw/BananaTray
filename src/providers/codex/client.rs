@@ -1,5 +1,8 @@
 use crate::providers::common::http_client;
 use anyhow::Result;
+use std::time::Duration;
+
+const RESET_CREDITS_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// 构造 usage API 请求头。
 ///
@@ -28,6 +31,16 @@ pub(super) fn call_usage_api(
     let headers = usage_api_headers(access_token, account_id);
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
     http_client::get_with_headers(url, &header_refs)
+}
+
+pub(super) fn call_reset_credits_api(
+    url: &str,
+    access_token: &str,
+    account_id: Option<&str>,
+) -> Result<String> {
+    let headers = usage_api_headers(access_token, account_id);
+    let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
+    http_client::get_with_timeout(url, &header_refs, Some(RESET_CREDITS_TIMEOUT))
 }
 
 #[cfg(test)]

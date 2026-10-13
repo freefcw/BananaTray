@@ -1,7 +1,7 @@
-use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
-use crate::providers::{ProviderError, ProviderResult};
 use super::quota::{self, CreditBalance, CreditsInput, ParsedUsage, WindowQuotaInput, WindowRole};
 use super::resets;
+use crate::models::{QuotaInfo, QuotaLabelSpec, QuotaType};
+use crate::providers::{ProviderError, ProviderResult};
 
 fn parse_window_quota(window: &serde_json::Value, default_role: WindowRole) -> QuotaInfo {
     let used_percent = window
@@ -523,11 +523,16 @@ mod tests {
         }"#;
         let parsed = parse_usage_response(raw).unwrap();
         assert_eq!(parsed.quotas.len(), 2);
-        assert!(parsed.quotas.iter().any(|quota| quota.stable_key == "credit"));
-        assert!(parsed.quotas.iter().any(|quota| quota.quota_type == QuotaType::Points));
+        assert!(parsed
+            .quotas
+            .iter()
+            .any(|quota| quota.stable_key == "credit"));
+        assert!(parsed
+            .quotas
+            .iter()
+            .any(|quota| quota.quota_type == QuotaType::Points));
         assert_eq!(parsed.resets.available_count, Some(2));
         assert!(!parsed.resets.details_known);
         assert!(parsed.resets.resets.is_empty());
     }
 }
-
