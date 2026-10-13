@@ -74,4 +74,4 @@ CLI 兑底内部固定顺序为 `codex app-server` RPC → PTY `/status`。RPC �
 - BananaTray 暂不实现 OpenAI Web Dashboard 抓取（CodexBar 的 code review / usage breakdown / credits history）
 - BananaTray 暂不支持多 managed account 切换
 - RPC fallback 可取百分比、窗口 reset 时间戳、窗口时长、credits balance、planType，以及 `rateLimitResetCredits` 里的重置类型 / 获取时间 / 到期时间；PTY fallback 只取百分比与 credits balance，不复现窗口 reset 时间戳，也没有可兑换重置明细
-- 可兑换限流重置不是配额、积分或请求次数。托盘和设置页用单独的重置卡展示类型、获取时间、到期时间；缺明细时只显示一句数量说明。它不写入 quota history，也不触发额度告警。usage 响应通常只有 `available_count`，OAuth 成功后会再请求同主机的 `/wham/rate-limit-reset-credits`，独立超时为 1 秒；失败或超时保留 usage 数量摘要，不触发 token 刷新或 CLI fallback，不影响已经拿到的会话/周配额
+- 可兑换限流重置不是配额、积分或请求次数。托盘和设置页用单独的重置卡展示类型、获取时间、到期时间；缺明细时只显示一句数量说明。它不写入 quota history，也不触发额度告警。usage 响应通常只有 `available_count`，OAuth 成功后会再请求同主机的 `/wham/rate-limit-reset-credits`，独立超时为 1 秒；失败或超时保留 usage 数量摘要，不触发 token 刷新或 CLI fallback，不影响已经拿到的会话/周配额。展示时按当前时间过滤过期明细，包括刷新失败后保留的缓存；过期行不回填为未知库存。

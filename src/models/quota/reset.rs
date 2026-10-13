@@ -53,22 +53,25 @@ impl RateLimitResetSnapshot {
             return None;
         }
 
-        if self.resets.is_empty() {
-            let count = self.available_count.unwrap_or(0);
-            if count == 0 {
-                return None;
-            }
-            return Some(RateLimitResetPresentation {
-                resets: Vec::new(),
-                undisclosed: count,
-            });
+        let known = u32::try_from(self.resets.len()).unwrap_or(u32::MAX);
+        let undisclosed = self.available_count.unwrap_or(known).saturating_sub(known);
+        let now_secs = crate::utils::time_utils::now_epoch_secs();
+        let resets: Vec<_> = self
+            .resets
+            .iter()
+            .filter(|reset| {
+                reset
+                    .expires_at_secs
+                    .is_none_or(|expires| expires > now_secs)
+            })
+            .cloned()
+            .collect();
+        if resets.is_empty() && undisclosed == 0 {
+            return None;
         }
-
-        let shown = u32::try_from(self.resets.len()).unwrap_or(u32::MAX);
-        let count = self.available_count.unwrap_or(shown);
         Some(RateLimitResetPresentation {
-            resets: self.resets.clone(),
-            undisclosed: count.saturating_sub(shown),
+            resets,
+            undisclosed,
         })
     }
 }
@@ -82,7 +85,7 @@ mod tests {
             reset_type: "codex_rate_limits".into(),
             title: Some("Full reset".into()),
             granted_at_secs: Some(1_735_689_600),
-            expires_at_secs: Some(1_738_281_600),
+            expires_at_secs: Some(crate::utils::time_utils::now_epoch_secs() + 86_400),
         }
     }
 
@@ -108,6 +111,78 @@ mod tests {
         assert!(presentation.resets.is_empty());
         assert_eq!(presentation.undisclosed, 2);
         assert!(snapshot.needs_detail_fetch());
+    }
+
+    #[test]
+    fn expired_resets_are_hidden_with_or_without_a_count() {
+        let now = crate::utils::time_utils::now_epoch_secs();
+        for available_count in [Some(1), None] {
+            for expires_at_secs in [now - 1, now] {
+                let snapshot = RateLimitResetSnapshot {
+                    available_count,
+                    details_known: true,
+                    resets: vec![RateLimitReset {
+                        expires_at_secs: Some(expires_at_secs),
+                        ..sample_reset()
+                    }],
+                };
+                assert!(snapshot.presentation().is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn expired_resets_do_not_become_undisclosed_inventory() {
+        let now = crate::utils::time_utils::now_epoch_secs();
+        let active = RateLimitReset {
+            expires_at_secs: Some(now + 86_400),
+            ..sample_reset()
+        };
+        let snapshot = RateLimitResetSnapshot {
+            available_count: Some(3),
+            details_known: true,
+            resets: vec![
+                RateLimitReset {
+                    expires_at_secs: Some(now - 1),
+                    ..sample_reset()
+                },
+                active.clone(),
+            ],
+        };
+        let presentation = snapshot.presentation().unwrap();
+        assert_eq!(presentation.resets, vec![active]);
+        assert_eq!(presentation.undisclosed, 1);
+    }
+
+    #[test]
+    fn expired_details_keep_only_genuinely_undisclosed_inventory() {
+        let snapshot = RateLimitResetSnapshot {
+            available_count: Some(2),
+            details_known: true,
+            resets: vec![RateLimitReset {
+                expires_at_secs: Some(crate::utils::time_utils::now_epoch_secs() - 1),
+                ..sample_reset()
+            }],
+        };
+        let presentation = snapshot.presentation().unwrap();
+        assert!(presentation.resets.is_empty());
+        assert_eq!(presentation.undisclosed, 1);
+    }
+
+    #[test]
+    fn reset_without_expiry_remains_visible() {
+        let reset = RateLimitReset {
+            expires_at_secs: None,
+            ..sample_reset()
+        };
+        let snapshot = RateLimitResetSnapshot {
+            resets: vec![reset.clone()],
+            details_known: true,
+            ..Default::default()
+        };
+        let presentation = snapshot.presentation().unwrap();
+        assert_eq!(presentation.resets, vec![reset]);
+        assert_eq!(presentation.undisclosed, 0);
     }
 
     #[test]

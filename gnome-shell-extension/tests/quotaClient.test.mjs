@@ -58,6 +58,38 @@ async function flushPromises() {
     await Promise.resolve();
 }
 
+describe('validateSnapshot — rate limit resets', () => {
+    it('accepts absent, null, and empty reset lists', () => {
+        for (const rate_limit_resets of [undefined, null, []]) {
+            const snapshot = makeSnapshot({providers: [makeProvider({rate_limit_resets})]});
+            assert.doesNotThrow(() => validateSnapshot(snapshot));
+        }
+    });
+
+    it('preserves detail rows and count-only summaries', () => {
+        const rate_limit_resets = [
+            {reset_type: 'Full reset', granted_at: '2026-10-01 08:00', expires_at: '2026-11-01 08:00'},
+            {reset_type: '1 more without type or expiry', granted_at: null, expires_at: null},
+        ];
+        const snapshot = makeSnapshot({providers: [makeProvider({rate_limit_resets})]});
+        assert.deepEqual(parseSnapshot(JSON.stringify(snapshot)).providers[0].rate_limit_resets, rate_limit_resets);
+    });
+
+    it('rejects malformed reset lists and fields', () => {
+        for (const rate_limit_resets of [
+            {},
+            [null],
+            [{}],
+            [{reset_type: 1}],
+            [{reset_type: 'Full reset', granted_at: 1}],
+            [{reset_type: 'Full reset', expires_at: false}],
+        ]) {
+            const snapshot = makeSnapshot({providers: [makeProvider({rate_limit_resets})]});
+            assert.throws(() => validateSnapshot(snapshot), /rate_limit_resets/);
+        }
+    });
+});
+
 // ============================================================
 // validateSnapshot — happy path
 // ============================================================

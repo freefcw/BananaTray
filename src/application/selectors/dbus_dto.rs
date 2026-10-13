@@ -398,6 +398,60 @@ mod tests {
     }
 
     #[test]
+    fn dbus_reset_entries_filter_expired_rows_and_preserve_summary() {
+        let _g = setup_locale();
+        use crate::models::test_helpers::make_test_provider;
+        use crate::models::{
+            AppSettings, ConnectionStatus, ProviderKind, RateLimitReset, RateLimitResetSnapshot,
+        };
+
+        let mut settings = AppSettings::default();
+        settings
+            .provider
+            .set_enabled(&ProviderId::BuiltIn(ProviderKind::Codex), true);
+        let mut provider = make_test_provider(ProviderKind::Codex, ConnectionStatus::Connected);
+        let now = crate::utils::time_utils::now_epoch_secs();
+        provider.rate_limit_resets = RateLimitResetSnapshot {
+            available_count: Some(3),
+            details_known: true,
+            resets: vec![
+                RateLimitReset {
+                    reset_type: "codex_rate_limits".into(),
+                    title: Some("Expired reset".into()),
+                    granted_at_secs: Some(now - 86_400),
+                    expires_at_secs: Some(now - 1),
+                },
+                RateLimitReset {
+                    reset_type: "codex_rate_limits".into(),
+                    title: Some("Available reset".into()),
+                    granted_at_secs: Some(now - 86_400),
+                    expires_at_secs: Some(now + 86_400),
+                },
+            ],
+        };
+        let mut session = AppSession::new(settings, vec![provider]);
+        let snapshot = DBusQuotaSnapshot::from_session(&session);
+        let json = serde_json::to_value(&snapshot).unwrap();
+        let entries = json["providers"][0]["rate_limit_resets"]
+            .as_array()
+            .unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["reset_type"], "Available reset");
+        assert!(entries[0]["granted_at"].is_string());
+        assert!(entries[0]["expires_at"].is_string());
+        assert_eq!(entries[1]["reset_type"], "1 more without type or expiry");
+        assert!(entries[1]["granted_at"].is_null());
+        assert!(entries[1]["expires_at"].is_null());
+
+        let resets = &mut session.provider_store.providers[0].rate_limit_resets;
+        resets.available_count = Some(2);
+        resets.resets[1].expires_at_secs = Some(now - 1);
+        let snapshot = DBusQuotaSnapshot::from_session(&session);
+        let json = serde_json::to_value(&snapshot).unwrap();
+        assert!(json["providers"][0].get("rate_limit_resets").is_none());
+    }
+
+    #[test]
     fn dbus_snapshot_round_trip_json() {
         let _g = setup_locale();
         use crate::models::test_helpers::make_test_provider;

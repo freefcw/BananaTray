@@ -15,7 +15,7 @@
 - `units.rs` — 百分比 / fraction 归一化常量与纯函数，仅供 quota 模块内部构造器使用；provider 应通过 `QuotaInfo` 的百分比构造器表达语义。
 - `failure.rs` — `ProviderFailure`、`FailureReason`、`FailureAdvice` 的结构化失败语义。
 - `refresh_data.rs` — provider 刷新成功后传回 runtime state 的 `RefreshData`。`rate_limit_resets` 是可兑换限流重置，不是 `quotas` 的一条。
-- `reset.rs` — `RateLimitReset` / `RateLimitResetSnapshot`。数量为 0 时不展示；只有数量、没有明细时 `needs_detail_fetch()` 为 true。
+- `reset.rs` — `RateLimitReset` / `RateLimitResetSnapshot`。数量为 0 时不展示；只有数量、没有明细时 `needs_detail_fetch()` 为 true。`presentation()` 按当前时间排除 `expires_at_secs <= now` 的明细，缓存跨过到期时间后也不再展示；未知到期时间仍保留。数量摘要先扣除全部已知明细，再过滤过期行，避免把过期重置重新算成缺少明细的库存。托盘、设置页、D-Bus 和弹窗高度共用这份展示结果。
 - `provider_status.rs` — `ConnectionStatus`、`UpdateStatus`、`ErrorKind`、`ProviderStatus` 及状态转换方法。成功刷新会整份替换 `rate_limit_resets`；失败保留上一份。
 - `tests.rs` — quota 模块单元测试，覆盖 stable key、状态阈值、构造器和 ProviderStatus 转换。
 

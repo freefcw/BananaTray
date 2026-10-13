@@ -51,15 +51,19 @@ fn popup_height_adds_reset_card_without_changing_quota_slots() {
             reset_type: "codex_rate_limits".into(),
             title: Some("Full reset".into()),
             granted_at_secs: Some(1_735_689_600),
-            expires_at_secs: Some(1_738_368_000),
+            expires_at_secs: Some(crate::utils::time_utils::now_epoch_secs() + 86_400),
         }],
     };
-    let store = ProviderStore {
+    let mut store = ProviderStore {
         providers: vec![provider],
     };
     let with_reset = compute_popup_height(&nav, &store, &settings);
     let extra = crate::models::reset_popup_extra(1, false);
     assert!((with_reset - without - extra).abs() < f32::EPSILON);
+
+    store.providers[0].rate_limit_resets.resets[0].expires_at_secs =
+        Some(crate::utils::time_utils::now_epoch_secs() - 1);
+    assert_eq!(compute_popup_height(&nav, &store, &settings), without);
 }
 
 #[test]

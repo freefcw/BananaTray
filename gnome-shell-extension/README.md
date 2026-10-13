@@ -214,6 +214,7 @@ mock 与真实 daemon 契约漂移。
 `DBusQuotaSnapshot` 顶层必须包含 `schema_version`。当前 Extension 只接受
 `schema_version: 1`，并在渲染前校验最小必填字段；字段缺失、类型不匹配或版本不支持时会显示错误态并写入 GNOME Shell 日志。
 `header.elapsed_secs` 是可选字段，仅在 `status_kind == Stale` 时用于本地化“多久前”文案；若缺失，Extension 仍会回退读取 daemon 的 `status_text`。
+`provider.rate_limit_resets` 是可选数组，缺失 / `null` / 空数组时不展示重置区。明细条目的 `reset_type`、`granted_at`、`expires_at` 是 daemon 已格式化的文本，未知时间为 `—`；数量摘要用 `reset_type` 存放说明，两个时间字段为 `null`。daemon 构建快照时过滤过期明细，扩展沿用快照，不参与额度状态和告警；完整字段语义见 `src/dbus/README.md`。
 `connection`、`worst_status` 和 quota `status_level` 的未知枚举值会写入日志，状态等级未知时按 Yellow 渲染，
 用于暴露同版本内的 daemon / Extension 协议漂移。
 
