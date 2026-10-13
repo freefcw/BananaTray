@@ -27,6 +27,10 @@ BananaTray — macOS/Linux system tray app for monitoring AI coding assistant qu
 - **Read `AGENTS_local.md` first** — if the file exists in the project root, read it before running any commands. It contains machine-specific environment config (e.g. tool paths) and is git-ignored.
 - **Lockfile before blame** — if build/test/check fails after dependency-related changes (especially patched git crates, new upstream APIs, or code that clearly expects newer dependency behavior), first run `cargo update` or targeted `cargo update -p <crate>` to refresh `Cargo.lock`, then judge whether the failure is a real source issue.
 
+- **macOS 临时目录隔离** — 如果 `just ci-fast` 在 GNOME 翻译检查时报 `mktemp ... bananatray-i18n.XXXXXX.mo: File exists`，可用 `TMPDIR="$(mktemp -d /tmp/bananatray-verify.XXXXXX)" just ci-fast` 重跑，避免与上次失败留下的临时文件冲突，无需删除已有文件或跳过门禁。
+
+- **拆分提交验证** — i18n 测试会扫描 `src/` 下的 Rust 文件，包含未跟踪文件；pre-commit 暂存未提交改动时不会移走未跟踪文件。新增 provider 尚未提交而对应 locale 被暂存隐藏时，会误报缺少翻译 key。使用只包含待提交快照的临时 worktree 验证和提交，避免后续改动干扰，不跳过提交钩子。
+
 ## Commands
 
 ```bash
