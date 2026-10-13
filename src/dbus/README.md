@@ -140,7 +140,7 @@ validator 与 presentation 共享 `dbusContract.js` 中的稳定集合，三者�
 
 `provider.rate_limit_resets` 是 schema v1 内新增的可选数组，空列表省略，旧扩展可忽略。它不属于 `quotas`，不影响 `worst_status`：
 
-- 明细条目包含字符串 `reset_type`、`granted_at` 和 `expires_at`；类型与时间文本由 daemon 格式化，未知时间为 `—`。
+- 明细条目包含字符串 `reset_type`、`granted_at` 和 `expires_at`；类型与时间文本由 daemon 格式化，时间使用目标日期的本地时区偏移，未知时间为 `—`。
 - 数量摘要条目的 `reset_type` 是本地化数量说明，`granted_at` / `expires_at` 都为 `null`；扩展按摘要行展示。
 - daemon 构建快照时排除已经到期的明细，过期行不转成缺少明细的库存；已发送的快照没有 epoch 字段，扩展不会自行推进过期状态，需等下一份快照。
 

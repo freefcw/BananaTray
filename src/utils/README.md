@@ -20,7 +20,7 @@ Shared time utilities consolidating logic previously duplicated across providers
 - `now_epoch_secs()` — current time as epoch seconds
 - `format_countdown(delta_secs)` — human-readable countdown (e.g. "Resets in 2d 5h", "Resets in 45m", "Resets soon")
 - `format_reset_from_epoch(epoch)` — countdown from epoch seconds
-- `format_local_minute(epoch)` — local `YYYY-MM-DD HH:MM`; `format_minute_at_offset` pins the offset for tests
+- `format_local_minute(epoch)` — local `YYYY-MM-DD HH:MM`, using the offset at the target timestamp rather than the current offset (including daylight-saving transitions); `format_minute_at_offset` formats with an explicit fixed offset. Local-time regression tests run in an isolated `TZ=America/New_York` subprocess to avoid changing the test process timezone
 - `is_expired_epoch_secs(expiry)` — token expiry check
 - `is_older_than(iso, max_age_secs)` — staleness check
 

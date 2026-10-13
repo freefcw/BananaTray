@@ -86,8 +86,12 @@ pub fn format_reset_from_epoch(epoch_secs: i64) -> String {
 
 /// 把 Unix 秒格式化成本地时区的 `YYYY-MM-DD HH:MM`。
 pub fn format_local_minute(epoch_secs: i64) -> Option<String> {
-    let offset = chrono::Local::now().offset().local_minus_utc();
-    format_minute_at_offset(epoch_secs, offset)
+    let utc = chrono::DateTime::from_timestamp(epoch_secs, 0)?;
+    Some(
+        utc.with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M")
+            .to_string(),
+    )
 }
 
 /// 用固定 UTC 偏移（秒）格式化到分钟，供测试锁定时区。
@@ -178,6 +182,43 @@ mod tests {
         assert_eq!(format_countdown(3600), "⏱ Resets in 1h");
         assert_eq!(format_countdown(90000), "⏱ Resets in 1d 1h");
         assert_eq!(format_countdown(86400), "⏱ Resets in 1d");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_minute_uses_the_offset_at_the_target_date() {
+        if std::env::var_os("BANANATRAY_TEST_LOCAL_MINUTE").is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "utils::time_utils::tests::local_minute_uses_the_offset_at_the_target_date",
+                    "--nocapture",
+                ])
+                .env("TZ", "America/New_York")
+                .env("BANANATRAY_TEST_LOCAL_MINUTE", "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+
+        for (timestamp, expected) in [
+            ("2025-01-01T00:00:00Z", "2024-12-31 19:00"),
+            ("2025-07-01T00:00:00Z", "2025-06-30 20:00"),
+            ("2025-03-09T06:59:00Z", "2025-03-09 01:59"),
+            ("2025-03-09T07:00:00Z", "2025-03-09 03:00"),
+            ("2025-11-02T05:59:00Z", "2025-11-02 01:59"),
+            ("2025-11-02T06:00:00Z", "2025-11-02 01:00"),
+        ] {
+            let epoch = parse_iso8601_to_epoch(timestamp).unwrap();
+            assert_eq!(format_local_minute(epoch).as_deref(), Some(expected));
+        }
+        assert!(format_local_minute(i64::MAX).is_none());
     }
 
     #[test]
