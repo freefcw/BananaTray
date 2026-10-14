@@ -164,6 +164,7 @@ pub(super) fn newapi_delete_finished(
     request_id: u64,
     provider_id: ProviderId,
     result: Result<std::path::PathBuf, CustomProviderLifecycleFailure>,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     if !session
@@ -174,7 +175,7 @@ pub(super) fn newapi_delete_finished(
     }
     match result {
         Ok(_path) => {
-            super::shared::commit_deleted_provider(session, &provider_id, effects);
+            super::shared::commit_deleted_provider(session, &provider_id, now_ms, effects);
             effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into())
         }
         Err(_failure) => {

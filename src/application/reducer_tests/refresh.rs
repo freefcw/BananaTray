@@ -581,13 +581,16 @@ fn skipped_does_not_touch_non_refreshing_provider() {
         .provider_store
         .find_by_id_mut(&pid(ProviderKind::Claude))
         .unwrap()
-        .mark_refresh_succeeded(crate::models::RefreshData {
-            quotas: vec![],
-            account_email: None,
-            account_tier: None,
-            source_label: None,
-            rate_limit_resets: Default::default(),
-        });
+        .mark_refresh_succeeded(
+            crate::models::RefreshData {
+                quotas: vec![],
+                account_email: None,
+                account_tier: None,
+                source_label: None,
+                rate_limit_resets: Default::default(),
+            },
+            std::time::Instant::now(),
+        );
 
     let effects = reduce(
         &mut session,

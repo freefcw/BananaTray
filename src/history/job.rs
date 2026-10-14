@@ -18,8 +18,15 @@ pub enum HistoryJob {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HistoryScope {
+    Settings,
+    Popup,
+}
+
 #[derive(Debug, Clone)]
 pub struct HistoryLoadRequest {
+    pub scope: HistoryScope,
     pub request_id: u64,
     pub provider_id: String,
     /// 选中的查询窗口。画出来的横轴是窗口内样本的起止时间。

@@ -57,6 +57,10 @@ pub enum SettingsEffect {
     SyncAutoLaunch(bool),
     ApplyLocale(String),
     UpdateLogLevel(String),
+    ResolveTokenInputState {
+        provider_id: ProviderId,
+        request_id: u64,
+    },
 }
 
 #[derive(Debug)]

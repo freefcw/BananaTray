@@ -4,7 +4,9 @@ use gpui::{App, Window};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::settings_window::{clear_popup_view, notify_popup_view, schedule_open_settings_window};
+use super::settings_window::{
+    clear_popup_view, notify_popup_view, notify_settings_view, schedule_open_settings_window,
+};
 
 struct WindowShellCaps<'a> {
     window: &'a mut Window,
@@ -52,6 +54,7 @@ struct AppShellCaps<'a> {
 impl crate::runtime::ContextCapabilities for AppShellCaps<'_> {
     fn render(&mut self, state: &Rc<RefCell<AppState>>) {
         notify_popup_view(state, self.cx);
+        notify_settings_view(self.cx);
     }
 
     fn publish_quota_snapshot(&mut self, state: &Rc<RefCell<AppState>>) {

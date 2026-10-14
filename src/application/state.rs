@@ -388,6 +388,7 @@ fn build_initial_settings_ui_state(
         history_retention_dropdown_open: false,
         provider_history_retention_dropdown_open: false,
         token_editing_provider: None,
+        token_input_query: TokenInputQueryState::default(),
         modal: SettingsModalState::Idle,
         script_provider_testing: false,
         script_provider_test_request_id: 0,
@@ -508,6 +509,7 @@ pub struct SettingsUiState {
     pub provider_history_retention_dropdown_open: bool,
     /// 正在编辑 Token 的 Provider ID（None = 未编辑）
     pub token_editing_provider: Option<ProviderId>,
+    pub token_input_query: TokenInputQueryState,
     /// 右侧面板的互斥模态状态机。
     ///
     /// 把原本散落的 `adding_newapi` / `editing_newapi` / `adding_provider` /
@@ -532,6 +534,46 @@ pub struct SettingsUiState {
     pub global_hotkey_error: Option<GlobalHotkeyError>,
     /// 与 `global_hotkey_error` 对应的候选热键（持久化格式）
     pub global_hotkey_error_candidate: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub enum TokenInputLoadState {
+    #[default]
+    Idle,
+    Loading {
+        provider_id: ProviderId,
+        request_id: u64,
+        previous: Option<crate::models::TokenInputState>,
+    },
+    Ready {
+        provider_id: ProviderId,
+        display: crate::models::TokenInputState,
+    },
+    Unavailable {
+        provider_id: ProviderId,
+    },
+}
+
+/// Token 设置面板的生命周期、请求编号和当前结果。
+///
+/// 这些字段必须一起变化：窗口关闭或面板离开时使当前查询失效，
+/// 新查询递增编号，异步结果只允许回填当前编号。
+#[derive(Debug, Default)]
+pub struct TokenInputQueryState {
+    pub window_open: bool,
+    pub request_id: u64,
+    pub load: TokenInputLoadState,
+}
+
+impl TokenInputLoadState {
+    pub fn provider_id(&self) -> Option<&ProviderId> {
+        match self {
+            Self::Idle => None,
+            Self::Loading { provider_id, .. }
+            | Self::Ready { provider_id, .. }
+            | Self::Unavailable { provider_id } => Some(provider_id),
+        }
+    }
 }
 
 impl SettingsUiState {
@@ -766,6 +808,8 @@ pub enum HistoryLoadState {
 pub struct DebugUiState {
     /// 当前选中的调试 Provider
     pub selected_provider: Option<ProviderId>,
+    /// 当前正在执行 Debug 刷新的 Provider；独立于当前下拉框选择。
+    pub active_refresh_provider: Option<ProviderId>,
     /// Provider 下拉是否展开
     pub provider_dropdown_open: bool,
     /// 是否正在调试刷新中

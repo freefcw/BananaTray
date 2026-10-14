@@ -230,6 +230,7 @@ pub(super) fn script_provider_delete_finished(
     request_id: u64,
     provider_id: ProviderId,
     result: Result<ScriptProviderDeleteSuccess, CustomProviderLifecycleFailure>,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     if !session
@@ -240,11 +241,11 @@ pub(super) fn script_provider_delete_finished(
     }
     match result {
         Ok(ScriptProviderDeleteSuccess::DeletedAll { .. }) => {
-            super::shared::commit_deleted_provider(session, &provider_id, effects);
+            super::shared::commit_deleted_provider(session, &provider_id, now_ms, effects);
             effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
         }
         Ok(ScriptProviderDeleteSuccess::DeletedYamlOnly { .. }) => {
-            super::shared::commit_deleted_provider(session, &provider_id, effects);
+            super::shared::commit_deleted_provider(session, &provider_id, now_ms, effects);
             super::shared::notify_plain_i18n(
                 effects,
                 "script_provider.delete_partial_title",

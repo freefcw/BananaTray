@@ -6,18 +6,51 @@ mod refresh;
 mod script_provider;
 mod settings;
 mod shared;
+mod token_input;
 
 use super::state::AppSession;
 use crate::application::{AppAction, AppEffect};
 
 pub use shared::build_config_sync_request;
 
+#[derive(Debug, Clone, Copy)]
+pub struct ReductionTime {
+    pub wall_ms: i64,
+    pub monotonic: std::time::Instant,
+}
+
+#[cfg(test)]
+pub(crate) fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
+    static MONOTONIC: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    reduce_at(
+        session,
+        action,
+        ReductionTime {
+            wall_ms: 1_800_000_000_000,
+            monotonic: *MONOTONIC.get_or_init(std::time::Instant::now),
+        },
+    )
+}
+
 /// 将 action 穷尽分派到对应领域 reducer。
 ///
 /// 这里直接解构 payload，避免先按家族转发后再用 `unreachable!` 做第二次 match。
 /// 新增 `AppAction` 变体时，编译器会要求在此补齐唯一的分派入口。
-pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
+pub fn reduce_at(
+    session: &mut AppSession,
+    action: AppAction,
+    time: ReductionTime,
+) -> Vec<AppEffect> {
     let mut effects = Vec::new();
+    let token_query_update = match &action {
+        AppAction::SettingsWindowOpened
+        | AppAction::SaveProviderToken { .. }
+        | AppAction::RefreshEventReceived(crate::refresh::RefreshEvent::ProvidersReloaded {
+            ..
+        }) => token_input::QueryUpdate::Invalidate,
+        AppAction::RefreshTokenInputState => token_input::QueryUpdate::Recheck,
+        _ => token_input::QueryUpdate::Sync,
+    };
 
     // 后台完成动作不会改变用户正在操作的表单上下文；其余前台动作一旦发生，
     // 迟到的保存失败仍回滚持久状态，但不得再恢复旧表单覆盖新输入。
@@ -28,8 +61,24 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
     }
 
     match action {
-        AppAction::SelectNavTab(tab) => settings::select_nav_tab(session, tab, &mut effects),
+        AppAction::SelectNavTab(tab) => {
+            settings::select_nav_tab(session, tab, time.wall_ms, &mut effects)
+        }
         AppAction::SetSettingsTab(tab) => settings::set_settings_tab(session, tab, &mut effects),
+        AppAction::SettingsWindowOpened => settings::settings_window_opened(session, &mut effects),
+        AppAction::SettingsWindowClosed => token_input::window_closed(session),
+        AppAction::RefreshTokenInputState => {}
+        AppAction::TokenInputStateResolved {
+            provider_id,
+            request_id,
+            display,
+        } => {
+            token_input::apply_resolved(session, provider_id, request_id, display, &mut effects);
+        }
+        AppAction::DebugRefreshStarted {
+            provider_id,
+            previous_log_level,
+        } => debug::debug_refresh_started(session, provider_id, previous_log_level),
         AppAction::ToggleCadenceDropdown => {
             settings::toggle_cadence_dropdown(session, &mut effects)
         }
@@ -40,7 +89,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             history::toggle_provider_history_retention_dropdown(session, &mut effects)
         }
         AppAction::SetHistoryRange(range) => {
-            history::set_history_range(session, range, &mut effects)
+            history::set_history_range(session, range, time.wall_ms, &mut effects)
         }
         AppAction::BeginClearProviderHistory => {
             history::begin_clear_provider_history(session, &mut effects)
@@ -49,21 +98,31 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             history::cancel_clear_provider_history(session, &mut effects)
         }
         AppAction::ConfirmClearProviderHistory => {
-            history::confirm_clear_provider_history(session, &mut effects)
+            history::confirm_clear_provider_history(session, time.wall_ms, &mut effects)
         }
         AppAction::BeginClearAllHistory => history::begin_clear_all_history(session, &mut effects),
         AppAction::CancelClearAllHistory => {
             history::cancel_clear_all_history(session, &mut effects)
         }
         AppAction::ConfirmClearAllHistory => {
-            history::confirm_clear_all_history(session, &mut effects)
+            history::confirm_clear_all_history(session, time.wall_ms, &mut effects)
         }
-        AppAction::ApplyHistoryRetention => history::push_apply_retention(session, &mut effects),
+        AppAction::ApplyHistoryRetention => {
+            history::push_apply_retention(session, time.wall_ms, &mut effects)
+        }
         AppAction::QuotaHistoryLoaded {
+            scope,
             request_id,
             provider_id,
             outcome,
-        } => history::apply_loaded(session, request_id, provider_id, outcome, &mut effects),
+        } => history::apply_loaded(
+            session,
+            scope,
+            request_id,
+            provider_id,
+            outcome,
+            &mut effects,
+        ),
         AppAction::SaveGlobalHotkey(hotkey) => {
             settings::save_global_hotkey(session, hotkey, &mut effects)
         }
@@ -74,14 +133,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             settings::finish_global_hotkey_apply(session, requested, result, &mut effects)
         }
         AppAction::UpdateSetting(change) => {
-            settings::apply_setting_change(session, change, &mut effects)
+            settings::apply_setting_change(session, change, time.wall_ms, &mut effects)
         }
         AppAction::OpenSettings { provider } => {
-            settings::open_settings(session, provider, &mut effects)
+            settings::open_settings(session, provider, time.wall_ms, &mut effects)
         }
         AppAction::OpenUrl(url) => settings::open_url(url, &mut effects),
         AppAction::PopupVisibilityChanged(visible) => {
-            settings::popup_visibility_changed(session, visible, &mut effects)
+            settings::popup_visibility_changed(session, visible, time.wall_ms, &mut effects)
         }
         AppAction::ToggleOverviewExpanded(id) => {
             settings::toggle_overview_expanded(session, id, &mut effects)
@@ -93,7 +152,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
         AppAction::RefreshAll => refresh::refresh_all_providers(session, &mut effects),
         AppAction::RefreshEventReceived(event) => {
-            refresh::apply_refresh_event(session, event, &mut effects)
+            refresh::apply_refresh_event(session, event, time, &mut effects)
         }
 
         AppAction::UpdateLogLevel(level) => debug::update_log_level(level, &mut effects),
@@ -112,7 +171,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         AppAction::ClearDebugLogs => debug::clear_debug_logs(&mut effects),
 
         AppAction::SelectSettingsProvider(id) => {
-            provider_sidebar::select_settings_provider(session, id, &mut effects)
+            provider_sidebar::select_settings_provider(session, id, time.wall_ms, &mut effects)
         }
         AppAction::SetTokenEditing {
             provider_id,
@@ -181,7 +240,14 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             request_id,
             provider_id,
             result,
-        } => newapi::newapi_delete_finished(session, request_id, provider_id, result, &mut effects),
+        } => newapi::newapi_delete_finished(
+            session,
+            request_id,
+            provider_id,
+            result,
+            time.wall_ms,
+            &mut effects,
+        ),
         AppAction::ConfirmDeleteNewApi => newapi::confirm_delete_newapi(session, &mut effects),
         AppAction::CancelDeleteNewApi => newapi::cancel_delete_newapi(session, &mut effects),
 
@@ -248,6 +314,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
             request_id,
             provider_id,
             result,
+            time.wall_ms,
             &mut effects,
         ),
         AppAction::ConfirmDeleteScriptProvider => {
@@ -258,6 +325,7 @@ pub fn reduce(session: &mut AppSession, action: AppAction) -> Vec<AppEffect> {
         }
     }
 
+    token_input::sync_query(session, token_query_update, &mut effects);
     effects
 }
 

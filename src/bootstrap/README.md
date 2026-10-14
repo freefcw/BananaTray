@@ -10,9 +10,9 @@ the `app` feature and may depend on GPUI.
 |------|----------------|
 | `../bootstrap.rs` | Thin module root; declares bootstrap submodules and re-exports the stable shell entry points used by `main`, `ui`, `tray`, and `dbus`. |
 | `capabilities.rs` | Implements `WindowShellCaps` / `AppShellCaps` and exposes `dispatch_in_window()` / `dispatch_in_app()` as the full-context runtime dispatch facade. |
-| `settings_window.rs` | Holds the shell hook registry for popup/settings view factories and owns settings window open, reuse, display targeting, and activation workarounds. |
+| `settings_window.rs` | Directly calls concrete UI factories / popup lifecycle entry points and owns settings window open, reuse, display targeting, close observation and activation workarounds. Closing invalidates token-query state; App-context render also notifies the existing settings view. |
 | `ui_bootstrap.rs` | Initializes locale, UI toolkit, idle GPU cache trim, initial tray icon/tooltip, and notification authorization. |
-| `workers/` | Background worker bootstrap and foreground event pumps: refresh coordinator, independent custom-provider I/O and script-test pumps, and Linux D-Bus snapshot emission. |
+| `workers/` | Background worker bootstrap and foreground event pumps: refresh coordinator, independent custom-provider I/O and script-test pumps, token-display completion pump, and Linux D-Bus snapshot emission. |
 | `event_sources/` | External app event registration: app shutdown, tray callbacks/menu fallback, startup global hotkey, and secondary instance SHOW bridge. |
 
 ## Boundary
@@ -20,7 +20,7 @@ the `app` feature and may depend on GPUI.
 - `bootstrap` is the shell composition root, not a domain layer.
 - `runtime` owns reducer/effect execution and capability traits, but it must not know concrete
   `SettingsView`, tray controller, D-Bus handles, or GPUI window handles.
-- `ui` provides concrete views and hook factories; `bootstrap` performs the shell-side registration.
+- `ui` provides concrete views, factories and popup lifecycle entry points; `bootstrap` calls them directly. There is no optional callback registry or registration-order prerequisite.
 - `tray`, `platform`, and `dbus` own their local protocols/adapters. The GPUI foreground wiring
   that combines them with `AppState` stays here.
 

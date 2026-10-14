@@ -38,11 +38,8 @@ pub(crate) fn build_settings_view(
     state: Rc<RefCell<AppState>>,
     cx: &mut App,
 ) -> Entity<SettingsView> {
+    crate::bootstrap::dispatch_in_app(&state, AppAction::SettingsWindowOpened, cx);
     cx.new(|cx| SettingsView::new(state, cx))
-}
-
-pub(crate) fn register_shell_hooks() {
-    crate::bootstrap::register_build_settings_view(build_settings_view);
 }
 
 // ============================================================================
@@ -356,10 +353,13 @@ pub(crate) struct TokenInputDraft {
     pub input: Entity<InputState>,
 }
 
+const TOKEN_INPUT_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub(crate) struct SettingsView {
     pub(crate) state: Rc<RefCell<AppState>>,
     /// 当前交互设置面板的 Token 输入框（通用，不绑定特定 provider）
     pub(crate) token_input: Option<TokenInputDraft>,
+    token_input_refresh_task: Option<gpui::Task<()>>,
     /// General Tab 全局热键捕获输入框
     pub(crate) global_hotkey_input: Option<Entity<HotkeyInputState>>,
     /// 上次同步进捕获控件的已保存热键值，用来避免覆盖用户尚未保存的录制结果
@@ -382,17 +382,14 @@ pub(crate) struct SettingsView {
 impl SettingsView {
     pub(crate) fn new(state: Rc<RefCell<AppState>>, cx: &mut Context<Self>) -> Self {
         info!(target: "settings", "constructing settings view");
-        // 新窗口实例没有 view-local 草稿，清除前一个窗口可能残留的编辑标记
-        let user_theme = {
-            let session = &mut state.borrow_mut().session;
-            session.settings_ui.token_editing_provider = None;
-            session.settings.display.theme
-        };
+        // 新窗口实例没有 view-local 草稿，残留的编辑标记由建窗 action 清除。
+        let user_theme = state.borrow().session.settings.display.theme;
         let load_debug_diagnostics =
             state.borrow().session.settings_ui.active_tab == SettingsTab::Debug;
         let mut view = Self {
             state,
             token_input: None,
+            token_input_refresh_task: None,
             global_hotkey_input: None,
             global_hotkey_synced_value: None,
             _appearance_sub: None,
@@ -404,6 +401,7 @@ impl SettingsView {
             debug_diagnostics_loading: false,
             _debug_diagnostics_task: None,
         };
+        view.start_token_input_refresh_task(cx);
         if load_debug_diagnostics {
             view.refresh_debug_diagnostics(cx);
         }
@@ -490,6 +488,35 @@ impl SettingsView {
 
     pub(in crate::ui::settings_window) fn clear_token_input(&mut self) {
         self.token_input = None;
+    }
+
+    fn start_token_input_refresh_task(&mut self, cx: &mut Context<Self>) {
+        self.token_input_refresh_task = Some(cx.spawn(async move |view, cx| loop {
+            gpui::Timer::after(TOKEN_INPUT_REFRESH_INTERVAL).await;
+            if view
+                .update(cx, |view, cx| {
+                    let visible = view
+                        .state
+                        .borrow()
+                        .session
+                        .settings_ui
+                        .token_input_query
+                        .load
+                        .provider_id()
+                        .is_some();
+                    if visible {
+                        runtime::dispatch_in_context(
+                            &view.state,
+                            AppAction::RefreshTokenInputState,
+                            cx,
+                        );
+                    }
+                })
+                .is_err()
+            {
+                break;
+            }
+        }));
     }
 
     /// 根据用户主题设置 + 窗口外观解析设置窗口主题

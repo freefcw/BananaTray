@@ -48,6 +48,7 @@ view-state snapshot, not in live `SettingsView.state` reads from section rendere
 
 - Detail renderers read provider identity, info, usage, quota visibility, settings capability, and
   confirmation flags from `SettingsProviderDetailViewState`.
+- Token display consumes `detail.token_input` (Loading / Ready / Unavailable), not live manager or credential lookups. Unknown external status is not a missing-token result; input drafts remain view-local.
 - New detail-panel state should first be derived in `application/selectors/settings.rs` and covered by
   selector tests before a renderer consumes it.
 - Section renderers must not inspect `SettingsModalState`, provider store internals, or persisted

@@ -10,7 +10,6 @@ pub(crate) fn sync_initial_auto_launch(settings: &AppSettings) {
 /// 初始化 i18n、UI 工具包、托盘图标（在 GPUI run 闭包内调用）
 pub(crate) fn bootstrap_ui(cx: &mut App, settings: &AppSettings) {
     crate::i18n::apply_locale(&settings.display.language);
-    crate::ui::register_shell_hooks();
 
     fc_ui::init(cx);
     crate::ui::sync_fc_ui_theme(settings.display.theme, cx.window_appearance(), cx);

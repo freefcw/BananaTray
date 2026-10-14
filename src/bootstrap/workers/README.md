@@ -10,6 +10,7 @@ Foreground bridges for background work owned by the app shell.
 | `custom_provider.rs` | Owns the serial NewAPI / script-provider CRUD worker (including edit loads and save-time settings flush) and returns finished actions to the reducer. |
 | `script_test.rs` | Owns the independent serial script Run Test worker and returns `ScriptProviderTestFinished` to the reducer. |
 | `history.rs` | Owns the quota-history SQLite thread. It appends, loads, and purges jobs, then wakes the foreground with `QuotaHistoryLoaded`. It does not read settings or call the reducer. |
+| `token_input.rs` | Drains token-display completion actions from the runtime ledger after a lightweight wake-up, then dispatches them in the GPUI foreground. Lookup I/O and request validity policy stay in runtime / application. |
 | `linux_dbus.rs` | Linux-only D-Bus snapshot emission after foreground state changes. |
 
 ## Boundary

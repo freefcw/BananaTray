@@ -125,6 +125,7 @@ pub(crate) fn execute_job(
 
 fn unavailable_action(request: HistoryLoadRequest) -> AppAction {
     AppAction::QuotaHistoryLoaded {
+        scope: request.scope,
         request_id: request.request_id,
         provider_id: ProviderId::from_id_key(&request.provider_id),
         outcome: HistoryLoadOutcome::Unavailable,
@@ -139,6 +140,7 @@ fn ready_action(request: HistoryLoadRequest, rows: Vec<crate::history::HistoryRo
         request.axis_end_ms,
     ));
     AppAction::QuotaHistoryLoaded {
+        scope: request.scope,
         request_id: request.request_id,
         provider_id: ProviderId::from_id_key(&request.provider_id),
         outcome,

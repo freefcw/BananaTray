@@ -255,6 +255,7 @@ fn load_result_settles_popup_scope_without_touching_settings_scope() {
     reduce(
         &mut session,
         AppAction::QuotaHistoryLoaded {
+            scope: crate::history::HistoryScope::Popup,
             request_id: 7,
             provider_id: pid(ProviderKind::Claude),
             outcome: HistoryLoadOutcome::Ready(ready),
@@ -265,4 +266,140 @@ fn load_result_settles_popup_scope_without_touching_settings_scope() {
         HistoryLoadState::Ready { .. }
     ));
     assert!(matches!(session.history_ui.load, HistoryLoadState::Idle));
+}
+
+#[test]
+fn fixed_reduction_time_drives_samples_queries_and_refresh_age() {
+    let mut session = make_session();
+    let id = pid(ProviderKind::Claude);
+    session.settings_ui.selected_provider = id.clone();
+    session.nav.switch_to(NavTab::Provider(id.clone()));
+    session.settings.provider.set_enabled(&id, true);
+    let time = crate::application::ReductionTime {
+        wall_ms: 1_900_000_000_123,
+        monotonic: std::time::Instant::now() - std::time::Duration::from_secs(17),
+    };
+    let effects = crate::application::reduce_at(&mut session, finished(success()), time);
+    let mut loads = 0;
+    for effect in effects {
+        match effect {
+            AppEffect::Common(CommonEffect::History(HistoryJob::Append { sample, cutoff_ms })) => {
+                assert_eq!(sample.captured_at_ms, time.wall_ms);
+                assert_eq!(cutoff_ms, time.wall_ms - 90 * crate::history::DAY_MS);
+            }
+            AppEffect::Common(CommonEffect::History(HistoryJob::Load(request))) => {
+                assert_eq!(request.axis_end_ms, time.wall_ms);
+                assert_eq!(request.captured_to_ms, time.wall_ms + 1);
+                loads += 1;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(loads, 2);
+    assert_eq!(
+        session
+            .provider_store
+            .find_by_id(&id)
+            .unwrap()
+            .last_refreshed_instant,
+        Some(time.monotonic)
+    );
+}
+
+#[test]
+fn same_numbered_history_queries_do_not_cross_scopes() {
+    let mut session = make_session();
+    session.settings_ui.selected_provider = pid(ProviderKind::Claude);
+    let settings_effects = reduce(
+        &mut session,
+        AppAction::SetHistoryRange(HistoryRange::Last7Days),
+    );
+    let popup_effects = reduce(
+        &mut session,
+        AppAction::SelectNavTab(NavTab::Provider(pid(ProviderKind::Claude))),
+    );
+    let load_request = |effects: Vec<AppEffect>| {
+        effects
+            .into_iter()
+            .find_map(|effect| match effect {
+                AppEffect::Common(CommonEffect::History(HistoryJob::Load(request))) => {
+                    Some(request)
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let settings_request = load_request(settings_effects);
+    let popup_request = load_request(popup_effects);
+    assert_eq!(settings_request.request_id, popup_request.request_id);
+    reduce(
+        &mut session,
+        AppAction::QuotaHistoryLoaded {
+            scope: settings_request.scope,
+            request_id: settings_request.request_id,
+            provider_id: pid(ProviderKind::Claude),
+            outcome: HistoryLoadOutcome::Ready(crate::history::HistoryReady {
+                range: settings_request.range,
+                axis_start_ms: settings_request.axis_start_ms,
+                axis_end_ms: settings_request.axis_end_ms,
+                state: crate::history::HistoryReadyState::Empty,
+            }),
+        },
+    );
+    assert!(matches!(
+        session.history_ui.load,
+        HistoryLoadState::Ready { .. }
+    ));
+    assert!(matches!(
+        session.popup_history_ui.load,
+        HistoryLoadState::Loading { .. }
+    ));
+    reduce(
+        &mut session,
+        AppAction::QuotaHistoryLoaded {
+            scope: popup_request.scope,
+            request_id: popup_request.request_id,
+            provider_id: pid(ProviderKind::Claude),
+            outcome: HistoryLoadOutcome::Ready(crate::history::HistoryReady {
+                range: popup_request.range,
+                axis_start_ms: popup_request.axis_start_ms,
+                axis_end_ms: popup_request.axis_end_ms,
+                state: crate::history::HistoryReadyState::Empty,
+            }),
+        },
+    );
+    assert!(
+        matches!(session.history_ui.load, HistoryLoadState::Ready { ready, .. } if ready.range == HistoryRange::Last7Days)
+    );
+    assert!(
+        matches!(session.popup_history_ui.load, HistoryLoadState::Ready { ready, .. } if ready.range == HistoryRange::Last24Hours)
+    );
+}
+
+#[test]
+fn stale_history_response_is_ignored_within_its_scope() {
+    let mut session = make_session();
+    session.settings_ui.selected_provider = pid(ProviderKind::Claude);
+    reduce(
+        &mut session,
+        AppAction::SetHistoryRange(HistoryRange::Last7Days),
+    );
+    let old_id = session.history_ui.request_id;
+    reduce(
+        &mut session,
+        AppAction::SetHistoryRange(HistoryRange::Last30Days),
+    );
+    let effects = reduce(
+        &mut session,
+        AppAction::QuotaHistoryLoaded {
+            scope: crate::history::HistoryScope::Settings,
+            request_id: old_id,
+            provider_id: pid(ProviderKind::Claude),
+            outcome: HistoryLoadOutcome::Unavailable,
+        },
+    );
+    assert!(effects.is_empty());
+    assert!(
+        matches!(session.history_ui.load, HistoryLoadState::Loading { request_id, .. } if request_id != old_id)
+    );
 }

@@ -632,6 +632,31 @@ fn toggle_overview_expanded_flips_session_state_without_persisting() {
 }
 
 #[test]
+fn opening_settings_window_clears_previous_token_editor_without_changing_preferences() {
+    let mut session = make_session();
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Claude));
+    session.settings_ui.modal = crate::application::SettingsModalState::AddingNewApi;
+    session.settings_ui.pending_custom_provider_save_request_id = Some(7);
+    let before = session.settings.clone();
+    let effects = reduce(&mut session, AppAction::SettingsWindowOpened);
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    assert_eq!(
+        session.settings_ui.pending_custom_provider_save_request_id,
+        Some(7)
+    );
+    assert_eq!(
+        session.settings_ui.modal,
+        crate::application::SettingsModalState::AddingNewApi
+    );
+    assert_eq!(
+        session.settings.system.refresh_interval_mins,
+        before.system.refresh_interval_mins
+    );
+    assert_eq!(session.settings.display.theme, before.display.theme);
+    assert!(has_render(&effects));
+}
+
+#[test]
 fn toggle_session_quota_notifications_resets_usage_baselines() {
     use crate::models::{QuotaInfo, RefreshData};
 

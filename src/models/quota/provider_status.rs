@@ -153,14 +153,14 @@ impl ProviderStatus {
         self.connection = ConnectionStatus::Refreshing;
     }
 
-    pub fn mark_refresh_succeeded(&mut self, data: RefreshData) {
+    pub fn mark_refresh_succeeded(&mut self, data: RefreshData, refreshed_at: Instant) {
         self.quotas = data.quotas;
         self.rate_limit_resets = data.rate_limit_resets;
         self.account_email = data.account_email;
         self.account_tier = data.account_tier;
         self.runtime_source_label = data.source_label;
         self.connection = ConnectionStatus::Connected;
-        self.last_refreshed_instant = Some(Instant::now());
+        self.last_refreshed_instant = Some(refreshed_at);
         self.update_status = None;
         self.last_failure = None;
         self.error_kind = ErrorKind::default();

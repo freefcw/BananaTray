@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，shell hook 由 `bootstrap` 注册 |
+| `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，由 `bootstrap` 直接调用工厂，构造前派发 `SettingsWindowOpened` 清除旧 Token 编辑标记 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 | `quota_usage.rs` | 用量步长步进器共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」） |
 | `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情卡带标题并按单位展示继承 / 自定义身份；三个单位（百分比 / 货币 / 积分·额度）各一行，以彩色徽章（黄=预警、红=严重、强调色=通知，数值按单位带 `%` / `$`）展示生效的剩余值阈值，编辑时三个输入框纵向全宽排列（无响应式断点）。编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
@@ -60,6 +60,8 @@ SettingsView::render()
 
 - 设置窗口和托盘弹窗是**不同的 GPUI 窗口**，可同时存在
 - 设置窗口的异步调度与多显示器复用逻辑已迁至 `bootstrap::schedule_open_settings_window()`
+- Token 查询由进入面板、切换 Provider、保存 override 和 registry 更新事件驱动：reducer 发 `SettingsEffect::ResolveTokenInputState`，runtime 在阻塞线程池执行，bootstrap 前台 pump 回投 `TokenInputStateResolved`。渲染只读 detail selector 的 `token_input`，区分查询中、已确认结果和暂时不可读；本地 override 即时显示，未完成外部查询不显示配置缺失引导。结果只匹配当前 Provider / 请求编号，关闭窗口或离开面板时失效，不在 view 保存凭证副本或 manager 快照。
+- view-owned 定时任务只在可见 Token 面板每 5 秒派发一次复查 action，不读取凭证或执行 provider 方法；在途查询和编辑期间不重复查询，复查保留已确认展示。窗口销毁时定时任务取消，底层不可取消的读取自行完成，但不再回填已关闭的上下文。
 - Token 输入框使用 view-local `TokenInputDraft` 复用 `InputState`，进入编辑时创建草稿，保存 / 取消 / 离开当前 provider 入口时清理；输入容器的键盘 wiring 统一走 fc-ui 官方 `input_state::wire_actions`（自带 `key_context("Input")` / `track_focus` / 全部编辑 action），不要手写 `on_action` 注册——手写版曾长期漏掉 enter/tab/escape 与 disabled 判空
 - 所有 `InputState` / `TextareaState` 实体由 fc-ui 全局 `ThemeState` 提供光标 / 选区 / 占位色，该主题由 `sync_fc_ui_theme()`（`src/ui/fc_ui_theme.rs`）按用户主题偏好 + 系统外观同步安装，primary 覆盖为 BananaTray accent；修改主题链路时不要绕过它单独 `install_theme`
 - 阈值编辑草稿 `QuotaThresholdDraft` 同样为 view-local：target 区分 Global / Provider(id)，渲染非归属目标区域时丢弃（切 Tab / 切 Provider / 离开 detail 都不会串草稿）；输入通过 `QuotaThresholds::parse` 与 reducer 共用同一套校验，错误内联展示

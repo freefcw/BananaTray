@@ -60,9 +60,22 @@ pub(super) fn debug_refresh_provider(session: &mut AppSession, effects: &mut Vec
     let supports_refresh = provider_supports_refresh(session, &id);
     if !session.debug_ui.refresh_active && supports_refresh {
         session.debug_ui.refresh_active = true;
+        session.debug_ui.active_refresh_provider = Some(id.clone());
         session.provider_store.mark_refreshing_by_id(&id);
         effects.push(DebugEffect::StartRefresh(id).into());
         effects.push(ContextEffect::Render.into());
+    }
+}
+
+pub(super) fn debug_refresh_started(
+    session: &mut AppSession,
+    provider_id: ProviderId,
+    previous_log_level: log::LevelFilter,
+) {
+    if session.debug_ui.refresh_active
+        && session.debug_ui.active_refresh_provider.as_ref() == Some(&provider_id)
+    {
+        session.debug_ui.prev_log_level = Some(previous_log_level);
     }
 }
 

@@ -6,10 +6,11 @@
 ## 模块边界
 
 - `mod.rs` — `CommonEffect` 顶层穷尽分派。
-- `settings.rs` — 设置持久化、自启动同步、语言与日志级别应用。
+- `settings.rs` — 设置持久化、自启动同步、语言与日志级别应用，并路由 Token 展示查询。
+- `token_input.rs` — 将 `SettingsEffect::ResolveTokenInputState` 放到阻塞线程池，不读取 GPUI。每项查询捕获 settings / manager 快照，完成后写入只含脱敏展示数据的结果 ledger 并唤醒前台；不同查询可并行，慢旧查询不能挡住新入口。本地保存和 registry 更新由 reducer 推进请求编号，旧结果不采纳。查询异常回传 Unavailable，不伪装成没有 Token。退出关闭唤醒端，不等待不可取消的底层读取。该文件的线程门控测试覆盖真实后台查询与迟到结果。
 - `notification.rs` — quota、普通文本和 Debug 测试通知。
 - `refresh.rs` — refresh 请求发送；发送失败时返回后续 `RefreshEventReceived` action，由 reducer 统一应用失败状态和 render effect。
-- `debug.rs` — Debug 页的平台动作、日志捕获和 Debug 刷新编排。
+- `debug.rs` — Debug 页的平台动作、日志捕获和 Debug 刷新编排。原日志级别通过 `DebugRefreshStarted` 交回 reducer，排在发送失败的完成 action 之前，不直接修改会话状态。
 - `newapi.rs` — NewAPI 保存 / 删除 / 加载的运行时编排。
 - `script_provider.rs` — 自定义脚本 Provider 的 Run Test、脚本 + YAML 保存、删除和编辑加载编排。
 

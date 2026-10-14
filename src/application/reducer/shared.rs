@@ -130,6 +130,7 @@ pub(super) fn settle_custom_provider_save<S: crate::models::CustomProviderSaveSu
 pub(super) fn commit_deleted_provider(
     session: &mut AppSession,
     provider_id: &ProviderId,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     session
@@ -141,5 +142,5 @@ pub(super) fn commit_deleted_provider(
         session.settings_ui.selected_provider = session.first_sidebar_provider();
     }
     effects.push(SettingsEffect::PersistSettings.into());
-    super::history::note_deleted_provider(session, provider_id, effects);
+    super::history::note_deleted_provider(session, provider_id, now_ms, effects);
 }

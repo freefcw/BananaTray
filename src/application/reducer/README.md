@@ -14,12 +14,13 @@ Reducer 子模块目录。这里承载 `AppAction` 到 `AppSession` 状态变更
 | `script_provider.rs` | 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流、runtime completion action 处理，以及对应 effect 发射 |
 | `debug.rs` | Debug Tab 操作、调试刷新、日志目录 / 剪贴板 / 调试通知相关 action |
 | `shared.rs` | 跨子 reducer 共享的纯 helper，如配置同步请求、刷新能力判断、动态图标同步 |
+| `token_input.rs` | Token 查询的可见性、请求编号、失效与完成动作；顶层分发后统一同步查询上下文，包含纯状态 / selector 回归测试 |
 
 ## 数据流
 
 ```
 AppAction
-  -> reducer.rs::reduce()
+  -> reducer.rs::reduce_at(session, action, time)
     -> reducer/<domain>.rs
       -> mutate AppSession
       -> append AppEffect
@@ -30,7 +31,7 @@ AppAction
 
 ## 约束
 
-- 保持纯函数边界：给定 `AppSession` 和 `AppAction`，只产生确定的状态变更和 effect 列表。
+- 保持纯函数边界：给定 `AppSession`、`AppAction` 和 `ReductionTime`，只产生确定的状态变更和 effect 列表。
 - 新 action 优先按业务归属放入对应子 reducer；只有跨领域的无状态 helper 放入 `shared.rs`。
 - 不从这里导入 `providers/` 或 GPUI 类型，避免破坏 application 层的测试边界。
 - 测试仍集中挂在顶层 `reducer.rs` 的 `reducer_tests.rs`，覆盖跨子 reducer 的行为契约。

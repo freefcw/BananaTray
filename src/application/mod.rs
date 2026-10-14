@@ -13,7 +13,9 @@ pub use effect::{
     RefreshEffect, ScriptProviderEffect, SettingsEffect, TrayIconRequest,
 };
 pub use quota_alert::{AlertEngine, QuotaNotificationEvent, QuotaObservation};
-pub use reducer::{build_config_sync_request, reduce};
+#[cfg(test)]
+pub(crate) use reducer::reduce;
+pub use reducer::{build_config_sync_request, reduce_at, ReductionTime};
 #[cfg(test)]
 pub(crate) use selectors::display_source_label;
 pub use selectors::{
@@ -30,7 +32,7 @@ pub use selectors::{
     RateLimitResetSectionView, RefreshTarget, ResetExpiryUrgency, SettingsProviderDetailViewState,
     SettingsProviderHistoryPhase, SettingsProviderHistoryViewState, SettingsProviderInfoViewState,
     SettingsProviderListItemViewState, SettingsProviderRightPaneViewState,
-    SettingsProviderStatusKind, SettingsProviderUsageViewState,
+    SettingsProviderStatusKind, SettingsProviderUsageViewState, TokenInputDisplayState,
 };
 #[allow(unused_imports)] // app feature 下 ui/widgets / platform 通知使用
 pub(crate) use selectors::{

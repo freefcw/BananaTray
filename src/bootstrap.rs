@@ -24,8 +24,7 @@ pub(crate) use event_sources::shutdown::register_app_shutdown;
 #[allow(unused_imports)]
 pub(crate) use event_sources::tray::register_tray_events;
 pub(crate) use settings_window::{
-    clear_popup_view, register_build_settings_view, register_clear_popup_view,
-    register_notify_view, schedule_open_settings_window,
+    clear_popup_view, register_settings_window_lifecycle, schedule_open_settings_window,
 };
 #[allow(unused_imports)]
 pub(crate) use ui_bootstrap::{bootstrap_ui, sync_initial_auto_launch};
@@ -40,3 +39,4 @@ pub(crate) use workers::linux_dbus::emit_current_dbus_snapshot;
 pub(crate) use workers::refresh::{bootstrap_refresh, start_event_pump, trigger_initial_refresh};
 #[allow(unused_imports)]
 pub(crate) use workers::script_test::{script_test_channel, start_script_test_pump};
+pub(crate) use workers::token_input::start_token_input_pump;

@@ -39,7 +39,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 
 ### `reducer.rs` / `reducer/` — 纯函数状态变换
 
-- **`reduce(session, action) → Vec<AppEffect>`** — 核心 reducer；顶层使用单个穷尽 match 直接解构 action 并调用对应领域函数，不再通过家族 dispatcher 的 `_ => unreachable!` 二次分派。新增 `AppAction` 变体时，编译器会要求补齐唯一分派入口
+- **`reduce_at(session, action, ReductionTime) → Vec<AppEffect>`** — 核心 reducer；顶层使用单个穷尽 match 直接解构 action 并调用对应领域函数，不再通过家族 dispatcher 的 `_ => unreachable!` 二次分派。新增 `AppAction` 变体时，编译器会要求补齐唯一分派入口
 - **顶层 `reducer.rs` 只做单层穷尽 action 分发**，具体状态变换按领域拆到子 reducer：
   - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性；`SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` 先对 effective rules 变化做快照比对，仅当 Provider 当前有效额度单位的 `notify` 阈值实际变化时调用 `rebaseline_alerts`（只重建告警状态，不动步长累计），并发出 Render + Persist + PublishQuotaSnapshot（不发通知、不触发刷新）
   - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
@@ -48,6 +48,12 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
   - `reducer/script_provider.rs` — 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流与对应 effect 发射
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
+  - `reducer/token_input.rs` — 可见 Token 面板的查询状态与请求编号；顶层在 action 分发后统一同步上下文，切换入口立即发查询、关闭 / 离开面板使旧请求失效，保存凭证和 registry 更新重开查询；同轮重复 action 不产生重复查询。后台结果通过 `TokenInputStateResolved` 回填。
+- **时间输入**：runtime 每次 dispatch 捕获一份 `ReductionTime`（epoch 毫秒 + 单调时钟），初始 action 与同步后续 action 共用该快照。历史采样、查询窗口、保留 cutoff 和成功刷新时刻都从此输入计算；reducer 与状态变换方法不自行读取时钟。测试辅助 `reduce()` 仅在 test 构建中提供固定时间。
+- **Token 展示**：`TokenInputQueryState` 统一保存窗口可见性、请求编号和 `TokenInputLoadState`；只保存脱敏结果，不保存凭证副本或 manager 句柄。selector 输出 `Loading / Ready(TokenInputState) / Unavailable`，未完成的外部查询不能被当成缺少 Token；本地 override 可即时显示。低频复查保留上次已确认的展示，不打断编辑，也不与在途查询重叠。
+- **窗口 / Debug 生命周期**：`SettingsWindowOpened` 标记窗口可见并清除旧 Token 编辑标记；`SettingsWindowClosed` 清理 Token 查询上下文；`DebugRefreshStarted` 把 runtime 捕获的原日志级别交回 reducer，且必须先于发送失败的完成 action 结算。view 构造和 effect handler 不直接写 `AppSession`。
+- **Debug 刷新身份**：`DebugUiState` 额外保存活动刷新 Provider；完成事件按活动目标恢复日志级别，不依赖用户在刷新期间当前选中的下拉项。
+- **历史读取身份**：`HistoryLoadRequest` / `QuotaHistoryLoaded` 透传 `HistoryScope::Settings | Popup`，每个范围内再用 `request_id + ProviderId` 匹配当前 Loading。相同编号的不同范围请求不能共享结果。
 - **全局热键保存流**：`SaveGlobalHotkey` 不直接修改 `settings.system.global_hotkey`；reducer 发出 `ContextEffect::ApplyGlobalHotkey`，runtime 完成平台冲突 probe、注册和同步持久化后返回 `GlobalHotkeyApplyFinished`。只有保存成功时 reducer 才提交新值；持久化失败会恢复旧平台热键并保留旧设置。其中 macOS 使用 `RegisterEventHotKey` 的系统级注册路径。
 - **自定义 Provider 自动注册**：`SubmitNewApi` 保存时通过 `models::newapi_provider_id()` 计算 ID（含 user_id 维度，同站多账号为 `{slug}-{user}:newapi`）并预注册到统一 `provider_layout`；新增模式下身份（站点 + 账号）已被占用时拒绝保存并通知用户改用编辑，不静默覆盖 YAML；编辑模式下 Provider 身份始终来自 `SettingsModalState::EditingNewApi` 的原始 `base_url` / `original_filename` / `original_id`（编辑保持身份不变，不随 user_id 修改迁移），不信任 action payload 修改身份；YAML 生成和文件写入委托给 `NewApiEffect::SaveProvider`；runtime 回传 `NewApiSaveFinished` 后，reducer 再统一通知、reload 或回滚
 - **NewAPI 删除 / 加载流**：`DeleteNewApi` 会先把 `SettingsModalState::ConfirmingDeleteNewApi` 恢复为 `Idle`，然后委托 `NewApiEffect::DeleteProvider` 执行磁盘删除；成功后立即删除 Provider layout item 和 hidden quota 引用并发出 `PersistSettings`，不等待 reload 才收敛。`EditNewApi` 委托 `NewApiEffect::LoadConfig` 读取 YAML，runtime 通过 `NewApiLoadFinished` 回填编辑态或失败通知
@@ -123,11 +129,11 @@ NewAPI 保存完成后由 reducer 调用的纯状态操作逻辑：
 ```
 User Event / Background Event
   → AppAction
-    → reduce(&mut AppSession, action)
+    → reduce_at(&mut AppSession, action, time)
       → Vec<AppEffect>
         → runtime/ 执行 effects
           → 可选返回后续 AppAction（I/O completion / enqueue failure）
-          → reduce(...) 继续处理完成事件
+          → reduce_at(..., time) 继续处理完成事件
 ```
 
 ## 约束
@@ -135,6 +141,6 @@ User Event / Background Event
 - **不可导入 `gpui`** — 这是最核心的测试边界。所有类型必须是纯 Rust。
 - **不可导入 `providers/`** — 避免 application → providers 的反向依赖。NewAPI 纯数据类型位于 `models/newapi.rs`，脚本 Provider 纯数据类型位于 `models/script_provider.rs`。
 - **不可导入 `platform/notification` 承载业务规则** — quota 告警状态机留在 application，platform 只负责通知发送适配。
-- Reducer 必须是**纯函数**（给定 state + action → 确定的 effects），便于测试。
-- CommonEffect handler 需要同步回到状态机时应返回后续 `AppAction`，不要直接修改 `AppSession`；少数 runtime-only 临时状态（如 `DebugEffect::StartRefresh` 保存日志级别）是明确例外。
+- Reducer 必须是**纯函数**（给定 state + action + time → 确定的状态变化与 effects），便于测试。
+- CommonEffect handler 需要同步回到状态机时应返回后续 `AppAction`，不要直接修改 `AppSession`。
 - Effect handler 不得在执行期间再次调用 `dispatch_*()`（重入保护）。

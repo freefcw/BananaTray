@@ -5,7 +5,8 @@
 ## 边界
 
 - `sample` 把 `Success` / `Unavailable` / `Failed` 收成一条样本。`Skipped*` 返回 `None`，不落库。
-- `retention` 只计算 cutoff 和查询窗口。SQLite 不读 `AppSettings`。
+- `retention` 只计算 cutoff 和查询窗口。SQLite 不读 `AppSettings`。历史 reducer 使用 dispatch 显式传入的 epoch 毫秒，采样和同轮查询共用时间快照。
+- `HistoryLoadRequest` 与完成 action 透传 `HistoryScope`（Settings / Popup）；独立计号的两个查看范围只结算自己的响应，即使 Provider 和请求编号相同也不会串线。
 - `series` 把样本收成折线。失败样本不进入折线。
 - `sqlite` 是唯一的存储适配器。前台 reducer 和设置页都不碰数据库。
 - 脱敏后的 `detail` 最长 160 个字符。不保存账号邮箱、token 或 cookie。

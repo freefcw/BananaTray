@@ -3,11 +3,11 @@ use std::rc::Rc;
 
 use log::info;
 
-use crate::application::SettingsEffect;
+use crate::application::{AppAction, SettingsEffect};
 
 use super::super::AppState;
 
-pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: SettingsEffect) {
+pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: SettingsEffect) -> Vec<AppAction> {
     match effect {
         SettingsEffect::PersistSettings => {
             let s = state.borrow();
@@ -22,7 +22,14 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: SettingsEffect) {
         SettingsEffect::UpdateLogLevel(level) => {
             update_log_level(&level);
         }
+        SettingsEffect::ResolveTokenInputState {
+            provider_id,
+            request_id,
+        } => {
+            return super::token_input::run(state, provider_id, request_id);
+        }
     }
+    Vec::new()
 }
 
 fn update_log_level(level: &str) {

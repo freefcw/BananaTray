@@ -22,7 +22,12 @@ pub(super) fn render_settings_section(
     let mut section = match detail.settings_capability.clone() {
         SettingsCapability::TokenInput(capability) => section.child(
             super::super::token_input_panel::render_token_input_panel(
-                &detail.id, capability, view, theme, cx,
+                &detail.id,
+                capability,
+                &detail.token_input,
+                view,
+                theme,
+                cx,
             )
             .mt(px(10.0)),
         ),

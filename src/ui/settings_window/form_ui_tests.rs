@@ -184,3 +184,101 @@ fn newapi_form_invalid_divisor_then_valid_submit(cx: &mut TestAppContext) {
     assert_eq!(config.divisor, Some(500000.0));
     assert!(input_error(&inputs.divisor, cx).is_none());
 }
+
+struct BackgroundOnlyTokenProvider {
+    foreground_thread: std::thread::ThreadId,
+}
+
+#[async_trait::async_trait]
+impl crate::providers::AiProvider for BackgroundOnlyTokenProvider {
+    fn descriptor(&self) -> crate::models::ProviderDescriptor {
+        crate::models::ProviderDescriptor {
+            id: "background-token:test".into(),
+            metadata: crate::models::ProviderMetadata::fallback(
+                crate::models::ProviderKind::Custom,
+            ),
+        }
+    }
+}
+
+impl crate::providers::ProviderCapabilities for BackgroundOnlyTokenProvider {
+    fn settings_capability(&self) -> crate::models::SettingsCapability {
+        crate::providers::copilot_settings_capability()
+    }
+
+    fn resolve_token_input_state(
+        &self,
+        _: &crate::models::AppSettings,
+    ) -> Option<crate::models::TokenInputState> {
+        assert_ne!(std::thread::current().id(), self.foreground_thread);
+        Some(crate::models::TokenInputState {
+            has_token: true,
+            masked: None,
+            source_i18n_key: Some("copilot.source.env_var"),
+            edit_mode: crate::models::TokenEditMode::SetNew,
+        })
+    }
+}
+
+#[gpui::test]
+fn token_panel_render_reads_snapshot_and_never_probes_provider(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    cx.update(fc_ui::init);
+    let state = make_state();
+    let id = crate::models::ProviderId::Custom("background-token:test".to_string());
+    let mut manager = crate::providers::ProviderManager::new();
+    manager.register(std::sync::Arc::new(BackgroundOnlyTokenProvider {
+        foreground_thread: std::thread::current().id(),
+    }));
+    let crate::models::SettingsCapability::TokenInput(capability) =
+        crate::providers::copilot_settings_capability()
+    else {
+        unreachable!()
+    };
+    {
+        let mut state = state.borrow_mut();
+        state.manager = crate::providers::ProviderManagerHandle::new(manager);
+        state.session.provider_store.providers = state.manager.snapshot().initial_statuses();
+        state.session.settings_ui.selected_provider = id.clone();
+    }
+    {
+        let mut state = state.borrow_mut();
+        crate::application::reduce(
+            &mut state.session,
+            AppAction::SetSettingsTab(crate::application::SettingsTab::Providers),
+        );
+        crate::application::reduce(&mut state.session, AppAction::SettingsWindowOpened);
+    }
+    let view = cx.new(|cx| SettingsView::new(state.clone(), cx));
+    view.update(cx, |view, cx| {
+        let snapshot = crate::application::settings_providers_tab_view_state(&state.borrow().session);
+        assert_eq!(snapshot.detail.token_input, crate::application::TokenInputDisplayState::Loading);
+        let _panel = super::providers::token_input_panel::render_token_input_panel(
+            &id, capability, &snapshot.detail.token_input, view, &crate::theme::Theme::dark(), cx,
+        );
+        let request_id = state
+            .borrow()
+            .session
+            .settings_ui
+            .token_input_query
+            .request_id;
+        crate::application::reduce(&mut state.borrow_mut().session, AppAction::TokenInputStateResolved {
+            provider_id: id.clone(), request_id,
+            display: Some(crate::models::TokenInputState {
+                has_token: true, masked: None,
+                source_i18n_key: Some("copilot.source.env_var"),
+                edit_mode: crate::models::TokenEditMode::SetNew,
+            }),
+        });
+        let snapshot = crate::application::settings_providers_tab_view_state(&state.borrow().session);
+        assert!(matches!(snapshot.detail.token_input, crate::application::TokenInputDisplayState::Ready(ref display) if display.source_i18n_key == Some("copilot.source.env_var")));
+        let _panel = super::providers::token_input_panel::render_token_input_panel(
+            &id, capability, &snapshot.detail.token_input, view, &crate::theme::Theme::dark(), cx,
+        );
+        crate::application::reduce(&mut state.borrow_mut().session, AppAction::SaveProviderToken {
+            provider_id: id.clone(), token: "test-local-override".to_string(),
+        });
+        let snapshot = crate::application::settings_providers_tab_view_state(&state.borrow().session);
+        assert!(matches!(snapshot.detail.token_input, crate::application::TokenInputDisplayState::Ready(display) if display.has_token && display.edit_mode == crate::models::TokenEditMode::EditStored));
+    });
+}

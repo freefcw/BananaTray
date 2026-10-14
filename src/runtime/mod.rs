@@ -1,4 +1,4 @@
-use crate::application::{reduce, AppAction, AppEffect, ContextEffect};
+use crate::application::{reduce_at, AppAction, AppEffect, ContextEffect, ReductionTime};
 use gpui::Context;
 
 mod app_state;
@@ -23,6 +23,13 @@ pub(crate) use diagnostics_context::{
 };
 pub use gpu_cache::register_idle_gpu_cache_trim;
 pub(crate) use settings_writer::SettingsWriter;
+
+pub(crate) fn reduction_time() -> ReductionTime {
+    ReductionTime {
+        wall_ms: crate::history::now_ms(),
+        monotonic: std::time::Instant::now(),
+    }
+}
 
 // runtime 是前台内核：只持有 reducer/effect 执行和上下文能力抽象。
 // 具体窗口、托盘、D-Bus 句柄与 App/Window 级 dispatch facade 由 bootstrap 组合。
@@ -118,10 +125,11 @@ fn dispatch_effects(
         flag.set(true);
     });
     let _guard = DispatchGuard;
+    let time = reduction_time();
 
     let effects = {
         let mut state_ref = state.borrow_mut();
-        reduce(&mut state_ref.session, action)
+        reduce_at(&mut state_ref.session, action, time)
     };
     let mut pending_effects = std::collections::VecDeque::from(effects);
     while let Some(effect) = pending_effects.pop_front() {
@@ -129,7 +137,7 @@ fn dispatch_effects(
         for action in follow_up_actions {
             let effects = {
                 let mut state_ref = state.borrow_mut();
-                reduce(&mut state_ref.session, action)
+                reduce_at(&mut state_ref.session, action, time)
             };
             pending_effects.extend(effects);
         }

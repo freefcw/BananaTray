@@ -125,6 +125,7 @@ pub fn run_app() {
 
             // 4. 注册应用退出钩子（等待设置最终落盘）
             bootstrap::register_app_shutdown(&state, cx);
+            bootstrap::register_settings_window_lifecycle(&state, cx);
 
             // 5. Linux: 启动 D-Bus 服务（供 GNOME Shell Extension 使用）
             #[cfg(target_os = "linux")]
@@ -141,6 +142,10 @@ pub fn run_app() {
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
             bootstrap::start_custom_provider_pump(&state, custom_provider_rx, cx);
+            let token_input_rx = state.borrow_mut().take_token_input_receiver();
+            if let Some(token_input_rx) = token_input_rx {
+                bootstrap::start_token_input_pump(&state, token_input_rx, cx);
+            }
             // borrow_mut 的临时值会先释放，if let 条件里直接借用会撑满整个分支体。
             let history_rx = state.borrow_mut().take_history_receiver();
             if let Some(history_rx) = history_rx {

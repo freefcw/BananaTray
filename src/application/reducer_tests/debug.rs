@@ -197,6 +197,7 @@ fn finished_event_restores_debug_state() {
 
     session.debug_ui.selected_provider = Some(id.clone());
     session.debug_ui.refresh_active = true;
+    session.debug_ui.active_refresh_provider = Some(id.clone());
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
     let outcome = RefreshOutcome {
@@ -232,6 +233,7 @@ fn finished_event_for_other_provider_does_not_restore() {
 
     session.debug_ui.selected_provider = Some(pid(ProviderKind::Claude));
     session.debug_ui.refresh_active = true;
+    session.debug_ui.active_refresh_provider = Some(pid(ProviderKind::Claude));
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
 
     let outcome = RefreshOutcome {
@@ -253,12 +255,71 @@ fn finished_event_for_other_provider_does_not_restore() {
 }
 
 #[test]
+fn debug_refresh_start_completion_records_log_level_only_for_active_target() {
+    let mut session = make_session();
+    let id = pid(ProviderKind::Claude);
+    session.debug_ui.selected_provider = Some(id.clone());
+    reduce(&mut session, AppAction::DebugRefreshProvider);
+    assert!(session.debug_ui.prev_log_level.is_none());
+    reduce(
+        &mut session,
+        AppAction::DebugRefreshStarted {
+            provider_id: pid(ProviderKind::Gemini),
+            previous_log_level: log::LevelFilter::Error,
+        },
+    );
+    assert!(session.debug_ui.prev_log_level.is_none());
+    reduce(
+        &mut session,
+        AppAction::DebugRefreshStarted {
+            provider_id: id,
+            previous_log_level: log::LevelFilter::Warn,
+        },
+    );
+    assert_eq!(
+        session.debug_ui.prev_log_level,
+        Some(log::LevelFilter::Warn)
+    );
+}
+
+#[test]
+fn finished_event_restores_debug_state_after_selection_changes() {
+    let mut session = make_session();
+    let active = pid(ProviderKind::Claude);
+    session.debug_ui.selected_provider = Some(active.clone());
+    session.debug_ui.refresh_active = true;
+    session.debug_ui.active_refresh_provider = Some(active.clone());
+    session.debug_ui.prev_log_level = Some(log::LevelFilter::Info);
+    session.debug_ui.selected_provider = Some(pid(ProviderKind::Gemini));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
+            id: active,
+            result: RefreshResult::SkippedStale,
+        })),
+    );
+
+    assert!(!session.debug_ui.refresh_active);
+    assert!(session.debug_ui.active_refresh_provider.is_none());
+    assert!(session.debug_ui.prev_log_level.is_none());
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::RestoreLogLevel(
+            log::LevelFilter::Info
+        )))
+    )));
+}
+
+#[test]
 fn finished_restore_survives_unknown_provider() {
     let mut session = make_session_without(ProviderKind::Claude);
     let id = pid(ProviderKind::Claude);
 
     session.debug_ui.selected_provider = Some(id.clone());
     session.debug_ui.refresh_active = true;
+    session.debug_ui.active_refresh_provider = Some(id.clone());
     session.debug_ui.prev_log_level = Some(log::LevelFilter::Warn);
 
     let outcome = RefreshOutcome {

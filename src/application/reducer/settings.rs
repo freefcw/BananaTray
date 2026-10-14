@@ -10,10 +10,21 @@ use super::shared::{
     build_config_sync_request, resolve_tray_icon_request, sync_dynamic_icon_if_needed,
 };
 
-pub(super) fn select_nav_tab(session: &mut AppSession, tab: NavTab, effects: &mut Vec<AppEffect>) {
+pub(super) fn select_nav_tab(
+    session: &mut AppSession,
+    tab: NavTab,
+    now_ms: i64,
+    effects: &mut Vec<AppEffect>,
+) {
     session.nav.switch_to(tab);
     effects.push(ContextEffect::Render.into());
-    super::history::begin_popup_history_load(session, effects);
+    super::history::begin_popup_history_load(session, now_ms, effects);
+}
+
+pub(super) fn settings_window_opened(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+    session.settings_ui.token_input_query.window_open = true;
+    session.settings_ui.token_editing_provider = None;
+    effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn toggle_overview_expanded(
@@ -97,6 +108,7 @@ pub(super) fn finish_global_hotkey_apply(
 pub(super) fn apply_setting_change(
     session: &mut AppSession,
     change: SettingChange,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     match change {
@@ -160,12 +172,13 @@ pub(super) fn apply_setting_change(
             effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());
         }
         SettingChange::SetHistoryRetentionDays(days) => {
-            if !super::history::set_global_retention(session, days, effects) {
+            if !super::history::set_global_retention(session, days, now_ms, effects) {
                 return;
             }
         }
         SettingChange::SetProviderHistoryRetentionDays { provider_id, days } => {
-            if !super::history::set_provider_retention(session, provider_id, days, effects) {
+            if !super::history::set_provider_retention(session, provider_id, days, now_ms, effects)
+            {
                 return;
             }
         }
@@ -311,13 +324,14 @@ fn rebaseline_quota_alert_changes(
 pub(super) fn open_settings(
     session: &mut AppSession,
     provider: Option<ProviderId>,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     if let Some(id) = provider {
         session.settings_ui.selected_provider = id;
         session.settings_ui.active_tab = SettingsTab::Providers;
     }
-    super::history::begin_history_load(session, effects);
+    super::history::begin_history_load(session, now_ms, effects);
     effects.push(ContextEffect::OpenSettingsWindow.into());
 }
 
@@ -328,11 +342,12 @@ pub(super) fn open_url(url: String, effects: &mut Vec<AppEffect>) {
 pub(super) fn popup_visibility_changed(
     session: &mut AppSession,
     visible: bool,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     session.popup_visible = visible;
     if visible {
-        super::history::begin_popup_history_load(session, effects);
+        super::history::begin_popup_history_load(session, now_ms, effects);
     } else {
         // 弹窗关闭时同步图标为已启用 Provider 的综合状态
         if session.settings.display.tray_icon_style == TrayIconStyle::Dynamic {

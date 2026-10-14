@@ -12,16 +12,14 @@ mod notification;
 mod refresh;
 pub(super) mod script_provider;
 mod settings;
+mod token_input;
 
 pub(super) fn run_common_effect(
     state: &Rc<RefCell<AppState>>,
     effect: CommonEffect,
 ) -> Vec<AppAction> {
     match effect {
-        CommonEffect::Settings(effect) => {
-            settings::run(state, effect);
-            Vec::new()
-        }
+        CommonEffect::Settings(effect) => settings::run(state, effect),
         CommonEffect::Notification(effect) => {
             notification::run(effect);
             Vec::new()

@@ -1,7 +1,7 @@
 use crate::application::{AppEffect, ContextEffect};
 use crate::history::{
-    capture_sample, cutoff_ms, now_ms, query_window, retention_cutoffs, HistoryJob,
-    HistoryLoadOutcome, HistoryLoadRequest, HistoryRange,
+    capture_sample, cutoff_ms, query_window, retention_cutoffs, HistoryJob, HistoryLoadOutcome,
+    HistoryLoadRequest, HistoryRange, HistoryScope,
 };
 use crate::models::{valid_retention_days, NavTab, ProviderId};
 use crate::refresh::{RefreshReason, RefreshResult};
@@ -13,9 +13,9 @@ pub(super) fn record_adopted_refresh(
     id: &ProviderId,
     reason: Option<RefreshReason>,
     result: &RefreshResult,
+    captured_at_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
-    let captured_at_ms = now_ms();
     let Some(sample) = capture_sample(id, result, reason, captured_at_ms) else {
         return;
     };
@@ -28,14 +28,18 @@ pub(super) fn record_adopted_refresh(
         .into(),
     );
     if &session.settings_ui.selected_provider == id {
-        begin_history_load(session, effects);
+        begin_history_load(session, captured_at_ms, effects);
     }
     if session.nav.active_tab == NavTab::Provider(id.clone()) {
-        begin_popup_history_load(session, effects);
+        begin_popup_history_load(session, captured_at_ms, effects);
     }
 }
 
-pub(super) fn begin_history_load(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+pub(super) fn begin_history_load(
+    session: &mut AppSession,
+    now_ms: i64,
+    effects: &mut Vec<AppEffect>,
+) {
     let provider_id = session.settings_ui.selected_provider.clone();
     session.history_ui.request_id = session.history_ui.request_id.wrapping_add(1);
     let request_id = session.history_ui.request_id;
@@ -47,13 +51,19 @@ pub(super) fn begin_history_load(session: &mut AppSession, effects: &mut Vec<App
         session,
         &provider_id,
         session.history_ui.range,
+        HistoryScope::Settings,
         request_id,
+        now_ms,
         effects,
     );
 }
 
 /// 托盘弹窗固定看近 24 小时。切到 Overview/Settings 页时不发请求。
-pub(super) fn begin_popup_history_load(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+pub(super) fn begin_popup_history_load(
+    session: &mut AppSession,
+    now_ms: i64,
+    effects: &mut Vec<AppEffect>,
+) {
     let NavTab::Provider(provider_id) = &session.nav.active_tab else {
         return;
     };
@@ -68,7 +78,9 @@ pub(super) fn begin_popup_history_load(session: &mut AppSession, effects: &mut V
         session,
         &provider_id,
         HistoryRange::Last24Hours,
+        HistoryScope::Popup,
         request_id,
+        now_ms,
         effects,
     );
 }
@@ -77,16 +89,19 @@ fn push_load_job(
     session: &AppSession,
     provider_id: &ProviderId,
     range: HistoryRange,
+    scope: HistoryScope,
     request_id: u64,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     let days = session
         .settings
         .effective_history_retention_days(provider_id);
     let (axis_start_ms, axis_end_ms, captured_from_ms, captured_to_ms) =
-        query_window(range, now_ms(), days);
+        query_window(range, now_ms, days);
     effects.push(
         HistoryJob::Load(HistoryLoadRequest {
+            scope,
             request_id,
             provider_id: provider_id.id_key(),
             axis_start_ms,
@@ -101,35 +116,36 @@ fn push_load_job(
     effects.push(ContextEffect::Render.into());
 }
 
-pub(super) fn push_apply_retention(session: &AppSession, effects: &mut Vec<AppEffect>) {
+pub(super) fn push_apply_retention(
+    session: &AppSession,
+    now_ms: i64,
+    effects: &mut Vec<AppEffect>,
+) {
     let loaded = session.provider_store.custom_provider_ids();
     let targets = retention_cutoffs(
         &session.settings.provider.provider_layout,
         &loaded,
         &session.settings,
-        now_ms(),
+        now_ms,
     );
     effects.push(HistoryJob::ApplyRetention { targets }.into());
 }
 
 pub(super) fn apply_loaded(
     session: &mut AppSession,
+    scope: HistoryScope,
     request_id: u64,
     provider_id: ProviderId,
     outcome: HistoryLoadOutcome,
     effects: &mut Vec<AppEffect>,
 ) {
-    // 设置页和托盘弹窗各自计号，同一条响应可能同时满足两边，两个作用域都要结算。
-    let mut applied = false;
-    if is_current_load(&session.history_ui.load, &provider_id, request_id) {
-        session.history_ui.load = loaded_state(provider_id.clone(), request_id, outcome.clone());
-        applied = true;
-    }
-    if is_current_load(&session.popup_history_ui.load, &provider_id, request_id) {
-        session.popup_history_ui.load = loaded_state(provider_id, request_id, outcome);
-        applied = true;
-    }
-    if applied {
+    // 设置页和托盘弹窗各自计号，响应只能结算其来源作用域中的当前请求。
+    let load = match scope {
+        HistoryScope::Settings => &mut session.history_ui.load,
+        HistoryScope::Popup => &mut session.popup_history_ui.load,
+    };
+    if is_current_load(load, &provider_id, request_id) {
+        *load = loaded_state(provider_id, request_id, outcome);
         effects.push(ContextEffect::Render.into());
     }
 }
@@ -165,10 +181,11 @@ fn loaded_state(
 pub(super) fn set_history_range(
     session: &mut AppSession,
     range: HistoryRange,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     session.history_ui.range = range;
-    begin_history_load(session, effects);
+    begin_history_load(session, now_ms, effects);
 }
 
 pub(super) fn toggle_history_retention_dropdown(
@@ -219,6 +236,7 @@ pub(super) fn cancel_clear_provider_history(
 
 pub(super) fn confirm_clear_provider_history(
     session: &mut AppSession,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     if !session
@@ -231,7 +249,7 @@ pub(super) fn confirm_clear_provider_history(
     let provider_id = session.settings_ui.selected_provider.id_key();
     session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(HistoryJob::PurgeProvider { provider_id }.into());
-    begin_history_load(session, effects);
+    begin_history_load(session, now_ms, effects);
 }
 
 pub(super) fn begin_clear_all_history(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
@@ -252,18 +270,23 @@ pub(super) fn cancel_clear_all_history(session: &mut AppSession, effects: &mut V
     }
 }
 
-pub(super) fn confirm_clear_all_history(session: &mut AppSession, effects: &mut Vec<AppEffect>) {
+pub(super) fn confirm_clear_all_history(
+    session: &mut AppSession,
+    now_ms: i64,
+    effects: &mut Vec<AppEffect>,
+) {
     if !session.settings_ui.modal.is_confirming_clear_all_history() {
         return;
     }
     session.settings_ui.modal = SettingsModalState::Idle;
     effects.push(HistoryJob::PurgeAll.into());
-    begin_history_load(session, effects);
+    begin_history_load(session, now_ms, effects);
 }
 
 pub(super) fn set_global_retention(
     session: &mut AppSession,
     days: u16,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) -> bool {
     if !valid_retention_days(days) {
@@ -271,8 +294,8 @@ pub(super) fn set_global_retention(
     }
     session.settings.history.retention_days = days;
     session.settings_ui.history_retention_dropdown_open = false;
-    push_apply_retention(session, effects);
-    begin_history_load(session, effects);
+    push_apply_retention(session, now_ms, effects);
+    begin_history_load(session, now_ms, effects);
     true
 }
 
@@ -280,6 +303,7 @@ pub(super) fn set_provider_retention(
     session: &mut AppSession,
     provider_id: ProviderId,
     days: Option<u16>,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) -> bool {
     if days.is_some_and(|days| !valid_retention_days(days)) {
@@ -290,9 +314,9 @@ pub(super) fn set_provider_retention(
         .provider
         .set_history_retention_days(&provider_id, days);
     session.settings_ui.provider_history_retention_dropdown_open = false;
-    push_apply_retention(session, effects);
+    push_apply_retention(session, now_ms, effects);
     if session.settings_ui.selected_provider == provider_id {
-        begin_history_load(session, effects);
+        begin_history_load(session, now_ms, effects);
     }
     true
 }
@@ -300,6 +324,7 @@ pub(super) fn set_provider_retention(
 pub(super) fn note_deleted_provider(
     session: &mut AppSession,
     provider_id: &ProviderId,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     effects.push(
@@ -308,5 +333,5 @@ pub(super) fn note_deleted_provider(
         }
         .into(),
     );
-    begin_history_load(session, effects);
+    begin_history_load(session, now_ms, effects);
 }

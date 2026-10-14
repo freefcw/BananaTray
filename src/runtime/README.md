@@ -16,13 +16,13 @@
 
 - `application/` 只声明状态变化与 effects，不执行副作用
 - `runtime/` 执行副作用，但不再把 UI 句柄存进 `AppState`
-- `ui/` 持有具体 GPUI 视图类型，并提供 hooks factory；真正的注册动作由 `bootstrap` 统一完成
+- `ui/` 持有具体 GPUI 视图类型、工厂和 popup 生命周期入口；`bootstrap` 直接组合调用，不维护可选 hook 注册表
 
 ## Shell Boundary Decision
 
 `runtime` 是前台内核，不是 shell owner。这里保留 reducer dispatch、effect routing、settings / refresh / diagnostics 等前台能力，以及 `ContextCapabilities` / `FullContextCapabilities` 这类能力抽象。
 
-具体 shell 语义属于 `bootstrap`：settings window 的打开与复用、popup view hook registry、tray icon 应用、D-Bus handle 连接、App/Window 级 dispatch facade 都在那里组合。不要把旧的 `dispatch_in_app()` / `dispatch_in_window()`、`SettingsView` 句柄、D-Bus handle 或通用 shell manager 加回 `runtime`。如果新增 effect 需要强上下文能力，先扩展 capability trait 和 `bootstrap` adapter，而不是让 runtime 直接认识具体 UI / tray / D-Bus 类型。
+具体 shell 语义属于 `bootstrap`：settings window 的打开与复用、popup view 生命周期适配、tray icon 应用、D-Bus handle 连接、App/Window 级 dispatch facade 都在那里组合。不要把旧的 `dispatch_in_app()` / `dispatch_in_window()`、`SettingsView` 句柄、D-Bus handle 或通用 shell manager 加回 `runtime`。如果新增 effect 需要强上下文能力，先扩展 capability trait 和 `bootstrap` adapter，而不是让 runtime 直接认识具体 UI / tray / D-Bus 类型。
 
 ## 两级路由架构
 
@@ -69,7 +69,7 @@
 | `bootstrap::dispatch_in_app()` | `App` | 全局事件（如后台刷新事件泵） |
 
 所有 dispatch 函数共享同一流程：
-1. 借用 `AppState`，调用 `reduce(&mut session, action)` 得到 `Vec<AppEffect>`
+1. 捕获一份 `ReductionTime`，借用 `AppState`，调用 `reduce_at(&mut session, action, time)` 得到 `Vec<AppEffect>`；同步后续 action 共用该时间快照
 2. 释放借用
 3. 将相应上下文包装进 Adapter
 4. 逐个执行 effects (通过 context effect runner 或 `effects::run_common_effect`)
@@ -91,14 +91,15 @@
 - `custom_provider_tx` — NewAPI / 脚本 Provider CRUD 的持久后台队列及线程 owner；关闭入队端后继续 drain 已入队事务，在共同截止时间内等待 worker；超时 detach，不再保证未完成事务的结算
 - `custom_provider_results` — CRUD worker 的可靠结果 ledger；完成 action 先写入 ledger，再由前台 pump 唤醒并结算
 - `script_test_tx` — 脚本 Run Test 的独立有界后台队列及线程 owner，长 timeout 不会阻塞 CRUD
+- `token_input_results` / `token_input_wake_tx` — 脱敏 Token 展示结果 ledger 与前台唤醒端；请求执行使用阻塞线程池，不持有 UI 句柄，退出关闭唤醒端
 - `settings_writer: SettingsWriter` — 设置持久化串行写入器
 - `log_path` — Debug 页展示的日志路径
 
-`AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用与设置窗口构造入口现在注册到 `bootstrap` 的 shell hook registry，避免把 UI 句柄直接存进 `AppState`。
+`AppState` 已从 `ui` 模块迁出到 `runtime`，这样 `runtime` 不再依赖 `ui::AppState`，`ui` 改为消费 `runtime::AppState`。弹窗视图弱引用仍留在 UI 内部；`bootstrap` 直接调用 popup 生命周期入口和设置窗口工厂，避免把 UI 句柄直接存进 `AppState`，也不再依赖可选 hook 注册顺序。
 
-`ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和设置页 token 面板都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。设置页保存的 app-managed provider credentials 会随 `RefreshRequest::UpdateConfig` 发给后台协调器，刷新执行时再通过 `ProviderExecutionContext` 显式传给 provider。
+`ProviderManagerHandle` 的引入是为了消除 reload 后的前后台分叉：`RefreshCoordinator` 和 Token 展示查询 executor 都通过同一个句柄拿快照，自定义 provider 热重载时只替换内部 `Arc<ProviderManager>`，不再各自保留旧 manager。设置页保存的 app-managed provider credentials 会随 `RefreshRequest::UpdateConfig` 发给后台协调器，刷新执行时再通过 `ProviderExecutionContext` 显式传给 provider。
 
-### `bootstrap.rs` + `bootstrap/` — Shell Hook Registry
+### `bootstrap.rs` + `bootstrap/` — Shell Composition Root
 
 `bootstrap` 承担 shell composition root 的职责：`bootstrap.rs` 是薄模块入口，`bootstrap/`
 按生命周期边界拆分 UI / settings window / worker bridge / event source / D-Bus 的具体适配器入口：
@@ -112,7 +113,7 @@
 - 通过 `bootstrap/workers/` 桥接 refresh 与 script provider test 后台 worker 到前台 reducer
 - 在 Linux 上把 `DBusServiceHandle` 作为 event pump 的局部输入，用于更新快照缓存并发射信号
 
-`ui/` 只负责提供 hooks factory；`bootstrap` 统一注册这些 hooks，`runtime` 只调用抽象端口，不再知道 `SettingsView` 或 `DBusServiceHandle` 的具体归属。
+`ui/` 提供具体视图工厂与 popup 生命周期入口；`bootstrap` 直接调用，`runtime` 只调用抽象端口，不知道 `SettingsView` 或 `DBusServiceHandle` 的具体归属。
 
 ### `gpu_cache.rs` — GPUI Resource Trimming
 
@@ -138,7 +139,7 @@
 封装所有不依赖 GPUI 上下文的 effect handler，避免 `runtime/mod.rs` 成为副作用中心化增长点：
 
 - `mod.rs` — `CommonEffect` 顶层穷尽分派
-- `settings.rs` — `SettingsEffect`
+- `settings.rs` — `SettingsEffect`；Token 展示查询由 `token_input.rs` 在阻塞线程池执行，经结果 ledger / bootstrap pump 回投 `TokenInputStateResolved`，不占用 CRUD 或脚本测试串行队列
 - `notification.rs` — `NotificationEffect`
 - `refresh.rs` — `RefreshEffect`，并提供共享的 refresh 请求发送 helper
 - `debug.rs` — `DebugEffect`
@@ -182,7 +183,7 @@
 ```text
 AppAction
   -> runtime::dispatch_in_context() / bootstrap::dispatch_in_app() / bootstrap::dispatch_in_window()
-  -> application::reduce(&mut AppState.session, action)
+  -> application::reduce_at(&mut AppState.session, action, time)
   -> Vec<AppEffect>
   -> run_context_effect / effects::run_common_effect
   -> GPUI / tray / refresh / settings_store / providers side effects

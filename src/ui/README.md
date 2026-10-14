@@ -13,12 +13,12 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 - render tray popup and settings window views
 - keep GPUI-only state local to views
 - translate user interaction into `AppAction`
-- register shell hooks during bootstrap
+- provide concrete view factories and popup lifecycle entry points for bootstrap
 
 ## Boundaries
 
 - may depend on `gpui`
-- should read/write shared app state only through `runtime::AppState`
+- should read shared app state through `runtime::AppState`; session changes are dispatched as `AppAction` rather than written by view constructors
 - should not own settings persistence, refresh scheduling, or reducer execution
 - should keep concrete view handles and weak refs inside `ui`, not inside `AppState`
 
@@ -37,7 +37,7 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 ### `settings_window/` — Full Settings Window
 
 Separate desktop window with tabbed settings UI:
-- `mod.rs` — window shell, tab routing, `SettingsView`, and shell hook factory for `bootstrap`
+- `mod.rs` — window shell, tab routing, `SettingsView`, and concrete view factory for `bootstrap`
 - `general_tab.rs` — theme, refresh cadence, auto-hide, launch-at-login
 - `providers/` — provider sidebar + detail panel
 - `display_tab.rs` / `debug_tab.rs` / `about_tab.rs` — remaining settings tabs
@@ -60,16 +60,14 @@ TrayController (tray/controller.rs)
        ├─ View reads `state.session` or selector output during render
        ├─ View-safe action → `runtime::dispatch_in_context()`
        ├─ Window / App action → `bootstrap::dispatch_in_window()` / `bootstrap::dispatch_in_app()`
-       │   ├─ `application::reduce(&mut state.session, action)`
+       │   ├─ `application::reduce_at(&mut state.session, action, time)`
        │   └─ execute `AppEffect` in GPUI / App context
        └─ RefreshCoordinator event → `AppAction::RefreshEventReceived` → reducer
 
-bootstrap_ui()
-  └─ ui::register_shell_hooks()
-       ├─ ui::views::app_view::register_shell_hooks()
-       └─ ui::settings_window::register_shell_hooks()
-            ├─ bootstrap registers popup rerender / clear callbacks
-            └─ bootstrap registers settings-window view factory
+bootstrap shell adapters
+  ├─ directly call ui popup rerender / clear entry points
+  └─ directly call ui::settings_window::build_settings_view()
+       └─ dispatch SettingsWindowOpened before constructing the view
 
 View / window actions
   ├─ view-safe callbacks → `runtime::dispatch_in_context()`

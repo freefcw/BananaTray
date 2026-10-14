@@ -651,7 +651,7 @@ fn provider_status_prefers_runtime_source_label_after_success() {
     let data = RefreshData::quotas_only(vec![QuotaInfo::new("test", 1.0, 100.0)])
         .with_source_label("seat api");
 
-    p.mark_refresh_succeeded(data);
+    p.mark_refresh_succeeded(data, std::time::Instant::now());
 
     assert_eq!(p.source_label(), "seat api");
 }

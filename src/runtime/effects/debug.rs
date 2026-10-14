@@ -31,8 +31,11 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: DebugEffect) -> Vec<App
         }
         DebugEffect::StartRefresh(kind) => {
             info!(target: "settings", "starting debug refresh for {:?}", kind);
-            // 保存当前日志级别到 state，供 RestoreLogLevel 使用。
-            state.borrow_mut().session.debug_ui.prev_log_level = Some(log::max_level());
+            // 通过完成 action 保存当前日志级别到 state，供 RestoreLogLevel 使用。
+            let started = AppAction::DebugRefreshStarted {
+                provider_id: kind.clone(),
+                previous_log_level: log::max_level(),
+            };
             LogCapture::global().clear();
             LogCapture::global().enable();
             log::set_max_level(log::LevelFilter::Debug);
@@ -40,7 +43,9 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: DebugEffect) -> Vec<App
                 id: kind,
                 reason: RefreshReason::Manual,
             };
-            super::refresh::send_request(state, request)
+            let mut actions = vec![started];
+            actions.extend(super::refresh::send_request(state, request));
+            actions
         }
         DebugEffect::RestoreLogLevel(level) => {
             info!(target: "settings", "debug refresh complete, restoring log level to {:?}", level);

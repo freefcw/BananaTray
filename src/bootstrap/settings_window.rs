@@ -6,52 +6,53 @@ use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-type NotifyPopupViewFn = fn(&Rc<RefCell<AppState>>, &mut App);
-type BuildSettingsViewFn =
-    fn(Rc<RefCell<AppState>>, &mut App) -> gpui::Entity<crate::ui::settings_window::SettingsView>;
-type ClearPopupViewFn = fn(&Rc<RefCell<AppState>>);
 type SettingsWindowHandle = WindowHandle<crate::ui::settings_window::SettingsView>;
 
 thread_local! {
-    static NOTIFY_POPUP_VIEW_FN: RefCell<Option<NotifyPopupViewFn>> = const { RefCell::new(None) };
-    static BUILD_SETTINGS_VIEW_FN: RefCell<Option<BuildSettingsViewFn>> = const { RefCell::new(None) };
-    static CLEAR_POPUP_VIEW_FN: RefCell<Option<ClearPopupViewFn>> = const { RefCell::new(None) };
     static SETTINGS_WINDOW: RefCell<Option<SettingsWindowHandle>> = const { RefCell::new(None) };
 }
 
-pub(crate) fn register_notify_view(f: NotifyPopupViewFn) {
-    NOTIFY_POPUP_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+pub(super) fn notify_popup_view(_state: &Rc<RefCell<AppState>>, cx: &mut App) {
+    crate::ui::notify_current_view(cx);
 }
 
-pub(crate) fn register_build_settings_view(f: BuildSettingsViewFn) {
-    BUILD_SETTINGS_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+pub(crate) fn clear_popup_view(_state: &Rc<RefCell<AppState>>) {
+    crate::ui::clear_current_view();
 }
 
-pub(crate) fn register_clear_popup_view(f: ClearPopupViewFn) {
-    CLEAR_POPUP_VIEW_FN.with(|slot| *slot.borrow_mut() = Some(f));
+pub(super) fn notify_settings_view(cx: &mut App) {
+    if let Some(handle) = SETTINGS_WINDOW.with(|slot| *slot.borrow()) {
+        let _ = handle.update(cx, |_, _, cx| cx.notify());
+    }
 }
 
-pub(super) fn notify_popup_view(state: &Rc<RefCell<AppState>>, cx: &mut App) {
-    NOTIFY_POPUP_VIEW_FN.with(|slot| {
-        if let Some(f) = *slot.borrow() {
-            f(state, cx);
-        }
-    });
-}
-
-pub(crate) fn clear_popup_view(state: &Rc<RefCell<AppState>>) {
-    CLEAR_POPUP_VIEW_FN.with(|slot| {
-        if let Some(f) = *slot.borrow() {
-            f(state);
-        }
-    });
-}
-
-fn build_settings_view(
-    state: Rc<RefCell<AppState>>,
-    cx: &mut App,
-) -> Option<gpui::Entity<crate::ui::settings_window::SettingsView>> {
-    BUILD_SETTINGS_VIEW_FN.with(|slot| slot.borrow().map(|f| f(state, cx)))
+pub(crate) fn register_settings_window_lifecycle(state: &Rc<RefCell<AppState>>, cx: &mut App) {
+    let state = state.clone();
+    cx.on_window_closed(move |cx| {
+        let Some(handle) = SETTINGS_WINDOW.with(|slot| *slot.borrow()) else {
+            return;
+        };
+        let state = state.clone();
+        let pump_cx = cx.to_async();
+        cx.to_async()
+            .foreground_executor()
+            .spawn(async move {
+                let _ = pump_cx.update(|cx| {
+                    if SETTINGS_WINDOW.with(|slot| *slot.borrow() == Some(handle))
+                        && handle.update(cx, |_, _, _| {}).is_err()
+                    {
+                        clear_settings_window_slot();
+                        crate::bootstrap::dispatch_in_app(
+                            &state,
+                            crate::application::AppAction::SettingsWindowClosed,
+                            cx,
+                        );
+                    }
+                });
+            })
+            .detach();
+    })
+    .detach();
 }
 
 pub(crate) fn schedule_open_settings_window(
@@ -95,15 +96,19 @@ fn open_settings_window(state: Rc<RefCell<AppState>>, display_id: Option<Display
         );
     });
 
-    let Some(build_view) = build_settings_view(state, cx) else {
-        log::error!(target: "settings", "settings view factory not registered");
-        return;
-    };
+    let build_view = crate::ui::settings_window::build_settings_view(state.clone(), cx);
     let options = settings_window_options(target_display_id, cx);
 
     match cx.open_window(options, |_window, _cx| build_view) {
         Ok(handle) => install_new_settings_window(handle, cx),
-        Err(err) => log::error!(target: "settings", "failed to open settings window: {err:?}"),
+        Err(err) => {
+            crate::bootstrap::dispatch_in_app(
+                &state,
+                crate::application::AppAction::SettingsWindowClosed,
+                cx,
+            );
+            log::error!(target: "settings", "failed to open settings window: {err:?}");
+        }
     }
 }
 

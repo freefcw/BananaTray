@@ -25,6 +25,7 @@
 - `QuotaInfo::percentage()` / `percent_remaining()` 保持不 clamp，允许 over-quota 时超过 100% 或为负数。
 - provider 若收到 `used_percent` / `remaining_percent` / `remaining_fraction`，应通过 `QuotaInfo::from_used_percent()`、`from_remaining_percent()`、`from_remaining_fraction()` 或对应 `with_key_*` 构造器创建配额，不要直接写百分比制 `limit` 或重复换算公式。
 - `ProviderStatus::new(provider_id, metadata)` 要求 `provider_id.kind()` 与 `metadata.kind` 对齐；debug 构建会断言。
+- `ProviderStatus::mark_refresh_succeeded(data, refreshed_at)` 显式接收成功采纳时的单调时钟，不自行读取 `Instant::now()`；runtime 的 dispatch 时间快照同时驱动历史采样与刷新年龄。
 - 普通月度百分比配额使用 `QuotaType::Monthly` + `QuotaLabelSpec::Monthly`，两者的 `stable_key` 均为 `"monthly"`；不要与信用额语义的 `MonthlyCredits` 或带套餐层级的 `MonthlyTier` 混用。
 - `QuotaLabelSpec::Credits` 在 `QuotaType::Points` 下保留旧 `stable_key = "general"` 以兼容 Kiro 早期版本（Regular Credits 早期被建模为 `General`）；其他 `Points` 类型的 quota 应使用专属 `QuotaLabelSpec` 变体或 `Raw(...)`，避免与 Kiro 共用 `"general"` key。
 - `QuotaType::Count` 是纯信息型可用数量（如 Claude `cedar_ember` / Codex reset credits 的限额重置次数）：`threshold_measurement()` 恒为 `None`，因此恒为 Green、永不耗尽、不参与状态色与告警；余额分支按整数（`{:.0}`）展示，模式标签为 `quota.mode.available` 而非 `quota.mode.balance`。`QuotaLabelSpec::CloudCredits`（stable_key `"cloud-credits"`）用于 Claude 云端赠送额度（USD）；`QuotaLabelSpec::LimitResetCredits`（stable_key `"limit-reset-credits"`）用于限额重置次数。

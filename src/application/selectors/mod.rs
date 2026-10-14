@@ -282,6 +282,7 @@ pub struct SettingsProviderDetailViewState {
     pub info: SettingsProviderInfoViewState,
     pub usage: SettingsProviderUsageViewState,
     pub settings_capability: SettingsCapability,
+    pub token_input: TokenInputDisplayState,
     pub quota_display_mode: QuotaDisplayMode,
     pub quota_usage_step_pct: Option<u8>,
     pub global_quota_usage_step_pct: u8,
@@ -290,6 +291,13 @@ pub struct SettingsProviderDetailViewState {
     /// 配额可见性列表（用于设置 UI 中的勾选框）
     pub quota_visibility: Vec<QuotaVisibilityItem>,
     pub history: SettingsProviderHistoryViewState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenInputDisplayState {
+    Loading,
+    Ready(crate::models::TokenInputState),
+    Unavailable,
 }
 
 #[derive(Debug, Clone)]

@@ -7,7 +7,7 @@
 
 use super::super::SettingsView;
 use super::shared;
-use crate::application::AppAction;
+use crate::application::{AppAction, TokenInputDisplayState};
 use crate::models::{ProviderId, TokenEditMode, TokenInputCapability, TokenInputState};
 use crate::theme::Theme;
 use crate::ui::widgets::{render_action_button, ButtonSize, ButtonVariant};
@@ -79,22 +79,22 @@ impl RenderOnce for TokenInputBox {
 pub(crate) fn render_token_input_panel(
     provider_id: &ProviderId,
     capability: TokenInputCapability,
+    display_state: &TokenInputDisplayState,
     view: &mut SettingsView,
     theme: &Theme,
     cx: &mut Context<SettingsView>,
 ) -> Div {
-    // 统一通过 ProviderManager 解析运行时 token 展示状态。
-    // manager 会优先走 provider 自定义逻辑，必要时自动回落到通用 credential 存储。
-    let display_info = {
-        let state = view.state.borrow();
-        state.manager.snapshot().resolve_token_input_state(
-            provider_id,
-            capability,
-            &state.session.settings,
-        )
+    // 统一读取 selector 提供的 token 展示快照。
+    // 尚未确认的外部登录态显示查询中，不作为缺少凭证处理。
+    let display_info = match display_state {
+        TokenInputDisplayState::Ready(display) => display.clone(),
+        _ => TokenInputState {
+            has_token: false,
+            masked: None,
+            source_i18n_key: None,
+            edit_mode: TokenEditMode::SetNew,
+        },
     };
-
-    let has_token = display_info.has_token;
     let mut card = shared::render_settings_card(theme)
         .child(render_token_panel_header(capability, theme))
         .child(render_token_panel_description(capability, theme));
@@ -126,7 +126,7 @@ pub(crate) fn render_token_input_panel(
     card = card
         .child(render_token_value(
             token_input_entity,
-            has_token,
+            display_state,
             is_editing,
             theme,
             cx,
@@ -191,7 +191,7 @@ fn render_token_panel_description(capability: TokenInputCapability, theme: &Them
 
 fn render_token_value(
     input_entity: Option<Entity<fc_ui::components::input_state::InputState>>,
-    has_token: bool,
+    display_state: &TokenInputDisplayState,
     is_editing: bool,
     theme: &Theme,
     cx: &App,
@@ -205,9 +205,14 @@ fn render_token_value(
         }
         .into_any_element();
     }
-    if has_token {
+    if matches!(display_state, TokenInputDisplayState::Ready(display) if display.has_token) {
         return render_configured_token(theme).into_any_element();
     }
+    let message = match display_state {
+        TokenInputDisplayState::Loading => t!("settings.token.checking"),
+        TokenInputDisplayState::Unavailable => t!("settings.token.unavailable"),
+        TokenInputDisplayState::Ready(_) => t!("settings.token.hint"),
+    };
 
     div()
         .h(px(40.0))
@@ -218,7 +223,7 @@ fn render_token_value(
                 .text_size(px(12.0))
                 .line_height(relative(1.5))
                 .text_color(theme.text.muted)
-                .child(t!("settings.token.hint").to_string()),
+                .child(message.to_string()),
         )
         .into_any_element()
 }

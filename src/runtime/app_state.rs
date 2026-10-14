@@ -32,6 +32,9 @@ pub struct AppState {
     pub(crate) history_tx: PersistentJobSender<HistoryJob>,
     history_rx: Option<PersistentJobReceiver<HistoryJob>>,
     pub(crate) history_results: WorkerResults,
+    pub(crate) token_input_results: WorkerResults,
+    pub(crate) token_input_wake_tx: smol::channel::Sender<()>,
+    token_input_wake_rx: Option<smol::channel::Receiver<()>>,
     /// 设置文件 debounce 写入器（所有持久化统一通过此句柄串行化）
     pub(crate) settings_writer: SettingsWriter,
     /// 日志文件路径（Debug Tab 展示用）
@@ -55,6 +58,7 @@ impl AppState {
         let providers = manager.snapshot().initial_statuses();
         let session = AppSession::new(settings, providers);
         let (history_tx, history_rx) = PersistentJobSender::unbounded();
+        let (token_input_wake_tx, token_input_wake_rx) = smol::channel::unbounded();
         debug!(
             target: "app",
             "default active tab: {:?}",
@@ -71,6 +75,9 @@ impl AppState {
             history_tx,
             history_rx: Some(history_rx),
             history_results: WorkerResults::default(),
+            token_input_results: WorkerResults::default(),
+            token_input_wake_tx,
+            token_input_wake_rx: Some(token_input_wake_rx),
             settings_writer: SettingsWriter::spawn(),
             log_path,
             #[cfg(target_os = "linux")]
@@ -82,6 +89,10 @@ impl AppState {
 
     pub(crate) fn take_history_receiver(&mut self) -> Option<PersistentJobReceiver<HistoryJob>> {
         self.history_rx.take()
+    }
+
+    pub(crate) fn take_token_input_receiver(&mut self) -> Option<smol::channel::Receiver<()>> {
+        self.token_input_wake_rx.take()
     }
 
     /// 向 RefreshCoordinator 发送请求（非阻塞）。
@@ -118,6 +129,7 @@ impl AppState {
     /// refresh / script-test / custom-provider worker 共享退出 deadline；CRUD 超时 detach
     /// 不保证未完成事务结算，settings writer 随后持久化已结算的领域状态。
     pub(crate) fn shutdown_before(&mut self, deadline: std::time::Instant) {
+        self.token_input_wake_tx.close();
         self.refresh_worker.request_shutdown();
         self.custom_provider_tx.close();
         self.script_test_tx.request_shutdown();
@@ -141,7 +153,8 @@ impl AppState {
         }
         for action in self.custom_provider_results.drain() {
             // 退出阶段只结算领域状态；通知、render、reload 等非持久 effect 无需执行。
-            let _ = crate::application::reduce(&mut self.session, action);
+            let _ =
+                crate::application::reduce_at(&mut self.session, action, super::reduction_time());
         }
         // 退出时丢掉还没画到界面上的历史读结果，避免把加载态写进这次会话。
         let _ = self.history_results.drain();

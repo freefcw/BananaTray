@@ -1,5 +1,5 @@
 use super::state::{GlobalHotkeyError, SettingsTab};
-use crate::history::{HistoryLoadOutcome, HistoryRange};
+use crate::history::{HistoryLoadOutcome, HistoryRange, HistoryScope};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
     ProviderId, QuotaDisplayMode, QuotaThresholdUnit, QuotaThresholds, ScriptProviderConfig,
@@ -13,6 +13,18 @@ use std::path::PathBuf;
 pub enum AppAction {
     SelectNavTab(NavTab),
     SetSettingsTab(SettingsTab),
+    SettingsWindowOpened,
+    SettingsWindowClosed,
+    RefreshTokenInputState,
+    TokenInputStateResolved {
+        provider_id: ProviderId,
+        request_id: u64,
+        display: Option<crate::models::TokenInputState>,
+    },
+    DebugRefreshStarted {
+        provider_id: ProviderId,
+        previous_log_level: log::LevelFilter,
+    },
     SelectSettingsProvider(ProviderId),
     ToggleCadenceDropdown,
     ToggleHistoryRetentionDropdown,
@@ -28,6 +40,7 @@ pub enum AppAction {
     ApplyHistoryRetention,
     /// 历史线程读完一个 provider 的窗口。过期请求由 reducer 丢掉。
     QuotaHistoryLoaded {
+        scope: HistoryScope,
         request_id: u64,
         provider_id: ProviderId,
         outcome: HistoryLoadOutcome,
@@ -183,13 +196,18 @@ pub enum AppAction {
 }
 
 impl AppAction {
-    /// 后台完成动作不会使当前自定义 Provider 表单上下文失效。
+    /// 后台完成与建窗生命周期动作不会使当前自定义 Provider 表单上下文失效。
     ///
     /// 使用穷尽 match 而不是 reducer 外的手写白名单，确保新增完成动作时
     /// 编译器会要求同步更新这条异步生命周期契约。
     pub(crate) fn preserves_custom_provider_form_context(&self) -> bool {
         match self {
-            Self::RefreshEventReceived(_)
+            Self::SettingsWindowOpened
+            | Self::SettingsWindowClosed
+            | Self::RefreshTokenInputState
+            | Self::TokenInputStateResolved { .. }
+            | Self::DebugRefreshStarted { .. }
+            | Self::RefreshEventReceived(_)
             | Self::NewApiSaveFinished { .. }
             | Self::NewApiLoadFinished { .. }
             | Self::NewApiDeleteFinished { .. }

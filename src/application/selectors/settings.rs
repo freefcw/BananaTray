@@ -2,7 +2,7 @@
 //!
 //! 将 AppSession → Settings ViewModel 的转换逻辑集中于此。
 
-use super::super::state::{AppSession, HistoryLoadState, SettingsModalState};
+use super::super::state::{AppSession, HistoryLoadState, SettingsModalState, TokenInputLoadState};
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_label,
     format_relative_refresh_age, format_user_failure_message, provider_source_label,
@@ -197,6 +197,7 @@ fn settings_provider_detail_view_state(
             .modal
             .is_confirming_delete_script_provider(),
         provider_capability,
+        token_input: token_input_display_state(session, id),
         info: settings_provider_info_view_state(provider, is_enabled),
         usage: settings_provider_usage_view_state(provider, is_enabled, &effective_rules),
         settings_capability: provider
@@ -210,6 +211,57 @@ fn settings_provider_detail_view_state(
         quota_visibility,
         history: settings_provider_history_view_state(session, id),
     }
+}
+
+fn token_input_display_state(session: &AppSession, id: &ProviderId) -> TokenInputDisplayState {
+    let load = &session.settings_ui.token_input_query.load;
+    if load.provider_id() == Some(id) {
+        match load {
+            TokenInputLoadState::Ready { display, .. }
+            | TokenInputLoadState::Loading {
+                previous: Some(display),
+                ..
+            } => {
+                return TokenInputDisplayState::Ready(display.clone());
+            }
+            TokenInputLoadState::Unavailable { .. } => {
+                if session_has_local_token_override(session, id) {
+                    return local_token_input_state();
+                }
+                return TokenInputDisplayState::Unavailable;
+            }
+            _ => {}
+        }
+    }
+    if session_has_local_token_override(session, id) {
+        return local_token_input_state();
+    }
+    TokenInputDisplayState::Loading
+}
+
+fn session_has_local_token_override(session: &AppSession, id: &ProviderId) -> bool {
+    let Some(provider) = session.provider_store.find_by_id(id) else {
+        return false;
+    };
+    let crate::models::SettingsCapability::TokenInput(capability) = &provider.settings_capability
+    else {
+        return false;
+    };
+    session
+        .settings
+        .provider
+        .credentials
+        .get_credential(capability.credential_key)
+        .is_some_and(|value| !value.is_empty())
+}
+
+fn local_token_input_state() -> TokenInputDisplayState {
+    TokenInputDisplayState::Ready(crate::models::TokenInputState {
+        has_token: true,
+        masked: None,
+        source_i18n_key: None,
+        edit_mode: crate::models::TokenEditMode::EditStored,
+    })
 }
 
 fn settings_provider_history_view_state(

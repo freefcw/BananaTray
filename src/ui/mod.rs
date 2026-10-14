@@ -8,8 +8,4 @@ pub(crate) use fc_ui_theme::sync_fc_ui_theme;
 pub use views::app_view::AppView;
 pub(crate) use widgets::with_multiline_tooltip;
 
-#[allow(dead_code)]
-pub(crate) fn register_shell_hooks() {
-    views::app_view::register_shell_hooks();
-    settings_window::register_shell_hooks();
-}
+pub(crate) use views::app_view::{clear_current_view, notify_current_view};

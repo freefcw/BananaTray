@@ -418,6 +418,8 @@ provider.not_connected: "未连接"
 
 # ── 通用 Token 设置 UI ───────────────────────────────────
 settings.token.configured: "Token 已配置"
+settings.token.checking: "正在检查 Token 配置…"
+settings.token.unavailable: "暂时无法读取 Token 配置，稍后会重试。"
 settings.token.via: "%{masked} · 来源：%{source}"
 settings.token.hint: "可手动粘贴 Token，或通过创建链接生成后再配置。"
 settings.token.create: "创建 Token"

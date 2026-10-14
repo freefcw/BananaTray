@@ -418,6 +418,8 @@ provider.not_connected: "Not connected"
 
 # ── Shared token settings UI ─────────────────────────────
 settings.token.configured: "Token configured"
+settings.token.checking: "Checking token configuration…"
+settings.token.unavailable: "Unable to read token configuration. Will retry shortly."
 settings.token.via: "%{masked} · Source: %{source}"
 settings.token.hint: "Paste a token manually or use the create link to generate one."
 settings.token.create: "Create Token"

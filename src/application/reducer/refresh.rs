@@ -69,6 +69,7 @@ fn process_refresh_outcome(
     outcome_id: &ProviderId,
     reason: Option<RefreshReason>,
     result: RefreshResult,
+    time: super::ReductionTime,
     effects: &mut Vec<AppEffect>,
 ) {
     if session.provider_store.find_by_id(outcome_id).is_none() {
@@ -84,7 +85,14 @@ fn process_refresh_outcome(
         return;
     }
 
-    super::history::record_adopted_refresh(session, outcome_id, reason, &result, effects);
+    super::history::record_adopted_refresh(
+        session,
+        outcome_id,
+        reason,
+        &result,
+        time.wall_ms,
+        effects,
+    );
 
     match result {
         RefreshResult::Success { data } => {
@@ -121,7 +129,7 @@ fn process_refresh_outcome(
                 }
             }
             if let Some(provider) = session.provider_store.find_by_id_mut(outcome_id) {
-                provider.mark_refresh_succeeded(data);
+                provider.mark_refresh_succeeded(data, time.monotonic);
                 effects.push(ContextEffect::Render.into());
             }
         }
@@ -164,6 +172,7 @@ fn process_refresh_outcome(
 pub(super) fn apply_refresh_event(
     session: &mut AppSession,
     event: RefreshEvent,
+    time: super::ReductionTime,
     effects: &mut Vec<AppEffect>,
 ) {
     match event {
@@ -175,7 +184,7 @@ pub(super) fn apply_refresh_event(
         }
         RefreshEvent::Finished(outcome) => {
             let is_debug_target = session.debug_ui.refresh_active
-                && session.debug_ui.selected_provider.as_ref() == Some(&outcome.id);
+                && session.debug_ui.active_refresh_provider.as_ref() == Some(&outcome.id);
 
             // 快照刷新前的综合状态等级，用于判断刷新后是否需要更新图标
             let prev_status = session.worst_enabled_provider_status();
@@ -186,6 +195,7 @@ pub(super) fn apply_refresh_event(
                 &outcome_id,
                 outcome.reason,
                 outcome.result,
+                time,
                 effects,
             );
 
@@ -194,6 +204,7 @@ pub(super) fn apply_refresh_event(
 
             if is_debug_target {
                 session.debug_ui.refresh_active = false;
+                session.debug_ui.active_refresh_provider = None;
                 if let Some(prev_level) = session.debug_ui.prev_log_level.take() {
                     effects.push(DebugEffect::RestoreLogLevel(prev_level).into());
                 }
