@@ -31,12 +31,12 @@
   - `runtime/effects/` 按领域执行 GPUI-free 的 `CommonEffect`，避免把持久化、通知、refresh、Debug、NewAPI / 脚本 Provider I/O 全部集中在 `runtime/mod.rs`。
   - macOS 的全局热键后端现使用系统级 `RegisterEventHotKey`，不再依赖 `NSEvent` monitor。
 - `bootstrap.rs` + `bootstrap/`
-  - shell composition root；`bootstrap.rs` 是薄入口，`bootstrap/` 按职责拆分 full-context dispatch facade、popup/settings hook registry、settings window 生命周期、UI 启动。
+  - shell composition root；`bootstrap.rs` 是薄入口，`bootstrap/` 按职责拆分 full-context dispatch facade、popup/settings 具体 UI 适配、settings window 生命周期、UI 启动。
   - `bootstrap/workers/` 承担 refresh/custom-provider CRUD/script-test worker 到前台 reducer 的 bridge，以及 Linux D-Bus 快照发射。
   - `bootstrap/event_sources/` 承担 app shutdown、tray events、startup hotkey、secondary instance bridge 的外部事件源注册。
-  - 统一注册 UI hooks，并持有具体 tray / settings window / D-Bus 适配器入口；不引入 runtime-owned shell manager。
+  - 直接调用 UI 工厂与 popup 生命周期入口，并持有具体 tray / settings window / D-Bus 适配器入口；没有可选 hook 注册表，不引入 runtime-owned shell manager。
 - `ui/`
-  - GPUI 视图、窗口内容、控件和 view-local 状态，以及向 `bootstrap` 提供 hooks factory。
+  - GPUI 视图、窗口内容、控件和 view-local 状态，以及向 `bootstrap` 提供具体视图工厂与 popup 生命周期入口。
 - `theme/`
   - GPUI 主题 token、主题 YAML 解析和 `WindowAppearance` 到运行时主题的映射。
   - 仅在 `app` feature 下编译。
@@ -93,7 +93,7 @@
 
 1. UI 交互或后台事件产生 `AppAction`
 2. `runtime::dispatch_in_context()` 或 `bootstrap::dispatch_in_app()` / `bootstrap::dispatch_in_window()` 调用 reducer
-3. reducer 通过单个穷尽 match 将 action 分派到领域函数并返回 `Vec<AppEffect>`；不使用家族二次 match 的 `unreachable!` 兜底
+3. runtime 捕获一份 `ReductionTime`，调用 `reduce_at(session, action, time)`；reducer 通过单个穷尽 match 将 action 分派到领域函数并返回 `Vec<AppEffect>`。同一 dispatch 的同步后续 action 共用该时间快照，历史采样 / 查询 / cutoff 与成功刷新时间都显式取自此输入；不使用家族二次 match 的 `unreachable!` 兜底
 4. runtime 执行 effect
 5. 必要时请求 UI 重绘、打开窗口、发送 refresh 请求、预检并重绑全局热键，或写入设置
 
@@ -125,7 +125,7 @@
 - `ui/` 负责：
   - popup 和 settings window 的具体视图类型
   - 渲染逻辑与 view-local state（例如设置页里的热键捕获控件）
-  - 提供给 `bootstrap` 注册的 hooks factory
+  - 提供给 `bootstrap` 直接调用的视图工厂与 popup 生命周期入口
 
 这意味着：
 
@@ -168,7 +168,7 @@
 自定义 provider reload 的稳定语义：
 
 - YAML 运行时契约为 `schema_version: 2` + `plan.steps`；加载旧 YAML 时会自动迁移并写回，详见 `custom-provider.md`。
-- reload 会重建 provider manager 快照，并把最新状态发回前台。
+- reload 在独立阻塞任务中重建 provider manager 快照，扫描、解析与迁移不阻塞协调器控制循环。加载同时最多执行一次；新请求合并到最新 reload revision，过期构建结果不发布，完成后串行构建最新一轮。提交新 registry 时再次推进刷新 generation，加载期间的配置更新保留；loader panic 会转换为失败消息并释放活动 reload，后续请求可以重试；shutdown 不等待不可取消的底层加载任务。
 - 当前没有文件系统 watcher；触发规则和 reload 语义详见 `refresh-strategy.md` §Custom Provider Reload。
 
 ## Persistence And External Storage
@@ -188,7 +188,8 @@
 - 系统深浅色与 Linux GNOME extension 的首份状态在进入 GPUI 前预热（每条平台命令最多 500ms）；进入事件循环后只读取缓存，过期 CLI 刷新在后台运行，不会同步阻塞渲染或托盘更新。
 - `settings.json`、BananaTray 代写的外部 OAuth 凭证和自定义 provider YAML 复用私有文件写入原语：同目录临时文件、Unix `0600`、写入同步后 rename，并在可恢复失败路径清理临时文件。脚本 provider 使用不可变版本化脚本，最后原子提交引用它的 YAML；成功后再清理旧脚本，避免崩溃窗口产生跨版本文件对。
 - `settings.json` 加载失败（JSON 损坏等）时，启动路径会先把原文件 rename 备份为 `settings.json.corrupt-<epoch>` 再回退默认值，避免后续 persist 覆盖后原始内容不可恢复；备份成功时启动后发送系统通知告知备份位置。
-- 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。
+- 外部 provider 的真实认证状态不一定存放在 `settings.json`，也可能来自环境变量、CLI 登录态或 provider 自己的文件。Token 展示查询经 action / `SettingsEffect::ResolveTokenInputState` / 阻塞线程池 / 结果 ledger / bootstrap foreground pump 返回 reducer。查询状态留在 `SettingsUiState`，只存脱敏结果；selector 区分 Loading / Ready / Unavailable，未完成查询不当成缺少 Token，本地 override 可即时显示。进入面板、切换、保存 override 或 registry 更新触发新查询；仅当前可见面板每 5 秒复查，复查不重叠、不打断编辑并保留已确认展示。结果按 Provider 与请求编号采纳，关闭 / 离开上下文使旧请求失效；view 不轮询凭证、不缓存 manager 或凭证副本。退出关闭结果唤醒端，不等待不可取消的读取；App-context Render 会同时通知 popup 与现存的设置窗口。
+- 设置窗口构造与 Debug effect 不直接写会话：设置窗口工厂派发 `SettingsWindowOpened` 清理旧编辑标记（不失效待结算的自定义 Provider 保存上下文）；Debug effect 把捕获的原日志级别通过 `DebugRefreshStarted` 回交，先于发送失败的完成消息结算。历史查询完成消息透传 `HistoryScope::Settings | Popup`，再以 Provider 与范围内请求编号匹配，两个独立查看范围不能因同号共享结果。
 - 用量历史是另一份本地库 `quota_history.sqlite`，和 `settings.json` 放在同一个配置目录。reducer 只把已采纳的 `Success` / `Unavailable` / `Failed` 交给历史线程；跳过的刷新不写入。失败样本会留下，但不会进入折线。保留天数在 `settings.json` 的 `history.retention_days`（默认 90，范围 1 到 365），provider 可以用 `history_retention_days` 覆盖。历史线程不读设置，cutoff 由 reducer 放进任务。缩短保留会立刻按 provider 删除更早的行；加长不会删数据。设置页读图时，查询起点也不会早于当前保留期限。手动清除和改天数是两件事，清除需要确认。退出时历史线程和其它 worker 共用 60ms，未画完的读取结果直接丢掉，不写回这次会话。
 - 折线有两处展示，共用同一套聚合与视图构建（`selectors/history.rs` + `ui/widgets/display/history_chart.rs`）：设置页 provider 详情可切 24 小时 / 7 天 / 30 天，每条序列自带标题；托盘弹窗 provider 页固定近 24 小时，按 `quota_key` 画进对应的配额卡片底部，不再单独占一块，也不再重复标题。纵轴跟着「显示」里的额度显示：剩余或已用，但图上不写这两个字。计量配额的剩余是 `limit - used`；纯余额没有已用，始终画剩余。刻度按可见样本的最小、最大值两侧留白，百分比不再固定成 0–100，刻度文字先取整，取整后上下写成同一个数时再留小数；样本持平时折线画在中间，只标这一个值。横轴是这些样本的起止本地时间，不是整段空白窗口；同一天只标时分，跨天用 `10/4 19:51`。两个采样之间保持上一个真实值，用量相同的采样并成一段平线，数值变化时再跳到新值，台阶带圆角，线下有一层淡填充。平时不画采样点，悬停才标中那一次，不把中间画成渐变斜线。指针停在折线区域（纵轴数字右侧）时，画跟手的虚线指示线，读数吸到最近的真实采样，时间和数值都是那一次的，同一天如 `22:16  64%`，跨天带月日。是否同一天，以及横轴两端文字，都按第一个和最后一个样本，不按留白后的轴端。孤立采样在圆点附近几个像素内仍可读，半径不超过到相邻采样的一半；断档中段和留白远端只标时间。多条线同时命中时，读数块留在指针旁。指示线画在折线下面。绘图区只留底边。离开这块区域十字消失，窗口高度不变。设置页里，折线真有断开时才在图下说明；只有托盘里关掉、这里仍画出的配额时才说明这一点。清除这个服务商的历史放在图下，需要再确认一次。「显示」里的「合并折线」默认打开：单位和含义相同的配额画进同一张图，用不同颜色，图例标名称；单位不同的仍分开。关掉就回到每条配额一张图。托盘仍是每张配额卡一条线，不看这个开关。单位或含义不一致的序列不标纵轴数字。对不上可见配额的序列（例如已隐藏的配额）不出现在弹窗里。打开弹窗、切换 provider 页签、该 provider 的刷新被采纳时都会重新加载；不足两个点的序列不画。窗口高度只为这些内嵌折线额外加高。两侧的加载状态各自计号（`history_ui` 与 `popup_history_ui`），同一条响应按 request_id 各自结算。
 
