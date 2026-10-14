@@ -33,7 +33,7 @@
 - 配置凭证、启用列表或 Provider registry 变化时递增 generation，立即让前台退出 `Refreshing`，并丢弃旧 generation 的迟到结果
 - 接收 `ProviderManager` 已分类好的 `ProviderResult<RefreshData>`，不再在 refresh 边界处理裸 `anyhow::Result`
 - 将结果封装为 `RefreshEvent` 发回 UI 线程
-- 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）并原子替换共享快照，保证前后台看到的是同一个 registry
+- 管理 `ProviderManager` 的热重载（自定义 Provider 文件变更）并原子替换共享快照，保证前后台看到的是同一个 registry。目录扫描、YAML 解析 / 迁移与 registry 构建在 `smol::unblock` 中执行，不阻塞控制循环。reload 同时最多执行一次；加载期间的新请求合并为最新 revision，旧 revision 不发布，完成后再串行加载最新一轮。接收 reload 与提交新 registry 时都使正在刷新的旧 generation 失效；加载期间收到的 `UpdateConfig` 不会被加载结果覆盖。loader panic 会转换为失败消息并释放活动 reload，后续请求可以重试；shutdown 不等待不可取消的底层加载任务。
 
 测试文件：`coordinator_tests.rs`
 

@@ -508,7 +508,11 @@ fn test_reload_providers_replaces_shared_manager_snapshot() {
         let (event_tx, event_rx) = smol::channel::bounded(8);
         let manager = ProviderManagerHandle::new(ProviderManager::new());
         let initial = manager.snapshot();
-        let coordinator = RefreshCoordinator::new(manager.clone(), event_tx);
+        let coordinator = RefreshCoordinator::with_loader(
+            manager.clone(),
+            event_tx,
+            Arc::new(ProviderManager::new),
+        );
         let request_tx = coordinator.sender();
 
         let task = smol::spawn(coordinator.run());
@@ -527,5 +531,219 @@ fn test_reload_providers_replaces_shared_manager_snapshot() {
 
         request_tx.send(RefreshRequest::Shutdown).await.unwrap();
         task.await;
+    });
+}
+
+#[test]
+fn slow_registry_reload_does_not_block_config_or_shutdown() {
+    smol::block_on(async {
+        let (entered_tx, entered_rx) = smol::channel::bounded(1);
+        let (release_tx, release_rx) = smol::channel::bounded::<()>(1);
+        let (event_tx, event_rx) = smol::channel::unbounded();
+        let manager = ProviderManagerHandle::new(ProviderManager::new());
+        let coordinator = RefreshCoordinator::with_loader(
+            manager,
+            event_tx,
+            Arc::new(move || {
+                entered_tx.try_send(()).unwrap();
+                let _ = smol::block_on(release_rx.recv());
+                ProviderManager::new()
+            }),
+        );
+        let request_tx = coordinator.sender();
+        let task = smol::spawn(coordinator.run());
+        request_tx
+            .send(RefreshRequest::ReloadProviders)
+            .await
+            .unwrap();
+        entered_rx.recv().await.unwrap();
+        request_tx
+            .send(RefreshRequest::UpdateConfig {
+                interval_mins: 9,
+                enabled: Vec::new(),
+                provider_credentials: ProviderSettings::default(),
+            })
+            .await
+            .unwrap();
+        request_tx
+            .send(RefreshRequest::RefreshOne {
+                id: ProviderId::BuiltIn(ProviderKind::Claude),
+                reason: RefreshReason::Manual,
+            })
+            .await
+            .unwrap();
+        let event = smol::future::or(async { event_rx.recv().await.ok() }, async {
+            smol::Timer::after(Duration::from_secs(1)).await;
+            None
+        })
+        .await;
+        assert!(matches!(
+            event,
+            Some(RefreshEvent::Finished(RefreshOutcome {
+                result: RefreshResult::SkippedDisabled,
+                ..
+            }))
+        ));
+        request_tx.send(RefreshRequest::Shutdown).await.unwrap();
+        let stopped = smol::future::or(
+            async {
+                task.await;
+                true
+            },
+            async {
+                smol::Timer::after(Duration::from_secs(1)).await;
+                false
+            },
+        )
+        .await;
+        release_tx.try_send(()).unwrap();
+        assert!(stopped);
+    });
+}
+
+#[test]
+fn repeated_registry_reloads_are_serial_and_only_publish_latest() {
+    smol::block_on(async {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let load_calls = calls.clone();
+        let (entered_tx, entered_rx) = smol::channel::unbounded();
+        let (release_tx, release_rx) = smol::channel::unbounded::<()>();
+        let (event_tx, event_rx) = smol::channel::unbounded();
+        let manager = ProviderManagerHandle::new(ProviderManager::new());
+        let initial = manager.snapshot();
+        let mut coordinator = RefreshCoordinator::with_loader(
+            manager.clone(),
+            event_tx,
+            Arc::new(move || {
+                let call = load_calls.fetch_add(1, Ordering::SeqCst);
+                entered_tx.try_send(call).unwrap();
+                let _ = smol::block_on(release_rx.recv());
+                ProviderManager::new()
+            }),
+        );
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        assert_eq!(entered_rx.recv().await.unwrap(), 0);
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        release_tx.try_send(()).unwrap();
+        let completed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(completed).await;
+        assert!(Arc::ptr_eq(&initial, &manager.snapshot()));
+        assert!(event_rx.try_recv().is_err());
+        assert_eq!(entered_rx.recv().await.unwrap(), 1);
+        coordinator
+            .handle_request(RefreshRequest::UpdateConfig {
+                interval_mins: 11,
+                enabled: Vec::new(),
+                provider_credentials: ProviderSettings::default(),
+            })
+            .await;
+        release_tx.try_send(()).unwrap();
+        let completed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(completed).await;
+        assert!(!Arc::ptr_eq(&initial, &manager.snapshot()));
+        assert_eq!(coordinator.scheduler.interval_mins(), 11);
+        assert!(matches!(
+            event_rx.try_recv(),
+            Ok(RefreshEvent::ProvidersReloaded { .. })
+        ));
+        assert!(event_rx.try_recv().is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(coordinator.active_reload.is_none());
+    });
+}
+
+#[test]
+fn panicking_registry_reload_can_retry() {
+    smol::block_on(async {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let load_calls = calls.clone();
+        let (event_tx, event_rx) = smol::channel::unbounded();
+        let manager = ProviderManagerHandle::new(ProviderManager::new());
+        let mut coordinator = RefreshCoordinator::with_loader(
+            manager.clone(),
+            event_tx,
+            Arc::new(move || {
+                if load_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    panic!("test loader panic");
+                }
+                ProviderManager::new()
+            }),
+        );
+
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        let failed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(failed).await;
+        assert!(coordinator.active_reload.is_none());
+        assert!(event_rx.try_recv().is_err());
+
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        let completed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(completed).await;
+
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(coordinator.active_reload.is_none());
+        assert!(matches!(
+            event_rx.try_recv(),
+            Ok(RefreshEvent::ProvidersReloaded { .. })
+        ));
+    });
+}
+
+#[test]
+fn failed_registry_reload_does_not_drop_newer_request() {
+    smol::block_on(async {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let load_calls = calls.clone();
+        let (entered_tx, entered_rx) = smol::channel::unbounded();
+        let (release_tx, release_rx) = smol::channel::unbounded::<()>();
+        let (event_tx, event_rx) = smol::channel::unbounded();
+        let manager = ProviderManagerHandle::new(ProviderManager::new());
+        let mut coordinator = RefreshCoordinator::with_loader(
+            manager,
+            event_tx,
+            Arc::new(move || {
+                let call = load_calls.fetch_add(1, Ordering::SeqCst);
+                entered_tx.try_send(call).unwrap();
+                if call == 0 {
+                    let _ = smol::block_on(release_rx.recv());
+                    panic!("test loader panic");
+                }
+                ProviderManager::new()
+            }),
+        );
+
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        assert_eq!(entered_rx.recv().await.unwrap(), 0);
+        coordinator
+            .handle_request(RefreshRequest::ReloadProviders)
+            .await;
+        release_tx.try_send(()).unwrap();
+
+        let failed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(failed).await;
+        assert_eq!(entered_rx.recv().await.unwrap(), 1);
+
+        let completed = coordinator.task_rx.recv().await.unwrap();
+        coordinator.handle_task_message(completed).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(coordinator.active_reload.is_none());
+        assert!(matches!(
+            event_rx.try_recv(),
+            Ok(RefreshEvent::ProvidersReloaded { .. })
+        ));
     });
 }

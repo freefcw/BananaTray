@@ -21,8 +21,15 @@ use crate::providers::{ProviderError, ProviderManager, ProviderManagerHandle, Pr
 use super::scheduler::RefreshScheduler;
 use super::types::*;
 
-#[derive(Debug)]
 enum TaskMessage {
+    ProvidersLoaded {
+        revision: u64,
+        manager: Arc<ProviderManager>,
+    },
+    ProvidersLoadFailed {
+        revision: u64,
+        message: String,
+    },
     Completed {
         id: ProviderId,
         task_id: u64,
@@ -65,6 +72,9 @@ pub struct RefreshCoordinator {
     active_refreshes: HashMap<ProviderId, ActiveRefresh>,
     next_task_id: u64,
     config_generation: u64,
+    reload_revision: u64,
+    active_reload: Option<u64>,
+    load_manager: Arc<dyn Fn() -> ProviderManager + Send + Sync>,
 }
 
 impl RefreshCoordinator {
@@ -77,6 +87,14 @@ impl RefreshCoordinator {
     }
 
     pub fn new(manager: ProviderManagerHandle, event_tx: Sender<RefreshEvent>) -> Self {
+        Self::with_loader(manager, event_tx, Arc::new(ProviderManager::load_default))
+    }
+
+    fn with_loader(
+        manager: ProviderManagerHandle,
+        event_tx: Sender<RefreshEvent>,
+        load_manager: Arc<dyn Fn() -> ProviderManager + Send + Sync>,
+    ) -> Self {
         // 请求通道不设容量上限：请求体小、产生速率受 UI 交互自然约束。
         let (request_tx, request_rx) = smol::channel::unbounded();
         let (task_tx, task_rx) = smol::channel::unbounded();
@@ -92,6 +110,9 @@ impl RefreshCoordinator {
             active_refreshes: HashMap::new(),
             next_task_id: 0,
             config_generation: 0,
+            reload_revision: 0,
+            active_reload: None,
+            load_manager,
         }
     }
 
@@ -293,8 +314,79 @@ impl RefreshCoordinator {
         }
     }
 
+    fn launch_reload(&mut self) {
+        let revision = self.reload_revision;
+        self.active_reload = Some(revision);
+        let loader = self.load_manager.clone();
+        let task_tx = self.task_tx.clone();
+        smol::spawn(async move {
+            let result = smol::unblock(move || {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| loader()))
+            })
+            .await;
+            let message = match result {
+                Ok(manager) => TaskMessage::ProvidersLoaded {
+                    revision,
+                    manager: Arc::new(manager),
+                },
+                Err(payload) => TaskMessage::ProvidersLoadFailed {
+                    revision,
+                    message: Self::panic_message(payload),
+                },
+            };
+            let _ = task_tx.send(message).await;
+        })
+        .detach();
+    }
+
+    fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+        if let Some(message) = payload.downcast_ref::<&str>() {
+            (*message).to_string()
+        } else if let Some(message) = payload.downcast_ref::<String>() {
+            message.clone()
+        } else {
+            "unknown panic payload".to_string()
+        }
+    }
+
+    fn handle_reload_failure(&mut self, revision: u64, message: String) {
+        if self.active_reload != Some(revision) {
+            return;
+        }
+        self.active_reload = None;
+        log::error!(target: "refresh", "failed to reload custom providers: {message}");
+        if revision != self.reload_revision {
+            self.launch_reload();
+        }
+    }
+
     async fn handle_task_message(&mut self, message: TaskMessage) {
         match message {
+            TaskMessage::ProvidersLoadFailed { revision, message } => {
+                self.handle_reload_failure(revision, message);
+            }
+            TaskMessage::ProvidersLoaded { revision, manager } => {
+                if self.active_reload != Some(revision) {
+                    return;
+                }
+                self.active_reload = None;
+                if revision != self.reload_revision {
+                    self.launch_reload();
+                    return;
+                }
+                self.config_generation = self.config_generation.wrapping_add(1);
+                self.invalidate_active_refreshes(None).await;
+                let statuses = manager.initial_statuses();
+                let new_ids: std::collections::HashSet<_> =
+                    statuses.iter().map(|status| &status.provider_id).collect();
+                self.scheduler.cleanup_stale(&new_ids);
+                self.manager.replace(manager);
+                let _ = self
+                    .event_tx
+                    .send(RefreshEvent::ProvidersReloaded { statuses })
+                    .await;
+                log::info!(target: "refresh", "custom providers reloaded");
+            }
             TaskMessage::TimedOut {
                 id,
                 task_id,
@@ -431,18 +523,10 @@ impl RefreshCoordinator {
                 self.config_generation = self.config_generation.wrapping_add(1);
                 self.invalidate_active_refreshes(None).await;
 
-                let new_manager = Arc::new(crate::providers::ProviderManager::load_default());
-                let statuses = new_manager.initial_statuses();
-                let new_ids: std::collections::HashSet<_> =
-                    statuses.iter().map(|status| &status.provider_id).collect();
-                self.scheduler.cleanup_stale(&new_ids);
-                self.manager.replace(new_manager);
-
-                let _ = self
-                    .event_tx
-                    .send(RefreshEvent::ProvidersReloaded { statuses })
-                    .await;
-                log::info!(target: "refresh", "custom providers reloaded");
+                self.reload_revision = self.reload_revision.wrapping_add(1);
+                if self.active_reload.is_none() {
+                    self.launch_reload();
+                }
             }
             RefreshRequest::Shutdown => {
                 log::info!(target: "refresh", "coordinator shutting down");
