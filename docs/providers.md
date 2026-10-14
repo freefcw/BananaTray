@@ -110,7 +110,7 @@ Provider 可以声明自己的设置能力，UI 会按能力自动渲染对应�
 - `None`
   - 自动管理型 provider，没有额外交互设置。
 - `TokenInput(...)`
-  - 使用通用 token 输入面板。
+  - 使用通用 token 输入面板。`resolve_token_input_state` 可探测外部凭证来源，但只能在后台执行；渲染只消费脱敏的内存快照。新面板 / 外部状态尚未就绪时，本地 override 可即时显示，否则明确显示正在查询，不能当成没有 Token；查询异常与确认没有 Token 也分开。进入面板、切换、保存 override、registry 更新触发查询，当前可见面板每 5 秒低频复查且不与在途查询或编辑重叠。结果按 Provider / 请求编号接受，旧结果不会应用；关闭面板后不回填。
 - `NewApiEditable { base_url }`
   - 面向通过 NewAPI 表单创建的自定义 provider，允许在设置页继续编辑。
   - `base_url` 取自 YAML 的 `base_url`，设置卡片用它显示当前站点地址（可点击打开）。
