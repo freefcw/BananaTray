@@ -545,7 +545,7 @@ fn format_reset_expiry(epoch_secs: Option<i64>) -> String {
     let timestamp = format_reset_timestamp(epoch_secs);
     match epoch_secs.and_then(|epoch| days_until_epoch(epoch, now_epoch_secs())) {
         Some(days) => format!(
-            "({timestamp}) ({})",
+            "{timestamp} ({})",
             t!("codex.reset.remaining_days", n = days)
         ),
         None => timestamp,
@@ -1135,13 +1135,13 @@ mod tests {
             };
             let row = rate_limit_reset_row(&reset);
             let date = format_local_minute(expires_at).unwrap();
-            assert_eq!(row.expires_at, format!("({date}) ({days} Days)"));
+            assert_eq!(row.expires_at, format!("{date} ({days} Days)"));
             assert_eq!(row.granted_at, format_local_minute(now).unwrap());
 
             rust_i18n::set_locale("zh-CN");
             assert_eq!(
                 rate_limit_reset_row(&reset).expires_at,
-                format!("({date}) ({days} 天)")
+                format!("{date} ({days} 天)")
             );
             rust_i18n::set_locale("en");
         }
