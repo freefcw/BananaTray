@@ -13,6 +13,8 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 
 const SEAT_API_BASE: &str = "https://server.self-serve.windsurf.com";
+/// `overageBalanceMicros` 的单位是美元的百万分之一。
+const MICROS_PER_USD: f64 = 1_000_000.0;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +38,9 @@ struct SeatPlanStatus {
     weekly_quota_reset_at_unix: Option<String>,
     #[serde(default)]
     plan_info: Option<SeatPlanInfo>,
+    /// 超额用量余额，美元的百万分之一。上游可能给字符串或数字。
+    #[serde(default)]
+    overage_balance_micros: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +138,14 @@ fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
         quotas.push(quota);
     }
 
+    if let Some(dollars) = plan_status
+        .overage_balance_micros
+        .as_ref()
+        .and_then(overage_balance_usd)
+    {
+        quotas.push(build_overage_balance_quota(dollars));
+    }
+
     if quotas.is_empty() {
         return Err(ProviderError::no_data().into());
     }
@@ -164,6 +177,30 @@ fn build_seat_quota(
 
 fn parse_reset_at_unix(reset_at_unix: Option<&str>) -> Option<i64> {
     reset_at_unix.and_then(|value| value.parse::<i64>().ok())
+}
+
+/// 把超额余额从 micros 换成美元。缺字段、负数和非有限值都不展示。
+fn overage_balance_usd(raw: &Value) -> Option<f64> {
+    let micros = match raw {
+        Value::String(text) => text.trim().parse::<f64>().ok()?,
+        Value::Number(number) => number.as_f64()?,
+        _ => return None,
+    };
+    if !micros.is_finite() || micros < 0.0 {
+        return None;
+    }
+    let dollars = micros / MICROS_PER_USD;
+    dollars.is_finite().then_some(dollars)
+}
+
+fn build_overage_balance_quota(dollars: f64) -> QuotaInfo {
+    QuotaInfo::balance_only(
+        QuotaLabelSpec::ExtraUsage,
+        dollars,
+        None,
+        QuotaType::Credit,
+        None,
+    )
 }
 
 fn get_api_key(spec: &CodeiumFamilySpec) -> Result<String> {
@@ -669,6 +706,81 @@ mod tests {
             err.downcast_ref::<ProviderError>(),
             Some(ProviderError::NoData)
         ));
+    }
+
+    #[test]
+    fn test_parse_seat_response_adds_overage_balance_from_micros_string() {
+        let json = r#"{
+            "userStatus": {
+                "planStatus": {
+                    "dailyQuotaRemainingPercent": 100,
+                    "overageBalanceMicros": "1829587876",
+                    "planInfo": { "planName": "Max" }
+                },
+                "email": "test@example.com"
+            }
+        }"#;
+
+        let response: SeatResponse = serde_json::from_str(json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+        let balance = data
+            .quotas
+            .iter()
+            .find(|quota| quota.stable_key == "extra-usage")
+            .expect("overage balance");
+
+        assert_eq!(balance.label_spec, QuotaLabelSpec::ExtraUsage);
+        assert_eq!(balance.quota_type, QuotaType::Credit);
+        assert!(balance.is_balance_only());
+        assert!((balance.remaining_balance.unwrap() - 1829.587876).abs() < 1e-6);
+        assert!(data
+            .quotas
+            .iter()
+            .any(|quota| quota.stable_key == "daily-quota"));
+    }
+
+    #[test]
+    fn test_parse_seat_response_accepts_numeric_overage_balance_including_zero() {
+        let json = r#"{
+            "userStatus": {
+                "planStatus": {
+                    "overageBalanceMicros": 10000000
+                }
+            }
+        }"#;
+
+        let response: SeatResponse = serde_json::from_str(json).unwrap();
+        let data = parse_seat_response(response).unwrap();
+
+        assert_eq!(data.quotas.len(), 1);
+        let balance = &data.quotas[0];
+        assert_eq!(balance.stable_key, "extra-usage");
+        assert!((balance.remaining_balance.unwrap() - 10.0).abs() < f64::EPSILON);
+
+        let zero: SeatResponse = serde_json::from_str(
+            r#"{"userStatus": {"planStatus": {"overageBalanceMicros": "0"}}}"#,
+        )
+        .unwrap();
+        let zero_data = parse_seat_response(zero).unwrap();
+        assert_eq!(zero_data.quotas[0].remaining_balance, Some(0.0));
+    }
+
+    #[test]
+    fn test_parse_seat_response_skips_invalid_overage_balance() {
+        for micros in [r#"-1"#, r#""-5""#, r#""nope""#, r#"{}"#] {
+            let json = format!(
+                r#"{{"userStatus": {{"planStatus": {{"overageBalanceMicros": {micros}}}}}}}"#
+            );
+            let response: SeatResponse = serde_json::from_str(&json).unwrap();
+            let err = parse_seat_response(response).unwrap_err();
+            assert!(
+                matches!(
+                    err.downcast_ref::<ProviderError>(),
+                    Some(ProviderError::NoData)
+                ),
+                "micros {micros} should not produce a balance card"
+            );
+        }
     }
 
     #[test]

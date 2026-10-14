@@ -53,7 +53,7 @@ Antigravity
 
 Devin
   refresh()
-    ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly
+    ├─→ windsurf::seat_source::fetch_refresh_data()  # daily / weekly / overage balance
     ├─→ codeium_family::refresh_live()
     └─→ codeium_family::refresh_cache()              # fallback / missing weekly补齐
 ```

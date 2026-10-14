@@ -66,7 +66,7 @@ Antigravity 的云端源位于 `src/providers/antigravity/cloud_source.rs`，不
 
 1. Antigravity：优先尝试云端 quota API（macOS，读 agy Keychain token；请求带 `User-Agent: antigravity`，429 冷却期内跳过），失败时尝试 live source，最后回退本地 cache
 2. Devin：优先尝试 seat API，失败时再尝试 live source，最后回退本地 cache
-3. Devin 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining
+3. Devin 优先使用 seat API 返回的 daily / weekly quota；若 seat API 缺 weekly quota，则由 `windsurf/mod.rs` 继续用本地 cache 补 weekly quota。seat/cache 任一路径遇到“weekly percentage 缺失 + reset 在未来”时，都通过同一纯函数解释为 0% remaining。seat API 另把 `planStatus.overageBalanceMicros` 除以 1_000_000 展示为超额用量余额卡；cache 路径没有该字段，合并时保留 seat 上的这张卡
 4. 所有来源都失败时，云端 `SessionExpired` / `AuthRequired` 优先保留结构化 reason 与 advice；其它组合返回包含三路诊断的 `FetchFailed`
 
 本地 cache 回退之前会做两道陈旧检查：
@@ -139,7 +139,7 @@ cargo run -- debug-codeium-family windsurf  # legacy alias
 - 本地 cache key 名称可能因产品版本变化而漂移。
 - 本地 HTTPS endpoint 可能使用自签证书。
 - Devin seat API 依赖本地 auth status 中的 `apiKey`，当前优先读取 `windsurfAuthStatus`，并兼容未来可能出现的 `devinAuthStatus`；请求体里的版本号使用本机安装版本的最佳努力探测，探测不到时不发送版本字段。
-- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；单条额度的 reset 时间已过时，不会据此推断“100% 剩余”，而是视为不可用。Devin seat API 省略 `weeklyQuotaRemainingPercent`、但仍给出未来的 `weeklyQuotaResetAtUnix` 时，表示当前周额度已耗尽，应用会继续展示 Weekly 为 0% 剩余；没有有效 reset 时间时不作此推断。
+- cache fallback 只能反映本地已缓存的数据，不保证和实时服务完全一致；单条额度的 reset 时间已过时，不会据此推断“100% 剩余”，而是视为不可用。Devin seat API 省略 `weeklyQuotaRemainingPercent`、但仍给出未来的 `weeklyQuotaResetAtUnix` 时，表示当前周额度已耗尽，应用会继续展示 Weekly 为 0% 剩余；没有有效 reset 时间时不作此推断。超额用量余额只来自 seat API 的 `overageBalanceMicros`，本地 cache 补周配额时带不上这张卡。
 
 ## Maintenance Rule
 
