@@ -119,6 +119,7 @@ fn render_detail_content(
             &detail.usage,
             theme,
             detail.quota_display_mode,
+            detail.quota_card_style,
         ))
         .child(history::render_history_section(detail, dispatcher, theme))
 }

@@ -1,5 +1,5 @@
 use crate::application::SettingsProviderUsageViewState;
-use crate::models::QuotaDisplayMode;
+use crate::models::{QuotaCardStyle, QuotaDisplayMode};
 use crate::theme::Theme;
 use crate::ui::widgets::{
     render_detail_empty_card, render_detail_error_card, render_detail_section_title,
@@ -11,6 +11,7 @@ pub(super) fn render_usage_section(
     usage: &SettingsProviderUsageViewState,
     theme: &Theme,
     display_mode: QuotaDisplayMode,
+    card_style: QuotaCardStyle,
 ) -> Div {
     match usage {
         SettingsProviderUsageViewState::Disabled { message }
@@ -22,7 +23,14 @@ pub(super) fn render_usage_section(
             let mut section = usage_section(theme);
             for quota in quotas {
                 section = section.child(div().mt(px(10.0)).child(
-                    crate::ui::widgets::render_quota_bar(quota, theme, 0, display_mode, None),
+                    crate::ui::widgets::render_quota_card(
+                        quota,
+                        theme,
+                        0,
+                        display_mode,
+                        card_style,
+                        None,
+                    ),
                 ));
             }
             if let Some(resets) = resets {

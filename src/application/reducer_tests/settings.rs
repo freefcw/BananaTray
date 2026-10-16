@@ -3,7 +3,7 @@ use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, ContextEffect, GlobalHotkeyError,
     NotificationEffect, RefreshEffect, SettingChange, SettingsEffect, TrayIconRequest,
 };
-use crate::models::{NavTab, ProviderKind, RefreshData};
+use crate::models::{NavTab, ProviderKind, QuotaCardStyle, RefreshData};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
 
 // ── Cadence Dropdown ────────────────────────────────
@@ -519,6 +519,30 @@ fn set_quota_display_mode_round_trip() {
         session.settings.display.quota_display_mode,
         QuotaDisplayMode::Remaining
     );
+}
+
+#[test]
+fn set_quota_card_style_persists() {
+    let mut session = make_session();
+    assert_eq!(
+        session.settings.display.quota_card_style,
+        QuotaCardStyle::Bar
+    );
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetQuotaCardStyle(QuotaCardStyle::Ring)),
+    );
+
+    assert_eq!(
+        session.settings.display.quota_card_style,
+        QuotaCardStyle::Ring
+    );
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_render(&effects));
 }
 
 #[test]

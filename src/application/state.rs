@@ -5,7 +5,7 @@ use super::quota_alert::AlertEngine;
 use crate::history::{is_line_series, HistoryRange, HistoryReady, HistoryReadyState};
 use crate::models::{
     AppSettings, ConnectionStatus, NavTab, NewApiEditData, ProviderId, ProviderKind,
-    ProviderStatus, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
+    ProviderStatus, QuotaCardStyle, ScriptProviderEditData, ScriptProviderTestResult, StatusLevel,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -880,39 +880,50 @@ pub fn compute_popup_height(
 /// 托盘配额卡里内嵌折线占用的额外高度。
 ///
 /// 只算当前 provider 页上、可见配额里、至少两个点的序列。加载中、刷新中、
-/// 空状态，以及设置页 / Overview，都不加高。
+/// 空状态，以及设置页 / Overview，都不加高。圆圈样式的折线在圆环右侧，
+/// 不为折线本身加高；有折线的卡把重置时间放到右侧折线下面，按 `CARD_RING_DETAIL_EXTRA` 加高。
 fn popup_embedded_history_extra(session: &AppSession) -> f32 {
+    let count = embedded_history_line_count(session);
+    let per_card = if session.settings.display.quota_card_style == QuotaCardStyle::Ring {
+        crate::models::PopupLayout::CARD_RING_DETAIL_EXTRA
+    } else {
+        crate::models::PopupLayout::CARD_HISTORY_EXTRA
+    };
+    count as f32 * per_card
+}
+
+fn embedded_history_line_count(session: &AppSession) -> usize {
     let NavTab::Provider(id) = &session.nav.active_tab else {
-        return 0.0;
+        return 0;
     };
     let HistoryLoadState::Ready {
         provider_id, ready, ..
     } = &session.popup_history_ui.load
     else {
-        return 0.0;
+        return 0;
     };
     if provider_id != id {
-        return 0.0;
+        return 0;
     }
     let Some(provider) = session.provider_store.find_by_id(id) else {
-        return 0.0;
+        return 0;
     };
     if provider.connection == ConnectionStatus::Refreshing
         || (provider.connection == ConnectionStatus::Error && provider.quotas.is_empty())
     {
-        return 0.0;
+        return 0;
     }
     let visible = session
         .settings
         .provider
         .visible_quotas(id, &provider.quotas);
     if visible.is_empty() {
-        return 0.0;
+        return 0;
     }
     let HistoryReadyState::Charts(series) = &ready.state else {
-        return 0.0;
+        return 0;
     };
-    let count = series
+    series
         .iter()
         .filter(|item| {
             is_line_series(item)
@@ -920,8 +931,7 @@ fn popup_embedded_history_extra(session: &AppSession) -> f32 {
                     .iter()
                     .any(|quota| quota.stable_key == item.quota_key)
         })
-        .count();
-    count as f32 * crate::models::PopupLayout::CARD_HISTORY_EXTRA
+        .count()
 }
 
 /// 计算当前头部状态分类和可选的经过秒数

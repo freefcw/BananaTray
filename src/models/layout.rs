@@ -63,8 +63,17 @@ impl PopupLayout {
 
     /// 一张有折线的配额卡比 `CARD_HEIGHT` 多出来的高度。
     ///
-    /// 卡片是 `flex_col` + `gap(6)`，多一个图表子节点就多一段 6px 间距，再加上图表自身高度。
+    /// 线条样式把折线放在卡片底部：卡片是 `flex_col` + `gap(6)`，多一个图表子节点就多一段
+    /// 6px 间距，再加上图表自身高度。圆圈样式把折线放在圆环右侧，不再加这段。
     pub const CARD_HISTORY_EXTRA: f32 = 6.0 + Self::CARD_HISTORY_CHART_HEIGHT;
+
+    /// 圆圈样式有折线时，重置时间放在右侧折线下面，不贴着圆环。
+    ///
+    /// 折线和这行字之间留 `CARD_RING_DETAIL_GAP`。没有折线时详情留在圆环右侧，不加这段。
+    pub const CARD_RING_DETAIL_GAP: f32 = 14.0;
+    pub const CARD_RING_DETAIL_LINE: f32 = 14.0;
+    pub const CARD_RING_DETAIL_EXTRA: f32 =
+        Self::CARD_RING_DETAIL_GAP + Self::CARD_RING_DETAIL_LINE;
 
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;

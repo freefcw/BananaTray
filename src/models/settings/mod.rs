@@ -139,6 +139,9 @@ pub struct DisplaySettings {
     /// 额度显示模式：剩余 or 已用
     #[serde(default)]
     pub quota_display_mode: QuotaDisplayMode,
+    /// 配额卡画法：线条（进度条，折线在下方）或圆圈（数字在环内，折线在右侧）。
+    #[serde(default)]
+    pub quota_card_style: QuotaCardStyle,
     /// 设置页历史图是否把单位相同的配额画在一张图里。托盘仍是每张卡一条线。
     #[serde(default = "default_true")]
     pub merge_history_charts: bool,
@@ -168,6 +171,7 @@ impl Default for DisplaySettings {
             language: default_language(),
             tray_icon_style: TrayIconStyle::default(),
             quota_display_mode: QuotaDisplayMode::default(),
+            quota_card_style: QuotaCardStyle::default(),
             merge_history_charts: true,
             show_dashboard_button: true,
             show_refresh_button: true,
@@ -523,6 +527,19 @@ impl Default for TrayIconStyle {
     fn default() -> Self {
         Self::Monochrome
     }
+}
+
+/// 配额卡片的画法。
+///
+/// 线条是现在的大数字加进度条，历史折线画在卡片底部。圆圈把数字放进圆环，
+/// 同一张卡的右侧画历史折线，窗口不再为折线加高。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum QuotaCardStyle {
+    /// 大数字、进度条，历史折线在卡片底部。
+    #[default]
+    Bar,
+    /// 圆环里放数字，历史折线在右侧。
+    Ring,
 }
 
 /// 额度显示模式

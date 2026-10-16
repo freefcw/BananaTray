@@ -17,7 +17,7 @@ mod tray;
 use super::state::{FormIdentity, HeaderStatusKind};
 use crate::history::HistoryUnit;
 use crate::models::{
-    NewApiEditData, ProviderCapability, ProviderId, QuotaDisplayMode, QuotaInfo,
+    NewApiEditData, ProviderCapability, ProviderId, QuotaCardStyle, QuotaDisplayMode, QuotaInfo,
     QuotaThresholdUnit, QuotaThresholds, ScriptProviderEditData, ScriptProviderTestResult,
     SettingsCapability, StatusLevel,
 };
@@ -75,6 +75,8 @@ pub struct ProviderPanelViewState {
     pub account: Option<AccountInfoViewState>,
     pub body: ProviderBodyViewState,
     pub quota_display_mode: QuotaDisplayMode,
+    /// 配额卡画法。圆圈样式把折线放在圆环右侧，不再加高窗口。
+    pub quota_card_style: QuotaCardStyle,
     /// 近 24 小时用量折线；无成功样本或尚未加载时为空，UI 不渲染。
     pub history_charts: Vec<HistoryChartView>,
     /// Codex 可兑换限流重置。不是配额卡。
@@ -289,6 +291,7 @@ pub struct SettingsProviderDetailViewState {
     pub settings_capability: SettingsCapability,
     pub token_input: TokenInputDisplayState,
     pub quota_display_mode: QuotaDisplayMode,
+    pub quota_card_style: QuotaCardStyle,
     pub quota_usage_step_pct: Option<u8>,
     pub global_quota_usage_step_pct: u8,
     pub show_quota_thresholds: bool,
@@ -438,7 +441,7 @@ pub(crate) use format::display_source_label;
 #[allow(unused_imports)] // app feature 下 ui/widgets 使用
 pub(crate) use format::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_card_mode_label, format_quota_status_label,
+    format_quota_card_mode_label, format_quota_status_label, quota_ring_fill_ratio,
 };
 #[allow(unused_imports)]
 pub(crate) use format::{format_quota_label, format_quota_remaining_text};

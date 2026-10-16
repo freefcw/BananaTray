@@ -38,7 +38,7 @@ pub use selectors::{
 pub(crate) use selectors::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
     format_quota_card_mode_label, format_quota_label, format_quota_remaining_text,
-    format_quota_status_label,
+    format_quota_status_label, quota_ring_fill_ratio,
 };
 #[cfg(any(target_os = "linux", test))]
 #[allow(unused_imports)]

@@ -196,6 +196,18 @@ fn display_settings_missing_tray_popup_uses_default() {
     let restored: DisplaySettings = serde_json::from_value(json).unwrap();
     assert_eq!(restored.tray_popup, TrayPopupSettings::default());
     assert!(restored.merge_history_charts);
+    assert_eq!(restored.quota_card_style, QuotaCardStyle::Bar);
+}
+
+#[test]
+fn quota_card_style_round_trip() {
+    let settings = DisplaySettings {
+        quota_card_style: QuotaCardStyle::Ring,
+        ..Default::default()
+    };
+    let json = serde_json::to_value(&settings).unwrap();
+    let restored: DisplaySettings = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.quota_card_style, QuotaCardStyle::Ring);
 }
 
 #[test]

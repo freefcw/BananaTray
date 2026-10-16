@@ -513,6 +513,32 @@ fn panel_defaults_to_remaining_mode() {
                 panel.quota_display_mode,
                 crate::models::QuotaDisplayMode::Remaining
             );
+            assert_eq!(panel.quota_card_style, crate::models::QuotaCardStyle::Bar);
+        }
+        _ => panic!("expected Panel variant"),
+    }
+}
+
+#[test]
+fn panel_inherits_quota_card_style_from_settings() {
+    use crate::models::QuotaCardStyle;
+
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Gemini, true);
+    settings.display.quota_card_style = QuotaCardStyle::Ring;
+
+    let mut provider = make_provider(ProviderKind::Gemini, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("test", 50.0, 100.0)];
+
+    let session = make_session_with_provider(settings, provider);
+    let view = provider_detail_view_state(&session, &pid(ProviderKind::Gemini));
+
+    match view {
+        ProviderDetailViewState::Panel(panel) => {
+            assert_eq!(panel.quota_card_style, QuotaCardStyle::Ring);
         }
         _ => panic!("expected Panel variant"),
     }

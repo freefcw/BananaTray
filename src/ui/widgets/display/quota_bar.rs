@@ -5,7 +5,7 @@ use crate::application::{
     format_quota_card_mode_label, format_quota_status_label, HistoryChartView,
     QuotaDisplayViewState,
 };
-use crate::models::{PopupLayout, QuotaDisplayMode, QuotaInfo};
+use crate::models::{PopupLayout, QuotaCardStyle, QuotaDisplayMode, QuotaInfo};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -14,7 +14,7 @@ use gpui::{
     Stateful, StyleRefinement, Styled,
 };
 
-fn render_quota_card_frame(
+pub(in crate::ui::widgets::display) fn render_quota_card_frame(
     quota: &QuotaInfo,
     theme: &Theme,
     hover_bg: Hsla,
@@ -35,7 +35,7 @@ fn render_quota_card_frame(
         .hover(move |style: StyleRefinement| style.bg(hover_bg))
 }
 
-fn render_quota_header_row(
+pub(in crate::ui::widgets::display) fn render_quota_header_row(
     quota_view: &QuotaDisplayViewState,
     badge_color: Hsla,
     badge_label: String,
@@ -183,11 +183,32 @@ fn render_quota_detail_row(detail_text: &str, theme: &Theme) -> Div {
     )
 }
 
+/// 按「额度样式」画一张配额卡。线条走进度条，圆圈把数字放进圆环、折线放在右侧。
+pub(crate) fn render_quota_card(
+    quota_view: &QuotaDisplayViewState,
+    theme: &Theme,
+    generation: u64,
+    display_mode: QuotaDisplayMode,
+    style: QuotaCardStyle,
+    history: Option<&HistoryChartView>,
+) -> gpui::AnyElement {
+    match style {
+        QuotaCardStyle::Bar => {
+            render_quota_bar(quota_view, theme, generation, display_mode, history)
+                .into_any_element()
+        }
+        QuotaCardStyle::Ring => {
+            super::quota_ring::render_quota_ring(quota_view, theme, display_mode, history)
+                .into_any_element()
+        }
+    }
+}
+
 /// Lumina Bar 风格的 quota 卡片。
 ///
 /// `history` 有值时把近 24 小时折线画在卡片底部，不再另起标题。
 /// 高度增量见 `PopupLayout::CARD_HISTORY_EXTRA`（卡片 `gap(6)` + 图表高度）。
-pub(crate) fn render_quota_bar(
+fn render_quota_bar(
     quota_view: &QuotaDisplayViewState,
     theme: &Theme,
     generation: u64,

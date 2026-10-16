@@ -159,11 +159,12 @@ impl AppView {
                         .history_charts
                         .iter()
                         .find(|chart| chart.quota_key == quota.quota.stable_key);
-                    cards = cards.child(crate::ui::widgets::render_quota_bar(
+                    cards = cards.child(crate::ui::widgets::render_quota_card(
                         quota,
                         &theme,
                         *generation,
                         vm.quota_display_mode,
+                        vm.quota_card_style,
                         history,
                     ));
                 }

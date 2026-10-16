@@ -153,6 +153,7 @@ pub fn provider_detail_view_state(
         account,
         body,
         quota_display_mode: session.settings.display.quota_display_mode,
+        quota_card_style: session.settings.display.quota_card_style,
         history_charts,
         resets: rate_limit_reset_section(&provider.rate_limit_resets).map(Box::new),
     })

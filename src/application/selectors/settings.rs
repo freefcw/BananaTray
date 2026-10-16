@@ -204,6 +204,7 @@ fn settings_provider_detail_view_state(
             .map(|p| p.settings_capability.clone())
             .unwrap_or_default(),
         quota_display_mode: session.settings.display.quota_display_mode,
+        quota_card_style: session.settings.display.quota_card_style,
         quota_usage_step_pct: session.settings.provider.quota_usage_step(id),
         global_quota_usage_step_pct: session.settings.notification.quota_usage_step_pct,
         show_quota_thresholds: provider_capability == ProviderCapability::Monitorable,

@@ -41,7 +41,7 @@ pub use script_provider::{
 };
 pub use settings::{
     valid_retention_days, AppSettings, AppTheme, DisplaySettings, HistorySettings, LoggingSettings,
-    NotificationSettings, ProviderConfig, ProviderLayoutItem, ProviderSettings, QuotaDisplayMode,
-    SavedWindowPosition, SystemSettings, TrayIconStyle, TrayPopupSettings, DEFAULT_RETENTION_DAYS,
-    RETENTION_PRESETS,
+    NotificationSettings, ProviderConfig, ProviderLayoutItem, ProviderSettings, QuotaCardStyle,
+    QuotaDisplayMode, SavedWindowPosition, SystemSettings, TrayIconStyle, TrayPopupSettings,
+    DEFAULT_RETENTION_DAYS, RETENTION_PRESETS,
 };

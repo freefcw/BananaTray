@@ -349,3 +349,29 @@ fn popup_height_grows_only_for_embedded_history_lines() {
         crate::models::compute_popup_height_for_overview(&[1])
     );
 }
+
+/// 圆圈样式把折线放在圆环右侧。有折线时只为底部详情行加高，不加整段折线高度。
+#[test]
+fn popup_height_ring_style_keeps_history_inside_the_card() {
+    use crate::models::QuotaCardStyle;
+
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].quotas = vec![QuotaInfo::new("Session", 50.0, 100.0)];
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    session.nav.active_tab = NavTab::Provider(pid(ProviderKind::Claude));
+    let bar_height = session.popup_height();
+    session.settings.display.quota_card_style = QuotaCardStyle::Ring;
+    assert_eq!(session.popup_height(), bar_height);
+
+    session.popup_history_ui.load = HistoryLoadState::Ready {
+        provider_id: pid(ProviderKind::Claude),
+        request_id: 1,
+        ready: ready_charts(vec![line_series("session", 3)]),
+    };
+
+    assert_eq!(
+        session.popup_height(),
+        bar_height + PopupLayout::CARD_RING_DETAIL_EXTRA
+    );
+    assert!(PopupLayout::CARD_RING_DETAIL_EXTRA < PopupLayout::CARD_HISTORY_EXTRA);
+}

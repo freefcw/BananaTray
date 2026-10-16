@@ -191,6 +191,9 @@ pub(super) fn apply_setting_change(
         SettingChange::SetQuotaDisplayMode(mode) => {
             session.settings.display.quota_display_mode = mode;
         }
+        SettingChange::SetQuotaCardStyle(style) => {
+            session.settings.display.quota_card_style = style;
+        }
         SettingChange::ToggleMergeHistoryCharts => {
             session.settings.display.merge_history_charts =
                 !session.settings.display.merge_history_charts;

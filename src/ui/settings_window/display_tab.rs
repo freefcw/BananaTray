@@ -4,7 +4,7 @@ use super::components::{
 };
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
-use crate::models::{AppSettings, AppTheme, QuotaDisplayMode, TrayIconStyle};
+use crate::models::{AppSettings, AppTheme, QuotaCardStyle, QuotaDisplayMode, TrayIconStyle};
 use crate::theme::Theme;
 use crate::ui::widgets::{render_segmented_control, render_toggle_switch, SegmentedSize};
 use gpui::{
@@ -48,6 +48,8 @@ impl SettingsView {
             .child(self.render_tray_icon_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_quota_display_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(self.render_quota_card_style_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_merge_charts_setting(settings, theme))
     }
@@ -152,6 +154,33 @@ impl SettingsView {
                 crate::bootstrap::dispatch_in_window(
                     &state,
                     AppAction::UpdateSetting(SettingChange::SetQuotaDisplayMode(mode)),
+                    window,
+                    cx,
+                );
+            },
+        )
+    }
+
+    fn render_quota_card_style_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        let state = self.state.clone();
+        render_inline_segmented_row(
+            &t!("settings.quota_card_style"),
+            vec![
+                (
+                    t!("settings.quota_card_style.bar").to_string(),
+                    QuotaCardStyle::Bar,
+                ),
+                (
+                    t!("settings.quota_card_style.ring").to_string(),
+                    QuotaCardStyle::Ring,
+                ),
+            ],
+            &settings.display.quota_card_style,
+            theme,
+            move |style, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::UpdateSetting(SettingChange::SetQuotaCardStyle(style)),
                     window,
                     cx,
                 );

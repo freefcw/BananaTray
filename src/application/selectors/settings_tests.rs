@@ -545,6 +545,30 @@ fn settings_detail_inherits_quota_display_mode() {
     assert_eq!(view_state.detail.quota_display_mode, QuotaDisplayMode::Used);
 }
 
+#[test]
+fn settings_detail_inherits_quota_card_style() {
+    use crate::models::QuotaCardStyle;
+
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+    settings.display.quota_card_style = QuotaCardStyle::Ring;
+
+    let session = make_session(
+        settings,
+        pid(ProviderKind::Claude),
+        vec![make_provider(
+            ProviderKind::Claude,
+            ConnectionStatus::Connected,
+        )],
+    );
+
+    let view_state = settings_providers_tab_view_state(&session);
+    assert_eq!(view_state.detail.quota_card_style, QuotaCardStyle::Ring);
+}
+
 // ── settings_capability 透传 ────────────────────────────
 
 #[test]

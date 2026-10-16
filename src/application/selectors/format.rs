@@ -437,6 +437,21 @@ pub fn format_quota_card_mode_label(quota: &QuotaInfo, display_mode: QuotaDispla
     }
 }
 
+/// 圆环弧长，和卡片主数字用同一套剩余 / 已用语义。
+///
+/// 纯余额没有总量，返回 `None`，调用方画满环。有总量时把比例夹到 0..=1。
+#[allow(dead_code)] // 仅 app feature 下的额度圆环调用
+pub fn quota_ring_fill_ratio(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> Option<f32> {
+    if quota.is_balance_only() {
+        return None;
+    }
+    let pct = match display_mode {
+        QuotaDisplayMode::Remaining => quota.percent_remaining(),
+        QuotaDisplayMode::Used => quota.percentage(),
+    };
+    Some((pct.clamp(0.0, 100.0) / 100.0) as f32)
+}
+
 /// 设置页 quota 卡片是否需要额外的百分号单位。
 #[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_has_unit(quota: &QuotaInfo) -> bool {
@@ -1028,6 +1043,31 @@ mod tests {
         assert!(format_quota_card_has_unit(&QuotaInfo::new(
             "General", 25.0, 100.0
         )));
+    }
+
+    #[test]
+    fn ring_fill_follows_remaining_or_used_and_skips_balance() {
+        let quota = QuotaInfo::new("Session", 25.0, 100.0);
+        let remaining = quota_ring_fill_ratio(&quota, QuotaDisplayMode::Remaining).unwrap();
+        let used = quota_ring_fill_ratio(&quota, QuotaDisplayMode::Used).unwrap();
+        assert!((remaining - 0.75).abs() < 1e-5);
+        assert!((used - 0.25).abs() < 1e-5);
+
+        let over = QuotaInfo::new("Session", 140.0, 100.0);
+        assert_eq!(
+            quota_ring_fill_ratio(&over, QuotaDisplayMode::Used),
+            Some(1.0)
+        );
+        assert_eq!(
+            quota_ring_fill_ratio(&over, QuotaDisplayMode::Remaining),
+            Some(0.0)
+        );
+
+        let balance = QuotaInfo::balance_only("Balance", 12.0, Some(1.0), QuotaType::Credit, None);
+        assert_eq!(
+            quota_ring_fill_ratio(&balance, QuotaDisplayMode::Remaining),
+            None
+        );
     }
 
     #[test]
