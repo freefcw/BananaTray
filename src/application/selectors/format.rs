@@ -490,10 +490,21 @@ pub(crate) fn rate_limit_reset_section(
 }
 
 fn rate_limit_reset_row(reset: &RateLimitReset) -> super::RateLimitResetRowView {
+    let expires_on = format_reset_timestamp(reset.expires_at_secs);
+    let expires_in = reset
+        .expires_at_secs
+        .and_then(|epoch| days_until_epoch(epoch, now_epoch_secs()))
+        .map(|days| t!("codex.reset.remaining_days", n = days).to_string());
+    let expires_at = match &expires_in {
+        Some(remaining) => format!("{expires_on} ({remaining})"),
+        None => expires_on.clone(),
+    };
     super::RateLimitResetRowView {
         reset_type: display_reset_type(reset),
         granted_at: format_reset_timestamp(reset.granted_at_secs),
-        expires_at: format_reset_expiry(reset.expires_at_secs),
+        expires_at,
+        expires_on,
+        expires_in,
         expiry_urgency: reset_expiry_urgency(reset.expires_at_secs),
     }
 }
@@ -538,17 +549,6 @@ fn display_reset_type(reset: &RateLimitReset) -> String {
         "codex_rate_limits" => t!("codex.reset.type.codex_rate_limits").to_string(),
         "" => t!("codex.reset.type.unknown").to_string(),
         other => other.to_string(),
-    }
-}
-
-fn format_reset_expiry(epoch_secs: Option<i64>) -> String {
-    let timestamp = format_reset_timestamp(epoch_secs);
-    match epoch_secs.and_then(|epoch| days_until_epoch(epoch, now_epoch_secs())) {
-        Some(days) => format!(
-            "{timestamp} ({})",
-            t!("codex.reset.remaining_days", n = days)
-        ),
-        None => timestamp,
     }
 }
 
@@ -1135,14 +1135,22 @@ mod tests {
             };
             let row = rate_limit_reset_row(&reset);
             let date = format_local_minute(expires_at).unwrap();
+            assert_eq!(row.expires_on, date);
+            assert_eq!(
+                row.expires_in.as_deref(),
+                Some(format!("{days} Days").as_str())
+            );
             assert_eq!(row.expires_at, format!("{date} ({days} Days)"));
             assert_eq!(row.granted_at, format_local_minute(now).unwrap());
 
             rust_i18n::set_locale("zh-CN");
+            let zh = rate_limit_reset_row(&reset);
+            assert_eq!(zh.expires_on, date);
             assert_eq!(
-                rate_limit_reset_row(&reset).expires_at,
-                format!("{date} ({days} 天)")
+                zh.expires_in.as_deref(),
+                Some(format!("{days} 天").as_str())
             );
+            assert_eq!(zh.expires_at, format!("{date} ({days} 天)"));
             rust_i18n::set_locale("en");
         }
     }

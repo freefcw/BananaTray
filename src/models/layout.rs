@@ -69,8 +69,12 @@ impl PopupLayout {
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;
 
-    /// 限流重置卡的垂直内边距：`py(12)` 上下各一份。
-    pub const RESET_CARD_PAD_Y: f32 = 24.0;
+    /// 限流重置卡上内边距。标题行紧贴顶边时，12px 看起来比额度卡更挤。
+    pub const RESET_CARD_PAD_TOP: f32 = 20.0;
+    /// 限流重置卡下内边距。
+    pub const RESET_CARD_PAD_BOTTOM: f32 = 14.0;
+    /// 上下内边距合计，高度计算用这一份。
+    pub const RESET_CARD_PAD_Y: f32 = Self::RESET_CARD_PAD_TOP + Self::RESET_CARD_PAD_BOTTOM;
     /// 重置卡 1px 边框的上下合计。
     pub const RESET_CARD_BORDER: f32 = 2.0;
     /// 重置卡标题、类型/时间行、数量说明行的固定行高。

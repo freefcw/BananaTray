@@ -204,7 +204,12 @@ pub struct QuotaDisplayViewState {
 pub struct RateLimitResetRowView {
     pub reset_type: String,
     pub granted_at: String,
+    /// 到期时刻加剩余天数，给悬浮提示和 D-Bus。
     pub expires_at: String,
+    /// 到期时刻，不含剩余天数。
+    pub expires_on: String,
+    /// 剩余天数，如「7 天」。没有时刻时为空，避免和未知时间挤在同一列。
+    pub expires_in: Option<String>,
     pub expiry_urgency: ResetExpiryUrgency,
 }
 

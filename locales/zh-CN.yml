@@ -528,7 +528,7 @@ codex.reset.remaining_days: "%{n} 天"
 codex.reset.type.codex_rate_limits: "限流重置"
 codex.reset.type.full: "完整重置"
 codex.reset.type.unknown: "重置"
-codex.reset.summary_only: "有 %{n} 个可兑换重置，这次没有类型和到期时间"
+codex.reset.summary_only: "有 %{n} 个可兑换重置，类型和到期时间这次没读到"
 codex.reset.more_without_details: "另有 %{n} 个没有类型或到期时间"
 
 quota.label.session: "会话 (5小时)"
