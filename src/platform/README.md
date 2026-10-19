@@ -41,6 +41,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 ## Key Constraints
 
 - Keep `paths`, `system`, and log-reading helpers usable from lib/no-default-feature checks.
+- Clipboard helpers may keep a background process alive while they own the selection; the foreground command and stdin write are both deadline-bounded and cleaned up on failure.
 - Route private settings/credential writes through `atomic_file`; multi-file callers may own commit/rollback orchestration but must reuse its exclusive private-file creation primitive (`write_private_file_exclusively`).
 - Keep GPUI, notification, single-instance, auto-launch, and asset loading dependencies behind `feature = "app"`.
 - Do not put quota alert policy in `notification.rs`; platform code only sends already-decided notifications.

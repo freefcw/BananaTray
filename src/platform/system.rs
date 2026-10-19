@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::OnceLock;
@@ -115,10 +115,24 @@ pub fn open_path_in_finder(path: &Path) -> Result<()> {
     }
 }
 
+/// 剪贴板输入和子进程退出各自等待的上限。
+///
+/// 正常情况下这个上限不会被触及：`xclip` / `xsel` 默认都会 daemon 化
+/// （见 `xclip.c` 的 `xcverb == OSILENT` 分支、`xsel --nodetach` 的反向说明），
+/// 父进程写完 stdin 后立即退出，`wait` 很快返回。
+///
+/// 保留超时是纯防御性的：若某个打包版本或未来的工具没有 daemon 化而是留在前台
+/// 持有选区，调用线程会永久卡住，用户只能强杀进程。2 秒足够区分两种情况。
+const CLIPBOARD_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// 将文本写入系统剪贴板
 ///
 /// macOS: `pbcopy`
 /// Linux: `xclip` 或 `xsel`
+///
+/// 实现上需注意：X11/Wayland 的剪贴板协议要求「选区所有者」进程存活以响应后续
+/// 读取请求，所以这些工具写入完成后会 fork 出后台进程继续持有选区。它们**不是**
+/// 以「内容已送达」为退出条件的普通命令，等待与关闭 stdin 的语义必须兼容这一点。
 pub fn copy_to_clipboard(text: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
@@ -180,24 +194,178 @@ fn copy_with_candidates(
 }
 
 fn run_command_with_input(program: &str, args: &[&str], text: &str) -> Result<()> {
-    let mut child = Command::new(program)
+    run_command_with_input_timeout(program, args, text, CLIPBOARD_COMMAND_TIMEOUT)
+}
+
+fn run_command_with_input_timeout(
+    program: &str,
+    args: &[&str],
+    text: &str,
+    timeout: std::time::Duration,
+) -> Result<()> {
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::piped())
+        // 剪贴板工具不需要 stdout/stderr；置为 null 也避免它们继承我们的终端。
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    prepare_process_group(&mut command);
+
+    let mut child = command
         .spawn()
         .with_context(|| format!("failed to start {program}"))?;
+    let mut stdin = match child.stdin.take() {
+        Some(stdin) => stdin,
+        None => {
+            terminate_child_tree(&mut child);
+            let _ = child.wait();
+            bail!("child process did not expose stdin")
+        }
+    };
 
-    let write_result = child
-        .stdin
-        .take()
-        .context("child process did not expose stdin")?
-        .write_all(text.as_bytes())
-        .with_context(|| format!("failed to write to {program}"));
-    let status = child
-        .wait()
-        .with_context(|| format!("failed to wait for {program}"))?;
+    let write_result = write_with_timeout(&mut stdin, text.as_bytes(), timeout);
+    drop(stdin);
 
-    write_result?;
+    if let Err(err) = write_result {
+        terminate_child_tree(&mut child);
+        let _ = child.wait();
+        return Err(err).with_context(|| format!("failed to write to {program}"));
+    }
+
+    let status = match wait_with_timeout(&mut child, program, timeout) {
+        Ok(status) => status,
+        Err(err) => {
+            terminate_child_tree(&mut child);
+            let _ = child.wait();
+            return Err(err);
+        }
+    };
     ensure_success(program, status)
+}
+
+fn write_with_timeout(
+    stdin: &mut std::process::ChildStdin,
+    input: &[u8],
+    timeout: std::time::Duration,
+) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+
+        let fd = stdin.as_raw_fd();
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        if flags == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let result = write_nonblocking_until_deadline(stdin, input, timeout);
+        let _ = unsafe { libc::fcntl(fd, libc::F_SETFL, flags) };
+        result
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = timeout;
+        stdin.write_all(input)
+    }
+}
+
+#[cfg(unix)]
+fn write_nonblocking_until_deadline(
+    stdin: &mut std::process::ChildStdin,
+    input: &[u8],
+    timeout: std::time::Duration,
+) -> io::Result<()> {
+    let deadline = std::time::Instant::now() + timeout;
+    let mut written = 0;
+    while written < input.len() {
+        match stdin.write(&input[written..]) {
+            Ok(0) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "clipboard stdin closed before all input was written",
+                ));
+            }
+            Ok(count) => written += count,
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "clipboard stdin write timed out",
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
+}
+
+/// 有上限地等待子进程退出；超时则结束子进程并报错。
+///
+/// 没有复用 `providers::common::cli::run_child_with_timeout` 是有意的：
+/// 那个函数带进程组、PATH 注入和 stdout/stderr 管道排空，是为 provider 子进程
+/// 设计的；剪贴板命令只需要「等到退出」这一件事，套用会引入无关耦合。
+/// 两者各约 20 行，重复度低，合并的收益抵不上耦合成本。
+fn wait_with_timeout(
+    child: &mut Child,
+    program: &str,
+    timeout: std::time::Duration,
+) -> Result<ExitStatus> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    terminate_child_tree(child);
+                    let _ = child.wait();
+                    bail!(
+                        "{program} did not exit within {}ms and was terminated",
+                        timeout.as_millis()
+                    );
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(err) => {
+                return Err(err).with_context(|| format!("failed to wait for {program}"));
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn prepare_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setpgid(0, 0) == -1 {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn prepare_process_group(_command: &mut Command) {}
+
+fn terminate_child_tree(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+            unsafe {
+                let _ = libc::kill(-pgid, libc::SIGKILL);
+            }
+        }
+    }
+    let _ = child.kill();
 }
 
 fn spawn_checked_command(command: &mut Command) -> Result<std::thread::JoinHandle<()>> {
@@ -442,6 +610,95 @@ mod tests {
         assert_eq!(format_file_size(1536), "1.5 KB");
         assert_eq!(format_file_size(1048576), "1.0 MB");
         assert_eq!(format_file_size(2621440), "2.5 MB");
+    }
+
+    #[test]
+    fn clipboard_command_reaps_after_input_is_closed() {
+        let script = "cat >/dev/null; exit 0";
+
+        let started = std::time::Instant::now();
+        let result = run_command_with_input("sh", &["-c", script], "payload");
+        let elapsed = started.elapsed();
+
+        assert!(result.is_ok(), "expected success, got {result:?}");
+        assert!(
+            elapsed < CLIPBOARD_COMMAND_TIMEOUT,
+            "clipboard copy took {elapsed:?}, indicating the command was not reaped"
+        );
+    }
+
+    #[test]
+    fn clipboard_large_payload_does_not_block_when_reader_consumes_input() {
+        let script = "cat >/dev/null; exit 0";
+        let large = "x".repeat(256 * 1024);
+
+        let started = std::time::Instant::now();
+        let result = run_command_with_input("sh", &["-c", script], &large);
+        let elapsed = started.elapsed();
+
+        assert!(result.is_ok(), "expected success, got {result:?}");
+        assert!(
+            elapsed < CLIPBOARD_COMMAND_TIMEOUT,
+            "large clipboard payload took {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn clipboard_input_timeout_terminates_non_reader() {
+        let script = "dd bs=1 count=1 >/dev/null 2>/dev/null; sleep 30";
+        let large = "x".repeat(256 * 1024);
+        let started = std::time::Instant::now();
+        let err = run_command_with_input_timeout(
+            "sh",
+            &["-c", script],
+            &large,
+            std::time::Duration::from_millis(100),
+        )
+        .unwrap_err();
+        let err = format!("{err:#}");
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert!(
+            err.contains("timed out"),
+            "expected stdin timeout, got: {err}"
+        );
+    }
+
+    #[test]
+    fn wait_with_timeout_terminates_process_that_never_exits() {
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "sleep 30"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        prepare_process_group(&mut command);
+        let mut child = command.spawn().unwrap();
+
+        let started = std::time::Instant::now();
+        let err = wait_with_timeout(&mut child, "sleep", std::time::Duration::from_millis(100))
+            .unwrap_err()
+            .to_string();
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert!(err.contains("did not exit"), "unexpected error: {err}");
+        // 超时路径必须已回收子进程，避免留下僵尸。
+        assert!(child.try_wait().unwrap().is_some());
+    }
+
+    #[test]
+    fn wait_with_timeout_returns_immediately_for_fast_exit() {
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "exit 0"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        prepare_process_group(&mut command);
+        let mut child = command.spawn().unwrap();
+
+        let status =
+            wait_with_timeout(&mut child, "sh", std::time::Duration::from_secs(10)).unwrap();
+
+        assert!(status.success());
     }
 
     #[test]
