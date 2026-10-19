@@ -22,6 +22,12 @@
 //!   `SO_PEERCRED` and the corresponding macOS peer-credential API via `peer_creds()`). Windows
 //!   uses the named pipe's operating-system access control; its credential API exposes a peer PID,
 //!   not a user ID.
+//! - **Read bounds**: each line is capped at [`MAX_COMMAND_LINE`] bytes and the read has a
+//!   [`READ_TIMEOUT`] deadline, so a peer cannot grow the tray process's heap without bound
+//!   or hold the accept loop open by never sending a newline.
+//! - **Slow-client isolation**: each connection is served on its own thread, so one stuck
+//!   client cannot starve the accept loop (which would otherwise break the SHOW relay and
+//!   make secondary launches silently do nothing).
 
 use interprocess::local_socket::prelude::*;
 #[cfg(not(windows))]
@@ -30,10 +36,11 @@ use interprocess::local_socket::GenericFilePath;
 use interprocess::local_socket::GenericNamespaced;
 use interprocess::local_socket::{ListenerOptions, Name, Stream};
 use log::{error, info, warn};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 #[cfg(not(windows))]
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 #[cfg(unix)]
@@ -46,6 +53,21 @@ use std::os::unix::fs::OpenOptionsExt;
 use super::APP_ID_LOWER;
 
 const SHOW_CMD: &[u8] = b"SHOW\n";
+
+/// Maximum accepted length of a single command line, in bytes.
+///
+/// The only legitimate payload is `"SHOW\n"` (5 bytes); this leaves generous slack while
+/// keeping the worst-case allocation per connection trivially small.
+const MAX_COMMAND_LINE: u64 = 64;
+
+/// Deadline for a peer to deliver a complete command line.
+///
+/// A legitimate secondary instance writes `SHOW\n` immediately, so this only ever fires for
+/// a stalled or hostile peer.
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Maximum number of connection threads that may be active at once.
+const MAX_ACTIVE_CONNECTIONS: usize = 32;
 
 /// Number of short retries before treating an old Unix socket as stale.
 const PRIMARY_CONNECT_ATTEMPTS: usize = 3;
@@ -416,9 +438,33 @@ fn accept_loop(
     tx: mpsc::Sender<()>,
     _guard: PrimaryGuard,
 ) {
+    let active_connections = Arc::new(AtomicUsize::new(0));
     for conn in listener.incoming() {
         match conn {
-            Ok(stream) => handle_client(stream, &tx),
+            Ok(stream) => {
+                if !try_acquire_connection(&active_connections) {
+                    warn!(
+                        target: "single_instance",
+                        "too many active single-instance connections; rejecting peer"
+                    );
+                    continue;
+                }
+
+                // 每个连接独立线程处理：恶意/卡死的客户端不能阻塞 accept，
+                // 否则二次启动的 SHOW 中继会失效。
+                let tx = tx.clone();
+                let active_connections = Arc::clone(&active_connections);
+                let permit = ConnectionPermit(active_connections);
+                if let Err(e) = std::thread::Builder::new()
+                    .name("single-instance-conn".into())
+                    .spawn(move || {
+                        let _permit = permit;
+                        handle_client(stream, &tx);
+                    })
+                {
+                    warn!(target: "single_instance", "failed to spawn connection thread ({e})");
+                }
+            }
             Err(e) => {
                 error!(target: "single_instance", "accept error: {e}");
             }
@@ -426,23 +472,98 @@ fn accept_loop(
     }
 }
 
+fn try_acquire_connection(active_connections: &AtomicUsize) -> bool {
+    active_connections
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            (current < MAX_ACTIVE_CONNECTIONS).then_some(current + 1)
+        })
+        .is_ok()
+}
+
+struct ConnectionPermit(Arc<AtomicUsize>);
+
+impl Drop for ConnectionPermit {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 fn handle_client(stream: Stream, tx: &mpsc::Sender<()>) {
-    let reader = BufReader::new(stream);
-    for line in reader.lines() {
-        match line {
-            Ok(cmd) if cmd.trim() == "SHOW" => {
-                info!(target: "single_instance", "received SHOW command from secondary instance");
-                let _ = tx.send(());
-            }
-            Ok(other) => {
-                warn!(target: "single_instance", "unknown command: {other}");
-            }
-            Err(e) => {
-                error!(target: "single_instance", "read error: {e}");
-                break;
-            }
+    // Unix 只接受本进程所属用户的连接；目录权限是额外的纵深防御。
+    if !peer_is_same_user(&stream) {
+        warn!(target: "single_instance", "rejected connection from a different user");
+        return;
+    }
+
+    // 读取超时：合法二次实例会立即写入 "SHOW\n"，超时只对卡死/恶意对端生效。
+    // Windows 命名管道不支持 I/O 超时（返回 Unsupported），此时依赖长度上限兜底。
+    if let Err(e) = stream.set_recv_timeout(Some(READ_TIMEOUT)) {
+        if e.kind() != std::io::ErrorKind::Unsupported {
+            warn!(target: "single_instance", "failed to set read timeout ({e})");
         }
     }
+
+    // 长度上限：`lines()` 会把整行累积进进程内 String，对端不发换行即可无限撑大堆。
+    // `take` 在超过上限时截断，`read_line` 返回后按长度判定为非法输入并断开。
+    let mut reader = BufReader::new(stream.take(MAX_COMMAND_LINE + 1));
+    let mut buf = String::new();
+    match reader.read_line(&mut buf) {
+        Ok(0) => {} // 对端关闭
+        Ok(_) if buf.len() as u64 > MAX_COMMAND_LINE => {
+            warn!(
+                target: "single_instance",
+                "rejected oversized command line (>{MAX_COMMAND_LINE} bytes)"
+            );
+        }
+        Ok(_) if buf.trim() == "SHOW" => {
+            info!(target: "single_instance", "received SHOW command from secondary instance");
+            let _ = tx.send(());
+        }
+        Ok(_) => {
+            warn!(target: "single_instance", "unknown command: {}", buf.trim());
+        }
+        Err(e) if is_timeout_error(&e) => {
+            warn!(target: "single_instance", "read timed out, closing connection");
+        }
+        Err(e) => {
+            error!(target: "single_instance", "read error: {e}");
+        }
+    }
+}
+
+/// Whether an I/O error represents a read timeout rather than a real failure.
+fn is_timeout_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+    )
+}
+
+/// Verify the Unix peer runs as the same user as this process.
+///
+/// Returns `true` only when the platform reports a matching uid or does not expose a uid. A
+/// credential-query error is rejected because it may indicate that the peer cannot be
+/// authenticated reliably.
+#[cfg(unix)]
+fn peer_is_same_user(stream: &Stream) -> bool {
+    match stream.peer_creds() {
+        Ok(creds) => match creds.euid() {
+            Some(peer_uid) => peer_uid == current_uid(),
+            // 平台不提供 euid（如部分 BSD）：放行，依赖目录权限。
+            None => true,
+        },
+        Err(e) => {
+            warn!(target: "single_instance", "failed to read peer credentials ({e}), rejecting connection");
+            false
+        }
+    }
+}
+
+#[cfg(windows)]
+fn peer_is_same_user(_stream: &Stream) -> bool {
+    // Windows named-pipe access is controlled by the pipe's OS security descriptor. The
+    // interprocess peer-credential API exposes a PID on Windows, not a comparable user ID.
+    true
 }
 
 fn notify_existing_instance() -> bool {
@@ -517,6 +638,43 @@ mod tests {
         assert!(!is_valid_instance_suffix(""));
         assert!(!is_valid_instance_suffix("../real"));
         assert!(!is_valid_instance_suffix("with space"));
+    }
+
+    #[test]
+    fn oversized_line_is_truncated_at_the_cap() {
+        // 模拟恶意对端：不发送换行，持续写入远超上限的数据。
+        let payload = vec![b'A'; (MAX_COMMAND_LINE as usize) * 8];
+        let mut reader = BufReader::new(std::io::Cursor::new(payload).take(MAX_COMMAND_LINE + 1));
+        let mut buf = String::new();
+        reader.read_line(&mut buf).unwrap();
+
+        // take() 保证不会读到超过上限，因此堆分配有界。
+        assert!(buf.len() as u64 <= MAX_COMMAND_LINE + 1);
+        assert!(
+            buf.len() as u64 > MAX_COMMAND_LINE,
+            "should be detected as oversized"
+        );
+    }
+
+    #[test]
+    fn normal_show_command_fits_within_the_cap() {
+        assert!(SHOW_CMD.len() as u64 <= MAX_COMMAND_LINE);
+        assert_eq!(String::from_utf8_lossy(SHOW_CMD).trim(), "SHOW");
+    }
+
+    #[test]
+    fn active_connection_limit_releases_permits_after_disconnect() {
+        let active_connections = Arc::new(AtomicUsize::new(0));
+        let mut permits = Vec::new();
+
+        for _ in 0..MAX_ACTIVE_CONNECTIONS {
+            assert!(try_acquire_connection(&active_connections));
+            permits.push(ConnectionPermit(Arc::clone(&active_connections)));
+        }
+        assert!(!try_acquire_connection(&active_connections));
+
+        permits.pop();
+        assert!(try_acquire_connection(&active_connections));
     }
 
     /// 在测试期间设置单实例后缀，并在 drop 时恢复原值。
@@ -600,6 +758,65 @@ mod tests {
         ensure_private_dir(&dir).unwrap();
         let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o700, "socket dir must be 0700, got {mode:o}");
+    }
+
+    /// 恶意对端不发换行、持续写入时，必须在长度上限处被断开。
+    ///
+    /// 关键断言：连接在**写入极少数据后**就被服务端关闭，而不是等读到海量数据。
+    /// 若长度上限缺失（退回无界 `lines()`），服务端会持续收数据，写入端不会很快失败。
+    #[cfg(unix)]
+    #[test]
+    fn real_socket_rejects_endless_line_without_exhausting_memory() {
+        use std::io::Write as _;
+
+        let _guard = SuffixGuard::set("selftest-dos");
+
+        let path = socket_file_path();
+        cleanup_stale_socket_path(&path);
+
+        let listener = ListenerOptions::new()
+            .name(socket_name())
+            .create_sync()
+            .expect("failed to bind test listener");
+
+        let (tx, rx) = mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            if let Some(Ok(stream)) = listener.incoming().next() {
+                handle_client(stream, &tx);
+            }
+        });
+
+        // 模拟攻击：只写数据，永不发送换行。
+        let mut attacker = Stream::connect(socket_name()).expect("attacker connect");
+        let chunk = vec![b'A'; 4096];
+        let mut bytes_written = 0usize;
+        for _ in 0..256 {
+            match attacker.write_all(&chunk) {
+                Ok(()) => bytes_written += chunk.len(),
+                // 对端被断开后写入失败 —— 这正是期望结果。
+                Err(_) => break,
+            }
+            // 服务端一旦按上限断开，写入很快会失败；无需写满全部循环。
+            if bytes_written > 64 * 1024 {
+                break;
+            }
+        }
+
+        // 攻击者必须被断开，且没有 SHOW 被中继。
+        assert!(
+            !rx.recv_timeout(Duration::from_secs(2)).is_ok(),
+            "oversized line must not be treated as SHOW"
+        );
+
+        // 关键：服务端必须在读到极少量数据后就断开（上限 64 字节），
+        // 而不是把对端发来的所有内容都收下。
+        assert!(
+            bytes_written <= 64 * 1024,
+            "server accepted {bytes_written} bytes; length cap is not enforced"
+        );
+
+        handle.join().unwrap();
+        cleanup_stale_socket_path(&path);
     }
 
     #[cfg(unix)]
