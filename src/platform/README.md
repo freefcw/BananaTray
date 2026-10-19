@@ -14,7 +14,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | `assets.rs` | app-only | GPUI `AssetSource`; resolves resources from `BANANATRAY_RESOURCES`, app bundles, Linux system install paths, then dev root. |
 | `notification.rs` | app-only | OS notification adapter. Domain alert decisions stay in `application/quota_alert.rs`. |
 | `auto_launch.rs` | app-only | Launch-at-login integration: macOS `SMAppService`, Linux XDG autostart desktop entry; requests run on one background worker, coalesce to the latest desired state, and expose an exit-time completion barrier. |
-| `single_instance.rs` | app-only | Single-instance IPC via local sockets; secondary launches send `SHOW` to the primary instance. |
+| `single_instance.rs` | app-only | Single-instance IPC via local sockets; secondary launches send `SHOW` to the primary instance. Unix sockets use an app-owned per-user `0700` directory and a process-lifetime lock; Windows uses a named pipe. |
 | `popup_window.rs` | app-only | 托盘弹窗在打开 / 切 tab 时的内容区 resize。macOS 用 `setFrame` 钉住顶边并关掉动画；Linux 仍走 `Window::resize()`。Overview 展开/折叠不走这条路径。 |
 | `gnome_detect.rs` | Linux + app-only | Detects when the native GNOME Shell Extension path should replace KSNI/AppIndicator fallback. The first CLI probe is prewarmed before GPUI starts (500ms timeout); TTL refreshes run off-thread. |
 
@@ -32,6 +32,11 @@ Platform integration layer. This module owns OS adapters and filesystem location
 - Default log file:
   - macOS: `~/Library/Logs/bananatray/bananatray.log`
   - Linux: `$XDG_STATE_HOME/bananatray/bananatray.log`
+- Single-instance socket (Unix only; Windows uses a named pipe):
+  - Directory (app-owned, created/tightened to `0700`): `$XDG_RUNTIME_DIR/bananatray/` on Linux (fallback: app config dir), `~/Library/Caches/bananatray/` on macOS.
+  - File name: `bananatray[-<suffix>].sock`
+  - Lock file: `bananatray[-<suffix>].lock`, held for the lifetime of the primary listener.
+  - The socket never sits directly in a shared session directory (`$XDG_RUNTIME_DIR`, `~/Library/Caches`), because the app tightens its socket directory to `0700` and must only do that to a directory it owns.
 
 ## Key Constraints
 
