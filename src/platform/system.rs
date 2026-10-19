@@ -117,7 +117,7 @@ pub fn open_path_in_finder(path: &Path) -> Result<()> {
 
 /// 剪贴板输入和子进程退出各自等待的上限。
 ///
-/// 正常情况下这个上限不会被触及：`xclip` / `xsel` 默认都会 daemon 化
+/// 正常情况下这个上限不会被触及：`xclip` / `xsel` / `wl-copy` 默认都会 daemon 化
 /// （见 `xclip.c` 的 `xcverb == OSILENT` 分支、`xsel --nodetach` 的反向说明），
 /// 父进程写完 stdin 后立即退出，`wait` 很快返回。
 ///
@@ -128,7 +128,9 @@ const CLIPBOARD_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from
 /// 将文本写入系统剪贴板
 ///
 /// macOS: `pbcopy`
-/// Linux: `xclip` 或 `xsel`
+/// Linux: 按会话类型选择 —— Wayland 优先 `wl-copy`，X11 优先 `xclip` / `xsel`。
+/// 这个区分是必要的：`xclip` / `xsel` 走 X11 选区协议，在纯 Wayland 会话下
+/// 完全无法工作，只列它们会让 GNOME/KDE 默认会话下的复制按钮直接报错。
 ///
 /// 实现上需注意：X11/Wayland 的剪贴板协议要求「选区所有者」进程存活以响应后续
 /// 读取请求，所以这些工具写入完成后会 fork 出后台进程继续持有选区。它们**不是**
@@ -147,25 +149,64 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        copy_with_candidates(
-            text,
-            &[
-                CommandSpec {
-                    program: "xclip",
-                    args: &["-selection", "clipboard"],
-                },
-                CommandSpec {
-                    program: "xsel",
-                    args: &["--clipboard"],
-                },
-            ],
-            run_command_with_input,
-        )
+        copy_with_candidates(text, &linux_clipboard_candidates(), run_command_with_input)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         bail!("clipboard integration is not supported on this platform")
     }
+}
+
+/// Linux 剪贴板命令候选，按当前会话类型排序。
+///
+/// `xclip` / `xsel` 走 X11 选区协议，在纯 Wayland 会话下无法工作
+/// （XWayland 也拿不到原生 Wayland 客户端的选区），因此 Wayland 会话下
+/// 优先使用 `wl-copy`。
+#[cfg(target_os = "linux")]
+fn linux_clipboard_candidates() -> Vec<CommandSpec<'static>> {
+    linux_clipboard_candidates_for(is_wayland_session())
+}
+
+#[cfg(target_os = "linux")]
+fn linux_clipboard_candidates_for(is_wayland: bool) -> Vec<CommandSpec<'static>> {
+    const XCLIP: CommandSpec<'static> = CommandSpec {
+        program: "xclip",
+        args: &["-selection", "clipboard"],
+    };
+    const XSEL: CommandSpec<'static> = CommandSpec {
+        program: "xsel",
+        args: &["--clipboard"],
+    };
+    const WL_COPY: CommandSpec<'static> = CommandSpec {
+        program: "wl-copy",
+        args: &[],
+    };
+
+    if is_wayland {
+        vec![WL_COPY, XCLIP, XSEL]
+    } else {
+        vec![XCLIP, XSEL, WL_COPY]
+    }
+}
+
+/// 判断当前是否为 Wayland 会话。
+///
+/// `XDG_SESSION_TYPE` 是 systemd/logind 与各桌面环境共同约定的权威来源；
+/// 缺失时回退到 `WAYLAND_DISPLAY`。
+#[cfg(target_os = "linux")]
+fn is_wayland_session() -> bool {
+    is_wayland_session_values(
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+        std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn is_wayland_session_values(session_type: Option<&str>, wayland_display: Option<&str>) -> bool {
+    if let Some(session_type) = session_type.filter(|value| !value.trim().is_empty()) {
+        return session_type.trim().eq_ignore_ascii_case("wayland");
+    }
+    wayland_display.is_some_and(|value| !value.trim().is_empty())
 }
 
 #[derive(Clone, Copy)]
@@ -699,6 +740,37 @@ mod tests {
             wait_with_timeout(&mut child, "sh", std::time::Duration::from_secs(10)).unwrap();
 
         assert!(status.success());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_clipboard_candidates_follow_session_type() {
+        let wayland = linux_clipboard_candidates_for(true);
+        assert_eq!(
+            wayland
+                .iter()
+                .map(|candidate| candidate.program)
+                .collect::<Vec<_>>(),
+            vec!["wl-copy", "xclip", "xsel"]
+        );
+
+        let x11 = linux_clipboard_candidates_for(false);
+        assert_eq!(
+            x11.iter()
+                .map(|candidate| candidate.program)
+                .collect::<Vec<_>>(),
+            vec!["xclip", "xsel", "wl-copy"]
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wayland_session_detection_uses_session_type_then_display_fallback() {
+        assert!(is_wayland_session_values(Some("wayland"), None));
+        assert!(is_wayland_session_values(Some(" WAYLAND "), None));
+        assert!(!is_wayland_session_values(Some("x11"), Some("wayland-0")));
+        assert!(is_wayland_session_values(None, Some("wayland-0")));
+        assert!(!is_wayland_session_values(Some(""), Some("  ")));
     }
 
     #[test]

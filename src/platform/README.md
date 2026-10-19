@@ -9,7 +9,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 | `mod.rs` | mixed | Defines app identity constants and gates app-only adapters behind `feature = "app"`. |
 | `atomic_file.rs` | lib-safe | Atomically replaces private settings/credential files and creates exclusive private files for caller-owned multi-file transactions, with Unix `0600` at creation, flush-before-rename, and error cleanup. |
 | `paths.rs` | lib-safe | Resolves settings, custom provider, and custom script directories. |
-| `system.rs` | lib-safe | Small system helpers: non-blocking URL/path launch, clipboard fallback, OS info, file-size formatting, and prewarmed/cached asynchronous dark-mode detection. |
+| `system.rs` | lib-safe | Small system helpers: non-blocking URL/path launch, OS-aware clipboard fallback, OS info, file-size formatting, and prewarmed/cached asynchronous dark-mode detection. |
 | `logging.rs` | mixed | App logger initialization (size-based rotation + startup cleanup) behind `feature = "app"`, plus test/lib-safe log-tail helpers. |
 | `assets.rs` | app-only | GPUI `AssetSource`; resolves resources from `BANANATRAY_RESOURCES`, app bundles, Linux system install paths, then dev root. |
 | `notification.rs` | app-only | OS notification adapter. Domain alert decisions stay in `application/quota_alert.rs`. |
@@ -41,7 +41,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 ## Key Constraints
 
 - Keep `paths`, `system`, and log-reading helpers usable from lib/no-default-feature checks.
-- Clipboard helpers may keep a background process alive while they own the selection; the foreground command and stdin write are both deadline-bounded and cleaned up on failure.
+- Linux clipboard integration prefers `wl-copy` in Wayland sessions and `xclip` / `xsel` in X11 sessions, then falls back across all available candidates. Clipboard helpers may keep a background process alive while they own the selection; the foreground command and stdin write are both deadline-bounded and cleaned up on failure.
 - Route private settings/credential writes through `atomic_file`; multi-file callers may own commit/rollback orchestration but must reuse its exclusive private-file creation primitive (`write_private_file_exclusively`).
 - Keep GPUI, notification, single-instance, auto-launch, and asset loading dependencies behind `feature = "app"`.
 - Do not put quota alert policy in `notification.rs`; platform code only sends already-decided notifications.
