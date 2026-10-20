@@ -29,6 +29,14 @@
 use crate::application::{format_quota_label, format_quota_remaining_text, QuotaNotificationEvent};
 use log::{info, warn};
 use rust_i18n::t;
+use std::sync::mpsc::{self, SyncSender, TrySendError};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+/// 外部通知调用的上限（macOS `osascript`）。
+const NOTIFICATION_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+const NOTIFICATION_POLL_INTERVAL: Duration = Duration::from_millis(20);
+const NOTIFICATION_QUEUE_CAPACITY: usize = 32;
 // ============================================================================
 // 系统通知发送
 // ============================================================================
@@ -106,10 +114,40 @@ pub fn send_plain_notification(title: &str, body: &str) {
 }
 
 fn spawn_notification(title: String, body: String, with_sound: bool) {
-    // 在独立线程中发送通知，防止 macOS 系统事件导致 GPUI RefCell 重入 panic
-    std::thread::spawn(move || {
-        platform_send_notification(&title, &body, with_sound);
+    // 串行化到单条工作线程：通知服务挂住时最多留一条线程，而不是按通知次数
+    // 每次 spawn 一条。工作线程在首次通知时惰性启动。
+    static SENDER: OnceLock<Mutex<SyncSender<(String, String, bool)>>> = OnceLock::new();
+
+    let sender = SENDER.get_or_init(|| {
+        let (tx, rx) = mpsc::sync_channel::<(String, String, bool)>(NOTIFICATION_QUEUE_CAPACITY);
+        std::thread::Builder::new()
+            .name("notification-sender".to_string())
+            .spawn(move || {
+                info!(target: "notification", "notification worker started");
+                while let Ok((title, body, with_sound)) = rx.recv() {
+                    platform_send_notification(&title, &body, with_sound);
+                }
+                info!(target: "notification", "notification worker stopped");
+            })
+            .expect("failed to spawn notification-sender thread");
+        Mutex::new(tx)
     });
+
+    let guard = sender
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match guard.try_send((title, body, with_sound)) {
+        Ok(()) => {}
+        Err(TrySendError::Full(_)) => {
+            warn!(
+                target: "notification",
+                "notification queue is full; dropping notification"
+            );
+        }
+        Err(TrySendError::Disconnected(_)) => {
+            warn!(target: "notification", "notification worker is gone; dropping notification");
+        }
+    }
 }
 
 // ---- macOS: 原生通知 (UNUserNotificationCenter) + osascript fallback ----
@@ -352,12 +390,13 @@ fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
         )
     };
 
-    match std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-    {
-        Ok(output) => {
+    match run_command_with_deadline(
+        std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script),
+        NOTIFICATION_CALL_TIMEOUT,
+    ) {
+        Ok(Some(output)) => {
             if output.status.success() {
                 info!(target: "notification", "osascript notification sent: {}", title);
             } else {
@@ -365,8 +404,72 @@ fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
                 warn!(target: "notification", "osascript failed: {}", stderr.trim());
             }
         }
+        Ok(None) => {
+            warn!(
+                target: "notification",
+                "osascript did not finish within {:?}; killing it",
+                NOTIFICATION_CALL_TIMEOUT
+            );
+        }
         Err(err) => {
             warn!(target: "notification", "failed to run osascript: {}", err);
+        }
+    }
+}
+
+/// 运行命令并等待结果，超过 `timeout` 就杀掉并返回 `Ok(None)`。
+#[cfg(target_os = "macos")]
+fn run_command_with_deadline(
+    command: &mut std::process::Command,
+    timeout: Duration,
+) -> std::io::Result<Option<std::process::Output>> {
+    // 给 osascript 单独建立进程组，避免它退出后派生进程继续持有输出管道，
+    // 让后续 `wait_with_output()` 绕过 deadline 一直等 EOF。
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setpgid(0, 0) == -1 {
+                    Err(std::io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            });
+        }
+    }
+
+    let mut child = command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        if child.try_wait()?.is_some() {
+            #[cfg(unix)]
+            kill_process_group(child.id());
+            return child.wait_with_output().map(Some);
+        }
+        if Instant::now() >= deadline {
+            #[cfg(unix)]
+            kill_process_group(child.id());
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        std::thread::sleep(NOTIFICATION_POLL_INTERVAL);
+    }
+}
+
+#[cfg(unix)]
+fn kill_process_group(pid: u32) {
+    if let Ok(pgid) = libc::pid_t::try_from(pid) {
+        if pgid > 1 {
+            unsafe {
+                let _ = libc::kill(-pgid, libc::SIGKILL);
+            }
         }
     }
 }
@@ -375,7 +478,43 @@ fn send_osascript_notification(title: &str, body: &str, with_sound: bool) {
 // NOTE: notify-rust is a cfg(not(macos)) dependency in Cargo.toml.
 // Do NOT add a macOS code path here; see module-level doc for rationale.
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
+    let mut notification = notify_rust::Notification::new();
+    notification
+        .appname(crate::platform::APP_NAME)
+        .summary(title)
+        .body(body);
+
+    if with_sound {
+        notification.sound_name("default");
+    }
+
+    let result = smol::block_on(smol::future::race(
+        async {
+            notification
+                .show_async()
+                .await
+                .map(|_| ())
+                .map_err(|err| err.to_string())
+        },
+        async {
+            smol::Timer::after(NOTIFICATION_CALL_TIMEOUT).await;
+            Err("notification call timed out".to_string())
+        },
+    ));
+
+    match result {
+        Ok(_) => {
+            info!(target: "notification", "system notification sent: {}", title);
+        }
+        Err(err) => {
+            warn!(target: "notification", "failed to send system notification: {}", err);
+        }
+    }
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_os = "linux")))]
 fn platform_send_notification(title: &str, body: &str, with_sound: bool) {
     let mut notification = notify_rust::Notification::new();
     notification
@@ -508,5 +647,40 @@ mod tests {
         });
         assert!(body.contains("session"), "body: {body}");
         assert_no_unreplaced_params(&body);
+    }
+
+    /// 超过上限时杀掉子进程并返回 `Ok(None)`，不无限等待。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn run_command_with_deadline_kills_slow_child() {
+        use std::time::Duration;
+        let start = std::time::Instant::now();
+        let result = super::run_command_with_deadline(
+            std::process::Command::new("sleep").arg("10"),
+            Duration::from_millis(100),
+        )
+        .expect("spawn sleep");
+
+        assert!(result.is_none(), "a slow child must be killed, not awaited");
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "run_command_with_deadline must not wait for the whole child"
+        );
+    }
+
+    /// 正常退出的命令返回输出。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn run_command_with_deadline_returns_output_for_fast_child() {
+        use std::time::Duration;
+        let result = super::run_command_with_deadline(
+            std::process::Command::new("echo").arg("ok"),
+            Duration::from_secs(5),
+        )
+        .expect("spawn echo");
+
+        let output = result.expect("fast child must finish");
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ok");
     }
 }
