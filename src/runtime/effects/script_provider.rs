@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use crate::application::{AppAction, ScriptProviderEffect};
 use crate::models::{
@@ -139,8 +139,42 @@ impl TempScriptDir {
             chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ));
         std::fs::create_dir_all(&path).map_err(|e| format!("failed to create temp dir: {e}"))?;
+        restrict_dir_permissions(&path)?;
+        debug!(target: "settings", "created private temp script dir for provider test");
         Ok(Self { path })
     }
+}
+
+/// 把测试目录收紧到仅属主可访问（0700）。
+///
+/// Linux 上 `std::env::temp_dir()` 是共享的 `/tmp`（1777），而 `create_dir_all`
+/// 只按 umask 建目录（通常 0755）。测试脚本里可能写有 API key，不收紧就等于
+/// 在测试窗口内对其他本地用户明文可读。macOS 的 TMPDIR 是用户私有目录，
+/// 这一步在那里是空操作。
+#[cfg(unix)]
+fn restrict_dir_permissions(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+        .map_err(|e| format!("failed to restrict temp dir permissions: {e}"))
+}
+
+#[cfg(not(unix))]
+fn restrict_dir_permissions(_path: &std::path::Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// 以仅属主可读写的权限写入文件（0600）。
+#[cfg(unix)]
+fn write_private_file(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, contents).map_err(|e| format!("failed to write temp script: {e}"))?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| format!("failed to restrict temp script permissions: {e}"))
+}
+
+#[cfg(not(unix))]
+fn write_private_file(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    std::fs::write(path, contents).map_err(|e| format!("failed to write temp script: {e}"))
 }
 
 impl Drop for TempScriptDir {
@@ -152,8 +186,12 @@ impl Drop for TempScriptDir {
 fn write_temp_script_and_run(config: &ScriptProviderConfig) -> Result<CommandTestOutput, String> {
     let dir = TempScriptDir::create()?;
     let script_path = dir.path.join("provider_script.py");
-    std::fs::write(&script_path, &config.script)
-        .map_err(|e| format!("failed to write temp script: {e}"))?;
+    write_private_file(&script_path, &config.script)?;
+    debug!(
+        target: "settings",
+        "wrote provider test script ({} bytes) to a 0600 temp file",
+        config.script.len()
+    );
 
     let script_arg = script_path.to_string_lossy().to_string();
     let output = run_script_command(
@@ -342,5 +380,25 @@ mod tests {
         assert!(result.message.contains("non-zero"));
         assert_eq!(result.stderr, "boom");
         assert!(result.preview.is_none());
+    }
+
+    /// 测试目录和脚本必须是仅属主可访问，否则共享 /tmp 上其他用户能读到脚本内容。
+    #[cfg(unix)]
+    #[test]
+    fn temp_script_dir_and_file_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempScriptDir::create().expect("temp dir");
+        let dir_mode = std::fs::metadata(&dir.path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(dir_mode, 0o700, "temp dir must be 0700, got {dir_mode:o}");
+
+        let script_path = dir.path.join("provider_script.py");
+        write_private_file(&script_path, "print('secret')").expect("write script");
+        let file_mode = std::fs::metadata(&script_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(file_mode, 0o600, "script must be 0600, got {file_mode:o}");
     }
 }
