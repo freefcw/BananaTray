@@ -48,6 +48,7 @@
 - 设置页 NewAPI 与自定义脚本向导都会生成普通 YAML；应用内保存 / 删除会显式触发 reload。
 - BananaTray 生成的自定义 provider YAML 使用私密临时文件原子替换，Unix 上权限为 `0600`；脚本向导先提交不可变版本化脚本，再以 YAML 作为最终提交点。
 - HTTP `headers` 在 YAML 加载阶段校验 name/value，非法请求头不会延迟到 refresh 时静默失败。
+- 公共 HTTP 层只允许 `https`（回环地址除外），只跟随相同 origin（scheme / host / port）的 GET 重定向（自定义密钥头如 `X-Api-Key` 不会像 `Authorization` 那样被自动剥离），非 GET 请求不跟随重定向，响应正文有上限（见 `providers::common::MAX_EXTERNAL_PAYLOAD_BYTES`）。
 - Provider HTTP 错误正文和 custom login 响应不得进入日志、`ProviderFailure.raw_detail` 或用户界面；公共 HTTP 层只传播状态码，登录诊断只记录操作阶段。
 - `file_json_match` 的值不匹配时只暴露稳定位置 `path:json_path`；YAML 中的 `expected` 与文件内 `actual` 不得进入日志、`ProviderFailure` 或用户界面。
 - 手工编辑 YAML 后通常需重启应用。

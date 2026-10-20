@@ -172,6 +172,20 @@ impl ProviderError {
                         raw_detail: Some(format!("HTTP {}", code)),
                     },
                 },
+                // 安全策略拒绝：非 https、跨主机重定向、正文超限。
+                // 归为 FetchFailed，raw_detail 只带原因，不带 URL 或凭证。
+                HttpError::InsecureScheme => Self::FetchFailed {
+                    advice: None,
+                    raw_detail: Some("refusing non-https request".to_string()),
+                },
+                HttpError::Redirect(reason) => Self::FetchFailed {
+                    advice: None,
+                    raw_detail: Some(format!("redirect refused: {}", reason)),
+                },
+                HttpError::BodyTooLarge { limit } => Self::FetchFailed {
+                    advice: None,
+                    raw_detail: Some(format!("response body exceeds {} bytes", limit)),
+                },
             };
         }
 

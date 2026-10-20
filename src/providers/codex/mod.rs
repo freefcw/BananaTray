@@ -255,6 +255,11 @@ fn should_fallback_to_cli(err: &anyhow::Error) -> bool {
             HttpError::Timeout => true,
             HttpError::Transport(_) => true,
             HttpError::HttpStatus { code } => (500..=599).contains(code),
+            // 安全策略拒绝（非 https / 跨主机重定向 / 正文超限）不是网络抖动，
+            // 换 CLI 走同一后端也一样，不重试。
+            HttpError::InsecureScheme | HttpError::Redirect(_) | HttpError::BodyTooLarge { .. } => {
+                false
+            }
         };
     }
     matches!(
