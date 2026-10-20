@@ -23,9 +23,8 @@ pub(super) fn run(state: &Rc<RefCell<AppState>>, effect: DebugEffect) -> Vec<App
             Vec::new()
         }
         DebugEffect::CopyToClipboard(text) => {
-            match crate::platform::system::copy_to_clipboard(&text) {
-                Ok(()) => info!(target: "settings", "copied {} bytes to clipboard", text.len()),
-                Err(err) => warn!(target: "settings", "failed to copy to clipboard: {err:#}"),
+            if let Err(err) = state.borrow().clipboard_tx.try_send(text) {
+                warn!(target: "settings", "failed to queue clipboard copy: {err}");
             }
             Vec::new()
         }

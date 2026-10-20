@@ -41,7 +41,7 @@ Platform integration layer. This module owns OS adapters and filesystem location
 ## Key Constraints
 
 - Keep `paths`, `system`, and log-reading helpers usable from lib/no-default-feature checks.
-- Linux clipboard integration prefers `wl-copy` in Wayland sessions and `xclip` / `xsel` in X11 sessions, then falls back across all available candidates. Clipboard helpers may keep a background process alive while they own the selection; the foreground command and stdin write are both deadline-bounded and cleaned up on failure.
+- Linux clipboard integration prefers `wl-copy` in Wayland sessions and `xclip` / `xsel` in X11 sessions, then falls back across all available candidates. Clipboard helpers may keep a background process alive while they own the selection; requests are queued to a dedicated worker instead of running on the GPUI foreground, while the command's stdin write and exit are deadline-bounded and cleaned up on failure.
 - Route private settings/credential writes through `atomic_file`; multi-file callers may own commit/rollback orchestration but must reuse its exclusive private-file creation primitive (`write_private_file_exclusively`).
 - Keep GPUI, notification, single-instance, auto-launch, and asset loading dependencies behind `feature = "app"`.
 - Do not put quota alert policy in `notification.rs`; platform code only sends already-decided notifications.

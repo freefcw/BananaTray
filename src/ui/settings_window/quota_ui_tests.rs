@@ -21,11 +21,13 @@ pub(super) fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
+    let (clipboard_tx, _clipboard_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
     let state = Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
+        clipboard_tx,
         manager,
         AppSettings::default(),
         None,

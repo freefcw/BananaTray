@@ -109,6 +109,7 @@ pub fn run_app() {
             let (refresh_tx, event_rx, manager) = bootstrap::bootstrap_refresh();
             let (script_test_tx, script_test_rx) = bootstrap::script_test_channel();
             let (custom_provider_tx, custom_provider_rx) = bootstrap::custom_provider_channel();
+            let (clipboard_tx, clipboard_rx) = bootstrap::clipboard_channel();
 
             bootstrap::sync_initial_auto_launch(&settings);
 
@@ -117,6 +118,7 @@ pub fn run_app() {
                 refresh_tx,
                 custom_provider_tx,
                 script_test_tx,
+                clipboard_tx,
                 manager.clone(),
                 settings,
                 log_path.clone(),
@@ -142,6 +144,7 @@ pub fn run_app() {
             bootstrap::start_event_pump(&state, event_rx, cx);
             bootstrap::start_script_test_pump(&state, script_test_rx, cx);
             bootstrap::start_custom_provider_pump(&state, custom_provider_rx, cx);
+            bootstrap::start_clipboard_worker(&state, clipboard_rx);
             let token_input_rx = state.borrow_mut().take_token_input_receiver();
             if let Some(token_input_rx) = token_input_rx {
                 bootstrap::start_token_input_pump(&state, token_input_rx, cx);

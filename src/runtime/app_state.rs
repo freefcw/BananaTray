@@ -28,6 +28,8 @@ pub struct AppState {
     pub(crate) custom_provider_results: WorkerResults,
     /// 向独立阻塞线程发送脚本 Run Test，避免长 timeout 阻塞 CRUD。
     pub(crate) script_test_tx: BackgroundJobSender<ScriptTestJob>,
+    /// 向独立阻塞线程发送剪贴板写入，避免 xsel/xclip 阻塞 GPUI 前台。
+    pub(crate) clipboard_tx: BackgroundJobSender<String>,
     /// 用量历史 SQLite 线程。关闭后继续 drain 已入队的写入。
     pub(crate) history_tx: PersistentJobSender<HistoryJob>,
     history_rx: Option<PersistentJobReceiver<HistoryJob>>,
@@ -50,6 +52,7 @@ impl AppState {
         refresh_worker: RefreshWorker,
         custom_provider_tx: PersistentJobSender<CustomProviderJob>,
         script_test_tx: BackgroundJobSender<ScriptTestJob>,
+        clipboard_tx: BackgroundJobSender<String>,
         manager: ProviderManagerHandle,
         settings: AppSettings,
         log_path: Option<PathBuf>,
@@ -72,6 +75,7 @@ impl AppState {
             custom_provider_tx,
             custom_provider_results: WorkerResults::default(),
             script_test_tx,
+            clipboard_tx,
             history_tx,
             history_rx: Some(history_rx),
             history_results: WorkerResults::default(),
@@ -118,9 +122,11 @@ impl AppState {
     ) -> bool {
         self.custom_provider_tx.close();
         self.script_test_tx.request_shutdown();
+        self.clipboard_tx.request_shutdown();
         self.history_tx.close();
         self.custom_provider_tx.join_before(deadline)
             & self.script_test_tx.join_before(deadline)
+            & self.clipboard_tx.join_before(deadline)
             & self.history_tx.join_before(deadline)
     }
 
@@ -133,10 +139,12 @@ impl AppState {
         self.refresh_worker.request_shutdown();
         self.custom_provider_tx.close();
         self.script_test_tx.request_shutdown();
+        self.clipboard_tx.request_shutdown();
         self.history_tx.close();
 
         let _ = self.refresh_worker.join_before(deadline);
         let _ = self.script_test_tx.join_before(deadline);
+        let _ = self.clipboard_tx.join_before(deadline);
         let custom_provider_stopped = self.custom_provider_tx.join_before(deadline);
         let history_stopped = self.history_tx.join_before(deadline);
         if !history_stopped {

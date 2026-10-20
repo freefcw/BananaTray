@@ -1,5 +1,5 @@
 use super::*;
-use crate::application::{AppAction, TrayIconRequest};
+use crate::application::{AppAction, AppEffect, CommonEffect, DebugEffect, TrayIconRequest};
 use crate::models::{
     AppSettings, ConnectionStatus, CustomProviderLifecycleFailure, ErrorKind, ProviderId,
     ProviderKind, ScriptProviderConfig, TrayIconStyle,
@@ -65,11 +65,13 @@ fn make_state() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
+    let (clipboard_tx, _clipboard_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
     seal_settings_writer(Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
+        clipboard_tx,
         manager,
         AppSettings::default(),
         None,
@@ -83,12 +85,14 @@ fn make_state_with_background_receiver() -> (
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, custom_provider_rx) = PersistentJobSender::channel(8);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(8);
+    let (clipboard_tx, _clipboard_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
     (
         seal_settings_writer(Rc::new(RefCell::new(AppState::new(
             crate::refresh::RefreshWorker::detached(tx),
             custom_provider_tx,
             script_test_tx,
+            clipboard_tx,
             manager,
             AppSettings::default(),
             None,
@@ -103,11 +107,13 @@ fn make_state_with_full_refresh_queue() -> Rc<RefCell<AppState>> {
         .expect("refresh queue should accept filler request");
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
+    let (clipboard_tx, _clipboard_rx) = BackgroundJobSender::channel(1);
     let manager = ProviderManagerHandle::new(ProviderManager::new());
     seal_settings_writer(Rc::new(RefCell::new(AppState::new(
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
+        clipboard_tx,
         manager,
         AppSettings::default(),
         None,
@@ -118,6 +124,7 @@ fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
     let (tx, _rx) = smol::channel::bounded(1);
     let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
     let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
+    let (clipboard_tx, _clipboard_rx) = BackgroundJobSender::channel(1);
     script_test_tx
         .try_send(ScriptTestJob {
             request_id: 99,
@@ -135,10 +142,34 @@ fn make_state_with_full_script_queue() -> Rc<RefCell<AppState>> {
         crate::refresh::RefreshWorker::detached(tx),
         custom_provider_tx,
         script_test_tx,
+        clipboard_tx,
         manager,
         AppSettings::default(),
         None,
     ))))
+}
+
+fn make_state_with_clipboard_receiver() -> (
+    Rc<RefCell<AppState>>,
+    crate::runtime::BackgroundJobReceiver<String>,
+) {
+    let (tx, _rx) = smol::channel::bounded(1);
+    let (custom_provider_tx, _custom_provider_rx) = PersistentJobSender::channel(1);
+    let (script_test_tx, _script_test_rx) = BackgroundJobSender::channel(1);
+    let (clipboard_tx, clipboard_rx) = BackgroundJobSender::channel(1);
+    let manager = ProviderManagerHandle::new(ProviderManager::new());
+    (
+        seal_settings_writer(Rc::new(RefCell::new(AppState::new(
+            crate::refresh::RefreshWorker::detached(tx),
+            custom_provider_tx,
+            script_test_tx,
+            clipboard_tx,
+            manager,
+            AppSettings::default(),
+            None,
+        )))),
+        clipboard_rx,
+    )
 }
 
 #[test]
@@ -172,6 +203,24 @@ fn app_state_shutdown_requests_both_background_workers_to_stop() {
 
     assert!(state.borrow().custom_provider_tx.is_shutdown());
     assert!(state.borrow().script_test_tx.is_shutdown());
+    assert!(state.borrow().clipboard_tx.is_shutdown());
+}
+
+#[test]
+fn copy_to_clipboard_effect_only_enqueues_work_on_the_foreground() {
+    let (state, clipboard_rx) = make_state_with_clipboard_receiver();
+    let mut caps = FakeCaps::default();
+
+    let actions = run_effect_with_full_context(
+        &state,
+        AppEffect::Common(CommonEffect::Debug(DebugEffect::CopyToClipboard(
+            "payload".to_string(),
+        ))),
+        &mut caps,
+    );
+
+    assert!(actions.is_empty());
+    assert_eq!(clipboard_rx.recv().unwrap(), "payload");
 }
 
 #[test]

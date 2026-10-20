@@ -150,11 +150,13 @@ mod tests {
         let (refresh_tx, _refresh_rx) = smol::channel::unbounded();
         let (custom_tx, _custom_rx) = crate::runtime::PersistentJobSender::channel(1);
         let (script_tx, _script_rx) = crate::runtime::BackgroundJobSender::channel(1);
+        let (clipboard_tx, _clipboard_rx) = crate::runtime::BackgroundJobSender::channel(1);
         let manager = ProviderManagerHandle::new(ProviderManager::with_custom_providers(providers));
         let mut state = AppState::new(
             crate::refresh::RefreshWorker::detached(refresh_tx),
             custom_tx,
             script_tx,
+            clipboard_tx,
             manager,
             AppSettings::default(),
             None,

@@ -7,6 +7,7 @@ Foreground bridges for background work owned by the app shell.
 | File | Responsibility |
 |------|----------------|
 | `refresh.rs` | Starts the refresh coordinator thread, bridges `RefreshEvent` back to the GPUI foreground executor, and sends startup refresh requests. |
+| `clipboard.rs` | Owns the bounded clipboard worker; runs `xclip` / `xsel` / `wl-copy` / `pbcopy` away from the GPUI foreground thread. |
 | `custom_provider.rs` | Owns the serial NewAPI / script-provider CRUD worker (including edit loads and save-time settings flush) and returns finished actions to the reducer. |
 | `script_test.rs` | Owns the independent serial script Run Test worker and returns `ScriptProviderTestFinished` to the reducer. |
 | `history.rs` | Owns the quota-history SQLite thread. It appends, loads, and purges jobs, then wakes the foreground with `QuotaHistoryLoaded`. It does not read settings or call the reducer. |
@@ -16,8 +17,10 @@ Foreground bridges for background work owned by the app shell.
 ## Boundary
 
 These modules may know GPUI foreground executors and shell-owned handles, but they should not own
-domain policy. Refresh scheduling stays in `refresh/`, custom-provider I/O and script test execution
-stay in `runtime`, and state changes still enter through `AppAction`. Script tests and CRUD use
+domain policy. Refresh scheduling stays in `refresh/`; clipboard execution, custom-provider I/O,
+and script test execution stay in their platform/runtime adapters; state changes still enter through
+`AppAction`. Clipboard copies use a bounded queue and one dedicated worker, so queue submission is
+non-blocking while the platform helper retains its stdin/write and process-exit deadlines. Script tests and CRUD use
 independent queues/owners so a long test timeout cannot block save/delete/load. The CRUD queue is
 persistent: shutdown closes only its enqueue side, then drains accepted jobs and joins its
 worker within the shared 60 ms deadline; overdue workers detach, so unfinished transactions and

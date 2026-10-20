@@ -29,6 +29,8 @@ pub(crate) use settings_window::{
 #[allow(unused_imports)]
 pub(crate) use ui_bootstrap::{bootstrap_ui, sync_initial_auto_launch};
 #[allow(unused_imports)]
+pub(crate) use workers::clipboard::{clipboard_channel, start_clipboard_worker};
+#[allow(unused_imports)]
 pub(crate) use workers::custom_provider::{custom_provider_channel, start_custom_provider_pump};
 #[allow(unused_imports)]
 pub(crate) use workers::history::start_history_pump;

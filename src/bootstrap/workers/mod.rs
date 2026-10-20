@@ -1,3 +1,4 @@
+pub(crate) mod clipboard;
 pub(crate) mod custom_provider;
 pub(crate) mod history;
 pub(crate) mod refresh;
