@@ -135,7 +135,27 @@ impl SettingsWriter {
 
     /// 同步写入：立即落盘并返回结果。
     /// 后台线程会先丢弃未落盘的 debounce 快照，确保此次写入是最终状态。
+    ///
+    /// 无上限等待，只适合测试或确定不会阻塞前台的调用点；前台路径用
+    /// `flush_before` 带上限。
+    #[cfg(test)]
     pub fn flush(&self, settings: AppSettings) -> bool {
+        self.flush_before(settings, None)
+    }
+
+    /// 同 `flush`，但等待落盘有上限。
+    ///
+    /// 用于不能无限阻塞前台的调用点（如全局热键，注册必须在 GPUI 线程上做，
+    /// 但落盘包含 `sync_all`，无上限等待会把托盘和设置窗口一起停住）。
+    /// 超时按落盘失败处理，调用方据此回滚。
+    ///
+    /// 注意「超时 ≠ 未落盘」：快照在提交时已通过 `WriteCmd::Flush` 抵达后台
+    /// worker，超时只是前台不再等待 reply；worker 之后仍可能把它写盘。调用方
+    /// 回滚 UI 状态后，若 app 在 worker 完成落盘前退出，磁盘上的设置可能与
+    /// 用户看到的回滚后状态短暂分叉，下次正常 `schedule`/`flush` 会收敛。
+    /// 该窗口只出现在「落盘耗时超过 deadline」且「随后立即退出」的组合下，
+    /// 可接受；若未来需要严格回滚，可让 `commit` 返回 revision 并支持撤销。
+    pub fn flush_before(&self, settings: AppSettings, deadline: Option<Duration>) -> bool {
         let Some(tx) = &self.tx else {
             warn!(target: "settings", "settings-writer already shut down, flush failed");
             return false;
@@ -148,7 +168,10 @@ impl SettingsWriter {
             let snapshot = snapshots.commit(settings);
             send_flush(tx, snapshot.settings)
         };
-        await_flush(reply_rx)
+        match deadline {
+            Some(deadline) => await_flush_before(reply_rx, deadline),
+            None => await_flush(reply_rx),
+        }
     }
 
     pub(crate) fn handle(&self) -> Option<SettingsWriterHandle> {
@@ -231,6 +254,25 @@ fn await_flush(reply_rx: Option<mpsc::Receiver<bool>>) -> bool {
     reply_rx.and_then(|rx| rx.recv().ok()).unwrap_or(false)
 }
 
+/// 等待落盘结果，但不超过 `deadline`。超时返回 false（按失败处理）。
+fn await_flush_before(reply_rx: Option<mpsc::Receiver<bool>>, deadline: Duration) -> bool {
+    let Some(rx) = reply_rx else {
+        return false;
+    };
+    match rx.recv_timeout(deadline) {
+        Ok(ok) => ok,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            warn!(
+                target: "settings",
+                "settings flush did not finish within {:?}; treating as failure",
+                deadline
+            );
+            false
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => false,
+    }
+}
+
 impl Drop for SettingsWriter {
     fn drop(&mut self) {
         self.shutdown_before(
@@ -306,7 +348,7 @@ fn run_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex};
     use std::thread;
     use std::time::Instant;
 
@@ -395,6 +437,71 @@ mod tests {
 
         let r = records.lock().unwrap();
         assert_eq!(*r, vec![42]);
+    }
+
+    /// 落盘超过上限时按失败返回，不无限阻塞前台（全局热键路径）。
+    #[test]
+    fn flush_before_returns_false_when_persist_is_slow() {
+        let records: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+        let writer = SettingsWriter::spawn_internal(
+            Duration::from_millis(10),
+            Box::new(move |settings| {
+                // 模拟慢盘：远超 deadline。
+                thread::sleep(Duration::from_millis(400));
+                records
+                    .lock()
+                    .unwrap()
+                    .push(settings.system.refresh_interval_mins);
+                true
+            }),
+        );
+
+        let start = Instant::now();
+        let result = writer.flush_before(make_settings(7), Some(Duration::from_millis(50)));
+        let elapsed = start.elapsed();
+
+        assert!(!result, "a slow persist must report failure");
+        assert!(
+            elapsed < Duration::from_millis(300),
+            "flush_before must not wait for the whole persist, took {elapsed:?}"
+        );
+    }
+
+    /// 超时后的补偿快照必须排在迟到的原始 flush 之后，最终成为磁盘状态。
+    #[test]
+    fn scheduled_compensation_wins_after_timed_out_flush() {
+        let records: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+        let first_persist = Arc::new(AtomicBool::new(true));
+        let records_clone = records.clone();
+        let first_persist_clone = first_persist.clone();
+        let writer = SettingsWriter::spawn_internal(
+            Duration::from_millis(10),
+            Box::new(move |settings| {
+                if first_persist_clone.swap(false, Ordering::SeqCst) {
+                    thread::sleep(Duration::from_millis(150));
+                }
+                records_clone
+                    .lock()
+                    .unwrap()
+                    .push(settings.system.refresh_interval_mins);
+                true
+            }),
+        );
+
+        assert!(!writer.flush_before(make_settings(1), Some(Duration::from_millis(20))));
+        writer.schedule(make_settings(2));
+        wait_writes(&records, 2);
+
+        assert_eq!(*records.lock().unwrap(), vec![1, 2]);
+    }
+
+    /// 落盘在期限内完成时，flush_before 正常返回成功。
+    #[test]
+    fn flush_before_returns_true_when_persist_is_fast() {
+        let (writer, records) = test_writer(10);
+
+        assert!(writer.flush_before(make_settings(11), Some(Duration::from_millis(500))));
+        assert_eq!(*records.lock().unwrap(), vec![11]);
     }
 
     #[test]

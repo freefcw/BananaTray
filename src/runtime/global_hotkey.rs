@@ -99,7 +99,10 @@ pub(crate) fn rebind_global_hotkey(
     let result = match register_hotkey_string(requested_hotkey, Some(&previous_hotkey), cx) {
         Ok(persisted) => {
             next_settings.system.global_hotkey = persisted.clone();
-            let settings_saved = state.borrow().settings_writer.flush(next_settings);
+            let settings_saved = state
+                .borrow()
+                .settings_writer
+                .flush_before(next_settings, Some(crate::timing::HOTKEY_PERSIST_DEADLINE));
             if settings_saved {
                 Ok(persisted)
             } else {
@@ -107,6 +110,11 @@ pub(crate) fn rebind_global_hotkey(
                     target: "settings",
                     "failed to persist global hotkey; restoring previous registration"
                 );
+                // `flush_before` only bounds the foreground wait; the worker may
+                // still finish the newer snapshot later. Queue a compensating
+                // snapshot so the disk state follows the registration rollback.
+                let rollback_settings = state.borrow().session.settings.clone();
+                state.borrow().settings_writer.schedule(rollback_settings);
                 if let Err(error) = register_hotkey_string(&previous_hotkey, Some(&persisted), cx) {
                     warn!(
                         target: "settings",

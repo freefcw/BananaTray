@@ -142,7 +142,10 @@ fn persist_hotkey_value(state: &Rc<RefCell<AppState>>, hotkey: String, reason: &
 
     let settings_saved = {
         let s = state.borrow();
-        s.settings_writer.flush(s.session.settings.clone())
+        s.settings_writer.flush_before(
+            s.session.settings.clone(),
+            Some(crate::timing::HOTKEY_PERSIST_DEADLINE),
+        )
     };
     if !settings_saved {
         warn!(
