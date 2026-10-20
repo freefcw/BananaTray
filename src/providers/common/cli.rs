@@ -2,6 +2,7 @@ use crate::models::FailureAdvice;
 use crate::providers::common::path_resolver;
 use crate::providers::ProviderError;
 use anyhow::Result;
+use log::warn;
 use std::io::Read;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -9,6 +10,10 @@ use std::time::{Duration, Instant};
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// 单个流（stdout / stderr）的捕获上限。
+///
+/// 超过上限就杀掉子进程并报失败，而不是把整个输出读进内存。
+const MAX_STREAM_BYTES: u64 = super::MAX_EXTERNAL_PAYLOAD_BYTES;
 
 /// 检查 CLI 是否可执行。
 pub fn command_exists(binary: &str) -> bool {
@@ -51,20 +56,14 @@ pub(crate) fn run_prepared_command_with_timeout(
 }
 
 fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output> {
-    let stdout_handle = child.stdout.take().map(|mut handle| {
-        thread::spawn(move || {
-            let mut buf = Vec::new();
-            let _ = handle.read_to_end(&mut buf);
-            buf
-        })
-    });
-    let stderr_handle = child.stderr.take().map(|mut handle| {
-        thread::spawn(move || {
-            let mut buf = Vec::new();
-            let _ = handle.read_to_end(&mut buf);
-            buf
-        })
-    });
+    let stdout_handle = child
+        .stdout
+        .take()
+        .map(|handle| thread::spawn(move || read_bounded(handle, MAX_STREAM_BYTES)));
+    let stderr_handle = child
+        .stderr
+        .take()
+        .map(|handle| thread::spawn(move || read_bounded(handle, MAX_STREAM_BYTES)));
 
     let deadline = Instant::now() + timeout;
     let status = loop {
@@ -72,6 +71,11 @@ fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output>
             break status;
         }
         if Instant::now() >= deadline {
+            warn!(
+                target: "cli",
+                "command exceeded {:?}; killing the process tree",
+                timeout
+            );
             kill_child_tree(&mut child);
             let _ = child.wait();
             return Err(ProviderError::Timeout.into());
@@ -89,8 +93,28 @@ fn run_child_with_timeout(mut child: Child, timeout: Duration) -> Result<Output>
     })
 }
 
+/// 读取一个流，最多 `limit` 字节；超出则返回 `Err(())` 让调用方杀掉子进程。
+fn read_bounded(mut handle: impl Read, limit: u64) -> std::result::Result<Vec<u8>, ()> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    let mut total: u64 = 0;
+    loop {
+        match handle.read(&mut chunk) {
+            Ok(0) => return Ok(buf),
+            Ok(n) => {
+                total += n as u64;
+                if total > limit {
+                    return Err(());
+                }
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            Err(_) => return Ok(buf),
+        }
+    }
+}
+
 fn join_reader_before_deadline(
-    handle: Option<thread::JoinHandle<Vec<u8>>>,
+    handle: Option<thread::JoinHandle<std::result::Result<Vec<u8>, ()>>>,
     deadline: Instant,
     child: &mut Child,
 ) -> Result<Vec<u8>> {
@@ -99,9 +123,29 @@ fn join_reader_before_deadline(
     };
     loop {
         if handle.is_finished() {
-            return Ok(handle.join().unwrap_or_default());
+            return match handle.join().unwrap_or(Err(())) {
+                Ok(buf) => Ok(buf),
+                Err(()) => {
+                    // 输出超过上限：杀掉子进程并报失败，不返回半截输出。
+                    warn!(
+                        target: "cli",
+                        "command output exceeded the {} byte limit; killing the process",
+                        MAX_STREAM_BYTES
+                    );
+                    kill_child_tree(child);
+                    let _ = child.wait();
+                    Err(
+                        ProviderError::fetch_failed("command output exceeded the size limit")
+                            .into(),
+                    )
+                }
+            };
         }
         if Instant::now() >= deadline {
+            warn!(
+                target: "cli",
+                "command did not finish draining output before the deadline; killing the process tree"
+            );
             kill_child_tree(child);
             let _ = child.wait();
             return Err(ProviderError::Timeout.into());
@@ -310,5 +354,22 @@ mod tests {
         .unwrap_err();
         let classified = ProviderError::classify(&err);
         assert!(matches!(classified, ProviderError::Timeout));
+    }
+
+    /// 狂吐输出的命令必须在超过上限时失败，而不是把整个输出读进内存。
+    #[cfg(unix)]
+    #[test]
+    fn test_run_command_with_timeout_rejects_output_over_limit() {
+        // 持续输出直到被杀，远超 MAX_STREAM_BYTES。
+        let err = run_command_with_timeout(
+            "sh",
+            &["-c", "yes 0123456789abcdef"],
+            Duration::from_secs(10),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("size limit"),
+            "unexpected error: {err}"
+        );
     }
 }

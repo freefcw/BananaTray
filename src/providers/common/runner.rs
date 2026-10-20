@@ -21,7 +21,15 @@ use crate::providers::common::path_resolver;
 use crate::utils::text_utils;
 
 const READER_CHUNK_SIZE: usize = 8192;
+/// Reader queue capacity. A bounded queue applies backpressure before the
+/// captured buffer reaches its hard limit.
+const READER_QUEUE_CAPACITY: usize = 64;
 const CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(60);
+/// PTY 捕获缓冲上限。
+///
+/// 捕获循环每收到一块就把整个缓冲重新转成字符串做提示匹配，缓冲无上限时
+/// 一条狂吐输出的 CLI 会在超时前把内存冲上去。
+const MAX_CAPTURE_BYTES: usize = super::MAX_EXTERNAL_PAYLOAD_BYTES as usize;
 /// How long to wait for a killed child to be reaped before giving up.
 const REAP_TIMEOUT: Duration = Duration::from_secs(2);
 const REAP_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -454,7 +462,10 @@ fn spawn_reader(pair: &PtyPair) -> Result<ReaderThread> {
     let mut reader = pair.master.try_clone_reader()?;
     let stop = Arc::new(AtomicBool::new(false));
     let reader_stop = Arc::clone(&stop);
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    // `channel()` is intentionally not used here: the capture loop consumes
+    // at most one chunk per poll, so an unbounded queue could grow without
+    // limit while a CLI is producing output faster than we can inspect it.
+    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(READER_QUEUE_CAPACITY);
 
     #[cfg(unix)]
     let raw_fd = pair.master.as_raw_fd();
@@ -586,11 +597,18 @@ impl CaptureState {
         now >= self.deadline
     }
 
+    /// 追加一块输出；达到上限后截断，由 `is_full` 通知捕获循环停止。
     fn record_chunk(&mut self, data: &[u8], now: Instant) {
         if text_utils::has_meaningful_content(data) {
             self.last_meaningful_data = now;
         }
-        self.buffer.extend_from_slice(data);
+        let remaining = MAX_CAPTURE_BYTES.saturating_sub(self.buffer.len());
+        self.buffer
+            .extend_from_slice(&data[..data.len().min(remaining)]);
+    }
+
+    fn is_full(&self) -> bool {
+        self.buffer.len() >= MAX_CAPTURE_BYTES
     }
 
     fn record_prompt_response(&mut self, now: Instant) {
@@ -611,7 +629,9 @@ impl CaptureState {
 
     fn drain_remaining(&mut self, receiver: &Receiver<Vec<u8>>) {
         while let Ok(data) = receiver.try_recv() {
-            self.buffer.extend_from_slice(&data);
+            let remaining = MAX_CAPTURE_BYTES.saturating_sub(self.buffer.len());
+            self.buffer
+                .extend_from_slice(&data[..data.len().min(remaining)]);
         }
     }
 
@@ -662,6 +682,15 @@ impl<'a> CaptureLoop<'a> {
                 break;
             }
             if self.process_exited()? {
+                break;
+            }
+            if self.state.is_full() {
+                log::warn!(
+                    target: "interactive_runner",
+                    "Output exceeded {} bytes; stopping capture and killing the child",
+                    MAX_CAPTURE_BYTES
+                );
+                self.child.child_mut().kill()?;
                 break;
             }
             if self.idle_timeout_reached() {
@@ -1063,5 +1092,40 @@ mod tests {
             }
             other => panic!("expected FetchFailed, got {:?}", other),
         }
+    }
+
+    /// 缓冲达到上限后，后续块被静默丢弃，`is_full` 让捕获循环停止。
+    #[test]
+    fn capture_state_caps_buffer_at_max() {
+        let now = Instant::now();
+        let mut state = CaptureState::new(Duration::from_secs(60), now);
+
+        // 分块喂入超过上限的数据。
+        let chunk = vec![b'x'; MAX_CAPTURE_BYTES / 4];
+        for _ in 0..5 {
+            state.record_chunk(&chunk, now);
+        }
+
+        assert!(state.is_full(), "buffer must reach the cap");
+        assert_eq!(state.buffer_len(), MAX_CAPTURE_BYTES);
+
+        // 已满后再喂入不再增长。
+        state.record_chunk(b"more", now);
+        assert_eq!(state.buffer_len(), MAX_CAPTURE_BYTES);
+    }
+
+    /// `drain_remaining` 同样受上限约束（进程退出后的尾部冲刷不能超限）。
+    #[test]
+    fn capture_state_drain_respects_max() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(vec![b'y'; MAX_CAPTURE_BYTES]).unwrap();
+        tx.send(vec![b'z'; 1024]).unwrap();
+
+        let now = Instant::now();
+        let mut state = CaptureState::new(Duration::from_secs(60), now);
+        state.drain_remaining(&rx);
+
+        assert!(state.is_full());
+        assert_eq!(state.buffer_len(), MAX_CAPTURE_BYTES);
     }
 }

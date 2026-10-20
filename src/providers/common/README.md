@@ -14,6 +14,8 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`run_lenient_command()`** — 宽容模式，有输出就返回 Ok（适用于 amp/kiro-cli 偶发非零退出码）
 - **`stdout_or_stderr_text()`** — 某些 CLI 把业务输出写到 stderr 的兜底方案
 - 非交互式 CLI 统一带超时，超时映射为 `ProviderError::Timeout`
+- stdout / stderr 捕获有上限（与 HTTP / PTY 共享 `MAX_EXTERNAL_PAYLOAD_BYTES`）；超限即杀掉
+  子进程并报失败，不把狂吐输出读进内存
 
 ### `path_resolver.rs` — CLI 路径解析
 
@@ -63,7 +65,8 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`InteractiveRunner`** — 通过 `portable-pty` 创建伪终端，模拟真实 shell 环境
 - **`InteractiveOptions`** — 超时、idle timeout、自动应答、环境变量排除、周期性 Enter
 - 支持 `auto_responses` 机制自动回应 CLI 的交互式提示（如 `Continue? [y/n]` → `y`）
-- 使用独立读线程 + `mpsc::channel` 实现非阻塞 I/O
+- 使用独立读线程 + 有界 `mpsc::sync_channel` 实现非阻塞 I/O
+- 捕获缓冲和 reader 队列都有上限（与 HTTP / CLI 共享 `MAX_EXTERNAL_PAYLOAD_BYTES`）；超限即停止捕获并杀掉子进程，避免狂吐输出在 channel 中无限排队
 - 会话结束时尝试终止 PTY 进程组并等待读线程退出，避免超时或提前返回留下子进程与 reader 线程
 
 ## 消费关系
