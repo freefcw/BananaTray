@@ -10,6 +10,10 @@ use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize, PtySyste
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -18,6 +22,9 @@ use crate::utils::text_utils;
 
 const READER_CHUNK_SIZE: usize = 8192;
 const CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(60);
+/// How long to wait for a killed child to be reaped before giving up.
+const REAP_TIMEOUT: Duration = Duration::from_secs(2);
+const REAP_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 /// Result of running an interactive command
 #[derive(Debug)]
@@ -149,8 +156,9 @@ impl InteractiveRunner {
         // Create PTY
         let pair = self.create_pty()?;
 
-        // Spawn process
-        let mut child = self.spawn_process(&pair, &executable_path, &options)?;
+        // Spawn process. From here on the child is owned by a guard that attempts
+        // to terminate and reap it on every exit path.
+        let mut child = ChildGuard::new(self.spawn_process(&pair, &executable_path, &options)?);
         log::info!(
             target: "interactive_runner",
             "[{}] Process spawned ({:.0}ms), waiting {:.0}ms init delay",
@@ -160,9 +168,18 @@ impl InteractiveRunner {
         // Allow process to initialize
         std::thread::sleep(options.init_delay);
 
+        #[cfg(unix)]
+        child.set_process_group(pair.master.process_group_leader());
+
+        // Take the writer once and hold it for the whole session.
+        // `take_writer` is one-shot, so taking it per-write made every
+        // auto-response fail with "cannot take writer more than once".
+        // Holding it also avoids the premature EOF that dropping it sends to
+        // the slave (UnixMasterWriter::drop writes a newline + EOT).
+        let mut writer = pair.master.take_writer()?;
+
         // Send input command
         if !input.trim().is_empty() {
-            let mut writer = pair.master.take_writer()?;
             let input_data = format!("{}\r", input.trim());
             log::info!(
                 target: "interactive_runner",
@@ -173,7 +190,7 @@ impl InteractiveRunner {
         }
 
         // Capture output with auto-response handling
-        let buffer = self.capture_output(&pair, &mut child, &options)?;
+        let buffer = self.capture_output(&pair, &mut child, &mut writer, &options)?;
 
         let elapsed = start.elapsed();
         log::debug!(
@@ -183,11 +200,6 @@ impl InteractiveRunner {
             elapsed.as_secs_f64(),
             buffer.len()
         );
-
-        if child.try_wait()?.is_none() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
 
         // Strip ANSI codes from output
         let output = text_utils::strip_ansi(&String::from_utf8_lossy(&buffer));
@@ -262,13 +274,21 @@ impl InteractiveRunner {
     fn capture_output(
         &self,
         pair: &PtyPair,
-        child: &mut Box<dyn portable_pty::Child + Send + Sync>,
+        child: &mut ChildGuard,
+        writer: &mut Box<dyn Write + Send>,
         options: &InteractiveOptions,
     ) -> Result<Vec<u8>> {
-        let ReaderThread { receiver, handle } = spawn_reader(pair)?;
-        let buffer = CaptureLoop::new(pair, child, options, receiver).run()?;
-        drop(handle);
-        Ok(buffer)
+        let mut reader = spawn_reader(pair)?;
+        let receiver = reader.take_receiver();
+        let result = CaptureLoop::new(child, writer, options, receiver).run();
+
+        // Stop/reap the process before joining the reader. On Unix this also
+        // closes the PTY slave held by descendants, while the reader's poll
+        // loop provides a bounded escape even if the child cleanup fails.
+        child.reap();
+        reader.stop_and_join();
+
+        result
     }
 
     fn normalize_for_matching(text: &str) -> String {
@@ -276,18 +296,198 @@ impl InteractiveRunner {
     }
 }
 
+/// Owns the spawned child and attempts to terminate and reap it on every exit
+/// path, including `?` early returns.
+///
+/// `portable_pty` wraps `std::process::Child`, which neither kills nor waits on
+/// drop, so without this guard any error between spawn and the explicit cleanup
+/// leaves the process unreaped.
+struct ChildGuard {
+    child: Box<dyn portable_pty::Child + Send + Sync>,
+    #[cfg(unix)]
+    process_group_id: Option<libc::pid_t>,
+    cleanup_attempted: bool,
+}
+
+impl ChildGuard {
+    fn new(child: Box<dyn portable_pty::Child + Send + Sync>) -> Self {
+        Self {
+            child,
+            #[cfg(unix)]
+            process_group_id: None,
+            cleanup_attempted: false,
+        }
+    }
+
+    #[cfg(unix)]
+    fn set_process_group(&mut self, process_group_id: Option<libc::pid_t>) {
+        self.process_group_id = process_group_id;
+    }
+
+    fn child_mut(&mut self) -> &mut dyn portable_pty::Child {
+        self.child.as_mut()
+    }
+
+    /// Attempts to terminate the process tree, then waits for the direct child
+    /// to be reaped. Cleanup is bounded so a broken child implementation cannot
+    /// block the caller forever.
+    fn reap(&mut self) {
+        self.reap_with_timeout(REAP_TIMEOUT);
+    }
+
+    fn reap_with_timeout(&mut self, timeout: Duration) {
+        if self.cleanup_attempted {
+            return;
+        }
+        self.cleanup_attempted = true;
+
+        match self.child.try_wait() {
+            Ok(Some(_)) => {
+                // The direct child is already gone, but descendants may still
+                // hold the PTY slave open.
+                #[cfg(unix)]
+                self.kill_process_group();
+                return;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                log::warn!(
+                    target: "interactive_runner",
+                    "try_wait failed before child cleanup: {}; attempting termination",
+                    e
+                );
+            }
+        }
+
+        if let Err(e) = self.child.kill() {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    target: "interactive_runner",
+                    "failed to terminate interactive child: {}",
+                    e
+                );
+            }
+        }
+
+        #[cfg(unix)]
+        self.kill_process_group();
+
+        let deadline = Instant::now() + timeout;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(REAP_POLL_INTERVAL);
+                }
+                Ok(None) => {
+                    log::warn!(
+                        target: "interactive_runner",
+                        "Child did not exit within {:?} after termination; leaving it unreaped",
+                        timeout
+                    );
+                    return;
+                }
+                Err(e) => {
+                    log::warn!(
+                        target: "interactive_runner",
+                        "try_wait failed while reaping child: {}",
+                        e
+                    );
+                    return;
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn kill_process_group(&self) {
+        let Some(process_group_id) = self.process_group_id else {
+            return;
+        };
+        if process_group_id <= 1 {
+            return;
+        }
+
+        let result = unsafe { libc::kill(-process_group_id, libc::SIGKILL) };
+        if result != 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() != Some(libc::ESRCH) {
+                log::warn!(
+                    target: "interactive_runner",
+                    "failed to terminate PTY process group {}: {}",
+                    process_group_id,
+                    error
+                );
+            }
+        }
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        self.reap();
+    }
+}
+
 struct ReaderThread {
-    receiver: Receiver<Vec<u8>>,
+    receiver: Option<Receiver<Vec<u8>>>,
+    stop: Arc<AtomicBool>,
     handle: JoinHandle<()>,
+}
+
+impl ReaderThread {
+    fn take_receiver(&mut self) -> Receiver<Vec<u8>> {
+        self.receiver
+            .take()
+            .expect("PTY reader receiver can only be taken once")
+    }
+
+    fn stop_and_join(self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if self.handle.join().is_err() {
+            log::warn!(target: "interactive_runner", "PTY reader thread panicked");
+        }
+    }
 }
 
 fn spawn_reader(pair: &PtyPair) -> Result<ReaderThread> {
     let mut reader = pair.master.try_clone_reader()?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let reader_stop = Arc::clone(&stop);
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+    #[cfg(unix)]
+    let raw_fd = pair.master.as_raw_fd();
 
     let handle = std::thread::spawn(move || {
         let mut chunk = [0u8; READER_CHUNK_SIZE];
         loop {
+            if reader_stop.load(Ordering::Relaxed) {
+                break;
+            }
+
+            #[cfg(unix)]
+            {
+                let Some(raw_fd) = raw_fd else {
+                    break;
+                };
+                let mut poll_fd = libc::pollfd {
+                    fd: raw_fd,
+                    events: libc::POLLIN | libc::POLLHUP | libc::POLLERR,
+                    revents: 0,
+                };
+                let poll_result = unsafe { libc::poll(&mut poll_fd, 1, 100) };
+                if poll_result < 0 {
+                    if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    break;
+                }
+                if poll_result == 0 {
+                    continue;
+                }
+            }
+
             match reader.read(&mut chunk) {
                 Ok(0) => break,
                 Ok(n) => {
@@ -301,7 +501,8 @@ fn spawn_reader(pair: &PtyPair) -> Result<ReaderThread> {
     });
 
     Ok(ReaderThread {
-        receiver: rx,
+        receiver: Some(rx),
+        stop,
         handle,
     })
 }
@@ -428,8 +629,10 @@ impl CaptureState {
 }
 
 struct CaptureLoop<'a> {
-    pair: &'a PtyPair,
-    child: &'a mut Box<dyn portable_pty::Child + Send + Sync>,
+    child: &'a mut ChildGuard,
+    /// Held for the whole capture so auto-responses and periodic Enters can be
+    /// written; `take_writer` is one-shot and cannot be called again.
+    writer: &'a mut Box<dyn Write + Send>,
     options: &'a InteractiveOptions,
     receiver: Receiver<Vec<u8>>,
     state: CaptureState,
@@ -438,14 +641,14 @@ struct CaptureLoop<'a> {
 
 impl<'a> CaptureLoop<'a> {
     fn new(
-        pair: &'a PtyPair,
-        child: &'a mut Box<dyn portable_pty::Child + Send + Sync>,
+        child: &'a mut ChildGuard,
+        writer: &'a mut Box<dyn Write + Send>,
         options: &'a InteractiveOptions,
         receiver: Receiver<Vec<u8>>,
     ) -> Self {
         Self {
-            pair,
             child,
+            writer,
             options,
             receiver,
             state: CaptureState::new(options.timeout, Instant::now()),
@@ -496,10 +699,9 @@ impl<'a> CaptureLoop<'a> {
         }
     }
 
-    fn send_auto_response(&self, prompt_match: &PromptMatch) {
-        match self.pair.master.take_writer() {
-            Ok(mut writer) => {
-                let _ = writer.write_all(prompt_match.response.as_bytes());
+    fn send_auto_response(&mut self, prompt_match: &PromptMatch) {
+        match self.writer.write_all(prompt_match.response.as_bytes()) {
+            Ok(()) => {
                 log::info!(
                     target: "interactive_runner",
                     "Auto-responded to normalized prompt '{}' with '{}'",
@@ -510,7 +712,7 @@ impl<'a> CaptureLoop<'a> {
             Err(e) => {
                 log::warn!(
                     target: "interactive_runner",
-                    "Auto-response matched normalized prompt '{}' but take_writer failed: {}",
+                    "Auto-response matched normalized prompt '{}' but write failed: {}",
                     prompt_match.normalized_prompt, e
                 );
             }
@@ -518,7 +720,7 @@ impl<'a> CaptureLoop<'a> {
     }
 
     fn process_exited(&mut self) -> Result<bool> {
-        if let Some(_status) = self.child.try_wait()? {
+        if let Some(_status) = self.child.child_mut().try_wait()? {
             log::info!(target: "interactive_runner", "Process exited");
             return Ok(true);
         }
@@ -552,8 +754,8 @@ impl<'a> CaptureLoop<'a> {
             return;
         }
 
-        if let Ok(mut writer) = self.pair.master.take_writer() {
-            let _ = writer.write_all(b"\r");
+        if self.writer.write_all(b"\r").is_err() {
+            log::warn!(target: "interactive_runner", "Periodic Enter write failed");
         }
         self.state.record_enter_attempt(Instant::now());
     }
@@ -580,6 +782,169 @@ mod tests {
         assert_eq!(
             InteractiveRunner::normalize_for_matching("Hello World"),
             text_utils::normalize_for_matching("Hello World")
+        );
+    }
+
+    /// The child must be reaped when the guard drops, even though nothing calls
+    /// kill/wait explicitly. Regression test for the unreaped-child leak on the
+    /// early-return paths (take_writer / write failure) in `run`.
+    #[cfg(unix)]
+    #[test]
+    fn child_guard_reaps_on_drop() {
+        let pty = native_pty_system();
+        let pair = pty
+            .openpty(PtySize {
+                rows: 50,
+                cols: 160,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("openpty");
+
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        cmd.args(["-c", "sleep 60"]);
+        let raw = pair.slave.spawn_command(cmd).expect("spawn");
+        let pid = raw.process_id().expect("pid");
+        let process_group_id = pair.master.process_group_leader();
+
+        {
+            let mut guard = ChildGuard::new(raw);
+            guard.set_process_group(process_group_id);
+            // dropped here without any explicit kill/wait
+        }
+
+        // The process must be gone (reaped), not left as a zombie. `kill -0`
+        // succeeds for a zombie, so check the process state instead.
+        let out = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .expect("ps");
+        let stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert!(
+            stat.is_empty(),
+            "child {} was left unreaped (ps stat = {:?})",
+            pid,
+            stat
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reader_thread_can_be_stopped_without_pty_eof() {
+        let pty = native_pty_system();
+        let pair = pty
+            .openpty(PtySize {
+                rows: 50,
+                cols: 160,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("openpty");
+
+        let mut reader = spawn_reader(&pair).expect("spawn reader");
+        let _receiver = reader.take_receiver();
+        reader.stop_and_join();
+    }
+
+    /// Stays alive after `kill`. A real child cannot: `Child::kill` ends in `SIGKILL`.
+    #[derive(Debug)]
+    struct NeverExitingChild;
+
+    impl portable_pty::ChildKiller for NeverExitingChild {
+        fn kill(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn clone_killer(&self) -> Box<dyn portable_pty::ChildKiller + Send + Sync> {
+            Box::new(Self)
+        }
+    }
+
+    impl portable_pty::Child for NeverExitingChild {
+        fn try_wait(&mut self) -> std::io::Result<Option<portable_pty::ExitStatus>> {
+            Ok(None)
+        }
+
+        fn wait(&mut self) -> std::io::Result<portable_pty::ExitStatus> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "NeverExitingChild does not exit",
+            ))
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            None
+        }
+
+        #[cfg(windows)]
+        fn as_raw_handle(&self) -> Option<std::os::windows::io::RawHandle> {
+            None
+        }
+    }
+
+    /// Reap must give up after `REAP_TIMEOUT` when the child stays alive after kill.
+    #[test]
+    fn child_guard_reap_is_bounded() {
+        const TEST_REAP_TIMEOUT: Duration = Duration::from_millis(50);
+        let start = Instant::now();
+        let mut guard = ChildGuard::new(Box::new(NeverExitingChild));
+        guard.reap_with_timeout(TEST_REAP_TIMEOUT);
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed >= TEST_REAP_TIMEOUT,
+            "reap returned in {:?}, before the {:?} give-up deadline",
+            elapsed,
+            TEST_REAP_TIMEOUT
+        );
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "reap took {:?}, expected to stay below one second",
+            elapsed,
+        );
+    }
+
+    /// End-to-end: an auto-response must actually reach the child. Regression
+    /// test for the one-shot `take_writer` bug, where every auto-response failed
+    /// with "cannot take writer more than once".
+    #[cfg(unix)]
+    #[test]
+    fn auto_response_reaches_child() {
+        let dir = std::env::temp_dir().join(format!("runner_autoresp_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let script = dir.join("prompt.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf 'Continue? [y/n] '\nread ans\nif [ \"$ans\" = \"y\" ]; then echo GOT_YES; else echo GOT_OTHER; fi\n",
+        )
+        .expect("write script");
+        let mut perms = std::fs::metadata(&script).expect("stat").permissions();
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script, perms).expect("chmod");
+
+        let mut auto_responses = HashMap::new();
+        auto_responses.insert("Continue? [y/n]".to_string(), "y\n".to_string());
+
+        let runner = InteractiveRunner::new();
+        let options = InteractiveOptions {
+            timeout: Duration::from_secs(10),
+            idle_timeout: Duration::from_secs(2),
+            auto_responses,
+            init_delay: Duration::from_millis(200),
+            ..Default::default()
+        };
+
+        let result = runner
+            .run(script.to_str().expect("path"), "", options)
+            .expect("run should succeed");
+
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(
+            result.output.contains("GOT_YES"),
+            "auto-response did not reach the child; output was {:?}",
+            result.output
         );
     }
 

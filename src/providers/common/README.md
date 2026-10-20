@@ -59,6 +59,7 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
 - **`InteractiveOptions`** — 超时、idle timeout、自动应答、环境变量排除、周期性 Enter
 - 支持 `auto_responses` 机制自动回应 CLI 的交互式提示（如 `Continue? [y/n]` → `y`）
 - 使用独立读线程 + `mpsc::channel` 实现非阻塞 I/O
+- 会话结束时尝试终止 PTY 进程组并等待读线程退出，避免超时或提前返回留下子进程与 reader 线程
 
 ## 消费关系
 
