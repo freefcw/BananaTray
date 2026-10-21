@@ -31,10 +31,13 @@ use log::{info, warn};
 use rust_i18n::t;
 use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(target_os = "macos")]
+use std::time::Instant;
 
 /// 外部通知调用的上限（macOS `osascript`）。
 const NOTIFICATION_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(target_os = "macos")]
 const NOTIFICATION_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const NOTIFICATION_QUEUE_CAPACITY: usize = 32;
 // ============================================================================
@@ -463,7 +466,7 @@ fn run_command_with_deadline(
     }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 fn kill_process_group(pid: u32) {
     if let Ok(pgid) = libc::pid_t::try_from(pid) {
         if pgid > 1 {
