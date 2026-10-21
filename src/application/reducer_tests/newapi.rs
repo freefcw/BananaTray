@@ -236,6 +236,59 @@ fn newapi_save_finished_success_notifies_and_reloads_providers() {
 }
 
 #[test]
+fn newapi_edit_with_only_credentials_changed_refreshes_after_reload() {
+    // 只改 cookie 时 metadata 不变，reload 本身不会把它算作 affected。
+    let mut session = make_session();
+    let id = ProviderId::Custom("relay-example-com:newapi".to_string());
+    session.settings.provider.set_enabled(&id, true);
+    session
+        .provider_store
+        .providers
+        .push(make_custom_provider_status("relay-example-com:newapi"));
+
+    reduce(
+        &mut session,
+        AppAction::NewApiSaveFinished {
+            request_id: 0,
+            config: make_newapi_config(),
+            filename: "newapi-relay.yaml".to_string(),
+            original_id: Some("relay-example-com:newapi".to_string()),
+            is_editing: true,
+            result: Ok(NewApiSaveSuccess {
+                path: std::path::PathBuf::from("newapi-relay.yaml"),
+                settings_saved: true,
+            }),
+        },
+    );
+
+    let statuses = session.provider_store.providers.to_vec();
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded {
+            statuses: statuses.clone(),
+        }),
+    );
+    let refreshes_edited = |effects: &[AppEffect]| {
+        has_effect(effects, |e| {
+            matches!(
+                e,
+                AppEffect::Common(CommonEffect::Refresh(RefreshEffect::SendRequest(
+                    RefreshRequest::RefreshOne { id: ref rid, .. }
+                ))) if *rid == id
+            )
+        })
+    };
+    assert!(refreshes_edited(&effects));
+
+    // 只补刷一次：之后无关的 reload 不再重复刷新。
+    let effects = reduce(
+        &mut session,
+        AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
+    );
+    assert!(!refreshes_edited(&effects));
+}
+
+#[test]
 fn newapi_save_finished_failure_rolls_back_create_and_notifies() {
     let mut session = make_session();
     let config = make_newapi_config();

@@ -443,29 +443,36 @@ fn providers_reloaded_repoints_active_tab_when_deleted() {
 }
 
 #[test]
-fn providers_reloaded_persists_settings_when_stale_ids_pruned() {
+fn providers_reloaded_keeps_settings_of_custom_provider_missing_from_reload() {
+    // YAML 暂时解析失败时，该 provider 不在本次 statuses 里；它的设置不能被清掉。
     let mut session = make_session();
-    let custom_id = ProviderId::Custom("stale:api".to_string());
+    let custom_id = ProviderId::Custom("broken:api".to_string());
     session.settings.provider.set_enabled(&custom_id, true);
+    session
+        .settings
+        .provider
+        .set_quota_usage_step(&custom_id, Some(5));
     session
         .provider_store
         .providers
-        .push(make_custom_provider_status("stale:api"));
+        .push(make_custom_provider_status("broken:api"));
 
     let statuses: Vec<_> = ProviderKind::all()
         .iter()
         .map(|k| make_test_provider(*k, ConnectionStatus::Disconnected))
         .collect();
 
-    let effects = reduce(
+    reduce(
         &mut session,
         AppAction::RefreshEventReceived(RefreshEvent::ProvidersReloaded { statuses }),
     );
 
-    assert!(has_effect(&effects, |e| matches!(
-        e,
-        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
-    )));
+    assert!(session.provider_store.find_by_id(&custom_id).is_none());
+    assert!(session.settings.provider.is_enabled(&custom_id));
+    assert_eq!(
+        session.settings.provider.quota_usage_step(&custom_id),
+        Some(5)
+    );
 }
 
 // ── Skipped* 收敛 ─────────────────────────────────────

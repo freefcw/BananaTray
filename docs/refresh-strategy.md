@@ -96,6 +96,8 @@
 - BananaTray **没有**监视 providers 目录的自动文件 watcher。
 - 应用内通过 NewAPI 或自定义脚本向导保存 / 删除会显式触发 reload。
 - 手工编辑 YAML 文件后，通常需要重启应用才能看到变化。
+- 应用内保存某个自定义 Provider 后，下一次 `ProvidersReloaded` 会刷新它并重置它的告警基线，即使只改了 cookie / user_id / 脚本内容、metadata 没变。
+- reload 结果里缺失的自定义 Provider（例如 YAML 暂时解析失败）只从当前列表移除，**不**清理它在 settings 中的排序、开关、阈值等；只有应用内删除才会清理这些设置。
 
 ## Debug Refresh
 

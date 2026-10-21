@@ -329,41 +329,6 @@ impl ProviderConfig {
         self.history_retention_days.remove(&key);
     }
 
-    /// 清除已不存在的自定义 Provider ID（热重载后清理残留）。
-    pub fn prune_stale_custom_ids(&mut self, existing_custom_ids: &[ProviderId]) -> bool {
-        let existing: HashSet<String> = existing_custom_ids
-            .iter()
-            .filter_map(|id| match id {
-                ProviderId::Custom(s) => Some(s.clone()),
-                _ => None,
-            })
-            .collect();
-
-        let before = self.provider_layout.len()
-            + self.hidden_quotas.len()
-            + self.quota_usage_steps.len()
-            + self.quota_threshold_overrides.len()
-            + self.history_retention_days.len();
-        self.provider_layout.retain(|item| {
-            ProviderKind::from_id_key(&item.id).is_some() || existing.contains(&item.id)
-        });
-        self.hidden_quotas
-            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
-        self.quota_usage_steps
-            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
-        self.quota_threshold_overrides
-            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
-        self.history_retention_days
-            .retain(|key, _| ProviderKind::from_id_key(key).is_some() || existing.contains(key));
-        let normalized = self.normalize_layout();
-        let after = self.provider_layout.len()
-            + self.hidden_quotas.len()
-            + self.quota_usage_steps.len()
-            + self.quota_threshold_overrides.len()
-            + self.history_retention_days.len();
-        normalized || before != after
-    }
-
     pub fn quota_usage_step(&self, id: &ProviderId) -> Option<u8> {
         self.quota_usage_steps
             .get(&id.id_key())

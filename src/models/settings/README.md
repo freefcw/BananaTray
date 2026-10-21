@@ -29,11 +29,11 @@ AppSettings
 - **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `quota_usage_steps` / `quota_threshold_overrides`
   - `provider_layout` 是有序 Provider 偏好列表；数组顺序就是排序，每个 item 只保存稳定 `id`、`in_sidebar` 和 `enabled`
   - `in_sidebar: false` 的 item 保留在布局中，用于重新加入时恢复原位置；隐藏 Provider 始终为 disabled，启用 Provider 会自动将其加入 sidebar
-  - `quota_usage_steps` 是 Provider 级用量步长覆盖（key = 稳定 `id_key`，无条目 = 跟随全局 `notification.quota_usage_step_pct`，显式 0 = 关闭该 Provider 的用量提醒）；`remove_provider_references()` / `prune_stale_custom_ids()` 会一并清理
-  - `quota_threshold_overrides` 是 Provider 级阈值覆盖（key = 稳定 `id_key`）：按单位整组覆盖，某单位为 `None` 即继承全局；值为 `Some` 即构成“自定义”身份，即使数值与全局相同也保留记录。`set_quota_threshold_override()` 传 `None` 清除该单位覆盖，三个单位全空时删除整条 entry；`remove_provider_references()` / `prune_stale_custom_ids()` 会一并清理
+  - `quota_usage_steps` 是 Provider 级用量步长覆盖（key = 稳定 `id_key`，无条目 = 跟随全局 `notification.quota_usage_step_pct`，显式 0 = 关闭该 Provider 的用量提醒）；`remove_provider_references()` 会一并清理
+  - `quota_threshold_overrides` 是 Provider 级阈值覆盖（key = 稳定 `id_key`）：按单位整组覆盖，某单位为 `None` 即继承全局；值为 `Some` 即构成“自定义”身份，即使数值与全局相同也保留记录。`set_quota_threshold_override()` 传 `None` 清除该单位覆盖，三个单位全空时删除整条 entry；`remove_provider_references()` 会一并清理
   - Provider 名称、图标、能力和运行时状态均从 Provider descriptor / `ProviderStatus` 计算，不复制到 settings
   - 旧版 `enabled_providers` / `provider_order` / `sidebar_providers` 在 `settings_store` 加载边界一次性迁移；缺失字段与显式空数组语义不同。仅在 `enabled_providers` 中启用、未出现在 `sidebar_providers` 的项会保持 enabled 并补进 sidebar（旧 Overview / refresh 不要求 sidebar 成员资格）；不要改成按 sidebar 成员强制禁用，否则会静默停止监控
-  - `is_enabled()` / `set_enabled()` / `is_in_sidebar()` / `add_to_sidebar()` / `remove_from_sidebar()` / `prune_stale_custom_ids()` / `register_discovered_custom_providers()` / `quota_usage_step()` / `set_quota_usage_step()` / `effective_quota_usage_step()`
+  - `is_enabled()` / `set_enabled()` / `is_in_sidebar()` / `add_to_sidebar()` / `remove_from_sidebar()` / `register_discovered_custom_providers()` / `quota_usage_step()` / `set_quota_usage_step()` / `effective_quota_usage_step()`
 - **`ProviderSettings`** — 扁平 key-value 凭证存储（`github_token`、`custom_token` 等），位于 `ProviderConfig::credentials`
   - 这里只存 BananaTray 自己管理的 provider token；Provider 真实可用凭证也可能来自外部配置文件、CLI 登录态或环境变量
 - **`TrayPopupSettings`** — 托盘弹窗的持久化 UI 状态；当前包含 Linux 下用户拖动后的上次窗口位置

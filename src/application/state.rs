@@ -195,6 +195,11 @@ pub struct AppSession {
     /// 只活在本次进程内：默认折叠，用户展开后在应用生命周期里保持。
     /// 放在 session 而非 `AppView`，因为 macOS 每次关闭弹窗都会销毁 view。
     pub overview_expanded: std::collections::HashSet<String>,
+    /// 已保存、等下一次 `ProvidersReloaded` 再刷新的自定义 Provider。
+    ///
+    /// 只改 cookie / user_id / 脚本内容时 metadata 不变，reload 不会把它算进 `affected`；
+    /// 而新 registry 是异步加载的，保存当下直接刷新会用到旧凭证。
+    pub refresh_after_reload: std::collections::HashSet<ProviderId>,
 }
 
 impl AppSession {
@@ -221,6 +226,7 @@ impl AppSession {
             alert_engine: AlertEngine::new(),
             popup_visible: false,
             overview_expanded: Default::default(),
+            refresh_after_reload: Default::default(),
         }
     }
 

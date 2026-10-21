@@ -132,6 +132,7 @@ pub(super) fn script_provider_save_finished(
         effects,
         request_id,
         is_editing,
+        ProviderId::Custom(config.provider_id.clone()),
         result,
         super::shared::ProviderSavePolicy {
             rollback_edit: Box::new(|session| {

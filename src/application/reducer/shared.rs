@@ -99,6 +99,7 @@ pub(super) fn settle_custom_provider_save<S: crate::models::CustomProviderSaveSu
     effects: &mut Vec<AppEffect>,
     request_id: u64,
     is_editing: bool,
+    saved_id: ProviderId,
     result: Result<S, crate::models::CustomProviderLifecycleFailure>,
     policy: ProviderSavePolicy<'_>,
 ) {
@@ -107,6 +108,7 @@ pub(super) fn settle_custom_provider_save<S: crate::models::CustomProviderSaveSu
         Ok(success) => {
             let (title_key, body_key) = (policy.success_keys)(is_editing, success.settings_saved());
             notify_plain_i18n(effects, title_key, body_key);
+            session.refresh_after_reload.insert(saved_id);
             effects.push(RefreshEffect::SendRequest(RefreshRequest::ReloadProviders).into());
         }
         Err(_failure) => {

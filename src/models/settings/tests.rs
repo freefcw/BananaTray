@@ -379,72 +379,6 @@ fn ordered_provider_ids_deduplicates() {
     assert_eq!(claude_count, 1);
 }
 
-// ── prune_stale_custom_ids ──────────────────────────────
-
-#[test]
-fn prune_removes_stale_custom_from_enabled() {
-    let mut config = ProviderConfig::default();
-    config.set_enabled(&ProviderId::Custom("old:api".to_string()), true);
-    config.set_enabled(&ProviderId::Custom("keep:api".to_string()), true);
-    config.set_provider_enabled(ProviderKind::Claude, true);
-
-    let existing = vec![ProviderId::Custom("keep:api".to_string())];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(changed);
-    assert!(!config.is_enabled(&ProviderId::Custom("old:api".to_string())));
-    assert!(config.is_enabled(&ProviderId::Custom("keep:api".to_string())));
-    assert!(config.is_enabled(&ProviderId::BuiltIn(ProviderKind::Claude)));
-}
-
-#[test]
-fn prune_removes_stale_custom_from_provider_layout() {
-    let config = ProviderConfig {
-        provider_layout: vec![
-            ProviderLayoutItem::new(ProviderKind::Claude.id_key(), true, false),
-            ProviderLayoutItem::new("old:api", true, false),
-            ProviderLayoutItem::new("keep:api", true, false),
-        ],
-        ..Default::default()
-    };
-    // prune 需要 &mut，但 clippy 建议初始化时赋值，所以这里重新绑定
-    let mut config = config;
-
-    let existing = vec![ProviderId::Custom("keep:api".to_string())];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(changed);
-    assert_eq!(config.provider_layout.len(), 2);
-    assert!(!config.has_layout_item(&ProviderId::Custom("old:api".to_string())));
-}
-
-#[test]
-fn prune_returns_false_when_nothing_to_prune() {
-    let mut config = ProviderConfig::default();
-    config.set_provider_enabled(ProviderKind::Claude, true);
-
-    let existing: Vec<ProviderId> = vec![];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(!changed);
-}
-
-#[test]
-fn prune_preserves_all_builtin_keys() {
-    let mut config = ProviderConfig::default();
-    for kind in ProviderKind::all() {
-        config.set_provider_enabled(*kind, true);
-    }
-
-    let existing: Vec<ProviderId> = vec![];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(!changed);
-    for kind in ProviderKind::all() {
-        assert!(config.is_enabled(&ProviderId::BuiltIn(*kind)));
-    }
-}
-
 // ── move_provider_to_index（拖拽排序）──────────────────
 
 #[test]
@@ -844,31 +778,6 @@ fn remove_provider_references_clears_usage_step_override() {
 }
 
 #[test]
-fn prune_stale_custom_ids_removes_usage_step_overrides() {
-    let mut config = ProviderConfig::default();
-    config.set_quota_usage_step(&ProviderId::Custom("old:api".to_string()), Some(5));
-    config.set_quota_usage_step(&ProviderId::Custom("keep:api".to_string()), Some(10));
-    config.set_quota_usage_step(&builtin(ProviderKind::Claude), Some(20));
-
-    let existing = vec![ProviderId::Custom("keep:api".to_string())];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(changed);
-    assert_eq!(
-        config.quota_usage_step(&ProviderId::Custom("old:api".to_string())),
-        None
-    );
-    assert_eq!(
-        config.quota_usage_step(&ProviderId::Custom("keep:api".to_string())),
-        Some(10)
-    );
-    assert_eq!(
-        config.quota_usage_step(&builtin(ProviderKind::Claude)),
-        Some(20)
-    );
-}
-
-#[test]
 fn notification_settings_default_quota_usage_step_is_zero() {
     assert_eq!(NotificationSettings::default().quota_usage_step_pct, 0);
 
@@ -908,44 +817,5 @@ fn remove_provider_references_clears_quota_threshold_overrides() {
     assert_eq!(
         config.quota_threshold_override(&keep, QuotaThresholdUnit::Currency),
         Some(currency_thresholds)
-    );
-}
-
-#[test]
-fn prune_stale_custom_ids_removes_quota_threshold_overrides() {
-    let mut config = ProviderConfig::default();
-    let gone = ProviderId::Custom("gone:api".to_string());
-    let keep = ProviderId::Custom("keep:api".to_string());
-    let thresholds = QuotaThresholds {
-        warning: 70.0,
-        critical: 30.0,
-        notify: 15.0,
-    };
-    config.set_quota_threshold_override(&gone, QuotaThresholdUnit::Percentage, Some(thresholds));
-    config.set_quota_threshold_override(&keep, QuotaThresholdUnit::Amount, Some(thresholds));
-    config.set_quota_threshold_override(
-        &builtin(ProviderKind::Claude),
-        QuotaThresholdUnit::Percentage,
-        Some(thresholds),
-    );
-
-    let existing = vec![keep.clone()];
-    let changed = config.prune_stale_custom_ids(&existing);
-
-    assert!(changed);
-    assert_eq!(
-        config.quota_threshold_override(&gone, QuotaThresholdUnit::Percentage),
-        None
-    );
-    assert_eq!(
-        config.quota_threshold_override(&keep, QuotaThresholdUnit::Amount),
-        Some(thresholds)
-    );
-    assert_eq!(
-        config.quota_threshold_override(
-            &builtin(ProviderKind::Claude),
-            QuotaThresholdUnit::Percentage
-        ),
-        Some(thresholds)
     );
 }

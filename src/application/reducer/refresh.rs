@@ -220,7 +220,17 @@ pub(super) fn apply_refresh_event(
                 .iter()
                 .map(|p| p.provider_id.clone())
                 .collect();
-            let affected = session.provider_store.sync_custom_providers(&statuses);
+            let mut affected = session.provider_store.sync_custom_providers(&statuses);
+            for id in std::mem::take(&mut session.refresh_after_reload) {
+                if session.provider_store.find_by_id(&id).is_none() {
+                    continue;
+                }
+                // 凭证或脚本换了，可能已是另一个账号：旧的用量基线和告警状态都不再适用。
+                session.alert_engine.remove(&id);
+                if !affected.contains(&id) {
+                    affected.push(id);
+                }
+            }
 
             for id in known_before
                 .into_iter()
@@ -229,15 +239,8 @@ pub(super) fn apply_refresh_event(
                 session.alert_engine.remove(&id);
             }
 
-            // 清理 settings 中残留的已删除自定义 Provider ID
-            let custom_ids = session.provider_store.custom_provider_ids();
-            if session
-                .settings
-                .provider
-                .prune_stale_custom_ids(&custom_ids)
-            {
-                effects.push(SettingsEffect::PersistSettings.into());
-            }
+            // 这里不按本次加载结果 prune settings：YAML 暂时解析失败也会从 statuses 里消失，
+            // 按它清理会永久丢掉排序、开关和阈值。应用内删除已由 commit_deleted_provider 清理。
 
             // 自动启用首次出现的自定义 Provider（热重载发现的新 YAML 文件）
             let auto_registered = session

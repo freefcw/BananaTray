@@ -109,11 +109,16 @@ pub(super) fn newapi_save_finished(
         result,
     } = completion;
     let config = &config;
+    // 与 runtime 保存一致：编辑沿用原始 id，新增按 base_url + user_id 计算。
+    let saved_id = ProviderId::Custom(original_id.clone().unwrap_or_else(|| {
+        crate::models::newapi_provider_id(&config.base_url, config.user_id.as_deref())
+    }));
     super::shared::settle_custom_provider_save(
         session,
         effects,
         request_id,
         is_editing,
+        saved_id,
         result,
         super::shared::ProviderSavePolicy {
             rollback_edit: Box::new(|session| {
