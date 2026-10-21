@@ -76,7 +76,7 @@ pub fn build_issue_report(session: &AppSession, ctx: &IssueReportContext) -> Iss
     body.push_str("\n## Description\n\n");
     body.push_str("<!-- Please describe the issue here -->\n\n");
 
-    // ── 最近 30 分钟内的 WARN/ERROR 日志 ──
+    // ── 最近的 WARN/ERROR 日志（只扫每个日志文件的末尾） ──
     if !ctx.recent_errors.is_empty() {
         body.push_str("## Recent Errors\n\n");
         body.push_str("```\n");

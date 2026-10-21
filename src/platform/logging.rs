@@ -383,6 +383,10 @@ pub fn read_last_errors(path: &std::path::Path, max_lines: usize) -> String {
     ring.into_iter().collect::<Vec<_>>().join("\n")
 }
 
+/// 每个日志文件只扫描末尾这么多字节找 WARN/ERROR。
+#[cfg(any(feature = "app", test))]
+const ERROR_SCAN_TAIL_BYTES: u64 = 256 * 1024;
+
 /// 将 `path` 中满足 `filter` 的行追加进 `ring`，保持 `ring` 容量不超过 `max_lines`
 ///（超出则从最老端弹出）。文件不存在或读取失败时静默跳过。
 ///
@@ -394,11 +398,39 @@ fn append_filtered_lines(
     mut filter: impl FnMut(&str) -> bool,
     ring: &mut std::collections::VecDeque<String>,
 ) {
-    let Ok(file) = fs::File::open(path) else {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let Ok(mut file) = fs::File::open(path) else {
         return;
     };
+    // 只读文件末尾：调用方在 UI 线程上，日志按默认配置可达数十 MB。
+    let len = file.metadata().map(|meta| meta.len()).unwrap_or(0);
+    let tail_start = len.saturating_sub(ERROR_SCAN_TAIL_BYTES);
+    let skip_partial_line = if tail_start == 0 {
+        false
+    } else if file.seek(SeekFrom::Start(tail_start - 1)).is_err() {
+        return;
+    } else {
+        let mut previous = [0u8; 1];
+        if file.read_exact(&mut previous).is_err() {
+            return;
+        }
+        previous[0] != b'\n'
+    };
+    if file.seek(SeekFrom::Start(tail_start)).is_err() {
+        return;
+    }
     let reader = BufReader::new(file);
-    for line in reader.lines() {
+    let lines = reader.lines();
+    // 偏移点可能正好落在一行开头；只有首行确实是从中间开始的残行时才丢弃。
+    let lines = if skip_partial_line {
+        let mut lines = lines;
+        let _ = lines.next();
+        lines
+    } else {
+        lines
+    };
+    for line in lines {
         let Ok(line) = line else { continue };
         if !filter(&line) {
             continue;
@@ -577,6 +609,33 @@ mod tests {
         assert!(result_lines[0].contains("error 17"));
         assert!(result_lines[2].contains("error 19"));
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "app")]
+    #[test]
+    fn read_last_errors_keeps_line_at_tail_boundary() {
+        let dir = std::env::temp_dir().join("bananatray_errors_tail_boundary_test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.log");
+
+        let boundary_line = "2026-04-11 10:00:00.000 [ERROR] boundary\n";
+        let newest_line = "2026-04-11 10:00:01.000 [ERROR] newest\n";
+        let trailing_padding =
+            "x".repeat(ERROR_SCAN_TAIL_BYTES as usize - boundary_line.len() - newest_line.len());
+        // 让 boundary_line 恰好从扫描窗口起点开始，且窗口前一个字节是换行。
+        let prefix = "x".repeat(123);
+        fs::write(
+            &path,
+            format!("{prefix}\n{boundary_line}{newest_line}{trailing_padding}"),
+        )
+        .unwrap();
+
+        let result = read_last_errors(&path, 2);
+
+        assert!(result.contains("boundary"));
+        assert!(result.contains("newest"));
         let _ = fs::remove_dir_all(&dir);
     }
 
