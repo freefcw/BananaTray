@@ -297,6 +297,49 @@ fn test_timeout_keeps_single_flight_until_underlying_task_finishes() {
 }
 
 #[test]
+fn test_config_change_after_timeout_reruns_when_old_task_finishes() {
+    smol::block_on(async {
+        let id = ProviderId::Custom("test:timeout-config".to_string());
+        let mut manager = ProviderManager::new();
+        manager.register(Arc::new(DelayedProvider::new(
+            "test:timeout-config",
+            Duration::from_millis(250),
+        )));
+
+        let (event_tx, _event_rx) = smol::channel::bounded(16);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
+        coordinator.scheduler.update_config(10, vec![id.clone()]);
+
+        coordinator
+            .start_refresh(id.clone(), RefreshReason::Manual)
+            .await;
+        let timeout = coordinator.task_rx.recv().await.unwrap();
+        assert!(matches!(&timeout, TaskMessage::TimedOut { .. }));
+        coordinator.handle_task_message(timeout).await;
+        let old_task_id = coordinator.active_refreshes[&id].task_id;
+
+        let mut credentials = crate::models::ProviderSettings::default();
+        credentials.set_credential("test_token", "new-token".to_string());
+        coordinator
+            .handle_request(RefreshRequest::UpdateConfig {
+                interval_mins: 10,
+                enabled: vec![id.clone()],
+                provider_credentials: credentials,
+            })
+            .await;
+        assert!(coordinator.active_refreshes[&id].rerun.is_some());
+
+        let completion = coordinator.task_rx.recv().await.unwrap();
+        assert!(matches!(&completion, TaskMessage::Completed { .. }));
+        coordinator.handle_task_message(completion).await;
+
+        assert_ne!(coordinator.active_refreshes[&id].task_id, old_task_id);
+        drive_until_idle(&mut coordinator).await;
+    });
+}
+
+#[test]
 fn test_late_success_after_timeout_is_forwarded_and_records_success() {
     smol::block_on(async {
         let id = ProviderId::Custom("test:late".to_string());
@@ -445,11 +488,131 @@ fn test_config_change_discards_old_result_and_releases_ui_immediately() {
             })
         )));
 
+        // 旧结果被丢弃；旧任务结束后用新凭证补跑一次，补跑的成功才会上报。
         drive_until_idle(&mut coordinator).await;
-        assert!(drain_events(&event_rx).into_iter().all(|event| !matches!(
+        let events = drain_events(&event_rx);
+        let started = events
+            .iter()
+            .filter(|event| matches!(event, RefreshEvent::Started { .. }))
+            .count();
+        let successes = events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    RefreshEvent::Finished(RefreshOutcome {
+                        reason: Some(RefreshReason::Manual),
+                        result: RefreshResult::Success { .. },
+                        ..
+                    })
+                )
+            })
+            .count();
+        assert_eq!((started, successes), (1, 1));
+    });
+}
+
+#[test]
+fn test_request_during_invalidated_refresh_reruns_instead_of_skipping() {
+    smol::block_on(async {
+        let id = ProviderId::Custom("test:rerun".to_string());
+        let active = Arc::new(AtomicUsize::new(0));
+        let max_active = Arc::new(AtomicUsize::new(0));
+        let mut manager = ProviderManager::new();
+        manager.register(Arc::new(DelayedProvider::with_counters(
+            "test:rerun",
+            Duration::from_millis(120),
+            active,
+            max_active.clone(),
+        )));
+
+        let (event_tx, event_rx) = smol::channel::bounded(16);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
+        coordinator.scheduler.update_config(10, vec![id.clone()]);
+
+        coordinator
+            .start_refresh(id.clone(), RefreshReason::Periodic)
+            .await;
+        // 刷新进行中把 provider 关掉再打开，前台随后补发单个刷新。
+        for enabled in [vec![], vec![id.clone()]] {
+            coordinator
+                .handle_request(RefreshRequest::UpdateConfig {
+                    interval_mins: 10,
+                    enabled,
+                    provider_credentials: crate::models::ProviderSettings::default(),
+                })
+                .await;
+        }
+        coordinator
+            .handle_request(RefreshRequest::RefreshOne {
+                id: id.clone(),
+                reason: RefreshReason::ProviderToggled,
+            })
+            .await;
+
+        drive_until_idle(&mut coordinator).await;
+
+        let events = drain_events(&event_rx);
+        assert!(!events.iter().any(|event| matches!(
             event,
             RefreshEvent::Finished(RefreshOutcome {
-                reason: Some(RefreshReason::Manual),
+                result: RefreshResult::SkippedInFlight,
+                ..
+            })
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::ProviderToggled),
+                result: RefreshResult::Success { .. },
+                ..
+            })
+        )));
+        assert_eq!(max_active.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn test_reenabling_provider_after_invalidated_refresh_reruns_automatically() {
+    smol::block_on(async {
+        let id = ProviderId::Custom("test:reenable".to_string());
+        let mut manager = ProviderManager::new();
+        manager.register(Arc::new(DelayedProvider::new(
+            "test:reenable",
+            Duration::from_millis(120),
+        )));
+
+        let (event_tx, event_rx) = smol::channel::bounded(16);
+        let mut coordinator =
+            RefreshCoordinator::new(ProviderManagerHandle::new(manager), event_tx);
+        coordinator.scheduler.update_config(10, vec![id.clone()]);
+
+        coordinator
+            .start_refresh(id.clone(), RefreshReason::Periodic)
+            .await;
+        for enabled in [vec![], vec![id.clone()]] {
+            coordinator
+                .handle_request(RefreshRequest::UpdateConfig {
+                    interval_mins: 10,
+                    enabled,
+                    provider_credentials: crate::models::ProviderSettings::default(),
+                })
+                .await;
+        }
+
+        drive_until_idle(&mut coordinator).await;
+
+        let events = drain_events(&event_rx);
+        let started = events
+            .iter()
+            .filter(|event| matches!(event, RefreshEvent::Started { .. }))
+            .count();
+        assert_eq!(started, 2);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            RefreshEvent::Finished(RefreshOutcome {
+                reason: Some(RefreshReason::Periodic),
                 result: RefreshResult::Success { .. },
                 ..
             })

@@ -52,6 +52,9 @@ struct ActiveRefresh {
     /// result_reported 的来源是 UI 超时（已报 Failed）。区别于配置失效：
     /// 超时后底层任务仍可能成功，迟到的成功结果应当补报，避免 UI 停在错误状态。
     timed_out: bool,
+    /// 配置失效时任务仍在跑：底层结束、释放 single-flight 后用新输入补跑一次。
+    /// 期间收到的同 Provider 请求合并到这里，不再回 `SkippedInFlight`。
+    rerun: Option<RefreshReason>,
 }
 
 enum LoopEvent {
@@ -218,6 +221,7 @@ impl RefreshCoordinator {
                 reason,
                 result_reported: false,
                 timed_out: false,
+                rerun: None,
             },
         );
         let _ = self
@@ -268,6 +272,21 @@ impl RefreshCoordinator {
 
     /// 启动刷新但不等待结果；主循环继续处理配置、reload 和 shutdown。
     async fn start_refresh(&mut self, id: ProviderId, reason: RefreshReason) {
+        if self.scheduler.enabled_providers().contains(&id) {
+            // 旧任务已被配置变化作废（含关了又开），结果注定丢弃：把请求合并成它结束后的补跑。
+            if let Some(active) = self.active_refreshes.get_mut(&id).filter(|active| {
+                active.result_reported && (!active.timed_out || active.rerun.is_some())
+            }) {
+                // Periodic / Startup 受 cooldown 约束，不能覆盖已排队的手动类原因。
+                match &mut active.rerun {
+                    Some(queued)
+                        if !matches!(*queued, RefreshReason::Periodic | RefreshReason::Startup) => {
+                    }
+                    queued => *queued = Some(reason),
+                }
+                return;
+            }
+        }
         if let Some(skip) = self.scheduler.check_eligibility(&id, reason) {
             self.send_skip(id, skip, reason).await;
             return;
@@ -380,6 +399,11 @@ impl RefreshCoordinator {
                 let new_ids: std::collections::HashSet<_> =
                     statuses.iter().map(|status| &status.provider_id).collect();
                 self.scheduler.cleanup_stale(&new_ids);
+                for (id, active) in &mut self.active_refreshes {
+                    if !new_ids.contains(id) {
+                        active.rerun = None;
+                    }
+                }
                 self.manager.replace(manager);
                 let _ = self
                     .event_tx
@@ -441,7 +465,7 @@ impl RefreshCoordinator {
                 if active.result_reported {
                     // 超时已报 Failed 的任务随后成功：转发迟到结果并补记成功，
                     // 否则 UI 会一直停在错误状态直到下一次刷新。配置失效的过期
-                    // 结果仍按原逻辑丢弃。两次结果都保留原来的触发原因。
+                    // 结果仍按原逻辑丢弃，改为用新输入补跑。两次结果都保留原来的触发原因。
                     if active.timed_out
                         && matches!(outcome.result, RefreshResult::Success { .. })
                         && active.generation == self.config_generation
@@ -449,6 +473,9 @@ impl RefreshCoordinator {
                     {
                         self.scheduler.record_success(&id);
                         let _ = self.event_tx.send(RefreshEvent::Finished(outcome)).await;
+                    }
+                    if let Some(reason) = active.rerun {
+                        self.start_refresh(id, reason).await;
                     }
                     return;
                 }
@@ -467,17 +494,29 @@ impl RefreshCoordinator {
         }
     }
 
-    /// 配置或 registry 变化时立即让前台退出 Refreshing；底层任务仍保持 single-flight。
+    /// 配置或 registry 变化时立即让前台退出 Refreshing；底层任务仍保持 single-flight，
+    /// 仍启用的 Provider 在旧任务结束后用新输入补跑一次。
     async fn invalidate_active_refreshes(&mut self, enabled: Option<&[ProviderId]>) {
         let mut invalidated = Vec::new();
         for (id, active) in &mut self.active_refreshes {
+            let is_enabled = enabled.map_or_else(
+                || self.scheduler.enabled_providers().contains(id),
+                |ids| ids.contains(id),
+            );
             if active.result_reported {
+                // 旧任务仍可能持有 single-flight。仍启用的 Provider 必须在旧任务
+                // 结束后用新输入补跑；禁用时不排队，重新启用时再登记补跑。
+                if is_enabled && active.rerun.is_none() {
+                    active.rerun = Some(active.reason);
+                }
                 continue;
             }
             active.result_reported = true;
-            let result = if enabled.is_some_and(|ids| !ids.contains(id)) {
+            let result = if !is_enabled {
                 RefreshResult::SkippedDisabled
             } else {
+                // 旧任务用的是过期输入，结束后按原因补跑；否则在下个周期前都不会有新数据。
+                active.rerun = Some(active.reason);
                 RefreshResult::SkippedStale
             };
             invalidated.push((id.clone(), result, active.reason));
