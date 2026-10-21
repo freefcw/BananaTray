@@ -234,9 +234,20 @@ mod platform {
     use crate::platform::{APP_BUNDLE_ID, APP_NAME};
 
     pub fn enable() -> Result<()> {
-        let exe = std::env::current_exe().context("failed to determine current executable")?;
+        let exe = match launch_target(std::env::var_os("APPIMAGE")) {
+            Some(appimage) => appimage,
+            None => std::env::current_exe().context("failed to determine current executable")?,
+        };
         let path = entry_path()?;
         write_entry(&path, &exe)
+    }
+
+    /// AppImage 运行时 `current_exe()` 是 `/tmp/.mount_*` 下的临时挂载路径，重启后就不存在了；
+    /// 自启动要指向 AppImage 文件本身（运行时由 `APPIMAGE` 给出绝对路径）。
+    pub(super) fn launch_target(appimage: Option<std::ffi::OsString>) -> Option<PathBuf> {
+        appimage
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
     }
 
     pub fn disable() -> Result<()> {
@@ -394,6 +405,19 @@ mod tests {
     mod linux_tests {
         use super::super::platform;
         use std::path::Path;
+
+        #[test]
+        fn appimage_launch_target_uses_the_appimage_file() {
+            assert_eq!(
+                platform::launch_target(Some("/home/u/Apps/BananaTray.AppImage".into())),
+                Some(std::path::PathBuf::from("/home/u/Apps/BananaTray.AppImage"))
+            );
+            assert_eq!(platform::launch_target(None), None);
+            assert_eq!(
+                platform::launch_target(Some("relative.AppImage".into())),
+                None
+            );
+        }
 
         #[test]
         fn desktop_content_contains_exe_path() {
