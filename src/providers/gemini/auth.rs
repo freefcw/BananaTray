@@ -1,8 +1,7 @@
-use crate::providers::common::{cli, path_resolver};
+use crate::providers::common::cli;
 use crate::providers::{ProviderError, ProviderResult};
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::process::Command;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct OAuthCredentials {
@@ -95,13 +94,9 @@ pub(super) fn refresh_token_via_cli() -> ProviderResult<()> {
         .ok();
     let before_creds = std::fs::read_to_string(&creds_path).ok();
 
-    let output = Command::new("sh")
-        .args(["-c", "echo '/quit' | gemini 2>/dev/null || true"])
-        .env("PATH", path_resolver::enriched_path())
-        .output()
-        .map_err(|err| {
-            ProviderError::fetch_failed(&format!("run gemini CLI for token refresh: {err}"))
-        })?;
+    // refresh token 失效时 CLI 会停在登录流程里，必须有超时，否则刷新任务永远占着 single-flight。
+    let output = cli::run_command("sh", &["-c", "echo '/quit' | gemini 2>/dev/null || true"])
+        .map_err(|err| ProviderError::classify(&err))?;
 
     if !output.status.success() {
         log::warn!(target: "providers", "gemini CLI token refresh exited with: {:?}", output.status);

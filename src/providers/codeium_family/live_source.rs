@@ -2,11 +2,12 @@ use super::parse_strategy::{ApiParseStrategy, ParseStrategy};
 use super::spec::CodeiumFamilySpec;
 use super::LOCAL_API_SOURCE_LABEL;
 use crate::models::RefreshData;
+use crate::providers::common::cli;
 use crate::providers::{ProviderError, ProviderResult};
 use log::{debug, info, warn};
 use regex::Regex;
-use std::process::Command;
 use std::sync::LazyLock;
+use std::time::Duration;
 use ureq::Agent;
 
 pub(super) const PROCESS_QUERY: &str = "language_server_";
@@ -26,6 +27,9 @@ pub(super) const PGREP_LIST_ARGS: &[&str] = &["-af"];
 
 pub(super) const PGREP_CANDIDATES: &[&str] = &["/usr/bin/pgrep", "/bin/pgrep", "pgrep"];
 const LSOF_CANDIDATES: &[&str] = &["/usr/sbin/lsof", "/usr/bin/lsof", "lsof"];
+const PROCESS_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+/// 本地 language server 请求的总超时。它挂住时不能让刷新任务一直占着 single-flight。
+const LOCAL_API_TIMEOUT: Duration = Duration::from_secs(10);
 const API_PATH: &str = "exa.language_server_pb.LanguageServerService/GetUserStatus";
 
 static CSRF_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--csrf_token\s+(\S+)").unwrap());
@@ -45,6 +49,8 @@ static INSECURE_AGENT: LazyLock<Agent> = LazyLock::new(|| {
         ureq::config::Config::builder()
             .tls_config(tls)
             .http_status_as_error(false)
+            .max_redirects(0)
+            .timeout_global(Some(LOCAL_API_TIMEOUT))
             .build(),
     )
 });
@@ -53,6 +59,8 @@ static PLAIN_AGENT: LazyLock<Agent> = LazyLock::new(|| {
     Agent::new_with_config(
         ureq::config::Config::builder()
             .http_status_as_error(false)
+            .max_redirects(0)
+            .timeout_global(Some(LOCAL_API_TIMEOUT))
             .build(),
     )
 });
@@ -97,46 +105,45 @@ pub fn fetch_refresh_data(spec: &CodeiumFamilySpec) -> ProviderResult<RefreshDat
 }
 
 pub fn detect_process(spec: &CodeiumFamilySpec) -> ProviderResult<ProcessInfo> {
-    let mut last_error = None;
+    let mut args = PGREP_LIST_ARGS.to_vec();
+    args.push(PROCESS_QUERY);
+    let output = run_first_available(PGREP_CANDIDATES, &args)?;
 
-    for pgrep in PGREP_CANDIDATES {
-        let output = match Command::new(pgrep)
-            .args(PGREP_LIST_ARGS)
-            .arg(PROCESS_QUERY)
-            .output()
-        {
-            Ok(output) => output,
-            Err(err) => {
-                last_error = Some(err);
-                continue;
-            }
-        };
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        if stdout.trim().is_empty() {
-            return Err(ProviderError::unavailable(&format!(
-                "{} language server not running",
-                spec.log_label
-            )));
-        }
-
-        return stdout
-            .lines()
-            .find(|line| matches_process_line(line, spec))
-            .ok_or_else(|| {
-                ProviderError::unavailable(&format!(
-                    "{} language server not running",
-                    spec.log_label
-                ))
-            })
-            .and_then(parse_process_line);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.trim().is_empty() {
+        return Err(ProviderError::unavailable(&format!(
+            "{} language server not running",
+            spec.log_label
+        )));
     }
 
-    let message = last_error
-        .map(|err| format!("pgrep not available: {err}"))
-        .unwrap_or_else(|| "pgrep not available".to_string());
-    Err(ProviderError::unavailable(&message))
+    stdout
+        .lines()
+        .find(|line| matches_process_line(line, spec))
+        .ok_or_else(|| {
+            ProviderError::unavailable(&format!("{} language server not running", spec.log_label))
+        })
+        .and_then(parse_process_line)
+}
+
+/// 依次尝试候选路径（GUI 环境下 PATH 可能缺失），用第一个存在的执行。
+/// 带超时：pgrep / lsof 偶尔会卡住，不能让刷新任务一直占着 single-flight。
+/// 超时或执行失败直接返回，不再换下一个候选重复等待。
+pub(super) fn run_first_available(
+    candidates: &[&str],
+    args: &[&str],
+) -> ProviderResult<std::process::Output> {
+    for binary in candidates {
+        match cli::run_command_with_timeout(binary, args, PROCESS_COMMAND_TIMEOUT) {
+            Ok(output) => return Ok(output),
+            Err(err) => match ProviderError::classify(&err) {
+                ProviderError::CliNotFound { .. } => continue,
+                other => return Err(other),
+            },
+        }
+    }
+    let name = candidates.last().copied().unwrap_or("command");
+    Err(ProviderError::unavailable(&format!("{name} not available")))
 }
 
 pub fn matches_process_line(line: &str, spec: &CodeiumFamilySpec) -> bool {
@@ -225,33 +232,18 @@ fn extract_binary_path(command_line: &str) -> Option<String> {
 }
 
 pub(super) fn discover_port(pid: &str, spec: &CodeiumFamilySpec) -> ProviderResult<u16> {
-    let mut last_error = None;
+    let output = run_first_available(
+        LSOF_CANDIDATES,
+        &["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", pid],
+    )?;
 
-    for command in LSOF_CANDIDATES {
-        let output = match Command::new(command)
-            .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", pid])
-            .output()
-        {
-            Ok(output) => output,
-            Err(err) => {
-                last_error = Some(err);
-                continue;
-            }
-        };
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return parse_listen_port(&stdout).ok_or_else(|| {
-            ProviderError::parse_failed(&format!(
-                "no TCP LISTEN port found via lsof for {}",
-                spec.log_label
-            ))
-        });
-    }
-
-    let message = last_error
-        .map(|err| format!("lsof not available: {err}"))
-        .unwrap_or_else(|| "lsof not available".to_string());
-    Err(ProviderError::unavailable(&message))
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_listen_port(&stdout).ok_or_else(|| {
+        ProviderError::parse_failed(&format!(
+            "no TCP LISTEN port found via lsof for {}",
+            spec.log_label
+        ))
+    })
 }
 
 fn parse_listen_port(output: &str) -> Option<u16> {

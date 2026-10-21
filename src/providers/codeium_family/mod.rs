@@ -12,7 +12,6 @@ use rusqlite::{Connection, OpenFlags};
 use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub(crate) use live_source::matches_process_line;
 pub(crate) use live_source::ProcessInfo;
@@ -298,21 +297,12 @@ pub(crate) fn query_auth_status_json(
 /// 使用候选路径列表执行 pgrep，避免 GUI 环境下 PATH 缺失导致找不到 pgrep。
 #[allow(dead_code)]
 fn run_pgrep() -> Result<std::process::Output> {
-    let mut last_error = None;
-    for pgrep in live_source::PGREP_CANDIDATES {
-        match Command::new(pgrep)
-            .args(live_source::PGREP_LIST_ARGS)
-            .arg(live_source::PROCESS_QUERY)
-            .output()
-        {
-            Ok(output) => return Ok(output),
-            Err(err) => last_error = Some(err),
-        }
-    }
-
-    Err(last_error
-        .map(|e| anyhow::anyhow!("pgrep not available: {e}"))
-        .unwrap_or_else(|| anyhow::anyhow!("pgrep not available")))
+    let mut args = live_source::PGREP_LIST_ARGS.to_vec();
+    args.push(live_source::PROCESS_QUERY);
+    Ok(live_source::run_first_available(
+        live_source::PGREP_CANDIDATES,
+        &args,
+    )?)
 }
 
 #[cfg(test)]

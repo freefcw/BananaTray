@@ -198,12 +198,13 @@ fn extract_oauth_token_from_json(content: &str) -> Option<String> {
 /// 服务名称为 `copilot-cli`。
 #[cfg(target_os = "macos")]
 fn read_copilot_cli_keychain_token() -> Option<String> {
-    use std::process::Command;
-
-    let output = Command::new("security")
-        .args(["find-generic-password", "-s", "copilot-cli", "-w"])
-        .output()
-        .ok()?;
+    // 钥匙串授权弹窗没人点时 `security` 会一直等；与 Antigravity 一样限时 5 秒。
+    let output = crate::providers::common::cli::run_command_with_timeout(
+        "/usr/bin/security",
+        &["find-generic-password", "-s", "copilot-cli", "-w"],
+        Duration::from_secs(5),
+    )
+    .ok()?;
 
     if !output.status.success() {
         debug!(target: "providers", "copilot: macOS Keychain lookup failed (no copilot-cli entry)");
