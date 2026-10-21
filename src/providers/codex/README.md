@@ -1,6 +1,6 @@
 # Codex Provider
 
-OpenAI Codex（ChatGPT 后端）配额抓取实现。对应 `~/.codex/auth.json` 的 OAuth 凭据。
+OpenAI Codex（ChatGPT 后端）配额抓取实现。对应 `$CODEX_HOME/auth.json`（默认 `~/.codex/auth.json`）的 OAuth 凭据；与 `config.toml` 共用 `config::codex_home_dir()`。
 
 ## 文件分工
 

@@ -30,9 +30,8 @@ pub(super) struct CodexAccount {
 }
 
 pub(super) fn auth_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".codex")
+    super::config::codex_home_dir()
+        .unwrap_or_else(|| PathBuf::from(".").join(".codex"))
         .join("auth.json")
 }
 

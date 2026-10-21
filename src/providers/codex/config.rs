@@ -187,14 +187,23 @@ fn config_path() -> Option<PathBuf> {
 /// - `codex_home` 为空 / 纯空白 / None → 回退到 `home_dir/.codex`
 /// - `home_dir` 也为 None → 返回 None（调用方走默认 URL）
 fn build_config_path(codex_home: Option<String>, home_dir: Option<PathBuf>) -> Option<PathBuf> {
+    Some(build_codex_home(codex_home, home_dir)?.join("config.toml"))
+}
+
+/// Codex 的数据根目录：`$CODEX_HOME`，未设置时为 `~/.codex`。
+/// `config.toml` 和 `auth.json` 都在这里，两者必须同源，否则会混用不同账号。
+pub(super) fn codex_home_dir() -> Option<PathBuf> {
+    build_codex_home(std::env::var("CODEX_HOME").ok(), dirs::home_dir())
+}
+
+fn build_codex_home(codex_home: Option<String>, home_dir: Option<PathBuf>) -> Option<PathBuf> {
     let env_home = codex_home
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let root = match env_home {
-        Some(s) => PathBuf::from(s),
-        None => home_dir?.join(".codex"),
-    };
-    Some(root.join("config.toml"))
+    match env_home {
+        Some(s) => Some(PathBuf::from(s)),
+        None => Some(home_dir?.join(".codex")),
+    }
 }
 
 #[cfg(test)]
