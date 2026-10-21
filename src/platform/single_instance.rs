@@ -725,6 +725,7 @@ mod tests {
         let _guard = SuffixGuard::set("selftest");
 
         let path = socket_file_path();
+        ensure_private_dir(&socket_dir()).expect("failed to create private socket directory");
         // 上一次失败可能留下陈旧节点。
         cleanup_stale_socket_path(&path);
 
@@ -772,6 +773,7 @@ mod tests {
         let _guard = SuffixGuard::set("selftest-dos");
 
         let path = socket_file_path();
+        ensure_private_dir(&socket_dir()).expect("failed to create private socket directory");
         cleanup_stale_socket_path(&path);
 
         let listener = ListenerOptions::new()
@@ -790,16 +792,14 @@ mod tests {
         let mut attacker = Stream::connect(socket_name()).expect("attacker connect");
         let chunk = vec![b'A'; 4096];
         let mut bytes_written = 0usize;
-        for _ in 0..256 {
+        for _ in 0..1024 {
             match attacker.write_all(&chunk) {
                 Ok(()) => bytes_written += chunk.len(),
                 // 对端被断开后写入失败 —— 这正是期望结果。
                 Err(_) => break,
             }
-            // 服务端一旦按上限断开，写入很快会失败；无需写满全部循环。
-            if bytes_written > 64 * 1024 {
-                break;
-            }
+            // 继续尝试写满 1 MiB：有界读取时连接会很快关闭；
+            // 若服务端退回无界读取，这个循环会完整写入大量数据。
         }
 
         // 攻击者必须被断开，且没有 SHOW 被中继。
@@ -809,9 +809,11 @@ mod tests {
         );
 
         // 关键：服务端必须在读到极少量数据后就断开（上限 64 字节），
-        // 而不是把对端发来的所有内容都收下。
+        // 而不是把对端发来的 4 MiB 攻击数据全部收下。
         assert!(
-            bytes_written <= 64 * 1024,
+            // 内核发送缓冲可能在服务线程关闭连接前接收少量额外数据；
+            // 但有界读取仍应远低于本测试的 4 MiB 攻击量。
+            bytes_written < 1024 * 1024,
             "server accepted {bytes_written} bytes; length cap is not enforced"
         );
 
