@@ -46,8 +46,10 @@ pub(crate) fn debug_context_from_diagnostics(
 
 /// 收集 Issue Report 所需的运行时信息（含日志文件读取）。
 pub(crate) fn collect_issue_report_context(log_path: Option<&Path>) -> IssueReportContext {
+    // 这些行会拼进 GitHub URL、留在浏览器历史里，离开本机前先脱敏。
     let recent_errors = log_path
         .map(|path| crate::platform::logging::read_last_errors(path, 10))
+        .map(|lines| crate::history::scrub_secrets(&lines))
         .unwrap_or_default();
 
     IssueReportContext {
@@ -108,12 +110,14 @@ mod tests {
         let log_path = dir.path().join("app.log");
         std::fs::write(
             &log_path,
-            "2026-01-01 [INFO] ignored\n2026-01-01 [WARN] warning\n2026-01-01 [ERROR] failed\n",
+            "2026-01-01 [INFO] ignored\n2026-01-01 [WARN] warning\n2026-01-01 [ERROR] failed\n2026-01-01 [ERROR] refresh failed: access_token=abcd1234efgh5678\n",
         )
         .unwrap();
 
         let ctx = collect_issue_report_context(Some(&log_path));
 
+        assert!(ctx.recent_errors.contains("refresh failed"));
+        assert!(!ctx.recent_errors.contains("abcd1234efgh5678"));
         assert!(ctx.recent_errors.contains("[WARN] warning"));
         assert!(ctx.recent_errors.contains("[ERROR] failed"));
         assert!(!ctx.recent_errors.contains("[INFO] ignored"));

@@ -12,6 +12,11 @@ struct Span {
 
 /// 入库前的 `raw_detail` 脱敏。先占住的区间不再被后面的规则改写，全部遮完再截断。
 pub fn scrub_history_detail(raw: &str) -> String {
+    scrub_secrets(raw).chars().take(DETAIL_LIMIT).collect()
+}
+
+/// 遮掉文本里常见形态的凭据，不截断。日志行等离开本机前（如 issue report）也走这里。
+pub fn scrub_secrets(raw: &str) -> String {
     let mut spans = Vec::new();
     claim_whole(&mut spans, raw, email_re(), |_| {
         "<redacted-email>".to_string()
@@ -20,9 +25,22 @@ pub fn scrub_history_detail(raw: &str) -> String {
     claim_group(raw, &mut spans, bearer_re(), 1);
     claim_group(raw, &mut spans, query_re(), 2);
     claim_group(raw, &mut spans, header_re(), 2);
+    claim_group(raw, &mut spans, key_value_re(), 1);
     claim_whole(&mut spans, raw, secret_prefix_re(), mask_preview);
     claim_whole(&mut spans, raw, hex_re(), mask_preview);
     claim_whole(&mut spans, raw, base64_re(), mask_preview);
+    // base64url / JWT 段含 `-` `_`；要求带数字，避免把长的 kebab-case 文案也遮掉。
+    for found in token_run_re().find_iter(raw) {
+        if found.as_str().bytes().any(|b| b.is_ascii_digit())
+            && !overlaps(&spans, found.start(), found.end())
+        {
+            spans.push(Span {
+                start: found.start(),
+                end: found.end(),
+                replacement: mask_preview(found.as_str()),
+            });
+        }
+    }
 
     spans.sort_by_key(|span| span.start);
     let mut out = String::new();
@@ -36,7 +54,7 @@ pub fn scrub_history_detail(raw: &str) -> String {
         cursor = span.end;
     }
     out.push_str(&raw[cursor..]);
-    out.chars().take(DETAIL_LIMIT).collect()
+    out
 }
 
 fn mask_preview(value: &str) -> String {
@@ -115,14 +133,35 @@ fn header_re() -> &'static Regex {
     })
 }
 
+/// JSON / YAML / 表单里的 `"access_token": "…"`、`password: …`、`session_token=…`。
+fn key_value_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)[\w-]*(?:token|secret|password|passwd|api[_-]?key|session)[\w-]*["']?\s*[:=]\s*["']?([^"'\s,;&}]+)"#,
+        )
+        .expect("key value regex")
+    })
+}
+
 fn secret_prefix_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"sk-[A-Za-z0-9_\-]{8,}").expect("secret prefix regex"))
+    RE.get_or_init(|| {
+        Regex::new(
+            r"(?:sk-|[sr]k_(?:live|test)_|github_pat_|gh[pousr]_|xox[abprs]-)[A-Za-z0-9_\-]{8,}",
+        )
+        .expect("secret prefix regex")
+    })
 }
 
 fn hex_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b[0-9a-fA-F]{32,}\b").expect("hex regex"))
+}
+
+fn token_run_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"[A-Za-z0-9_\-]{32,}").expect("token run regex"))
 }
 
 fn base64_re() -> &'static Regex {
@@ -146,6 +185,34 @@ mod tests {
         let scrubbed = scrub_history_detail("Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz");
         assert!(!scrubbed.contains("sk-abcdefghijklmnopqrstuvwxyz"));
         assert!(!scrubbed.contains("abcdefghijklmnopqrstuvwxyz"));
+    }
+
+    #[test]
+    fn common_secret_shapes_are_masked() {
+        for (raw, secret) in [
+            (
+                r#"{"access_token":"ya29.a0AfH6SMBx-abc_def123-ghi"}"#,
+                "a0AfH6SMBx-abc_def123",
+            ),
+            ("token=abc123secretvalue", "abc123secret"),
+            ("session_token=abcdef123456", "abcdef123456"),
+            ("password: hunter2secret", "hunter2secret"),
+            ("{'token': 'tok_live_abcdef1234'}", "tok_live_abcdef1234"),
+            (
+                "github_pat_11ABCDEFG0_abcdefghijklmnopqrstuvwxyz0123",
+                "ABCDEFG0_abcdefghij",
+            ),
+            ("key sk_live_abcdefghijklmn rejected", "abcdefghijklmn"),
+        ] {
+            let scrubbed = scrub_history_detail(raw);
+            assert!(!scrubbed.contains(secret), "{raw} -> {scrubbed}");
+        }
+    }
+
+    #[test]
+    fn plain_diagnostics_are_left_readable() {
+        let raw = "codeium-family-language-server-not-running on port check (HTTP 503)";
+        assert_eq!(scrub_history_detail(raw), raw);
     }
 
     #[test]

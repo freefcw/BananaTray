@@ -11,7 +11,7 @@ mod sqlite;
 mod store;
 
 pub use job::{HistoryJob, HistoryLoadRequest, HistoryScope, ProviderRetentionCutoff};
-pub use redact::scrub_history_detail;
+pub use redact::{scrub_history_detail, scrub_secrets};
 pub use retention::{cutoff_ms, query_window, retention_cutoffs, DAY_MS};
 pub use sample::{
     capture_sample, HistoryStatus, HistoryUnit, QuotaHistoryPoint, QuotaHistorySample,
