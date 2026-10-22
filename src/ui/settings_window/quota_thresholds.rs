@@ -208,17 +208,20 @@ fn render_quota_threshold_unit(
         row = row.bg(theme.bg.subtle);
     }
 
-    let header = div()
+    // 标题行固定高度：编辑态把操作按钮移到区间条下方，标题行只保留标题，进入 / 退出编辑时内容不跳动，
+    // 窄宽度下也不会因按钮挤出卡片
+    let mut header = div()
         .flex()
         .items_center()
         .justify_between()
         .gap(px(12.0))
-        .child(render_unit_header(target, unit_state, theme))
-        .child(if editing {
-            render_draft_actions(theme, cx, on_change)
-        } else {
-            render_unit_actions(target, unit_state, theme, cx, on_change)
-        });
+        .min_h(px(26.0))
+        .child(render_unit_header(target, unit_state, theme));
+    if !editing {
+        header = header.child(render_unit_actions(
+            target, unit_state, theme, cx, on_change,
+        ));
+    }
 
     row = row.child(header);
 
@@ -230,6 +233,7 @@ fn render_quota_threshold_unit(
             theme,
             window,
             cx,
+            on_change,
         ));
     } else {
         row = row.child(render_threshold_strip(
@@ -572,6 +576,7 @@ fn render_draft_editor(
     theme: &Theme,
     window: &mut Window,
     cx: &mut Context<SettingsView>,
+    on_change: &Rc<QuotaThresholdChange>,
 ) -> Div {
     let Some(draft) = &view.quota_threshold_draft else {
         return div();
@@ -632,12 +637,23 @@ fn render_draft_editor(
             theme.text.muted,
         ),
     };
+    // 提示 / 错误与操作按钮同一行；宽度不足时按钮换到下一行并保持右对齐
     editor.child(
         div()
-            .text_size(px(11.5))
-            .line_height(px(16.0))
-            .text_color(color)
-            .child(message),
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(160.0))
+                    .text_size(px(11.5))
+                    .line_height(px(16.0))
+                    .text_color(color)
+                    .child(message),
+            )
+            .child(render_draft_actions(theme, cx, on_change).ml_auto()),
     )
 }
 
