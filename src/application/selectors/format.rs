@@ -324,6 +324,10 @@ pub fn quota_display_view_state(quota: &QuotaInfo, rules: &QuotaRules) -> QuotaD
         label: format_quota_label(quota),
         detail: format_quota_detail(quota),
         status_level: quota.status_level(rules),
+        hideable: quota.label_spec == QuotaLabelSpec::ExtraUsage
+            && quota
+                .remaining_balance
+                .is_some_and(|balance| balance <= 0.0),
     }
 }
 
@@ -1079,6 +1083,7 @@ mod tests {
             quota,
             label: "Balance".to_string(),
             detail: "Resets tomorrow".to_string(),
+            hideable: false,
         };
         assert_eq!(
             format_quota_card_detail_text(&view),

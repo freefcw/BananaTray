@@ -199,6 +199,9 @@ pub struct QuotaDisplayViewState {
     pub label: String,
     pub detail: String,
     pub status_level: StatusLevel,
+    /// 托盘卡片是否显示“隐藏”按钮：只给余额 ≤ 0 的超额用量卡。余额为正时隐藏
+    /// 会在下次刷新自动撤销，按钮没有意义。
+    pub hideable: bool,
 }
 
 /// 一条限流重置的展示文案。时间未知时用本地化占位，不画成额度或次数。

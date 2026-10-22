@@ -28,6 +28,7 @@ tooltip.settings: "设置"
 tooltip.quit: "退出"
 tooltip.expand_quotas: "展开配额"
 tooltip.collapse_quotas: "折叠配额"
+tooltip.hide_quota: "隐藏此卡（余额大于 0 时自动显示）"
 
 # ── 设置窗口 ──────────────────────────────────────────────
 settings.title: "BananaTray 设置"

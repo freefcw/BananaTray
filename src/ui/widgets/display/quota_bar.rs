@@ -10,9 +10,10 @@ use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     div, ease_out_quint, linear_color_stop, multi_stop_linear_gradient, px, relative, Animation,
-    AnimationExt, Div, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement,
-    Stateful, StyleRefinement, Styled,
+    AnimationExt, App, Div, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement, Stateful, StyleRefinement, Styled, Window,
 };
+use rust_i18n::t;
 
 pub(in crate::ui::widgets::display) fn render_quota_card_frame(
     quota: &QuotaInfo,
@@ -35,12 +36,53 @@ pub(in crate::ui::widgets::display) fn render_quota_card_frame(
         .hover(move |style: StyleRefinement| style.bg(hover_bg))
 }
 
+/// 卡片“隐藏”按钮的点击回调。
+pub(crate) type QuotaHideHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
+
 pub(in crate::ui::widgets::display) fn render_quota_header_row(
     quota_view: &QuotaDisplayViewState,
     badge_color: Hsla,
     badge_label: String,
     theme: &Theme,
+    on_hide: Option<QuotaHideHandler>,
 ) -> Div {
+    let badge = div()
+        .flex_shrink_0()
+        .text_size(px(10.0))
+        .font_weight(FontWeight::BOLD)
+        .text_color(badge_color)
+        .px(px(8.0))
+        .py(px(2.0))
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(badge_color)
+        .child(badge_label);
+    let mut trailing = div().flex().items_center().gap(px(4.0)).child(badge);
+    if let Some(on_hide) = on_hide {
+        // 16px 与状态徽标同高，不改变卡片高度，弹窗高度计算不受影响。
+        let hover_bg = theme.bg.card_inner_hovered;
+        let button = div()
+            .w(px(16.0))
+            .h(px(16.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover_bg))
+            .child(crate::ui::widgets::render_svg_icon(
+                "src/icons/close.svg",
+                px(10.0),
+                theme.text.muted,
+            ))
+            .on_mouse_down(MouseButton::Left, on_hide);
+        trailing = trailing.child(crate::ui::widgets::with_tooltip(
+            ElementId::Name(format!("quota-hide-{}", quota_view.quota.stable_key).into()),
+            &t!("tooltip.hide_quota"),
+            theme,
+            button,
+        ));
+    }
     div()
         .w_full()
         .flex()
@@ -64,19 +106,7 @@ pub(in crate::ui::widgets::display) fn render_quota_header_row(
                         .child(quota_view.label.to_uppercase()),
                 ),
         )
-        .child(
-            div()
-                .flex_shrink_0()
-                .text_size(px(10.0))
-                .font_weight(FontWeight::BOLD)
-                .text_color(badge_color)
-                .px(px(8.0))
-                .py(px(2.0))
-                .rounded(px(6.0))
-                .border_1()
-                .border_color(badge_color)
-                .child(badge_label),
-        )
+        .child(trailing)
 }
 
 fn render_quota_value_row(
@@ -191,14 +221,20 @@ pub(crate) fn render_quota_card(
     display_mode: QuotaDisplayMode,
     style: QuotaCardStyle,
     history: Option<&HistoryChartView>,
+    on_hide: Option<QuotaHideHandler>,
 ) -> gpui::AnyElement {
     match style {
-        QuotaCardStyle::Bar => {
-            render_quota_bar(quota_view, theme, generation, display_mode, history)
-                .into_any_element()
-        }
+        QuotaCardStyle::Bar => render_quota_bar(
+            quota_view,
+            theme,
+            generation,
+            display_mode,
+            history,
+            on_hide,
+        )
+        .into_any_element(),
         QuotaCardStyle::Ring => {
-            super::quota_ring::render_quota_ring(quota_view, theme, display_mode, history)
+            super::quota_ring::render_quota_ring(quota_view, theme, display_mode, history, on_hide)
                 .into_any_element()
         }
     }
@@ -214,6 +250,7 @@ fn render_quota_bar(
     generation: u64,
     display_mode: QuotaDisplayMode,
     history: Option<&HistoryChartView>,
+    on_hide: Option<QuotaHideHandler>,
 ) -> impl IntoElement {
     let q = &quota_view.quota;
     let status = quota_view.status_level;
@@ -232,6 +269,7 @@ fn render_quota_bar(
             badge_color,
             badge_label,
             theme,
+            on_hide,
         ))
         .child(render_quota_value_row(
             &display_text,

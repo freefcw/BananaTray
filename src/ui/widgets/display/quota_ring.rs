@@ -24,6 +24,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
     theme: &Theme,
     display_mode: QuotaDisplayMode,
     history: Option<&HistoryChartView>,
+    on_hide: Option<super::quota_bar::QuotaHideHandler>,
 ) -> impl IntoElement {
     let quota = &quota_view.quota;
     let fill = theme.status_bar_color(quota_view.status_level);
@@ -43,6 +44,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
             badge,
             status_label,
             theme,
+            on_hide,
         ))
         .child(
             div()

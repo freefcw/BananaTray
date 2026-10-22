@@ -30,6 +30,8 @@ pub(super) fn render_usage_section(
                         display_mode,
                         card_style,
                         None,
+                        // 设置页已有逐项可见性开关，卡片上不重复放隐藏按钮。
+                        None,
                     ),
                 ));
             }

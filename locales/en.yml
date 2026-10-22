@@ -28,6 +28,7 @@ tooltip.settings: "Settings"
 tooltip.quit: "Quit"
 tooltip.expand_quotas: "Expand quotas"
 tooltip.collapse_quotas: "Collapse quotas"
+tooltip.hide_quota: "Hide this card (it shows again once the balance is above 0)"
 
 # ── Settings window ──────────────────────────────────────
 settings.title: "BananaTray Settings"

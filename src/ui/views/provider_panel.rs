@@ -1,6 +1,7 @@
 use crate::application::{
     provider_detail_view_state, AccountInfoViewState, AppAction, DisabledProviderViewState,
     ProviderBodyViewState, ProviderDetailViewState, ProviderEmptyAction, ProviderEmptyViewState,
+    SettingChange,
 };
 use crate::models::ProviderId;
 use crate::refresh::RefreshReason;
@@ -159,6 +160,28 @@ impl AppView {
                         .history_charts
                         .iter()
                         .find(|chart| chart.quota_key == quota.quota.stable_key);
+                    let on_hide = quota.hideable.then(|| {
+                        let state = self.state.clone();
+                        let provider_id = vm.id.clone();
+                        let quota_key = quota.quota.stable_key.clone();
+                        Box::new(
+                            move |_: &gpui::MouseDownEvent,
+                                  window: &mut gpui::Window,
+                                  cx: &mut gpui::App| {
+                                crate::bootstrap::dispatch_in_window(
+                                    &state,
+                                    AppAction::UpdateSetting(
+                                        SettingChange::ToggleQuotaVisibility {
+                                            provider_id: provider_id.clone(),
+                                            quota_key: quota_key.clone(),
+                                        },
+                                    ),
+                                    window,
+                                    cx,
+                                );
+                            },
+                        ) as crate::ui::widgets::QuotaHideHandler
+                    });
                     cards = cards.child(crate::ui::widgets::render_quota_card(
                         quota,
                         &theme,
@@ -166,6 +189,7 @@ impl AppView {
                         vm.quota_display_mode,
                         vm.quota_card_style,
                         history,
+                        on_hide,
                     ));
                 }
                 cards

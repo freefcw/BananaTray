@@ -44,7 +44,7 @@ AppSettings
 | 文件 | 职责 |
 |------|------|
 | `provider_config_ordering.rs` | Provider 排序逻辑：`ordered_provider_ids()` / `move_provider_to_index()`；数组位置是唯一排序来源 |
-| `provider_config_quota.rs` | 配额可见性：`is_quota_visible()` / `toggle_quota_visibility()` / `visible_worst_status()`，按 `ProviderId` 存储，避免多个 custom provider 共享同一个 `custom` 可见性状态。隐藏的配额同时退出状态颜色和告警 |
+| `provider_config_quota.rs` | 配额可见性：`is_quota_visible()` / `toggle_quota_visibility()` / `visible_worst_status()` / `reveal_positive_extra_usage()`，按 `ProviderId` 存储，避免多个 custom provider 共享同一个 `custom` 可见性状态。隐藏的配额同时退出状态颜色和告警；超额用量余额卡余额 > 0 时自动取消隐藏 |
 | `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `register_discovered_custom_providers()` / `add_to_sidebar()` / `remove_from_sidebar()` |
 
 ### `tests.rs` — 单元测试

@@ -109,6 +109,13 @@ fn process_refresh_outcome(
             } else {
                 0
             };
+            if session
+                .settings
+                .provider
+                .reveal_positive_extra_usage(outcome_id, &data.quotas)
+            {
+                effects.push(SettingsEffect::PersistSettings.into());
+            }
             // 用户隐藏的配额不参与告警。
             let visible_quotas: Vec<_> = session
                 .settings

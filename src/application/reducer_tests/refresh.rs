@@ -1632,7 +1632,7 @@ fn devin_refresh(session: &mut AppSession, extra_usage_usd: f64) -> Vec<AppEffec
 }
 
 #[test]
-fn hidden_quota_leaves_status_and_alerts() {
+fn hidden_extra_usage_card_leaves_status_and_alerts_until_balance_returns() {
     use crate::models::StatusLevel;
 
     let mut session = make_session();
@@ -1661,4 +1661,18 @@ fn hidden_quota_leaves_status_and_alerts() {
     assert_eq!(session.worst_enabled_provider_status(), StatusLevel::Green);
     assert!(quota_alerts(&devin_refresh(&mut session, 0.0)).is_empty());
     assert!(!extra_usage_visible(&session));
+
+    // 又有余额：自动显示并落盘。
+    let effects = devin_refresh(&mut session, 3.0);
+    assert!(extra_usage_visible(&session));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    // 恢复监测后从 >0 用到 0，照常发“耗尽”。
+    assert!(matches!(
+        quota_alerts(&devin_refresh(&mut session, 0.0)).first(),
+        Some(QuotaNotificationEvent::Exhausted { .. })
+    ));
 }
