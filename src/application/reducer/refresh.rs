@@ -109,11 +109,19 @@ fn process_refresh_outcome(
             } else {
                 0
             };
+            // 用户隐藏的配额不参与告警。
+            let visible_quotas: Vec<_> = session
+                .settings
+                .provider
+                .visible_quotas(outcome_id, &data.quotas)
+                .into_iter()
+                .cloned()
+                .collect();
             let quota_rules = session.settings.effective_quota_rules(outcome_id);
             let events = session.alert_engine.evaluate(QuotaObservation {
                 provider_id: outcome_id,
                 provider_name: &provider_name,
-                quotas: &data.quotas,
+                quotas: &visible_quotas,
                 rules: &quota_rules,
                 usage_step_pct,
             });

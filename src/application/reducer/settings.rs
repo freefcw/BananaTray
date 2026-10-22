@@ -202,10 +202,16 @@ pub(super) fn apply_setting_change(
             provider_id,
             quota_key,
         } => {
+            let prev_status = session.worst_enabled_provider_status();
             session
                 .settings
                 .provider
                 .toggle_quota_visibility(&provider_id, quota_key);
+            // 参与告警的配额集合变了：重建基线，避免把显隐切换误报成耗尽 / 恢复 / 用量下降。
+            session.alert_engine.remove(&provider_id);
+            // 隐藏的配额不参与状态颜色：托盘图标和 D-Bus 快照要跟着变。
+            sync_dynamic_icon_if_needed(session, prev_status, effects);
+            effects.push(ContextEffect::PublishQuotaSnapshot.into());
         }
         SettingChange::SetQuotaUsageStep(step_pct) => {
             let old_step = session.settings.notification.quota_usage_step_pct;
@@ -308,8 +314,14 @@ fn rebaseline_quota_alert_changes(
             continue;
         };
         let new_rules = session.settings.effective_quota_rules(id);
-        let notify_changed = provider
-            .quotas
+        let visible: Vec<_> = session
+            .settings
+            .provider
+            .visible_quotas(id, &provider.quotas)
+            .into_iter()
+            .cloned()
+            .collect();
+        let notify_changed = visible
             .iter()
             .filter_map(|quota| quota.threshold_measurement())
             .any(|measurement| {
@@ -319,7 +331,7 @@ fn rebaseline_quota_alert_changes(
         if notify_changed {
             session
                 .alert_engine
-                .rebaseline_alerts(id, &provider.quotas, &new_rules);
+                .rebaseline_alerts(id, &visible, &new_rules);
         }
     }
 }

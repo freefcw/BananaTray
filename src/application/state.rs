@@ -351,7 +351,13 @@ impl AppSession {
             .iter()
             .filter(|p| self.settings.provider.is_enabled(&p.provider_id))
             .filter(|p| p.connection == ConnectionStatus::Connected)
-            .map(|p| p.worst_status(&self.settings.effective_quota_rules(&p.provider_id)))
+            .map(|p| {
+                self.settings.provider.visible_worst_status(
+                    &p.provider_id,
+                    &p.quotas,
+                    &self.settings.effective_quota_rules(&p.provider_id),
+                )
+            })
             .max()
             .unwrap_or(StatusLevel::Green)
     }

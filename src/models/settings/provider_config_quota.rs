@@ -1,8 +1,9 @@
 //! ProviderConfig — 配额可见性管理
 //!
-//! 控制哪些配额在托盘弹窗中可见/隐藏。
+//! 控制哪些配额在托盘弹窗中可见/隐藏。隐藏的配额同时退出状态颜色和告警判定。
 
 use super::*;
+use crate::models::StatusLevel;
 
 impl ProviderConfig {
     /// 判断某个 quota 是否在托盘弹窗中可见（未被隐藏）
@@ -31,6 +32,20 @@ impl ProviderConfig {
             .iter()
             .filter(|q| self.is_quota_visible(provider_id, &q.stable_key))
             .collect()
+    }
+
+    /// 可见配额里最差的状态等级。用户隐藏的配额不参与状态颜色和告警。
+    pub fn visible_worst_status(
+        &self,
+        provider_id: &ProviderId,
+        quotas: &[QuotaInfo],
+        rules: &QuotaRules,
+    ) -> StatusLevel {
+        self.visible_quotas(provider_id, quotas)
+            .into_iter()
+            .map(|q| q.status_level(rules))
+            .max()
+            .unwrap_or(StatusLevel::Green)
     }
 
     /// 切换某个 quota 的可见性（隐藏 ↔ 显示）

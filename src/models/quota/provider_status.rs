@@ -5,9 +5,7 @@ use crate::models::provider::{
     ProviderCapability, ProviderId, ProviderKind, ProviderMetadata, SettingsCapability,
 };
 
-use super::{
-    ProviderFailure, QuotaInfo, QuotaRules, RateLimitResetSnapshot, RefreshData, StatusLevel,
-};
+use super::{ProviderFailure, QuotaInfo, RateLimitResetSnapshot, RefreshData};
 
 /// 元数据代理方法生成宏：保持 `provider.display_name()` 等 API 不变，
 /// 消除手写代理的样板代码。新增 ProviderMetadata 字段时只需加一行。
@@ -240,15 +238,6 @@ impl ProviderStatus {
 
     pub fn supports_refresh(&self) -> bool {
         self.provider_capability.supports_refresh()
-    }
-
-    /// 获取最高用量的状态等级（用于总览显示）
-    pub fn worst_status(&self, rules: &QuotaRules) -> StatusLevel {
-        self.quotas
-            .iter()
-            .map(|q| q.status_level(rules))
-            .max()
-            .unwrap_or(StatusLevel::Green)
     }
 }
 

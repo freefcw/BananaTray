@@ -154,7 +154,11 @@ impl DBusProviderEntry {
             })
             .collect();
 
-        let worst = provider.worst_status(&rules);
+        let worst = session.settings.provider.visible_worst_status(
+            &provider.provider_id,
+            &provider.quotas,
+            &rules,
+        );
 
         DBusProviderEntry {
             id: format_provider_id(&provider.provider_id),

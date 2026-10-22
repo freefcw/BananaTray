@@ -1602,3 +1602,63 @@ fn quota_threshold_notify_change_preserves_usage_step_and_rebases_alert() {
         Some(QuotaNotificationEvent::Recovered { .. })
     ));
 }
+
+// ── 隐藏的配额不参与状态与告警 ─────────────────────────
+
+fn devin_refresh(session: &mut AppSession, extra_usage_usd: f64) -> Vec<AppEffect> {
+    let extra_usage = QuotaInfo::balance_only(
+        crate::models::QuotaLabelSpec::ExtraUsage,
+        extra_usage_usd,
+        None,
+        crate::models::QuotaType::Credit,
+        None,
+    );
+    reduce(
+        session,
+        AppAction::RefreshEventReceived(RefreshEvent::Finished(RefreshOutcome {
+            reason: None,
+            id: pid(ProviderKind::Windsurf),
+            result: RefreshResult::Success {
+                data: RefreshData {
+                    quotas: vec![QuotaInfo::new("weekly", 20.0, 100.0), extra_usage],
+                    account_email: None,
+                    account_tier: None,
+                    source_label: None,
+                    rate_limit_resets: Default::default(),
+                },
+            },
+        })),
+    )
+}
+
+#[test]
+fn hidden_quota_leaves_status_and_alerts() {
+    use crate::models::StatusLevel;
+
+    let mut session = make_session();
+    let devin = pid(ProviderKind::Windsurf);
+    enable(&mut session, ProviderKind::Windsurf);
+    let extra_usage_visible = |session: &AppSession| {
+        session
+            .settings
+            .provider
+            .is_quota_visible(&devin, "extra-usage")
+    };
+
+    // 没买过超额用量：$0 卡可见，provider 标红（首次观测只建基线，不通知）。
+    assert!(quota_alerts(&devin_refresh(&mut session, 0.0)).is_empty());
+    assert_eq!(session.worst_enabled_provider_status(), StatusLevel::Red);
+
+    // 用户隐藏这张卡：不再标红，切换本身也不补发“恢复”。
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::ToggleQuotaVisibility {
+            provider_id: devin.clone(),
+            quota_key: "extra-usage".to_string(),
+        }),
+    );
+    assert!(quota_alerts(&effects).is_empty());
+    assert_eq!(session.worst_enabled_provider_status(), StatusLevel::Green);
+    assert!(quota_alerts(&devin_refresh(&mut session, 0.0)).is_empty());
+    assert!(!extra_usage_visible(&session));
+}
