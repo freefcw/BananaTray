@@ -24,6 +24,9 @@ const STEP_STROKE: f32 = 2.0;
 const STEP_RADIUS: f32 = 4.0;
 /// 台阶下方填充的不透明度。只铺在折线到基线之间。
 const STEP_FILL: f32 = 0.2;
+/// 断档虚线比台阶细、更淡，读作"这段没有数据"。
+const GAP_STROKE: f32 = 1.5;
+const GAP_OPACITY: f32 = 0.5;
 /// 圆点半径是 2.5px。再留一点，孤立采样也能被点中。
 const HOVER_HIT_PX: f64 = 4.0;
 const CHIP_FONT: f32 = 10.0;
@@ -213,16 +216,39 @@ fn paint_segment(
     color: Hsla,
     window: &mut Window,
 ) {
-    let mut run = Vec::new();
+    let mut run: Vec<&HistoryPointView> = Vec::new();
     for point in points {
         if point.gap_before && !run.is_empty() {
             paint_run(bounds, &run, color, window);
+            paint_gap_bridge(bounds, run[run.len() - 1], point, color, window);
             run.clear();
         }
         run.push(point);
     }
     if !run.is_empty() {
         paint_run(bounds, &run, color, window);
+    }
+}
+
+/// 断档不留白：用淡虚线按台阶形状接上，先保持断前的值，到恢复时刻再落到新值。
+/// 不铺填充，避免把没有数据的时段读成有用量。
+fn paint_gap_bridge(
+    bounds: Bounds<Pixels>,
+    before: &HistoryPointView,
+    after: &HistoryPointView,
+    color: Hsla,
+    window: &mut Window,
+) {
+    let from = chart_point(bounds, before.x_ratio, before.y_ratio);
+    let to = chart_point(bounds, after.x_ratio, after.y_ratio);
+    let mut builder = PathBuilder::stroke(px(GAP_STROKE)).dash_array(&[px(3.0), px(3.0)]);
+    builder.move_to(from);
+    builder.line_to(point(to.x, from.y));
+    if !same_pixel(from.y / px(1.0), to.y / px(1.0)) {
+        builder.line_to(to);
+    }
+    if let Ok(path) = builder.build() {
+        window.paint_path(path, color.opacity(GAP_OPACITY));
     }
 }
 
