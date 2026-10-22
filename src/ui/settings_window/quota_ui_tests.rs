@@ -1,5 +1,5 @@
 use super::quota_thresholds::{self, QuotaThresholdChange};
-use super::quota_usage::render_quota_usage_stepper;
+use super::quota_usage::{render_provider_quota_usage_card, render_quota_usage_stepper};
 use super::SettingsView;
 use crate::application::{QuotaThresholdUnitViewState, SettingChange};
 use crate::i18n::test_locale_guard;
@@ -65,18 +65,18 @@ impl Render for UsageHarness {
         let changes = self.changes.clone();
         let entity = cx.entity().clone();
         let theme = Theme::dark();
-        div().size_full().child(render_quota_usage_stepper(
-            selection,
-            inherited,
-            &theme,
-            move |step, _window, cx| {
-                changes.borrow_mut().push(step);
-                entity.update(cx, |harness, cx| {
-                    harness.selection = step;
-                    cx.notify();
-                });
-            },
-        ))
+        let on_change = move |step: Option<u8>, _window: &mut Window, cx: &mut gpui::App| {
+            changes.borrow_mut().push(step);
+            entity.update(cx, |harness, cx| {
+                harness.selection = step;
+                cx.notify();
+            });
+        };
+        // Provider 级（有全局值可继承）渲染完整卡片，全局入口只渲染步进器。
+        div().size_full().child(match inherited {
+            Some(global) => render_provider_quota_usage_card(selection, global, &theme, on_change),
+            None => render_quota_usage_stepper(selection, None, &theme, on_change),
+        })
     }
 }
 

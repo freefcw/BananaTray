@@ -369,6 +369,8 @@ cadence.n_minutes: "%{n} 分钟"
 quota_usage.off: "关闭"
 quota_usage.every: "每 %{n}%"
 quota_usage.inherited: "跟随全局"
+quota_usage.custom: "自定义"
+quota_usage.step_label: "提醒步长"
 quota_usage.follow_global: "恢复跟随全局"
 
 # ── 通知 ──────────────────────────────────────────────────

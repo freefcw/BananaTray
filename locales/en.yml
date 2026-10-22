@@ -369,6 +369,8 @@ cadence.n_minutes: "%{n} minutes"
 quota_usage.off: "Off"
 quota_usage.every: "Every %{n}%"
 quota_usage.inherited: "Following global"
+quota_usage.custom: "Custom"
+quota_usage.step_label: "Reminder step"
 quota_usage.follow_global: "Follow global"
 
 # ── Notifications ─────────────────────────────────────────
