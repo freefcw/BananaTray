@@ -7,10 +7,10 @@ use crate::models::{
     ProviderId, QuotaThresholdTarget, QuotaThresholdUnit, QuotaThresholds, QuotaThresholdsError,
 };
 use crate::theme::Theme;
-use fc_ui::components::input_state::InputState;
+use fc_ui::components::input_state::{InputEvent, InputState};
 use gpui::{
-    div, px, AppContext, Context, Div, Entity, FontWeight, Hsla, InteractiveElement, MouseButton,
-    MouseDownEvent, ParentElement, Styled, Window,
+    div, px, relative, AnyElement, AppContext, Context, Div, Entity, FontWeight, Hsla,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, Styled, Window,
 };
 use rust_i18n::t;
 use std::rc::Rc;
@@ -38,11 +38,15 @@ impl SettingsView {
             }
         }
         let threshold_input = |value: f64, cx: &mut Context<Self>| {
-            cx.new(|cx| {
+            let input = cx.new(|cx| {
                 InputState::new(cx)
                     .value(format!("{value}"))
                     .trim_on_blur(false)
-            })
+            });
+            // 输入变化时重绘设置视图，让「正常」区间与百分比比例刻度跟随草稿实时联动
+            cx.subscribe(&input, |_, _, _: &InputEvent, cx| cx.notify())
+                .detach();
+            input
         };
         self.quota_threshold_draft = Some(QuotaThresholdDraft {
             target,
@@ -219,9 +223,23 @@ fn render_quota_threshold_unit(
     row = row.child(header);
 
     if editing {
-        row = row.child(render_draft_editor(view, unit, theme, window, cx));
+        row = row.child(render_draft_editor(
+            view,
+            unit,
+            unit_state.effective,
+            theme,
+            window,
+            cx,
+        ));
     } else {
-        row = row.child(render_threshold_chips(unit, unit_state.effective, theme));
+        row = row.child(render_threshold_strip(
+            threshold_segments(unit, unit_state.effective, theme),
+            None,
+            theme,
+        ));
+        if unit == QuotaThresholdUnit::Percentage {
+            row = row.child(render_percentage_scale(unit_state.effective, theme));
+        }
     }
 
     row
@@ -268,60 +286,232 @@ fn render_unit_header(
     row
 }
 
-/// 三个阈值徽章：颜色与托盘中额度状态色一致，让用户一眼对应「黄 / 红 / 通知」。
-fn render_threshold_chips(unit: QuotaThresholdUnit, values: QuotaThresholds, theme: &Theme) -> Div {
-    div()
-        .flex()
-        .flex_wrap()
-        .items_center()
-        .gap(px(6.0))
-        .child(render_threshold_chip(
-            t!(
-                "settings.quota_thresholds.chip.notify",
-                value = format_threshold_value(unit, values.notify)
-            )
-            .to_string(),
-            theme.text.accent,
-            theme,
-        ))
-        .child(render_threshold_chip(
-            t!(
-                "settings.quota_thresholds.chip.critical",
-                value = format_threshold_value(unit, values.critical)
-            )
-            .to_string(),
-            theme.status.error,
-            theme,
-        ))
-        .child(render_threshold_chip(
-            t!(
-                "settings.quota_thresholds.chip.warning",
-                value = format_threshold_value(unit, values.warning)
-            )
-            .to_string(),
-            theme.status.warning,
-            theme,
-        ))
+/// 区间条中的一段：标签行（色点 + 含义）+ 数值或输入框。
+struct ThresholdSegment {
+    selector: Option<&'static str>,
+    label: String,
+    color: Hsla,
+    body: AnyElement,
 }
 
-fn render_threshold_chip(label: String, color: Hsla, theme: &Theme) -> Div {
+/// 三个阈值档位，按剩余额度从少到多排列（弹窗提醒 ≤ 图标变红 < 图标变黄），
+/// 颜色与托盘中额度状态色一致。
+fn threshold_levels(theme: &Theme) -> [(&'static str, String, Hsla); 3] {
+    [
+        (
+            "quota-threshold-notify",
+            t!("settings.quota_thresholds.segment.notify").to_string(),
+            theme.text.accent,
+        ),
+        (
+            "quota-threshold-critical",
+            t!("settings.quota_thresholds.segment.critical").to_string(),
+            theme.status.error,
+        ),
+        (
+            "quota-threshold-warning",
+            t!("settings.quota_thresholds.segment.warning").to_string(),
+            theme.status.warning,
+        ),
+    ]
+}
+
+/// 展示态区间条：三个阈值 + 「正常」区间，等宽排列，不随数值按比例缩放，
+/// 因此货币 / 积分这类没有上限的单位也能使用同一套表现。
+fn threshold_segments(
+    unit: QuotaThresholdUnit,
+    values: QuotaThresholds,
+    theme: &Theme,
+) -> Vec<ThresholdSegment> {
+    let mut segments: Vec<ThresholdSegment> = threshold_levels(theme)
+        .into_iter()
+        .zip([values.notify, values.critical, values.warning])
+        .map(|((_, label, color), value)| ThresholdSegment {
+            selector: None,
+            label,
+            color,
+            body: render_segment_value(format!("≤ {}", format_threshold_value(unit, value)), theme)
+                .into_any_element(),
+        })
+        .collect();
+    segments.push(normal_segment(unit, Some(values.warning), theme));
+    segments
+}
+
+/// 「正常」区间：剩余额度高于图标变黄阈值；阈值暂不可解析时显示占位符。
+fn normal_segment(
+    unit: QuotaThresholdUnit,
+    warning: Option<f64>,
+    theme: &Theme,
+) -> ThresholdSegment {
+    let value = warning
+        .map(|value| format!("> {}", format_threshold_value(unit, value)))
+        .unwrap_or_else(|| "—".to_string());
+    ThresholdSegment {
+        selector: None,
+        label: t!("settings.quota_thresholds.segment.normal").to_string(),
+        color: theme.status.success,
+        body: render_segment_value(value, theme)
+            .text_color(theme.text.secondary)
+            .into_any_element(),
+    }
+}
+
+fn render_segment_value(value: String, theme: &Theme) -> Div {
     div()
-        .flex()
-        .flex_shrink_0()
-        .items_center()
-        .gap(px(6.0))
+        .min_w_0()
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .text_size(px(13.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme.text.primary)
+        .child(value)
+}
+
+/// 单个区间块的最小宽度：容纳「色点 + 四字标签」与输入框，低于此宽度时改为两行两列。
+const SEGMENT_MIN_WIDTH: f32 = 76.0;
+const SEGMENT_GAP: f32 = 4.0;
+
+fn render_threshold_strip(
+    segments: Vec<ThresholdSegment>,
+    selector: Option<&'static str>,
+    theme: &Theme,
+) -> Div {
+    let mut strip = div().flex().flex_wrap().w_full().gap(px(SEGMENT_GAP));
+    if let Some(selector) = selector {
+        strip = strip.debug_selector(move || selector.to_string());
+    }
+    // 两两成组再整体换行：宽度足够时 4 列一行，窄窗口（如 Provider 详情页）退化为 2×2，
+    // 不会出现 3 + 1 的割裂排布
+    let mut segments = segments.into_iter().peekable();
+    while segments.peek().is_some() {
+        let mut pair = div()
+            .flex()
+            .flex_1()
+            .min_w(px(SEGMENT_MIN_WIDTH * 2.0 + SEGMENT_GAP))
+            .gap(px(SEGMENT_GAP));
+        for segment in segments.by_ref().take(2) {
+            pair = pair.child(render_threshold_segment(segment, theme));
+        }
+        strip = strip.child(pair);
+    }
+    strip
+}
+
+fn render_threshold_segment(segment: ThresholdSegment, theme: &Theme) -> Div {
+    let mut label = div()
+        .min_w_0()
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .text_size(px(10.5))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.text.muted)
+        .child(segment.label);
+    let mut cell = div()
+        .flex_1()
+        .min_w_0()
+        .flex_col()
+        .gap(px(4.0))
         .px(px(8.0))
-        .py(px(3.0))
-        .rounded(px(999.0))
-        .bg(color.opacity(0.14))
-        .child(div().size(px(6.0)).rounded_full().bg(color))
+        .py(px(6.0))
+        .rounded(px(6.0))
+        .bg(segment.color.opacity(0.10));
+    if let Some(selector) = segment.selector {
+        label = label.debug_selector(move || format!("{selector}-label"));
+        cell = cell.debug_selector(move || selector.to_string());
+    }
+    cell.child(
+        div()
+            .flex()
+            .items_center()
+            .gap(px(5.0))
+            .min_w_0()
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .size(px(6.0))
+                    .rounded_full()
+                    .bg(segment.color),
+            )
+            .child(label),
+    )
+    .child(segment.body)
+}
+
+/// 百分比单位有固定上限，额外画一条 0–100% 的比例刻度：红 / 黄 / 正常区间按真实宽度着色，
+/// 弹窗提醒位置用强调色竖线标出。
+fn render_percentage_scale(values: QuotaThresholds, theme: &Theme) -> Div {
+    let critical = values.critical.clamp(0.0, 100.0);
+    let warning = values.warning.clamp(critical, 100.0);
+    let notify = values.notify.clamp(0.0, 100.0);
+    let fraction = |value: f64| relative((value / 100.0) as f32);
+    let end_label = |text: &'static str| {
+        div()
+            .flex_shrink_0()
+            .text_size(px(10.0))
+            .text_color(theme.text.muted)
+            .child(text)
+    };
+
+    let bar = div()
+        .relative()
+        .flex_1()
+        .min_w_0()
+        .h(px(10.0))
         .child(
             div()
-                .text_size(px(11.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text.secondary)
-                .child(label),
+                .absolute()
+                .top(px(2.0))
+                .left_0()
+                .right_0()
+                .h(px(6.0))
+                .flex()
+                .rounded_full()
+                .overflow_hidden()
+                .bg(theme.status.progress_track)
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .h_full()
+                        .w(fraction(critical))
+                        .bg(theme.status.error),
+                )
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .h_full()
+                        .w(fraction(warning - critical))
+                        .bg(theme.status.warning),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .bg(theme.status.success.opacity(0.35)),
+                ),
         )
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .left(fraction(notify))
+                .ml(px(-1.0))
+                .w(px(2.0))
+                .h(px(10.0))
+                .rounded(px(1.0))
+                .bg(theme.text.accent),
+        );
+
+    div()
+        .debug_selector(|| "quota-threshold-scale".to_string())
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .child(end_label("0%"))
+        .child(bar)
+        .child(end_label("100%"))
 }
 
 fn render_unit_actions(
@@ -374,9 +564,11 @@ fn render_unit_actions(
     actions
 }
 
+/// 编辑态：输入框原位替换区间条中的数值，布局与展示态一致，避免编辑时高度暴涨。
 fn render_draft_editor(
     view: &mut SettingsView,
     unit: QuotaThresholdUnit,
+    effective: QuotaThresholds,
     theme: &Theme,
     window: &mut Window,
     cx: &mut Context<SettingsView>,
@@ -384,78 +576,69 @@ fn render_draft_editor(
     let Some(draft) = &view.quota_threshold_draft else {
         return div();
     };
-    let fields = [
-        (
-            "quota-threshold-notify",
-            field_label_with_unit(&t!("settings.quota_thresholds.field.notify"), unit),
-            theme.text.accent,
-            draft.notify.clone(),
-        ),
-        (
-            "quota-threshold-critical",
-            field_label_with_unit(&t!("settings.quota_thresholds.field.critical"), unit),
-            theme.status.error,
-            draft.critical.clone(),
-        ),
-        (
-            "quota-threshold-warning",
-            field_label_with_unit(&t!("settings.quota_thresholds.field.warning"), unit),
-            theme.status.warning,
-            draft.warning.clone(),
-        ),
+    let inputs = [
+        draft.notify.clone(),
+        draft.critical.clone(),
+        draft.warning.clone(),
     ];
     let error = draft.error;
 
-    let mut inputs = div()
-        .debug_selector(|| "quota-threshold-fields".to_string())
-        .flex()
-        .flex_col()
-        .w_full()
-        .gap(px(10.0));
-    for (id, label, color, entity) in fields {
+    let mut segments = Vec::with_capacity(4);
+    for ((selector, label, color), entity) in threshold_levels(theme).into_iter().zip(&inputs) {
         let is_focused = entity.read(cx).focus_handle(cx).is_focused(window);
-        inputs = inputs.child(
-            div()
-                .debug_selector(move || id.to_string())
-                .flex_shrink_0()
-                .w_full()
-                .min_w_0()
-                .flex_col()
-                .gap(px(6.0))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .child(div().size(px(6.0)).rounded_full().bg(color))
-                        .child(
-                            div()
-                                .debug_selector(move || format!("{id}-label"))
-                                .text_size(px(12.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme.text.secondary)
-                                .child(label),
-                        ),
-                )
-                .child(render_input_box(
-                    is_focused, false, &entity, theme, window, cx,
-                )),
-        );
+        segments.push(ThresholdSegment {
+            selector: Some(selector),
+            label,
+            color,
+            body: render_input_box(is_focused, false, entity, theme, window, cx)
+                .debug_selector(move || format!("{selector}-input"))
+                .h(px(28.0))
+                .px(px(8.0))
+                .py(px(4.0))
+                .rounded(px(6.0))
+                .text_size(px(12.5))
+                .into_any_element(),
+        });
     }
 
-    let mut editor = div().flex_col().gap(px(10.0)).child(inputs);
+    let [notify, critical, warning] = inputs.map(|input| input.read(cx).content().to_string());
+    let draft_values = QuotaThresholds::parse(unit, &warning, &critical, &notify).ok();
+    let warning_preview = draft_values.map(|values| values.warning).or_else(|| {
+        warning
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite())
+    });
+    segments.push(normal_segment(unit, warning_preview, theme));
 
-    if let Some(error) = error {
-        editor = editor.child(
-            div()
-                .text_size(px(11.5))
-                .line_height(px(16.0))
-                .text_color(theme.status.error)
-                .child(quota_threshold_error_text(error)),
-        );
+    let mut editor = div().flex_col().gap(px(10.0)).child(render_threshold_strip(
+        segments,
+        Some("quota-threshold-fields"),
+        theme,
+    ));
+    if unit == QuotaThresholdUnit::Percentage {
+        // 草稿合法时刻度实时跟随输入；不合法时保留当前生效值，避免刻度跳成无意义状态
+        editor = editor.child(render_percentage_scale(
+            draft_values.unwrap_or(effective),
+            theme,
+        ));
     }
 
-    editor
+    let (message, color) = match error {
+        Some(error) => (quota_threshold_error_text(error), theme.status.error),
+        None => (
+            t!("settings.quota_thresholds.hint").to_string(),
+            theme.text.muted,
+        ),
+    };
+    editor.child(
+        div()
+            .text_size(px(11.5))
+            .line_height(px(16.0))
+            .text_color(color)
+            .child(message),
+    )
 }
 
 fn render_draft_actions(
@@ -585,15 +768,6 @@ fn threshold_primary_button(
         .on_mouse_down(MouseButton::Left, on_click)
 }
 
-/// 按单位格式化输入框标签：显示对应的单位符号以指导输入。
-fn field_label_with_unit(base: &str, unit: QuotaThresholdUnit) -> String {
-    match unit {
-        QuotaThresholdUnit::Percentage => format!("{base} ≤ (%)"),
-        QuotaThresholdUnit::Currency => format!("{base} ≤ ($)"),
-        QuotaThresholdUnit::Amount => format!("{base} ≤"),
-    }
-}
-
 /// 按单位格式化阈值：百分比带 `%`，货币带 `$` 前缀，积分 / 额度保持原值。
 fn format_threshold_value(unit: QuotaThresholdUnit, value: f64) -> String {
     match unit {
@@ -636,22 +810,6 @@ fn quota_threshold_error_text(error: QuotaThresholdsError) -> String {
 mod tests {
     use super::*;
     use crate::models::ProviderKind;
-
-    #[test]
-    fn field_labels_include_unit_context() {
-        assert_eq!(
-            field_label_with_unit("预警", QuotaThresholdUnit::Percentage),
-            "预警 ≤ (%)"
-        );
-        assert_eq!(
-            field_label_with_unit("预警", QuotaThresholdUnit::Currency),
-            "预警 ≤ ($)"
-        );
-        assert_eq!(
-            field_label_with_unit("预警", QuotaThresholdUnit::Amount),
-            "预警 ≤"
-        );
-    }
 
     #[test]
     fn threshold_values_are_formatted_per_unit() {

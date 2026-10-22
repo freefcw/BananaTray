@@ -234,7 +234,7 @@ fn set_draft_values(
     });
 }
 
-fn assert_threshold_fields_stacked(cx: &mut VisualTestContext, case: &str) {
+fn assert_threshold_fields_in_strip(cx: &mut VisualTestContext, case: &str) {
     draw(cx);
     let parent = bounds(cx, "quota-threshold-fields");
     let notify = bounds(cx, "quota-threshold-notify");
@@ -246,13 +246,14 @@ fn assert_threshold_fields_stacked(cx: &mut VisualTestContext, case: &str) {
         ("critical", critical, "quota-threshold-critical-label"),
         ("warning", warning, "quota-threshold-warning-label"),
     ] {
-        assert_eq!(
-            field.origin.x, parent.origin.x,
-            "[{case}] {name} field x must equal the fields container x: {field:?} vs {parent:?}"
+        assert!(
+            field.left() >= parent.left() - px(0.5) && field.right() <= parent.right() + px(0.5),
+            "[{case}] {name} field must stay inside the strip: {field:?} vs {parent:?}"
         );
-        assert_eq!(
-            field.size.width, parent.size.width,
-            "[{case}] {name} field must span the fields container width: {field:?} vs {parent:?}"
+        // 窄窗口下不能把区间块挤到标签 / 输入框不可读，应退化为 2×2
+        assert!(
+            field.size.width >= px(76.0 - 0.5),
+            "[{case}] {name} segment is too narrow to read: {field:?}"
         );
         let label = bounds(cx, label_selector);
         assert!(
@@ -261,14 +262,26 @@ fn assert_threshold_fields_stacked(cx: &mut VisualTestContext, case: &str) {
         );
     }
 
+    // 阅读顺序按剩余额度从少到多：弹窗提醒 → 图标变红 → 图标变黄
     assert!(
-        notify.bottom() <= critical.top(),
-        "[{case}] notify must sit above critical: {notify:?} vs {critical:?}"
+        notify.top() == critical.top() && notify.right() <= critical.left(),
+        "[{case}] notify must sit left of critical in the same row: {notify:?} vs {critical:?}"
     );
+    let warning_after_critical = (warning.top() == critical.top()
+        && critical.right() <= warning.left())
+        || (warning.top() >= critical.bottom() && warning.left() == notify.left());
     assert!(
-        critical.bottom() <= warning.top(),
-        "[{case}] critical must sit above warning: {critical:?} vs {warning:?}"
+        warning_after_critical,
+        "[{case}] warning must follow critical in the same row or start the next row: {critical:?} vs {warning:?}"
     );
+    // 宽度足够容纳四段时必须保持单行
+    if parent.size.width >= px(4.0 * 76.0 + 3.0 * 4.0) {
+        assert_eq!(
+            warning.top(),
+            notify.top(),
+            "[{case}] wide strip must keep all segments in one row: {parent:?}"
+        );
+    }
 }
 
 #[gpui::test]
@@ -367,7 +380,7 @@ fn quota_usage_stepper_clamps_at_zero_and_hundred(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn threshold_edit_fields_stack_full_width_in_global_section(cx: &mut TestAppContext) {
+fn threshold_edit_fields_fill_strip_in_global_section(cx: &mut TestAppContext) {
     let _locale_guard = test_locale_guard("en");
     let changes = Rc::new(RefCell::new(Vec::new()));
     for locale in ["en", "zh-CN"] {
@@ -380,7 +393,7 @@ fn threshold_edit_fields_stack_full_width_in_global_section(cx: &mut TestAppCont
             for unit in QuotaThresholdUnit::ALL {
                 let case = format!("global/{locale}/{window_width}px/{unit:?}");
                 begin_draft(&view, cx, &QuotaThresholdTarget::Global, unit);
-                assert_threshold_fields_stacked(cx, &case);
+                assert_threshold_fields_in_strip(cx, &case);
             }
         }
     }
@@ -388,7 +401,7 @@ fn threshold_edit_fields_stack_full_width_in_global_section(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-fn threshold_edit_fields_stack_full_width_in_provider_section(cx: &mut TestAppContext) {
+fn threshold_edit_fields_fill_strip_in_provider_section(cx: &mut TestAppContext) {
     let _locale_guard = test_locale_guard("en");
     let changes = Rc::new(RefCell::new(Vec::new()));
     let provider = ProviderId::BuiltIn(ProviderKind::Claude);
@@ -402,7 +415,7 @@ fn threshold_edit_fields_stack_full_width_in_provider_section(cx: &mut TestAppCo
             for unit in QuotaThresholdUnit::ALL {
                 let case = format!("provider/{locale}/{window_width}px/{unit:?}");
                 begin_draft(&view, cx, &target, unit);
-                assert_threshold_fields_stacked(cx, &case);
+                assert_threshold_fields_in_strip(cx, &case);
             }
         }
     }
@@ -425,9 +438,10 @@ fn threshold_global_save_via_real_input_chain(cx: &mut TestAppContext) {
     );
     set_draft_values(&view, cx, "40", "15", "10");
 
-    let notify_field = bounds(cx, "quota-threshold-notify");
+    let notify_field = bounds(cx, "quota-threshold-notify-input");
+    // 点在输入框内边距上，走 render_input_box 的点击聚焦链路
     cx.simulate_click(
-        point(notify_field.center().x, notify_field.bottom() - px(4.0)),
+        point(notify_field.center().x, notify_field.bottom() - px(2.0)),
         Modifiers::none(),
     );
     cx.simulate_keystrokes("cmd-a");
