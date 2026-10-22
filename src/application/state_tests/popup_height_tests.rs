@@ -373,5 +373,5 @@ fn popup_height_ring_style_keeps_history_inside_the_card() {
         session.popup_height(),
         bar_height + PopupLayout::CARD_RING_DETAIL_EXTRA
     );
-    assert!(PopupLayout::CARD_RING_DETAIL_EXTRA < PopupLayout::CARD_HISTORY_EXTRA);
+    const { assert!(PopupLayout::CARD_RING_DETAIL_EXTRA < PopupLayout::CARD_HISTORY_EXTRA) };
 }

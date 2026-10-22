@@ -444,7 +444,12 @@ fn threshold_global_save_via_real_input_chain(cx: &mut TestAppContext) {
         point(notify_field.center().x, notify_field.bottom() - px(2.0)),
         Modifiers::none(),
     );
-    cx.simulate_keystrokes("cmd-a");
+    // fc-ui 的全选按平台绑定：macOS 为 cmd-a，其余平台为 ctrl-a
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input("5");
     draw(cx);
 
