@@ -27,6 +27,9 @@ impl HistoryRange {
     }
 }
 
+/// 相邻采样之间最多容忍几个空桶仍画成连续台阶。
+const BRIDGED_EMPTY_BUCKETS: i64 = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HistoryYKind {
     MeteredUsed,
@@ -194,7 +197,10 @@ fn series_for_key(
     let mut current: Option<HistorySegment> = None;
     let mut previous_bucket: Option<i64> = None;
     for (bucket, drawable) in buckets {
-        let gap = previous_bucket.is_some_and(|previous| bucket - previous > width);
+        // 阶梯本来就保持上一个值。漏掉几次采样（休眠、偶发失败）不算断档，
+        // 否则图上会被切成碎条。空桶超过阈值才断开。
+        let gap = previous_bucket
+            .is_some_and(|previous| bucket - previous > width * (BRIDGED_EMPTY_BUCKETS + 1));
         let same = current.as_ref().is_some_and(|segment| {
             segment.unit == drawable.unit && segment.y_kind == drawable.y_kind
         });
@@ -500,24 +506,34 @@ mod tests {
                     HistoryStatus::Success,
                     vec![metered("session", 40.0, HistoryUnit::Percentage)],
                 ),
+                // 中间空 3 个桶：仍连续。
                 row(
                     3,
-                    width * 3,
+                    width * 5,
+                    HistoryStatus::Success,
+                    vec![metered("session", 60.0, HistoryUnit::Percentage)],
+                ),
+                // 中间空 4 个桶：断档。
+                row(
+                    4,
+                    width * 10,
                     HistoryStatus::Success,
                     vec![metered("session", 80.0, HistoryUnit::Percentage)],
                 ),
             ],
             HistoryRange::Last24Hours,
             0,
-            width * 4,
+            width * 11,
         );
         let HistoryReadyState::Charts(series) = ready.state else {
             panic!("expected charts");
         };
-        assert_eq!(series[0].segments[0].points.len(), 2);
-        assert_eq!(series[0].segments[0].points[0].y, 40.0);
-        assert_eq!(series[0].segments[0].points[0].limit, Some(100.0));
-        assert!(series[0].segments[0].points[1].gap_before);
+        let points = &series[0].segments[0].points;
+        assert_eq!(points.len(), 3);
+        assert_eq!(points[0].y, 40.0);
+        assert_eq!(points[0].limit, Some(100.0));
+        assert!(!points[1].gap_before);
+        assert!(points[2].gap_before);
     }
 
     #[test]
