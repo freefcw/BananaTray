@@ -5,7 +5,8 @@
 
 use crate::application::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
-    format_quota_status_label, quota_ring_fill_ratio, HistoryChartView, QuotaDisplayViewState,
+    format_quota_card_mode_label, format_quota_status_label, quota_ring_fill_ratio,
+    HistoryChartView, QuotaDisplayViewState,
 };
 use crate::models::{PopupLayout, QuotaDisplayMode};
 use crate::theme::Theme;
@@ -32,6 +33,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
     let track = theme.status.progress_track;
     let ratio = quota_ring_fill_ratio(quota, display_mode);
     let display_text = format_quota_card_display_text(quota, display_mode);
+    let mode_label = format_quota_card_mode_label(quota, display_mode);
     let has_unit = format_quota_card_has_unit(quota);
     let detail_text = format_quota_card_detail_text(quota_view);
     let status_label = format_quota_status_label(quota_view.status_level);
@@ -60,7 +62,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
                     fill,
                     theme,
                 ))
-                .child(render_ring_side(history, &detail_text, theme)),
+                .child(render_ring_side(history, &mode_label, &detail_text, theme)),
         )
 }
 
@@ -128,7 +130,12 @@ fn render_ring_value(display_text: &str, has_unit: bool, value_size: f32, theme:
     value
 }
 
-fn render_ring_side(history: Option<&HistoryChartView>, detail_text: &str, theme: &Theme) -> Div {
+fn render_ring_side(
+    history: Option<&HistoryChartView>,
+    mode_label: &str,
+    detail_text: &str,
+    theme: &Theme,
+) -> Div {
     let mut side = div().flex_1().min_w_0().flex().flex_col();
     if let Some(history) = history {
         let plot = (RING_SIZE - PopupLayout::CARD_HISTORY_AXIS_CHROME).max(28.0);
@@ -144,9 +151,21 @@ fn render_ring_side(history: Option<&HistoryChartView>, detail_text: &str, theme
                     theme,
                 )),
         );
-        side = side.child(render_ring_detail(detail_text, theme));
-    } else if !detail_text.is_empty() {
-        side = side.h(px(RING_SIZE)).justify_center().child(
+        return side.child(render_ring_detail(detail_text, theme));
+    }
+
+    // 没有折线时右侧整块是空的：放上「剩余 / 已用 / 余额」说明圆环里的数字是什么，
+    // 再接重置时间。高度锁在圆环高度，弹窗高度计算不变。
+    side = side.h(px(RING_SIZE)).justify_center().gap(px(4.0)).child(
+        div()
+            .text_size(px(11.0))
+            .line_height(relative(1.3))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(theme.text.secondary)
+            .child(mode_label.to_string()),
+    );
+    if !detail_text.is_empty() {
+        side = side.child(
             div()
                 .text_size(px(12.0))
                 .line_height(relative(1.35))
