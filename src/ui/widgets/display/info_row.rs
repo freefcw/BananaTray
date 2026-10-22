@@ -80,7 +80,7 @@ pub(crate) fn render_kv_info_row(
 /// 渲染信息单元格（标签 + 值），水平排列用于两列布局
 ///
 /// # 使用场景
-/// - `settings_window/providers/detail/info.rs` — Provider 信息表格单元格
+/// - `settings_window/debug_tab.rs` — 环境信息键值行（路径行经 `render_path_info_cell` 复用）
 pub(crate) fn render_info_cell(label: &str, value: &str, value_color: Hsla, theme: &Theme) -> Div {
     div()
         .flex()
