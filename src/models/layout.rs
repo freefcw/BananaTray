@@ -78,10 +78,11 @@ impl PopupLayout {
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;
 
-    /// 限流重置卡上内边距。标题行紧贴顶边时，12px 看起来比额度卡更挤。
-    pub const RESET_CARD_PAD_TOP: f32 = 20.0;
-    /// 限流重置卡下内边距。
-    pub const RESET_CARD_PAD_BOTTOM: f32 = 14.0;
+    /// 限流重置卡上内边距。标题行紧贴顶边时，12px 看起来比额度卡更挤；
+    /// 20px 又让标题悬在卡片里（标题 20px 行高本身已带约 4px 留白），取上下一致的 16px。
+    pub const RESET_CARD_PAD_TOP: f32 = 16.0;
+    /// 限流重置卡下内边距，与上内边距对称。
+    pub const RESET_CARD_PAD_BOTTOM: f32 = 16.0;
     /// 上下内边距合计，高度计算用这一份。
     pub const RESET_CARD_PAD_Y: f32 = Self::RESET_CARD_PAD_TOP + Self::RESET_CARD_PAD_BOTTOM;
     /// 重置卡 1px 边框的上下合计。
