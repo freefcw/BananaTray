@@ -197,6 +197,24 @@ fn display_settings_missing_tray_popup_uses_default() {
     assert_eq!(restored.tray_popup, TrayPopupSettings::default());
     assert!(restored.merge_history_charts);
     assert_eq!(restored.quota_card_style, QuotaCardStyle::Bar);
+    assert_eq!(
+        restored.quota_card_history_range,
+        QuotaCardHistoryRange::Last24Hours
+    );
+}
+
+#[test]
+fn quota_card_history_range_round_trip() {
+    let settings = DisplaySettings {
+        quota_card_history_range: QuotaCardHistoryRange::CurrentPeriod,
+        ..Default::default()
+    };
+    let json = serde_json::to_value(&settings).unwrap();
+    let restored: DisplaySettings = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        restored.quota_card_history_range,
+        QuotaCardHistoryRange::CurrentPeriod
+    );
 }
 
 #[test]

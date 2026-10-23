@@ -77,7 +77,8 @@ pub struct ProviderPanelViewState {
     pub quota_display_mode: QuotaDisplayMode,
     /// 配额卡画法。圆圈样式把折线放在圆环右侧，不再加高窗口。
     pub quota_card_style: QuotaCardStyle,
-    /// 近 24 小时用量折线；无成功样本或尚未加载时为空，UI 不渲染。
+    /// 配额卡内嵌用量折线（近 24 小时或本周期，跟「卡片折线」设置走）；
+    /// 无成功样本或尚未加载时为空，UI 不渲染。
     pub history_charts: Vec<HistoryChartView>,
     /// Codex 可兑换限流重置。不是配额卡。
     ///
@@ -338,6 +339,20 @@ pub struct HistoryChartView {
     pub title: String,
     pub lines: Vec<HistoryLineView>,
     pub axis: HistoryChartAxisView,
+    /// 「本周期」视图的辅助线数据；普通范围图为 `None`。
+    pub period: Option<HistoryPeriodView>,
+}
+
+/// 本周期视图的辅助线，坐标同样归一到 0..1。横轴两端是周期起点和重置时间。
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistoryPeriodView {
+    /// 理想配速虚线：周期起点满额、重置时用完。剩余从 1 走到 0，已用从 0 走到 1。
+    pub pace_start_y_ratio: f64,
+    pub pace_end_y_ratio: f64,
+    /// 「现在」竖线的位置。
+    pub now_x_ratio: f64,
+    /// 纵轴中线文字，如 `50%`。
+    pub y_mid: String,
 }
 
 /// 图上的一条配额折线。`color_index` 只决定颜色顺序，具体颜色由界面取。

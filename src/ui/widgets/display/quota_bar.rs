@@ -287,9 +287,7 @@ fn render_quota_bar(
             div()
                 .mt(px(6.0))
                 .child(crate::ui::widgets::render_history_line_chart(
-                    &history.quota_key,
-                    history.lines.clone(),
-                    history.axis.clone(),
+                    history,
                     PopupLayout::CARD_HISTORY_PLOT_HEIGHT,
                     theme,
                 )),

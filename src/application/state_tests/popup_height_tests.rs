@@ -288,6 +288,7 @@ fn line_series(key: &str, points: usize) -> HistorySeries {
                 })
                 .collect(),
         }],
+        period: None,
     }
 }
 

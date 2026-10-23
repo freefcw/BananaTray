@@ -58,7 +58,7 @@ pub(super) fn begin_history_load(
     );
 }
 
-/// 托盘弹窗固定看近 24 小时。切到 Overview/Settings 页时不发请求。
+/// 托盘弹窗按 `quota_card_history_range` 看近 24 小时或配额当前周期。切到 Overview/Settings 页时不发请求。
 pub(super) fn begin_popup_history_load(
     session: &mut AppSession,
     now_ms: i64,
@@ -74,10 +74,14 @@ pub(super) fn begin_popup_history_load(
         provider_id: provider_id.clone(),
         request_id,
     };
+    let range = match session.settings.display.quota_card_history_range {
+        crate::models::QuotaCardHistoryRange::Last24Hours => HistoryRange::Last24Hours,
+        crate::models::QuotaCardHistoryRange::CurrentPeriod => HistoryRange::CurrentPeriod,
+    };
     push_load_job(
         session,
         &provider_id,
-        HistoryRange::Last24Hours,
+        range,
         HistoryScope::Popup,
         request_id,
         now_ms,

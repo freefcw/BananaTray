@@ -3,6 +3,7 @@
 //! 记录、存储、聚合分开。SQLite 适配器只执行 effect 里已经算好的 cutoff，不读设置。
 
 mod job;
+mod period;
 mod redact;
 mod retention;
 mod sample;
@@ -11,6 +12,7 @@ mod sqlite;
 mod store;
 
 pub use job::{HistoryJob, HistoryLoadRequest, HistoryScope, ProviderRetentionCutoff};
+pub use period::QuotaPeriod;
 pub use redact::{scrub_history_detail, scrub_secrets};
 pub use retention::{cutoff_ms, query_window, retention_cutoffs, DAY_MS};
 pub use sample::{

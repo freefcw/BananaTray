@@ -1075,6 +1075,7 @@ fn zcode_quota_card_matches_its_history_series() {
                         },
                     ],
                 }],
+                period: None,
             }]),
         },
     };

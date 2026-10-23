@@ -144,13 +144,7 @@ fn render_ring_side(
             div()
                 .h(px(RING_SIZE))
                 .overflow_hidden()
-                .child(super::render_history_line_chart(
-                    &history.quota_key,
-                    history.lines.clone(),
-                    history.axis.clone(),
-                    plot,
-                    theme,
-                )),
+                .child(super::render_history_line_chart(history, plot, theme)),
         );
         return side.child(render_ring_detail(detail_text, theme));
     }

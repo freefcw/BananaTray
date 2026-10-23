@@ -1,3 +1,4 @@
+use super::period::{current_period, period_bucket_width_ms, QuotaPeriod};
 use super::sample::{HistoryStatus, HistoryUnit, HistoryValueKind};
 use super::store::{HistoryPointRow, HistoryRow};
 
@@ -6,6 +7,9 @@ pub enum HistoryRange {
     Last24Hours,
     Last7Days,
     Last30Days,
+    /// 只给托盘配额卡用，设置页不提供。查询窗口取 31 天盖住一个自然月，
+    /// 横轴在 series 层裁到认出的周期；认不出周期的配额回退近 24 小时。
+    CurrentPeriod,
 }
 
 impl HistoryRange {
@@ -14,15 +18,18 @@ impl HistoryRange {
             Self::Last24Hours => 24 * 60 * 60 * 1000,
             Self::Last7Days => 7 * super::DAY_MS,
             Self::Last30Days => 30 * super::DAY_MS,
+            Self::CurrentPeriod => 31 * super::DAY_MS,
         };
         (now_ms.saturating_sub(width), now_ms)
     }
 
-    fn bucket_width_ms(self) -> i64 {
+    pub(super) fn bucket_width_ms(self) -> i64 {
         match self {
             Self::Last24Hours => 15 * 60 * 1000,
             Self::Last7Days => 60 * 60 * 1000,
             Self::Last30Days => 6 * 60 * 60 * 1000,
+            // 认不出周期、回退近 24 小时的配额用这个宽度；认出周期的按周期长度另算。
+            Self::CurrentPeriod => 15 * 60 * 1000,
         }
     }
 }
@@ -57,6 +64,8 @@ pub struct HistorySeries {
     pub quota_key: String,
     pub label_spec_json: String,
     pub segments: Vec<HistorySegment>,
+    /// 只有 `CurrentPeriod` 下认出周期的配额有值；点已裁到周期起点之后。
+    pub period: Option<QuotaPeriod>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,11 +117,11 @@ pub fn interpret(
         range,
         axis_start_ms,
         axis_end_ms,
-        state: ready_state(rows, range),
+        state: ready_state(rows, range, axis_end_ms),
     }
 }
 
-fn ready_state(rows: &[HistoryRow], range: HistoryRange) -> HistoryReadyState {
+fn ready_state(rows: &[HistoryRow], range: HistoryRange, now_ms: i64) -> HistoryReadyState {
     if rows.is_empty() {
         return HistoryReadyState::Empty;
     }
@@ -125,7 +134,7 @@ fn ready_state(rows: &[HistoryRow], range: HistoryRange) -> HistoryReadyState {
             count: rows.len() as u64,
         };
     }
-    let series = build_series(rows, range);
+    let series = build_series(rows, range, now_ms);
     if series.is_empty() {
         HistoryReadyState::NoNumeric
     } else {
@@ -133,7 +142,7 @@ fn ready_state(rows: &[HistoryRow], range: HistoryRange) -> HistoryReadyState {
     }
 }
 
-fn build_series(rows: &[HistoryRow], range: HistoryRange) -> Vec<HistorySeries> {
+fn build_series(rows: &[HistoryRow], range: HistoryRange, now_ms: i64) -> Vec<HistorySeries> {
     let mut keys = Vec::new();
     for row in rows {
         if row.status != HistoryStatus::Success {
@@ -149,20 +158,39 @@ fn build_series(rows: &[HistoryRow], range: HistoryRange) -> Vec<HistorySeries> 
         }
     }
     keys.into_iter()
-        .filter_map(|key| series_for_key(rows, range, &key))
+        .filter_map(|key| match range {
+            HistoryRange::CurrentPeriod => match current_period(rows, &key, now_ms) {
+                Some(period) => series_for_key(
+                    rows,
+                    &key,
+                    period_bucket_width_ms(period),
+                    period.start_ms,
+                    Some(period),
+                ),
+                None => series_for_key(
+                    rows,
+                    &key,
+                    range.bucket_width_ms(),
+                    HistoryRange::Last24Hours.window(now_ms).0,
+                    None,
+                ),
+            },
+            _ => series_for_key(rows, &key, range.bucket_width_ms(), i64::MIN, None),
+        })
         .collect()
 }
 
 fn series_for_key(
     rows: &[HistoryRow],
-    range: HistoryRange,
     quota_key: &str,
+    width: i64,
+    from_ms: i64,
+    period: Option<QuotaPeriod>,
 ) -> Option<HistorySeries> {
-    let width = range.bucket_width_ms();
     let mut samples = Vec::new();
     let mut label_spec_json = String::new();
     for row in rows {
-        if row.status != HistoryStatus::Success {
+        if row.status != HistoryStatus::Success || row.captured_at_ms < from_ms {
             continue;
         }
         if let Some(point) = row
@@ -236,6 +264,7 @@ fn series_for_key(
         quota_key: quota_key.to_string(),
         label_spec_json,
         segments,
+        period,
     })
 }
 
@@ -610,5 +639,148 @@ mod tests {
         assert!(plotted[0].x_ratio < 0.2);
         assert!(plotted[1].x_ratio > 0.8);
         assert!(bounds.end_ms - bounds.start_ms < 60 * 60 * 1000);
+    }
+
+    fn metered_with_reset(
+        key: &str,
+        used: f64,
+        unit: HistoryUnit,
+        label_spec_json: &str,
+        reset_at_secs: Option<i64>,
+    ) -> HistoryPointRow {
+        HistoryPointRow {
+            quota_key: key.to_string(),
+            quota_type: "general".to_string(),
+            label_spec_json: label_spec_json.to_string(),
+            value_kind: HistoryValueKind::Metered,
+            unit: Some(unit),
+            used: Some(used),
+            remaining: None,
+            limit_value: Some(100.0),
+            reset_at_secs,
+        }
+    }
+
+    #[test]
+    fn current_period_clips_points_to_the_period_start() {
+        let now = 500 * super::super::DAY_MS;
+        let end = now + 3 * super::super::DAY_MS;
+        let reset_secs = end / 1000;
+        // 周配额周期 7 天，桶宽 1 小时。起点 = end - 7d = now - 4d。
+        let rows = [
+            // 周期起点之前的样本要被裁掉。
+            row(
+                1,
+                now - 5 * super::super::DAY_MS,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "weekly",
+                    10.0,
+                    HistoryUnit::Percentage,
+                    "\"Weekly\"",
+                    Some(reset_secs),
+                )],
+            ),
+            // 同一 1 小时桶里的两次采样合并成一点，保留最后一次。
+            row(
+                2,
+                now - 2 * super::super::DAY_MS,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "weekly",
+                    20.0,
+                    HistoryUnit::Percentage,
+                    "\"Weekly\"",
+                    Some(reset_secs),
+                )],
+            ),
+            row(
+                3,
+                now - 2 * super::super::DAY_MS + 30 * 60 * 1000,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "weekly",
+                    25.0,
+                    HistoryUnit::Percentage,
+                    "\"Weekly\"",
+                    Some(reset_secs),
+                )],
+            ),
+            row(
+                4,
+                now,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "weekly",
+                    40.0,
+                    HistoryUnit::Percentage,
+                    "\"Weekly\"",
+                    Some(reset_secs),
+                )],
+            ),
+        ];
+        let ready = interpret(
+            &rows,
+            HistoryRange::CurrentPeriod,
+            now - 31 * super::super::DAY_MS,
+            now,
+        );
+        let HistoryReadyState::Charts(series) = ready.state else {
+            panic!("expected charts");
+        };
+        let item = &series[0];
+        let period = item.period.expect("weekly period");
+        assert_eq!(period.end_ms, end);
+        assert_eq!(period.start_ms, end - 7 * super::super::DAY_MS);
+        let points = &item.segments[0].points;
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0].y, 25.0);
+        assert!(points[0].bucket_start_ms >= period.start_ms);
+    }
+
+    #[test]
+    fn current_period_falls_back_to_last_24h_without_reset() {
+        let now = 500 * super::super::DAY_MS;
+        let rows = [
+            row(
+                1,
+                now - 2 * super::super::DAY_MS,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "pro",
+                    10.0,
+                    HistoryUnit::Percentage,
+                    "{\"Raw\":\"Pro\"}",
+                    None,
+                )],
+            ),
+            row(
+                2,
+                now - 60 * 1000,
+                HistoryStatus::Success,
+                vec![metered_with_reset(
+                    "pro",
+                    30.0,
+                    HistoryUnit::Percentage,
+                    "{\"Raw\":\"Pro\"}",
+                    None,
+                )],
+            ),
+        ];
+        let ready = interpret(
+            &rows,
+            HistoryRange::CurrentPeriod,
+            now - 31 * super::super::DAY_MS,
+            now,
+        );
+        let HistoryReadyState::Charts(series) = ready.state else {
+            panic!("expected charts");
+        };
+        let item = &series[0];
+        assert_eq!(item.period, None);
+        // 回退近 24 小时：两天前的样本不出现。
+        let points = &item.segments[0].points;
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].y, 30.0);
     }
 }

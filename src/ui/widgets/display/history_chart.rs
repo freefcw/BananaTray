@@ -3,11 +3,12 @@
 //! 指针停在折线区域里时，十字和读数按这一帧的鼠标位置现算，不进应用状态。
 
 use crate::application::{
-    history_hover_lines, hover_chip_origin, HistoryChartAxisView, HistoryHoverHit, HistoryLineView,
-    HistoryPointView,
+    history_hover_lines, hover_chip_origin, HistoryChartView, HistoryHoverHit, HistoryLineView,
+    HistoryPeriodView, HistoryPointView,
 };
 use crate::models::PopupLayout;
 use crate::theme::Theme;
+use gpui::prelude::FluentBuilder as _;
 use gpui::{
     canvas, div, fill, point, px, quad, relative, size, App, BorderStyle, Bounds, Div, Hsla,
     InteractiveElement, ParentElement, PathBuilder, Pixels, Point, SharedString,
@@ -57,12 +58,14 @@ pub(crate) fn history_line_color(index: usize, theme: &Theme) -> Hsla {
 }
 
 pub(crate) fn render_history_line_chart(
-    chart_id: &str,
-    lines: Vec<HistoryLineView>,
-    axis: HistoryChartAxisView,
+    chart: &HistoryChartView,
     plot_height: f32,
     theme: &Theme,
 ) -> Div {
+    let chart_id = &chart.quota_key;
+    let lines = chart.lines.clone();
+    let axis = chart.axis.clone();
+    let period = chart.period.clone();
     let frame = theme.border.subtle;
     let axis_color = theme.border.strong;
     let label = theme.text.muted;
@@ -102,7 +105,10 @@ pub(crate) fn render_history_line_chart(
                                 if let Some(hit) = &hover {
                                     paint_hover_guides(bounds, hit, frame, window);
                                 }
-                                paint_lines(bounds, &lines, &paint_theme, window);
+                                if let Some(period) = &period {
+                                    paint_period_guides(bounds, period, &paint_theme, window);
+                                }
+                                paint_lines(bounds, &lines, period.is_none(), &paint_theme, window);
                                 paint_baseline(bounds, axis_color, window);
                                 if let Some(hit) = hover {
                                     paint_hover_marker(
@@ -119,7 +125,13 @@ pub(crate) fn render_history_line_chart(
                         .size_full(),
                     ),
                 )
-                .child(y_ticks(&axis.y_max, &axis.y_min, plot_height, label)),
+                .child(y_ticks(
+                    &axis.y_max,
+                    &axis.y_min,
+                    chart.period.as_ref().map(|period| period.y_mid.as_str()),
+                    plot_height,
+                    label,
+                )),
         )
         .child(x_ticks(&axis.x_start, &axis.x_end, label))
 }
@@ -148,7 +160,7 @@ fn hover_hit(
     ))
 }
 
-fn y_ticks(top: &str, bottom: &str, plot_height: f32, color: Hsla) -> Div {
+fn y_ticks(top: &str, bottom: &str, mid: Option<&str>, plot_height: f32, color: Hsla) -> Div {
     // 盖在绘图框里面，和框的左缘对齐。单独占一列会把整张图往右推。
     let column = div()
         .absolute()
@@ -165,7 +177,24 @@ fn y_ticks(top: &str, bottom: &str, plot_height: f32, color: Hsla) -> Div {
         column
             .child(edge_tick(top, true, color))
             .child(edge_tick(bottom, false, color))
+            .when_some(mid, |column, mid| {
+                column.child(mid_tick(mid, plot_height, color))
+            })
     }
+}
+
+/// 本周期图的纵轴中线刻度，垂直居中在绘图区中线上。
+fn mid_tick(text: &str, plot_height: f32, color: Hsla) -> Div {
+    div()
+        .absolute()
+        .left(px(0.0))
+        // 10px 文字（line-height 1.0）中心对到绘图区中线。
+        .top(px(plot_height / 2.0 - 5.0))
+        .flex()
+        .text_size(px(10.0))
+        .line_height(relative(1.0))
+        .text_color(color)
+        .child(text.to_string())
 }
 
 fn edge_tick(text: &str, top: bool, color: Hsla) -> Div {
@@ -204,11 +233,17 @@ fn x_ticks(start: &str, end: &str, color: Hsla) -> Div {
 fn paint_lines(
     bounds: Bounds<Pixels>,
     lines: &[HistoryLineView],
+    allow_fill: bool,
     theme: &Theme,
     window: &mut Window,
 ) {
     // 多条折线同图时不叠加底部色块填充，避免蓝/绿/橙多重半透明色叠成浑浊暗色。
-    let fill_opacity = if lines.len() > 1 { 0.0 } else { STEP_FILL };
+    // 本周期图有配速虚线，线下也不铺填充。
+    let fill_opacity = if allow_fill && lines.len() == 1 {
+        STEP_FILL
+    } else {
+        0.0
+    };
     for line in lines {
         let color = history_line_color(line.color_index, theme);
         for segment in &line.segments {
@@ -428,6 +463,57 @@ fn apply_step(builder: &mut PathBuilder, commands: &[StepCommand]) {
             }
         }
     }
+}
+
+/// 本周期辅助线：50% 中线、「现在」竖线、理想配速对角线和起点圆点。
+fn paint_period_guides(
+    bounds: Bounds<Pixels>,
+    period: &HistoryPeriodView,
+    theme: &Theme,
+    window: &mut Window,
+) {
+    let plot = line_plot_bounds(bounds);
+    // 50% 参考线画成和顶部弱参考线一样的细实线。
+    let mid_y = plot.origin.y + plot.size.height / 2.0;
+    let width = (bounds.origin.x + bounds.size.width - plot.origin.x).max(px(1.0));
+    window.paint_quad(fill(
+        Bounds {
+            origin: point(plot.origin.x, mid_y - px(0.5)),
+            size: size(width, px(1.0)),
+        },
+        theme.border.strong.opacity(0.4),
+    ));
+
+    // 「现在」竖线：1px 点线，从绘图区顶到底。
+    let now_x = plot.origin.x + plot.size.width * (period.now_x_ratio as f32);
+    let mut now_builder = PathBuilder::stroke(px(1.0)).dash_array(&[px(1.5), px(2.5)]);
+    now_builder.move_to(point(now_x, plot.origin.y));
+    now_builder.line_to(point(now_x, plot.origin.y + plot.size.height));
+    if let Ok(path) = now_builder.build() {
+        window.paint_path(path, theme.text.muted);
+    }
+
+    // 理想配速：从周期起点满额斜到重置时用完，颜色跟着折线但更淡。
+    let pace_color = history_line_color(0, theme);
+    let pace_from = chart_point(bounds, 0.0, period.pace_start_y_ratio);
+    let pace_to = chart_point(bounds, 1.0, period.pace_end_y_ratio);
+    let mut pace_builder = PathBuilder::stroke(px(1.5)).dash_array(&[px(4.0), px(3.0)]);
+    pace_builder.move_to(pace_from);
+    pace_builder.line_to(pace_to);
+    if let Ok(path) = pace_builder.build() {
+        window.paint_path(path, pace_color.opacity(0.55));
+    }
+    let radius = px(2.5);
+    window.paint_quad(
+        fill(
+            Bounds {
+                origin: point(pace_from.x - radius, pace_from.y - radius),
+                size: size(radius * 2.0, radius * 2.0),
+            },
+            pace_color,
+        )
+        .corner_radii(radius),
+    );
 }
 
 fn line_plot_bounds(bounds: Bounds<Pixels>) -> Bounds<Pixels> {

@@ -142,6 +142,9 @@ pub struct DisplaySettings {
     /// 配额卡画法：线条（进度条，折线在下方）或圆圈（数字在环内，折线在右侧）。
     #[serde(default)]
     pub quota_card_style: QuotaCardStyle,
+    /// 配额卡内嵌折线的时间范围：近 24 小时或配额自己的当前周期。
+    #[serde(default)]
+    pub quota_card_history_range: QuotaCardHistoryRange,
     /// 设置页历史图是否把单位相同的配额画在一张图里。托盘仍是每张卡一条线。
     #[serde(default = "default_true")]
     pub merge_history_charts: bool,
@@ -172,6 +175,7 @@ impl Default for DisplaySettings {
             tray_icon_style: TrayIconStyle::default(),
             quota_display_mode: QuotaDisplayMode::default(),
             quota_card_style: QuotaCardStyle::default(),
+            quota_card_history_range: QuotaCardHistoryRange::default(),
             merge_history_charts: true,
             show_dashboard_button: true,
             show_refresh_button: true,
@@ -505,6 +509,16 @@ pub enum QuotaCardStyle {
     Bar,
     /// 圆环里放数字，历史折线在右侧。
     Ring,
+}
+
+/// 托盘配额卡内嵌折线的时间范围。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum QuotaCardHistoryRange {
+    /// 近 24 小时。
+    #[default]
+    Last24Hours,
+    /// 配额自己的当前周期：横轴从周期起点到重置时间。认不出周期的配额仍画近 24 小时。
+    CurrentPeriod,
 }
 
 /// 额度显示模式

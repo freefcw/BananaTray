@@ -5,11 +5,13 @@
 
 use super::format::format_quota_label_spec;
 use super::{
-    HistoryChartAxisView, HistoryChartView, HistoryLineView, HistoryPointView, HistorySegmentView,
+    HistoryChartAxisView, HistoryChartView, HistoryLineView, HistoryPeriodView, HistoryPointView,
+    HistorySegmentView,
 };
 use crate::history::{
     is_line_series, plot_on_scale, plot_segment, series_x_bounds, shared_y_scale, HistoryReady,
-    HistoryReadyState, HistorySegment, HistorySeries, HistoryUnit, HistoryYKind, SharedYScale,
+    HistoryReadyState, HistorySegment, HistorySeries, HistoryUnit, HistoryYKind, QuotaPeriod,
+    SharedYScale,
 };
 use crate::models::{QuotaDisplayMode, QuotaLabelSpec};
 use chrono::{Datelike, Local, Timelike};
@@ -49,7 +51,17 @@ fn build_history_charts(
     };
     groups
         .iter()
-        .map(|group| history_chart_view(group, ready.axis_start_ms, ready.axis_end_ms))
+        .map(|group| {
+            // 单序列认出了周期时画「本周期」图；构造不出周期视图时回退普通图。
+            if let [item] = group.as_slice() {
+                if let Some(period) = item.period {
+                    if let Some(view) = period_chart_view(item, period, ready.axis_end_ms) {
+                        return view;
+                    }
+                }
+            }
+            history_chart_view(group, ready.axis_start_ms, ready.axis_end_ms)
+        })
         .collect()
 }
 
@@ -138,38 +150,7 @@ fn history_chart_view(
     let lines = series
         .iter()
         .enumerate()
-        .map(|(index, item)| HistoryLineView {
-            quota_key: item.quota_key.clone(),
-            title: history_series_title(&item.label_spec_json),
-            color_index: index,
-            segments: item
-                .segments
-                .iter()
-                .map(|segment| {
-                    let points = if let Some(scale) = &scale {
-                        plot_on_scale(segment, x_start_ms, x_end_ms, scale.min, scale.max)
-                    } else {
-                        plot_segment(segment, x_start_ms, x_end_ms).1
-                    };
-                    debug_assert_eq!(points.len(), segment.points.len());
-                    HistorySegmentView {
-                        unit: segment.unit,
-                        points: segment
-                            .points
-                            .iter()
-                            .zip(points)
-                            .map(|(source, point)| HistoryPointView {
-                                at_ms: source.bucket_start_ms,
-                                y: source.y,
-                                x_ratio: point.x_ratio,
-                                y_ratio: point.y_ratio,
-                                gap_before: source.gap_before,
-                            })
-                            .collect(),
-                    }
-                })
-                .collect(),
-        })
+        .map(|(index, item)| line_view(item, index, x_start_ms, x_end_ms, scale.as_ref()))
         .collect();
     let title = if series.len() == 1 {
         history_series_title(&series[0].label_spec_json)
@@ -196,7 +177,122 @@ fn history_chart_view(
             label_start_ms,
             label_end_ms,
         ),
+        period: None,
     }
+}
+
+fn line_view(
+    item: &HistorySeries,
+    color_index: usize,
+    x_start_ms: i64,
+    x_end_ms: i64,
+    scale: Option<&SharedYScale>,
+) -> HistoryLineView {
+    HistoryLineView {
+        quota_key: item.quota_key.clone(),
+        title: history_series_title(&item.label_spec_json),
+        color_index,
+        segments: item
+            .segments
+            .iter()
+            .map(|segment| {
+                let points = if let Some(scale) = scale {
+                    plot_on_scale(segment, x_start_ms, x_end_ms, scale.min, scale.max)
+                } else {
+                    plot_segment(segment, x_start_ms, x_end_ms).1
+                };
+                debug_assert_eq!(points.len(), segment.points.len());
+                HistorySegmentView {
+                    unit: segment.unit,
+                    points: segment
+                        .points
+                        .iter()
+                        .zip(points)
+                        .map(|(source, point)| HistoryPointView {
+                            at_ms: source.bucket_start_ms,
+                            y: source.y,
+                            x_ratio: point.x_ratio,
+                            y_ratio: point.y_ratio,
+                            gap_before: source.gap_before,
+                        })
+                        .collect(),
+                }
+            })
+            .collect(),
+    }
+}
+
+/// 「本周期」图：固定 0..limit 纵轴、0/50%/100% 刻度，横轴是周期起点到重置时间。
+/// `series` 已被 `project_display_series` 按额度显示模式投影。
+/// 序列内部单位或已用/剩余不一致、没有上限时返回 `None`，由调用方回退普通图。
+fn period_chart_view(
+    series: &HistorySeries,
+    period: QuotaPeriod,
+    now_ms: i64,
+) -> Option<HistoryChartView> {
+    let first = series.segments.first()?;
+    if series
+        .segments
+        .iter()
+        .any(|segment| segment.unit != first.unit || segment.y_kind != first.y_kind)
+    {
+        return None;
+    }
+    let limit = series
+        .segments
+        .iter()
+        .rev()
+        .find_map(|segment| segment.points.last())?
+        .limit?;
+    if limit <= 0.0 {
+        return None;
+    }
+    let unit = first.unit;
+    let y_kind = first.y_kind;
+    let remaining = y_kind == HistoryYKind::BalanceRemaining;
+
+    let scale = SharedYScale {
+        min: 0.0,
+        max: limit,
+        unit,
+        y_kind,
+    };
+    let line = line_view(series, 0, period.start_ms, period.end_ms, Some(&scale));
+    let (y_max, y_min) = format_axis_ends(0.0, limit, unit);
+    let (x_start, x_end) = if period.end_ms - period.start_ms > crate::history::DAY_MS {
+        // 跨天的周期只标「月/日」，时分没有信息量。
+        (
+            axis_clock(period.start_ms)
+                .map(|clock| format!("{}/{}", clock.month, clock.day))
+                .unwrap_or_default(),
+            axis_clock(period.end_ms)
+                .map(|clock| format!("{}/{}", clock.month, clock.day))
+                .unwrap_or_default(),
+        )
+    } else {
+        format_history_axis_times(period.start_ms, period.end_ms)
+    };
+    let span = (period.end_ms - period.start_ms).max(1) as f64;
+    Some(HistoryChartView {
+        quota_key: series.quota_key.clone(),
+        title: history_series_title(&series.label_spec_json),
+        lines: vec![line],
+        axis: HistoryChartAxisView {
+            y_label: history_y_label(y_kind),
+            y_max,
+            y_min,
+            x_start,
+            x_end,
+            x_start_ms: period.start_ms,
+            x_end_ms: period.end_ms,
+        },
+        period: Some(HistoryPeriodView {
+            pace_start_y_ratio: if remaining { 1.0 } else { 0.0 },
+            pace_end_y_ratio: if remaining { 0.0 } else { 1.0 },
+            now_x_ratio: ((now_ms - period.start_ms) as f64 / span).clamp(0.0, 1.0),
+            y_mid: format_axis_value(limit / 2.0, unit, axis_base_decimals(unit)),
+        }),
+    })
 }
 
 fn sample_time_extent(segments: &[HistorySegment]) -> Option<(i64, i64)> {
@@ -511,13 +607,17 @@ fn history_y_label(kind: HistoryYKind) -> String {
     }
 }
 
-/// 持平只标一个值，`y_min` 留空。百分比先取整。两端写成同一个字符串时再多留一位，避免 0% 和 0% 并排。
-fn format_axis_ends(min: f64, max: f64, unit: HistoryUnit) -> (String, String) {
-    let base = match unit {
+fn axis_base_decimals(unit: HistoryUnit) -> usize {
+    match unit {
         HistoryUnit::Percentage => 0,
         HistoryUnit::Amount => 1,
         HistoryUnit::Currency => 2,
-    };
+    }
+}
+
+/// 持平只标一个值，`y_min` 留空。百分比先取整。两端写成同一个字符串时再多留一位，避免 0% 和 0% 并排。
+fn format_axis_ends(min: f64, max: f64, unit: HistoryUnit) -> (String, String) {
+    let base = axis_base_decimals(unit);
     if (max - min).abs() < 1e-9 {
         return (format_axis_value(max, unit, base), String::new());
     }
@@ -637,6 +737,7 @@ mod tests {
                     })
                     .collect(),
             }],
+            period: None,
         }
     }
 
@@ -931,6 +1032,7 @@ mod tests {
                     })
                     .collect(),
             }],
+            period: None,
         }
     }
 
@@ -1064,5 +1166,62 @@ mod tests {
             .rows
             .iter()
             .any(|row| row.contains("周配额") && row.contains("80%")));
+    }
+
+    #[test]
+    fn period_chart_fixes_axis_to_zero_and_limit() {
+        let _locale = crate::i18n::test_locale_guard("zh-CN");
+        let day = 86_400_000_i64;
+        let period = QuotaPeriod {
+            start_ms: 0,
+            end_ms: 7 * day,
+        };
+        let mut item = series("weekly", 3);
+        item.period = Some(period);
+        let ready = HistoryReady {
+            range: HistoryRange::CurrentPeriod,
+            axis_start_ms: 0,
+            axis_end_ms: 7 * day / 2,
+            state: HistoryReadyState::Charts(vec![item]),
+        };
+        let chart = &history_charts_view(&ready, QuotaDisplayMode::Remaining)[0];
+        assert_eq!(chart.axis.y_max, "100%");
+        assert_eq!(chart.axis.y_min, "0%");
+        assert_eq!(chart.axis.x_start_ms, period.start_ms);
+        assert_eq!(chart.axis.x_end_ms, period.end_ms);
+        // 跨天周期的横轴只标「月/日」。
+        assert!(!chart.axis.x_start.contains(':'));
+        assert!(!chart.axis.x_end.contains(':'));
+        let view = chart.period.as_ref().expect("period view");
+        assert_eq!(view.y_mid, "50%");
+        assert_eq!(view.pace_start_y_ratio, 1.0);
+        assert_eq!(view.pace_end_y_ratio, 0.0);
+        assert!((view.now_x_ratio - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn period_chart_in_used_mode_paces_up() {
+        let mut item = series("weekly", 3);
+        let period = QuotaPeriod {
+            start_ms: 0,
+            end_ms: 7 * 86_400_000,
+        };
+        item.period = Some(period);
+        let ready = HistoryReady {
+            range: HistoryRange::CurrentPeriod,
+            axis_start_ms: 0,
+            axis_end_ms: period.end_ms / 2,
+            state: HistoryReadyState::Charts(vec![item]),
+        };
+        let chart = &history_charts_view(&ready, QuotaDisplayMode::Used)[0];
+        let view = chart.period.as_ref().expect("period view");
+        assert_eq!(view.pace_start_y_ratio, 0.0);
+        assert_eq!(view.pace_end_y_ratio, 1.0);
+    }
+
+    #[test]
+    fn series_without_period_has_no_period_view() {
+        let chart = &history_charts_view(&ready(vec![series("a", 3)]), QuotaDisplayMode::Used)[0];
+        assert!(chart.period.is_none());
     }
 }

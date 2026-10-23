@@ -194,6 +194,11 @@ pub(super) fn apply_setting_change(
         SettingChange::SetQuotaCardStyle(style) => {
             session.settings.display.quota_card_style = style;
         }
+        SettingChange::SetQuotaCardHistoryRange(range) => {
+            session.settings.display.quota_card_history_range = range;
+            // 时间范围变了：弹窗里的配额卡折线要按新范围重载。
+            super::history::begin_popup_history_load(session, now_ms, effects);
+        }
         SettingChange::ToggleMergeHistoryCharts => {
             session.settings.display.merge_history_charts =
                 !session.settings.display.merge_history_charts;

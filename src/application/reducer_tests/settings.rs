@@ -3,7 +3,7 @@ use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, ContextEffect, GlobalHotkeyError,
     NotificationEffect, RefreshEffect, SettingChange, SettingsEffect, TrayIconRequest,
 };
-use crate::models::{NavTab, ProviderKind, QuotaCardStyle, RefreshData};
+use crate::models::{NavTab, ProviderKind, QuotaCardHistoryRange, QuotaCardStyle, RefreshData};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshResult};
 
 // ── Cadence Dropdown ────────────────────────────────
@@ -734,5 +734,39 @@ fn toggle_session_quota_notifications_resets_usage_baselines() {
     assert!(!has_effect(&effects, |e| matches!(
         e,
         AppEffect::Common(CommonEffect::Notification(NotificationEffect::Quota { .. }))
+    )));
+}
+
+#[test]
+fn set_quota_card_history_range_persists_and_reloads_popup() {
+    let mut session = make_session();
+    assert_eq!(
+        session.settings.display.quota_card_history_range,
+        QuotaCardHistoryRange::Last24Hours
+    );
+    // 弹窗停在某个 provider 页时，改范围要重载配额卡折线。
+    session
+        .nav
+        .switch_to(NavTab::Provider(pid(ProviderKind::Claude)));
+
+    let effects = reduce(
+        &mut session,
+        AppAction::UpdateSetting(SettingChange::SetQuotaCardHistoryRange(
+            QuotaCardHistoryRange::CurrentPeriod,
+        )),
+    );
+
+    assert_eq!(
+        session.settings.display.quota_card_history_range,
+        QuotaCardHistoryRange::CurrentPeriod
+    );
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+    assert!(has_render(&effects));
+    assert!(has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::History(crate::history::HistoryJob::Load(_)))
     )));
 }

@@ -4,7 +4,9 @@ use super::components::{
 };
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
-use crate::models::{AppSettings, AppTheme, QuotaCardStyle, QuotaDisplayMode, TrayIconStyle};
+use crate::models::{
+    AppSettings, AppTheme, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode, TrayIconStyle,
+};
 use crate::theme::Theme;
 use crate::ui::widgets::{render_segmented_control, render_toggle_switch, SegmentedSize};
 use gpui::{
@@ -50,6 +52,8 @@ impl SettingsView {
             .child(self.render_quota_display_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_quota_card_style_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(self.render_quota_card_history_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_merge_charts_setting(settings, theme))
     }
@@ -181,6 +185,33 @@ impl SettingsView {
                 crate::bootstrap::dispatch_in_window(
                     &state,
                     AppAction::UpdateSetting(SettingChange::SetQuotaCardStyle(style)),
+                    window,
+                    cx,
+                );
+            },
+        )
+    }
+
+    fn render_quota_card_history_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        let state = self.state.clone();
+        render_inline_segmented_row(
+            &t!("settings.quota_card_history"),
+            vec![
+                (
+                    t!("settings.quota_card_history.last_24h").to_string(),
+                    QuotaCardHistoryRange::Last24Hours,
+                ),
+                (
+                    t!("settings.quota_card_history.current_period").to_string(),
+                    QuotaCardHistoryRange::CurrentPeriod,
+                ),
+            ],
+            &settings.display.quota_card_history_range,
+            theme,
+            move |range, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::UpdateSetting(SettingChange::SetQuotaCardHistoryRange(range)),
                     window,
                     cx,
                 );

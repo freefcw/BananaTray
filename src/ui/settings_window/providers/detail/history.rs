@@ -60,13 +60,7 @@ pub(super) fn render_history_section(
                     .flex_col()
                     .gap(px(10.0))
                     .child(render_chart_legend(&chart.lines, &chart.title, theme))
-                    .child(render_history_line_chart(
-                        &chart.quota_key,
-                        chart.lines.clone(),
-                        chart.axis.clone(),
-                        116.0,
-                        theme,
-                    ));
+                    .child(render_history_line_chart(chart, 116.0, theme));
                 if index > 0 {
                     chart_block = chart_block
                         .pt(px(12.0))

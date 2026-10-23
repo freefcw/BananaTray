@@ -2,8 +2,8 @@ use super::state::{GlobalHotkeyError, SettingsTab};
 use crate::history::{HistoryLoadOutcome, HistoryRange, HistoryScope};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
-    ProviderId, QuotaCardStyle, QuotaDisplayMode, QuotaThresholdUnit, QuotaThresholds,
-    ScriptProviderConfig, ScriptProviderDeleteSuccess, ScriptProviderEditData,
+    ProviderId, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode, QuotaThresholdUnit,
+    QuotaThresholds, ScriptProviderConfig, ScriptProviderDeleteSuccess, ScriptProviderEditData,
     ScriptProviderSaveSuccess, ScriptProviderTestResult, TrayIconStyle,
 };
 use crate::refresh::{RefreshEvent, RefreshReason};
@@ -322,6 +322,7 @@ pub enum SettingChange {
     SetTrayIconStyle(TrayIconStyle),
     SetQuotaDisplayMode(QuotaDisplayMode),
     SetQuotaCardStyle(QuotaCardStyle),
+    SetQuotaCardHistoryRange(QuotaCardHistoryRange),
     ToggleMergeHistoryCharts,
     ToggleQuotaVisibility {
         provider_id: ProviderId,

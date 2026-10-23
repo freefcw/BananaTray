@@ -8,6 +8,7 @@
 - `retention` 只计算 cutoff 和查询窗口。SQLite 不读 `AppSettings`。历史 reducer 使用 dispatch 显式传入的 epoch 毫秒，采样和同轮查询共用时间快照。
 - `HistoryLoadRequest` 与完成 action 透传 `HistoryScope`（Settings / Popup）；独立计号的两个查看范围只结算自己的响应，即使 Provider 和请求编号相同也不会串线。
 - `series` 把样本收成折线。失败样本不进入折线。
+- `period` 给托盘配额卡的「本周期」折线推断配额当前周期：查询窗口固定 31 天（盖住一个自然月），周期终点取最新采样的重置时间，起点按标签长度（session 5h / daily 24h / weekly 7d / monthly 一个自然月）→ `quota_type` → 同一重置时间（±10 分钟）连续采样能盖住的最小周期顺序推；桶宽与设置页同长度范围一致。认不出周期的配额回退近 24 小时，设置页不提供这个范围。
 - `sqlite` 是唯一的存储适配器。前台 reducer 和设置页都不碰数据库。
 - 脱敏后的 `detail` 最长 160 个字符。不保存账号邮箱、token 或 cookie。
 

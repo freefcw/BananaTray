@@ -4,7 +4,7 @@ use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, SettingChange, SettingsModalState, SettingsTab,
 };
 use crate::history::{HistoryJob, HistoryLoadOutcome, HistoryRange};
-use crate::models::{NavTab, ProviderKind, QuotaInfo, RefreshData};
+use crate::models::{NavTab, ProviderKind, QuotaCardHistoryRange, QuotaInfo, RefreshData};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshReason, RefreshResult};
 
 fn finished(result: RefreshResult) -> AppAction {
@@ -401,5 +401,25 @@ fn stale_history_response_is_ignored_within_its_scope() {
     assert!(effects.is_empty());
     assert!(
         matches!(session.history_ui.load, HistoryLoadState::Loading { request_id, .. } if request_id != old_id)
+    );
+}
+
+#[test]
+fn popup_history_load_uses_current_period_window_when_enabled() {
+    let mut session = make_session();
+    session.settings.display.quota_card_history_range = QuotaCardHistoryRange::CurrentPeriod;
+    let effects = reduce(
+        &mut session,
+        AppAction::SelectNavTab(NavTab::Provider(pid(ProviderKind::Claude))),
+    );
+    let request = effects.iter().find_map(|effect| match effect {
+        AppEffect::Common(CommonEffect::History(HistoryJob::Load(request))) => Some(request),
+        _ => None,
+    });
+    let request = request.expect("provider tab loads popup history");
+    assert_eq!(request.range, HistoryRange::CurrentPeriod);
+    assert_eq!(
+        request.axis_end_ms - request.axis_start_ms,
+        31 * crate::history::DAY_MS
     );
 }
