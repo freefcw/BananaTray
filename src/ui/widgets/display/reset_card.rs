@@ -28,7 +28,7 @@ pub(crate) fn render_rate_limit_resets(
         .rounded(px(12.0))
         .bg(theme.bg.card_inner)
         .border_1()
-        .border_color(theme.border.subtle)
+        .border_color(theme.border.strong)
         .child(reset_heading(section, theme));
 
     let remaining_width = remaining_column_width(&section.rows);

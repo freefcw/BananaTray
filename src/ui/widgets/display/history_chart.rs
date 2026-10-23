@@ -14,10 +14,14 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window,
 };
 
-/// 折线缩进，避免贴着绘图区边缘被裁掉。
-const PLOT_INSET: f32 = 2.0;
-/// 纵轴数字离绘图区左缘、上缘、下缘的距离。
+/// 折线右侧缩进，避免贴着绘图区右缘被裁掉。
+const PLOT_INSET_X: f32 = 2.0;
+/// 绘图区上下内缩，为 100%/0% 处的 2px 粗折线与 5px 悬停圆点留出呼吸空间，并与 10px 纵轴文字中心对齐。
+const PLOT_INSET_Y: f32 = 6.0;
+/// 纵轴数字离绘图区左缘的距离。
 const LABEL_PAD: f32 = 6.0;
+/// 10px 纵轴文字（line-height 1.0）与 `PLOT_INSET_Y` 参考线中心对齐的顶/底偏移。
+const Y_TICK_EDGE_OFFSET: f32 = PLOT_INSET_Y - 5.0;
 /// 台阶笔画。比 1px 基线略粗，小图里仍能看清下降。
 const STEP_STROKE: f32 = 2.0;
 /// 台阶拐角的圆角半径。短台阶会把它收到线段的一半，避免两段圆角叠在一起。
@@ -174,9 +178,9 @@ fn edge_tick(text: &str, top: bool, color: Hsla) -> Div {
         .text_color(color)
         .child(text.to_string());
     if top {
-        tick.top(px(LABEL_PAD))
+        tick.top(px(Y_TICK_EDGE_OFFSET))
     } else {
-        tick.bottom(px(LABEL_PAD))
+        tick.bottom(px(Y_TICK_EDGE_OFFSET))
     }
 }
 
@@ -186,7 +190,7 @@ fn x_ticks(start: &str, end: &str, color: Hsla) -> Div {
         .h(px(PopupLayout::CARD_HISTORY_AXIS_TIME))
         .w_full()
         .pl(px(inset))
-        .pr(px(PLOT_INSET))
+        .pr(px(PLOT_INSET_X))
         .flex()
         .justify_between()
         .items_center()
@@ -203,10 +207,12 @@ fn paint_lines(
     theme: &Theme,
     window: &mut Window,
 ) {
+    // 多条折线同图时不叠加底部色块填充，避免蓝/绿/橙多重半透明色叠成浑浊暗色。
+    let fill_opacity = if lines.len() > 1 { 0.0 } else { STEP_FILL };
     for line in lines {
         let color = history_line_color(line.color_index, theme);
         for segment in &line.segments {
-            paint_segment(bounds, &segment.points, color, window);
+            paint_segment(bounds, &segment.points, color, fill_opacity, window);
         }
     }
 }
@@ -215,19 +221,20 @@ fn paint_segment(
     bounds: Bounds<Pixels>,
     points: &[HistoryPointView],
     color: Hsla,
+    fill_opacity: f32,
     window: &mut Window,
 ) {
     let mut run: Vec<&HistoryPointView> = Vec::new();
     for point in points {
         if point.gap_before && !run.is_empty() {
-            paint_run(bounds, &run, color, window);
+            paint_run(bounds, &run, color, fill_opacity, window);
             paint_gap_bridge(bounds, run[run.len() - 1], point, color, window);
             run.clear();
         }
         run.push(point);
     }
     if !run.is_empty() {
-        paint_run(bounds, &run, color, window);
+        paint_run(bounds, &run, color, fill_opacity, window);
     }
 }
 
@@ -257,6 +264,7 @@ fn paint_run(
     bounds: Bounds<Pixels>,
     points: &[&HistoryPointView],
     color: Hsla,
+    fill_opacity: f32,
     window: &mut Window,
 ) {
     // 阶梯：保持上一个采样的值，到下一个不同的值再跳。相同用量并成一段平线。
@@ -277,18 +285,21 @@ fn paint_run(
         return;
     }
     let commands = rounded_step(&vertices, STEP_RADIUS);
-    let baseline = (bounds.origin.y + bounds.size.height - px(1.0)) / px(1.0);
+    let plot = line_plot_bounds(bounds);
+    let baseline = (plot.origin.y + plot.size.height) / px(1.0);
     let first = vertices[0];
     let last = vertices[vertices.len() - 1];
 
-    let mut fill_path = PathBuilder::fill();
-    fill_path.move_to(point(px(first.0), px(baseline)));
-    fill_path.line_to(point(px(first.0), px(first.1)));
-    apply_step(&mut fill_path, &commands);
-    fill_path.line_to(point(px(last.0), px(baseline)));
-    fill_path.close();
-    if let Ok(path) = fill_path.build() {
-        window.paint_path(path, color.opacity(STEP_FILL));
+    if fill_opacity > 0.0 {
+        let mut fill_path = PathBuilder::fill();
+        fill_path.move_to(point(px(first.0), px(baseline)));
+        fill_path.line_to(point(px(first.0), px(first.1)));
+        apply_step(&mut fill_path, &commands);
+        fill_path.line_to(point(px(last.0), px(baseline)));
+        fill_path.close();
+        if let Ok(path) = fill_path.build() {
+            window.paint_path(path, color.opacity(fill_opacity));
+        }
     }
 
     let mut stroke = PathBuilder::stroke(px(STEP_STROKE));
@@ -421,12 +432,13 @@ fn apply_step(builder: &mut PathBuilder, commands: &[StepCommand]) {
 
 fn line_plot_bounds(bounds: Bounds<Pixels>) -> Bounds<Pixels> {
     let left = px(LABEL_PAD + PopupLayout::CARD_HISTORY_Y_GUTTER);
-    let inset = px(PLOT_INSET);
+    let inset_x = px(PLOT_INSET_X);
+    let inset_y = px(PLOT_INSET_Y);
     Bounds {
-        origin: point(bounds.origin.x + left, bounds.origin.y + inset),
+        origin: point(bounds.origin.x + left, bounds.origin.y + inset_y),
         size: size(
-            (bounds.size.width - left - inset).max(px(1.0)),
-            (bounds.size.height - inset * 2.0).max(px(1.0)),
+            (bounds.size.width - left - inset_x).max(px(1.0)),
+            (bounds.size.height - inset_y * 2.0).max(px(1.0)),
         ),
     }
 }
@@ -439,15 +451,23 @@ fn chart_point(bounds: Bounds<Pixels>, x_ratio: f64, y_ratio: f64) -> Point<Pixe
     )
 }
 
-/// 绘图区只留底边。刻度数字仍盖在左侧，不再画四周边框和纵轴线。
+/// 绘图区画顶栏弱参考线与底边基线，锚定绘图框上下边界，避免持平折线上方像留白断层。
 fn paint_baseline(bounds: Bounds<Pixels>, color: Hsla, window: &mut Window) {
     let plot = line_plot_bounds(bounds);
     let stroke = px(1.0);
     let right = bounds.origin.x + bounds.size.width;
+    let width = (right - plot.origin.x).max(stroke);
     window.paint_quad(fill(
         Bounds {
-            origin: point(plot.origin.x, bounds.origin.y + bounds.size.height - stroke),
-            size: size((right - plot.origin.x).max(stroke), stroke),
+            origin: point(plot.origin.x, plot.origin.y),
+            size: size(width, stroke),
+        },
+        color.opacity(0.4),
+    ));
+    window.paint_quad(fill(
+        Bounds {
+            origin: point(plot.origin.x, plot.origin.y + plot.size.height - stroke),
+            size: size(width, stroke),
         },
         color,
     ));

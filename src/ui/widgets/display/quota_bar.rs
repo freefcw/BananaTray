@@ -52,9 +52,10 @@ pub(in crate::ui::widgets::display) fn render_quota_header_row(
         .text_color(badge_color)
         .px(px(8.0))
         .py(px(2.0))
-        .rounded(px(6.0))
+        .rounded_full()
+        .bg(badge_color.opacity(0.12))
         .border_1()
-        .border_color(badge_color)
+        .border_color(badge_color.opacity(0.32))
         .child(badge_label);
     let mut trailing = div().flex().items_center().gap(px(4.0)).child(badge);
     if let Some(on_hide) = on_hide {
