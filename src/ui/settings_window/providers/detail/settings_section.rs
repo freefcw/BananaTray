@@ -49,11 +49,15 @@ pub(super) fn render_settings_section(
             .mt(px(10.0)),
         ),
         SettingsCapability::None => {
-            let placeholder = placeholder_for_provider_capability(detail.provider_capability);
-            section.child(render_info_placeholder_card(
-                placeholder.title,
-                placeholder.description,
-            ))
+            if !detail.can_refresh && !detail.show_quota_thresholds {
+                let placeholder = placeholder_for_provider_capability(detail.provider_capability);
+                section.child(render_info_placeholder_card(
+                    placeholder.title,
+                    placeholder.description,
+                ))
+            } else {
+                section
+            }
         }
     };
 

@@ -47,11 +47,11 @@ fn render_quota_visibility_list(
     let mut list = div()
         .flex()
         .flex_col()
-        .mt(px(8.0))
-        .rounded(px(10.0))
-        .bg(theme.bg.card)
+        .mt(px(10.0))
+        .rounded(px(12.0))
+        .bg(theme.bg.card_inner)
         .border_1()
-        .border_color(theme.border.subtle)
+        .border_color(theme.border.strong)
         .overflow_hidden();
 
     for (index, item) in items.iter().enumerate() {
@@ -77,15 +77,16 @@ fn render_quota_visibility_row(
 ) -> Div {
     let visible = item.visible;
     let quota_key = item.quota_key.clone();
+    let hover_bg = theme.bg.card_inner_hovered;
 
     div()
         .flex()
         .items_center()
         .justify_between()
-        .px(px(12.0))
-        .py(px(8.0))
+        .px(px(16.0))
+        .py(px(10.0))
         .cursor_pointer()
-        .hover(|s| s.bg(theme.bg.subtle))
+        .hover(move |s| s.bg(hover_bg))
         .child(render_quota_label(item, theme))
         .child(
             crate::ui::widgets::render_toggle_switch(visible, px(36.0), px(20.0), px(14.0), theme)
@@ -108,22 +109,30 @@ fn render_quota_label(item: &QuotaVisibilityItem, theme: &Theme) -> Div {
         label = label.child(render_svg_icon(
             "src/icons/status.svg",
             px(14.0),
-            quota_label_color(item.visible, theme),
+            quota_icon_color(item.visible, theme),
         ));
     }
 
     label.child(
         div()
-            .text_size(px(12.5))
+            .text_size(px(13.0))
             .line_height(relative(1.3))
             .text_color(quota_label_color(item.visible, theme))
             .child(item.label.clone()),
     )
 }
 
-fn quota_label_color(visible: bool, theme: &Theme) -> gpui::Hsla {
+fn quota_icon_color(visible: bool, theme: &Theme) -> gpui::Hsla {
     if visible {
         theme.text.accent
+    } else {
+        theme.text.muted
+    }
+}
+
+fn quota_label_color(visible: bool, theme: &Theme) -> gpui::Hsla {
+    if visible {
+        theme.text.primary
     } else {
         theme.text.muted
     }

@@ -18,9 +18,96 @@ pub(in crate::ui::settings_window) fn render_settings_card(theme: &Theme) -> Div
         .bg(theme.bg.card_inner)
         .border_1()
         .border_color(theme.border.strong)
-        .px(px(20.0))
-        .py(px(20.0))
+        .px(px(16.0))
+        .py(px(16.0))
         .gap(px(14.0))
+}
+
+/// 详情页设置卡片的统一头部：左侧 36×36 accent 图标块，右侧标题行
+/// （`badge` 传入时附在标题后）与一行说明，供用量提醒与提醒阈值卡片共用。
+pub(in crate::ui::settings_window) fn render_settings_card_header(
+    icon_path: &'static str,
+    title: String,
+    badge: Option<Div>,
+    description: String,
+    theme: &Theme,
+) -> Div {
+    let accent = theme.text.accent;
+    let icon = div()
+        .flex_shrink_0()
+        .w(px(36.0))
+        .h(px(36.0))
+        .rounded(px(10.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(accent.opacity(0.14))
+        .child(crate::ui::widgets::render_svg_icon(
+            icon_path,
+            px(18.0),
+            accent,
+        ));
+
+    let mut title_row = div().flex().items_center().gap(px(8.0)).child(
+        div()
+            .text_size(px(14.0))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.text.primary)
+            .whitespace_nowrap()
+            .child(title),
+    );
+    if let Some(badge) = badge {
+        title_row = title_row.child(badge);
+    }
+
+    let text = div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap(px(3.0))
+        .child(title_row)
+        .child(
+            div()
+                .text_size(px(12.0))
+                .line_height(relative(1.4))
+                .text_color(theme.text.muted)
+                .child(description),
+        );
+
+    div()
+        .w_full()
+        .flex()
+        .items_center()
+        .gap(px(12.0))
+        .child(icon)
+        .child(text)
+}
+
+/// 统一「跟随全局 / 自定义」状态胶囊徽章，供用量提醒与提醒阈值卡片共用。
+pub(in crate::ui::settings_window) fn render_inheritance_badge(
+    is_custom: bool,
+    label: String,
+    theme: &Theme,
+) -> Div {
+    let accent = theme.text.accent;
+    let (fg, bg, border) = if is_custom {
+        (accent, accent.opacity(0.14), accent.opacity(0.32))
+    } else {
+        (theme.text.secondary, theme.bg.subtle, theme.border.subtle)
+    };
+    div()
+        .px(px(7.0))
+        .py(px(1.5))
+        .rounded_full()
+        .bg(bg)
+        .border_1()
+        .border_color(border)
+        .text_size(px(10.5))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(fg)
+        .whitespace_nowrap()
+        .child(label)
 }
 
 /// 设置卡片标题。

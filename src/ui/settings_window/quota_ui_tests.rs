@@ -236,15 +236,35 @@ fn set_draft_values(
 
 fn assert_threshold_fields_in_strip(cx: &mut VisualTestContext, case: &str) {
     draw(cx);
+    let header = bounds(cx, "quota-threshold-editing-header");
     let parent = bounds(cx, "quota-threshold-fields");
+    assert!(
+        parent.top() - header.bottom() >= px(8.0),
+        "[{case}] threshold strip must not stick to unit header: {header:?} vs {parent:?}"
+    );
     let notify = bounds(cx, "quota-threshold-notify");
     let critical = bounds(cx, "quota-threshold-critical");
     let warning = bounds(cx, "quota-threshold-warning");
 
-    for (name, field, label_selector) in [
-        ("notify", notify, "quota-threshold-notify-label"),
-        ("critical", critical, "quota-threshold-critical-label"),
-        ("warning", warning, "quota-threshold-warning-label"),
+    for (name, field, label_selector, input_selector) in [
+        (
+            "notify",
+            notify,
+            "quota-threshold-notify-label",
+            "quota-threshold-notify-input",
+        ),
+        (
+            "critical",
+            critical,
+            "quota-threshold-critical-label",
+            "quota-threshold-critical-input",
+        ),
+        (
+            "warning",
+            warning,
+            "quota-threshold-warning-label",
+            "quota-threshold-warning-input",
+        ),
     ] {
         assert!(
             field.left() >= parent.left() - px(0.5) && field.right() <= parent.right() + px(0.5),
@@ -260,7 +280,39 @@ fn assert_threshold_fields_in_strip(cx: &mut VisualTestContext, case: &str) {
             label.right() <= field.right() + px(0.5),
             "[{case}] {name} label overflows its field: {label:?} vs {field:?}"
         );
+        let input = bounds(cx, input_selector);
+        assert!(
+            input.top() - label.bottom() >= px(4.0),
+            "[{case}] {name} input must have vertical spacing below its label: {label:?} vs {input:?}"
+        );
     }
+
+    let above_footer = cx
+        .debug_bounds("quota-threshold-scale")
+        .filter(|scale| scale.top() >= parent.bottom())
+        .map(|scale| {
+            assert!(
+                scale.top() - parent.bottom() >= px(8.0),
+                "[{case}] percentage scale must not stick to the threshold strip above: {parent:?} vs {scale:?}"
+            );
+            scale
+        })
+        .unwrap_or(parent);
+    let hint = bounds(cx, "quota-threshold-hint");
+    let save = bounds(cx, "quota-threshold-save");
+    let cancel = bounds(cx, "quota-threshold-cancel");
+    assert!(
+        hint.top() - above_footer.bottom() >= px(8.0),
+        "[{case}] hint text must not stick to the element above: {above_footer:?} vs {hint:?}"
+    );
+    assert!(
+        save.top() - above_footer.bottom() >= px(8.0),
+        "[{case}] save button must not stick to the element above: {above_footer:?} vs {save:?}"
+    );
+    assert!(
+        save.size.height <= px(25.0) && cancel.size.height <= px(25.0),
+        "[{case}] draft action buttons must stay compact: save={save:?}, cancel={cancel:?}"
+    );
 
     // 阅读顺序按剩余额度从少到多：弹窗提醒 → 图标变红 → 图标变黄
     assert!(
@@ -275,7 +327,7 @@ fn assert_threshold_fields_in_strip(cx: &mut VisualTestContext, case: &str) {
         "[{case}] warning must follow critical in the same row or start the next row: {critical:?} vs {warning:?}"
     );
     // 宽度足够容纳四段时必须保持单行
-    if parent.size.width >= px(4.0 * 76.0 + 3.0 * 4.0) {
+    if parent.size.width >= px(4.0 * 76.0 + 3.0 * 6.0) {
         assert_eq!(
             warning.top(),
             notify.top(),

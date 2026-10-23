@@ -1,5 +1,5 @@
 use super::providers::shared::{
-    render_input_box, render_settings_card, render_settings_card_title,
+    render_inheritance_badge, render_input_box, render_settings_card, render_settings_card_header,
 };
 use super::SettingsView;
 use crate::application::{QuotaThresholdUnitViewState, SettingChange, SettingsTab};
@@ -146,40 +146,24 @@ pub(in crate::ui::settings_window) fn render_quota_thresholds_section(
         }
         card
     } else {
-        // Provider 详情页：上方无全局分区标题，保留卡片标题与说明，结构与 Token/Usage 面板统一
-        let card = render_settings_card(theme)
-            .child(render_settings_card_title(
-                &t!("settings.quota_thresholds.title"),
-                theme,
-            ))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .text_color(theme.text.muted)
-                    .child(t!("settings.quota_thresholds.desc").to_string()),
-            );
+        // Provider 详情页：卡片头与「用量提醒」统一（共享 render_settings_card_header），
+        // 各单位区块直接以细分隔线在卡片内展开，避免再套一层内卡片造成三层套娃。
+        let header = render_settings_card_header(
+            "src/icons/status.svg",
+            t!("settings.quota_thresholds.title").to_string(),
+            None,
+            t!("settings.quota_thresholds.desc").to_string(),
+            theme,
+        );
 
-        let mut list = div()
-            .flex_col()
-            .w_full()
-            .rounded(px(10.0))
-            .border_1()
-            .border_color(theme.border.subtle)
-            .overflow_hidden();
-        for (index, unit_state) in units.iter().enumerate() {
-            list = list.child(render_quota_threshold_unit(
-                view,
-                &target,
-                unit_state,
-                index > 0,
-                theme,
-                window,
-                cx,
-                &on_change,
+        let mut card = render_settings_card(theme).child(header);
+        for unit_state in units {
+            card = card.child(render_quota_threshold_unit(
+                view, &target, unit_state, true, theme, window, cx, &on_change,
             ));
         }
 
-        card.child(list)
+        card
     }
 }
 
@@ -195,17 +179,26 @@ fn render_quota_threshold_unit(
     on_change: &Rc<QuotaThresholdChange>,
 ) -> Div {
     let unit = unit_state.unit;
+    let is_global = matches!(target, QuotaThresholdTarget::Global);
     let editing = view
         .quota_threshold_draft
         .as_ref()
         .is_some_and(|draft| draft.target == *target && draft.unit == unit);
 
-    let mut row = div().flex_col().gap(px(12.0)).px(px(14.0)).py(px(12.0));
-    if with_divider {
-        row = row.border_t_1().border_color(theme.border.subtle);
-    }
-    if editing {
-        row = row.bg(theme.bg.subtle);
+    let mut row = div().flex().flex_col().gap(px(10.0));
+    if is_global {
+        row = row.px(px(14.0)).py(px(12.0));
+        if with_divider {
+            row = row.border_t_1().border_color(theme.border.subtle);
+        }
+        if editing {
+            row = row.bg(theme.bg.subtle);
+        }
+    } else if with_divider {
+        row = row
+            .pt(px(14.0))
+            .border_t_1()
+            .border_color(theme.border.subtle);
     }
 
     // 标题行固定高度：编辑态把操作按钮移到区间条下方，标题行只保留标题，进入 / 退出编辑时内容不跳动，
@@ -215,9 +208,11 @@ fn render_quota_threshold_unit(
         .items_center()
         .justify_between()
         .gap(px(12.0))
-        .min_h(px(26.0))
+        .min_h(px(24.0))
         .child(render_unit_header(target, unit_state, theme));
-    if !editing {
+    if editing {
+        header = header.debug_selector(|| "quota-threshold-editing-header".to_string());
+    } else {
         header = header.child(render_unit_actions(
             target, unit_state, theme, cx, on_change,
         ));
@@ -263,28 +258,13 @@ fn render_unit_header(
     );
 
     if matches!(target, QuotaThresholdTarget::Provider(_)) {
-        let (label, color) = if unit_state.override_thresholds.is_some() {
-            (
-                t!("settings.quota_thresholds.custom").to_string(),
-                theme.text.accent,
-            )
+        let is_custom = unit_state.override_thresholds.is_some();
+        let label = if is_custom {
+            t!("settings.quota_thresholds.custom").to_string()
         } else {
-            (
-                t!("settings.quota_thresholds.inherit").to_string(),
-                theme.text.muted,
-            )
+            t!("settings.quota_thresholds.inherit").to_string()
         };
-        row = row.child(
-            div()
-                .px(px(6.0))
-                .py(px(1.0))
-                .rounded(px(5.0))
-                .border_1()
-                .border_color(theme.border.subtle)
-                .text_size(px(10.5))
-                .text_color(color)
-                .child(label),
-        );
+        row = row.child(render_inheritance_badge(is_custom, label, theme));
     }
 
     row
@@ -338,26 +318,42 @@ fn threshold_segments(
                 .into_any_element(),
         })
         .collect();
-    segments.push(normal_segment(unit, Some(values.warning), theme));
+    segments.push(normal_segment(unit, Some(values.warning), false, theme));
     segments
 }
 
 /// 「正常」区间：剩余额度高于图标变黄阈值；阈值暂不可解析时显示占位符。
+/// 编辑态使用与左侧输入框等高的只读槽，保证四段数值在同一水平线上对齐。
 fn normal_segment(
     unit: QuotaThresholdUnit,
     warning: Option<f64>,
+    editing: bool,
     theme: &Theme,
 ) -> ThresholdSegment {
     let value = warning
         .map(|value| format!("> {}", format_threshold_value(unit, value)))
         .unwrap_or_else(|| "—".to_string());
+    let value_el = render_segment_value(value, theme);
+    let body = if editing {
+        div()
+            .h(px(28.0))
+            .px(px(8.0))
+            .rounded(px(6.0))
+            .flex()
+            .items_center()
+            .bg(theme.bg.card_inner.opacity(0.65))
+            .border_1()
+            .border_color(theme.status.success.opacity(0.25))
+            .child(value_el)
+            .into_any_element()
+    } else {
+        value_el.into_any_element()
+    };
     ThresholdSegment {
         selector: None,
         label: t!("settings.quota_thresholds.segment.normal").to_string(),
         color: theme.status.success,
-        body: render_segment_value(value, theme)
-            .text_color(theme.text.secondary)
-            .into_any_element(),
+        body,
     }
 }
 
@@ -375,7 +371,7 @@ fn render_segment_value(value: String, theme: &Theme) -> Div {
 
 /// 单个区间块的最小宽度：容纳「色点 + 四字标签」与输入框，低于此宽度时改为两行两列。
 const SEGMENT_MIN_WIDTH: f32 = 76.0;
-const SEGMENT_GAP: f32 = 4.0;
+const SEGMENT_GAP: f32 = 6.0;
 
 fn render_threshold_strip(
     segments: Vec<ThresholdSegment>,
@@ -409,20 +405,22 @@ fn render_threshold_segment(segment: ThresholdSegment, theme: &Theme) -> Div {
         .overflow_hidden()
         .whitespace_nowrap()
         .text_ellipsis()
-        .text_size(px(10.5))
+        .text_size(px(11.0))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(theme.text.muted)
+        .text_color(theme.text.primary.opacity(0.86))
         .child(segment.label);
     let mut cell = div()
         .flex_1()
         .min_w_0()
         .flex()
         .flex_col()
-        .gap(px(4.0))
+        .gap(px(6.0))
         .px(px(8.0))
-        .py(px(6.0))
-        .rounded(px(6.0))
-        .bg(segment.color.opacity(0.10));
+        .py(px(7.0))
+        .rounded(px(7.0))
+        .bg(segment.color.opacity(0.12))
+        .border_1()
+        .border_color(segment.color.opacity(0.28));
     if let Some(selector) = segment.selector {
         label = label.debug_selector(move || format!("{selector}-label"));
         cell = cell.debug_selector(move || selector.to_string());
@@ -436,7 +434,7 @@ fn render_threshold_segment(segment: ThresholdSegment, theme: &Theme) -> Div {
             .child(
                 div()
                     .flex_shrink_0()
-                    .size(px(6.0))
+                    .size(px(6.5))
                     .rounded_full()
                     .bg(segment.color),
             )
@@ -494,7 +492,7 @@ fn render_percentage_scale(values: QuotaThresholds, theme: &Theme) -> Div {
                     div()
                         .flex_1()
                         .h_full()
-                        .bg(theme.status.success.opacity(0.35)),
+                        .bg(theme.status.success.opacity(0.65)),
                 ),
         )
         .child(
@@ -592,6 +590,11 @@ fn render_draft_editor(
     let mut segments = Vec::with_capacity(4);
     for ((selector, label, color), entity) in threshold_levels(theme).into_iter().zip(&inputs) {
         let is_focused = entity.read(cx).focus_handle(cx).is_focused(window);
+        let border_color = if is_focused {
+            theme.text.accent
+        } else {
+            color.opacity(0.38)
+        };
         segments.push(ThresholdSegment {
             selector: Some(selector),
             label,
@@ -602,7 +605,10 @@ fn render_draft_editor(
                 .px(px(8.0))
                 .py(px(4.0))
                 .rounded(px(6.0))
+                .bg(theme.bg.card_inner)
+                .border_color(border_color)
                 .text_size(px(12.5))
+                .font_weight(FontWeight::SEMIBOLD)
                 .into_any_element(),
         });
     }
@@ -616,13 +622,17 @@ fn render_draft_editor(
             .ok()
             .filter(|value| value.is_finite())
     });
-    segments.push(normal_segment(unit, warning_preview, theme));
+    segments.push(normal_segment(unit, warning_preview, true, theme));
 
-    let mut editor = div().flex_col().gap(px(10.0)).child(render_threshold_strip(
-        segments,
-        Some("quota-threshold-fields"),
-        theme,
-    ));
+    let mut editor = div()
+        .flex()
+        .flex_col()
+        .gap(px(10.0))
+        .child(render_threshold_strip(
+            segments,
+            Some("quota-threshold-fields"),
+            theme,
+        ));
     if unit == QuotaThresholdUnit::Percentage {
         // 草稿合法时刻度实时跟随输入；不合法时保留当前生效值，避免刻度跳成无意义状态
         editor = editor.child(render_percentage_scale(
@@ -635,7 +645,7 @@ fn render_draft_editor(
         Some(error) => (quota_threshold_error_text(error), theme.status.error),
         None => (
             t!("settings.quota_thresholds.hint").to_string(),
-            theme.text.muted,
+            theme.text.secondary,
         ),
     };
     // 提示 / 错误与操作按钮同一行；宽度不足时按钮换到下一行并保持右对齐
@@ -644,9 +654,11 @@ fn render_draft_editor(
             .flex()
             .flex_wrap()
             .items_center()
-            .gap(px(8.0))
+            .gap(px(10.0))
+            .pt(px(2.0))
             .child(
                 div()
+                    .debug_selector(|| "quota-threshold-hint".to_string())
                     .flex_1()
                     .min_w(px(160.0))
                     .text_size(px(11.5))
@@ -672,20 +684,15 @@ fn render_draft_actions(
         .items_center()
         .gap(px(6.0))
         .child(
-            threshold_ghost_button(
-                &t!("settings.quota_thresholds.cancel"),
-                theme.text.secondary,
-                theme,
-                {
-                    let view_entity = view_entity.clone();
-                    move |_, _, cx| {
-                        view_entity.update(cx, |view, cx| {
-                            view.clear_quota_threshold_draft();
-                            cx.notify();
-                        });
-                    }
-                },
-            )
+            threshold_secondary_button(&t!("settings.quota_thresholds.cancel"), theme, {
+                let view_entity = view_entity.clone();
+                move |_, _, cx| {
+                    view_entity.update(cx, |view, cx| {
+                        view.clear_quota_threshold_draft();
+                        cx.notify();
+                    });
+                }
+            })
             .debug_selector(|| "quota-threshold-cancel".to_string()),
         )
         .child(
@@ -743,7 +750,21 @@ fn follow_global_click_handler(
     }
 }
 
-/// 轻量文字按钮：无边框，hover 时出现底色，用于行内次要操作。
+fn threshold_button_base(height: f32, horizontal_padding: f32) -> Div {
+    div()
+        .h(px(height))
+        .px(px(horizontal_padding))
+        .rounded(px(5.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .text_size(px(11.5))
+        .line_height(px(15.0))
+        .whitespace_nowrap()
+}
+
+/// 轻量文字按钮：无边框，hover 时出现底色，用于标题行内次要操作。
 fn threshold_ghost_button(
     label: &str,
     color: Hsla,
@@ -751,16 +772,29 @@ fn threshold_ghost_button(
     on_click: impl Fn(&MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> Div {
     let hover_bg = theme.bg.card_inner_hovered;
-    div()
-        .px(px(10.0))
-        .py(px(5.0))
-        .rounded(px(6.0))
-        .cursor_pointer()
+    threshold_button_base(22.0, 8.0)
         .hover(move |s| s.bg(hover_bg))
-        .text_size(px(12.0))
         .font_weight(FontWeight::MEDIUM)
         .text_color(color)
-        .whitespace_nowrap()
+        .child(label.to_string())
+        .on_mouse_down(MouseButton::Left, on_click)
+}
+
+/// 编辑态次要按钮（取消）：紧凑固定高度 + 细边框底色，与主按钮视觉平衡。
+fn threshold_secondary_button(
+    label: &str,
+    theme: &Theme,
+    on_click: impl Fn(&MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
+) -> Div {
+    let hover_bg = theme.bg.card_inner_hovered;
+    let hover_fg = theme.text.primary;
+    threshold_button_base(24.0, 10.0)
+        .bg(theme.bg.card_inner)
+        .border_1()
+        .border_color(theme.border.strong)
+        .hover(move |s| s.bg(hover_bg).text_color(hover_fg))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.text.secondary)
         .child(label.to_string())
         .on_mouse_down(MouseButton::Left, on_click)
 }
@@ -770,17 +804,13 @@ fn threshold_primary_button(
     theme: &Theme,
     on_click: impl Fn(&MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> Div {
-    div()
-        .px(px(12.0))
-        .py(px(5.0))
-        .rounded(px(6.0))
+    threshold_button_base(24.0, 10.0)
         .bg(theme.text.accent)
-        .cursor_pointer()
+        .border_1()
+        .border_color(theme.text.accent)
         .hover(|s| s.opacity(0.9))
-        .text_size(px(12.0))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme.element.active)
-        .whitespace_nowrap()
         .child(label.to_string())
         .on_mouse_down(MouseButton::Left, on_click)
 }

@@ -11,7 +11,7 @@
 | `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，由 `bootstrap` 直接调用工厂，构造前派发 `SettingsWindowOpened` 清除旧 Token 编辑标记 |
 | `components.rs` | 设置页共享组件（section title、description text 等） |
 | `quota_usage.rs` | 用量步长步进器共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」）。`render_provider_quota_usage_card` 是 Provider 详情页的整张卡片：上层图标 + 标题 +「跟随全局 / 自定义」标签（与阈值卡一致）+ 说明，分隔线下方左侧「提醒步长」、右侧步进器；覆盖时步进器左侧出现「恢复跟随全局」文字按钮（不用刷新图标，避免与详情页顶部刷新按钮混淆），两种状态卡片高度一致 |
-| `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情卡带标题并按单位展示继承 / 自定义身份；三个单位（百分比 / 货币 / 积分·额度）各一行，以等宽区间条按剩余额度从少到多展示「弹窗提醒 ≤ 图标变红 < 图标变黄 → 正常」（强调色 / 红 / 黄 / 绿，数值按单位带 `%` / `$`；等宽而非按比例，货币 / 积分无上限也适用），百分比行额外画 0–100% 比例刻度（弹窗提醒位置以强调色竖线标出）；区间块两两成组换行，窄宽度（如 460px 窗口下的 Provider 详情）退化为 2×2。编辑时输入框原位替换区间块中的数值，取消 / 保存按钮位于区间条下方与提示同行（窄宽度换行右对齐），标题行固定高度不随编辑态跳动；「正常」区间与百分比刻度订阅输入变化实时联动（草稿不合法时刻度保持生效值）。编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
+| `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情卡带统一图标标题头并按单位展示继承 / 自定义标签（由 selector 过滤为当前 Provider 实测额度所含单位 + 已配置覆盖的单位，无实测额度时展示全部三个单位）；单位（百分比 / 货币 / 积分·额度）各一行，以等宽区间条按剩余额度从少到多展示「弹窗提醒 ≤ 图标变红 < 图标变黄 → 正常」（强调色 / 红 / 黄 / 绿，数值按单位带 `%` / `$`；等宽而非按比例，货币 / 积分无上限也适用），百分比行额外画 0–100% 比例刻度（弹窗提醒位置以强调色竖线标出）；区间块两两成组换行，窄宽度（如 460px 窗口下的 Provider 详情）退化为 2×2。编辑时输入框原位替换区间块中的数值，取消 / 保存按钮位于区间条下方与提示同行（窄宽度换行右对齐），标题行固定高度不随编辑态跳动；「正常」区间与百分比刻度订阅输入变化实时联动（草稿不合法时刻度保持生效值）。编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
 | `quota_ui_tests.rs` | Opt-in GPUI mock-window UI 回归测试（`#[cfg(all(test, feature = "ui-tests"))]`，运行 `just test-settings-ui` 或 `cargo test --lib --locked --features ui-tests ui::settings_window -- --test-threads=1`）— 真实渲染并点击步进器 / 阈值 section，经 `debug_selector` 定位断言布局与派发；只构造纯内存 AppState + no-op SettingsWriter，无真实配置 I/O |
 | `form_ui_tests.rs` | 同门槛的表单校验回归 — NewAPI / Script Provider 表单的 `collect_*` 提交路径：必填 / 格式校验失败落到字段 state 的 `validation_error`，修正后复验清除；同时钉住 fc-ui 内置 required 文案（本地化映射的耦合点，见「约束」） |
 
@@ -31,7 +31,7 @@
 | 文件 | 职责 |
 |------|------|
 | `providers/mod.rs` | 入口 — 双栏布局组装（sidebar + divider + right panel 三态切换），右侧表单 identity 由 selector 显式下发 |
-| `providers/shared.rs` | Provider 表单/按钮共享基元（字段标签、输入框、只读字段、确认/取消按钮、字段级校验错误展示） |
+| `providers/shared.rs` | Provider 表单/按钮共享基元（设置卡片外壳与统一卡片头、继承状态徽章、字段标签、输入框、只读字段、确认/取消按钮、字段级校验错误展示） |
 | `providers/sidebar.rs` | 左侧 Sidebar — Provider 列表（拖拽排序、添加/删除按钮） |
 | `providers/detail/` | 右侧详情模块 — shell、section renderer、配额可见性和 editable-provider actions；模块契约见 `providers/detail/README.md` |
 | `providers/picker.rs` | 添加面板 — 可选 Provider 列表（从 sidebar 中排除已添加的） |

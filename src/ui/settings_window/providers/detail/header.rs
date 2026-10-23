@@ -70,21 +70,7 @@ fn render_header_actions(
         .flex()
         .items_center()
         .gap(px(8.0))
-        .child(render_remove_from_sidebar_button(detail, dispatcher, theme))
-        .child(
-            crate::ui::widgets::render_toggle_switch(
-                detail.is_enabled,
-                px(44.0),
-                px(24.0),
-                px(18.0),
-                theme,
-            )
-            .on_mouse_down(gpui::MouseButton::Left, {
-                let provider_id = provider_id_for_action(&detail.id);
-                dispatcher
-                    .interactive_action(move || AppAction::ToggleProvider(provider_id.clone()))
-            }),
-        );
+        .child(render_remove_from_sidebar_button(detail, dispatcher, theme));
 
     if detail.can_refresh {
         row = row.child(icon_button(None, "src/icons/refresh.svg", 16.0, theme, {
@@ -96,7 +82,19 @@ fn render_header_actions(
         }));
     }
 
-    row
+    row.child(
+        crate::ui::widgets::render_toggle_switch(
+            detail.is_enabled,
+            px(44.0),
+            px(24.0),
+            px(18.0),
+            theme,
+        )
+        .on_mouse_down(gpui::MouseButton::Left, {
+            let provider_id = provider_id_for_action(&detail.id);
+            dispatcher.interactive_action(move || AppAction::ToggleProvider(provider_id.clone()))
+        }),
+    )
 }
 
 fn render_remove_from_sidebar_button(

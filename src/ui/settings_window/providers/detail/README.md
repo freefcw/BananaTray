@@ -5,12 +5,15 @@
 ## Boundary
 
 - `mod.rs` owns the scroll container and section ordering.
-- `header.rs` renders provider identity plus enable, refresh, and remove-from-sidebar actions.
-- `info.rs` renders status/source/update/service-state as a filled card with a 2×2 layout (label above value, long values end with an ellipsis, a status-colored dot before the service state).
+- `header.rs` renders provider identity plus remove-from-sidebar, refresh, and enable actions (with the primary enable toggle on the far right).
+- `info.rs` renders status/source/update/service-state as a compact single-row 4-column status strip separated by subtle vertical dividers (label above value, long values end with an ellipsis, a status-colored dot before the service state).
 - `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
-- `quota_visibility.rs` renders per-quota tray visibility toggles.
+- `history.rs` renders the quota history card (range/interval toolbar, stacked single-unit or merged multi-series step charts with colored dot legends, and a footer combining notes with the clear-history ghost button).
+- `quota_visibility.rs` renders per-quota tray visibility toggles in a unified card container.
 - `settings_section.rs` renders provider settings capability branches, the per-provider
   usage-step （用量提醒） card, and the quota-thresholds （额度状态与提醒阈值） card.
+  When neither `can_refresh` nor `show_quota_thresholds` is active and `settings_capability == None`,
+  it falls back to an informational placeholder card.
   The usage-step card is gated on the `can_refresh` snapshot field
   (`ProviderStatus::supports_refresh()` = `ProviderCapability::Monitorable`) and renders regardless
   of which settings capability (token / NewAPI / script / none) the provider exposes —
@@ -23,9 +26,11 @@
   The quota-thresholds card is gated on `show_quota_thresholds`
   (`provider_capability == Monitorable`, likewise independent of `SettingsCapability`), so a
   monitorable provider with no interactive settings still gets per-unit threshold overrides, and
-  thresholds can be pre-configured before any quota data arrives. Its three-unit rows come from the
-  `quota_thresholds` snapshot entries (unit / `override_thresholds` / `effective`); editing reuses
-  the shared `quota_thresholds::render_quota_thresholds_section` component and the view-local
+  thresholds can be pre-configured before any quota data arrives. Its unit rows come from the
+  `quota_thresholds` snapshot entries (unit / `override_thresholds` / `effective`), filtered by the
+  selector to the units present in the provider's current measured quotas plus any unit with an
+  active user override (falling back to all three units when no measured quotas exist yet); editing
+  reuses the shared `quota_thresholds::render_quota_thresholds_section` component and the view-local
   `QuotaThresholdDraft`, dispatching `SettingChange::SetProviderQuotaThresholds` on save.
 - `actions.rs` owns the editable-provider edit/delete flow. It renders the same settings card as the
   Token panel (`shared::render_settings_card` + `render_action_button(.., ButtonSize::Panel, ..)`),

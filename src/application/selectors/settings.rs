@@ -5,8 +5,7 @@
 use super::super::state::{AppSession, HistoryLoadState, SettingsModalState, TokenInputLoadState};
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_label,
-    format_relative_refresh_age, format_user_failure_message, provider_source_label,
-    quota_display_view_state,
+    format_user_failure_message, provider_source_label, quota_display_view_state,
 };
 use super::*;
 use crate::history::HistoryReadyState;
@@ -173,14 +172,7 @@ fn settings_provider_detail_view_state(
         .map(|p| p.provider_capability)
         .unwrap_or(ProviderCapability::Monitorable);
     let effective_rules = session.settings.effective_quota_rules(id);
-    let quota_thresholds = QuotaThresholdUnit::ALL
-        .iter()
-        .map(|&unit| QuotaThresholdUnitViewState {
-            unit,
-            override_thresholds: session.settings.provider.quota_threshold_override(id, unit),
-            effective: effective_rules.thresholds(unit),
-        })
-        .collect();
+    let quota_thresholds = provider_quota_threshold_units(session, id, provider, &effective_rules);
 
     SettingsProviderDetailViewState {
         id: id.clone(),
@@ -456,6 +448,47 @@ fn settings_provider_usage_view_state(
     }
 }
 
+fn provider_quota_threshold_units(
+    session: &AppSession,
+    id: &ProviderId,
+    provider: Option<&ProviderStatus>,
+    effective_rules: &crate::models::QuotaRules,
+) -> Vec<QuotaThresholdUnitViewState> {
+    let has_measured_quotas = provider.is_some_and(|p| {
+        p.quotas
+            .iter()
+            .filter_map(crate::models::QuotaInfo::threshold_measurement)
+            .next()
+            .is_some()
+    });
+    QuotaThresholdUnit::ALL
+        .iter()
+        .copied()
+        .filter(|&unit| {
+            if !has_measured_quotas {
+                return true;
+            }
+            let in_quotas = provider.is_some_and(|p| {
+                p.quotas
+                    .iter()
+                    .filter_map(crate::models::QuotaInfo::threshold_measurement)
+                    .any(|m| m.unit == unit)
+            });
+            let has_override = session
+                .settings
+                .provider
+                .quota_threshold_override(id, unit)
+                .is_some();
+            in_quotas || has_override
+        })
+        .map(|unit| QuotaThresholdUnitViewState {
+            unit,
+            override_thresholds: session.settings.provider.quota_threshold_override(id, unit),
+            effective: effective_rules.thresholds(unit),
+        })
+        .collect()
+}
+
 fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
     if !provider.supports_refresh() {
         return match provider.provider_capability {
@@ -465,24 +498,7 @@ fn settings_provider_subtitle(provider: &ProviderStatus) -> String {
         };
     }
 
-    let source = provider_source_label(provider);
-    match provider.connection {
-        ConnectionStatus::Error => t!("provider.detail.last_failed", source = source).to_string(),
-        ConnectionStatus::Refreshing => {
-            t!("provider.detail.refreshing", source = source).to_string()
-        }
-        ConnectionStatus::Connected => {
-            if let Some(instant) = provider.last_refreshed_instant {
-                let time = format_relative_refresh_age(instant.elapsed().as_secs());
-                t!("provider.detail.updated", source = source, time = time).to_string()
-            } else {
-                t!("provider.detail.not_fetched", source = source).to_string()
-            }
-        }
-        ConnectionStatus::Disconnected => {
-            t!("provider.detail.not_detected", source = source).to_string()
-        }
-    }
+    provider_source_label(provider)
 }
 #[cfg(test)]
 #[path = "settings_tests.rs"]

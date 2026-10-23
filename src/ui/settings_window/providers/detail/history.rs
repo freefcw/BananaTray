@@ -8,11 +8,11 @@ use crate::models::RETENTION_PRESETS;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared;
 use crate::ui::widgets::{
-    history_line_color, render_detail_empty_card, render_detail_section_title,
-    render_history_line_chart, render_history_retention_dropdown, render_segmented_control,
+    history_line_color, render_detail_section_title, render_history_line_chart,
+    render_history_retention_dropdown, render_segmented_control, render_svg_icon,
     HistoryRetentionMenu, SegmentedSize,
 };
-use gpui::{div, px, App, Div, InteractiveElement, ParentElement, Styled, Window};
+use gpui::{div, px, relative, App, Div, InteractiveElement, ParentElement, Styled, Window};
 use rust_i18n::t;
 
 pub(super) fn render_history_section(
@@ -21,59 +21,86 @@ pub(super) fn render_history_section(
     theme: &Theme,
 ) -> Div {
     let history = &detail.history;
-    let mut section = div()
+    let mut card = div()
+        .flex()
+        .flex_col()
+        .mt(px(10.0))
+        .px(px(16.0))
+        .py(px(14.0))
+        .gap(px(12.0))
+        .rounded(px(12.0))
+        .bg(theme.bg.card_inner)
+        .border_1()
+        .border_color(theme.border.strong)
+        .child(render_toolbar(detail, dispatcher, theme));
+
+    let mut notes = Vec::new();
+    card = match &history.phase {
+        SettingsProviderHistoryPhase::Message(message) => card.child(
+            div()
+                .py(px(18.0))
+                .px(px(12.0))
+                .rounded(px(8.0))
+                .bg(theme.bg.card)
+                .border_1()
+                .border_color(theme.border.subtle)
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .line_height(relative(1.45))
+                        .text_color(theme.text.muted)
+                        .child(message.clone()),
+                ),
+        ),
+        SettingsProviderHistoryPhase::Charts(charts) => {
+            let mut card = card;
+            for (index, chart) in charts.iter().enumerate() {
+                let mut chart_block = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.0))
+                    .child(render_chart_legend(&chart.lines, &chart.title, theme))
+                    .child(render_history_line_chart(
+                        &chart.quota_key,
+                        chart.lines.clone(),
+                        chart.axis.clone(),
+                        116.0,
+                        theme,
+                    ));
+                if index > 0 {
+                    chart_block = chart_block
+                        .pt(px(12.0))
+                        .border_t_1()
+                        .border_color(theme.border.subtle);
+                }
+                card = card.child(chart_block);
+            }
+            if charts_have_gap(charts) {
+                notes.push(t!("provider.history.gap_hint").to_string());
+            }
+            if charts_include_hidden_quota(detail, charts) {
+                notes.push(t!("provider.history.includes_hidden").to_string());
+            }
+            card
+        }
+    };
+
+    card = card.child(render_history_footer(
+        notes,
+        history.confirming_clear,
+        dispatcher,
+        theme,
+    ));
+
+    div()
+        .flex()
         .flex_col()
         .mt(px(20.0))
-        .gap(px(10.0))
         .child(render_detail_section_title(
             &t!("provider.history.section"),
             theme,
         ))
-        .child(render_toolbar(detail, dispatcher, theme));
-
-    section = match &history.phase {
-        SettingsProviderHistoryPhase::Message(message) => {
-            section.child(render_detail_empty_card(message, theme))
-        }
-        SettingsProviderHistoryPhase::Charts(charts) => {
-            let mut section = section;
-            for chart in charts {
-                let heading = if chart.lines.len() > 1 {
-                    render_chart_legend(&chart.lines, theme)
-                } else {
-                    div()
-                        .text_size(px(12.0))
-                        .text_color(theme.text.secondary)
-                        .child(chart.title.clone())
-                };
-                section = section.child(div().flex_col().gap(px(6.0)).child(heading).child(
-                    render_history_line_chart(
-                        &chart.quota_key,
-                        chart.lines.clone(),
-                        chart.axis.clone(),
-                        120.0,
-                        theme,
-                    ),
-                ));
-            }
-            if charts_have_gap(charts) {
-                section =
-                    section.child(render_history_note(&t!("provider.history.gap_hint"), theme));
-            }
-            if charts_include_hidden_quota(detail, charts) {
-                section = section.child(render_history_note(
-                    &t!("provider.history.includes_hidden"),
-                    theme,
-                ));
-            }
-            section
-        }
-    };
-    section.child(render_clear_control(
-        history.confirming_clear,
-        dispatcher,
-        theme,
-    ))
+        .child(card)
 }
 
 fn charts_have_gap(charts: &[HistoryChartView]) -> bool {
@@ -100,9 +127,22 @@ fn charts_include_hidden_quota(
     })
 }
 
-fn render_chart_legend(lines: &[HistoryLineView], theme: &Theme) -> Div {
-    let mut row = div().flex().flex_wrap().items_center().gap(px(10.0));
+fn render_chart_legend(lines: &[HistoryLineView], fallback_title: &str, theme: &Theme) -> Div {
+    let mut row = div().flex().flex_wrap().items_center().gap(px(12.0));
+    if lines.is_empty() {
+        return row.child(
+            div()
+                .text_size(px(12.0))
+                .text_color(theme.text.secondary)
+                .child(fallback_title.to_string()),
+        );
+    }
     for line in lines {
+        let title = if line.title.is_empty() {
+            fallback_title.to_string()
+        } else {
+            line.title.clone()
+        };
         row = row.child(
             div()
                 .flex()
@@ -110,7 +150,7 @@ fn render_chart_legend(lines: &[HistoryLineView], theme: &Theme) -> Div {
                 .gap(px(6.0))
                 .child(
                     div()
-                        .size(px(8.0))
+                        .size(px(7.0))
                         .rounded_full()
                         .bg(history_line_color(line.color_index, theme)),
                 )
@@ -118,18 +158,40 @@ fn render_chart_legend(lines: &[HistoryLineView], theme: &Theme) -> Div {
                     div()
                         .text_size(px(12.0))
                         .text_color(theme.text.secondary)
-                        .child(line.title.clone()),
+                        .child(title),
                 ),
         );
     }
     row
 }
 
-fn render_history_note(text: &str, theme: &Theme) -> Div {
+fn render_history_footer(
+    notes: Vec<String>,
+    confirming_clear: bool,
+    dispatcher: &DetailActionDispatcher,
+    theme: &Theme,
+) -> Div {
+    let mut notes_col = div().flex_1().min_w_0().flex().flex_col().gap(px(3.0));
+    for note in notes {
+        notes_col = notes_col.child(
+            div()
+                .text_size(px(11.0))
+                .text_color(theme.text.muted)
+                .child(note),
+        );
+    }
+
     div()
-        .text_size(px(11.0))
-        .text_color(theme.text.muted)
-        .child(text.to_string())
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(12.0))
+        .pt(px(10.0))
+        .border_t_1()
+        .border_color(theme.border.subtle)
+        .child(notes_col)
+        .child(render_clear_control(confirming_clear, dispatcher, theme))
 }
 
 fn render_toolbar(
@@ -157,6 +219,9 @@ fn render_toolbar(
         .items_center()
         .justify_between()
         .gap(px(12.0))
+        .pb(px(10.0))
+        .border_b_1()
+        .border_color(theme.border.subtle)
         .child(render_range_control(
             &options,
             &detail.history.range,
@@ -198,7 +263,7 @@ fn render_retention_controls(
     let select = dispatcher.clone();
     let provider_id = detail.id.clone();
     let label = match history.retention_override {
-        Some(days) => t!("settings.history_retention.days", n = days).to_string(),
+        Some(days) => t!("provider.history.retention_effective", n = days).to_string(),
         None => t!("provider.history.retention_follow_global").to_string(),
     };
     let mut options = vec![(
@@ -212,14 +277,13 @@ fn render_retention_controls(
         )
     }));
 
-    div()
-        .flex()
-        .items_center()
-        .gap(px(8.0))
-        .child(
+    let mut row = div().flex().items_center().gap(px(6.0));
+    if history.retention_override.is_none() {
+        row = row.child(
             div()
-                .text_size(px(12.0))
+                .text_size(px(11.5))
                 .text_color(theme.text.muted)
+                .whitespace_nowrap()
                 .child(
                     t!(
                         "provider.history.retention_effective",
@@ -227,34 +291,36 @@ fn render_retention_controls(
                     )
                     .to_string(),
                 ),
-        )
-        .child(render_history_retention_dropdown(
-            label,
-            HistoryRetentionMenu {
-                open: history.dropdown_open,
-                compact: true,
-            },
-            options,
-            &history.retention_override,
-            theme,
-            move |_, window, cx| {
-                toggle.dispatch(
-                    AppAction::ToggleProviderHistoryRetentionDropdown,
-                    window,
-                    cx,
-                );
-            },
-            move |days, window, cx| {
-                select.dispatch(
-                    AppAction::UpdateSetting(SettingChange::SetProviderHistoryRetentionDays {
-                        provider_id: provider_id.clone(),
-                        days,
-                    }),
-                    window,
-                    cx,
-                );
-            },
-        ))
+        );
+    }
+
+    row.child(render_history_retention_dropdown(
+        label,
+        HistoryRetentionMenu {
+            open: history.dropdown_open,
+            compact: true,
+        },
+        options,
+        &history.retention_override,
+        theme,
+        move |_, window, cx| {
+            toggle.dispatch(
+                AppAction::ToggleProviderHistoryRetentionDropdown,
+                window,
+                cx,
+            );
+        },
+        move |days, window, cx| {
+            select.dispatch(
+                AppAction::UpdateSetting(SettingChange::SetProviderHistoryRetentionDays {
+                    provider_id: provider_id.clone(),
+                    days,
+                }),
+                window,
+                cx,
+            );
+        },
+    ))
 }
 
 fn render_clear_control(
@@ -278,13 +344,26 @@ fn render_clear_control(
         );
     }
     let begin = dispatcher.clone();
+    let hover_bg = theme.bg.card_inner_hovered;
     div()
+        .flex_shrink_0()
+        .flex()
+        .items_center()
+        .gap(px(5.0))
+        .px(px(8.0))
+        .py(px(4.0))
+        .rounded(px(6.0))
         .cursor_pointer()
-        .hover(|style| style.opacity(0.8))
+        .hover(move |style| style.bg(hover_bg))
+        .child(render_svg_icon(
+            "src/icons/trash.svg",
+            px(11.0),
+            theme.text.muted,
+        ))
         .child(
             div()
-                .text_size(px(11.0))
-                .text_color(theme.text.muted)
+                .text_size(px(11.5))
+                .text_color(theme.text.secondary)
                 .child(t!("provider.history.clear").to_string()),
         )
         .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {

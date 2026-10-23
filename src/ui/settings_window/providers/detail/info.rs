@@ -3,59 +3,61 @@ use crate::theme::Theme;
 use gpui::{div, px, relative, Div, FontWeight, Hsla, ParentElement, Styled};
 use rust_i18n::t;
 
-/// Provider 概览：与额度卡同款的填充卡片，内部 2×2 排布，标签在上、值在下。
+/// Provider 概览：与额度卡同款的紧凑单行 4 列状态条，标签在上、值在下，列间以细竖线分隔。
 ///
-/// 值独占整列宽度，「更新失败 · 数据 5 分钟前」这类长文案不必和标签抢同一行；
-/// 实在放不下时以省略号收尾。服务状态前加一个状态色圆点，扫一眼就能看出是否正常。
+/// 服务状态前加状态色圆点，扫一眼就能看出是否正常；超长文案自动以省略号收尾。
 pub(super) fn render_info_table(info: &SettingsProviderInfoViewState, theme: &Theme) -> Div {
     let primary = theme.text.primary;
     div()
         .flex()
-        .flex_col()
-        .gap(px(14.0))
-        .mt(px(20.0))
+        .items_center()
+        .gap(px(12.0))
+        .mt(px(16.0))
         .px(px(16.0))
-        .py(px(14.0))
+        .py(px(11.0))
         .rounded(px(12.0))
         .bg(theme.bg.card_inner)
         .border_1()
         .border_color(theme.border.strong)
-        .child(render_info_row(
-            render_info_field(
-                &t!("provider.info.state"),
-                &info.state_text,
-                primary,
-                None,
-                theme,
-            ),
-            render_info_field(
-                &t!("provider.info.source"),
-                &info.source_text,
-                primary,
-                None,
-                theme,
-            ),
+        .child(render_info_field(
+            &t!("provider.info.state"),
+            &info.state_text,
+            primary,
+            None,
+            theme,
         ))
-        .child(render_info_row(
-            render_info_field(
-                &t!("provider.info.updated"),
-                &info.updated_text,
-                primary,
-                None,
-                theme,
-            ),
-            render_info_field(
-                &t!("provider.info.status"),
-                &info.status_text,
-                status_color(info, theme),
-                Some(status_dot_color(info, theme)),
-                theme,
-            ),
+        .child(render_info_divider(theme))
+        .child(render_info_field(
+            &t!("provider.info.source"),
+            &info.source_text,
+            primary,
+            None,
+            theme,
+        ))
+        .child(render_info_divider(theme))
+        .child(render_info_field(
+            &t!("provider.info.updated"),
+            &info.updated_text,
+            primary,
+            None,
+            theme,
+        ))
+        .child(render_info_divider(theme))
+        .child(render_info_field(
+            &t!("provider.info.status"),
+            &info.status_text,
+            status_color(info, theme),
+            Some(status_dot_color(info, theme)),
+            theme,
         ))
 }
 
-fn render_info_row(first: Div, second: Div) -> Div {
-    div().flex().gap(px(16.0)).child(first).child(second)
+fn render_info_divider(theme: &Theme) -> Div {
+    div()
+        .flex_shrink_0()
+        .w(px(1.0))
+        .h(px(26.0))
+        .bg(theme.border.subtle)
 }
 
 fn render_info_field(

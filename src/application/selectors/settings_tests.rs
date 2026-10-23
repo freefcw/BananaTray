@@ -325,11 +325,7 @@ fn settings_provider_subtitle_uses_display_source_label() {
     let session = make_session(settings, pid(ProviderKind::Copilot), vec![provider]);
     let view_state = settings_providers_tab_view_state(&session);
 
-    assert!(
-        view_state.detail.subtitle.starts_with("GitHub · just now"),
-        "subtitle should use compact time, got: {}",
-        view_state.detail.subtitle
-    );
+    assert_eq!(view_state.detail.subtitle, "GitHub");
     assert!(!view_state.detail.subtitle.contains("github api"));
 }
 
@@ -753,7 +749,56 @@ fn settings_detail_quota_thresholds_shown_without_quota_data() {
     provider.quotas.clear();
     let session = make_session(settings, pid(ProviderKind::Claude), vec![provider]);
 
-    assert!(detail_snapshot(&session).show_quota_thresholds);
+    let detail = detail_snapshot(&session);
+    assert!(detail.show_quota_thresholds);
+    assert_eq!(detail.quota_thresholds.len(), 3);
+}
+
+#[test]
+fn settings_detail_quota_thresholds_filters_to_active_and_overridden_units() {
+    use crate::models::{QuotaThresholdUnit, QuotaThresholds, QuotaType};
+
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    let mut provider = make_provider(ProviderKind::Codex, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::with_details(QuotaLabelSpec::Weekly, 1.0, 100.0, QuotaType::Weekly, None),
+        QuotaInfo::balance_only(
+            QuotaLabelSpec::Credits,
+            62500.0,
+            None,
+            QuotaType::Points,
+            None,
+        ),
+    ];
+    let session = make_session(
+        settings.clone(),
+        pid(ProviderKind::Codex),
+        vec![provider.clone()],
+    );
+    let units: Vec<QuotaThresholdUnit> = detail_snapshot(&session)
+        .quota_thresholds
+        .into_iter()
+        .map(|u| u.unit)
+        .collect();
+    assert_eq!(
+        units,
+        vec![QuotaThresholdUnit::Percentage, QuotaThresholdUnit::Amount]
+    );
+
+    // 若用户显式设置了货币阈值覆盖，即使当前配额无货币项也保留展示以便查看和恢复
+    settings.provider.set_quota_threshold_override(
+        &pid(ProviderKind::Codex),
+        QuotaThresholdUnit::Currency,
+        Some(QuotaThresholds::DEFAULT_CURRENCY),
+    );
+    let session_with_override = make_session(settings, pid(ProviderKind::Codex), vec![provider]);
+    assert_eq!(
+        detail_snapshot(&session_with_override)
+            .quota_thresholds
+            .len(),
+        3
+    );
 }
 
 #[test]

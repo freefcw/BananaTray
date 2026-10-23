@@ -1,9 +1,11 @@
-use super::providers::shared::render_settings_card;
+use super::providers::shared::{
+    render_inheritance_badge, render_settings_card, render_settings_card_header,
+};
 use crate::theme::Theme;
-use crate::ui::widgets::{render_stepper, render_svg_icon, StepperOptions};
+use crate::ui::widgets::{render_stepper, StepperOptions};
 use gpui::{
-    div, px, relative, App, Div, FontWeight, InteractiveElement, MouseButton, MouseDownEvent,
-    ParentElement, Styled, Window,
+    div, px, App, Div, InteractiveElement, MouseButton, MouseDownEvent, ParentElement, Styled,
+    Window,
 };
 use rust_i18n::t;
 use std::rc::Rc;
@@ -90,71 +92,19 @@ pub(super) fn render_provider_quota_usage_card(
 ) -> Div {
     let on_change = Rc::new(on_change);
     let is_custom = selection.is_some();
-    let accent = theme.text.accent;
-    let (tag_label, tag_fg, tag_bg) = if is_custom {
-        (
-            t!("quota_usage.custom").to_string(),
-            accent,
-            accent.opacity(0.14),
-        )
+    let tag_label = if is_custom {
+        t!("quota_usage.custom").to_string()
     } else {
-        (
-            t!("quota_usage.inherited").to_string(),
-            theme.text.secondary,
-            theme.bg.subtle,
-        )
+        t!("quota_usage.inherited").to_string()
     };
 
-    let icon = div()
-        .flex_shrink_0()
-        .w(px(36.0))
-        .h(px(36.0))
-        .rounded(px(10.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(accent.opacity(0.14))
-        .child(render_svg_icon("src/icons/usage.svg", px(18.0), accent));
-
-    let title = div()
-        .flex()
-        .items_center()
-        .gap(px(8.0))
-        .child(
-            div()
-                .text_size(px(14.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text.primary)
-                .whitespace_nowrap()
-                .child(t!("provider.quota_usage.title").to_string()),
-        )
-        .child(
-            div()
-                .px(px(7.0))
-                .py(px(1.0))
-                .rounded_full()
-                .bg(tag_bg)
-                .text_size(px(10.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(tag_fg)
-                .whitespace_nowrap()
-                .child(tag_label),
-        );
-
-    let text = div()
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .flex_col()
-        .gap(px(3.0))
-        .child(title)
-        .child(
-            div()
-                .text_size(px(12.0))
-                .line_height(relative(1.4))
-                .text_color(theme.text.muted)
-                .child(t!("provider.quota_usage.desc").to_string()),
-        );
+    let header = render_settings_card_header(
+        "src/icons/usage.svg",
+        t!("provider.quota_usage.title").to_string(),
+        Some(render_inheritance_badge(is_custom, tag_label, theme)),
+        t!("provider.quota_usage.desc").to_string(),
+        theme,
+    );
 
     let mut control = div().flex_shrink_0().flex().items_center().gap(px(6.0));
     if is_custom {
@@ -187,14 +137,6 @@ pub(super) fn render_provider_quota_usage_card(
         theme,
         move |step, window, cx| on_change(step, window, cx),
     ));
-
-    let header = div()
-        .w_full()
-        .flex()
-        .items_center()
-        .gap(px(12.0))
-        .child(icon)
-        .child(text);
 
     let step_row = div()
         .w_full()
