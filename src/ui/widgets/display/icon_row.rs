@@ -31,6 +31,7 @@ pub(crate) fn render_icon_row(
         // 标题 + 描述（min_w(0) 允许 flex 收缩，避免长文本挤走右侧控件）
         .child(
             div()
+                .flex()
                 .flex_col()
                 .flex_1()
                 .min_w(px(0.0))

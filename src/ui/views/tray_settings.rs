@@ -114,6 +114,7 @@ impl AppView {
                     .child(crate::ui::widgets::render_footer_glyph(icon, theme))
                     .child(
                         div()
+                            .flex()
                             .flex_col()
                             .gap(px(3.0))
                             .child(

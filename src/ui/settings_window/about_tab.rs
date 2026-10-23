@@ -37,6 +37,7 @@ impl SettingsView {
     /// About Tab 入口
     pub(super) fn render_about_tab(&self, theme: &Theme) -> Div {
         div()
+            .flex()
             .flex_col()
             .items_center()
             .w_full()
@@ -55,6 +56,7 @@ impl SettingsView {
 
     fn render_app_hero(theme: &Theme) -> Div {
         div()
+            .flex()
             .flex_col()
             .items_center()
             .w_full()

@@ -95,6 +95,7 @@ impl AppView {
     fn render_overview_empty(&self, theme: &Theme) -> AnyElement {
         div()
             .w_full()
+            .flex()
             .flex_col()
             .items_center()
             .justify_center()
@@ -258,6 +259,7 @@ impl AppView {
 
         let mut quota_container = div()
             .w_full()
+            .flex()
             .flex_col()
             .gap(px(PopupLayout::OVERVIEW_QUOTA_LINE_GAP))
             .pl(px(PopupLayout::OVERVIEW_QUOTA_ROW_PL));
@@ -311,6 +313,7 @@ impl AppView {
                 format!("overview-{}", item.id.id_key()).into(),
             ))
             .w_full()
+            .flex()
             .flex_col()
             .gap(px(6.0))
             .px(px(12.0))

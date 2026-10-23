@@ -93,6 +93,7 @@ impl AppView {
         let id = vm.id.clone();
 
         div()
+            .flex()
             .flex_col()
             .items_center()
             .justify_center()
@@ -333,6 +334,7 @@ impl AppView {
                 div()
                     .flex_1()
                     .min_w_0()
+                    .flex()
                     .flex_col()
                     .gap(px(4.0))
                     .child(
@@ -463,6 +465,7 @@ impl AppView {
 
         let mut container = div()
             .w_full()
+            .flex()
             .flex_col()
             .gap(px(8.0))
             .rounded(px(12.0))

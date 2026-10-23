@@ -45,6 +45,7 @@ pub(crate) fn render_detail_error_card(title: &str, message: &str, theme: &Theme
             div()
                 .flex_1()
                 .min_w(px(0.0))
+                .flex()
                 .flex_col()
                 .gap(px(4.0))
                 .px(px(12.0))

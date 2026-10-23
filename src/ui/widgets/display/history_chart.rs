@@ -73,6 +73,7 @@ pub(crate) fn render_history_line_chart(
     let hover_lines = lines.clone();
     div()
         .w_full()
+        .flex()
         .flex_col()
         .gap(px(PopupLayout::CARD_HISTORY_AXIS_GAP))
         .child(

@@ -38,6 +38,7 @@ pub(super) fn render_section_header_with_desc(
     theme: &Theme,
 ) -> Div {
     div()
+        .flex()
         .flex_col()
         .gap(px(4.0))
         .px(px(4.0))

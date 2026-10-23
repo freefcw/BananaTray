@@ -133,6 +133,7 @@ impl AppView {
                     // 应用名称
                     .child(
                         div()
+                            .flex()
                             .flex_col()
                             .gap(px(1.0))
                             .child(

@@ -15,6 +15,7 @@ pub(super) fn render_quota_visibility_section(
     theme: &Theme,
 ) -> Div {
     let section = div()
+        .flex()
         .flex_col()
         .mt(px(20.0))
         .child(render_detail_section_title(
@@ -44,6 +45,7 @@ fn render_quota_visibility_list(
     theme: &Theme,
 ) -> Div {
     let mut list = div()
+        .flex()
         .flex_col()
         .mt(px(8.0))
         .rounded(px(10.0))

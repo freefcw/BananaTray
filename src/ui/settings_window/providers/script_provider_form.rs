@@ -85,6 +85,7 @@ fn render_test_result(result: Option<&ScriptProviderTestResult>, theme: &Theme) 
         .map(ScriptProviderQuotaPreview::display_line);
 
     div()
+        .flex()
         .flex_col()
         .gap(px(8.0))
         .mt(px(18.0))
@@ -172,6 +173,7 @@ fn render_script_provider_header(title: String, theme: &Theme) -> Div {
         )
         .child(
             div()
+                .flex()
                 .flex_col()
                 .gap(px(2.0))
                 .child(

@@ -51,6 +51,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
         .child(
             div()
                 .w_full()
+                .mt(px(6.0))
                 .flex()
                 .items_start()
                 .gap(px(12.0))

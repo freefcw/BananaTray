@@ -11,6 +11,7 @@ use rust_i18n::t;
 /// 保证设置区在两类 provider 下看起来一致。
 pub(in crate::ui::settings_window) fn render_settings_card(theme: &Theme) -> Div {
     div()
+        .flex()
         .flex_col()
         .w_full()
         .rounded(px(12.0))
@@ -105,7 +106,7 @@ fn field_border_color(has_error: bool, is_focused: bool, theme: &Theme) -> Hsla 
 }
 
 fn render_field_label(label: &str, hint: Option<&str>, theme: &Theme) -> Div {
-    let mut col = div().flex_col().gap(px(2.0)).child(
+    let mut col = div().flex().flex_col().gap(px(2.0)).child(
         div()
             .text_size(px(12.5))
             .font_weight(FontWeight::SEMIBOLD)
@@ -134,6 +135,7 @@ pub(in crate::ui::settings_window) fn render_input_field(
 ) -> Div {
     let has_error = field.error.is_some();
     let mut col = div()
+        .flex()
         .flex_col()
         .gap(px(6.0))
         .mt(field.margin_top)
@@ -207,6 +209,7 @@ pub(super) fn render_textarea_field(
         .text_color(theme.text.primary);
 
     let mut col = div()
+        .flex()
         .flex_col()
         .gap(px(6.0))
         .mt(field.margin_top)
@@ -243,6 +246,7 @@ pub(super) fn render_code_field(
         .text_color(theme.text.primary);
 
     let mut col = div()
+        .flex()
         .flex_col()
         .gap(px(6.0))
         .mt(field.margin_top)
@@ -268,6 +272,7 @@ pub(super) fn render_readonly_field(
 ) -> Div {
     let muted = theme.text.muted;
     div()
+        .flex()
         .flex_col()
         .gap(px(6.0))
         .mt(margin_top)

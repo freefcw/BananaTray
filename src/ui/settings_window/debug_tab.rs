@@ -240,6 +240,7 @@ impl SettingsView {
             ))
             .child(
                 div()
+                    .flex()
                     .flex_col()
                     .flex_1()
                     .min_w_0()

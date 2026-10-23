@@ -416,6 +416,7 @@ fn render_threshold_segment(segment: ThresholdSegment, theme: &Theme) -> Div {
     let mut cell = div()
         .flex_1()
         .min_w_0()
+        .flex()
         .flex_col()
         .gap(px(4.0))
         .px(px(8.0))

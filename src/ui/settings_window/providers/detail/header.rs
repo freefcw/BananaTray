@@ -39,6 +39,7 @@ fn render_header_identity(icon: &str, display_name: &str, subtitle: &str, theme:
         ))
         .child(
             div()
+                .flex()
                 .flex_col()
                 .flex_1()
                 .min_w(px(0.0))

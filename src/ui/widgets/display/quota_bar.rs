@@ -26,7 +26,6 @@ pub(in crate::ui::widgets::display) fn render_quota_card_frame(
         ))
         .w_full()
         .flex_col()
-        .gap(px(6.0))
         .px(px(16.0))
         .py(px(14.0))
         .rounded(px(12.0))
@@ -283,13 +282,17 @@ fn render_quota_bar(
         .child(render_quota_detail_row(&detail_text, theme));
 
     if let Some(history) = history {
-        card = card.child(crate::ui::widgets::render_history_line_chart(
-            &history.quota_key,
-            history.lines.clone(),
-            history.axis.clone(),
-            PopupLayout::CARD_HISTORY_PLOT_HEIGHT,
-            theme,
-        ));
+        card = card.child(
+            div()
+                .mt(px(6.0))
+                .child(crate::ui::widgets::render_history_line_chart(
+                    &history.quota_key,
+                    history.lines.clone(),
+                    history.axis.clone(),
+                    PopupLayout::CARD_HISTORY_PLOT_HEIGHT,
+                    theme,
+                )),
+        );
     }
     card
 }

@@ -321,6 +321,7 @@ fn render_newapi_header(title: String, theme: &Theme) -> Div {
         )
         .child(
             div()
+                .flex()
                 .flex_col()
                 .gap(px(2.0))
                 .child(
