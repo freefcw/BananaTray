@@ -260,7 +260,7 @@ impl QuotaInfo {
 
     /// 将剩余量（`limit - used`）格式化为带符号的两位小数字符串，可选前缀。
     ///
-    /// 用于 `Credit` / `Points` 类型在 `Remaining` 模式下的统一显示：
+    /// 用于 `Credit` 类型在 `Remaining` 模式下的统一显示：
     /// - 正数：`{prefix}{X.XX}`
     /// - 负数（超额）：`-{prefix}{X.XX}`
     pub fn format_remaining_signed(&self, prefix: &str) -> String {

@@ -402,6 +402,14 @@ pub fn quota_usage_detail_text(quota: &QuotaInfo) -> String {
     }
 }
 
+fn format_compact_amount(value: f64) -> String {
+    let text = format!("{value:.2}");
+    match text.strip_suffix(".00") {
+        Some(whole) => whole.to_string(),
+        None => text,
+    }
+}
+
 /// 设置页 quota 卡片的主显示文本。
 #[allow(dead_code)] // 仅 app feature 下的 ui/widgets/display/quota_bar.rs 调用
 pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisplayMode) -> String {
@@ -410,7 +418,7 @@ pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisp
         return match quota.quota_type {
             QuotaType::Credit => format!("${:.2}", balance),
             QuotaType::Count => format!("{:.0}", balance),
-            _ => format!("{:.2}", balance),
+            _ => format_compact_amount(balance),
         };
     }
 
@@ -418,8 +426,10 @@ pub fn format_quota_card_display_text(quota: &QuotaInfo, display_mode: QuotaDisp
     match (&quota.quota_type, display_mode) {
         (QuotaType::Credit, QuotaDisplayMode::Remaining) => quota.format_remaining_signed("$"),
         (QuotaType::Credit, QuotaDisplayMode::Used) => format!("${:.2}", quota.used),
-        (QuotaType::Points, QuotaDisplayMode::Remaining) => quota.format_remaining_signed(""),
-        (QuotaType::Points, QuotaDisplayMode::Used) => format!("{:.2}", quota.used),
+        (QuotaType::Points, QuotaDisplayMode::Remaining) => {
+            format_compact_amount(quota.limit - quota.used)
+        }
+        (QuotaType::Points, QuotaDisplayMode::Used) => format_compact_amount(quota.used),
         (_, QuotaDisplayMode::Remaining) => format!("{:.0}", remaining_pct.max(0.0)),
         (_, QuotaDisplayMode::Used) => format!("{:.0}", quota.percentage().clamp(0.0, 100.0)),
     }
@@ -990,6 +1000,30 @@ mod tests {
         assert_eq!(
             format_quota_card_display_text(&q, QuotaDisplayMode::Remaining),
             "$10.00"
+        );
+
+        let points_int = QuotaInfo::balance_only(
+            QuotaLabelSpec::Credits,
+            62500.0,
+            None,
+            QuotaType::Points,
+            None,
+        );
+        assert_eq!(
+            format_quota_card_display_text(&points_int, QuotaDisplayMode::Remaining),
+            "62500"
+        );
+
+        let points_frac = QuotaInfo::balance_only(
+            QuotaLabelSpec::Credits,
+            62500.25,
+            None,
+            QuotaType::Points,
+            None,
+        );
+        assert_eq!(
+            format_quota_card_display_text(&points_frac, QuotaDisplayMode::Remaining),
+            "62500.25"
         );
     }
 
