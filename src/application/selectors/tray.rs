@@ -155,6 +155,12 @@ pub fn provider_detail_view_state(
         quota_display_mode: session.settings.display.quota_display_mode,
         quota_card_style: session.settings.display.quota_card_style,
         history_charts,
+        expanded_history_keys: session
+            .expanded_history_charts
+            .iter()
+            .filter(|(provider_key, _)| provider_key == &id.id_key())
+            .map(|(_, quota_key)| quota_key.clone())
+            .collect(),
         resets: rate_limit_reset_section(&provider.rate_limit_resets).map(Box::new),
     })
 }

@@ -61,6 +61,12 @@ impl PopupLayout {
     pub const CARD_HISTORY_CHART_HEIGHT: f32 =
         Self::CARD_HISTORY_PLOT_HEIGHT + Self::CARD_HISTORY_AXIS_CHROME;
 
+    /// 线条样式点开放大后的绘图区高度，不含坐标文字。
+    pub const CARD_HISTORY_EXPANDED_PLOT_HEIGHT: f32 = 110.0;
+    /// 放大的折线比平时多出的高度。
+    pub const CARD_HISTORY_EXPANDED_EXTRA: f32 =
+        Self::CARD_HISTORY_EXPANDED_PLOT_HEIGHT - Self::CARD_HISTORY_PLOT_HEIGHT;
+
     /// 一张有折线的配额卡比 `CARD_HEIGHT` 多出来的高度。
     ///
     /// 线条样式把折线放在卡片底部：卡片是 `flex_col` + `gap(6)`，多一个图表子节点就多一段

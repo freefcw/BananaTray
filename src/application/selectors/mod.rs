@@ -80,6 +80,8 @@ pub struct ProviderPanelViewState {
     /// 配额卡内嵌用量折线（近 24 小时或本周期，跟「卡片折线」设置走）；
     /// 无成功样本或尚未加载时为空，UI 不渲染。
     pub history_charts: Vec<HistoryChartView>,
+    /// 这个 provider 里被点开放大的折线对应的 quota_key。圆圈样式不使用。
+    pub expanded_history_keys: Vec<String>,
     /// Codex 可兑换限流重置。不是配额卡。
     ///
     /// 装箱是为了不把 `ProviderDetailViewState::Panel` 撑过 clippy 的枚举体积阈值。

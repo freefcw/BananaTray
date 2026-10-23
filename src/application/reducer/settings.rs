@@ -36,6 +36,16 @@ pub(super) fn toggle_overview_expanded(
     effects.push(ContextEffect::Render.into());
 }
 
+pub(super) fn toggle_history_chart_expanded(
+    session: &mut AppSession,
+    provider_id: ProviderId,
+    quota_key: String,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.toggle_history_chart_expanded(&provider_id, &quota_key);
+    effects.push(ContextEffect::Render.into());
+}
+
 pub(super) fn set_settings_tab(
     session: &mut AppSession,
     tab: SettingsTab,

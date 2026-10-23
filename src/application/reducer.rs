@@ -145,6 +145,10 @@ pub fn reduce_at(
         AppAction::ToggleOverviewExpanded(id) => {
             settings::toggle_overview_expanded(session, id, &mut effects)
         }
+        AppAction::ToggleHistoryChartExpanded {
+            provider_id,
+            quota_key,
+        } => settings::toggle_history_chart_expanded(session, provider_id, quota_key, &mut effects),
         AppAction::QuitApp => settings::quit_app(&mut effects),
 
         AppAction::RefreshProvider { id, reason } => {

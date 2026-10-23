@@ -160,7 +160,36 @@ impl AppView {
                     let history = vm
                         .history_charts
                         .iter()
-                        .find(|chart| chart.quota_key == quota.quota.stable_key);
+                        .find(|chart| chart.quota_key == quota.quota.stable_key)
+                        .map(|chart| {
+                            let expanded = vm
+                                .expanded_history_keys
+                                .iter()
+                                .any(|key| key == &quota.quota.stable_key);
+                            let state = self.state.clone();
+                            let provider_id = vm.id.clone();
+                            let quota_key = quota.quota.stable_key.clone();
+                            crate::ui::widgets::QuotaCardHistory {
+                                chart,
+                                expanded,
+                                on_toggle: Some(Box::new(
+                                    move |_: &gpui::MouseDownEvent,
+                                          window: &mut gpui::Window,
+                                          cx: &mut gpui::App| {
+                                        crate::bootstrap::dispatch_in_window(
+                                            &state,
+                                            AppAction::ToggleHistoryChartExpanded {
+                                                provider_id: provider_id.clone(),
+                                                quota_key: quota_key.clone(),
+                                            },
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )
+                                    as crate::ui::widgets::QuotaChartToggleHandler),
+                            }
+                        });
                     let on_hide = quota.hideable.then(|| {
                         let state = self.state.clone();
                         let provider_id = vm.id.clone();

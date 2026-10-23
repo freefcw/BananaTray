@@ -38,6 +38,16 @@ pub(in crate::ui::widgets::display) fn render_quota_card_frame(
 /// 卡片“隐藏”按钮的点击回调。
 pub(crate) type QuotaHideHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
 
+/// 配额卡内嵌折线。`on_toggle` 为 `None` 时不能点开放大（设置页）；圆圈样式忽略放大。
+pub(crate) struct QuotaCardHistory<'a> {
+    pub chart: &'a HistoryChartView,
+    pub expanded: bool,
+    pub on_toggle: Option<QuotaChartToggleHandler>,
+}
+
+/// 折线点开放大 / 收起的点击回调。
+pub(crate) type QuotaChartToggleHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
+
 pub(in crate::ui::widgets::display) fn render_quota_header_row(
     quota_view: &QuotaDisplayViewState,
     badge_color: Hsla,
@@ -220,7 +230,7 @@ pub(crate) fn render_quota_card(
     generation: u64,
     display_mode: QuotaDisplayMode,
     style: QuotaCardStyle,
-    history: Option<&HistoryChartView>,
+    history: Option<QuotaCardHistory<'_>>,
     on_hide: Option<QuotaHideHandler>,
 ) -> gpui::AnyElement {
     match style {
@@ -242,14 +252,16 @@ pub(crate) fn render_quota_card(
 
 /// Lumina Bar 风格的 quota 卡片。
 ///
-/// `history` 有值时把近 24 小时折线画在卡片底部，不再另起标题。
+/// `history` 有值时把折线画在卡片底部，不再另起标题。
+/// 点击折线可放大 / 收起（`on_toggle` 有值时）；放大后高度多
+/// `PopupLayout::CARD_HISTORY_EXPANDED_EXTRA`。
 /// 高度增量见 `PopupLayout::CARD_HISTORY_EXTRA`（卡片 `gap(6)` + 图表高度）。
 fn render_quota_bar(
     quota_view: &QuotaDisplayViewState,
     theme: &Theme,
     generation: u64,
     display_mode: QuotaDisplayMode,
-    history: Option<&HistoryChartView>,
+    history: Option<QuotaCardHistory<'_>>,
     on_hide: Option<QuotaHideHandler>,
 ) -> impl IntoElement {
     let q = &quota_view.quota;
@@ -283,14 +295,27 @@ fn render_quota_bar(
         .child(render_quota_detail_row(&detail_text, theme));
 
     if let Some(history) = history {
+        let plot_height = if history.expanded {
+            PopupLayout::CARD_HISTORY_EXPANDED_PLOT_HEIGHT
+        } else {
+            PopupLayout::CARD_HISTORY_PLOT_HEIGHT
+        };
+        let mut chart_wrap = div()
+            .id(ElementId::Name(
+                format!("quota-history-{}", q.stable_key).into(),
+            ))
+            .mt(px(6.0));
+        if let Some(on_toggle) = history.on_toggle {
+            chart_wrap = chart_wrap
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, on_toggle);
+        }
         card = card.child(
-            div()
-                .mt(px(6.0))
-                .child(crate::ui::widgets::render_history_line_chart(
-                    history,
-                    PopupLayout::CARD_HISTORY_PLOT_HEIGHT,
-                    theme,
-                )),
+            chart_wrap.child(crate::ui::widgets::render_history_line_chart(
+                history.chart,
+                plot_height,
+                theme,
+            )),
         );
     }
     card

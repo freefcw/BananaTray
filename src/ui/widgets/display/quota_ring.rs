@@ -24,7 +24,7 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
     quota_view: &QuotaDisplayViewState,
     theme: &Theme,
     display_mode: QuotaDisplayMode,
-    history: Option<&HistoryChartView>,
+    history: Option<super::quota_bar::QuotaCardHistory<'_>>,
     on_hide: Option<super::quota_bar::QuotaHideHandler>,
 ) -> impl IntoElement {
     let quota = &quota_view.quota;
@@ -63,7 +63,12 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
                     fill,
                     theme,
                 ))
-                .child(render_ring_side(history, &mode_label, &detail_text, theme)),
+                .child(render_ring_side(
+                    history.map(|history| history.chart),
+                    &mode_label,
+                    &detail_text,
+                    theme,
+                )),
         )
 }
 

@@ -376,3 +376,38 @@ fn popup_height_ring_style_keeps_history_inside_the_card() {
     );
     const { assert!(PopupLayout::CARD_RING_DETAIL_EXTRA < PopupLayout::CARD_HISTORY_EXTRA) };
 }
+
+/// 线条样式点开放大的折线把窗口再加高；圆圈样式和没有折线的 key 忽略放大状态。
+#[test]
+fn popup_height_expanded_chart_adds_extra_height() {
+    use crate::models::QuotaCardStyle;
+
+    let mut store = make_store(&[ProviderKind::Claude]);
+    store.providers[0].quotas = vec![QuotaInfo::new("Session", 50.0, 100.0)];
+    let id = pid(ProviderKind::Claude);
+    let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
+    session.nav.active_tab = NavTab::Provider(id.clone());
+    session.popup_history_ui.load = HistoryLoadState::Ready {
+        provider_id: id.clone(),
+        request_id: 1,
+        ready: ready_charts(vec![line_series("session", 3)]),
+    };
+    let bar_height = session.popup_height();
+
+    session.toggle_history_chart_expanded(&id, "session");
+    assert_eq!(
+        session.popup_height(),
+        bar_height + PopupLayout::CARD_HISTORY_EXPANDED_EXTRA
+    );
+
+    // 放大标记指向一条当前没有折线的配额时不加高。
+    session.toggle_history_chart_expanded(&id, "session");
+    session.toggle_history_chart_expanded(&id, "no-chart");
+    assert_eq!(session.popup_height(), bar_height);
+
+    // 圆圈样式忽略放大状态。
+    session.settings.display.quota_card_style = QuotaCardStyle::Ring;
+    let ring_height = session.popup_height();
+    session.toggle_history_chart_expanded(&id, "session");
+    assert_eq!(session.popup_height(), ring_height);
+}

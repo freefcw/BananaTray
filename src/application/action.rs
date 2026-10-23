@@ -96,6 +96,11 @@ pub enum AppAction {
     PopupVisibilityChanged(bool),
     /// 切换 Overview 面板中某个 Provider 的展开/折叠状态（进程内记忆，不持久化）
     ToggleOverviewExpanded(ProviderId),
+    /// 切换托盘配额卡内嵌折线的放大状态（进程内记忆，不持久化）
+    ToggleHistoryChartExpanded {
+        provider_id: ProviderId,
+        quota_key: String,
+    },
     /// 进入"添加 Provider"选择模式（右面板切换为选择列表）
     EnterAddProvider,
     /// 取消添加 Provider（退出选择模式）
@@ -253,6 +258,7 @@ impl AppAction {
             | Self::ClearDebugLogs
             | Self::PopupVisibilityChanged(_)
             | Self::ToggleOverviewExpanded(_)
+            | Self::ToggleHistoryChartExpanded { .. }
             | Self::EnterAddProvider
             | Self::CancelAddProvider
             | Self::AddProviderToSidebar(_)

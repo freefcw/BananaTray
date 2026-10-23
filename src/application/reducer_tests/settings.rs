@@ -770,3 +770,45 @@ fn set_quota_card_history_range_persists_and_reloads_popup() {
         AppEffect::Common(CommonEffect::History(crate::history::HistoryJob::Load(_)))
     )));
 }
+
+#[test]
+fn toggle_history_chart_expanded_is_session_only() {
+    let mut session = make_session();
+    let id = pid(ProviderKind::Claude);
+
+    let effects = reduce(
+        &mut session,
+        AppAction::ToggleHistoryChartExpanded {
+            provider_id: id.clone(),
+            quota_key: "session".to_string(),
+        },
+    );
+    assert!(session.is_history_chart_expanded(&id, "session"));
+    assert!(has_render(&effects));
+    // 进程内记忆，不落盘。
+    assert!(!has_effect(&effects, |e| matches!(
+        e,
+        AppEffect::Common(CommonEffect::Settings(SettingsEffect::PersistSettings))
+    )));
+
+    // 另一个 key 的放大互不影响。
+    reduce(
+        &mut session,
+        AppAction::ToggleHistoryChartExpanded {
+            provider_id: id.clone(),
+            quota_key: "weekly".to_string(),
+        },
+    );
+    assert!(session.is_history_chart_expanded(&id, "session"));
+    assert!(session.is_history_chart_expanded(&id, "weekly"));
+
+    reduce(
+        &mut session,
+        AppAction::ToggleHistoryChartExpanded {
+            provider_id: id.clone(),
+            quota_key: "session".to_string(),
+        },
+    );
+    assert!(!session.is_history_chart_expanded(&id, "session"));
+    assert!(session.is_history_chart_expanded(&id, "weekly"));
+}

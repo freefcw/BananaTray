@@ -195,6 +195,11 @@ pub struct AppSession {
     /// 只活在本次进程内：默认折叠，用户展开后在应用生命周期里保持。
     /// 放在 session 而非 `AppView`，因为 macOS 每次关闭弹窗都会销毁 view。
     pub overview_expanded: std::collections::HashSet<String>,
+    /// 配额卡内嵌折线被点开放大的 `(provider id_key, quota_key)` 集合。
+    ///
+    /// 和 `overview_expanded` 一样只活在本次进程内，不持久化：
+    /// 应用重启后回到未放大状态；圆圈样式不使用这个状态。
+    pub expanded_history_charts: std::collections::HashSet<(String, String)>,
     /// 已保存、等下一次 `ProvidersReloaded` 再刷新的自定义 Provider。
     ///
     /// 只改 cookie / user_id / 脚本内容时 metadata 不变，reload 不会把它算进 `affected`；
@@ -226,6 +231,7 @@ impl AppSession {
             alert_engine: AlertEngine::new(),
             popup_visible: false,
             overview_expanded: Default::default(),
+            expanded_history_charts: Default::default(),
             refresh_after_reload: Default::default(),
         }
     }
@@ -240,6 +246,20 @@ impl AppSession {
         let key = id.id_key();
         if !self.overview_expanded.remove(&key) {
             self.overview_expanded.insert(key);
+        }
+    }
+
+    /// 该配额卡的内嵌折线当前是否放大显示。
+    pub fn is_history_chart_expanded(&self, id: &ProviderId, quota_key: &str) -> bool {
+        self.expanded_history_charts
+            .contains(&(id.id_key(), quota_key.to_string()))
+    }
+
+    /// 切换配额卡内嵌折线的放大状态（展开 ↔ 收起）。
+    pub fn toggle_history_chart_expanded(&mut self, id: &ProviderId, quota_key: &str) {
+        let key = (id.id_key(), quota_key.to_string());
+        if !self.expanded_history_charts.remove(&key) {
+            self.expanded_history_charts.insert(key);
         }
     }
 
@@ -894,46 +914,59 @@ pub fn compute_popup_height(
 /// 只算当前 provider 页上、可见配额里、至少两个点的序列。加载中、刷新中、
 /// 空状态，以及设置页 / Overview，都不加高。圆圈样式的折线在圆环右侧，
 /// 不为折线本身加高；有折线的卡把重置时间放到右侧折线下面，按 `CARD_RING_DETAIL_EXTRA` 加高。
+/// 线条样式下被点开放大的折线再加 `CARD_HISTORY_EXPANDED_EXTRA`；
+/// 放大标记指向一条当前没有折线的配额时不加高。
 fn popup_embedded_history_extra(session: &AppSession) -> f32 {
-    let count = embedded_history_line_count(session);
-    let per_card = if session.settings.display.quota_card_style == QuotaCardStyle::Ring {
-        crate::models::PopupLayout::CARD_RING_DETAIL_EXTRA
-    } else {
-        crate::models::PopupLayout::CARD_HISTORY_EXTRA
+    let keys = embedded_history_quota_keys(session);
+    if session.settings.display.quota_card_style == QuotaCardStyle::Ring {
+        return keys.len() as f32 * crate::models::PopupLayout::CARD_RING_DETAIL_EXTRA;
+    }
+    let NavTab::Provider(id) = &session.nav.active_tab else {
+        return 0.0;
     };
-    count as f32 * per_card
+    keys.iter()
+        .map(|key| {
+            let mut extra = crate::models::PopupLayout::CARD_HISTORY_EXTRA;
+            if session.is_history_chart_expanded(id, key) {
+                extra += crate::models::PopupLayout::CARD_HISTORY_EXPANDED_EXTRA;
+            }
+            extra
+        })
+        .sum()
 }
 
-fn embedded_history_line_count(session: &AppSession) -> usize {
+/// 当前 provider 页上真正画出内嵌折线的配额 key：
+/// 可见配额里、至少两个点的序列。
+fn embedded_history_quota_keys(session: &AppSession) -> Vec<&str> {
     let NavTab::Provider(id) = &session.nav.active_tab else {
-        return 0;
+        return Vec::new();
     };
     let HistoryLoadState::Ready {
         provider_id, ready, ..
     } = &session.popup_history_ui.load
     else {
-        return 0;
+        return Vec::new();
     };
     if provider_id != id {
-        return 0;
+        return Vec::new();
     }
     let Some(provider) = session.provider_store.find_by_id(id) else {
-        return 0;
+        return Vec::new();
     };
     if provider.connection == ConnectionStatus::Refreshing
         || (provider.connection == ConnectionStatus::Error && provider.quotas.is_empty())
     {
-        return 0;
+        return Vec::new();
     }
     let visible = session
         .settings
         .provider
         .visible_quotas(id, &provider.quotas);
     if visible.is_empty() {
-        return 0;
+        return Vec::new();
     }
     let HistoryReadyState::Charts(series) = &ready.state else {
-        return 0;
+        return Vec::new();
     };
     series
         .iter()
@@ -943,7 +976,8 @@ fn embedded_history_line_count(session: &AppSession) -> usize {
                     .iter()
                     .any(|quota| quota.stable_key == item.quota_key)
         })
-        .count()
+        .map(|item| item.quota_key.as_str())
+        .collect()
 }
 
 /// 计算当前头部状态分类和可选的经过秒数

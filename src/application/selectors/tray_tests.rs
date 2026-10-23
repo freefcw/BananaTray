@@ -1088,3 +1088,23 @@ fn zcode_quota_card_matches_its_history_series() {
     assert_eq!(panel.history_charts.len(), 1);
     assert_eq!(panel.history_charts[0].quota_key, "rolling-10h");
 }
+
+#[test]
+fn expanded_history_keys_only_cover_the_shown_provider() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::ZCode, true);
+    let provider = make_provider(ProviderKind::ZCode, ConnectionStatus::Connected);
+    let mut session = make_session_with_provider(settings, provider);
+    session.toggle_history_chart_expanded(&pid(ProviderKind::ZCode), "rolling-10h");
+    session.toggle_history_chart_expanded(&pid(ProviderKind::Claude), "weekly");
+
+    let ProviderDetailViewState::Panel(panel) =
+        provider_detail_view_state(&session, &pid(ProviderKind::ZCode))
+    else {
+        panic!("expected provider panel");
+    };
+    assert_eq!(panel.expanded_history_keys, vec!["rolling-10h".to_string()]);
+}
