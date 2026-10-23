@@ -19,6 +19,7 @@ pub(crate) fn render_rate_limit_resets(
     let mut card = div()
         .id(ElementId::Name("rate-limit-resets".into()))
         .w_full()
+        .flex()
         .flex_col()
         .gap(px(PopupLayout::RESET_CARD_GAP))
         .px(px(16.0))
@@ -183,7 +184,9 @@ fn reset_line(text: &str, color: gpui::Hsla, weight: FontWeight) -> Div {
         .h(px(PopupLayout::RESET_LINE_HEIGHT))
         .overflow_hidden()
         .text_size(px(12.0))
-        .line_height(relative(1.0))
+        // 行高必须撑满整行：1.0 倍行高时字形按字体 ascent+descent 居中会伸出行框顶边，
+        // 中文字形更高，顶部被 overflow_hidden 裁掉。
+        .line_height(px(PopupLayout::RESET_LINE_HEIGHT))
         .font_weight(weight)
         .text_color(color)
         .whitespace_nowrap()

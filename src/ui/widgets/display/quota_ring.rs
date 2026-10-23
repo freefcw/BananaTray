@@ -182,7 +182,8 @@ fn render_ring_detail(detail_text: &str, theme: &Theme) -> Div {
         .overflow_hidden()
         .whitespace_nowrap()
         .text_size(px(11.0))
-        .line_height(relative(1.0))
+        // 行高撑满整行，避免中文字形顶部伸出行框后被 overflow_hidden 裁掉。
+        .line_height(px(PopupLayout::CARD_RING_DETAIL_LINE))
         .text_color(theme.text.muted)
         .child(detail_text.to_string())
 }
