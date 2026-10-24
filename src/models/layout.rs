@@ -114,9 +114,8 @@ impl PopupLayout {
     pub const OVERVIEW_GAP: f32 = 8.0;
     /// Overview Provider 图标尺寸
     pub const OVERVIEW_ICON_SIZE: f32 = 16.0;
-    /// Overview 展开态配额行左侧 padding：对齐到图标右侧
-    /// dot(6) + gap(8) + icon(16) + gap(8) = 38，但视觉上对齐到图标中心更紧凑
-    pub const OVERVIEW_QUOTA_ROW_PL: f32 = 30.0;
+    /// Overview 展开态配额行左侧 padding：对齐到 Provider 图标左边缘（dot(6) + gap(8) = 14）
+    pub const OVERVIEW_QUOTA_ROW_PL: f32 = Self::OVERVIEW_DOT_SIZE + Self::OVERVIEW_GAP;
 
     // ── Overview 卡片高度 ──
 
