@@ -287,8 +287,7 @@ impl AppSession {
     /// 各已启用 Provider 在 Overview 面板中占用的配额行数。
     ///
     /// 折叠卡片恒为 1 行；展开卡片按可见配额数展开。
-    /// 这个行数只用于打开弹窗 / 切入 Overview 时的窗口高度；停留在 Overview
-    /// 时展开折叠不再改原生窗口，多出的行走内容区滚动。
+    /// 展开/收起卡片时 `popup_height()` 会随之重新计算，窗口在 `MAX_HEIGHT` 内自适应生长。
     fn overview_card_rows(&self) -> Vec<usize> {
         self.provider_store
             .enabled_providers(&self.settings)

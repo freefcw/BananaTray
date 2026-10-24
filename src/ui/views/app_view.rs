@@ -53,8 +53,6 @@ pub struct AppView {
     #[cfg(target_os = "linux")]
     pub(crate) _bounds_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
-    /// 已在 Overview tab 上按当前窗口高度锁定。展开/折叠不再改原生窗口，避免抖动。
-    is_overview_height_locked: bool,
 }
 
 impl AppView {
@@ -79,7 +77,6 @@ impl AppView {
             #[cfg(target_os = "linux")]
             _bounds_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
-            is_overview_height_locked: false,
         }
     }
 
@@ -193,31 +190,26 @@ impl AppView {
         crate::ui::widgets::render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
     }
 
-    fn sync_popup_height(&mut self, window: &mut Window, active_tab: &NavTab, desired_height: f32) {
-        let is_overview = matches!(active_tab, NavTab::Overview);
-        let should_sync_height = !is_overview || !self.is_overview_height_locked;
-        if should_sync_height {
-            if let WindowBounds::Windowed(current_bounds) = window.window_bounds() {
-                let new_height = px(desired_height);
-                let new_width = px(PopupLayout::WIDTH);
-                if size_differs(current_bounds.size, new_width, new_height) {
-                    let content_area = desired_height
-                        - PopupLayout::HEADER_HEIGHT
-                        - PopupLayout::NAV_HEIGHT
-                        - PopupLayout::FOOTER_HEIGHT;
-                    debug!(
-                        target: "layout",
-                        "window resize: {:?} -> {:?} (diff={:?}), content_area={:.0}px",
-                        current_bounds.size.height,
-                        new_height,
-                        current_bounds.size.height - new_height,
-                        content_area
-                    );
-                    resize_popup_window(window, new_width, new_height);
-                }
+    fn sync_popup_height(&self, window: &mut Window, desired_height: f32) {
+        if let WindowBounds::Windowed(current_bounds) = window.window_bounds() {
+            let new_height = px(desired_height);
+            let new_width = px(PopupLayout::WIDTH);
+            if size_differs(current_bounds.size, new_width, new_height) {
+                let content_area = desired_height
+                    - PopupLayout::HEADER_HEIGHT
+                    - PopupLayout::NAV_HEIGHT
+                    - PopupLayout::FOOTER_HEIGHT;
+                debug!(
+                    target: "layout",
+                    "window resize: {:?} -> {:?} (diff={:?}), content_area={:.0}px",
+                    current_bounds.size.height,
+                    new_height,
+                    current_bounds.size.height - new_height,
+                    content_area
+                );
+                resize_popup_window(window, new_width, new_height);
             }
         }
-        self.is_overview_height_locked = is_overview;
     }
 }
 
@@ -232,12 +224,10 @@ impl Render for AppView {
 
         #[cfg(target_os = "linux")]
         if !popup_visible {
-            // Linux 隐藏弹窗不销毁 view，解锁以便重开时重新落地高度
-            self.is_overview_height_locked = false;
             return div().size_full();
         }
 
-        self.sync_popup_height(window, &active_tab, desired_height);
+        self.sync_popup_height(window, desired_height);
 
         let theme = cx.global::<Theme>();
         div()

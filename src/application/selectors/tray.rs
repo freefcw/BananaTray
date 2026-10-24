@@ -338,6 +338,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                                 label: format_quota_label(q),
                                 display_text: compact_quota_display_text(q, display_mode),
                                 bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
+                                is_balance_only: q.is_balance_only(),
                                 status_level: sl,
                             }
                         })

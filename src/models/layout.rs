@@ -118,13 +118,13 @@ impl PopupLayout {
     // ── Overview 共用组件尺寸 ──
 
     /// 进度条固定宽度（所有布局统一）
-    pub const OVERVIEW_BAR_W: f32 = 80.0;
+    pub const OVERVIEW_BAR_W: f32 = 72.0;
     /// 折叠态/单行进度条高度
     pub const OVERVIEW_BAR_H: f32 = 4.0;
     /// 展开态进度条高度（比折叠态更粗，增强可读性）
     pub const OVERVIEW_EXPANDED_BAR_H: f32 = 6.0;
-    /// 数值列固定宽度（确保右侧对齐）
-    pub const OVERVIEW_VALUE_W: f32 = 38.0;
+    /// 数值列固定宽度（确保右侧对齐，容纳 $3074.63 / 62500 等较长数值）
+    pub const OVERVIEW_VALUE_W: f32 = 56.0;
     /// 状态徽章列固定宽度
     pub const OVERVIEW_BADGE_W: f32 = 28.0;
     /// 展开/折叠按钮方形点击区域（不可展开时用等宽空白占位保持对齐）

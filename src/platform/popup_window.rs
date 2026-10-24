@@ -4,8 +4,6 @@
 //! `setFrame:display:animate:NO`：顶边钉住、关掉 UtilityWindow 动画，
 //! 且不再因同步回调撞上 `try_borrow_mut` 而丢 resize 通知。
 //! 历史上的 AppKit 直调 workaround 见 docs/architecture.md Workaround Register。
-//!
-//! Overview 展开/折叠不要走这里：原生窗口改尺寸本身就会抖。
 
 use gpui::{size, Pixels, ResizeAnchor, Size, Window, WindowBounds};
 

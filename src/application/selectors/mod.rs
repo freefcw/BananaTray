@@ -188,6 +188,8 @@ pub struct OverviewQuotaItem {
     pub display_text: String,
     /// 进度条比例 [0.0, 1.0]
     pub bar_ratio: f32,
+    /// 是否为无总额上限的纯余额/按量计费项（Overview 不画百分比填充条）
+    pub is_balance_only: bool,
     /// 此配额的状态等级
     pub status_level: StatusLevel,
 }

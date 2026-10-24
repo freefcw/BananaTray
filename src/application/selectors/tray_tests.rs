@@ -871,7 +871,38 @@ fn overview_three_plus_quotas_collected_and_sorted() {
             for q in quotas {
                 assert!(!q.display_text.is_empty());
                 assert!(q.bar_ratio >= 0.0 && q.bar_ratio <= 1.0);
+                assert!(!q.is_balance_only);
             }
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_marks_balance_only_quotas() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Codex, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("weekly", 20.0, 100.0),
+        QuotaInfo::balance_only(
+            QuotaLabelSpec::Credits,
+            62500.0,
+            None,
+            crate::models::QuotaType::Points,
+            None,
+        ),
+    ];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Codex]);
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { quotas, .. } => {
+            assert_eq!(quotas.len(), 2);
+            let weekly = quotas.iter().find(|q| q.label == "weekly").unwrap();
+            let points = quotas.iter().find(|q| q.label != "weekly").unwrap();
+            assert!(!weekly.is_balance_only);
+            assert!(points.is_balance_only);
         }
         other => panic!("expected Quota, got {:?}", other),
     }

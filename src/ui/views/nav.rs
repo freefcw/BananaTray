@@ -4,8 +4,8 @@ use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::AppView;
 use gpui::{
-    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, Entity,
-    FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
+    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, FontWeight,
+    Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
     ScrollHandle, StatefulInteractiveElement, StyleRefinement, Styled,
 };
 use rust_i18n::t;
@@ -14,7 +14,7 @@ use std::time::Duration;
 /// Overview 导航图标路径（与 tray_settings.rs 保持一致）
 const OVERVIEW_ICON: &str = "src/icons/overview.svg";
 /// 两侧指示器区域宽度
-const INDICATOR_WIDTH: f32 = 14.0;
+const INDICATOR_WIDTH: f32 = 18.0;
 /// 滚动偏移量超过此阈值才显示指示器
 const SCROLL_THRESHOLD: f32 = 2.0;
 /// 滑块动画时长 (ms)
@@ -95,7 +95,6 @@ impl AppView {
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let border_color = theme.border.subtle;
-        let indicator_color = theme.text.muted;
         let slider_bg = theme.nav.pill_active_bg;
         let snapshot = self.top_nav_snapshot();
         let active_index = snapshot.active_index(&active_tab);
@@ -103,23 +102,19 @@ impl AppView {
         let metrics =
             Self::measure_nav_scroll(&self.nav_scroll_handle, active_index, previous_index);
 
-        let left_arrow = Self::render_nav_scroll_arrow(
+        let left_arrow = self.render_nav_scroll_arrow(
             "nav-arrow-left",
             "src/icons/chevron-left.svg",
             metrics.can_scroll_left,
             metrics.left_target,
-            self.nav_scroll_handle.clone(),
-            cx.entity().clone(),
-            indicator_color,
+            cx,
         );
-        let right_arrow = Self::render_nav_scroll_arrow(
+        let right_arrow = self.render_nav_scroll_arrow(
             "nav-arrow-right",
             "src/icons/chevron-right.svg",
             metrics.can_scroll_right,
             metrics.right_target,
-            self.nav_scroll_handle.clone(),
-            cx.entity().clone(),
-            indicator_color,
+            cx,
         );
         let slider = metrics
             .slider_layout
@@ -147,7 +142,9 @@ impl AppView {
             .w_full()
             .border_b_1()
             .border_color(border_color)
+            .px(px(2.0))
             .py(px(4.0))
+            .gap(px(2.0))
             .flex()
             .items_center()
             .child(left_arrow)
@@ -227,29 +224,37 @@ impl AppView {
     }
 
     fn render_nav_scroll_arrow(
+        &self,
         element_id: &'static str,
         icon_path: &'static str,
         enabled: bool,
         target: Option<usize>,
-        scroll_handle: ScrollHandle,
-        entity: Entity<Self>,
-        indicator_color: Hsla,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let mut arrow = div()
             .id(element_id)
             .w(px(INDICATOR_WIDTH))
+            .h(px(24.0))
+            .rounded(px(6.0))
             .flex_shrink_0()
             .flex()
             .items_center()
-            .justify_center()
-            .cursor_pointer();
+            .justify_center();
 
         if enabled {
+            let theme = cx.global::<Theme>();
+            let indicator_color = theme.text.muted;
+            let hover_bg = theme.bg.subtle;
+            let scroll_handle = self.nav_scroll_handle.clone();
+            let entity = cx.entity().clone();
+
             arrow = arrow
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
                 .child(
                     svg()
                         .path(icon_path)
-                        .size(px(10.0))
+                        .size(px(11.0))
                         .text_color(indicator_color),
                 )
                 .on_mouse_down(MouseButton::Left, move |_, _, cx| {
