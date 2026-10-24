@@ -1,20 +1,32 @@
-use crate::application::AppAction;
-use crate::models::NavTab;
+use crate::application::{provider_nav_alert_level, AppAction};
+use crate::models::{NavTab, NavTabStyle, StatusLevel};
 use crate::runtime;
 use crate::theme::Theme;
+use crate::ui::widgets::with_tooltip;
 use crate::ui::AppView;
 use gpui::{
-    div, px, relative, svg, Animation, AnimationExt, Bounds, Context, Div, ElementId, FontWeight,
-    Hsla, InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels,
-    ScrollHandle, StatefulInteractiveElement, StyleRefinement, Styled,
+    div, linear_color_stop, multi_stop_linear_gradient, point, px, relative, svg,
+    transparent_black, Animation, AnimationExt, Context, Div, ElementId, FontWeight, Hsla,
+    InteractiveElement, IntoElement, MouseButton, Negate, ParentElement, Pixels, ScrollHandle,
+    Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window,
 };
 use rust_i18n::t;
 use std::time::Duration;
 
 /// Overview 导航图标路径（与 tray_settings.rs 保持一致）
 const OVERVIEW_ICON: &str = "src/icons/overview.svg";
-/// 两侧指示器区域宽度
+/// 导航项总数超过此阈值时启用紧凑模式（未选中仅显示图标，选中展开图标+文字）
+const COMPACT_TAB_THRESHOLD: usize = 4;
+/// 紧凑模式下未选中纯图标按钮的固定宽度
+const COMPACT_ICON_PILL_WIDTH: f32 = 34.0;
+/// 紧凑模式下未选中纯图标按钮的固定高度（与展开态胶囊高度一致）
+const COMPACT_ICON_PILL_HEIGHT: f32 = 29.0;
+/// 两侧指示器区域宽度（始终占位，避免可滚动态切换时布局跳动）
 const INDICATOR_WIDTH: f32 = 18.0;
+/// 渐变遮罩从内容边缘向内延伸的宽度
+const FADE_WIDTH: f32 = 20.0;
+/// 滚动容器的垂直内边距；absolute 定位的滑块 top 偏移需与它保持一致
+const NAV_SCROLL_PADDING_Y: f32 = 4.0;
 /// 滚动偏移量超过此阈值才显示指示器
 const SCROLL_THRESHOLD: f32 = 2.0;
 /// 滑块动画时长 (ms)
@@ -46,12 +58,15 @@ struct TopNavItem {
     icon_path: String,
     label: String,
     tab: NavTab,
+    alert_level: Option<StatusLevel>,
 }
 
 struct TopNavSnapshot {
     items: Vec<TopNavItem>,
     previous_tab: Option<NavTab>,
     generation: u64,
+    /// 顶部导航栏展示风格（settings.display.nav_tab_style）
+    tab_style: NavTabStyle,
 }
 
 impl TopNavSnapshot {
@@ -67,7 +82,7 @@ impl TopNavSnapshot {
 }
 
 #[derive(Clone, Copy)]
-struct NavSliderRect {
+pub(crate) struct NavSliderRect {
     left: Pixels,
     width: Pixels,
     height: Pixels,
@@ -91,59 +106,88 @@ impl AppView {
     pub(crate) fn render_top_nav(
         &self,
         active_tab: NavTab,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let border_color = theme.border.subtle;
         let slider_bg = theme.nav.pill_active_bg;
+        let fade_from = theme.bg.panel;
+        let fade_to = transparent_black();
         let snapshot = self.top_nav_snapshot();
         let active_index = snapshot.active_index(&active_tab);
         let previous_index = snapshot.previous_index();
-        let metrics =
-            Self::measure_nav_scroll(&self.nav_scroll_handle, active_index, previous_index);
+        let item_count = snapshot.items.len();
+        let compact_mode =
+            snapshot.tab_style == NavTabStyle::Compact && item_count > COMPACT_TAB_THRESHOLD;
+
+        let from_rect = self.sync_nav_transition(
+            active_index,
+            previous_index,
+            item_count,
+            snapshot.generation,
+            window,
+            cx,
+        );
+
+        let metrics = Self::measure_nav_scroll(&self.nav_scroll_handle, active_index, from_rect);
+        let has_slider = metrics.slider_layout.is_some();
 
         let left_arrow = self.render_nav_scroll_arrow(
-            "nav-arrow-left",
-            "src/icons/chevron-left.svg",
+            true,
             metrics.can_scroll_left,
             metrics.left_target,
+            item_count,
             cx,
         );
         let right_arrow = self.render_nav_scroll_arrow(
-            "nav-arrow-right",
-            "src/icons/chevron-right.svg",
+            false,
             metrics.can_scroll_right,
             metrics.right_target,
+            item_count,
             cx,
         );
         let slider = metrics
             .slider_layout
             .map(|layout| self.render_nav_slider(layout, snapshot.generation, slider_bg));
 
+        let pill_gap = if compact_mode { px(4.0) } else { px(2.0) };
         let nav_scroll = div()
             .id("nav-provider-scroll")
             .overflow_x_scroll()
             .scrollbar_width(px(0.0))
             .flex()
             .items_center()
-            .gap(px(2.0))
+            .gap(pill_gap)
             .track_scroll(&self.nav_scroll_handle)
-            .children(snapshot.items.into_iter().map(|item| {
-                self.render_nav_pill(item.icon_path, item.label, item.tab, active_tab.clone(), cx)
+            .children(snapshot.items.into_iter().enumerate().map(|(ix, item)| {
+                self.render_nav_pill(ix, item, active_tab.clone(), compact_mode, has_slider, cx)
             }));
 
-        let mut center = div().flex_1().min_w_0().overflow_hidden().relative();
+        let mut center = div()
+            .flex_1()
+            .min_w_0()
+            .overflow_hidden()
+            .relative()
+            .py(px(NAV_SCROLL_PADDING_Y));
         if let Some(slider) = slider {
             center = center.child(slider);
         }
         center = center.child(nav_scroll);
+
+        // 左右边缘渐变遮罩：可滚动时盖在内容截断处，缓和硬裁剪边缘
+        if metrics.can_scroll_left {
+            center = center.child(Self::render_nav_fade(true, fade_from, fade_to));
+        }
+        if metrics.can_scroll_right {
+            center = center.child(Self::render_nav_fade(false, fade_from, fade_to));
+        }
 
         div()
             .w_full()
             .border_b_1()
             .border_color(border_color)
             .px(px(2.0))
-            .py(px(4.0))
             .gap(px(2.0))
             .flex()
             .items_center()
@@ -155,6 +199,7 @@ impl AppView {
     fn top_nav_snapshot(&self) -> TopNavSnapshot {
         let state = self.state.borrow();
         let session = &state.session;
+        let show_status_dots = session.settings.display.nav_status_dots;
         let mut nav_items: Vec<_> = session
             .provider_store
             .enabled_providers(&session.settings)
@@ -162,6 +207,11 @@ impl AppView {
                 icon_path: provider.icon_asset().to_string(),
                 label: provider.display_name().to_string(),
                 tab: NavTab::Provider(provider.provider_id.clone()),
+                alert_level: if show_status_dots {
+                    provider_nav_alert_level(&session.settings, provider)
+                } else {
+                    None
+                },
             })
             .collect();
 
@@ -172,6 +222,7 @@ impl AppView {
                     icon_path: OVERVIEW_ICON.to_string(),
                     label: t!("nav.overview").to_string(),
                     tab: NavTab::Overview,
+                    alert_level: None,
                 },
             );
         }
@@ -180,13 +231,118 @@ impl AppView {
             items: nav_items,
             previous_tab: session.nav.prev_active_tab.clone(),
             generation: session.nav.generation,
+            tab_style: session.settings.display.nav_tab_style,
         }
+    }
+
+    /// 同步 Tab 切换时的动画起点锁定与下一帧滚动归位。
+    ///
+    /// 紧凑模式下切换 Tab 会改变旧项（收起文字）与新项（展开文字）的自身宽度，
+    /// 因此在切换首帧先锁定旧项展开态的 `from_rect` 并触发下一帧重绘；
+    /// 第 2 帧拿到新项展开后的真实 `bounds_for_item` 后再滚入视口并启动滑块动画。
+    fn sync_nav_transition(
+        &self,
+        active_index: Option<usize>,
+        previous_index: Option<usize>,
+        item_count: usize,
+        generation: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<NavSliderRect> {
+        // 首帧进入新的 generation：锁定切换前旧选中项（仍处于展开态）的视觉位置
+        if self.nav_anim_from.get().map(|(g, _)| g) != Some(generation) {
+            let from_rect = previous_index
+                .and_then(|ix| Self::visual_rect_of_item(&self.nav_scroll_handle, ix));
+            self.nav_anim_from.set(Some((generation, from_rect)));
+            let entity = cx.entity().clone();
+            window.on_next_frame(move |_, cx| {
+                entity.update(cx, |_, cx| cx.notify());
+            });
+            return from_rect;
+        }
+
+        let cached_from = self.nav_anim_from.get().and_then(|(_, rect)| rect);
+
+        if self.nav_settled_generation.get() != Some(generation) {
+            match active_index {
+                Some(ix) => {
+                    if Self::scroll_nav_item_into_view(&self.nav_scroll_handle, ix, item_count) {
+                        self.nav_settled_generation.set(Some(generation));
+                    } else {
+                        let entity = cx.entity().clone();
+                        window.on_next_frame(move |_, cx| {
+                            entity.update(cx, |_, cx| cx.notify());
+                        });
+                    }
+                }
+                None => {
+                    self.nav_settled_generation.set(Some(generation));
+                }
+            }
+        }
+
+        cached_from
+    }
+
+    /// 将指定索引的导航项滚入可视区域，返回是否已完成布局测量
+    fn scroll_nav_item_into_view(handle: &ScrollHandle, ix: usize, item_count: usize) -> bool {
+        let Some(cb) = handle.bounds_for_item(ix) else {
+            return false;
+        };
+        let bounds = handle.bounds();
+        if bounds.size.width <= px(0.0) {
+            return false;
+        }
+        let max_scroll = handle.max_offset().width.max(px(0.0));
+        if max_scroll <= px(SCROLL_THRESHOLD) || ix == 0 {
+            handle.set_offset(point(px(0.0), px(0.0)));
+            return true;
+        }
+        if ix + 1 >= item_count {
+            handle.set_offset(point(max_scroll.negate(), px(0.0)));
+            return true;
+        }
+
+        let offset_x = handle.offset().x;
+        let view_left = bounds.left();
+        let view_right = bounds.right();
+        let vis_left = cb.left() + offset_x;
+        let vis_right = cb.right() + offset_x;
+
+        let new_offset_x = if vis_left < view_left {
+            (view_left - cb.left()).clamp(max_scroll.negate(), px(0.0))
+        } else if vis_right > view_right {
+            (view_right - cb.right()).clamp(max_scroll.negate(), px(0.0))
+        } else {
+            offset_x
+        };
+
+        if (new_offset_x - offset_x).abs() > px(0.5) {
+            handle.set_offset(point(new_offset_x, px(0.0)));
+        }
+        true
+    }
+
+    /// 将 item 的 layout bounds 换算成视觉坐标（扣除滚动偏移）。
+    /// 首帧 prepaint 未完成测量（bounds 为空）时返回 None。
+    fn visual_rect_of_item(handle: &ScrollHandle, ix: usize) -> Option<NavSliderRect> {
+        let bounds = handle.bounds_for_item(ix)?;
+        let scroll_bounds = handle.bounds();
+        if scroll_bounds.size.width <= px(0.0) {
+            return None;
+        }
+        let offset_x = handle.offset().x;
+        Some(NavSliderRect {
+            left: bounds.left() - scroll_bounds.left() + offset_x,
+            width: bounds.size.width,
+            height: bounds.size.height,
+        })
     }
 
     fn measure_nav_scroll(
         handle: &ScrollHandle,
         active_index: Option<usize>,
-        previous_index: Option<usize>,
+        from_rect: Option<NavSliderRect>,
     ) -> NavScrollMetrics {
         let offset = handle.offset();
         let max_offset = handle.max_offset();
@@ -194,21 +350,7 @@ impl AppView {
         let can_scroll_left = offset.x < threshold.negate();
         let can_scroll_right = max_offset.width > threshold && offset.x > max_offset.width.negate();
 
-        let scroll_bounds = handle.bounds();
-        let scroll_left = scroll_bounds.left();
-        let scroll_offset_x = offset.x;
-
-        let to_visual = |bounds: Bounds<Pixels>| NavSliderRect {
-            left: bounds.left() - scroll_left + scroll_offset_x,
-            width: bounds.size.width,
-            height: bounds.size.height,
-        };
-        let target_rect = active_index
-            .and_then(|ix| handle.bounds_for_item(ix))
-            .map(to_visual);
-        let from_rect = previous_index
-            .and_then(|ix| handle.bounds_for_item(ix))
-            .map(to_visual);
+        let target_rect = active_index.and_then(|ix| Self::visual_rect_of_item(handle, ix));
         let slider_layout = target_rect.map(|target| NavSliderLayout {
             target,
             from: from_rect,
@@ -225,17 +367,22 @@ impl AppView {
 
     fn render_nav_scroll_arrow(
         &self,
-        element_id: &'static str,
-        icon_path: &'static str,
+        is_left: bool,
         enabled: bool,
         target: Option<usize>,
+        item_count: usize,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> Stateful<Div> {
+        let (element_id, icon_path) = if is_left {
+            ("nav-arrow-left", "src/icons/chevron-left.svg")
+        } else {
+            ("nav-arrow-right", "src/icons/chevron-right.svg")
+        };
+
         let mut arrow = div()
             .id(element_id)
             .w(px(INDICATOR_WIDTH))
-            .h(px(24.0))
-            .rounded(px(6.0))
+            .h_full()
             .flex_shrink_0()
             .flex()
             .items_center()
@@ -258,8 +405,9 @@ impl AppView {
                         .text_color(indicator_color),
                 )
                 .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    cx.stop_propagation();
                     if let Some(ix) = target {
-                        scroll_handle.scroll_to_item(ix);
+                        Self::scroll_nav_item_into_view(&scroll_handle, ix, item_count);
                     }
                     entity.update(cx, |_, cx| cx.notify());
                 });
@@ -287,7 +435,8 @@ impl AppView {
 
         let base = div()
             .absolute()
-            .top(px(0.0))
+            // 抵消 scroll 容器自身的垂直 padding，让滑块与 pill 垂直对齐
+            .top(px(NAV_SCROLL_PADDING_Y))
             .h(to_height)
             .rounded(px(8.0))
             .bg(bg);
@@ -299,8 +448,6 @@ impl AppView {
                 ElementId::Name(format!("nav-slider-{}", generation).into()),
                 Animation::new(Duration::from_millis(SLIDER_ANIMATION_MS)),
                 move |el: Div, delta| {
-                    // delta: 0.0 → 1.0 (linear)
-                    // 应用果冻过冲映射
                     let t = jelly_overshoot(delta);
                     let left = lerp(from_left, to_left, t);
                     let width = lerp(from_width, to_width, t);
@@ -310,6 +457,33 @@ impl AppView {
             .into_any_element()
         } else {
             base.left(to_left).w(to_width).into_any_element()
+        }
+    }
+
+    /// 滚动边缘渐变遮罩（面板底色 → 透明），仅在对应方向可滚动时叠加。
+    /// 纯装饰层不拦截点击，被遮罩半露的 Tab 仍可点按。
+    fn render_nav_fade(is_left: bool, fade_from: Hsla, fade_to: Hsla) -> Div {
+        let base = div()
+            .absolute()
+            .top(px(0.0))
+            .bottom(px(0.0))
+            .w(px(FADE_WIDTH));
+        if is_left {
+            base.left(px(0.0)).bg(multi_stop_linear_gradient(
+                90.,
+                &[
+                    linear_color_stop(fade_from, 0.),
+                    linear_color_stop(fade_to, 1.),
+                ],
+            ))
+        } else {
+            base.right(px(0.0)).bg(multi_stop_linear_gradient(
+                270.,
+                &[
+                    linear_color_stop(fade_from, 0.),
+                    linear_color_stop(fade_to, 1.),
+                ],
+            ))
         }
     }
 
@@ -349,25 +523,26 @@ impl AppView {
             }
         }
         // 如果没找到，滚动到最后一个
-        if count > 0 {
-            Some(count - 1)
-        } else {
-            None
-        }
+        count.checked_sub(1)
     }
 
-    /// Lumina Bar 风格的 pill tab：水平 icon + label
-    /// 选中状态的背景由滑块提供，pill 本身始终透明背景
+    /// 渲染单个导航项：
+    /// - 常规模式（`<= 4` 项或 Full 风格）以及当前选中项：展示 `图标 + 名称` 胶囊
+    /// - Compact 风格且项数较多时的未选中项：仅展示居中图标，悬停显示名称 Tooltip
+    /// - `nav_status_dots` 开启时，配额异常的 Provider 在图标右上角叠加状态色点
     fn render_nav_pill(
         &self,
-        icon_path: String,
-        label: String,
-        tab: NavTab,
+        ix: usize,
+        item: TopNavItem,
         active_tab: NavTab,
+        compact_mode: bool,
+        has_slider: bool,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> Stateful<Div> {
+        let tab = item.tab;
         let is_active = tab == active_tab;
-        let theme = cx.global::<Theme>();
+        let icon_only = compact_mode && !is_active;
+        let theme = cx.global::<Theme>().clone();
         let entity = cx.entity().clone();
 
         let (text_color, icon_color) = if is_active {
@@ -376,43 +551,86 @@ impl AppView {
             (theme.text.muted, theme.text.muted)
         };
 
-        div()
+        let hover_bg = theme.bg.subtle;
+        let pill_id = ElementId::Name(format!("nav-pill-{ix}").into());
+
+        // 状态点描边跟随点背后的底色：选中项是滑块底色，未选中项是面板底色
+        let mut icon_wrap =
+            div()
+                .relative()
+                .flex_shrink_0()
+                .child(crate::ui::widgets::render_provider_icon(
+                    item.icon_path,
+                    px(15.0),
+                    icon_color,
+                ));
+        if let Some(level) = item.alert_level {
+            let dot_color = theme.status_badge_color(level);
+            let ring_color = if is_active {
+                theme.nav.pill_active_bg
+            } else {
+                theme.bg.panel
+            };
+            icon_wrap = icon_wrap.child(
+                div()
+                    .absolute()
+                    .top(px(-2.0))
+                    .right(px(-2.0))
+                    .w(px(6.0))
+                    .h(px(6.0))
+                    .rounded_full()
+                    .bg(dot_color)
+                    .border_1()
+                    .border_color(ring_color),
+            );
+        }
+
+        // 两种形态共享的胶囊外壳：flex + 圆角 + 指针 + 非激活态悬停底色
+        let pill_shell = div()
+            .flex_shrink_0()
             .flex()
             .items_center()
-            .gap(px(5.0))
-            .px(px(10.0))
-            .py(px(6.0))
             .rounded(px(8.0))
             .cursor_pointer()
-            // pill 本身不设背景，由滑块层提供
-            .hover(|style: StyleRefinement| {
-                if is_active {
-                    style
-                } else {
-                    style.bg(theme.bg.subtle)
-                }
-            })
-            .child(crate::ui::widgets::render_provider_icon(
-                icon_path,
-                px(15.0),
-                icon_color,
-            ))
-            .child(
+            .hover(
+                move |style: StyleRefinement| {
+                    if is_active {
+                        style
+                    } else {
+                        style.bg(hover_bg)
+                    }
+                },
+            );
+
+        let stateful_pill = if icon_only {
+            let base = pill_shell
+                .w(px(COMPACT_ICON_PILL_WIDTH))
+                .h(px(COMPACT_ICON_PILL_HEIGHT))
+                .justify_center()
+                .child(icon_wrap);
+            with_tooltip(pill_id, &item.label, &theme, base)
+        } else {
+            let mut base = pill_shell.id(pill_id).gap(px(5.0)).px(px(10.0)).py(px(6.0));
+
+            if is_active && !has_slider {
+                base = base.bg(theme.nav.pill_active_bg);
+            }
+
+            base.child(icon_wrap).child(
                 div()
                     .text_size(px(13.0))
                     .line_height(relative(1.3))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(text_color)
-                    .child(label),
+                    .whitespace_nowrap()
+                    .child(item.label),
             )
-            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                entity.update(cx, |view, cx| {
-                    runtime::dispatch_in_context(
-                        &view.state,
-                        AppAction::SelectNavTab(tab.clone()),
-                        cx,
-                    );
-                });
-            })
+        };
+
+        stateful_pill.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            entity.update(cx, |view, cx| {
+                runtime::dispatch_in_context(&view.state, AppAction::SelectNavTab(tab.clone()), cx);
+            });
+        })
     }
 }

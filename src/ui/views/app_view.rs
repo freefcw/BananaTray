@@ -9,7 +9,7 @@ use gpui::{
 };
 use log::debug;
 use rust_i18n::t;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::platform::popup_window::{resize_popup_window, size_differs};
@@ -53,6 +53,8 @@ pub struct AppView {
     #[cfg(target_os = "linux")]
     pub(crate) _bounds_sub: Option<gpui::Subscription>,
     pub(crate) nav_scroll_handle: gpui::ScrollHandle,
+    pub(crate) nav_settled_generation: Cell<Option<u64>>,
+    pub(crate) nav_anim_from: Cell<Option<(u64, Option<crate::ui::views::nav::NavSliderRect>)>>,
 }
 
 impl AppView {
@@ -77,6 +79,8 @@ impl AppView {
             #[cfg(target_os = "linux")]
             _bounds_sub: None,
             nav_scroll_handle: gpui::ScrollHandle::new(),
+            nav_settled_generation: Cell::new(None),
+            nav_anim_from: Cell::new(None),
         }
     }
 
@@ -241,7 +245,7 @@ impl Render for AppView {
             // 头部
             .child(self.render_header(cx))
             // 导航
-            .child(self.render_top_nav(active_tab.clone(), cx))
+            .child(self.render_top_nav(active_tab.clone(), window, cx))
             // 内容区
             .child(
                 div()
