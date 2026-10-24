@@ -4,7 +4,7 @@
 //! human-readable countdown formatting that were previously duplicated
 //! across `gemini.rs`, `codex.rs`, and `kimi.rs`.
 
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime};
 use rust_i18n::t;
 
 /// Parse an ISO 8601 timestamp (e.g. "2025-03-25T12:00:00Z" or with offset)
@@ -92,6 +92,24 @@ pub fn format_local_minute(epoch_secs: i64) -> Option<String> {
             .format("%Y-%m-%d %H:%M")
             .to_string(),
     )
+}
+
+/// 把 Unix 秒格式化成本地时区紧凑时间：与 `now_secs` 同一年时省略年份为 `M/D HH:MM`，
+/// 跨年时保留 `YYYY/M/D HH:MM`，与折线图横轴斜杠日期格式对齐。
+pub fn format_local_minute_compact(epoch_secs: i64, now_secs: i64) -> Option<String> {
+    let target = chrono::DateTime::from_timestamp(epoch_secs, 0)?.with_timezone(&chrono::Local);
+    let now = chrono::DateTime::from_timestamp(now_secs, 0)?.with_timezone(&chrono::Local);
+    let time = target.format("%H:%M");
+    if target.year() == now.year() {
+        Some(format!("{}/{} {time}", target.month(), target.day()))
+    } else {
+        Some(format!(
+            "{}/{}/{} {time}",
+            target.year(),
+            target.month(),
+            target.day()
+        ))
+    }
 }
 
 /// 用固定 UTC 偏移（秒）格式化到分钟，供测试锁定时区。
@@ -230,6 +248,41 @@ mod tests {
         assert_eq!(
             format_minute_at_offset(1_735_689_600, 8 * 3600).as_deref(),
             Some("2025-01-01 08:00")
+        );
+    }
+
+    #[test]
+    fn test_format_local_minute_compact_omits_same_year() {
+        let same_year_now = parse_iso8601_to_epoch("2026-06-15T12:00:00Z").unwrap();
+        let same_year_target = parse_iso8601_to_epoch("2026-10-05T12:00:00Z").unwrap();
+        let compact = format_local_minute_compact(same_year_target, same_year_now).unwrap();
+        let target_local = chrono::DateTime::from_timestamp(same_year_target, 0)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        assert_eq!(
+            compact,
+            format!(
+                "{}/{} {}",
+                target_local.month(),
+                target_local.day(),
+                target_local.format("%H:%M")
+            )
+        );
+
+        let diff_year_target = parse_iso8601_to_epoch("2027-01-05T12:00:00Z").unwrap();
+        let full = format_local_minute_compact(diff_year_target, same_year_now).unwrap();
+        let diff_local = chrono::DateTime::from_timestamp(diff_year_target, 0)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        assert_eq!(
+            full,
+            format!(
+                "{}/{}/{} {}",
+                diff_local.year(),
+                diff_local.month(),
+                diff_local.day(),
+                diff_local.format("%H:%M")
+            )
         );
     }
 

@@ -351,13 +351,31 @@ fn popup_height_grows_only_for_embedded_history_lines() {
     );
 }
 
-/// 圆圈样式把折线放在圆环右侧。有折线时只为底部详情行加高，不加整段折线高度。
+/// 圆圈样式把折线放在圆环右侧，详情在顶栏，不再为折线加高窗口。
 #[test]
 fn popup_height_ring_style_keeps_history_inside_the_card() {
-    use crate::models::QuotaCardStyle;
+    use crate::models::{QuotaCardStyle, QuotaDetailSpec, QuotaLabelSpec};
 
     let mut store = make_store(&[ProviderKind::Claude]);
-    store.providers[0].quotas = vec![QuotaInfo::new("Session", 50.0, 100.0)];
+    store.providers[0].quotas = vec![
+        QuotaInfo::with_details(
+            QuotaLabelSpec::Session,
+            50.0,
+            100.0,
+            QuotaType::Session,
+            Some(QuotaDetailSpec::ResetAt {
+                epoch_secs: 1_800_000_000,
+            }),
+        ),
+        QuotaInfo::balance_only_with_key(
+            "credit",
+            QuotaLabelSpec::Credits,
+            62500.0,
+            None,
+            QuotaType::Points,
+            None,
+        ),
+    ];
     let mut session = AppSession::new(make_settings(&[ProviderKind::Claude]), store.providers);
     session.nav.active_tab = NavTab::Provider(pid(ProviderKind::Claude));
     let bar_height = session.popup_height();
@@ -367,14 +385,10 @@ fn popup_height_ring_style_keeps_history_inside_the_card() {
     session.popup_history_ui.load = HistoryLoadState::Ready {
         provider_id: pid(ProviderKind::Claude),
         request_id: 1,
-        ready: ready_charts(vec![line_series("session", 3)]),
+        ready: ready_charts(vec![line_series("session", 3), line_series("credit", 3)]),
     };
 
-    assert_eq!(
-        session.popup_height(),
-        bar_height + PopupLayout::CARD_RING_DETAIL_EXTRA
-    );
-    const { assert!(PopupLayout::CARD_RING_DETAIL_EXTRA < PopupLayout::CARD_HISTORY_EXTRA) };
+    assert_eq!(session.popup_height(), bar_height);
 }
 
 /// 线条样式点开放大的折线把窗口再加高；圆圈样式和没有折线的 key 忽略放大状态。

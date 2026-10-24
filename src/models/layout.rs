@@ -70,25 +70,16 @@ impl PopupLayout {
     /// 一张有折线的配额卡比 `CARD_HEIGHT` 多出来的高度。
     ///
     /// 线条样式把折线放在卡片底部：卡片是 `flex_col` + `gap(6)`，多一个图表子节点就多一段
-    /// 6px 间距，再加上图表自身高度。圆圈样式把折线放在圆环右侧，不再加这段。
+    /// 6px 间距，再加上图表自身高度。圆圈样式把折线放在圆环右侧，详情在顶栏，不再加这段。
     pub const CARD_HISTORY_EXTRA: f32 = 6.0 + Self::CARD_HISTORY_CHART_HEIGHT;
-
-    /// 圆圈样式有折线时，重置时间放在右侧折线下面，不贴着圆环。
-    ///
-    /// 折线和这行字之间留 `CARD_RING_DETAIL_GAP`。没有折线时详情留在圆环右侧，不加这段。
-    pub const CARD_RING_DETAIL_GAP: f32 = 14.0;
-    pub const CARD_RING_DETAIL_LINE: f32 = 14.0;
-    pub const CARD_RING_DETAIL_EXTRA: f32 =
-        Self::CARD_RING_DETAIL_GAP + Self::CARD_RING_DETAIL_LINE;
 
     /// 卡片之间的间距: h(8.0) spacer
     pub const CARD_SPACER: f32 = 8.0;
 
-    /// 限流重置卡上内边距。标题行紧贴顶边时，12px 看起来比额度卡更挤；
-    /// 20px 又让标题悬在卡片里（标题 20px 行高本身已带约 4px 留白），取上下一致的 16px。
-    pub const RESET_CARD_PAD_TOP: f32 = 16.0;
+    /// 限流重置卡上内边距。
+    pub const RESET_CARD_PAD_TOP: f32 = 12.0;
     /// 限流重置卡下内边距，与上内边距对称。
-    pub const RESET_CARD_PAD_BOTTOM: f32 = 16.0;
+    pub const RESET_CARD_PAD_BOTTOM: f32 = 12.0;
     /// 上下内边距合计，高度计算用这一份。
     pub const RESET_CARD_PAD_Y: f32 = Self::RESET_CARD_PAD_TOP + Self::RESET_CARD_PAD_BOTTOM;
     /// 重置卡 1px 边框的上下合计。
@@ -96,7 +87,7 @@ impl PopupLayout {
     /// 重置卡标题、类型/时间行、数量说明行的固定行高。
     pub const RESET_LINE_HEIGHT: f32 = 20.0;
     /// 标题、每一条重置、数量说明之间的间距。
-    pub const RESET_CARD_GAP: f32 = 14.0;
+    pub const RESET_CARD_GAP: f32 = 8.0;
     /// 一条重置的紧凑单行高度。
     pub const RESET_ITEM_HEIGHT: f32 = Self::RESET_LINE_HEIGHT;
 

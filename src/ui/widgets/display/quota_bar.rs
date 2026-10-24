@@ -52,6 +52,7 @@ pub(in crate::ui::widgets::display) fn render_quota_header_row(
     quota_view: &QuotaDisplayViewState,
     badge_color: Hsla,
     badge_label: String,
+    header_detail: Option<&str>,
     theme: &Theme,
     on_hide: Option<QuotaHideHandler>,
 ) -> Div {
@@ -93,29 +94,59 @@ pub(in crate::ui::widgets::display) fn render_quota_header_row(
             button,
         ));
     }
+    let mut leading = div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .child(
+            div()
+                .flex_shrink_0()
+                .w(px(7.0))
+                .h(px(7.0))
+                .rounded_full()
+                .bg(badge_color),
+        )
+        .child(
+            div()
+                .flex_shrink_0()
+                .overflow_hidden()
+                .text_size(px(11.0))
+                .line_height(relative(1.3))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text.secondary)
+                .whitespace_nowrap()
+                .child(quota_view.label.to_uppercase()),
+        );
+    if let Some(detail) = header_detail.filter(|text| !text.is_empty()) {
+        leading = leading
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .text_size(px(11.0))
+                    .line_height(relative(1.3))
+                    .text_color(theme.text.muted)
+                    .child("·"),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_size(px(11.0))
+                    .line_height(relative(1.3))
+                    .text_color(theme.text.muted)
+                    .child(detail.to_string()),
+            );
+    }
     div()
         .w_full()
         .flex()
         .justify_between()
         .items_center()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.0))
-                .flex_shrink_0()
-                .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(badge_color))
-                .child(
-                    div()
-                        .overflow_hidden()
-                        .text_size(px(11.0))
-                        .line_height(relative(1.3))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text.secondary)
-                        .whitespace_nowrap()
-                        .child(quota_view.label.to_uppercase()),
-                ),
-        )
+        .gap(px(8.0))
+        .child(leading)
         .child(trailing)
 }
 
@@ -280,6 +311,7 @@ fn render_quota_bar(
             quota_view,
             badge_color,
             badge_label,
+            None,
             theme,
             on_hide,
         ))

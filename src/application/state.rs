@@ -914,19 +914,18 @@ pub fn compute_popup_height(
 /// 托盘配额卡里内嵌折线占用的额外高度。
 ///
 /// 只算当前 provider 页上、可见配额里、至少两个点的序列。加载中、刷新中、
-/// 空状态，以及设置页 / Overview，都不加高。圆圈样式的折线在圆环右侧，
-/// 不为折线本身加高；有折线的卡把重置时间放到右侧折线下面，按 `CARD_RING_DETAIL_EXTRA` 加高。
-/// 线条样式下被点开放大的折线再加 `CARD_HISTORY_EXPANDED_EXTRA`；
+/// 空状态，以及设置页 / Overview，都不加高。圆圈样式的折线在圆环右侧、详情在顶栏，
+/// 不为折线加高。线条样式下被点开放大的折线再加 `CARD_HISTORY_EXPANDED_EXTRA`；
 /// 放大标记指向一条当前没有折线的配额时不加高。
 fn popup_embedded_history_extra(session: &AppSession) -> f32 {
-    let keys = embedded_history_quota_keys(session);
     if session.settings.display.quota_card_style == QuotaCardStyle::Ring {
-        return keys.len() as f32 * crate::models::PopupLayout::CARD_RING_DETAIL_EXTRA;
+        return 0.0;
     }
     let NavTab::Provider(id) = &session.nav.active_tab else {
         return 0.0;
     };
-    keys.iter()
+    embedded_history_quota_keys(session)
+        .iter()
         .map(|key| {
             let mut extra = crate::models::PopupLayout::CARD_HISTORY_EXTRA;
             if session.is_history_chart_expanded(id, key) {

@@ -11,7 +11,9 @@ use crate::models::{
     QuotaRules, QuotaThresholdUnit, QuotaType, RateLimitReset, RateLimitResetSnapshot, StatusLevel,
     UpdateStatus,
 };
-use crate::utils::time_utils::{days_until_epoch, format_local_minute, now_epoch_secs};
+use crate::utils::time_utils::{
+    days_until_epoch, format_local_minute, format_local_minute_compact, now_epoch_secs,
+};
 use rust_i18n::t;
 
 /// 将内部 `source_label` 转为设置页副标题用的用户向文案。
@@ -519,14 +521,16 @@ pub(crate) fn rate_limit_reset_section(
 }
 
 fn rate_limit_reset_row(reset: &RateLimitReset) -> super::RateLimitResetRowView {
-    let expires_on = format_reset_timestamp(reset.expires_at_secs);
+    let now = now_epoch_secs();
+    let expires_full = format_reset_timestamp(reset.expires_at_secs);
+    let expires_on = format_reset_compact_timestamp(reset.expires_at_secs, now);
     let expires_in = reset
         .expires_at_secs
-        .and_then(|epoch| days_until_epoch(epoch, now_epoch_secs()))
+        .and_then(|epoch| days_until_epoch(epoch, now))
         .map(|days| t!("codex.reset.remaining_days", n = days).to_string());
     let expires_at = match &expires_in {
-        Some(remaining) => format!("{expires_on} ({remaining})"),
-        None => expires_on.clone(),
+        Some(remaining) => format!("{expires_full} ({remaining})"),
+        None => expires_full,
     };
     super::RateLimitResetRowView {
         reset_type: display_reset_type(reset),
@@ -534,12 +538,8 @@ fn rate_limit_reset_row(reset: &RateLimitReset) -> super::RateLimitResetRowView 
         expires_at,
         expires_on,
         expires_in,
-        expiry_urgency: reset_expiry_urgency(reset.expires_at_secs),
+        expiry_urgency: reset_expiry_urgency_at(reset.expires_at_secs, now),
     }
-}
-
-fn reset_expiry_urgency(epoch_secs: Option<i64>) -> super::ResetExpiryUrgency {
-    reset_expiry_urgency_at(epoch_secs, now_epoch_secs())
 }
 
 fn reset_expiry_urgency_at(epoch_secs: Option<i64>, now_secs: i64) -> super::ResetExpiryUrgency {
@@ -566,9 +566,9 @@ fn display_reset_type(reset: &RateLimitReset) -> String {
         .map(str::trim)
         .filter(|title| !title.is_empty())
     {
+        let lower = title.to_ascii_lowercase();
         if reset.reset_type == "codex_rate_limits"
-            && title.to_ascii_lowercase().contains("weekly")
-            && title.to_ascii_lowercase().contains("5 hr")
+            && (lower == "full reset" || (lower.contains("weekly") && lower.contains("5 hr")))
         {
             return t!("codex.reset.type.full").to_string();
         }
@@ -584,6 +584,13 @@ fn display_reset_type(reset: &RateLimitReset) -> String {
 fn format_reset_timestamp(epoch_secs: Option<i64>) -> String {
     epoch_secs
         .and_then(format_local_minute)
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| t!("codex.reset.time_unknown").to_string())
+}
+
+fn format_reset_compact_timestamp(epoch_secs: Option<i64>, now_secs: i64) -> String {
+    epoch_secs
+        .and_then(|secs| format_local_minute_compact(secs, now_secs))
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| t!("codex.reset.time_unknown").to_string())
 }
@@ -1168,6 +1175,21 @@ mod tests {
         assert_eq!(section.rows[0].reset_type, "Full reset");
         assert_ne!(section.rows[0].granted_at, "—");
         assert_eq!(section.rows[0].expires_at, "—");
+
+        let short_title = RateLimitResetSnapshot {
+            available_count: Some(1),
+            details_known: true,
+            resets: vec![RateLimitReset {
+                reset_type: "codex_rate_limits".into(),
+                title: Some("Full reset".into()),
+                granted_at_secs: Some(1_735_689_600),
+                expires_at_secs: None,
+            }],
+        };
+        rust_i18n::set_locale("zh-CN");
+        let zh_section = rate_limit_reset_section(&short_title).unwrap();
+        assert_eq!(zh_section.rows[0].reset_type, "完整重置");
+        rust_i18n::set_locale("en");
     }
 
     #[test]
@@ -1213,23 +1235,24 @@ mod tests {
                 expires_at_secs: Some(expires_at),
             };
             let row = rate_limit_reset_row(&reset);
-            let date = format_local_minute(expires_at).unwrap();
-            assert_eq!(row.expires_on, date);
+            let date_full = format_local_minute(expires_at).unwrap();
+            let date_compact = format_local_minute_compact(expires_at, now).unwrap();
+            assert_eq!(row.expires_on, date_compact);
             assert_eq!(
                 row.expires_in.as_deref(),
                 Some(format!("{days} Days").as_str())
             );
-            assert_eq!(row.expires_at, format!("{date} ({days} Days)"));
+            assert_eq!(row.expires_at, format!("{date_full} ({days} Days)"));
             assert_eq!(row.granted_at, format_local_minute(now).unwrap());
 
             rust_i18n::set_locale("zh-CN");
             let zh = rate_limit_reset_row(&reset);
-            assert_eq!(zh.expires_on, date);
+            assert_eq!(zh.expires_on, date_compact);
             assert_eq!(
                 zh.expires_in.as_deref(),
                 Some(format!("{days} 天").as_str())
             );
-            assert_eq!(zh.expires_at, format!("{date} ({days} 天)"));
+            assert_eq!(zh.expires_at, format!("{date_full} ({days} 天)"));
             rust_i18n::set_locale("en");
         }
     }
