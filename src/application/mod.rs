@@ -21,7 +21,7 @@ pub(crate) use selectors::display_source_label;
 pub use selectors::{
     build_debug_info_text, build_issue_report, build_issue_url, debug_tab_view_state,
     format_debug_console_logs, header_view_state, history_hover_hit, history_hover_lines,
-    hover_chip_origin, overview_view_state, provider_detail_view_state,
+    hover_chip_origin, overview_view_state, provider_detail_view_state, provider_nav_alert_level,
     settings_providers_tab_view_state, tray_global_actions_view_state, AccountInfoViewState,
     AvailableProviderItem, DebugContext, DebugTabViewState, DisabledProviderViewState,
     EnvironmentRowKind, HistoryChartAxisView, HistoryChartView, HistoryHoverHit, HistoryHoverMark,

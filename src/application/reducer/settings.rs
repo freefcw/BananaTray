@@ -209,6 +209,12 @@ pub(super) fn apply_setting_change(
             // 时间范围变了：弹窗里的配额卡折线要按新范围重载。
             super::history::begin_popup_history_load(session, now_ms, effects);
         }
+        SettingChange::SetNavTabStyle(style) => {
+            session.settings.display.nav_tab_style = style;
+        }
+        SettingChange::ToggleNavStatusDots => {
+            session.settings.display.nav_status_dots = !session.settings.display.nav_status_dots;
+        }
         SettingChange::ToggleMergeHistoryCharts => {
             session.settings.display.merge_history_charts =
                 !session.settings.display.merge_history_charts;

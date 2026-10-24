@@ -1139,3 +1139,55 @@ fn expanded_history_keys_only_cover_the_shown_provider() {
     };
     assert_eq!(panel.expanded_history_keys, vec!["rolling-10h".to_string()]);
 }
+
+// ── provider_nav_alert_level ──────────────────────────────
+
+#[test]
+fn provider_nav_alert_level_reflects_worst_quota_and_errors() {
+    let settings = AppSettings::default();
+
+    // 正常充足：无指示点
+    let mut healthy = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    healthy.quotas = vec![QuotaInfo::new("session", 20.0, 100.0)];
+    assert_eq!(provider_nav_alert_level(&settings, &healthy), None);
+
+    // 充足但最近刷新失败（展示陈旧数据）：黄色注意指示点
+    let mut stale_failed = healthy.clone();
+    stale_failed.update_status = Some(UpdateStatus::Failed);
+    assert_eq!(
+        provider_nav_alert_level(&settings, &stale_failed),
+        Some(crate::models::StatusLevel::Yellow)
+    );
+
+    // 配额注意：黄色指示点
+    let mut warning = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    warning.quotas = vec![QuotaInfo::new("session", 60.0, 100.0)]; // 40% remaining -> Yellow
+    assert_eq!(
+        provider_nav_alert_level(&settings, &warning),
+        Some(crate::models::StatusLevel::Yellow)
+    );
+
+    // 配额偏低：红色指示点
+    let mut critical = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    critical.quotas = vec![
+        QuotaInfo::new("session", 20.0, 100.0), // Green
+        QuotaInfo::new("weekly", 95.0, 100.0),  // 5% remaining -> Red
+    ];
+    assert_eq!(
+        provider_nav_alert_level(&settings, &critical),
+        Some(crate::models::StatusLevel::Red)
+    );
+
+    // 刷新错误且无配额：红色指示点
+    let errored = make_provider(ProviderKind::Claude, ConnectionStatus::Error);
+    assert_eq!(
+        provider_nav_alert_level(&settings, &errored),
+        Some(crate::models::StatusLevel::Red)
+    );
+
+    // 正在刷新或未连接：无指示点
+    let refreshing = make_provider(ProviderKind::Claude, ConnectionStatus::Refreshing);
+    assert_eq!(provider_nav_alert_level(&settings, &refreshing), None);
+    let disconnected = make_provider(ProviderKind::Claude, ConnectionStatus::Disconnected);
+    assert_eq!(provider_nav_alert_level(&settings, &disconnected), None);
+}

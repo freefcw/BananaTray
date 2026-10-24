@@ -163,6 +163,12 @@ pub struct DisplaySettings {
     /// 是否在托盘弹窗显示 Overview 总览面板
     #[serde(default = "default_true")]
     pub show_overview: bool,
+    /// 顶部导航栏 Tab 展示风格
+    #[serde(default)]
+    pub nav_tab_style: NavTabStyle,
+    /// 是否在顶部导航栏的服务商图标上叠加配额异常状态点
+    #[serde(default)]
+    pub nav_status_dots: bool,
     #[serde(default, skip_serializing_if = "TrayPopupSettings::is_default")]
     pub tray_popup: TrayPopupSettings,
 }
@@ -182,6 +188,8 @@ impl Default for DisplaySettings {
             show_debug_tab: false,
             show_account_info: true,
             show_overview: true,
+            nav_tab_style: NavTabStyle::default(),
+            nav_status_dots: false,
             tray_popup: TrayPopupSettings::default(),
         }
     }
@@ -509,6 +517,16 @@ pub enum QuotaCardStyle {
     Bar,
     /// 圆环里放数字，历史折线在右侧。
     Ring,
+}
+
+/// 顶部导航栏 Tab 的展示风格。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum NavTabStyle {
+    /// 所有项都展示「图标 + 名称」胶囊。
+    #[default]
+    Full,
+    /// 项数较多时未选中项收起为纯图标（悬停显示名称），选中项展开「图标 + 名称」。
+    Compact,
 }
 
 /// 托盘配额卡内嵌折线的时间范围。

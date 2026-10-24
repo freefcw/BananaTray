@@ -475,6 +475,6 @@ pub(crate) use tray::compact_quota_bar_ratio;
 #[cfg(any(target_os = "linux", test))]
 pub(crate) use tray::compact_quota_display_text;
 pub use tray::{
-    header_view_state, overview_view_state, provider_detail_view_state,
+    header_view_state, overview_view_state, provider_detail_view_state, provider_nav_alert_level,
     tray_global_actions_view_state,
 };

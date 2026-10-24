@@ -1,10 +1,10 @@
 use super::state::{GlobalHotkeyError, SettingsTab};
 use crate::history::{HistoryLoadOutcome, HistoryRange, HistoryScope};
 use crate::models::{
-    AppTheme, CustomProviderLifecycleFailure, NavTab, NewApiEditData, NewApiSaveSuccess,
-    ProviderId, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode, QuotaThresholdUnit,
-    QuotaThresholds, ScriptProviderConfig, ScriptProviderDeleteSuccess, ScriptProviderEditData,
-    ScriptProviderSaveSuccess, ScriptProviderTestResult, TrayIconStyle,
+    AppTheme, CustomProviderLifecycleFailure, NavTab, NavTabStyle, NewApiEditData,
+    NewApiSaveSuccess, ProviderId, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode,
+    QuotaThresholdUnit, QuotaThresholds, ScriptProviderConfig, ScriptProviderDeleteSuccess,
+    ScriptProviderEditData, ScriptProviderSaveSuccess, ScriptProviderTestResult, TrayIconStyle,
 };
 use crate::refresh::{RefreshEvent, RefreshReason};
 use std::path::PathBuf;
@@ -332,6 +332,8 @@ pub enum SettingChange {
     SetQuotaDisplayMode(QuotaDisplayMode),
     SetQuotaCardStyle(QuotaCardStyle),
     SetQuotaCardHistoryRange(QuotaCardHistoryRange),
+    SetNavTabStyle(NavTabStyle),
+    ToggleNavStatusDots,
     ToggleMergeHistoryCharts,
     ToggleQuotaVisibility {
         provider_id: ProviderId,

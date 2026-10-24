@@ -13,7 +13,7 @@ use super::format::{
 use super::*;
 use crate::models::{
     AppSettings, ConnectionStatus, ErrorKind, NavTab, ProviderCapability, ProviderId,
-    ProviderStatus, UpdateStatus,
+    ProviderStatus, StatusLevel, UpdateStatus,
 };
 use rust_i18n::t;
 
@@ -293,7 +293,47 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
     }
 }
 
-// ── Overview 总览 ───────────────────────────────────────────
+// ── 顶部导航栏状态点与 Overview 总览 ─────────────────────────
+
+/// 单个已启用 Provider 在顶部导航栏中的异常提示等级（正常/刷新中/未连接返回 `None`）。
+///
+/// 仅当 `display.nav_status_dots` 开启时由视图层读取：配额偏低/刷新错误为红色，
+/// 配额注意或展示陈旧数据（上次刷新失败）为黄色。
+pub fn provider_nav_alert_level(
+    settings: &AppSettings,
+    provider: &ProviderStatus,
+) -> Option<StatusLevel> {
+    if !provider.supports_refresh() {
+        return Some(StatusLevel::Red);
+    }
+
+    if overview_provider_renders_quotas(provider) {
+        let visible = settings
+            .provider
+            .visible_quotas(&provider.provider_id, &provider.quotas);
+        if visible.is_empty() {
+            return None;
+        }
+        let rules = settings.effective_quota_rules(&provider.provider_id);
+        let worst = visible
+            .iter()
+            .map(|q| q.status_level(&rules))
+            .max()
+            .unwrap_or(StatusLevel::Green);
+        match worst {
+            StatusLevel::Red => Some(StatusLevel::Red),
+            StatusLevel::Yellow => Some(StatusLevel::Yellow),
+            StatusLevel::Green if provider.update_status == Some(UpdateStatus::Failed) => {
+                Some(StatusLevel::Yellow)
+            }
+            StatusLevel::Green => None,
+        }
+    } else if provider.connection == ConnectionStatus::Error {
+        Some(StatusLevel::Red)
+    } else {
+        None
+    }
+}
 
 pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
     let display_mode = session.settings.display.quota_display_mode;
