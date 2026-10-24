@@ -145,6 +145,11 @@ settings.tray_icon.monochrome: "单色"
 settings.tray_icon.yellow: "黄色"
 settings.tray_icon.colorful: "多彩"
 settings.tray_icon.dynamic: "动态"
+settings.nav_tab_style: "导航栏样式"
+settings.nav_tab_style.full: "完整"
+settings.nav_tab_style.compact: "紧凑"
+settings.nav_status_dots: "导航栏状态点"
+settings.nav_status_dots.desc: "在服务商图标上叠加配额注意 / 偏低提示。"
 settings.tab.debug: "调试"
 
 # ── 调试标签页 ────────────────────────────────────────────

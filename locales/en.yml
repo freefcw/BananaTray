@@ -145,6 +145,11 @@ settings.tray_icon.monochrome: "Mono"
 settings.tray_icon.yellow: "Yellow"
 settings.tray_icon.colorful: "Colorful"
 settings.tray_icon.dynamic: "Dynamic"
+settings.nav_tab_style: "Nav Bar Style"
+settings.nav_tab_style.full: "Full"
+settings.nav_tab_style.compact: "Compact"
+settings.nav_status_dots: "Nav Status Dots"
+settings.nav_status_dots.desc: "Overlay warning / low-quota dots on provider icons in the nav bar."
 settings.tab.debug: "Debug"
 
 # ── Debug tab ─────────────────────────────────────────────

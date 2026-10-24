@@ -5,7 +5,8 @@ use super::components::{
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
 use crate::models::{
-    AppSettings, AppTheme, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode, TrayIconStyle,
+    AppSettings, AppTheme, NavTabStyle, QuotaCardHistoryRange, QuotaCardStyle, QuotaDisplayMode,
+    TrayIconStyle,
 };
 use crate::theme::Theme;
 use crate::ui::widgets::{render_segmented_control, render_toggle_switch, SegmentedSize};
@@ -56,6 +57,10 @@ impl SettingsView {
             .child(self.render_quota_card_history_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_merge_charts_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(self.render_nav_tab_style_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(self.render_nav_status_dots_setting(settings, theme))
     }
 
     fn render_theme_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
@@ -220,8 +225,62 @@ impl SettingsView {
     }
 
     fn render_merge_charts_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        self.render_inline_toggle_row(
+            &t!("settings.merge_history_charts"),
+            &t!("settings.merge_history_charts.desc"),
+            settings.display.merge_history_charts,
+            theme,
+            SettingChange::ToggleMergeHistoryCharts,
+        )
+    }
+
+    fn render_nav_tab_style_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        let enabled = settings.display.merge_history_charts;
+        render_inline_segmented_row(
+            &t!("settings.nav_tab_style"),
+            vec![
+                (
+                    t!("settings.nav_tab_style.full").to_string(),
+                    NavTabStyle::Full,
+                ),
+                (
+                    t!("settings.nav_tab_style.compact").to_string(),
+                    NavTabStyle::Compact,
+                ),
+            ],
+            &settings.display.nav_tab_style,
+            theme,
+            move |style, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::UpdateSetting(SettingChange::SetNavTabStyle(style)),
+                    window,
+                    cx,
+                );
+            },
+        )
+    }
+
+    fn render_nav_status_dots_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        self.render_inline_toggle_row(
+            &t!("settings.nav_status_dots"),
+            &t!("settings.nav_status_dots.desc"),
+            settings.display.nav_status_dots,
+            theme,
+            SettingChange::ToggleNavStatusDots,
+        )
+    }
+
+    /// 行内开关行：左侧标题 + 描述，右侧小尺寸 toggle。
+    fn render_inline_toggle_row(
+        &self,
+        label: &str,
+        desc: &str,
+        enabled: bool,
+        theme: &Theme,
+        change: SettingChange,
+    ) -> Div {
+        let state = self.state.clone();
         div()
             .flex()
             .items_center()
@@ -239,13 +298,13 @@ impl SettingsView {
                             .text_size(px(13.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text.primary)
-                            .child(t!("settings.merge_history_charts").to_string()),
+                            .child(label.to_string()),
                     )
                     .child(
                         div()
                             .text_size(px(11.0))
                             .text_color(theme.text.muted)
-                            .child(t!("settings.merge_history_charts.desc").to_string()),
+                            .child(desc.to_string()),
                     ),
             )
             .child(
@@ -255,7 +314,7 @@ impl SettingsView {
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         crate::bootstrap::dispatch_in_window(
                             &state,
-                            AppAction::UpdateSetting(SettingChange::ToggleMergeHistoryCharts),
+                            AppAction::UpdateSetting(change.clone()),
                             window,
                             cx,
                         );
