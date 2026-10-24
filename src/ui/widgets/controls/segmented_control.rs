@@ -1,7 +1,7 @@
 /// 分段选择器组件
 ///
 /// 圆角容器 + 多个 pill 选项 + 选中高亮的分段控件。
-/// 用于设置窗口中的 Theme / Language / Log Level 选择，
+/// 用于设置窗口中的 Theme / Language 选择，
 /// 也复用给 provider 明细页的 History 范围选择。
 use crate::theme::Theme;
 use gpui::{
@@ -14,8 +14,6 @@ type DivStyleFn = Box<dyn Fn(Div) -> Div>;
 
 /// 分段选择器尺寸风格
 pub(crate) enum SegmentedSize {
-    /// 紧凑自适应宽度（用于 Log Level 选择器）
-    Compact,
     /// 行内自适应宽度（用于水平行布局，如 Display Tab 的 Theme/Language 选择器）
     Inline,
     /// History 范围（provider 明细页 24h/7d/30d）：无外边框、紧凑 pill 组
@@ -51,13 +49,6 @@ fn nav_inactive_text(theme: &Theme) -> Hsla {
     theme.text.muted
 }
 
-fn compact_container(d: Div) -> Div {
-    d.flex_shrink_0()
-}
-fn compact_pill(d: Div) -> Div {
-    d.px(px(8.0)).py(px(5.0))
-}
-
 fn inline_container(d: Div) -> Div {
     d.flex_shrink_0()
 }
@@ -78,15 +69,6 @@ fn history_pill(d: Div) -> Div {
 
 fn style_for(size: SegmentedSize) -> SegmentedStyle {
     match size {
-        SegmentedSize::Compact => SegmentedStyle {
-            text_size: 11.0,
-            container: Box::new(compact_container),
-            pill: Box::new(compact_pill),
-            bordered: true,
-            pill_radius: 7.0,
-            active_text: element_active,
-            inactive_text: element_secondary,
-        },
         SegmentedSize::Inline => SegmentedStyle {
             text_size: 12.0,
             container: Box::new(inline_container),
@@ -113,13 +95,12 @@ fn style_for(size: SegmentedSize) -> SegmentedStyle {
 /// # 参数
 /// - `options` — 选项列表 (显示文字, 值)
 /// - `current` — 当前选中的值
-/// - `size` — 尺寸风格 (Compact / Inline / HistoryRange)
+/// - `size` — 尺寸风格 (Inline / HistoryRange)
 /// - `theme` — 主题
 /// - `on_select` — 选中回调，接收 (值, &mut Window, &mut App)
 ///
 /// # 使用场景
 /// - `settings_window/display_tab.rs` — Theme / Language 分段选择器
-/// - `settings_window/debug_tab.rs` — Log Level 分段选择器
 /// - `settings_window/providers/detail/history.rs` — History 范围
 pub(crate) fn render_segmented_control<T, F>(
     options: &[(String, T)],

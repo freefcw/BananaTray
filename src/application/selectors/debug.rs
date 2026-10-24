@@ -92,6 +92,7 @@ pub enum LogLevelColor {
 #[derive(Debug, Clone)]
 pub struct LogViewState {
     pub current_level: String,
+    pub dropdown_open: bool,
     pub log_path: Option<String>,
     pub log_file_size: Option<String>,
 }
@@ -210,16 +211,17 @@ impl EnvironmentViewState {
 /// 纯函数：所有运行时数据通过 `ctx` 注入
 pub fn debug_tab_view_state(session: &AppSession, ctx: &DebugContext) -> DebugTabViewState {
     DebugTabViewState {
-        log: build_log_view_state(ctx),
+        log: build_log_view_state(session, ctx),
         providers: build_provider_diagnostics(session),
         environment: build_environment_view_state(session, ctx),
         console: build_console_view_state(session, ctx),
     }
 }
 
-fn build_log_view_state(ctx: &DebugContext) -> LogViewState {
+fn build_log_view_state(session: &AppSession, ctx: &DebugContext) -> LogViewState {
     LogViewState {
         current_level: ctx.log_level.clone(),
+        dropdown_open: session.debug_ui.log_level_dropdown_open,
         log_path: ctx.log_path.as_ref().map(|p| p.display().to_string()),
         log_file_size: ctx
             .log_file_size

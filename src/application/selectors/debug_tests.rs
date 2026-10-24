@@ -56,33 +56,45 @@ fn test_failure(message: &str) -> ProviderFailure {
 
 #[test]
 fn log_view_state_with_context() {
+    let session = make_session(AppSettings::default());
     let ctx = test_context();
-    let vs = build_log_view_state(&ctx);
+    let vs = build_log_view_state(&session, &ctx);
     assert_eq!(vs.current_level, "debug");
+    assert!(!vs.dropdown_open);
     assert_eq!(vs.log_path.as_deref(), Some("/tmp/test.log"));
     assert_eq!(vs.log_file_size.as_deref(), Some("2.0 KB"));
 }
 
 #[test]
+fn log_view_state_exposes_dropdown_open() {
+    let mut session = make_session(AppSettings::default());
+    session.debug_ui.log_level_dropdown_open = true;
+    let vs = build_log_view_state(&session, &test_context());
+    assert!(vs.dropdown_open);
+}
+
+#[test]
 fn log_view_state_no_path() {
+    let session = make_session(AppSettings::default());
     let ctx = DebugContext {
         log_path: None,
         log_file_size: None,
         ..test_context()
     };
-    let vs = build_log_view_state(&ctx);
+    let vs = build_log_view_state(&session, &ctx);
     assert!(vs.log_path.is_none());
     assert!(vs.log_file_size.is_none());
 }
 
 #[test]
 fn log_view_state_path_but_no_size() {
+    let session = make_session(AppSettings::default());
     let ctx = DebugContext {
         log_path: Some(PathBuf::from("/nonexistent.log")),
         log_file_size: None, // 文件不存在
         ..test_context()
     };
-    let vs = build_log_view_state(&ctx);
+    let vs = build_log_view_state(&session, &ctx);
     assert!(vs.log_path.is_some());
     assert!(vs.log_file_size.is_none());
 }

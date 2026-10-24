@@ -11,8 +11,8 @@ use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::{
     render_action_button, render_colored_icon_sized, render_dropdown_panel, render_dropdown_row,
     render_dropdown_trigger, render_icon_row, render_icon_tooltip_button, render_info_cell,
-    render_path_info_cell, render_segmented_control, ButtonSize, ButtonVariant,
-    IconTooltipButtonOptions, SegmentedSize, DROPDOWN_TRIGGER_HEIGHT,
+    render_path_info_cell, ButtonSize, ButtonVariant, IconTooltipButtonOptions,
+    DROPDOWN_TRIGGER_HEIGHT,
 };
 use gpui::{
     deferred, div, px, rgb, AnyElement, Context, Deferred, Div, FontWeight, InteractiveElement,
@@ -34,6 +34,8 @@ const LOG_LEVELS: &[(&str, &str)] = &[
     ("trace", "Trace"),
 ];
 
+/// 日志级别下拉宽度（与刷新频率下拉保持一致）
+const LOG_LEVEL_DROPDOWN_WIDTH: f32 = 140.0;
 /// Debug Console Provider 下拉宽度
 const PROVIDER_DROPDOWN_WIDTH: f32 = 220.0;
 /// 选项过多时列表最大高度，超出后滚动
@@ -85,11 +87,7 @@ impl SettingsView {
             ))
             .child(
                 render_dark_card(theme)
-                    .child(Self::render_log_level_row(
-                        &debug_state.log.current_level,
-                        theme,
-                        &self.state,
-                    ))
+                    .child(Self::render_log_level_row(&debug_state, theme, &self.state))
                     .child(render_divider(theme))
                     .child(self.render_log_file_row(&debug_state, theme)),
             )
@@ -136,41 +134,93 @@ impl SettingsView {
     // Section 1: Log — 日志级别 + 文件信息
     // ========================================================================
 
-    /// 日志级别选择行 — 使用 render_icon_row + render_segmented_control
+    /// 日志级别选择行 — 使用 render_icon_dropdown_row + 下拉菜单
     fn render_log_level_row(
-        current: &str,
+        debug_state: &DebugTabViewState,
         theme: &Theme,
         state: &std::rc::Rc<std::cell::RefCell<crate::runtime::AppState>>,
     ) -> Div {
-        let options: Vec<(String, String)> = LOG_LEVELS
+        let log_state = &debug_state.log;
+        let current_lower = log_state.current_level.to_lowercase();
+        let selected_label = LOG_LEVELS
             .iter()
-            .map(|&(level, label)| (label.to_string(), level.to_string()))
-            .collect();
-        let current_owned = current.to_lowercase();
-        let state_clone = state.clone();
+            .find(|&&(level, _)| level == current_lower)
+            .map(|&(_, label)| label.to_string())
+            .unwrap_or_else(|| log_state.current_level.clone());
+        let dropdown_open = log_state.dropdown_open;
+        let toggle_state = state.clone();
 
-        render_icon_row(
+        let mut trigger = render_dropdown_trigger(
+            selected_label,
+            dropdown_open,
+            LOG_LEVEL_DROPDOWN_WIDTH,
+            false,
+            true,
+            theme,
+        )
+        .cursor_pointer()
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            crate::bootstrap::dispatch_in_window(
+                &toggle_state,
+                AppAction::ToggleDebugLogLevelDropdown,
+                window,
+                cx,
+            );
+        });
+
+        if dropdown_open {
+            trigger = trigger.child(Self::render_log_level_options(&current_lower, state, theme));
+        }
+
+        Self::render_icon_dropdown_row(
             "src/icons/advanced.svg",
             rgb(ICON_FG).into(),
             rgb(ICON_BG_LOG).into(),
             &t!("debug.log_level"),
             &t!("debug.log_level.desc"),
             theme,
-            div().flex_shrink_0().child(render_segmented_control(
-                &options,
-                &current_owned,
-                SegmentedSize::Compact,
-                theme,
-                move |level: String, window, cx| {
-                    crate::bootstrap::dispatch_in_window(
-                        &state_clone,
-                        AppAction::UpdateLogLevel(level),
-                        window,
-                        cx,
-                    );
-                },
-            )),
+            trigger,
         )
+    }
+
+    fn render_log_level_options(
+        current_lower: &str,
+        state: &std::rc::Rc<std::cell::RefCell<crate::runtime::AppState>>,
+        theme: &Theme,
+    ) -> Deferred {
+        let current_owned = current_lower.to_string();
+        let state = state.clone();
+
+        deferred(
+            render_dropdown_panel(
+                LOG_LEVEL_DROPDOWN_WIDTH,
+                DROPDOWN_TRIGGER_HEIGHT,
+                true,
+                theme,
+            )
+            .flex()
+            .flex_col()
+            .gap(px(2.0))
+            .children(LOG_LEVELS.iter().map(move |&(level, label)| {
+                let is_active = level == current_owned;
+                let opt_state = state.clone();
+                let level_owned = level.to_string();
+
+                render_dropdown_row(label.to_string(), is_active, false, theme).on_mouse_down(
+                    MouseButton::Left,
+                    move |_, window, cx| {
+                        cx.stop_propagation();
+                        crate::bootstrap::dispatch_in_window(
+                            &opt_state,
+                            AppAction::UpdateLogLevel(level_owned.clone()),
+                            window,
+                            cx,
+                        );
+                    },
+                )
+            })),
+        )
+        .with_priority(1)
     }
 
     /// 日志文件信息行 — 使用 render_icon_row + render_action_button 组合

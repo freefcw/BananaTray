@@ -838,6 +838,8 @@ pub enum HistoryLoadState {
 /// Debug Tab 的临时 UI 状态（与主设置 UI 解耦）
 #[derive(Default)]
 pub struct DebugUiState {
+    /// 日志级别下拉是否展开
+    pub log_level_dropdown_open: bool,
     /// 当前选中的调试 Provider
     pub selected_provider: Option<ProviderId>,
     /// 当前正在执行 Debug 刷新的 Provider；独立于当前下拉框选择。

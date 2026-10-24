@@ -159,7 +159,10 @@ pub fn reduce_at(
             refresh::apply_refresh_event(session, event, time, &mut effects)
         }
 
-        AppAction::UpdateLogLevel(level) => debug::update_log_level(level, &mut effects),
+        AppAction::ToggleDebugLogLevelDropdown => {
+            debug::toggle_debug_log_level_dropdown(session, &mut effects)
+        }
+        AppAction::UpdateLogLevel(level) => debug::update_log_level(session, level, &mut effects),
         AppAction::SendDebugNotification(kind) => {
             debug::send_debug_notification(session, kind, &mut effects)
         }

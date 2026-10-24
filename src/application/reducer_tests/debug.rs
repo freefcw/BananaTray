@@ -5,15 +5,42 @@ use crate::application::{
 use crate::models::{NavTab, ProviderKind};
 use crate::refresh::{RefreshEvent, RefreshOutcome, RefreshRequest, RefreshResult};
 
-// ── ToggleDebugProviderDropdown ─────────────────────
+// ── ToggleDebugLogLevelDropdown / ToggleDebugProviderDropdown ──
+
+#[test]
+fn toggle_debug_log_level_dropdown_flips_state_and_closes_provider_dropdown() {
+    let mut session = make_session();
+    session.debug_ui.provider_dropdown_open = true;
+    assert!(!session.debug_ui.log_level_dropdown_open);
+
+    let effects = reduce(&mut session, AppAction::ToggleDebugLogLevelDropdown);
+    assert!(session.debug_ui.log_level_dropdown_open);
+    assert!(!session.debug_ui.provider_dropdown_open);
+    assert!(has_render(&effects));
+
+    reduce(&mut session, AppAction::ToggleDebugLogLevelDropdown);
+    assert!(!session.debug_ui.log_level_dropdown_open);
+}
+
+#[test]
+fn update_log_level_closes_dropdown() {
+    let mut session = make_session();
+    session.debug_ui.log_level_dropdown_open = true;
+
+    let effects = reduce(&mut session, AppAction::UpdateLogLevel("trace".to_string()));
+    assert!(!session.debug_ui.log_level_dropdown_open);
+    assert!(has_render(&effects));
+}
 
 #[test]
 fn toggle_debug_provider_dropdown_flips_state() {
     let mut session = make_session();
+    session.debug_ui.log_level_dropdown_open = true;
     assert!(!session.debug_ui.provider_dropdown_open);
 
     let effects = reduce(&mut session, AppAction::ToggleDebugProviderDropdown);
     assert!(session.debug_ui.provider_dropdown_open);
+    assert!(!session.debug_ui.log_level_dropdown_open);
     assert!(has_render(&effects));
 
     reduce(&mut session, AppAction::ToggleDebugProviderDropdown);

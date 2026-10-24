@@ -80,6 +80,8 @@ pub enum AppAction {
     },
     OpenDashboard(ProviderId),
     OpenUrl(String),
+    /// Debug Tab: 展开 / 收起日志级别下拉
+    ToggleDebugLogLevelDropdown,
     UpdateLogLevel(String),
     SendDebugNotification(DebugNotificationKind),
     OpenLogDirectory,
@@ -248,6 +250,7 @@ impl AppAction {
             | Self::OpenSettings { .. }
             | Self::OpenDashboard(_)
             | Self::OpenUrl(_)
+            | Self::ToggleDebugLogLevelDropdown
             | Self::UpdateLogLevel(_)
             | Self::SendDebugNotification(_)
             | Self::OpenLogDirectory

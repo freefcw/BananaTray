@@ -7,7 +7,23 @@ use crate::models::ProviderId;
 use super::super::state::AppSession;
 use super::shared::provider_supports_refresh;
 
-pub(super) fn update_log_level(level: String, effects: &mut Vec<AppEffect>) {
+pub(super) fn toggle_debug_log_level_dropdown(
+    session: &mut AppSession,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.debug_ui.log_level_dropdown_open = !session.debug_ui.log_level_dropdown_open;
+    if session.debug_ui.log_level_dropdown_open {
+        session.debug_ui.provider_dropdown_open = false;
+    }
+    effects.push(ContextEffect::Render.into());
+}
+
+pub(super) fn update_log_level(
+    session: &mut AppSession,
+    level: String,
+    effects: &mut Vec<AppEffect>,
+) {
+    session.debug_ui.log_level_dropdown_open = false;
     effects.push(SettingsEffect::UpdateLogLevel(level).into());
     effects.push(ContextEffect::Render.into());
 }
@@ -39,6 +55,9 @@ pub(super) fn toggle_debug_provider_dropdown(
     effects: &mut Vec<AppEffect>,
 ) {
     session.debug_ui.provider_dropdown_open = !session.debug_ui.provider_dropdown_open;
+    if session.debug_ui.provider_dropdown_open {
+        session.debug_ui.log_level_dropdown_open = false;
+    }
     effects.push(ContextEffect::Render.into());
 }
 
