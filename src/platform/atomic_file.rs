@@ -2,10 +2,13 @@
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use std::fs::OpenOptions;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
+
+static TEMP_SIBLING_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// 将私有内容写入目标文件，并通过同目录 `rename` 原子替换旧内容。
 ///
@@ -69,18 +72,20 @@ pub(crate) fn write_private_file_exclusively(path: &Path, contents: &[u8]) -> io
     result
 }
 
-/// 在目标文件同目录生成带纳秒时间戳的隐藏临时文件路径。
+/// 在目标文件同目录生成进程内唯一的隐藏临时文件路径。
 ///
-/// 与独占创建（`create_new`）配合使用，避免并发写同一目标时互相覆盖临时文件。
+/// 时间戳用于可读性，进程 id 区分并发进程，单调计数器避免同一进程内
+/// 纳秒时间戳碰撞；与独占创建（`create_new`）配合使用，避免并发写同一目标时互相覆盖临时文件。
 pub(crate) fn temp_sibling_path(path: &Path) -> PathBuf {
     let filename = path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("tmp");
+    let timestamp = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default();
+    let sequence = TEMP_SIBLING_COUNTER.fetch_add(1, Ordering::Relaxed);
     path.with_file_name(format!(
-        ".{}.{}.tmp",
-        filename,
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ".{filename}.{}.{timestamp}.{sequence}.tmp",
+        std::process::id()
     ))
 }
 
