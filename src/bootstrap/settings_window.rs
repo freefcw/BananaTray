@@ -12,7 +12,7 @@ thread_local! {
     static SETTINGS_WINDOW: RefCell<Option<SettingsWindowHandle>> = const { RefCell::new(None) };
 }
 
-pub(super) fn notify_popup_view(_state: &Rc<RefCell<AppState>>, cx: &mut App) {
+pub(super) fn notify_popup_view(cx: &mut App) {
     crate::ui::notify_current_view(cx);
 }
 

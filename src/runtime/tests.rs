@@ -19,7 +19,7 @@ struct FakeCaps {
 }
 
 impl ContextCapabilities for FakeCaps {
-    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
+    fn render(&mut self) {
         self.rendered = true;
     }
 

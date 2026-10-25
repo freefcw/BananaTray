@@ -159,7 +159,7 @@ fn dispatch_effects(
 /// 不同 GPUI 入口（Context<V> / Window+App / App）通过 adapter 实现此 trait，
 /// 将"当前环境能做什么"与"要做什么"解耦。effect runner 只关心后者。
 pub(crate) trait ContextCapabilities {
-    fn render(&mut self, state: &Rc<RefCell<AppState>>);
+    fn render(&mut self);
     fn open_url(&mut self, url: &str) {
         if let Err(err) = crate::platform::system::open_url(url) {
             log::warn!(target: "app", "failed to open URL {url}: {err:#}");
@@ -180,7 +180,7 @@ pub(crate) trait FullContextCapabilities: ContextCapabilities {
 struct ViewCaps<'a, 'b, V: 'static>(&'a mut Context<'b, V>);
 
 impl<V: 'static> ContextCapabilities for ViewCaps<'_, '_, V> {
-    fn render(&mut self, _state: &Rc<RefCell<AppState>>) {
+    fn render(&mut self) {
         self.0.notify();
     }
     // open_url 使用 trait 默认实现（platform::system::open_url）。
@@ -195,7 +195,7 @@ fn run_full_context_effect(
     caps: &mut dyn FullContextCapabilities,
 ) -> Vec<AppAction> {
     match effect {
-        ContextEffect::Render => caps.render(state),
+        ContextEffect::Render => caps.render(),
         ContextEffect::OpenSettingsWindow => caps.open_settings_window(state),
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
         ContextEffect::ApplyTrayIcon(request) => caps.apply_tray_icon(request),
@@ -214,7 +214,7 @@ fn run_view_context_effect(
     caps: &mut dyn ContextCapabilities,
 ) {
     match effect {
-        ContextEffect::Render => caps.render(state),
+        ContextEffect::Render => caps.render(),
         ContextEffect::OpenUrl(url) => caps.open_url(&url),
         ContextEffect::PublishQuotaSnapshot => caps.publish_quota_snapshot(state),
         other => panic!(
