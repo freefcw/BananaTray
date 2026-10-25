@@ -407,6 +407,8 @@ pub struct QuotaVisibilityItem {
     pub quota_key: String,
     /// 是否在托盘弹窗中显示
     pub visible: bool,
+    /// 是否为总览主额度（折叠态优先展示）
+    pub is_primary: bool,
 }
 
 #[derive(Debug, Clone)]

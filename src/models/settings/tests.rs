@@ -312,6 +312,59 @@ fn hidden_quotas_isolated_between_custom_providers() {
     assert!(settings.provider.is_quota_visible(&second, "session"));
 }
 
+// ── primary_quotas ───────────────────────────────────
+
+#[test]
+fn toggle_primary_quota_sets_then_clears() {
+    let mut settings = AppSettings::default();
+    let id = builtin(ProviderKind::Cursor);
+    assert_eq!(settings.provider.primary_quota_key(&id), None);
+
+    settings
+        .provider
+        .toggle_primary_quota(&id, "weekly".to_string());
+    assert_eq!(settings.provider.primary_quota_key(&id), Some("weekly"));
+
+    settings
+        .provider
+        .toggle_primary_quota(&id, "weekly".to_string());
+    assert_eq!(settings.provider.primary_quota_key(&id), None);
+}
+
+#[test]
+fn primary_quota_isolated_per_provider() {
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .toggle_primary_quota(&builtin(ProviderKind::Cursor), "weekly".to_string());
+
+    assert_eq!(
+        settings
+            .provider
+            .primary_quota_key(&builtin(ProviderKind::Cursor)),
+        Some("weekly")
+    );
+    assert_eq!(
+        settings
+            .provider
+            .primary_quota_key(&builtin(ProviderKind::ZCode)),
+        None
+    );
+}
+
+#[test]
+fn remove_provider_references_clears_primary_quota() {
+    let mut settings = AppSettings::default();
+    let id = ProviderId::Custom("gone:newapi".to_string());
+    settings
+        .provider
+        .toggle_primary_quota(&id, "weekly".to_string());
+
+    settings.provider.remove_provider_references(&id);
+
+    assert!(settings.provider.primary_quotas.is_empty());
+}
+
 // ── ordered_provider_ids ──────────────────────────────
 
 #[test]

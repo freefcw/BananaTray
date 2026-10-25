@@ -149,6 +149,7 @@ fn settings_provider_detail_view_state(
         )
     };
 
+    let primary_quota_key = session.settings.provider.primary_quota_key(id);
     let quota_visibility = provider
         .map(|p| {
             p.quotas
@@ -162,6 +163,7 @@ fn settings_provider_detail_view_state(
                         label: format_quota_label(q),
                         quota_key: q.stable_key.clone(),
                         visible,
+                        is_primary: primary_quota_key == Some(q.stable_key.as_str()),
                     }
                 })
                 .collect()

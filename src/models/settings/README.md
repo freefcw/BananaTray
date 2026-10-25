@@ -26,7 +26,7 @@ AppSettings
 - **`DisplaySettings`** - `theme` / `language` / `tray_icon_style` / `quota_display_mode` / `quota_card_style` / `quota_card_history_range` / `merge_history_charts` / `tray_popup` / 各 UI 开关。`quota_card_history_range` 决定托盘配额卡内嵌折线看近 24 小时还是配额当前周期；认不出周期的配额仍画近 24 小时，设置页不受影响。`quota_display_mode` 同时决定配额卡片和历史折线画剩余还是已用；纯余额没有已用，折线仍画剩余。默认剩余。`merge_history_charts` 默认打开：设置页把单位和含义相同的历史折线画进同一张图；关掉后每条配额一张图。托盘不受这个开关影响。
 - **`LoggingSettings`** - `max_bytes` / `max_files`；日志轮转与启动清理阈值，默认 5 MiB × 4 份（磁盘硬上限约 25 MiB）。不在 UI 暴露，仅在 settings.json 持久化；`#[serde(default)]` 保证旧配置无需迁移。详见 `docs/logging.md`
 - **`QuotaRules`**（`AppSettings::quota`）— 全局额度状态/提醒阈值，按 `QuotaThresholdUnit` 分三组：百分比默认 50/20/10，货币默认 10/2/1，积分·额度默认 100/20/10（warning / critical / notify，全部为剩余值、inclusive `<=` 边界）。`AppSettings::effective_quota_rules(&ProviderId)` 叠加 Provider 覆盖后返回生效规则。
-- **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `quota_usage_steps` / `quota_threshold_overrides`
+- **`ProviderConfig`** — `credentials` / `provider_layout` / `hidden_quotas` / `primary_quotas` / `quota_usage_steps` / `quota_threshold_overrides`
   - `provider_layout` 是有序 Provider 偏好列表；数组顺序就是排序，每个 item 只保存稳定 `id`、`in_sidebar` 和 `enabled`
   - `in_sidebar: false` 的 item 保留在布局中，用于重新加入时恢复原位置；隐藏 Provider 始终为 disabled，启用 Provider 会自动将其加入 sidebar
   - `quota_usage_steps` 是 Provider 级用量步长覆盖（key = 稳定 `id_key`，无条目 = 跟随全局 `notification.quota_usage_step_pct`，显式 0 = 关闭该 Provider 的用量提醒）；`remove_provider_references()` 会一并清理
@@ -44,7 +44,7 @@ AppSettings
 | 文件 | 职责 |
 |------|------|
 | `provider_config_ordering.rs` | Provider 排序逻辑：`ordered_provider_ids()` / `move_provider_to_index()`；数组位置是唯一排序来源 |
-| `provider_config_quota.rs` | 配额可见性：`is_quota_visible()` / `toggle_quota_visibility()` / `visible_worst_status()` / `reveal_positive_extra_usage()`，按 `ProviderId` 存储，避免多个 custom provider 共享同一个 `custom` 可见性状态。隐藏的配额同时退出状态颜色和告警；超额用量余额卡余额 > 0 时自动取消隐藏 |
+| `provider_config_quota.rs` | 配额可见性与总览主额度：`is_quota_visible()` / `toggle_quota_visibility()` / `primary_quota_key()` / `toggle_primary_quota()` / `visible_worst_status()` / `reveal_positive_extra_usage()`，按 `ProviderId` 存储，避免多个 custom provider 共享同一个 `custom` 可见性状态。隐藏的配额同时退出状态颜色和告警；超额用量余额卡余额 > 0 时自动取消隐藏。`primary_quotas` 只影响总览折叠态展示哪个配额（不设 = 最差配额优先），不参与状态颜色与告警；主额度被隐藏或配额消失时回退到最差配额 |
 | `provider_config_sidebar.rs` | Sidebar 管理：`sidebar_provider_ids()` / `register_discovered_custom_providers()` / `add_to_sidebar()` / `remove_from_sidebar()` |
 
 ### `tests.rs` — 单元测试

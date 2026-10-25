@@ -116,6 +116,8 @@ impl PersistedQuotaRuleGroups {
 struct PersistedProviderConfig {
     credentials: ProviderSettings,
     hidden_quotas: HashMap<String, HashSet<String>>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    primary_quotas: HashMap<String, String>,
     // 值先保留为 Value 再逐条解析：手改 JSON 的非法条目只丢弃该条，不拖垮整个文件
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     quota_usage_steps: HashMap<String, serde_json::Value>,
@@ -170,6 +172,7 @@ impl PersistedProviderConfig {
             credentials: self.credentials,
             provider_layout: layout,
             hidden_quotas: self.hidden_quotas,
+            primary_quotas: self.primary_quotas,
             quota_usage_steps,
             quota_threshold_overrides,
             history_retention_days,
@@ -270,6 +273,7 @@ impl From<&AppSettings> for PersistedAppSettingsV1 {
             provider: PersistedProviderConfig {
                 credentials: value.provider.credentials.clone(),
                 hidden_quotas: value.provider.hidden_quotas.clone(),
+                primary_quotas: value.provider.primary_quotas.clone(),
                 quota_usage_steps: value
                     .provider
                     .quota_usage_steps
@@ -465,9 +469,10 @@ fn merge_preserving_unknown_fields(
 /// 再次带回，造成新旧 Provider 配置同时存在。
 fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
     const LEGACY_FIELDS: [&str; 3] = ["enabled_providers", "provider_order", "sidebar_providers"];
-    const CURRENT_FIELDS: [&str; 6] = [
+    const CURRENT_FIELDS: [&str; 7] = [
         "credentials",
         "hidden_quotas",
+        "primary_quotas",
         "provider_layout",
         "quota_usage_steps",
         "quota_threshold_overrides",
@@ -1018,6 +1023,54 @@ mod tests {
                 .get(provider_id.id_key())
                 .is_none(),
             "已删除的动态 hidden_quotas 条目不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn save_persists_primary_quota_entry_removal() {
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        let provider_id = crate::models::ProviderId::Custom("removed:newapi".to_string());
+        settings
+            .provider
+            .primary_quotas
+            .insert(provider_id.id_key(), "weekly".to_string());
+        save_to(&settings, &path).unwrap();
+
+        settings
+            .provider
+            .primary_quotas
+            .remove(&provider_id.id_key());
+        save_to(&settings, &path).unwrap();
+
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(
+            saved["provider"]["primary_quotas"]
+                .get(provider_id.id_key())
+                .is_none(),
+            "已删除的动态 primary_quotas 条目不应被兼容性合并带回"
+        );
+    }
+
+    #[test]
+    fn primary_quota_settings_round_trip() {
+        use crate::models::{ProviderId, ProviderKind};
+
+        let (_dir, path) = temp_settings_path();
+        let mut settings = AppSettings::default();
+        settings.provider.toggle_primary_quota(
+            &ProviderId::BuiltIn(ProviderKind::Cursor),
+            "weekly".to_string(),
+        );
+        save_to(&settings, &path).unwrap();
+
+        let loaded = load_from(&path).unwrap();
+
+        assert_eq!(
+            loaded
+                .provider
+                .primary_quota_key(&ProviderId::BuiltIn(ProviderKind::Cursor)),
+            Some("weekly")
         );
     }
 

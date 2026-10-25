@@ -78,4 +78,24 @@ impl ProviderConfig {
             set.insert(quota_key);
         }
     }
+
+    /// 用户指定的总览主额度 stable_key。
+    ///
+    /// 主额度只影响总览展示：折叠态优先展示它而非最差配额。被隐藏或配额已不存在时
+    /// 由调用方回退到最差配额，存储值仍然保留。
+    pub fn primary_quota_key(&self, provider_id: &ProviderId) -> Option<&str> {
+        self.primary_quotas
+            .get(&provider_id.id_key())
+            .map(String::as_str)
+    }
+
+    /// 切换某个 quota 的总览主额度状态（设为主额度 ↔ 恢复最差配额优先）。
+    pub fn toggle_primary_quota(&mut self, provider_id: &ProviderId, quota_key: String) {
+        let key = provider_id.id_key();
+        if self.primary_quotas.get(&key) == Some(&quota_key) {
+            self.primary_quotas.remove(&key);
+        } else {
+            self.primary_quotas.insert(key, quota_key);
+        }
+    }
 }

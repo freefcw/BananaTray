@@ -59,6 +59,15 @@ fn detail_quota_visible(session: &AppSession, quota_key: &str) -> bool {
         .visible
 }
 
+fn detail_quota_primary(session: &AppSession, quota_key: &str) -> bool {
+    detail_snapshot(session)
+        .quota_visibility
+        .iter()
+        .find(|item| item.quota_key == quota_key)
+        .unwrap_or_else(|| panic!("missing quota visibility item for key {quota_key}"))
+        .is_primary
+}
+
 #[test]
 fn settings_providers_tab_respects_order_and_selection() {
     let _locale_guard = setup_locale();
@@ -498,6 +507,56 @@ fn settings_detail_quota_visibility_tracks_toggle_action() {
         ),
     );
     assert!(detail_quota_visible(&session, "session"));
+}
+
+#[test]
+fn settings_detail_quota_visibility_reports_primary() {
+    use crate::models::QuotaType;
+
+    let _locale_guard = setup_locale();
+    let provider_id = pid(ProviderKind::Claude);
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::Claude, true);
+
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::with_details(
+            QuotaLabelSpec::Session,
+            30.0,
+            100.0,
+            QuotaType::Session,
+            None,
+        ),
+        QuotaInfo::with_details(QuotaLabelSpec::Weekly, 50.0, 100.0, QuotaType::Weekly, None),
+    ];
+
+    let mut session = make_session(settings, provider_id.clone(), vec![provider]);
+    assert!(!detail_quota_primary(&session, "session"));
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::UpdateSetting(
+            crate::application::SettingChange::TogglePrimaryQuota {
+                provider_id: provider_id.clone(),
+                quota_key: "session".to_string(),
+            },
+        ),
+    );
+    assert!(detail_quota_primary(&session, "session"));
+    assert!(!detail_quota_primary(&session, "weekly"));
+
+    crate::application::reduce(
+        &mut session,
+        crate::application::AppAction::UpdateSetting(
+            crate::application::SettingChange::TogglePrimaryQuota {
+                provider_id,
+                quota_key: "session".to_string(),
+            },
+        ),
+    );
+    assert!(!detail_quota_primary(&session, "session"));
 }
 
 #[test]

@@ -339,6 +339,11 @@ pub enum SettingChange {
         provider_id: ProviderId,
         quota_key: String,
     },
+    /// 设为主额度 / 取消主额度（总览折叠态优先展示该配额）
+    TogglePrimaryQuota {
+        provider_id: ProviderId,
+        quota_key: String,
+    },
     SetQuotaUsageStep(u8),
     SetProviderQuotaUsageStep {
         provider_id: ProviderId,

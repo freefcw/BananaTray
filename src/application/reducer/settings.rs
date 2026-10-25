@@ -234,6 +234,16 @@ pub(super) fn apply_setting_change(
             sync_dynamic_icon_if_needed(session, prev_status, effects);
             effects.push(ContextEffect::PublishQuotaSnapshot.into());
         }
+        SettingChange::TogglePrimaryQuota {
+            provider_id,
+            quota_key,
+        } => {
+            // 主额度只影响总览折叠态展示，不参与状态颜色与告警，无需重建基线。
+            session
+                .settings
+                .provider
+                .toggle_primary_quota(&provider_id, quota_key);
+        }
         SettingChange::SetQuotaUsageStep(step_pct) => {
             let old_step = session.settings.notification.quota_usage_step_pct;
             let new_step = step_pct.min(100);

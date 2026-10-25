@@ -270,6 +270,9 @@ pub struct ProviderConfig {
     /// 每个 Provider 中被隐藏的配额标签集合（不在托盘弹窗中显示）。
     /// key = provider id_key (如 "claude"), value = 隐藏的 quota label 集合。
     pub hidden_quotas: HashMap<String, HashSet<String>>,
+    /// 每个 Provider 的总览主额度：折叠态优先展示该配额而非最差配额。
+    /// key = provider id_key, value = `QuotaInfo::stable_key`。
+    pub primary_quotas: HashMap<String, String>,
     pub quota_usage_steps: HashMap<String, u8>,
     pub quota_threshold_overrides: HashMap<String, QuotaRuleOverrides>,
     /// 按 provider 覆盖的历史保留天数。缺项表示跟随全局。
@@ -282,6 +285,7 @@ impl Default for ProviderConfig {
             credentials: ProviderSettings::default(),
             provider_layout: Self::default_layout(),
             hidden_quotas: HashMap::new(),
+            primary_quotas: HashMap::new(),
             quota_usage_steps: HashMap::new(),
             quota_threshold_overrides: HashMap::new(),
             history_retention_days: HashMap::new(),
@@ -336,6 +340,7 @@ impl ProviderConfig {
         let key = id.id_key();
         self.provider_layout.retain(|item| item.id != key);
         self.hidden_quotas.remove(&key);
+        self.primary_quotas.remove(&key);
         self.quota_usage_steps.remove(&key);
         self.quota_threshold_overrides.remove(&key);
         self.history_retention_days.remove(&key);
