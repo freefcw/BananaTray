@@ -463,22 +463,29 @@ fn merge_preserving_unknown_fields(
     serde_json::Value::Object(std::mem::take(existing))
 }
 
+/// 已迁移淘汰的旧 provider 字段；保存时删除，防止兼容合并把旧状态带回。
+const LEGACY_PROVIDER_FIELDS: [&str; 3] =
+    ["enabled_providers", "provider_order", "sidebar_providers"];
+/// 当前 provider 动态配置字段；保存时以当前领域状态整体替换。
+///
+/// 该清单必须与 [`PersistedProviderConfig`] 的序列化键保持一致——漏登记新字段时，
+/// 通用未知字段合并会把用户已删除的旧条目"复活"。一致性由
+/// `current_fields_match_serialized_provider_config_keys` 守卫测试锁定。
+const CURRENT_PROVIDER_FIELDS: [&str; 7] = [
+    "credentials",
+    "hidden_quotas",
+    "primary_quotas",
+    "provider_layout",
+    "quota_usage_steps",
+    "quota_threshold_overrides",
+    "history_retention_days",
+];
+
 /// Provider 动态配置字段都是当前领域状态的完整快照。
 ///
 /// 保存时整体替换这些字段，并删除已经迁移的旧字段，避免通用未知字段合并把旧状态
 /// 再次带回，造成新旧 Provider 配置同时存在。
 fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &serde_json::Value) {
-    const LEGACY_FIELDS: [&str; 3] = ["enabled_providers", "provider_order", "sidebar_providers"];
-    const CURRENT_FIELDS: [&str; 7] = [
-        "credentials",
-        "hidden_quotas",
-        "primary_quotas",
-        "provider_layout",
-        "quota_usage_steps",
-        "quota_threshold_overrides",
-        "history_retention_days",
-    ];
-
     let Some(existing_provider) = existing
         .get_mut("provider")
         .and_then(serde_json::Value::as_object_mut)
@@ -492,10 +499,10 @@ fn replace_dynamic_provider_maps(existing: &mut serde_json::Value, current: &ser
         return;
     };
 
-    for field in LEGACY_FIELDS {
+    for field in LEGACY_PROVIDER_FIELDS {
         existing_provider.remove(field);
     }
-    for field in CURRENT_FIELDS {
+    for field in CURRENT_PROVIDER_FIELDS {
         match current_provider.get(field) {
             Some(current_value) => {
                 existing_provider.insert(field.to_string(), current_value.clone());
@@ -1667,6 +1674,47 @@ mod tests {
                 notify: 2.0,
             },
             "非法覆盖必须继承当前全局规则而非库默认"
+        );
+    }
+
+    /// 守卫：`CURRENT_PROVIDER_FIELDS` 必须与"填满全部字段的 PersistedProviderConfig
+    /// 序列化出的键集合"保持一致。新增 provider map 字段而忘记登记时，用户删除的
+    /// 旧条目会被 `merge_preserving_unknown_fields` 静默复活（见上方删除回归测试）。
+    #[test]
+    fn current_fields_match_serialized_provider_config_keys() {
+        let config = PersistedProviderConfig {
+            credentials: ProviderSettings::default(),
+            hidden_quotas: HashMap::from([("p".to_string(), HashSet::from(["q".to_string()]))]),
+            primary_quotas: HashMap::from([("p".to_string(), "q".to_string())]),
+            quota_usage_steps: HashMap::from([("p".to_string(), serde_json::json!(25))]),
+            quota_threshold_overrides: HashMap::from([(
+                "p".to_string(),
+                PersistedQuotaRuleGroups::default(),
+            )]),
+            history_retention_days: HashMap::from([("p".to_string(), 30)]),
+            provider_layout: Some(Vec::new()),
+            enabled_providers: Some(HashMap::new()),
+            provider_order: Some(Vec::new()),
+            sidebar_providers: Some(Vec::new()),
+        };
+
+        let serialized = serde_json::to_value(&config).unwrap();
+        let keys: std::collections::BTreeSet<&str> = serialized
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let expected: std::collections::BTreeSet<&str> = CURRENT_PROVIDER_FIELDS
+            .iter()
+            .chain(LEGACY_PROVIDER_FIELDS.iter())
+            .copied()
+            .collect();
+
+        assert_eq!(
+            keys, expected,
+            "PersistedProviderConfig 的序列化键与 CURRENT_PROVIDER_FIELDS/LEGACY_PROVIDER_FIELDS \
+             不一致：新增字段必须同步登记，否则保存时无法整体替换、删除条目会被合并复活"
         );
     }
 }
