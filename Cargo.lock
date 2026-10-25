@@ -1463,9 +1463,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f97731ed25c830933f8e57526465600fe2aeee17b5a8277fa52431c028cc1a7"
+checksum = "ecc7268596eb9066bc5422974db151d5e44fca98b0f3a680ce17c8ed72c516ad"
 dependencies = [
  "fc-gpui-core",
  "fc-gpui-platform",
@@ -1484,9 +1484,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-core"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6826ce0a6674adbd9983608c54d4f7114764f3c31cb715f81f79018713fc95cb"
+checksum = "84d5950d87fde1e3792caefdc571210475b1db10dc7d337925acb1a1243a4b3b"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -1580,9 +1580,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-linux"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b4a2bf7266021091e70faaa688d877481e16882d19b49d39a7b74361417ab29"
+checksum = "5333e52ddea32290e50dfb0b3da81481dc1dfc2c9fd4b50b0a94ced12597d184"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -1633,9 +1633,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-macos"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb48288c9a82587c1e7106474d9442bf3d6bd84d9f9aa7ed720c298eff83386f"
+checksum = "374b259cf2ae762bf6e99f190412134b747f57b5a90da69098a61cc05d29e62e"
 dependencies = [
  "anyhow",
  "async-task",
@@ -1681,9 +1681,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-macros"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ace49fe19fb579585ab42997bfd8b639ea3dcd4884618974a4403f8517fa256a"
+checksum = "549d5a407c889114b2ca1ce02bc27d436da7556b2e97beea31dc2dc6f04bb791"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -1707,9 +1707,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-platform"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9498e3fab287181fdb7f3e0b4431813817e81ea3b1c3202f3d8c4d1849db6ad5"
+checksum = "3b1d00daa08c35955f27c5b0a71c13fe3e8f437c62515bd1d32a19b542862baa"
 dependencies = [
  "fc-gpui-core",
  "fc-gpui-linux",
@@ -1798,9 +1798,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-wgpu"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70edac209918d190d659a7404fc21cc912f108204ad28fbccadaa443af6c6917"
+checksum = "dfca456ae320281b605b6377c4786618d409b5243524845345b37118df595b9a"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1819,9 +1819,9 @@ dependencies = [
 
 [[package]]
 name = "fc-gpui-windows"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf8f6ef9a545fbfe56f8eca33df3890be178b6dd9b6ddd68dbde1d31dd44589c"
+checksum = "6321c4612d2e6e30af212f84b0b62dcce1e9ff868901843ea73fc435ccb769de"
 dependencies = [
  "anyhow",
  "async-task",
@@ -1849,9 +1849,9 @@ dependencies = [
 
 [[package]]
 name = "fc-ui"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9871c2f74f6a5d247137d4d9aa9f76ca4a8e88b279f83b371fe1738a44b1fa9b"
+checksum = "1aef1eb19b03b83c1cf703b4ec8099742807d8600e048f4b8293473b525bb481"
 dependencies = [
  "fc-gpui",
  "futures",
@@ -5455,11 +5455,10 @@ dependencies = [
 
 [[package]]
 name = "taffy"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "639627c87f43b9181c811f40a6296409e093a17bc761214cba3c15df74f86b99"
+checksum = "3c8480887e8803986d96a7173729565520d4bbb721ad6b7ad6941a22897207aa"
 dependencies = [
- "arrayvec",
  "serde",
  "slotmap",
  "smallvec",

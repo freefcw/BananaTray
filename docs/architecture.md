@@ -10,7 +10,7 @@
 - `bananatray` 二进制目标通过 Cargo `required-features = ["app"]` 显式要求该 feature。
 - `src/main.rs` 是只调用 `bananatray::run_app()` 的薄入口；唯一模块图和完整启动流程位于 lib crate，避免 bin/lib 各编译一份同名模块。
 - `app` 不只控制模块导出，也隔离托盘壳的运行时依赖（GPUI / fc-ui / 单实例 / 通知 / 自启动 / Linux zbus 等）。
-- GPUI 与 UI 组件库都来自 crates.io 正式发布版：`fc-gpui` 0.11.3（Cargo 依赖键仍是 `gpui`，`use gpui::*` 不变）和 `fc-ui` 0.9.4（crate root 即 `fc_ui`，无包别名）。`fc-ui` 0.9.4 依赖 `fc-gpui` 0.11.3，两边必须保持同一份 GPUI，否则会被解析成两份直接编译失败。0.11.3 修的是 macOS 关窗竞态：窗口句柄已经取走、`NSWindow.close()` 尚未执行时，如果 AppKit 又送来鼠标移动、按键、拖动、缩放或文本输入，不再因 `MacWindowState.native_window already taken` panic。
+- GPUI 与 UI 组件库都来自 crates.io 正式发布版：`fc-gpui` 0.12.0（Cargo 依赖键仍是 `gpui`，`use gpui::*` 不变）和 `fc-ui` 0.9.5（crate root 即 `fc_ui`，无包别名）。`fc-ui` 0.9.5 依赖 `fc-gpui` 0.12.0，两边必须保持同一份 GPUI，否则会被解析成两份直接编译失败。0.9.5 引入 Taffy 0.15，并保留 `ScrollWheelEvent` 的弃用兼容别名；本仓库不直接使用该别名，因此升级不需要源码迁移。
 - 这两个包要求 rustc ≥ 1.90（`fc-ui` 声明 `rust-version = 1.90`，`fc-gpui` 使用 edition 2024）；项目通过 `rust-toolchain.toml` 固定 Rust 1.98.1 及 rustfmt/clippy 组件，避免 stable 滚动升级导致 CI 的 lint 行为未经评估就变化。1.98.1 同时是 GitHub runner 镜像（ubuntu 24.04 与 26.04、macOS）预装的 Rust 版本，CI 冷跑不需要 rustup 下载 toolchain。workflow 里的 `dtolnay/rust-toolchain` 统一引用 `@v1` tag 并显式传 `toolchain` 输入——上游已删除按 Rust 版本编号的 tag，写 `@1.98.1` 这类版本引用会 resolve 失败。
 - GPUI 启动使用 `AppProfile::Minimal`，让托盘类长驻进程采用较小的文本布局缓存、glyph raster-bounds 缓存、GPU atlas / instance buffer 初始预算和 element arena。
 - 托盘常驻依赖 `QuitMode::Explicit`（`fc-gpui` 0.9 取代旧的 `set_keep_alive_without_windows`）：所有窗口关闭后进程不退出，只有显式 quit 才结束。
@@ -208,7 +208,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 
 **优先级说明**：P1 = 直接影响用户体验；P2 = 防御性，可能已不需要；P3 = 平台/语言限制，短期不会变。
 
-**最近核查日期**：2026-10-08（随 fc-gpui 0.11.1 / fc-ui 0.9.1 升级逐条核对）
+**最近核查日期**：2026-10-25（随 fc-gpui 0.12.0 / fc-ui 0.9.5 升级逐条核对）
 
 **2026-10-08 随上游修复删除的条目**（不再出现在代码里，留档备查）：
 
