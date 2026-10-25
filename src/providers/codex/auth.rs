@@ -7,6 +7,9 @@ use base64::Engine;
 use std::path::{Path, PathBuf};
 
 const TOKEN_MAX_AGE_SECS: i64 = 8 * 24 * 60 * 60;
+/// Codex CLI 内置的 OAuth 公开 client_id（与 CodexBar 等同类工具一致）。
+const CODEX_OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+const OPENAI_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 
 /// Codex `~/.codex/auth.json` 解析结果。
 ///
@@ -154,11 +157,11 @@ fn token_needs_refresh(last_refresh: &Option<String>) -> bool {
 
 pub(super) fn refresh_access_token(refresh_token: &str) -> ProviderResult<String> {
     let body = format!(
-        "grant_type=refresh_token&refresh_token={}&client_id=app_EMoamEEZ73f0CkXaXp7hrann",
+        "grant_type=refresh_token&refresh_token={}&client_id={CODEX_OAUTH_CLIENT_ID}",
         refresh_token
     );
 
-    let response_str = http_client::post_form("https://auth.openai.com/oauth/token", &[], &body)
+    let response_str = http_client::post_form(OPENAI_TOKEN_URL, &[], &body)
         .map_err(|err| ProviderError::classify(&err))?;
 
     let resp: serde_json::Value = serde_json::from_str(&response_str)

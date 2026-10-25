@@ -12,10 +12,8 @@
 use std::path::PathBuf;
 
 const DEFAULT_BASE_URL: &str = "https://chatgpt.com/backend-api";
-/// `/backend-api` 前缀下的 usage path。
-const CHATGPT_USAGE_PATH: &str = "/wham/usage";
-/// 自托管或非 chatgpt.com 域下的 usage path（与 CodexBar `codexUsagePath` 一致）。
-const CODEX_USAGE_PATH: &str = "/wham/usage";
+/// usage path。官方 chatgpt.com 与自托管域当前共用同一路径（与 CodexBar `codexUsagePath` 一致）。
+const USAGE_PATH: &str = "/wham/usage";
 
 /// 解析并返回最终的 usage API URL。读取 `$CODEX_HOME/config.toml`（默认
 /// `~/.codex/config.toml`），任何阶段失败都回退到默认 URL。
@@ -158,14 +156,9 @@ pub(super) fn reset_credits_url_from_usage(usage_url: &str) -> Option<String> {
     Some(format!("{base}/wham/rate-limit-reset-credits"))
 }
 
-/// 纯函数：根据 base 是否含 `/backend-api` 选择 path 并拼接最终 URL。
+/// 纯函数：拼接最终 usage URL（官方与自托管共用同一 path）。
 fn assemble_usage_url(base: &str) -> String {
-    let path = if base.contains("/backend-api") {
-        CHATGPT_USAGE_PATH
-    } else {
-        CODEX_USAGE_PATH
-    };
-    format!("{}{}", base, path)
+    format!("{}{}", base, USAGE_PATH)
 }
 
 /// I/O：读取 `$CODEX_HOME/config.toml`，回退到 `~/.codex/config.toml`。

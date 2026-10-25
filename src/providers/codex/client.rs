@@ -30,7 +30,7 @@ pub(super) fn call_usage_api(
 ) -> Result<String> {
     let headers = usage_api_headers(access_token, account_id);
     let header_refs: Vec<_> = headers.iter().map(String::as_str).collect();
-    http_client::get_with_headers(url, &header_refs)
+    http_client::get_raw_http_response(url, &header_refs)
 }
 
 pub(super) fn call_reset_credits_api(

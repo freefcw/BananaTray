@@ -409,14 +409,15 @@ pub fn get_with_timeout(url: &str, headers: &[&str], timeout: Option<Duration>) 
     )
 }
 
-/// Perform an HTTP GET and return the full raw output (headers + body).
+/// Perform an HTTP GET and return the full raw HTTP response (status line + headers + body).
 ///
 /// The response is formatted as `"HTTP/1.1 <status>\r\n<headers>\r\n\r\n<body>"`
 /// to maintain compatibility with callers that parse raw HTTP responses (e.g. Codex).
+/// 与 [`get`] 的差异在响应格式而非请求头——两者都接受自定义请求头。
 ///
 /// 4xx/5xx → `HttpError::HttpStatus`，超时 → `HttpError::Timeout`
-pub fn get_with_headers(url: &str, headers: &[&str]) -> Result<String> {
-    debug!(target: "http", "GET request with headers started");
+pub fn get_raw_http_response(url: &str, headers: &[&str]) -> Result<String> {
+    debug!(target: "http", "GET raw-response request started");
 
     let response = send_with_redirects("GET", None, url, |agent, url| {
         set_headers!(agent.get(url), headers).call()

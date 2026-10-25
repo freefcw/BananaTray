@@ -40,7 +40,9 @@ Provider 共享基础设施，提供所有 Provider 实现的通用工具。
   provider 可通过 `downcast_ref::<HttpError>()` 精确分类，`ProviderError::classify()` 自动将
   401/403 映射为 `AuthRequired`、超时映射为 `Timeout`、传输错误映射为 `NetworkFailed`；
   安全策略拒绝（非 https / 跨 origin 重定向 / 正文超限）归为 `FetchFailed`，不可重试
-- **`get()` / `get_with_headers()`** — GET 请求变体（4xx/5xx 返回 `HttpError::HttpStatus`）
+- **`get()` / `get_raw_http_response()`** — GET 请求变体（4xx/5xx 返回 `HttpError::HttpStatus`）；
+  `get` 返回 body，`get_raw_http_response` 额外拼回状态行 + 响应头
+  （供 Codex 这类逐行解析原始 HTTP 响应的调用方使用）
 - **`post_json()` / `post_form()`** — POST 请求（JSON / form-urlencoded）
 - 全局共享 `LazyLock<Agent>`；`http_status_as_error(false)` 让 `check_status` 统一接管非 2xx，
   且错误正文**不读取、不记录、不传播**（可能含 token / 邮箱等敏感信息），`HttpStatus` 只携带状态码
