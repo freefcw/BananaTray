@@ -13,11 +13,10 @@ use crate::models::{
     ScriptProviderQuotaPreview, ScriptProviderTestResult, DEFAULT_SCRIPT_TIMEOUT_MS,
 };
 use crate::theme::{monospace_font_family, Theme};
-use crate::ui::widgets::render_svg_icon;
+use crate::ui::widgets::{render_action_button, render_svg_icon, ButtonSize, ButtonVariant};
 use gpui::{
-    div, prelude::FluentBuilder as _, px, AnyElement, Context, Div, FontWeight, Hsla,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, StatefulInteractiveElement,
-    Styled, Window,
+    div, prelude::FluentBuilder as _, px, AnyElement, Context, Div, FontWeight, InteractiveElement,
+    IntoElement, ParentElement, StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -190,28 +189,6 @@ fn render_script_provider_header(title: String, theme: &Theme) -> Div {
                         .child(t!("script_provider.subtitle").to_string()),
                 ),
         )
-}
-
-fn script_form_button(label: String, background: Hsla, border: Option<Hsla>, text: Hsla) -> Div {
-    let button = div()
-        .flex_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .px(px(14.0))
-        .py(px(10.0))
-        .rounded(px(8.0))
-        .bg(background)
-        .text_size(px(13.0))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(text)
-        .cursor_pointer()
-        .hover(|style| style.opacity(0.9))
-        .child(label);
-    match border {
-        Some(color) => button.border_1().border_color(color),
-        None => button,
-    }
 }
 
 impl SettingsView {
@@ -428,20 +405,21 @@ impl SettingsView {
 
     fn render_script_cancel_button(&self, theme: &Theme) -> AnyElement {
         let state = self.state.clone();
-        script_form_button(
-            t!("script_provider.cancel").to_string(),
-            theme.bg.subtle,
-            Some(theme.border.strong),
-            theme.text.primary,
+        render_action_button(
+            &t!("script_provider.cancel"),
+            None,
+            ButtonVariant::Subtle,
+            ButtonSize::Panel,
+            theme,
+            move |_, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state,
+                    AppAction::CancelAddScriptProvider,
+                    window,
+                    cx,
+                );
+            },
         )
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            crate::bootstrap::dispatch_in_window(
-                &state,
-                AppAction::CancelAddScriptProvider,
-                window,
-                cx,
-            );
-        })
         .into_any_element()
     }
 
@@ -458,54 +436,56 @@ impl SettingsView {
         } else {
             t!("script_provider.test").to_string()
         };
-        script_form_button(
-            label,
-            theme.bg.subtle,
-            Some(theme.text.accent),
-            theme.text.accent,
+        render_action_button(
+            &label,
+            None,
+            ButtonVariant::Outlined,
+            ButtonSize::Panel,
+            theme,
+            move |_, window, cx| {
+                if is_testing {
+                    return;
+                }
+                let config = view.update(cx, |view: &mut Self, cx| {
+                    view.collect_script_provider_config(cx)
+                });
+                if let Some(config) = config {
+                    crate::bootstrap::dispatch_in_window(
+                        &state,
+                        AppAction::TestScriptProvider(config),
+                        window,
+                        cx,
+                    );
+                }
+            },
         )
         .opacity(if is_testing { 0.55 } else { 1.0 })
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            if is_testing {
-                return;
-            }
-            let config = view.update(cx, |view: &mut Self, cx| {
-                view.collect_script_provider_config(cx)
-            });
-            if let Some(config) = config {
-                crate::bootstrap::dispatch_in_window(
-                    &state,
-                    AppAction::TestScriptProvider(config),
-                    window,
-                    cx,
-                );
-            }
-        })
         .into_any_element()
     }
 
     fn render_script_save_button(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let state = self.state.clone();
         let view = cx.entity().clone();
-        script_form_button(
-            t!("script_provider.save").to_string(),
-            theme.text.accent,
+        render_action_button(
+            &t!("script_provider.save"),
             None,
-            theme.element.active,
+            ButtonVariant::Primary,
+            ButtonSize::Panel,
+            theme,
+            move |_, window, cx| {
+                let config = view.update(cx, |view: &mut Self, cx| {
+                    view.collect_script_provider_config(cx)
+                });
+                if let Some(config) = config {
+                    crate::bootstrap::dispatch_in_window(
+                        &state,
+                        AppAction::SubmitScriptProvider(config),
+                        window,
+                        cx,
+                    );
+                }
+            },
         )
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-            let config = view.update(cx, |view: &mut Self, cx| {
-                view.collect_script_provider_config(cx)
-            });
-            if let Some(config) = config {
-                crate::bootstrap::dispatch_in_window(
-                    &state,
-                    AppAction::SubmitScriptProvider(config),
-                    window,
-                    cx,
-                );
-            }
-        })
         .into_any_element()
     }
 }

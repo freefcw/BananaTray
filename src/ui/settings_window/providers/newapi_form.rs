@@ -17,9 +17,9 @@ use crate::application::AppAction;
 use crate::application::FormIdentity;
 use crate::models::{build_newapi_config_from_fields, NewApiEditData, NewApiFormError};
 use crate::theme::Theme;
-use crate::ui::widgets::render_svg_icon;
+use crate::ui::widgets::{render_action_button, render_svg_icon, ButtonSize, ButtonVariant};
 use gpui::{
-    div, px, relative, Context, Div, FontWeight, InteractiveElement, MouseButton, ParentElement,
+    div, px, relative, Context, Div, FontWeight, InteractiveElement, ParentElement,
     StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
@@ -229,62 +229,39 @@ impl SettingsView {
             .flex()
             .gap(px(12.0))
             .mt(px(28.0))
-            // 取消按钮
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(px(16.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(theme.bg.subtle)
-                    .border_1()
-                    .border_color(theme.border.strong)
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.text.primary)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .child(t!("newapi.cancel").to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        crate::bootstrap::dispatch_in_window(
-                            &state_cancel,
-                            AppAction::CancelAddNewApi,
-                            window,
-                            cx,
-                        );
-                    }),
-            )
-            // 保存按钮
-            .child({
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(px(16.0))
-                    .py(px(10.0))
-                    .rounded(px(8.0))
-                    .bg(theme.text.accent)
-                    .text_size(px(13.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.element.active)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .child(t!("newapi.save").to_string())
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        let ok = view.update(cx, |view: &mut Self, cx| {
-                            let action = view.collect_submit_action(cx);
-                            cx.notify();
-                            action
-                        });
-                        if let Some(action) = ok {
-                            crate::bootstrap::dispatch_in_window(&state_save, action, window, cx);
-                        }
-                    })
-            })
+            // 取消 / 保存共用 widgets 的 Panel 档按钮，避免调用方再手写一套样式
+            .child(render_action_button(
+                &t!("newapi.cancel"),
+                None,
+                ButtonVariant::Subtle,
+                ButtonSize::Panel,
+                theme,
+                move |_, window, cx| {
+                    crate::bootstrap::dispatch_in_window(
+                        &state_cancel,
+                        AppAction::CancelAddNewApi,
+                        window,
+                        cx,
+                    );
+                },
+            ))
+            .child(render_action_button(
+                &t!("newapi.save"),
+                None,
+                ButtonVariant::Primary,
+                ButtonSize::Panel,
+                theme,
+                move |_, window, cx| {
+                    let ok = view.update(cx, |view: &mut Self, cx| {
+                        let action = view.collect_submit_action(cx);
+                        cx.notify();
+                        action
+                    });
+                    if let Some(action) = ok {
+                        crate::bootstrap::dispatch_in_window(&state_save, action, window, cx);
+                    }
+                },
+            ))
     }
 }
 
