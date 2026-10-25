@@ -23,16 +23,8 @@ pub(crate) fn listen_for_secondary_instance(
         .expect("failed to spawn single-instance bridge thread");
 
     let ctrl = controller.clone();
-    let show_async_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while show_async_rx.recv().await.is_ok() {
-                info!(target: "app", "secondary instance requested SHOW");
-                let _ = show_async_cx.update(|cx| {
-                    ctrl.borrow_mut().toggle_popup(cx);
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), show_async_rx, move |(), cx| {
+        info!(target: "app", "secondary instance requested SHOW");
+        ctrl.borrow_mut().toggle_popup(cx);
+    });
 }

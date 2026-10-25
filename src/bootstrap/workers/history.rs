@@ -35,18 +35,10 @@ pub(crate) fn start_history_pump(state: &Rc<RefCell<AppState>>, rx: HistoryRecei
     state.borrow().history_tx.attach_owner(owner);
 
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while wake_rx.recv().await.is_ok() {
-                let _ = pump_cx.update(|cx| {
-                    let actions = state.borrow().history_results.drain();
-                    for action in actions {
-                        dispatch_in_app(&state, action, cx);
-                    }
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), wake_rx, move |(), cx| {
+        let actions = state.borrow().history_results.drain();
+        for action in actions {
+            dispatch_in_app(&state, action, cx);
+        }
+    });
 }

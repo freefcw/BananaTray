@@ -141,36 +141,24 @@ fn spawn_action_bridge(
     action_rx: smol::channel::Receiver<DBusActionRequest>,
     async_cx: gpui::AsyncApp,
 ) {
-    let ui_cx = async_cx.clone();
-    async_cx
-        .foreground_executor()
-        .spawn(async move {
-            while let Ok(action) = action_rx.recv().await {
-                match action {
-                    DBusActionRequest::OpenSettings => {
-                        info!(target: "dbus", "scheduling OpenSettings on GPUI main thread");
-                        let _ = ui_cx.update(|cx| {
-                            crate::bootstrap::dispatch_in_app(
-                                &state,
-                                crate::application::AppAction::OpenSettings { provider: None },
-                                cx,
-                            );
-                        });
-                    }
-                    DBusActionRequest::RefreshAll => {
-                        info!(target: "dbus", "scheduling RefreshAll on GPUI main thread");
-                        let _ = ui_cx.update(|cx| {
-                            crate::bootstrap::dispatch_in_app(
-                                &state,
-                                crate::application::AppAction::RefreshAll,
-                                cx,
-                            );
-                        });
-                    }
-                }
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(async_cx, action_rx, move |action, cx| match action {
+        DBusActionRequest::OpenSettings => {
+            info!(target: "dbus", "scheduling OpenSettings on GPUI main thread");
+            crate::bootstrap::dispatch_in_app(
+                &state,
+                crate::application::AppAction::OpenSettings { provider: None },
+                cx,
+            );
+        }
+        DBusActionRequest::RefreshAll => {
+            info!(target: "dbus", "scheduling RefreshAll on GPUI main thread");
+            crate::bootstrap::dispatch_in_app(
+                &state,
+                crate::application::AppAction::RefreshAll,
+                cx,
+            );
+        }
+    });
 }
 
 /// D-Bus 服务主循环（在独立线程运行）

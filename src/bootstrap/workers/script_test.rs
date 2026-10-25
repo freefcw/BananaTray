@@ -34,15 +34,7 @@ pub(crate) fn start_script_test_pump(
     state.borrow().script_test_tx.attach_owner(owner);
 
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while let Ok(action) = result_rx.recv().await {
-                let _ = pump_cx.update(|cx| {
-                    dispatch_in_app(&state, action, cx);
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), result_rx, move |action, cx| {
+        dispatch_in_app(&state, action, cx);
+    });
 }

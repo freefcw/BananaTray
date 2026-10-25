@@ -10,18 +10,10 @@ pub(crate) fn start_token_input_pump(
     cx: &mut App,
 ) {
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while wake_rx.recv().await.is_ok() {
-                let _ = pump_cx.update(|cx| {
-                    let actions = state.borrow().token_input_results.drain();
-                    for action in actions {
-                        crate::bootstrap::dispatch_in_app(&state, action, cx);
-                    }
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), wake_rx, move |(), cx| {
+        let actions = state.borrow().token_input_results.drain();
+        for action in actions {
+            crate::bootstrap::dispatch_in_app(&state, action, cx);
+        }
+    });
 }

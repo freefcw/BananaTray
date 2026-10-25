@@ -45,25 +45,14 @@ pub(crate) fn start_event_pump(
     .detach();
 
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while let Ok(event) = event_rx.recv().await {
-                let _ = pump_cx.update(|cx| {
-                    dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
-                    if !super::linux_dbus::emit_current_dbus_snapshot(
-                        &state,
-                        dbus_handle.borrow().as_ref(),
-                    ) {
-                        // 发射通道已失效（如 session bus 连接失败）：放弃 handle
-                        // 一次性降级，之后不再重复发射。
-                        dbus_handle.borrow_mut().take();
-                    }
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), event_rx, move |event, cx| {
+        dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
+        if !super::linux_dbus::emit_current_dbus_snapshot(&state, dbus_handle.borrow().as_ref()) {
+            // 发射通道已失效（如 session bus 连接失败）：放弃 handle
+            // 一次性降级，之后不再重复发射。
+            dbus_handle.borrow_mut().take();
+        }
+    });
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -73,17 +62,9 @@ pub(crate) fn start_event_pump(
     cx: &mut App,
 ) {
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while let Ok(event) = event_rx.recv().await {
-                let _ = pump_cx.update(|cx| {
-                    dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), event_rx, move |event, cx| {
+        dispatch_in_app(&state, AppAction::RefreshEventReceived(event), cx);
+    });
 }
 
 /// 发送初始配置同步 + 启动首次刷新。

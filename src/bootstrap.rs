@@ -10,6 +10,29 @@ mod settings_window;
 mod ui_bootstrap;
 mod workers;
 
+/// 在 GPUI foreground executor 上泵送 channel：每收到一个事件，回到主线程执行一次回调。
+///
+/// 收敛 workers / event_sources / dbus 桥接中重复出现的 pump 脚手架；drain、dispatch、
+/// 信号发射等差异逻辑由各调用方的 `on_event` 闭包表达。发送端全部关闭后泵自然退出。
+pub(crate) fn spawn_foreground_pump<T, F>(
+    async_cx: gpui::AsyncApp,
+    rx: smol::channel::Receiver<T>,
+    mut on_event: F,
+) where
+    T: 'static,
+    F: FnMut(T, &mut gpui::App) + 'static,
+{
+    let pump_cx = async_cx.clone();
+    async_cx
+        .foreground_executor()
+        .spawn(async move {
+            while let Ok(event) = rx.recv().await {
+                let _ = pump_cx.update(|cx| on_event(event, cx));
+            }
+        })
+        .detach();
+}
+
 // These re-exports are the stable shell entry points for `main.rs` and GPUI
 // callbacks. The lib test target compiles this module without the bin startup
 // path, so some startup-only entries are intentionally unused there.

@@ -41,18 +41,10 @@ pub(crate) fn start_custom_provider_pump(
     state.borrow().custom_provider_tx.attach_owner(owner);
 
     let state = state.clone();
-    let pump_cx = cx.to_async();
-    cx.to_async()
-        .foreground_executor()
-        .spawn(async move {
-            while result_rx.recv().await.is_ok() {
-                let _ = pump_cx.update(|cx| {
-                    let actions = state.borrow().custom_provider_results.drain();
-                    for action in actions {
-                        dispatch_in_app(&state, action, cx);
-                    }
-                });
-            }
-        })
-        .detach();
+    crate::bootstrap::spawn_foreground_pump(cx.to_async(), result_rx, move |(), cx| {
+        let actions = state.borrow().custom_provider_results.drain();
+        for action in actions {
+            dispatch_in_app(&state, action, cx);
+        }
+    });
 }
