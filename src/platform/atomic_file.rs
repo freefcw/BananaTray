@@ -1,11 +1,10 @@
 //! 私有配置与凭证文件的原子写入原语。
 
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-#[cfg(any(feature = "app", test))]
 use std::fs::OpenOptions;
-#[cfg(all(unix, any(feature = "app", test)))]
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
 /// 将私有内容写入目标文件，并通过同目录 `rename` 原子替换旧内容。
@@ -49,7 +48,6 @@ pub(crate) fn write_private_file_atomically(path: &Path, contents: &[u8]) -> io:
 ///
 /// 供需要自行编排多文件提交/回滚的调用方写入 sibling temp。调用方在成功后拥有该
 /// 临时文件，并负责 rename 或清理；本函数会清理由写入或同步失败产生的半成品。
-#[cfg(any(feature = "app", test))]
 pub(crate) fn write_private_file_exclusively(path: &Path, contents: &[u8]) -> io::Result<()> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
@@ -69,6 +67,21 @@ pub(crate) fn write_private_file_exclusively(path: &Path, contents: &[u8]) -> io
         let _ = std::fs::remove_file(path);
     }
     result
+}
+
+/// 在目标文件同目录生成带纳秒时间戳的隐藏临时文件路径。
+///
+/// 与独占创建（`create_new`）配合使用，避免并发写同一目标时互相覆盖临时文件。
+pub(crate) fn temp_sibling_path(path: &Path) -> PathBuf {
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("tmp");
+    path.with_file_name(format!(
+        ".{}.{}.tmp",
+        filename,
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ))
 }
 
 fn contextualize(operation: &str, path: &Path, error: io::Error) -> io::Error {

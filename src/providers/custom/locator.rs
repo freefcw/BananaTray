@@ -12,6 +12,8 @@ pub struct CustomProviderYaml {
 /// 遍历 providers 目录，按 YAML 内的 `id` 定位自定义 provider。
 ///
 /// 文件名不是身份的一部分；真正的身份来自 YAML `id` 字段。
+/// 纯读取语义：旧 schema 只做内存迁移，不写回磁盘（迁移落盘只发生在
+/// 启动加载路径 `loader::read_provider_def`）。
 #[cfg(any(feature = "app", test))]
 pub fn find_custom_provider_yaml_by_id(
     provider_custom_id: &str,
@@ -24,7 +26,10 @@ pub fn find_custom_provider_yaml_by_id(
             continue;
         }
 
-        let Ok(def) = super::loader::read_provider_def(&path) else {
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(def) = super::loader::parse_provider_def(&content) else {
             continue;
         };
         if def.id != provider_custom_id {
@@ -119,15 +124,58 @@ plan:
     }
 
     #[test]
-    fn find_custom_provider_yaml_by_id_migrates_legacy_newapi_yaml() {
+    fn find_custom_provider_yaml_by_id_parses_without_touching_disk() {
         let dir = tempfile::tempdir().unwrap();
-        let yaml_path = dir.path().join("newapi-anyrouter-top.yaml");
+        let yaml_path = dir.path().join("renamed-provider.yaml");
         std::fs::write(
             &yaml_path,
-            r#"id: "anyrouter-top:newapi"
-base_url: "https://anyrouter.top"
+            r#"id: "my-api:newapi"
+schema_version: 2
+base_url: "https://example.com"
 metadata:
-  display_name: "AnyRouter"
+  display_name: "Example"
+  brand_name: "NewAPI Relay"
+plan:
+  steps:
+    - name: "api"
+      source:
+        type: http
+        method: get
+        url: "/api/user/self"
+      parser:
+        format: json
+        quotas:
+          - label: "Balance"
+            remaining: "data.quota"
+"#,
+        )
+        .unwrap();
+
+        let before = std::fs::read_to_string(&yaml_path).unwrap();
+        let found = find_custom_provider_yaml_by_id("my-api:newapi", dir.path()).unwrap();
+        let after = std::fs::read_to_string(&yaml_path).unwrap();
+
+        assert_eq!(found.path, yaml_path);
+        assert_eq!(found.def.id, "my-api:newapi");
+        assert_eq!(before, after, "locate must not rewrite the YAML on disk");
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "locate must not leave backup or temp files"
+        );
+    }
+
+    /// 定位 legacy（v1 顶层键）YAML 时同样保持磁盘不变，仅在内存中升到 v2。
+    #[test]
+    fn find_custom_provider_yaml_by_id_keeps_legacy_yaml_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml_path = dir.path().join("legacy-newapi.yaml");
+        std::fs::write(
+            &yaml_path,
+            r#"id: "legacy-router:newapi"
+base_url: "https://legacy.example.com"
+metadata:
+  display_name: "Legacy"
   brand_name: "NewAPI Relay"
 availability:
   type: always
@@ -136,7 +184,7 @@ source:
   url: "/api/user/self"
   auth:
     type: cookie
-    value: "session=test-token"
+    value: "session=old-token"
 parser:
   format: json
   quotas:
@@ -146,11 +194,18 @@ parser:
         )
         .unwrap();
 
-        let found = find_custom_provider_yaml_by_id("anyrouter-top:newapi", dir.path()).unwrap();
-        assert_eq!(found.path, yaml_path);
+        let found = find_custom_provider_yaml_by_id("legacy-router:newapi", dir.path()).unwrap();
+
+        // 内存中已升到 v2，可正常回填编辑表单
         assert_eq!(found.def.schema_version, 2);
+        // 磁盘保持 legacy 原文：迁移写回只发生在启动加载路径
         assert!(std::fs::read_to_string(&yaml_path)
             .unwrap()
-            .contains("schema_version: 2"));
+            .contains("availability:"));
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "locate must not migrate on disk or leave .bak files"
+        );
     }
 }

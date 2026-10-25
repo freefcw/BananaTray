@@ -12,7 +12,7 @@ use crate::providers::custom::generator;
 use crate::providers::custom::lifecycle_error::{
     CustomProviderLifecycleError, CustomProviderLifecycleResult,
 };
-use crate::providers::custom::locator::{find_custom_provider_yaml_by_id, is_yaml_path};
+use crate::providers::custom::locator::find_custom_provider_yaml_by_id;
 use crate::providers::custom::schema::{CustomProviderDef, SourceDef};
 use std::path::{Path, PathBuf};
 
@@ -202,48 +202,38 @@ fn find_paths_in_dir(
     providers_dir: &Path,
     scripts_dir: &Path,
 ) -> CustomProviderLifecycleResult<(PathBuf, PathBuf)> {
-    let entries = std::fs::read_dir(providers_dir).map_err(|e| {
-        CustomProviderLifecycleError::file_operation(
+    // 复用 locator 的统一扫描入口（内存迁移、不落盘），使删除路径与编辑回填
+    // 路径对 legacy schema YAML 的解析语义保持一致。
+    let Some(yaml) = find_custom_provider_yaml_by_id(custom_id, providers_dir) else {
+        // 目录不可读时保留 file_operation 语义，而不是误报 yaml_not_found。
+        if let Err(e) = std::fs::read_dir(providers_dir) {
+            return Err(CustomProviderLifecycleError::file_operation(
+                "delete script provider",
+                format!(
+                    "failed to read providers dir {}: {}",
+                    providers_dir.display(),
+                    e
+                ),
+            ));
+        }
+        let fallback_yaml = yaml_filename_for_id(custom_id)
+            .map(|filename| crate::platform::paths::custom_provider_path(&filename));
+        return Err(CustomProviderLifecycleError::yaml_not_found(
             "delete script provider",
-            format!(
-                "failed to read providers dir {}: {}",
-                providers_dir.display(),
-                e
-            ),
+            custom_id,
+            fallback_yaml,
+        ));
+    };
+
+    let script_path = script_path_from_def(&yaml.def).ok_or_else(|| {
+        CustomProviderLifecycleError::invalid_script_provider(
+            "delete script provider",
+            custom_id,
+            "missing companion script path",
         )
     })?;
-    for entry in entries.flatten() {
-        let yaml_path = entry.path();
-        if !is_yaml_path(&yaml_path) {
-            continue;
-        }
-        let Ok(content) = std::fs::read_to_string(&yaml_path) else {
-            continue;
-        };
-        let Ok(def) = serde_norway::from_str::<CustomProviderDef>(&content) else {
-            continue;
-        };
-        if def.id != custom_id {
-            continue;
-        }
-        let script_path = script_path_from_def(&def).ok_or_else(|| {
-            CustomProviderLifecycleError::invalid_script_provider(
-                "delete script provider",
-                custom_id,
-                "missing companion script path",
-            )
-        })?;
-        let script_path = script_path_allowed_for_delete(script_path, scripts_dir)?;
-        return Ok((yaml_path, script_path));
-    }
-
-    let fallback_yaml = yaml_filename_for_id(custom_id)
-        .map(|filename| crate::platform::paths::custom_provider_path(&filename));
-    Err(CustomProviderLifecycleError::yaml_not_found(
-        "delete script provider",
-        custom_id,
-        fallback_yaml,
-    ))
+    let script_path = script_path_allowed_for_delete(script_path, scripts_dir)?;
+    Ok((yaml.path, script_path))
 }
 
 fn script_path_from_def(def: &CustomProviderDef) -> Option<PathBuf> {

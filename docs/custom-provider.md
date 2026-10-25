@@ -2,7 +2,7 @@
 
 BananaTray 支持通过 YAML 文件声明自定义 provider，无需编写 Rust 代码。
 
-当前稳定契约是 `schema_version: 2`，运行时只解释 `plan.steps`。旧版顶层 `source` / `parser` YAML 不再作为运行时兼容路径；加载或按 id 定位时会自动迁移并写回 `schema_version: 2`（同目录保留 `.bak`）。无法安全转换的文件仍会跳过。离线批量迁移仍可用 `scripts/migrate_custom_provider_yaml.py`。
+当前稳定契约是 `schema_version: 2`，运行时只解释 `plan.steps`。旧版顶层 `source` / `parser` YAML 不再作为运行时兼容路径；启动加载时会自动迁移并写回 `schema_version: 2`（同目录保留 `.bak`），而设置页按 id 定位时只在内存中迁移，不改写原文件。无法安全转换的文件仍会跳过。离线批量迁移仍可用 `scripts/migrate_custom_provider_yaml.py`。
 
 ## 先说结论
 
@@ -382,7 +382,7 @@ preprocess:
 
 ## 旧 YAML 迁移
 
-应用启动或 reload 自定义 provider 时，会自动把旧版顶层 `availability/source/parser/preprocess` 写成 `schema_version: 2`，并在同目录留下 `.bak`。设置页按 id 定位 NewAPI / 脚本 provider 时也会走同一条迁移路径。无法安全转换的文件不会改写，日志里会有 `providers::custom` warning。
+应用启动或 reload 自定义 provider 时，会自动把旧版顶层 `availability/source/parser/preprocess` 写成 `schema_version: 2`，并在同目录留下 `.bak`。设置页按 id 定位 NewAPI / 脚本 provider 时只在内存中迁移，不创建备份或临时文件。无法安全转换的文件不会改写，日志里会有 `providers::custom` warning。
 
 离线批量迁移（不启动应用）仍可用脚本：
 

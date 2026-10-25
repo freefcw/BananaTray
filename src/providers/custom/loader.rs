@@ -1,16 +1,12 @@
 use anyhow::Result;
 use log::{info, warn};
-use regex::Regex;
 
-use crate::models::ProviderKind;
 use std::path::{Path, PathBuf};
 
 use super::legacy_migrate::migrate_text;
 use super::provider::CustomProvider;
-use super::schema::{
-    AuthDef, CustomProviderDef, HeaderDef, HttpMethodDef, ParserDef, PlanStepDef, RegexQuotaRule,
-    SourceDef,
-};
+use super::schema::CustomProviderDef;
+use super::validate::validate;
 
 /// 自定义 Provider YAML 文件的搜索目录
 fn providers_dir() -> PathBuf {
@@ -89,6 +85,9 @@ fn load_one(path: &Path) -> Result<CustomProvider> {
 }
 
 /// 读取自定义 Provider YAML；旧 schema 会先自动迁移并尽量写回磁盘。
+///
+/// 仅限启动加载路径（`load_from_dir`）使用——迁移写回是加载时的显式行为；
+/// 定位/编辑回填等纯读取场景必须走 [`parse_provider_def`]，不得触碰磁盘。
 pub(super) fn read_provider_def(path: &Path) -> Result<CustomProviderDef> {
     let original = std::fs::read_to_string(path)?;
     let (def, migrated) = parse_with_optional_migration(&original)?;
@@ -109,6 +108,16 @@ pub(super) fn read_provider_def(path: &Path) -> Result<CustomProviderDef> {
         }
     }
     Ok(def)
+}
+
+/// 解析自定义 Provider YAML 内容（含旧 schema 的内存迁移），不产生任何磁盘写入。
+///
+/// 供 locator 等"查找/定位"语义的调用方使用：旧 schema 只在返回值中升到 v2，
+/// 磁盘上的迁移写回发生在下一次启动加载（`load_from_dir`）时。
+/// 门控与 locator 一致：纯 lib（--no-default-features）构建没有定位场景。
+#[cfg(any(feature = "app", test))]
+pub(super) fn parse_provider_def(content: &str) -> Result<CustomProviderDef> {
+    Ok(parse_with_optional_migration(content)?.0)
 }
 
 fn parse_with_optional_migration(content: &str) -> Result<(CustomProviderDef, Option<String>)> {
@@ -174,21 +183,13 @@ fn looks_like_legacy_schema(content: &str) -> bool {
 fn persist_migrated_yaml(path: &Path, migrated: &str) -> std::io::Result<PathBuf> {
     let backup = unique_backup_path(path);
     std::fs::copy(path, &backup)?;
+    // 继承原文件权限（用户可能自行收紧过）；但临时文件先以 0600 独占创建，
+    // 避免含 token 的迁移内容以默认权限（常见 0644）短暂对外可读。
     let permissions = path.metadata()?.permissions();
-    let tmp = {
-        let filename = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("provider.yaml");
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default();
-        path.with_file_name(format!(".{filename}.{stamp}.migrate.tmp"))
-    };
+    let tmp = crate::platform::atomic_file::temp_sibling_path(path);
     let write_result = (|| {
-        std::fs::write(&tmp, migrated)?;
-        std::fs::set_permissions(&tmp, permissions.clone())?;
+        crate::platform::atomic_file::write_private_file_exclusively(&tmp, migrated.as_bytes())?;
+        std::fs::set_permissions(&tmp, permissions)?;
         std::fs::rename(&tmp, path)
     })();
     if write_result.is_err() {
@@ -213,201 +214,6 @@ fn unique_backup_path(path: &Path) -> PathBuf {
     let mut stamped = path.as_os_str().to_os_string();
     stamped.push(format!(".bak.{stamp}"));
     PathBuf::from(stamped)
-}
-
-/// 校验定义的合法性，在加载时 fail-fast
-fn validate(def: &CustomProviderDef) -> Result<()> {
-    if def.schema_version != 2 {
-        anyhow::bail!("'schema_version' is {} but must be 2", def.schema_version);
-    }
-    if def.id.trim().is_empty() {
-        anyhow::bail!("'id' cannot be empty");
-    }
-    if ProviderKind::from_id_key(&def.id).is_some() {
-        anyhow::bail!(
-            "custom provider id '{}' is reserved by a built-in provider; choose a unique id",
-            def.id
-        );
-    }
-    if def.metadata.display_name.is_empty() {
-        anyhow::bail!("'metadata.display_name' cannot be empty");
-    }
-
-    if def.plan.steps.is_empty() {
-        anyhow::bail!("'plan.steps' must contain at least one step");
-    }
-    for step in &def.plan.steps {
-        validate_step(step)?;
-    }
-
-    Ok(())
-}
-
-fn validate_step(step: &PlanStepDef) -> Result<()> {
-    if step.name.trim().is_empty() {
-        anyhow::bail!("plan step name cannot be empty");
-    }
-    validate_source(&step.source)?;
-    if !matches!(step.source, SourceDef::Placeholder { .. }) && step.parser.is_none() {
-        anyhow::bail!(
-            "plan step '{}': 'parser' is required unless source.type is placeholder",
-            step.name
-        );
-    }
-    validate_parser(&step.parser)?;
-    Ok(())
-}
-
-fn validate_source(source: &SourceDef) -> Result<()> {
-    match source {
-        SourceDef::Cli { command, .. } => {
-            if command.is_empty() {
-                anyhow::bail!("'source.command' cannot be empty");
-            }
-        }
-        SourceDef::Http {
-            method,
-            url,
-            auth,
-            headers,
-            body,
-            ..
-        } => {
-            if url.is_empty() {
-                anyhow::bail!("'source.url' cannot be empty");
-            }
-            if *method == HttpMethodDef::Post && body.as_ref().is_none_or(|body| body.is_empty()) {
-                anyhow::bail!("'source.body' cannot be empty for HTTP POST");
-            }
-            validate_auth_header(auth)?;
-            validate_headers(headers)?;
-        }
-        SourceDef::Placeholder { reason } => {
-            if reason.is_empty() {
-                anyhow::bail!("'source.reason' cannot be empty for placeholder provider");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_auth_header(auth: &Option<AuthDef>) -> Result<()> {
-    if let Some(AuthDef::HeaderEnv { header, .. }) = auth {
-        validate_header_name(header, "source.auth.header")?;
-    }
-    Ok(())
-}
-
-fn validate_headers(headers: &[HeaderDef]) -> Result<()> {
-    for header in headers {
-        validate_header_name(&header.name, "source.headers[].name")?;
-        ureq::http::HeaderValue::try_from(header.value.as_str()).map_err(|err| {
-            anyhow::anyhow!("invalid header value for '{}': {}", header.name, err)
-        })?;
-    }
-    Ok(())
-}
-
-fn validate_header_name(name: &str, field: &str) -> Result<()> {
-    ureq::http::HeaderName::try_from(name)
-        .map(|_| ())
-        .map_err(|err| anyhow::anyhow!("invalid header name '{}' in {}: {}", name, field, err))
-}
-
-fn validate_parser(parser: &Option<ParserDef>) -> Result<()> {
-    let Some(parser) = parser else {
-        // parser 可以为 None（placeholder source）
-        return Ok(());
-    };
-    match parser {
-        ParserDef::Json { quotas, .. } => {
-            if quotas.is_empty() {
-                anyhow::bail!("'parser.quotas' must contain at least one rule");
-            }
-            for rule in quotas {
-                // 校验模式互斥：remaining 模式 vs 传统 used+limit 模式
-                let has_remaining = rule.remaining.as_ref().is_some_and(|s| !s.is_empty());
-                let has_limit = rule.limit.as_ref().is_some_and(|s| !s.is_empty());
-                let has_used = rule.used.as_ref().is_some_and(|s| !s.is_empty());
-
-                if has_remaining && has_limit {
-                    anyhow::bail!(
-                        "quota rule '{}': 'remaining' and 'limit' are mutually exclusive",
-                        rule.label
-                    );
-                }
-                if !has_remaining && !has_limit {
-                    anyhow::bail!(
-                        "quota rule '{}': must specify either 'remaining' or 'used'+'limit'",
-                        rule.label
-                    );
-                }
-                if has_limit && !has_used {
-                    anyhow::bail!(
-                        "quota rule '{}': 'used' is required when 'limit' is specified",
-                        rule.label
-                    );
-                }
-
-                validate_divisor(&rule.label, rule.divisor)?;
-            }
-        }
-        ParserDef::Regex { quotas, .. } => {
-            if quotas.is_empty() {
-                anyhow::bail!("'parser.quotas' must contain at least one rule");
-            }
-            for rule in quotas {
-                validate_regex_rule(rule)?;
-                validate_divisor(&rule.label, rule.divisor)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_regex_rule(rule: &RegexQuotaRule) -> Result<()> {
-    let re = Regex::new(&rule.pattern).map_err(|e| {
-        anyhow::anyhow!(
-            "quota rule '{}': invalid regex '{}': {}",
-            rule.label,
-            rule.pattern,
-            e
-        )
-    })?;
-
-    let capture_count = re.captures_len() - 1; // group 0 是整个匹配
-    if rule.used_group > capture_count {
-        anyhow::bail!(
-            "quota rule '{}': used_group {} exceeds capture groups ({})",
-            rule.label,
-            rule.used_group,
-            capture_count
-        );
-    }
-    if rule.limit_group > capture_count {
-        anyhow::bail!(
-            "quota rule '{}': limit_group {} exceeds capture groups ({})",
-            rule.label,
-            rule.limit_group,
-            capture_count
-        );
-    }
-
-    Ok(())
-}
-
-/// 校验 divisor 必须为正数
-fn validate_divisor(label: &str, divisor: Option<f64>) -> Result<()> {
-    if let Some(d) = divisor {
-        if d <= 0.0 {
-            anyhow::bail!(
-                "quota rule '{}': divisor must be positive, got {}",
-                label,
-                d
-            );
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -983,6 +789,50 @@ parser:
             PathBuf::from(backup)
         };
         assert_eq!(fs::read_to_string(backup).unwrap(), yaml);
+    }
+
+    /// 迁移写回必须继承原文件权限：用户把 YAML 收紧到 0600 后，
+    /// 落盘的 v2 文件不得回到默认权限（umask 下常见 0644）。
+    #[cfg(unix)]
+    #[test]
+    fn test_migration_write_preserves_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+id: "legacy-perms:cli"
+metadata:
+  display_name: "Legacy"
+  brand_name: "Legacy"
+availability:
+  type: cli_exists
+  value: "echo"
+source:
+  type: cli
+  command: "echo"
+parser:
+  format: regex
+  quotas:
+    - label: "Usage"
+      pattern: '(\d+)/(\d+)'
+"#;
+        let path = dir.path().join("legacy-perms.yaml");
+        fs::write(&path, yaml).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+
+        let providers = load_from_dir(dir.path());
+        assert_eq!(providers.len(), 1, "legacy YAML 应迁移并加载成功");
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "迁移写回不得放宽原文件权限");
+
+        // 目录内只应留下迁移后的 yaml 与 .bak 备份，无 .tmp 残留
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(entries.len(), 2, "unexpected files: {entries:?}");
+        assert!(entries.iter().all(|name| !name.contains(".tmp")));
     }
 
     #[test]

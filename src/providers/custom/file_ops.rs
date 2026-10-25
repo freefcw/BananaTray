@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::platform::atomic_file::write_private_file_exclusively;
+use crate::platform::atomic_file::{temp_sibling_path, write_private_file_exclusively};
 
 pub(super) fn write_newapi_yaml(path: &Path, yaml_content: &str) -> Result<PathBuf, String> {
     let providers_dir = path
@@ -160,18 +160,6 @@ fn write_script_provider_files_with_temps(
     }
 
     Ok(())
-}
-
-fn temp_sibling_path(path: &Path) -> PathBuf {
-    let filename = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("tmp");
-    path.with_file_name(format!(
-        ".{}.{}.tmp",
-        filename,
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
-    ))
 }
 
 pub(super) fn versioned_script_path(path: &Path) -> PathBuf {

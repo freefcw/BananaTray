@@ -25,6 +25,7 @@ pub(in crate::providers::custom) mod schema;
 #[cfg(feature = "app")]
 mod script_provider_lifecycle;
 mod url;
+mod validate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::providers::custom) enum CustomProviderOrigin {
