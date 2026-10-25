@@ -58,15 +58,16 @@ impl ClaudeCliProbe {
         map
     }
 
-    /// 解析 `claude /usage` 输出
-    fn parse_usage_output(raw: &str) -> ProviderResult<Vec<QuotaInfo>> {
+    /// 解析 `claude /usage` 输出。
+    ///
+    /// 本函数永不失败：无法识别的段落被静默丢弃，空结果的整体错误分类
+    /// 由调用方 `probe()` 统一处理。
+    fn parse_usage_output(raw: &str) -> Vec<QuotaInfo> {
         let clean = text_utils::strip_ansi(raw);
-        let quotas = Self::split_sections(&clean)
+        Self::split_sections(&clean)
             .iter()
             .filter_map(|section| Self::parse_usage_section(section))
-            .collect();
-
-        Ok(quotas)
+            .collect()
     }
 
     /// 解析单个 `claude /usage` 段落；无法识别或无法读取用量时返回 None。
@@ -230,7 +231,7 @@ impl UsageProbe for ClaudeCliProbe {
         debug!(target: "providers", "claude command completed, output length: {} bytes", result.output.len());
 
         // 解析配额
-        let quotas = Self::parse_usage_output(&result.output)?;
+        let quotas = Self::parse_usage_output(&result.output);
 
         if quotas.is_empty() {
             let output_lower = result.output.to_lowercase();
@@ -300,7 +301,7 @@ Resets in 2h 15m
 Current week
 30% left
 "#;
-        let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
+        let quotas = ClaudeCliProbe::parse_usage_output(output);
         assert_eq!(quotas.len(), 2);
 
         // Session
@@ -328,7 +329,7 @@ Current week (Opus)
 Current week (Sonnet)
 20% left
 "#;
-        let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
+        let quotas = ClaudeCliProbe::parse_usage_output(output);
         assert_eq!(quotas.len(), 2);
 
         assert_eq!(
@@ -360,7 +361,7 @@ Current week (Sonnet)
 Extra usage
 $5.00 / $20.00
 "#;
-        let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
+        let quotas = ClaudeCliProbe::parse_usage_output(output);
         assert_eq!(quotas.len(), 1);
 
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
@@ -375,7 +376,7 @@ $5.00 / $20.00
 Extra usage
 25% used
 "#;
-        let quotas = ClaudeCliProbe::parse_usage_output(output).unwrap();
+        let quotas = ClaudeCliProbe::parse_usage_output(output);
         assert_eq!(quotas.len(), 1);
 
         assert_eq!(quotas[0].label_spec, QuotaLabelSpec::ExtraUsage);
@@ -396,8 +397,8 @@ Extra usage
             let mut engine = crate::application::AlertEngine::new();
             let provider = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Claude);
 
-            let baseline = ClaudeCliProbe::parse_usage_output("Extra usage\n25% used\n").unwrap();
-            let current = ClaudeCliProbe::parse_usage_output(later).unwrap();
+            let baseline = ClaudeCliProbe::parse_usage_output("Extra usage\n25% used\n");
+            let current = ClaudeCliProbe::parse_usage_output(later);
             assert_eq!(current.len(), 1, "{later:?}");
 
             let q = &current[0];
@@ -443,7 +444,7 @@ Extra usage
 
     #[test]
     fn test_parse_credit_amount_at_limit_100_stays_currency() {
-        let quotas = ClaudeCliProbe::parse_usage_output("Extra usage\n$95.00 / $100.00\n").unwrap();
+        let quotas = ClaudeCliProbe::parse_usage_output("Extra usage\n$95.00 / $100.00\n");
         assert_eq!(quotas.len(), 1);
 
         let q = &quotas[0];

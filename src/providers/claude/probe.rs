@@ -1,22 +1,9 @@
 //! Claude Provider 探针抽象
 //!
-//! 定义了获取配额的统一接口和选择模式。
+//! 定义了获取配额的统一接口。
 
 use crate::models::QuotaInfo;
 use crate::providers::ProviderResult;
-
-/// 获取方式选择模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[allow(dead_code)]
-pub enum ProbeMode {
-    /// 自动选择：优先 API，失败回退 CLI
-    #[default]
-    Auto,
-    /// 强制使用 CLI
-    Cli,
-    /// 强制使用 API
-    Api,
-}
 
 /// Probe Trait：数据源选择的抽象。
 ///

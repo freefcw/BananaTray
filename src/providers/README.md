@@ -71,7 +71,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
 
 | File | Provider | Settings key | Descriptor ID | Capability | Data Source | Notes |
 |------|----------|--------------|---------------|------------|-------------|-------|
-| `claude/` | Claude | `claude` | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources; `credentials.rs` handles OAuth credential loading/refresh/save; `probe.rs` defines `UsageProbe` trait + `ProbeMode` |
+| `claude/` | Claude | `claude` | `claude` | `Monitorable` | HTTP API + CLI fallback | `mod.rs` orchestrates source selection; `api_probe.rs` / `cli_probe.rs` implement sources; `credentials.rs` handles OAuth credential loading/refresh/save; `probe.rs` defines the `UsageProbe` trait |
 | `gemini/` | Gemini | `gemini` | `gemini:api` | `Monitorable` | HTTP API | Split into `auth.rs`, `client.rs`, `parser.rs`, `mod.rs` |
 | `copilot/` | Copilot | `copilot` | `copilot:api` | `Monitorable` | GitHub API | Split into `token.rs`, `client.rs`, `parser.rs`; declares `SettingsCapability::TokenInput(TokenInputCapability)`, provides a custom multi-source token resolver, uses the shared Unicode-safe secret preview helper, and reads app-managed `github_token` from `ProviderExecutionContext` during refresh |
 | `cline_pass/` | ClinePass | `cline-pass` | `cline-pass:api` | `Monitorable` | Cline usage API | Reads BananaTray `cline_api_key`, `CLINE_API_KEY`, or Cline's `providers.json` in that order; local OAuth is read-only and never refreshed or written by BananaTray. Maps `five_hour`, `weekly`, and `monthly` limits to stable quota semantics. See `cline_pass/README.md` for paths and response contracts |
@@ -121,7 +121,7 @@ Concrete built-in provider modules, `common/`, `custom/`, and `codeium_family/` 
   - Share the fallback pattern conceptually, not via a forced common trait
 - `Claude` uses explicit source orchestration in `mod.rs`:
   - `check_availability(ctx)` accepts either API or CLI source
-  - `ProbeMode::Auto` prefers API and falls back to CLI
+  - `refresh(ctx)` follows a fixed Auto policy: API first, CLI fallback (see `refresh_auto`)
   - concrete source logic stays in `api_probe.rs` / `cli_probe.rs`
 - Codeium-family providers keep orchestration in the provider facade instead of in the shared module:
   - `codeium_family/live_source.rs` handles process discovery + local API transport

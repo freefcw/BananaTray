@@ -174,8 +174,7 @@ providers/my_provider/
 实现要点：
 - `mod.rs` 只负责：
   - `check_availability(ctx)` 的“任一 source 可用即可”
-  - `refresh(ctx)` 的 source 优先级
-  - `ProbeMode` / source policy
+  - `refresh(ctx)` 的 source 优先级（固定 Auto：API 优先、失败回退 CLI，见 `refresh_auto`）
 - 每个 source 文件只负责自己的取数与解析
 - 适合保留 trait，当且仅当 source 确实存在多个实现
 

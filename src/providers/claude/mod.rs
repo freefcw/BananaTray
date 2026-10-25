@@ -7,7 +7,7 @@ mod cli_probe;
 mod credentials;
 mod probe;
 
-pub use probe::{ProbeMode, UsageProbe};
+pub use probe::UsageProbe;
 
 use api_probe::ClaudeApiProbe;
 use async_trait::async_trait;
@@ -25,14 +25,11 @@ use crate::models::{
 
 /// Claude Provider
 ///
-/// 支持三种获取模式：
-/// - Auto: 优先 API，失败回退 CLI（默认）
-/// - Cli: 强制使用 CLI
-/// - Api: 强制使用 API
+/// 刷新策略固定为 Auto：优先 API，失败回退 CLI（见 `refresh_auto` 与
+/// `should_fallback_to_cli` 决策表）。
 pub struct ClaudeProvider {
     cli_probe: Box<dyn UsageProbe>,
     api_probe: Box<dyn UsageProbe>,
-    probe_mode: ProbeMode,
 }
 
 impl Default for ClaudeProvider {
@@ -43,36 +40,14 @@ impl Default for ClaudeProvider {
 
 impl ClaudeProvider {
     pub fn new() -> Self {
-        Self::with_probes(
-            Box::new(ClaudeCliProbe),
-            Box::new(ClaudeApiProbe),
-            ProbeMode::Auto,
-        )
+        Self::with_probes(Box::new(ClaudeCliProbe), Box::new(ClaudeApiProbe))
     }
 
-    fn with_probes(
-        cli_probe: Box<dyn UsageProbe>,
-        api_probe: Box<dyn UsageProbe>,
-        probe_mode: ProbeMode,
-    ) -> Self {
+    fn with_probes(cli_probe: Box<dyn UsageProbe>, api_probe: Box<dyn UsageProbe>) -> Self {
         Self {
             cli_probe,
             api_probe,
-            probe_mode,
         }
-    }
-
-    /// 读取账户邮箱（从 ~/.claude.json）
-    #[allow(dead_code)]
-    pub fn read_account_email() -> Option<String> {
-        let home = dirs::home_dir()?;
-        let path = home.join(".claude.json");
-        let content = std::fs::read_to_string(path).ok()?;
-        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-        json.get("oauthAccount")
-            .and_then(|a| a.get("emailAddress"))
-            .and_then(|e| e.as_str())
-            .map(|s| s.to_string())
     }
 
     fn both_unavailable_error() -> ProviderError {
@@ -81,41 +56,9 @@ impl ClaudeProvider {
         })
     }
 
-    fn ensure_cli_available(&self) -> ProviderResult<()> {
-        if self.cli_probe.is_available() {
-            Ok(())
-        } else {
-            Err(ProviderError::cli_not_found("claude"))
-        }
-    }
-
-    fn ensure_api_available(&self) -> ProviderResult<()> {
-        if self.api_probe.is_available() {
-            Ok(())
-        } else {
-            Err(ProviderError::auth_required(Some(
-                FailureAdvice::NoOauthCreds {
-                    cli: "claude".to_string(),
-                },
-            )))
-        }
-    }
-
     fn refresh_from_probe(probe: &dyn UsageProbe) -> ProviderResult<RefreshData> {
         let quotas = probe.probe()?;
         Ok(RefreshData::quotas_only(quotas))
-    }
-
-    fn refresh_via_cli(&self) -> ProviderResult<RefreshData> {
-        debug!("Claude: using CLI source");
-        self.ensure_cli_available()?;
-        Self::refresh_from_probe(self.cli_probe.as_ref())
-    }
-
-    fn refresh_via_api(&self) -> ProviderResult<RefreshData> {
-        debug!("Claude: using API source");
-        self.ensure_api_available()?;
-        Self::refresh_from_probe(self.api_probe.as_ref())
     }
 
     fn refresh_auto(&self) -> ProviderResult<RefreshData> {
@@ -171,17 +114,7 @@ impl AiProvider for ClaudeProvider {
     }
 
     async fn refresh(&self, _ctx: &ProviderExecutionContext<'_>) -> ProviderResult<RefreshData> {
-        match self.probe_mode {
-            ProbeMode::Cli => {
-                debug!("Claude: forcing CLI mode");
-                self.refresh_via_cli()
-            }
-            ProbeMode::Api => {
-                debug!("Claude: forcing API mode");
-                self.refresh_via_api()
-            }
-            ProbeMode::Auto => self.refresh_auto(),
-        }
+        self.refresh_auto()
     }
 }
 
@@ -215,12 +148,8 @@ mod tests {
         }
     }
 
-    fn provider(
-        cli_probe: StubProbe,
-        api_probe: StubProbe,
-        probe_mode: ProbeMode,
-    ) -> ClaudeProvider {
-        ClaudeProvider::with_probes(Box::new(cli_probe), Box::new(api_probe), probe_mode)
+    fn provider(cli_probe: StubProbe, api_probe: StubProbe) -> ClaudeProvider {
+        ClaudeProvider::with_probes(Box::new(cli_probe), Box::new(api_probe))
     }
 
     fn test_context<'a>(
@@ -242,7 +171,6 @@ mod tests {
                 available: true,
                 outcome: StubOutcome::Success { label: "api" },
             },
-            ProbeMode::Auto,
         );
 
         let data = provider.refresh_auto().unwrap();
@@ -264,7 +192,6 @@ mod tests {
                 available: true,
                 outcome: StubOutcome::Error(ProviderError::fetch_failed("api down")),
             },
-            ProbeMode::Auto,
         );
 
         let data = provider.refresh_auto().unwrap();
@@ -289,7 +216,6 @@ mod tests {
                     },
                 ))),
             },
-            ProbeMode::Auto,
         );
 
         let err = provider.refresh_auto().unwrap_err();
@@ -307,7 +233,6 @@ mod tests {
                 available: false,
                 outcome: StubOutcome::Success { label: "api" },
             },
-            ProbeMode::Auto,
         );
 
         let credentials = crate::models::ProviderSettings::default();
@@ -326,30 +251,11 @@ mod tests {
                 available: false,
                 outcome: StubOutcome::Success { label: "api" },
             },
-            ProbeMode::Auto,
         );
 
         let credentials = crate::models::ProviderSettings::default();
         let ctx = test_context(&credentials);
         let err = smol::block_on(provider.check_availability(&ctx)).unwrap_err();
         assert!(matches!(err, ProviderError::Unavailable { .. }));
-    }
-
-    #[test]
-    fn test_api_mode_requires_api_source() {
-        let provider = provider(
-            StubProbe {
-                available: true,
-                outcome: StubOutcome::Success { label: "cli" },
-            },
-            StubProbe {
-                available: false,
-                outcome: StubOutcome::Success { label: "api" },
-            },
-            ProbeMode::Api,
-        );
-
-        let err = provider.refresh_via_api().unwrap_err();
-        assert!(matches!(err, ProviderError::AuthRequired { .. }));
     }
 }
