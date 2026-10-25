@@ -20,6 +20,15 @@ SVG icon assets used by the GPUI UI layer.
 Provider icons are monochrome brand marks rendered through `currentColor`. Geometry is
 normalized in the asset instead of adding provider-specific scaling to UI code.
 
+### Brand mark sources
+
+`provider-*.svg` brand marks are adapted from [LobeHub Icons](https://github.com/lobehub/lobe-icons)
+(`@lobehub/icons-static-svg`, MIT) — monochrome `currentColor` variants of the
+official provider logos. Adaptation per file: drop `<title>`/style metadata, give every
+graphical element an explicit `fill="currentColor"`, and wrap the geometry in a
+`<g transform>` that scales the painted bounds to a `19`-unit longest edge centered at
+`(12, 12)`. `provider-custom.svg` and `provider-unknown.svg` are in-house designs.
+
 ### Structural rules
 
 - Root element: `width="24" height="24" viewBox="0 0 24 24" fill="none"`.
@@ -34,10 +43,9 @@ normalized in the asset instead of adding provider-specific scaling to UI code.
 
 ### Optical rules
 
-- Outline or mixed marks normally occupy `16`-`18` units on their longest edge.
-- Filled marks normally occupy `16`-`17` units because their optical weight is higher.
-- Wide brand marks may use `18`-`20` units of width when their natural aspect ratio
-  requires it.
+- Filled brand marks are normalized to a `19`-unit longest edge (see above); narrower
+  marks keep their natural aspect ratio.
+- Hand-drawn outline or mixed marks normally occupy `16`-`18` units on their longest edge.
 - Keep painted geometry at least about `2` units from the canvas edge and center the
   optical weight near `(12, 12)`. Brand asymmetry takes precedence over mechanical
   centering.
