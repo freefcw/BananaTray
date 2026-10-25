@@ -108,6 +108,7 @@ impl AppView {
                 vm.icon.clone(),
                 px(32.0),
                 theme.text.muted,
+                theme.bg.card_inner,
             ))
             .child(
                 div()

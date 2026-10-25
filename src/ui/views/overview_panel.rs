@@ -126,6 +126,7 @@ fn append_provider_identity<E: ParentElement>(
         item.icon.clone(),
         px(PopupLayout::OVERVIEW_ICON_SIZE),
         icon_color,
+        theme.bg.card_inner,
     ))
     .child(render_provider_name_cell(
         item, name_color, sub_label, theme,

@@ -122,7 +122,8 @@ crate::builtin_provider_manifest::builtin_provider_manifest!(define_provider_kin
 /// - `brand_name`: 母品牌/公司名称，用于品牌归属展示（如 "AWS", "GitHub"）；
 ///   若产品即品牌则与 `display_name` 相同（如 "Amp"）
 /// - `source_label`: 数据来源标识，用于 Debug/Settings 中展示数据获取方式（如 "kiro api"）
-/// - `icon_asset`: SVG 图标的相对路径
+/// - `icon_asset`: 图标资源标识——打包路径 `src/icons/*.svg`、本地 `.svg` 文件绝对路径，
+///   或单字符文本（自定义 Provider 回退到 display_name 首字母）
 /// - `dashboard_url`: 官方用量仪表盘 URL
 /// - `account_hint`: 账户类型提示文本（如 "GitHub account"）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

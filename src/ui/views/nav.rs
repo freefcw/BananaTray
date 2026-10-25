@@ -550,6 +550,12 @@ impl AppView {
         } else {
             (theme.text.muted, theme.text.muted)
         };
+        // 字母徽章的镂空色 = 图标所在背景：选中项是胶囊底色，未选中是面板底色
+        let icon_surface = if is_active {
+            theme.nav.pill_active_bg
+        } else {
+            theme.bg.panel
+        };
 
         let hover_bg = theme.bg.subtle;
         let pill_id = ElementId::Name(format!("nav-pill-{ix}").into());
@@ -563,6 +569,7 @@ impl AppView {
                     item.icon_path,
                     px(15.0),
                     icon_color,
+                    icon_surface,
                 ));
         if let Some(level) = item.alert_level {
             let dot_color = theme.status_badge_color(level);

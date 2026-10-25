@@ -60,6 +60,7 @@ impl Render for DragPreview {
                 self.icon.clone(),
                 px(18.0),
                 self.theme.text.primary,
+                self.theme.text.accent_soft,
             ))
             .child(
                 div()
@@ -88,6 +89,12 @@ fn render_sidebar_item_content(
         theme.text.primary
     } else {
         theme.text.muted
+    };
+    // 字母徽章镂空色 = 行背景：选中是 accent_soft，未选中是面板底色
+    let icon_surface = if is_selected {
+        theme.text.accent_soft
+    } else {
+        theme.bg.panel
     };
     let name_color = if is_selected {
         theme.text.primary
@@ -136,7 +143,12 @@ fn render_sidebar_item_content(
         .h(px(40.0))
         .w_full()
         .child(drag_handle)
-        .child(render_provider_icon(icon, px(20.0), icon_color))
+        .child(render_provider_icon(
+            icon,
+            px(20.0),
+            icon_color,
+            icon_surface,
+        ))
         .child(name_row)
         .child(enabled_dot)
 }
