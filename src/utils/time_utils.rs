@@ -57,8 +57,9 @@ pub fn format_countdown(delta_secs: i64) -> String {
         return t!("time.resets_soon").to_string();
     }
 
-    let days = delta_secs / 86400;
-    let hours = (delta_secs % 86400) / 3600;
+    const SECS_PER_DAY: i64 = 86_400;
+    let days = delta_secs / SECS_PER_DAY;
+    let hours = (delta_secs % SECS_PER_DAY) / 3600;
     let mins = (delta_secs % 3600) / 60;
 
     if days > 0 {
@@ -131,7 +132,8 @@ pub fn days_until_epoch(epoch_secs: i64, now_secs: i64) -> Option<u32> {
         return None;
     }
     let delta = (epoch_secs - now_secs) as u64;
-    Some(delta.div_ceil(86400).max(1) as u32)
+    const SECS_PER_DAY: u64 = 86_400;
+    Some(delta.div_ceil(SECS_PER_DAY).max(1) as u32)
 }
 
 /// Check if a token with the given expiry (epoch seconds as f64) has expired.

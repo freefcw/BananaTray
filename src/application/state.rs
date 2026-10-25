@@ -855,6 +855,18 @@ pub struct DebugUiState {
 // 纯逻辑助手函数
 // ============================================================================
 
+/// 距上次成功刷新多少秒内头部仍显示 Synced，超过则显示 Stale。
+const SYNCED_WITHIN_SECS: u64 = 60;
+
+/// 按距上次成功刷新的秒数划分头部状态。
+fn header_status_from_elapsed(elapsed_secs: u64) -> (HeaderStatusKind, Option<u64>) {
+    if elapsed_secs < SYNCED_WITHIN_SECS {
+        (HeaderStatusKind::Synced, Some(elapsed_secs))
+    } else {
+        (HeaderStatusKind::Stale, Some(elapsed_secs))
+    }
+}
+
 /// 头部状态徽章类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderStatusKind {
@@ -1002,12 +1014,7 @@ pub fn compute_header_status(
     }
 
     if let Some(instant) = provider.last_refreshed_instant {
-        let secs = instant.elapsed().as_secs();
-        if secs < 60 {
-            (HeaderStatusKind::Synced, Some(secs))
-        } else {
-            (HeaderStatusKind::Stale, Some(secs))
-        }
+        header_status_from_elapsed(instant.elapsed().as_secs())
     } else {
         match provider.connection {
             ConnectionStatus::Error | ConnectionStatus::Disconnected => {
@@ -1048,12 +1055,7 @@ fn compute_overview_header_status(
     }
 
     if let Some(instant) = latest_success {
-        let secs = instant.elapsed().as_secs();
-        return if secs < 60 {
-            (HeaderStatusKind::Synced, Some(secs))
-        } else {
-            (HeaderStatusKind::Stale, Some(secs))
-        };
+        return header_status_from_elapsed(instant.elapsed().as_secs());
     }
 
     if has_connected_provider {

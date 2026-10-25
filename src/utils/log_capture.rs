@@ -19,17 +19,6 @@ pub struct LogEntry {
     pub message: String,
 }
 
-impl LogEntry {
-    /// 格式化为单行文本（用于 Copy Logs）
-    #[allow(dead_code)]
-    pub fn format_line(&self) -> String {
-        format!(
-            "{} [{}] {} {}",
-            self.timestamp, self.level, self.target, self.message
-        )
-    }
-}
-
 /// Ring buffer 容量
 const MAX_ENTRIES: usize = 500;
 
@@ -111,16 +100,6 @@ impl LogCapture {
             .lock()
             .map(|buf| buf.iter().cloned().collect())
             .unwrap_or_default()
-    }
-
-    /// 将所有条目格式化为纯文本（用于 Copy Logs）
-    #[allow(dead_code)]
-    pub fn format_all(&self) -> String {
-        self.entries()
-            .iter()
-            .map(|e| e.format_line())
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 }
 
@@ -216,19 +195,6 @@ mod tests {
         assert_eq!(cap.entries().len(), 1);
         cap.clear();
         assert!(cap.entries().is_empty());
-    }
-
-    #[test]
-    fn format_all_produces_text() {
-        let cap = make_capture();
-        cap.enable();
-        cap.try_push(log::Level::Info, "refresh", "started");
-        cap.try_push(log::Level::Debug, "providers", "checking");
-        let text = cap.format_all();
-        assert!(text.contains("refresh"));
-        assert!(text.contains("providers"));
-        assert!(text.contains("started"));
-        assert!(text.contains("checking"));
     }
 
     #[test]

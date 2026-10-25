@@ -25,8 +25,7 @@ use crate::models::{
 
 /// Claude Provider
 ///
-/// 刷新策略固定为 Auto：优先 API，失败回退 CLI（见 `refresh_auto` 与
-/// `should_fallback_to_cli` 决策表）。
+/// 刷新策略固定为 Auto：优先 API，失败回退 CLI（见 `refresh_auto`）。
 pub struct ClaudeProvider {
     cli_probe: Box<dyn UsageProbe>,
     api_probe: Box<dyn UsageProbe>,

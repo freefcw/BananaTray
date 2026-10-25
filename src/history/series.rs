@@ -15,7 +15,7 @@ pub enum HistoryRange {
 impl HistoryRange {
     pub fn window(self, now_ms: i64) -> (i64, i64) {
         let width = match self {
-            Self::Last24Hours => 24 * 60 * 60 * 1000,
+            Self::Last24Hours => super::DAY_MS,
             Self::Last7Days => 7 * super::DAY_MS,
             Self::Last30Days => 30 * super::DAY_MS,
             Self::CurrentPeriod => 31 * super::DAY_MS,

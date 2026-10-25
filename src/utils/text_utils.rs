@@ -30,7 +30,6 @@ pub fn strip_ansi(text: &str) -> String {
 ///
 /// Use this when processing raw PTY output that may contain spinners and
 /// cursor manipulation in addition to standard color/style codes.
-#[allow(dead_code)]
 pub fn strip_terminal_noise(text: &str) -> String {
     TERMINAL_NOISE_RE.replace_all(text, "").to_string()
 }

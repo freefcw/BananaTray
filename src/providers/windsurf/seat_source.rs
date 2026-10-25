@@ -124,9 +124,8 @@ fn parse_seat_response(seat_response: SeatResponse) -> Result<RefreshData> {
             plan_status.weekly_quota_reset_at_unix,
         ));
     } else if let Some(quota) = codeium_family::infer_exhausted_weekly_quota(
-        plan_status
-            .weekly_quota_remaining_percent
-            .map(|percent| percent as f64),
+        // 进入本分支说明 weekly 百分比必为 None（Some 分支已被上方接管）
+        None,
         parse_reset_at_unix(plan_status.weekly_quota_reset_at_unix.as_deref()),
         chrono::Utc::now().timestamp(),
     ) {

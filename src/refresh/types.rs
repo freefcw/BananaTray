@@ -29,8 +29,7 @@ pub enum RefreshRequest {
     },
     /// 热重载自定义 Provider（重建 ProviderManager 快照）
     ReloadProviders,
-    /// 预留给未来显式关闭协调器的退出路径；当前由 channel 关闭兜底。
-    #[allow(dead_code)]
+    /// 显式关闭协调器；`shutdown_before` 优先走此路径，channel 全部关闭时再兜底退出。
     Shutdown,
 }
 

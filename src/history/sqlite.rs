@@ -128,19 +128,42 @@ fn sqlite_err(err: rusqlite::Error) -> HistoryError {
     HistoryError::new(err.to_string())
 }
 
+// load_rows 按列名读取（rusqlite RowIndex 支持 &str）：SQL 调整列序/重命名时
+// 这里要么读对、要么报 InvalidColumnName，不会再把同类型的列
+// （error_kind / failure_reason / refresh_reason 均为 Option<String>）静默互换。
+const COL_SAMPLE_ID: &str = "id";
+const COL_CAPTURED_AT_MS: &str = "captured_at_ms";
+const COL_PROVIDER_ID: &str = "provider_id";
+const COL_STATUS: &str = "status";
+const COL_ERROR_KIND: &str = "error_kind";
+const COL_FAILURE_REASON: &str = "failure_reason";
+const COL_FAILURE_REASON_PAYLOAD: &str = "failure_reason_payload";
+const COL_FAILURE_ADVICE: &str = "failure_advice";
+const COL_DETAIL: &str = "detail";
+const COL_REFRESH_REASON: &str = "refresh_reason";
+const COL_QUOTA_KEY: &str = "quota_key";
+const COL_QUOTA_TYPE: &str = "quota_type";
+const COL_LABEL_SPEC_JSON: &str = "label_spec_json";
+const COL_VALUE_KIND: &str = "value_kind";
+const COL_UNIT: &str = "unit";
+const COL_USED: &str = "used";
+const COL_REMAINING: &str = "remaining";
+const COL_LIMIT_VALUE: &str = "limit_value";
+const COL_RESET_AT_SECS: &str = "reset_at_secs";
+
 fn history_point(row: &rusqlite::Row<'_>, quota_key: String) -> HistoryPointRow {
-    let value_kind: String = row.get(13).unwrap_or_default();
-    let unit: Option<String> = row.get(14).ok().flatten();
+    let value_kind: String = row.get(COL_VALUE_KIND).unwrap_or_default();
+    let unit: Option<String> = row.get(COL_UNIT).ok().flatten();
     HistoryPointRow {
         quota_key,
-        quota_type: row.get(11).unwrap_or_default(),
-        label_spec_json: row.get(12).unwrap_or_default(),
+        quota_type: row.get(COL_QUOTA_TYPE).unwrap_or_default(),
+        label_spec_json: row.get(COL_LABEL_SPEC_JSON).unwrap_or_default(),
         value_kind: HistoryValueKind::parse(&value_kind).unwrap_or(HistoryValueKind::NonNumeric),
         unit: unit.as_deref().and_then(HistoryUnit::parse),
-        used: row.get(15).ok().flatten(),
-        remaining: row.get(16).ok().flatten(),
-        limit_value: row.get(17).ok().flatten(),
-        reset_at_secs: row.get(18).ok().flatten(),
+        used: row.get(COL_USED).ok().flatten(),
+        remaining: row.get(COL_REMAINING).ok().flatten(),
+        limit_value: row.get(COL_LIMIT_VALUE).ok().flatten(),
+        reset_at_secs: row.get(COL_RESET_AT_SECS).ok().flatten(),
     }
 }
 
@@ -267,9 +290,9 @@ impl QuotaHistoryReader for SqliteQuotaHistoryStore {
             .map_err(sqlite_err)?;
         let mut grouped: Vec<HistoryRow> = Vec::new();
         while let Some(row) = rows.next().map_err(sqlite_err)? {
-            let sample_id: i64 = row.get(0).map_err(sqlite_err)?;
+            let sample_id: i64 = row.get(COL_SAMPLE_ID).map_err(sqlite_err)?;
             let point = row
-                .get::<_, Option<String>>(10)
+                .get::<_, Option<String>>(COL_QUOTA_KEY)
                 .map_err(sqlite_err)?
                 .map(|quota_key| history_point(row, quota_key));
             if grouped
@@ -281,19 +304,20 @@ impl QuotaHistoryReader for SqliteQuotaHistoryStore {
                 }
                 continue;
             }
-            let status = HistoryStatus::parse(&row.get::<_, String>(3).map_err(sqlite_err)?)
-                .ok_or_else(|| HistoryError::new("unknown history status"))?;
+            let status =
+                HistoryStatus::parse(&row.get::<_, String>(COL_STATUS).map_err(sqlite_err)?)
+                    .ok_or_else(|| HistoryError::new("unknown history status"))?;
             grouped.push(HistoryRow {
                 sample_id,
-                captured_at_ms: row.get(1).map_err(sqlite_err)?,
-                provider_id: row.get(2).map_err(sqlite_err)?,
+                captured_at_ms: row.get(COL_CAPTURED_AT_MS).map_err(sqlite_err)?,
+                provider_id: row.get(COL_PROVIDER_ID).map_err(sqlite_err)?,
                 status,
-                error_kind: row.get(4).map_err(sqlite_err)?,
-                failure_reason: row.get(5).map_err(sqlite_err)?,
-                failure_reason_payload: row.get(6).map_err(sqlite_err)?,
-                failure_advice_json: row.get(7).map_err(sqlite_err)?,
-                detail: row.get(8).map_err(sqlite_err)?,
-                refresh_reason: row.get(9).map_err(sqlite_err)?,
+                error_kind: row.get(COL_ERROR_KIND).map_err(sqlite_err)?,
+                failure_reason: row.get(COL_FAILURE_REASON).map_err(sqlite_err)?,
+                failure_reason_payload: row.get(COL_FAILURE_REASON_PAYLOAD).map_err(sqlite_err)?,
+                failure_advice_json: row.get(COL_FAILURE_ADVICE).map_err(sqlite_err)?,
+                detail: row.get(COL_DETAIL).map_err(sqlite_err)?,
+                refresh_reason: row.get(COL_REFRESH_REASON).map_err(sqlite_err)?,
                 points: point.into_iter().collect(),
             });
         }
