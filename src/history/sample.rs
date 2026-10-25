@@ -84,6 +84,18 @@ impl HistoryUnit {
     }
 }
 
+impl From<crate::models::QuotaThresholdUnit> for HistoryUnit {
+    /// 领域计量单位 → 历史落库单位的 1:1 桥接（字符串值与持久化格式一致）。
+    /// 单位选择规则本身见 `QuotaType::native_measurement_unit` 单一出处。
+    fn from(unit: crate::models::QuotaThresholdUnit) -> Self {
+        match unit {
+            crate::models::QuotaThresholdUnit::Percentage => Self::Percentage,
+            crate::models::QuotaThresholdUnit::Currency => Self::Currency,
+            crate::models::QuotaThresholdUnit::Amount => Self::Amount,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuotaHistoryPoint {
     pub quota_key: String,
@@ -207,11 +219,13 @@ fn point_from_quota(quota: &QuotaInfo) -> QuotaHistoryPoint {
     if quota.is_balance_only() {
         if let Some(remaining) = quota.remaining_balance.filter(|value| value.is_finite()) {
             point.value_kind = HistoryValueKind::Balance;
-            point.unit = Some(if quota.quota_type == QuotaType::Credit {
-                HistoryUnit::Currency
-            } else {
-                HistoryUnit::Amount
-            });
+            point.unit = Some(
+                quota
+                    .quota_type
+                    .native_measurement_unit()
+                    .map(HistoryUnit::from)
+                    .unwrap_or(HistoryUnit::Amount),
+            );
             point.remaining = Some(remaining);
             return point;
         }
@@ -225,10 +239,12 @@ fn point_from_quota(quota: &QuotaInfo) -> QuotaHistoryPoint {
             && quota.quota_type != QuotaType::Points;
         point.unit = Some(if percentage {
             HistoryUnit::Percentage
-        } else if quota.quota_type == QuotaType::Credit {
-            HistoryUnit::Currency
         } else {
-            HistoryUnit::Amount
+            quota
+                .quota_type
+                .native_measurement_unit()
+                .map(HistoryUnit::from)
+                .unwrap_or(HistoryUnit::Amount)
         });
         return point;
     }

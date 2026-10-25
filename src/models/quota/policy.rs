@@ -31,6 +31,22 @@ impl QuotaThresholdUnit {
     }
 }
 
+impl super::QuotaType {
+    /// 原生计量单位：Credit → Currency，Points → Amount；其余类型没有原生单位
+    /// （阈值侧按剩余百分比判定，历史采样侧按原始数值记录）。
+    ///
+    /// `QuotaInfo::threshold_measurement` 与 `history` 的 `point_from_quota` 共用
+    /// 该映射，是"配额类型 → 计量单位"的单一出处；新增需要货币/积分语义的
+    /// `QuotaType` 变体只需在此登记，两侧行为自动保持一致。
+    pub fn native_measurement_unit(&self) -> Option<QuotaThresholdUnit> {
+        match self {
+            Self::Credit => Some(QuotaThresholdUnit::Currency),
+            Self::Points => Some(QuotaThresholdUnit::Amount),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct QuotaThresholds {
     pub warning: f64,

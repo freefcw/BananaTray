@@ -295,7 +295,6 @@ impl QuotaInfo {
     /// 注意：调用方在使用此判定前应先排除 `QuotaType::Credit` / `QuotaType::Points`，
     /// 这两类有专属显示分支（货币 / 积分绝对值），不应当作百分比展示——即使它们的
     /// `limit` 恰好等于 100。
-    #[allow(dead_code)]
     pub fn is_percentage_mode(&self) -> bool {
         (self.limit - PERCENT_SCALE).abs() < 1e-9
     }
@@ -315,10 +314,10 @@ impl QuotaInfo {
             if !balance.is_finite() {
                 return None;
             }
-            let unit = match self.quota_type {
-                QuotaType::Credit => QuotaThresholdUnit::Currency,
-                _ => QuotaThresholdUnit::Amount,
-            };
+            let unit = self
+                .quota_type
+                .native_measurement_unit()
+                .unwrap_or(QuotaThresholdUnit::Amount);
             return Some(QuotaMeasurement {
                 unit,
                 remaining: balance,
@@ -329,24 +328,24 @@ impl QuotaInfo {
         if !self.limit.is_finite() || !self.used.is_finite() || self.limit <= 0.0 {
             return None;
         }
-        // 有总额配额：Credit / Points 用原生剩余值，其余按剩余百分比
-        match self.quota_type {
-            QuotaType::Credit => Some(QuotaMeasurement {
-                unit: QuotaThresholdUnit::Currency,
-                remaining: self.limit - self.used,
-                comparison_scale: self.limit.abs().max(self.used.abs()),
-            }),
-            QuotaType::Points => Some(QuotaMeasurement {
-                unit: QuotaThresholdUnit::Amount,
-                remaining: self.limit - self.used,
-                comparison_scale: self.limit.abs().max(self.used.abs()),
-            }),
-            _ => Some(QuotaMeasurement {
-                unit: QuotaThresholdUnit::Percentage,
-                remaining: self.percent_remaining(),
-                comparison_scale: (self.used.abs() / self.limit).max(1.0) * PERCENT_SCALE,
-            }),
-        }
+        // 有总额配额：Credit / Points 用原生单位与原生剩余值，其余按剩余百分比
+        let (unit, remaining, comparison_scale) = match self.quota_type.native_measurement_unit() {
+            Some(unit) => (
+                unit,
+                self.limit - self.used,
+                self.limit.abs().max(self.used.abs()),
+            ),
+            None => (
+                QuotaThresholdUnit::Percentage,
+                self.percent_remaining(),
+                (self.used.abs() / self.limit).max(1.0) * PERCENT_SCALE,
+            ),
+        };
+        Some(QuotaMeasurement {
+            unit,
+            remaining,
+            comparison_scale,
+        })
     }
 
     /// 状态等级：Green / Yellow / Red
