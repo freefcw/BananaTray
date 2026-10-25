@@ -233,6 +233,8 @@ metadata:
         assert_eq!(desc.metadata.icon_asset, "M");
     }
 
+    // 打包资源存在性检查依赖 app feature 的 AssetSource；lib-only 构建保留 src/ 路径语义
+    #[cfg(feature = "app")]
     #[test]
     fn test_missing_packaged_svg_falls_back_to_first_letter() {
         let yaml = format!(
