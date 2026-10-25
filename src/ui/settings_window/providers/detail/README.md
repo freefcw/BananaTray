@@ -9,7 +9,9 @@
 - `info.rs` renders status/source/update/service-state as a compact single-row 4-column status strip separated by subtle vertical dividers (label above value, long values end with an ellipsis, a status-colored dot before the service state).
 - `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
 - `history.rs` renders the quota history card (range/interval toolbar, stacked single-unit or merged multi-series step charts with colored dot legends, and a footer combining notes with the clear-history ghost button).
-- `quota_visibility.rs` renders per-quota tray visibility toggles in a unified card container.
+- `quota_visibility.rs` renders per-quota tray visibility toggles plus the overview
+  primary-quota star (≥2 visible quotas only; toggling dispatches
+  `SettingChange::TogglePrimaryQuota`) in a unified card container.
 - `settings_section.rs` renders provider settings capability branches, the per-provider
   usage-step （用量提醒） card, and the quota-thresholds （额度状态与提醒阈值） card.
   When neither `can_refresh` nor `show_quota_thresholds` is active and `settings_capability == None`,

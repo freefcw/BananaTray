@@ -740,6 +740,73 @@ fn overview_picks_worst_quota_and_sorts_descending() {
     }
 }
 
+/// 用户指定的主额度排最前（折叠态展示它），总体最差等级不变
+#[test]
+fn overview_primary_quota_comes_first() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0), // 90% remaining → Green
+        QuotaInfo::new("weekly", 95.0, 100.0),  // 5% remaining → Red
+    ];
+
+    let mut session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    session
+        .settings
+        .provider
+        .toggle_primary_quota(&pid(ProviderKind::Claude), "session".to_string());
+
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota {
+            status_level,
+            quotas,
+            ..
+        } => {
+            // 总体最差仍是 Red（状态点语义不变）
+            assert_eq!(*status_level, crate::models::StatusLevel::Red);
+            // 主额度排最前，折叠态展示它
+            assert_eq!(quotas[0].quota_key, "session");
+            assert_eq!(quotas[0].status_level, crate::models::StatusLevel::Green);
+            assert_eq!(quotas[1].quota_key, "weekly");
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+/// 主额度被隐藏后回退到最差配额优先
+#[test]
+fn overview_hidden_primary_falls_back_to_worst() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::new("session", 10.0, 100.0), // Green
+        QuotaInfo::new("weekly", 95.0, 100.0),  // Red
+    ];
+
+    let mut session = make_overview_session(vec![provider], &[ProviderKind::Claude]);
+    let id = pid(ProviderKind::Claude);
+    session
+        .settings
+        .provider
+        .toggle_primary_quota(&id, "session".to_string());
+    session
+        .settings
+        .provider
+        .toggle_quota_visibility(&id, "session".to_string());
+
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { quotas, .. } => {
+            assert_eq!(quotas.len(), 1);
+            assert_eq!(quotas[0].quota_key, "weekly");
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
 /// 展开状态来自 session 记忆，弹窗重建后仍然是展开态
 #[test]
 fn overview_reports_remembered_expansion() {

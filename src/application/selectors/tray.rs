@@ -375,6 +375,7 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                         .map(|q| {
                             let sl = q.status_level(&rules);
                             OverviewQuotaItem {
+                                quota_key: q.stable_key.clone(),
                                 label: format_quota_label(q),
                                 display_text: compact_quota_display_text(q, display_mode),
                                 bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
@@ -385,6 +386,20 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                         .collect();
                     quota_items.sort_by_key(|item| std::cmp::Reverse(item.status_level));
                     let worst = quota_items[0].status_level;
+                    // 用户指定的主额度挪到最前：折叠态展示它而非最差配额。
+                    if let Some(primary_key) = session
+                        .settings
+                        .provider
+                        .primary_quota_key(&provider.provider_id)
+                    {
+                        if let Some(pos) = quota_items
+                            .iter()
+                            .position(|item| item.quota_key == primary_key)
+                        {
+                            let item = quota_items.remove(pos);
+                            quota_items.insert(0, item);
+                        }
+                    }
                     OverviewItemStatus::Quota {
                         status_level: worst,
                         quotas: quota_items,

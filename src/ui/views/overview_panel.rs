@@ -435,13 +435,13 @@ impl AppView {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = cx.global::<Theme>().clone();
-        let color = theme.status_badge_color(overall_level);
+        let dot_color = theme.status_badge_color(overall_level);
         let fill = theme.status_bar_color(quota.status_level);
         let sub_label = expandable.then_some(quota.label.as_str());
 
         let mut row = build_single_line_card_row(
             item,
-            color,
+            dot_color,
             theme.text.secondary,
             theme.text.primary,
             sub_label,
@@ -454,7 +454,11 @@ impl AppView {
             fill,
             &theme,
         ))
-        .child(render_badge(overall_level, color));
+        // 徽章跟随所展示配额：设了主额度时行内数值是它，badge 也应是它而非最差等级。
+        .child(render_badge(
+            quota.status_level,
+            theme.status_badge_color(quota.status_level),
+        ));
 
         // 展开列（固定 24×24 尺寸，保证所有单行卡片宽度与 42px 总高度完全一致）
         if expandable {

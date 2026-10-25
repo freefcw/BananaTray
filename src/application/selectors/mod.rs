@@ -164,9 +164,9 @@ pub struct OverviewItemViewState {
 pub enum OverviewItemStatus {
     /// 有有效配额数据（所有展示值已由 selector 预计算）
     Quota {
-        /// 总体最差状态等级（用于状态点和徽章颜色）
+        /// 总体最差状态等级（用于状态点颜色）
         status_level: StatusLevel,
-        /// 所有可见配额（按 status_level 降序，最差的在前）
+        /// 所有可见配额（主额度在前，其余按 status_level 降序，最差的在前）
         quotas: Vec<OverviewQuotaItem>,
         /// 是否展开显示全部配额（进程内记忆；单配额时无意义）
         expanded: bool,
@@ -182,6 +182,8 @@ pub enum OverviewItemStatus {
 /// Overview 中单个配额的预计算展示数据
 #[derive(Debug, Clone)]
 pub struct OverviewQuotaItem {
+    /// 语言无关的稳定标识符（`QuotaInfo::stable_key`），用于匹配主额度设置
+    pub quota_key: String,
     /// 配额名称（如 "Session"、"Weekly"）
     pub label: String,
     /// 预计算的显示文本（如 "70%"、"$15.00"）

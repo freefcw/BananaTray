@@ -284,6 +284,8 @@ provider.settings.auto_title: "This provider is automatically configured"
 provider.settings.auto_desc: "No additional settings required"
 provider.not_found: "Provider not found"
 provider.quota_visibility.empty: "No quota items yet. They appear here after a successful refresh."
+provider.quota_visibility.set_primary: "Pin to collapsed overview"
+provider.quota_visibility.unset_primary: "Unpin from collapsed overview"
 provider.quota_usage.title: "Usage reminders"
 provider.quota_usage.desc: "Override the usage-reminder step for this provider."
 
