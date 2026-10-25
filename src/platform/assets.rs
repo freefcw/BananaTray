@@ -79,6 +79,11 @@ impl Assets {
         log::info!(target: "assets", "using dev resources: {}", path.display());
         path
     }
+
+    /// 判断给定资源路径是否能从当前运行时资源根读取。
+    pub(crate) fn contains_file(path: &str) -> bool {
+        Self::new().base.join(path).is_file()
+    }
 }
 
 impl AssetSource for Assets {

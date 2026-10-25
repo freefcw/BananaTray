@@ -160,7 +160,8 @@ metadata:
   icon: "M"                  # 可选；留空时会回退到 display_name 首字母（大写）
                              # 也可以是单字符/emoji 文本，或本地 SVG 文件路径：
                              # 绝对路径、~ 开头、相对 providers 目录的文件名，
-                             # 或打包资源 src/icons/*.svg（24x24、currentColor 单色）
+                             # 或打包资源 src/icons/*.svg（24x24、currentColor 单色）；
+                             # 可解析的本地路径不存在时回退首字母
   dashboard_url: "/usage"    # 可选
   account_hint: "account"    # 可选
   source_label: "api"        # 可选

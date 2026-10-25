@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::path::Path;
 
 use crate::models::{ProviderDescriptor, ProviderKind, ProviderMetadata};
 
@@ -11,6 +12,7 @@ pub(super) fn descriptor(def: &CustomProviderDef) -> ProviderDescriptor {
         first_letter_icon(&def.metadata.display_name)
     } else {
         resolve_icon_asset(&def.metadata.icon)
+            .filter(|resolved| icon_asset_loadable(resolved))
             .unwrap_or_else(|| first_letter_icon(&def.metadata.display_name))
     };
     ProviderDescriptor {
@@ -39,11 +41,34 @@ fn first_letter_icon(display_name: &str) -> String {
         .unwrap_or_else(|| "?".to_string())
 }
 
+/// `src/` 路径按当前 AssetSource 资源根检查；其余 `.svg` 视为本地文件。
+/// 目标不存在、不可读或不是普通文件时返回 false，让调用方回退首字母徽章，
+/// 避免图标位留白。
+fn icon_asset_loadable(icon_asset: &str) -> bool {
+    if !icon_asset.ends_with(".svg") {
+        return true;
+    }
+
+    if icon_asset.starts_with("src/") {
+        #[cfg(feature = "app")]
+        {
+            return crate::platform::assets::Assets::contains_file(icon_asset);
+        }
+        #[cfg(not(feature = "app"))]
+        {
+            // lib-only 构建不包含 GPUI AssetSource，只能保留资源路径语义。
+            return true;
+        }
+    }
+
+    Path::new(icon_asset).is_file()
+}
+
 /// 解析 metadata.icon 的 SVG 路径语义；非 .svg 值原样保留（字母/emoji 文本模式）。
 ///
 /// - `src/…​.svg`：打包资源路径，原样保留
 /// - `/abs/…​.svg`：绝对路径，原样保留
-/// - `~/…​.svg`：展开 HOME
+/// - `~/…​.svg`：展开为 home 目录（与 `expand_tilde` 同源的 `dirs::home_dir`）
 /// - 其他相对 `.svg`：相对 custom providers 目录解析为绝对路径
 ///
 /// AssetSource 用 `fs::read(base.join(path))` 加载——绝对路径下 join 直接替换 base，
@@ -57,8 +82,8 @@ fn resolve_icon_asset(icon: &str) -> Option<String> {
     if icon.starts_with('~') {
         return icon
             .strip_prefix("~/")
-            .zip(std::env::var("HOME").ok())
-            .map(|(rest, home)| format!("{home}/{rest}"));
+            .zip(dirs::home_dir())
+            .map(|(rest, home)| home.join(rest).to_string_lossy().into_owned());
     }
     Some(
         crate::platform::paths::custom_providers_dir()
@@ -187,6 +212,94 @@ metadata:
     fn test_resolve_icon_asset_bare_tilde_falls_back() {
         // "~icon.svg" 不是合法的 ~ 展开形式，应返回 None 由调用方回退首字母
         assert_eq!(resolve_icon_asset("~icon.svg"), None);
+    }
+
+    #[test]
+    fn test_missing_local_svg_falls_back_to_first_letter() {
+        let yaml = format!(
+            r#"
+schema_version: 2
+id: "test:cli"
+metadata:
+  display_name: "My Provider"
+  brand_name: "Test"
+  icon: "definitely-missing-icon-xyz.svg"
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
+        let desc = descriptor(&def);
+        assert_eq!(desc.metadata.icon_asset, "M");
+    }
+
+    #[test]
+    fn test_missing_packaged_svg_falls_back_to_first_letter() {
+        let yaml = format!(
+            r#"
+schema_version: 2
+id: "test:cli"
+metadata:
+  display_name: "My Provider"
+  brand_name: "Test"
+  icon: "src/icons/definitely-missing-icon-xyz.svg"
+{}
+"#,
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
+        let desc = descriptor(&def);
+        assert_eq!(desc.metadata.icon_asset, "M");
+    }
+
+    #[test]
+    fn test_svg_directory_falls_back_to_first_letter() {
+        let dir = tempfile::tempdir().unwrap();
+        let icon_path = dir.path().join("icon.svg");
+        std::fs::create_dir(&icon_path).unwrap();
+        let yaml = format!(
+            r#"
+schema_version: 2
+id: "test:cli"
+metadata:
+  display_name: "My Provider"
+  brand_name: "Test"
+  icon: "{}"
+{}
+"#,
+            icon_path.display(),
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
+        let desc = descriptor(&def);
+        assert_eq!(desc.metadata.icon_asset, "M");
+    }
+
+    #[test]
+    fn test_existing_local_svg_icon_preserved() {
+        // 存在的本地 .svg 不应被回退成首字母（存在性检查的正向分支）
+        let dir = tempfile::tempdir().unwrap();
+        let icon_path = dir.path().join("brand.svg");
+        std::fs::write(&icon_path, "<svg/>").unwrap();
+        let yaml = format!(
+            r#"
+schema_version: 2
+id: "test:cli"
+metadata:
+  display_name: "My Provider"
+  brand_name: "Test"
+  icon: "{}"
+{}
+"#,
+            icon_path.display(),
+            minimal_plan_yaml()
+        );
+        let def: CustomProviderDef = serde_norway::from_str(&yaml).unwrap();
+        let desc = descriptor(&def);
+        assert_eq!(
+            desc.metadata.icon_asset,
+            icon_path.to_string_lossy().into_owned()
+        );
     }
 
     #[test]
