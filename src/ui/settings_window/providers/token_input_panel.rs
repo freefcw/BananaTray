@@ -14,7 +14,8 @@ use crate::ui::widgets::{render_action_button, ButtonSize, ButtonVariant};
 use fc_ui::components::input_state::wire_actions as wire_input_actions;
 use gpui::{
     div, hsla, px, relative, AnyElement, App, Context, Div, Entity, FocusHandle, FontWeight,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled, Window,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window,
 };
 use rust_i18n::t;
 
@@ -27,6 +28,8 @@ struct TokenInputBox {
     input_entity: Entity<fc_ui::components::input_state::InputState>,
     theme: Theme,
     focus_handle: FocusHandle,
+    label: String,
+    description: String,
 }
 
 impl RenderOnce for TokenInputBox {
@@ -37,34 +40,38 @@ impl RenderOnce for TokenInputBox {
 
         let success = theme.status.success;
         // 官方 wiring 自带 key_context / track_focus / 全部编辑 action，这里只做外壳样式
-        wire_input_actions(&input_entity, window, cx)
-            .w_full()
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .px(px(14.0))
-            .py(px(10.0))
-            .h(px(40.0))
-            .rounded(px(8.0))
-            .bg(hsla(success.h, success.s, success.l, 0.15))
-            .border_1()
-            .border_color(if is_focused {
-                success
-            } else {
-                hsla(success.h, success.s, success.l, 0.35)
-            })
-            .text_color(success)
-            .on_mouse_down(MouseButton::Left, {
-                let handle = self.focus_handle.clone();
-                move |_, window, _| handle.focus(window)
-            })
-            .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .text_size(px(13.0))
-                    .child(input_entity),
-            )
+        shared::apply_input_semantics(
+            wire_input_actions(&input_entity, window, cx),
+            shared::input_semantics(input_entity.read(cx), &self.label),
+        )
+        .aria_description(self.description)
+        .w_full()
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .px(px(14.0))
+        .py(px(10.0))
+        .h(px(40.0))
+        .rounded(px(8.0))
+        .bg(hsla(success.h, success.s, success.l, 0.15))
+        .border_1()
+        .border_color(if is_focused {
+            success
+        } else {
+            hsla(success.h, success.s, success.l, 0.35)
+        })
+        .text_color(success)
+        .on_mouse_down(MouseButton::Left, {
+            let handle = self.focus_handle.clone();
+            move |_, window, _| handle.focus(window)
+        })
+        .child(
+            div()
+                .flex_1()
+                .overflow_hidden()
+                .text_size(px(13.0))
+                .child(input_entity),
+        )
     }
 }
 
@@ -129,6 +136,8 @@ pub(crate) fn render_token_input_panel(
             display_state,
             is_editing,
             theme,
+            t!(capability.title_i18n_key).to_string(),
+            t!(capability.description_i18n_key).to_string(),
             cx,
         ))
         .child(render_token_source(&display_info, is_editing, theme));
@@ -194,6 +203,8 @@ fn render_token_value(
     display_state: &TokenInputDisplayState,
     is_editing: bool,
     theme: &Theme,
+    label: String,
+    description: String,
     cx: &App,
 ) -> AnyElement {
     if let (true, Some(input_entity)) = (is_editing, input_entity) {
@@ -202,6 +213,8 @@ fn render_token_value(
             input_entity,
             theme: theme.clone(),
             focus_handle,
+            label,
+            description,
         }
         .into_any_element();
     }

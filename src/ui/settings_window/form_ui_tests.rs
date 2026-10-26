@@ -3,6 +3,7 @@
 //! 覆盖 NewAPI / Script Provider 两个表单的 `collect_*` 提交路径：
 //! 校验失败必须落到对应字段 state 的 `validation_error`（渲染层据此画红描边
 //! 和字段下文案），且不再静默吞掉；修正输入后复验必须清除错误。
+//! 另通过真实 AccessKit 树覆盖输入标签、值、校验状态和 Token 密码掩码。
 
 use super::quota_ui_tests::make_state;
 use super::{FormInputsCache, NewApiFormInputs, ScriptProviderFormInputs, SettingsView};
@@ -10,7 +11,10 @@ use crate::application::{AppAction, FormIdentity};
 use crate::i18n::test_locale_guard;
 use fc_ui::components::input_state::InputState;
 use fc_ui::components::textarea_state::TextareaState;
-use gpui::{AppContext, Entity, TestAppContext};
+use gpui::{
+    div, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, TestAppContext,
+    VisualTestContext, Window,
+};
 
 fn install_script_inputs(
     view: &Entity<SettingsView>,
@@ -67,6 +71,174 @@ fn textarea_error(entity: &Entity<TextareaState>, cx: &TestAppContext) -> Option
 /// （`providers::shared::localize_validation_message`），fc-ui 升级若改动
 /// 该文案，这里的断言会先失败，提醒同步映射表。
 const FC_UI_REQUIRED_MESSAGE: &str = "This field is required";
+
+enum FormA11yHarness {
+    NewApi(Entity<SettingsView>),
+    Token {
+        view: Entity<SettingsView>,
+        provider_id: crate::models::ProviderId,
+        capability: crate::models::TokenInputCapability,
+    },
+}
+
+impl Render for FormA11yHarness {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = crate::theme::Theme::dark();
+        let content = match self {
+            Self::NewApi(view) => view.update(cx, |view, cx| {
+                view.render_newapi_form(FormIdentity::NewApiAdd, false, None, &theme, window, cx)
+            }),
+            Self::Token {
+                view,
+                provider_id,
+                capability,
+            } => view.update(cx, |view, cx| {
+                super::providers::token_input_panel::render_token_input_panel(
+                    provider_id,
+                    *capability,
+                    &crate::application::TokenInputDisplayState::Ready(
+                        crate::models::TokenInputState {
+                            has_token: false,
+                            masked: None,
+                            source_i18n_key: None,
+                            edit_mode: crate::models::TokenEditMode::SetNew,
+                        },
+                    ),
+                    view,
+                    &theme,
+                    cx,
+                )
+            }),
+        };
+        div().size_full().child(content)
+    }
+}
+
+fn a11y_tree(cx: &mut VisualTestContext) -> serde_json::Value {
+    cx.simulate_accessibility_activation();
+    cx.update(|window, cx| {
+        window.draw(cx).clear();
+        serde_json::from_str(
+            &window
+                .debug_a11y_tree_json()
+                .expect("rendered form must have an accessibility tree"),
+        )
+        .expect("accessibility tree must be valid JSON")
+    })
+}
+
+fn a11y_field<'a>(tree: &'a serde_json::Value, role: &str, label: &str) -> &'a serde_json::Value {
+    tree["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["aria"]["role"] == role && node["aria"]["label"] == label)
+        .unwrap_or_else(|| panic!("missing {role} accessibility field labelled {label}: {tree}"))
+}
+
+#[gpui::test]
+fn newapi_fields_expose_accessible_values_and_validation_state(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    cx.update(fc_ui::init);
+    let view = cx.new(|cx| SettingsView::new(make_state(), cx));
+    let (harness, cx) = cx.add_window_view(move |_, _| FormA11yHarness::NewApi(view));
+
+    let initial_tree = a11y_tree(cx);
+    let name = a11y_field(&initial_tree, "TextInput", "Name");
+    assert_eq!(name["aria"]["value"], "");
+    assert_eq!(name["aria"]["required"], true);
+    assert!(name["aria"].get("invalid").is_none());
+    let cookie = a11y_field(&initial_tree, "MultilineTextInput", "Cookie");
+    assert_eq!(cookie["aria"]["required"], true);
+    assert!(cookie["aria"].get("invalid").is_none());
+
+    let inputs = harness.read_with(cx, |harness, cx| {
+        let FormA11yHarness::NewApi(view) = harness else {
+            unreachable!()
+        };
+        view.read_with(cx, |view, _| {
+            view.newapi_inputs.as_ref().unwrap().inputs.clone()
+        })
+    });
+    harness.update(cx, |harness, cx| {
+        let FormA11yHarness::NewApi(view) = harness else {
+            unreachable!()
+        };
+        view.update(cx, |view, cx| {
+            assert!(view.collect_submit_action(cx).is_none());
+        });
+    });
+    let invalid_tree = a11y_tree(cx);
+    assert_eq!(
+        a11y_field(&invalid_tree, "TextInput", "Name")["aria"]["invalid"],
+        "True"
+    );
+    assert_eq!(
+        a11y_field(&invalid_tree, "MultilineTextInput", "Cookie")["aria"]["invalid"],
+        "True"
+    );
+
+    set_input(&inputs.name, "Relay", cx);
+    set_input(&inputs.url, "https://relay.example.com", cx);
+    set_textarea(&inputs.cookie, "session=abc", cx);
+    harness.update(cx, |harness, cx| {
+        let FormA11yHarness::NewApi(view) = harness else {
+            unreachable!()
+        };
+        view.update(cx, |view, cx| {
+            assert!(view.collect_submit_action(cx).is_some());
+        });
+    });
+    let valid_tree = a11y_tree(cx);
+    let name = a11y_field(&valid_tree, "TextInput", "Name");
+    assert_eq!(name["aria"]["value"], "Relay");
+    assert!(name["aria"].get("invalid").is_none());
+    let cookie = a11y_field(&valid_tree, "MultilineTextInput", "Cookie");
+    assert_eq!(cookie["aria"]["value"], "session=abc");
+    assert!(cookie["aria"].get("invalid").is_none());
+}
+
+#[gpui::test]
+fn token_input_exposes_label_and_masks_password_value(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    cx.update(fc_ui::init);
+    let provider_id = crate::models::ProviderId::BuiltIn(crate::models::ProviderKind::Copilot);
+    let crate::models::SettingsCapability::TokenInput(capability) =
+        crate::providers::copilot_settings_capability()
+    else {
+        unreachable!()
+    };
+    let view = cx.new(|cx| SettingsView::new(make_state(), cx));
+    let input = view.update(cx, |view, cx| {
+        view.begin_token_input(
+            &provider_id,
+            capability,
+            crate::models::TokenEditMode::SetNew,
+            cx,
+        )
+    });
+    input.update(cx, |state, _| state.content = "secret-token".into());
+    view.read_with(cx, |view, _| {
+        view.state
+            .borrow_mut()
+            .session
+            .settings_ui
+            .token_editing_provider = Some(provider_id.clone());
+    });
+    let (_view, cx) = cx.add_window_view(move |_, _| FormA11yHarness::Token {
+        view,
+        provider_id,
+        capability,
+    });
+
+    let tree = a11y_tree(cx);
+    let token = a11y_field(&tree, "PasswordInput", "GitHub Login");
+    assert_eq!(token["aria"]["value"], "•".repeat("secret-token".len()));
+    assert!(token["aria"]["description"]
+        .as_str()
+        .is_some_and(|description| !description.is_empty()));
+    assert!(!tree.to_string().contains("secret-token"));
+}
 
 #[gpui::test]
 fn script_form_empty_required_fields_block_collect_and_surface_errors(cx: &mut TestAppContext) {

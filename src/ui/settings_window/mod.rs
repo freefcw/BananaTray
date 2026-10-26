@@ -475,6 +475,7 @@ impl SettingsView {
         };
         let input = cx.new(|cx| {
             InputState::new(cx)
+                .input_type(fc_ui::components::input_state::InputType::Password)
                 .placeholder(placeholder)
                 .value(initial_value.unwrap_or_default())
                 .trim_on_blur(false)

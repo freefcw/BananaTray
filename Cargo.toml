@@ -42,8 +42,9 @@ ui-tests = ["app", "gpui/test-support"]
 unexpected_cfgs = "allow"
 
 [dependencies]
-# 禁用不必要的图像格式 features 以减小体积：仅保留 SVG + PNG（app logo）
-gpui = { package = "fc-gpui", version = "0.12.0", default-features = false, features = ["font-kit", "image-format-png"], optional = true }
+# 禁用不必要的图像格式 features 以减小体积：仅保留 SVG + PNG（app logo）。
+# accessibility 必须显式开启：关闭默认 features 后，仅设置 ARIA 属性不会生成系统无障碍树。
+gpui = { package = "fc-gpui", version = "0.12.0", default-features = false, features = ["accessibility", "font-kit", "image-format-png"], optional = true }
 # fc-ui 在 default-features = false 时不再注册内置字体；
 # 这里只启用实际 UI 权重，避免拉入完整 JetBrains Mono Bold 等未用资产。
 # fc-ui 0.9 起 crate root 即 fc_ui，无需 package 别名。

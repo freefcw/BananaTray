@@ -1,9 +1,10 @@
 use crate::theme::{monospace_font_family, Theme};
-use fc_ui::components::input_state::{wire_actions as wire_input_actions, InputState};
+use fc_ui::components::input_state::{wire_actions as wire_input_actions, InputState, InputType};
 use fc_ui::components::textarea_state::{wire_actions as wire_textarea_actions, TextareaState};
 use gpui::{
     div, hsla, px, relative, App, Div, Entity, FontWeight, Hsla, InteractiveElement, MouseButton,
-    MouseDownEvent, ParentElement, Pixels, Stateful, Styled, Window,
+    MouseDownEvent, ParentElement, Pixels, SharedString, Stateful, StatefulInteractiveElement,
+    Styled, Window,
 };
 use rust_i18n::t;
 
@@ -230,6 +231,7 @@ pub(in crate::ui::settings_window) fn render_input_field(
         .child(render_input_box(
             field.is_focused,
             has_error,
+            field.label,
             input_entity,
             theme,
             window,
@@ -241,19 +243,87 @@ pub(in crate::ui::settings_window) fn render_input_field(
     col
 }
 
+/// 自定义输入控件共用的 AccessKit 语义；由 state 与可见字段标签生成。
+pub(in crate::ui::settings_window) struct FormInputSemantics {
+    role: gpui::accesskit::Role,
+    label: SharedString,
+    value: SharedString,
+    placeholder: SharedString,
+    is_disabled: bool,
+    is_required: bool,
+    is_invalid: bool,
+}
+
+/// 与官方 Input 保持一致：密码值只暴露掩码，不把凭证原文写进无障碍树。
+pub(in crate::ui::settings_window) fn input_semantics(
+    state: &InputState,
+    label: &str,
+) -> FormInputSemantics {
+    let value = if state.masked {
+        "•".repeat(state.content.chars().count())
+    } else {
+        state.content.to_string()
+    };
+    FormInputSemantics {
+        role: if state.input_type == InputType::Password {
+            gpui::accesskit::Role::PasswordInput
+        } else {
+            gpui::accesskit::Role::TextInput
+        },
+        label: label.to_string().into(),
+        value: value.into(),
+        placeholder: state.placeholder.clone(),
+        is_disabled: state.disabled,
+        is_required: state.validation_rules.required,
+        is_invalid: state.validation_error.is_some(),
+    }
+}
+
+fn textarea_semantics(state: &TextareaState, label: &str) -> FormInputSemantics {
+    FormInputSemantics {
+        role: gpui::accesskit::Role::MultilineTextInput,
+        label: label.to_string().into(),
+        value: state.content.clone(),
+        placeholder: state.placeholder.clone(),
+        is_disabled: state.disabled,
+        is_required: state.validation_rules.required,
+        is_invalid: state.validation_error.is_some(),
+    }
+}
+
+pub(in crate::ui::settings_window) fn apply_input_semantics(
+    input: Stateful<Div>,
+    semantics: FormInputSemantics,
+) -> Stateful<Div> {
+    let input = input
+        .role(semantics.role)
+        .aria_label(semantics.label)
+        .aria_value(semantics.value)
+        .aria_placeholder(semantics.placeholder)
+        .aria_disabled(semantics.is_disabled)
+        .aria_required(semantics.is_required);
+    if semantics.is_invalid {
+        input.aria_invalid(gpui::accesskit::Invalid::True)
+    } else {
+        input
+    }
+}
+
 /// 不带标签的单行输入框外壳（聚焦高亮 + 完整键盘编辑），供自定义标签布局复用。
-/// 键盘 wiring 走 fc-ui 官方 `wire_actions`（自带 key_context / track_focus /
-/// 全部编辑 action），这里只负责外壳样式与点击聚焦。
+/// 保留现有外壳样式与点击聚焦，键盘 wiring 与语义分别走官方 helper 和共享语义层。
 pub(in crate::ui::settings_window) fn render_input_box(
     is_focused: bool,
     has_error: bool,
+    label: &str,
     input_entity: &Entity<InputState>,
     theme: &Theme,
     window: &mut Window,
     cx: &App,
 ) -> Stateful<Div> {
-    let focus_handle = input_entity.read(cx).focus_handle(cx);
-    wire_input_actions(input_entity, window, cx)
+    let state = input_entity.read(cx);
+    let focus_handle = state.focus_handle(cx);
+    let semantics = input_semantics(state, label);
+    apply_input_semantics(wire_input_actions(input_entity, window, cx), semantics)
         .w_full()
         .flex()
         .items_center()
@@ -282,18 +352,22 @@ pub(super) fn render_textarea_field(
 ) -> Div {
     let has_error = field.error.is_some();
     // 官方 wiring 自带 key_context / track_focus / track_scroll / 点击聚焦 / 全部编辑 action
-    let textarea_div = wire_textarea_actions(textarea_entity, window, cx)
-        .w_full()
-        .px(px(12.0))
-        .py(px(8.0))
-        .min_h(px(72.0))
-        .max_h(px(140.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(field_border_color(has_error, field.is_focused, theme))
-        .text_size(px(13.0))
-        .text_color(theme.text.primary);
+    let semantics = textarea_semantics(textarea_entity.read(cx), field.label);
+    let textarea_div = apply_input_semantics(
+        wire_textarea_actions(textarea_entity, window, cx),
+        semantics,
+    )
+    .w_full()
+    .px(px(12.0))
+    .py(px(8.0))
+    .min_h(px(72.0))
+    .max_h(px(140.0))
+    .rounded(px(8.0))
+    .bg(theme.bg.card)
+    .border_1()
+    .border_color(field_border_color(has_error, field.is_focused, theme))
+    .text_size(px(13.0))
+    .text_color(theme.text.primary);
 
     let mut col = div()
         .flex()
@@ -318,19 +392,23 @@ pub(super) fn render_code_field(
     cx: &App,
 ) -> Div {
     let has_error = field.error.is_some();
-    let textarea_div = wire_textarea_actions(textarea_entity, window, cx)
-        .w_full()
-        .px(px(12.0))
-        .py(px(10.0))
-        .min_h(px(260.0))
-        .max_h(px(420.0))
-        .rounded(px(8.0))
-        .bg(theme.bg.card)
-        .border_1()
-        .border_color(field_border_color(has_error, field.is_focused, theme))
-        .font_family(monospace_font_family())
-        .text_size(px(12.0))
-        .text_color(theme.text.primary);
+    let semantics = textarea_semantics(textarea_entity.read(cx), field.label);
+    let textarea_div = apply_input_semantics(
+        wire_textarea_actions(textarea_entity, window, cx),
+        semantics,
+    )
+    .w_full()
+    .px(px(12.0))
+    .py(px(10.0))
+    .min_h(px(260.0))
+    .max_h(px(420.0))
+    .rounded(px(8.0))
+    .bg(theme.bg.card)
+    .border_1()
+    .border_color(field_border_color(has_error, field.is_focused, theme))
+    .font_family(monospace_font_family())
+    .text_size(px(12.0))
+    .text_color(theme.text.primary);
 
     let mut col = div()
         .flex()

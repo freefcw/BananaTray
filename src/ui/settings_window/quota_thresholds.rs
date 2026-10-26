@@ -595,21 +595,22 @@ fn render_draft_editor(
         } else {
             color.opacity(0.38)
         };
+        let body = render_input_box(is_focused, false, &label, entity, theme, window, cx)
+            .debug_selector(move || format!("{selector}-input"))
+            .h(px(28.0))
+            .px(px(8.0))
+            .py(px(4.0))
+            .rounded(px(6.0))
+            .bg(theme.bg.card_inner)
+            .border_color(border_color)
+            .text_size(px(12.5))
+            .font_weight(FontWeight::SEMIBOLD)
+            .into_any_element();
         segments.push(ThresholdSegment {
             selector: Some(selector),
             label,
             color,
-            body: render_input_box(is_focused, false, entity, theme, window, cx)
-                .debug_selector(move || format!("{selector}-input"))
-                .h(px(28.0))
-                .px(px(8.0))
-                .py(px(4.0))
-                .rounded(px(6.0))
-                .bg(theme.bg.card_inner)
-                .border_color(border_color)
-                .text_size(px(12.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .into_any_element(),
+            body,
         });
     }
 

@@ -14,7 +14,7 @@
 - 这两个包要求 rustc ≥ 1.90（`fc-ui` 声明 `rust-version = 1.90`，`fc-gpui` 使用 edition 2024）；项目通过 `rust-toolchain.toml` 固定 Rust 1.98.1 及 rustfmt/clippy 组件，避免 stable 滚动升级导致 CI 的 lint 行为未经评估就变化。1.98.1 同时是 GitHub runner 镜像（ubuntu 24.04 与 26.04、macOS）预装的 Rust 版本，CI 冷跑不需要 rustup 下载 toolchain。workflow 里的 `dtolnay/rust-toolchain` 统一引用 `@v1` tag 并显式传 `toolchain` 输入——上游已删除按 Rust 版本编号的 tag，写 `@1.98.1` 这类版本引用会 resolve 失败。
 - GPUI 启动使用 `AppProfile::Minimal`，让托盘类长驻进程采用较小的文本布局缓存、glyph raster-bounds 缓存、GPU atlas / instance buffer 初始预算和 element arena。
 - 托盘常驻依赖 `QuitMode::Explicit`（`fc-gpui` 0.9 取代旧的 `set_keep_alive_without_windows`）：所有窗口关闭后进程不退出，只有显式 quit 才结束。
-- `fc-ui` 以 `default-features = false` 引入时不会自动注册内置字体；BananaTray 在 `Cargo.toml` 显式开启 Inter 400/500/600/700 和 JetBrains Mono Regular，保留当前 UI 字重覆盖，同时避免嵌入未使用的 Mono Bold。
+- `fc-ui` 以 `default-features = false` 引入时不会自动注册内置字体；BananaTray 在 `Cargo.toml` 显式开启 Inter 400/500/600/700 和 JetBrains Mono Regular，保留当前 UI 字重覆盖，同时避免嵌入未使用的 Mono Bold。两个 UI crate 都关闭默认 features 时，`gpui` 必须显式启用 `accessibility`；否则即使控件设置 ARIA 属性，窗口也不会生成系统 AccessKit 树。自定义输入外壳复用 `providers::shared` 的语义 helper，`just test-settings-ui` 覆盖实际渲染树、校验状态与密码掩码。
 - `--no-default-features` 只保留给 `lib` 层的本地验证，不代表受支持的完整 app 构建模式；该模式下不应再引入 app-only 依赖，Linux target 的依赖树也不得包含 `zbus`。
 - i18n 文案由 `rust-i18n` 从 `locales/*.yml` 编译进二进制；`build.rs` 必须跟踪 locale 文件变化，避免仅修改翻译后 Cargo 复用旧资源。各 locale 文件的 key 集合（嵌套展平后）与 `%{placeholder}` 占位符集合必须互相对齐，缺 key 只在运行时暴露；`scripts/check_locales.py`（`just check-locales`，已并入 `ci-fast`，且由 GitHub CI 直接执行）负责该校验。
 
