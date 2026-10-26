@@ -49,7 +49,7 @@
 ## 技术栈
 
 - **语言**: Rust（稳定工具链）
-- **UI 框架**: [GPUI](https://crates.io/crates/fc-gpui)（`fc-gpui` v0.9，crate 名仍为 `gpui`）+ [`fc-ui`](https://crates.io/crates/fc-ui) v0.8 组件库（crate 名仍为 `adabraka_ui`）
+- **UI 框架**: [GPUI](https://crates.io/crates/fc-gpui)（`fc-gpui` v0.12，crate 名仍为 `gpui`）+ [`fc-ui`](https://crates.io/crates/fc-ui) v0.9 组件库（crate 名为 `fc_ui`）
 - **异步运行时**: smol v2（后台刷新协调器）
 - **HTTP 客户端**: ureq v3
 - **日志**: fern + log（文件 + 标准输出，含 panic 钩子）
@@ -58,7 +58,7 @@
 - **通知**: UNUserNotificationCenter（macOS）/ notify-rust（Linux）
 - **单实例**: interprocess（本地套接字）
 - **自启动**: smappservice-rs（macOS）/ XDG 桌面文件（Linux）
-- **D-Bus**: zbus v5（async-io，兼容 smol）用于 GNOME Shell Extension 进程间通信（仅 Linux）
+- **D-Bus**: zbus v6（默认 runtime）用于 GNOME Shell Extension 进程间通信（仅 Linux）
 - **GNOME Shell Extension**: GJS（GNOME JavaScript）— 原生顶部栏弹窗，通过 D-Bus 代理与主应用通信
 
 ## 快速开始

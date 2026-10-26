@@ -49,7 +49,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 ## Tech Stack
 
 - **Language**: Rust (stable toolchain)
-- **UI Framework**: [GPUI](https://crates.io/crates/fc-gpui) (`fc-gpui` v0.9, imported as `gpui`) + [`fc-ui`](https://crates.io/crates/fc-ui) v0.8 component library (imported as `adabraka_ui`)
+- **UI Framework**: [GPUI](https://crates.io/crates/fc-gpui) (`fc-gpui` v0.12, imported as `gpui`) + [`fc-ui`](https://crates.io/crates/fc-ui) v0.9 component library (imported as `fc_ui`)
 - **Async Runtime**: smol v2 (background refresh coordinator)
 - **HTTP Client**: ureq v3
 - **Logging**: fern + log (file + stdout, with panic hook)
@@ -58,7 +58,7 @@ A macOS/Linux system tray application for monitoring AI coding assistant quota u
 - **Notifications**: UNUserNotificationCenter (macOS) / notify-rust (Linux)
 - **Single Instance**: interprocess (local sockets)
 - **Auto-launch**: smappservice-rs (macOS) / XDG desktop files (Linux)
-- **D-Bus**: zbus v5 (async-io, smol-compatible) for GNOME Shell Extension IPC (Linux only)
+- **D-Bus**: zbus v6 (default runtime) for GNOME Shell Extension IPC (Linux only)
 - **GNOME Shell Extension**: GJS (GNOME JavaScript) — native top bar popup with D-Bus proxy
 
 ## Getting Started
