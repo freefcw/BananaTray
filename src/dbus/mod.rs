@@ -171,9 +171,9 @@ fn run_dbus_server(
         let iface = BananaTrayIface::new(snapshot_cache.clone(), action_tx);
 
         // 连接 Session Bus
-        let conn = zbus::connection::Builder::session()?
-            .name("com.bananatray.Daemon")?
-            .serve_at("/com/bananatray/Daemon", iface)?
+        let conn = zbus::connection::Builder::session()
+            .name("com.bananatray.Daemon")
+            .serve_at("/com/bananatray/Daemon", iface)
             .build()
             .await?;
 
