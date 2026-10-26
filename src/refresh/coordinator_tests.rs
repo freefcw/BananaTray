@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // ============================================================================
 // ProviderError 分类测试（build_outcome 使用的错误转换）
@@ -624,10 +624,15 @@ fn test_reenabling_provider_after_invalidated_refresh_reruns_automatically() {
 fn test_shutdown_is_processed_while_provider_is_still_running() {
     smol::block_on(async {
         let id = ProviderId::Custom("test:shutdown".to_string());
+        // 闸门式 provider：refresh 卡到测试放行（这里始终不放行）。shutdown 只要
+        // 能结束，就证明它没等 provider 完成；不需要拿 elapsed 上限去和模拟延迟
+        // 赛跑——测试线程被抢占超过上限时，elapsed 断言会误报。
+        let (gate_tx, gate_rx) = smol::channel::bounded(1);
         let mut manager = ProviderManager::new();
-        manager.register(Arc::new(DelayedProvider::new(
+        manager.register(Arc::new(GatedProvider::new(
             "test:shutdown",
-            Duration::from_millis(500),
+            Some(gate_rx),
+            None,
         )));
 
         let (event_tx, event_rx) = smol::channel::bounded(8);
@@ -655,13 +660,24 @@ fn test_shutdown_is_processed_while_provider_is_still_running() {
             RefreshEvent::Started { .. }
         ));
 
-        let started = Instant::now();
         request_tx.send(RefreshRequest::Shutdown).await.unwrap();
-        task.await;
-        assert!(
-            started.elapsed() < Duration::from_millis(250),
-            "shutdown waited for provider completion"
-        );
+        // provider 被闸门卡死时 shutdown 必须结束。5s 只是「不挂死」的兜底：
+        // 真正卡住的 provider 永远不会完成，5s 内必返回即使真出错也不拖住套件。
+        let finished = smol::future::or(
+            async move {
+                task.await;
+                true
+            },
+            async {
+                smol::Timer::after(Duration::from_secs(5)).await;
+                false
+            },
+        )
+        .await;
+        assert!(finished, "shutdown waited for provider completion");
+
+        // gate_tx 必须活到 task 结束：sender 一丢，闸门就变成 Closed。
+        drop(gate_tx);
     });
 }
 
