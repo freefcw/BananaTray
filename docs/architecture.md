@@ -242,6 +242,7 @@ Provider 层和 refresh 层尽量只保存稳定语义，不缓存最终展示�
 - `application/` 和 `models/` 是主要单元测试面。
 - provider parser、scheduler、settings store、selector 也有独立测试。
 - `runtime/` 和 `ui/` 仍属于 `app` feature 范围，但会尽量把纯逻辑抽离到可测试模块。
+- 「不阻塞 / 必须在 deadline 内返回」这类时序测试不要用 `thread::sleep(模拟耗时)` + `elapsed < 上限` 来断言：deadline 只覆盖真正的等待期，测试线程在提交被抢占超过（模拟耗时 - deadline）时，结果早已就绪，会误报「没有超时」；`elapsed` 上限还把调度噪声算进被测行为里。改用闸门（`mpsc` channel / condvar）把模拟的慢工作卡住，由测试放行，再断言可观察状态（返回值、尚未写盘、落盘顺序）。参考 `runtime::settings_writer::tests` 与 `platform::system::tests` 里的 probe 测试。
 
 ## What This Doc Does Not Promise
 

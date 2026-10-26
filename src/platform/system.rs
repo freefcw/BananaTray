@@ -618,15 +618,22 @@ mod tests {
     #[test]
     fn boolean_probe_returns_immediately_while_slow_detection_runs_off_thread() {
         let probe = NonBlockingBoolProbe::default();
-        let start = std::time::Instant::now();
 
-        let initial = probe.get_or_refresh(false, std::time::Duration::from_secs(30), || {
-            std::thread::sleep(std::time::Duration::from_millis(80));
+        // 闸门式慢检测：检测线程阻塞到测试放行。调用能返回本身就证明它没有
+        // 等检测完成；用 sleep + elapsed 上限时，测试线程被抢占超过上限就会
+        // 把「没阻塞」误判成阻塞（CI 上出现过同类误报）。
+        let (gate_tx, gate_rx) = std::sync::mpsc::channel::<()>();
+        let initial = probe.get_or_refresh(false, std::time::Duration::from_secs(30), move || {
+            let _ = gate_rx.recv();
             true
         });
 
-        assert!(!initial);
-        assert!(start.elapsed() < std::time::Duration::from_millis(20));
+        assert!(
+            !initial,
+            "a still-running detection must return the fallback without blocking"
+        );
+
+        gate_tx.send(()).expect("detection gate closed");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
         while !probe.get_or_refresh(false, std::time::Duration::from_secs(30), || false) {
             assert!(

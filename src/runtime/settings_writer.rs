@@ -443,12 +443,16 @@ mod tests {
     #[test]
     fn flush_before_returns_false_when_persist_is_slow() {
         let records: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+        // 闸门式慢盘：persist 阻塞到测试放行，而不是 sleep 固定时长。
+        // 用 sleep 时，若测试线程在提交后被抢占超过 (sleep - deadline)，
+        // reply 早已就绪，flush_before 会误判成功。
+        let (gate_tx, gate_rx) = mpsc::channel::<()>();
+        let records_clone = records.clone();
         let writer = SettingsWriter::spawn_internal(
             Duration::from_millis(10),
             Box::new(move |settings| {
-                // 模拟慢盘：远超 deadline。
-                thread::sleep(Duration::from_millis(400));
-                records
+                let _ = gate_rx.recv();
+                records_clone
                     .lock()
                     .unwrap()
                     .push(settings.system.refresh_interval_mins);
@@ -456,15 +460,19 @@ mod tests {
             }),
         );
 
-        let start = Instant::now();
-        let result = writer.flush_before(make_settings(7), Some(Duration::from_millis(50)));
-        let elapsed = start.elapsed();
-
-        assert!(!result, "a slow persist must report failure");
         assert!(
-            elapsed < Duration::from_millis(300),
-            "flush_before must not wait for the whole persist, took {elapsed:?}"
+            !writer.flush_before(make_settings(7), Some(Duration::from_millis(50))),
+            "a persist that outlives the deadline must report failure"
         );
+        // 比 elapsed 断言更硬：此时闸门仍然关着，落盘不可能完成，
+        // 记录为空就直接证明没有等整个落盘（也不受测试线程被抢占影响）。
+        assert!(
+            records.lock().unwrap().is_empty(),
+            "flush_before must not wait for the whole persist"
+        );
+
+        gate_tx.send(()).expect("persist gate closed");
+        wait_writes(&records, 1);
     }
 
     /// 超时后的补偿快照必须排在迟到的原始 flush 之后，最终成为磁盘状态。
@@ -472,13 +480,16 @@ mod tests {
     fn scheduled_compensation_wins_after_timed_out_flush() {
         let records: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
         let first_persist = Arc::new(AtomicBool::new(true));
+        // 第一次 persist 卡在闸门上直到测试放行，20ms 上限因此必定超时——
+        // 不依赖「slow persist 是否慢过 deadline」，也不受测试线程被抢占影响。
+        let (gate_tx, gate_rx) = mpsc::channel::<()>();
         let records_clone = records.clone();
         let first_persist_clone = first_persist.clone();
         let writer = SettingsWriter::spawn_internal(
             Duration::from_millis(10),
             Box::new(move |settings| {
                 if first_persist_clone.swap(false, Ordering::SeqCst) {
-                    thread::sleep(Duration::from_millis(150));
+                    let _ = gate_rx.recv();
                 }
                 records_clone
                     .lock()
@@ -489,6 +500,9 @@ mod tests {
         );
 
         assert!(!writer.flush_before(make_settings(1), Some(Duration::from_millis(20))));
+
+        // 放行迟到的原始落盘，再提交补偿快照：磁盘顺序必须是 1 然后 2。
+        gate_tx.send(()).expect("first persist gate closed");
         writer.schedule(make_settings(2));
         wait_writes(&records, 2);
 
