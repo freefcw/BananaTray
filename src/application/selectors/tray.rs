@@ -8,7 +8,8 @@ use super::super::state::{
 use super::format::{
     format_non_monitoring_message, format_overview_quota_label, format_provider_updated_at,
     format_quota_card_display_text, format_quota_card_has_unit, format_user_failure_message,
-    quota_display_view_state, rate_limit_reset_section, split_stale_age, StaleAgeUnit,
+    provider_source_label, quota_display_view_state, rate_limit_reset_section, split_stale_age,
+    StaleAgeUnit,
 };
 use super::*;
 use crate::models::{
@@ -28,9 +29,17 @@ pub fn header_view_state(session: &AppSession) -> HeaderViewState {
             (value, StaleAgeUnit::Hours) => t!("header.hours_ago", n = value).to_string(),
         },
     };
+    let failure_hint = match &session.nav.active_tab {
+        NavTab::Provider(id) => session
+            .provider_store
+            .find_by_id(id)
+            .and_then(stale_failure_hint),
+        _ => None,
+    };
     HeaderViewState {
         status_text,
         status_kind,
+        failure_hint,
     }
 }
 
@@ -118,18 +127,28 @@ pub fn provider_detail_view_state(
     let flags = provider_panel_flags(&session.settings, &provider);
 
     let account = if flags.show_account_info {
-        provider
-            .account_email
-            .as_ref()
-            .map(|email| AccountInfoViewState {
+        provider.account_email.as_ref().map(|email| {
+            Box::new(AccountInfoViewState {
                 email: email.clone(),
                 tier: provider.account_tier.clone(),
+                source_text: provider_source_label(&provider),
                 updated_text: format_provider_updated_at(&provider),
                 failure_hint: stale_failure_hint(&provider),
                 dashboard_url: flags
                     .has_dashboard_url
                     .then(|| provider.dashboard_url().to_string()),
             })
+        })
+    } else {
+        None
+    };
+
+    let stale_failure = if account.is_none() && provider.update_status == Some(UpdateStatus::Failed)
+    {
+        Some(Box::new(StaleFailureViewState {
+            updated_text: format_provider_updated_at(&provider),
+            failure_hint: stale_failure_hint(&provider),
+        }))
     } else {
         None
     };
@@ -151,6 +170,7 @@ pub fn provider_detail_view_state(
         id: id.clone(),
         show_dashboard,
         account,
+        stale_failure,
         body,
         quota_display_mode: session.settings.display.quota_display_mode,
         quota_card_style: session.settings.display.quota_card_style,

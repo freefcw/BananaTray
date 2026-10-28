@@ -14,34 +14,64 @@ use gpui::{
 };
 use rust_i18n::t;
 
-/// 账户行「更新时间」文本：刷新失败时用警示色并挂 tooltip 说明失败原因，
+/// 陈旧失败提示行：刷新失败保留旧配额时，用警示色并挂 tooltip 说明失败原因，
 /// 不让陈旧旧值默默冒充正常数据。
-fn render_account_updated_text(
+fn render_stale_failure_badge(
+    updated_text: &str,
+    failure_hint: Option<&str>,
+    tooltip_id: String,
+    theme: &Theme,
+) -> gpui::AnyElement {
+    let badge = div()
+        .flex()
+        .items_center()
+        .gap(px(4.0))
+        .child(crate::ui::widgets::render_svg_icon(
+            "src/icons/status.svg",
+            px(12.0),
+            theme.status.warning,
+        ))
+        .child(
+            div()
+                .text_size(px(11.0))
+                .line_height(relative(1.3))
+                .text_color(theme.status.warning)
+                .child(updated_text.to_string()),
+        );
+
+    match failure_hint {
+        Some(hint) => crate::ui::widgets::with_multiline_tooltip(tooltip_id, hint, theme, badge)
+            .into_any_element(),
+        None => badge.into_any_element(),
+    }
+}
+
+/// 账户卡片副信息：刷新失败时显示警示态「更新失败 · 数据年龄」与原因 tooltip；
+/// 正常同步时显示数据来源（如 OpenAI 官方 / Devin 云端），避免与窗口顶栏重复显示相对时间。
+fn render_account_sub_text(
     account: &AccountInfoViewState,
     id: &ProviderId,
     theme: &Theme,
 ) -> gpui::AnyElement {
-    let text_color = if account.failure_hint.is_some() {
-        theme.status.warning
-    } else {
-        theme.text.muted
-    };
-    let text = div()
+    if account.failure_hint.is_some() {
+        return render_stale_failure_badge(
+            &account.updated_text,
+            account.failure_hint.as_deref(),
+            format!("account-updated-tooltip-{}", id.id_key()),
+            theme,
+        );
+    }
+
+    div()
+        .min_w_0()
         .text_size(px(11.0))
         .line_height(relative(1.3))
-        .text_color(text_color)
-        .child(account.updated_text.clone());
-
-    match &account.failure_hint {
-        Some(hint) => crate::ui::widgets::with_multiline_tooltip(
-            format!("account-updated-tooltip-{}", id.id_key()),
-            hint,
-            theme,
-            text,
-        )
-        .into_any_element(),
-        None => text.into_any_element(),
-    }
+        .text_color(theme.text.muted)
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .child(account.source_text.clone())
+        .into_any_element()
 }
 
 /// 通用操作按钮：居中主操作 pill（打开设置 / 重试）。
@@ -234,10 +264,19 @@ impl AppView {
         let state_for_dashboard = self.state.clone();
         let id = vm.id.clone();
         let dashboard_row = if vm.show_dashboard {
+            let stale_badge = vm.stale_failure.as_ref().map(|stale| {
+                render_stale_failure_badge(
+                    &stale.updated_text,
+                    stale.failure_hint.as_deref(),
+                    format!("panel-stale-tooltip-{}", id.id_key()),
+                    &theme,
+                )
+            });
             let dashboard_id = id.clone();
             Some(self.render_link_row(
                 "src/icons/compass.svg",
                 &t!("tooltip.dashboard"),
+                stale_badge,
                 &theme,
                 move |_, window, cx| {
                     crate::bootstrap::dispatch_in_window(
@@ -280,7 +319,7 @@ impl AppView {
         container.into_any_element()
     }
 
-    /// 账户信息卡片：头像(首字符) + 邮箱 + 套餐徽章 + 更新时间 + > 箭头
+    /// 账户信息卡片：头像(首字符) + 邮箱 + 套餐徽章 + 来源/失败状态 + 仪表盘入口
     fn render_account_info_card(
         &self,
         account: &AccountInfoViewState,
@@ -297,12 +336,13 @@ impl AppView {
             .unwrap_or('?')
             .to_string();
 
-        // 状态行：套餐徽章 + 更新时间
-        let mut status_row = div().flex().items_center().gap(px(8.0));
+        // 状态行：套餐徽章 + 数据来源（刷新失败时切为警示状态）
+        let mut status_row = div().min_w_0().flex().items_center().gap(px(8.0));
 
         if let Some(ref tier) = account.tier {
             status_row = status_row.child(
                 div()
+                    .flex_shrink_0()
                     .px(px(6.0))
                     .py(px(2.0))
                     .rounded(px(4.0))
@@ -314,18 +354,7 @@ impl AppView {
             );
         }
 
-        status_row = status_row.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .child(crate::ui::widgets::render_svg_icon(
-                    "src/icons/status.svg",
-                    px(12.0),
-                    theme.text.muted,
-                ))
-                .child(render_account_updated_text(account, id, theme)),
-        );
+        status_row = status_row.child(render_account_sub_text(account, id, theme));
 
         let arrow_button =
             self.render_account_dashboard_button(id, account.dashboard_url.is_some(), theme);
@@ -387,43 +416,69 @@ impl AppView {
         enabled: bool,
         theme: &Theme,
     ) -> AnyElement {
+        if !enabled {
+            return div().into_any_element();
+        }
         let state_for_click = self.state.clone();
-        let tooltip_id = format!("account-dashboard-tooltip-{}", id);
+        let tooltip_id = ElementId::Name(format!("account-dashboard-tooltip-{}", id).into());
+        let hover_bg = theme.bg.card_inner_hovered;
+        let id = id.clone();
 
-        crate::ui::widgets::render_icon_tooltip_button(
-            ElementId::Name(tooltip_id.into()),
-            "src/icons/chevron-right.svg",
-            crate::ui::widgets::IconTooltipButtonOptions {
-                tooltip_text: enabled.then(|| t!("tooltip.open_dashboard").to_string()),
-                enabled,
-                icon_color: theme.text.primary,
-                disabled_icon_color: theme.text.muted,
-                hover_bg: theme.bg.card_inner_hovered,
-            },
-            theme,
-            {
-                let id = id.clone();
-                move |_, window, cx| {
-                    crate::bootstrap::dispatch_in_window(
-                        &state_for_click,
-                        AppAction::OpenDashboard(id.clone()),
-                        window,
-                        cx,
-                    );
-                }
-            },
-        )
+        let btn = div()
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .px(px(8.0))
+            .py(px(5.0))
+            .rounded(px(8.0))
+            .bg(theme.bg.subtle)
+            .border_1()
+            .border_color(theme.border.subtle)
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover_bg))
+            .child(crate::ui::widgets::render_svg_icon(
+                "src/icons/compass.svg",
+                px(13.0),
+                theme.text.secondary,
+            ))
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .line_height(relative(1.2))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text.secondary)
+                    .whitespace_nowrap()
+                    .child(t!("tooltip.dashboard").to_string()),
+            )
+            .child(crate::ui::widgets::render_svg_icon(
+                "src/icons/chevron-right.svg",
+                px(11.0),
+                theme.text.muted,
+            ))
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                crate::bootstrap::dispatch_in_window(
+                    &state_for_click,
+                    AppAction::OpenDashboard(id.clone()),
+                    window,
+                    cx,
+                );
+            });
+
+        crate::ui::widgets::with_tooltip(tooltip_id, &t!("tooltip.open_dashboard"), theme, btn)
+            .into_any_element()
     }
 
-    /// 操作链接行（类似截图中的 "Usage Dashboard"）
+    /// 操作链接行（类似截图中的 "Usage Dashboard"，可附带右侧陈旧失败提示）
     fn render_link_row(
         &self,
         icon: &'static str,
         label: &str,
+        trailing: Option<AnyElement>,
         theme: &Theme,
         handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
     ) -> Div {
-        div()
+        let left = div()
             .flex()
             .items_center()
             .gap(px(10.0))
@@ -444,7 +499,19 @@ impl AppView {
                     .text_color(theme.text.secondary)
                     .child(label.to_string()),
             )
-            .on_mouse_down(MouseButton::Left, handler)
+            .on_mouse_down(MouseButton::Left, handler);
+
+        match trailing {
+            Some(badge) => div()
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
+                .pr(px(6.0))
+                .child(left)
+                .child(badge),
+            None => left,
+        }
     }
 
     fn render_refreshing_state(&self, provider_name: &str, theme: &Theme) -> Div {

@@ -95,11 +95,47 @@ impl AppView {
             header_view_state(&state.session)
         };
 
-        let (dot_color, badge_bg) = match header.status_kind {
-            HeaderStatusKind::Synced => (theme.badge.healthy, theme.badge.synced_bg),
-            HeaderStatusKind::Syncing => (theme.text.accent, theme.badge.syncing_bg),
-            HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
-            HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
+        let (dot_color, badge_bg) = if header.failure_hint.is_some() {
+            (theme.status.warning, theme.bg.subtle)
+        } else {
+            match header.status_kind {
+                HeaderStatusKind::Synced => (theme.badge.healthy, theme.badge.synced_bg),
+                HeaderStatusKind::Syncing => (theme.text.accent, theme.badge.syncing_bg),
+                HeaderStatusKind::Stale => (theme.text.muted, theme.bg.subtle),
+                HeaderStatusKind::Offline => (theme.badge.offline, theme.button.danger_bg),
+            }
+        };
+        let badge_text_color = if header.failure_hint.is_some() {
+            theme.status.warning
+        } else {
+            theme.text.secondary
+        };
+
+        let status_badge = div()
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(12.0))
+            .bg(badge_bg)
+            .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(dot_color))
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(badge_text_color)
+                    .child(header.status_text),
+            );
+        let status_badge = match &header.failure_hint {
+            Some(hint) => crate::ui::widgets::with_multiline_tooltip(
+                "header-stale-failure-tooltip",
+                hint,
+                theme,
+                status_badge,
+            )
+            .into_any_element(),
+            None => status_badge.into_any_element(),
         };
 
         let header = div()
@@ -153,25 +189,7 @@ impl AppView {
                             ),
                     ),
             )
-            .child(
-                // 右侧：状态徽章
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .px(px(10.0))
-                    .py(px(5.0))
-                    .rounded(px(12.0))
-                    .bg(badge_bg)
-                    .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(dot_color))
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text.secondary)
-                            .child(header.status_text),
-                    ),
-            );
+            .child(status_badge);
 
         #[cfg(target_os = "linux")]
         let header = {

@@ -181,7 +181,9 @@ fn account_card_assembled_when_email_and_setting_on() {
             let account = panel.account.expect("account should be Some");
             assert_eq!(account.email, "test@example.com");
             assert_eq!(account.tier, Some("Pro".to_string()));
+            assert!(!account.source_text.is_empty());
             assert!(account.dashboard_url.is_some());
+            assert!(panel.stale_failure.is_none());
             assert!(!panel.show_dashboard);
         }
         _ => panic!("expected Panel variant"),
@@ -240,7 +242,44 @@ fn no_account_card_when_email_absent() {
     match view {
         ProviderDetailViewState::Panel(panel) => {
             assert!(panel.account.is_none());
+            assert!(panel.stale_failure.is_none());
             assert!(panel.show_dashboard);
+        }
+        _ => panic!("expected Panel variant"),
+    }
+}
+
+#[test]
+fn stale_failure_exposed_when_account_card_is_absent() {
+    let _locale_guard = setup_locale();
+    let mut settings = AppSettings::default();
+    settings
+        .provider
+        .set_provider_enabled(ProviderKind::ZCode, true);
+
+    let mut provider = make_provider(ProviderKind::ZCode, ConnectionStatus::Connected);
+    provider.quotas = vec![QuotaInfo::new("session", 20.0, 100.0)];
+    provider.last_refreshed_instant = Some(std::time::Instant::now());
+    provider.update_status = Some(UpdateStatus::Failed);
+    provider.last_failure = Some(test_failure("network timeout"));
+
+    let session = make_session_with_provider(settings, provider);
+    let header = header_view_state(&session);
+    assert_eq!(
+        header.failure_hint.as_deref(),
+        Some("Failed to fetch quota data; please try again")
+    );
+
+    let view = provider_detail_view_state(&session, &pid(ProviderKind::ZCode));
+    match view {
+        ProviderDetailViewState::Panel(panel) => {
+            assert!(panel.account.is_none());
+            let stale = panel.stale_failure.expect("stale_failure should be Some");
+            assert_eq!(stale.updated_text, "Update failed · data just now");
+            assert_eq!(
+                stale.failure_hint.as_deref(),
+                Some("Failed to fetch quota data; please try again")
+            );
         }
         _ => panic!("expected Panel variant"),
     }

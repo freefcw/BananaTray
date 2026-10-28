@@ -28,6 +28,8 @@ use crate::models::{
 pub struct HeaderViewState {
     pub status_text: String,
     pub status_kind: HeaderStatusKind,
+    /// 当前 Provider 最近一次刷新失败但保留缓存配额时的失败原因提示
+    pub failure_hint: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +74,9 @@ pub struct DisabledProviderViewState {
 pub struct ProviderPanelViewState {
     pub id: ProviderId,
     pub show_dashboard: bool,
-    pub account: Option<AccountInfoViewState>,
+    pub account: Option<Box<AccountInfoViewState>>,
+    /// 无账户卡片时，若最近一次刷新失败且仍展示缓存配额，用于在面板中提示陈旧数据状态与原因
+    pub stale_failure: Option<Box<StaleFailureViewState>>,
     pub body: ProviderBodyViewState,
     pub quota_display_mode: QuotaDisplayMode,
     /// 配额卡画法。圆圈样式把折线放在圆环右侧，不再加高窗口。
@@ -86,6 +90,12 @@ pub struct ProviderPanelViewState {
     ///
     /// 装箱是为了不把 `ProviderDetailViewState::Panel` 撑过 clippy 的枚举体积阈值。
     pub resets: Option<Box<RateLimitResetSectionView>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleFailureViewState {
+    pub updated_text: String,
+    pub failure_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +113,8 @@ pub struct AccountInfoViewState {
     pub email: String,
     /// 套餐名称（如 "Pro", "Max"）
     pub tier: Option<String>,
+    /// 数据来源的用户向展示文案（正常同步时展示，避免与窗口顶栏重复显示相对时间）
+    pub source_text: String,
     /// 上次更新时间描述（刷新失败时明示失败与数据年龄，不冒充正常）
     pub updated_text: String,
     /// 刷新失败原因（tooltip 展示；None 表示最近刷新成功或无失败记录）
