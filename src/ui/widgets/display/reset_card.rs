@@ -46,21 +46,18 @@ pub(crate) fn render_rate_limit_resets(
 }
 
 fn reset_heading(section: &RateLimitResetSectionView, theme: &Theme) -> Div {
-    let color = section
-        .rows
-        .iter()
-        .map(|row| row.expiry_urgency)
-        .min_by_key(reset_urgency_rank)
-        .map(|urgency| reset_time_color(urgency, theme))
-        .unwrap_or(theme.text.muted);
+    let dot_color = if section.rows.is_empty() {
+        theme.text.muted
+    } else {
+        theme.text.accent
+    };
 
-    div()
-        .w_full()
-        .h(px(PopupLayout::RESET_LINE_HEIGHT))
+    let mut leading = div()
+        .min_w_0()
         .flex()
         .items_center()
         .gap(px(6.0))
-        .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(color))
+        .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(dot_color))
         .child(
             div()
                 .overflow_hidden()
@@ -70,16 +67,48 @@ fn reset_heading(section: &RateLimitResetSectionView, theme: &Theme) -> Div {
                 .text_color(theme.text.secondary)
                 .whitespace_nowrap()
                 .child(t!("codex.reset.heading").to_uppercase()),
-        )
-}
+        );
 
-fn reset_urgency_rank(urgency: &ResetExpiryUrgency) -> u8 {
-    match urgency {
-        ResetExpiryUrgency::Critical => 0,
-        ResetExpiryUrgency::Warning => 1,
-        ResetExpiryUrgency::Safe => 2,
-        ResetExpiryUrgency::Unknown => 3,
+    if !section.rows.is_empty() {
+        leading = leading
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .line_height(relative(1.3))
+                    .text_color(theme.text.muted)
+                    .child("·"),
+            )
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .line_height(relative(1.3))
+                    .text_color(theme.text.muted)
+                    .child(section.rows.len().to_string()),
+            );
     }
+
+    let mut row = div()
+        .w_full()
+        .h(px(PopupLayout::RESET_LINE_HEIGHT))
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(8.0))
+        .child(leading);
+
+    if !section.rows.is_empty() {
+        row = row.child(
+            div()
+                .flex_shrink_0()
+                .text_size(px(11.0))
+                .line_height(relative(1.3))
+                .text_color(theme.text.muted)
+                .whitespace_nowrap()
+                .child(t!("codex.reset.expires").to_string()),
+        );
+    }
+
+    row
 }
 
 fn reset_urgency_color(urgency: ResetExpiryUrgency, theme: &Theme) -> Hsla {

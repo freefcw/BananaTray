@@ -40,7 +40,7 @@ widgets/
 |------|------|------|
 | `quota_bar.rs` | `render_quota_card()` | 额度卡片。线条样式是大数字、进度条，可选在底部内嵌历史折线；`QuotaCardHistory.on_toggle` 有值时折线可点开放大 / 收起（每张卡独立，进程内记忆），放大后绘图区更高。圆圈样式把数字放进圆环，折线在右侧，忽略放大状态 |
 | `quota_ring.rs` | （`render_quota_card` 的圆圈分支） | 顶栏沿用圆点、标题和状态。环内只放数字。有历史时右侧是折线，重置详情合并到顶栏标题旁（无详情时回退显示模式标签）；没有历史时详情在圆环右侧。纯余额无上限项使用虚线圆环与百分比实心弧区分 |
-| `reset_card.rs` | `render_rate_limit_resets()` | 紧凑限流重置卡。到期时刻（当年省略年份为 `M/D HH:MM`，与折线图横轴斜杠格式一致）和剩余天数分列右对齐，时间色比额度状态色更沉；悬浮提示补充获取时间与完整到期时间 |
+| `reset_card.rs` | `render_rate_limit_resets()` | 紧凑可兑换限流重置卡。标题栏左侧展示「可兑换重置 · 数量」、右侧标注「到期」列头；每条明细的到期时刻（当年省略年份为 `M/D HH:MM`，与折线图横轴斜杠格式一致）和剩余天数分列右对齐，时间色比额度状态色更沉；悬浮提示补充获取时间与完整到期时间 |
 | `history_chart.rs` | `render_history_line_chart()` / `render_history_line_chart_with_options()` | 归一化折线，签名接收整张 `HistoryChartView`（图 id 用 `quota_key`）。`chart.period` 有值时是「本周期」图：多画 50% 中线刻度、现在位置的竖点线、从满到空的中性色理想配速虚线（不画伪采样圆点），线下不铺填充。配额卡内嵌时通过 `HistoryChartOptions` 注入注意/偏低状态的主折线色与圆环右侧持平序列的纵轴数值去重。两个采样之间保持上一个值，用量相同的采样并成一段平线，数值变化时再跳，台阶带圆角，线下有一层淡填充（持平序列压淡填充，断档桥接下方铺半透明过渡填充避免被切成孤立色块）。平时不画采样点；指针悬停在折线区域里显示虚线指示线并吸到最近真实采样 |
 | `info_row.rs` | `render_kv_info_row()` / `render_info_cell()` / `render_path_info_cell()` | Key-Value 信息行，路径行支持点击打开文件管理器。`render_kv_info_row` 的右值配色由 `url` 有无决定（组件内部处理），调用方不传颜色 |
 | `icon_row.rs` | `render_icon_row()` | 图标 + 文本行（三栏布局，用于设置项） |

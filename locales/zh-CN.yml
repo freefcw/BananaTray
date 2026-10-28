@@ -527,7 +527,7 @@ hint.no_quota_in_response: "API 响应中未找到配额数据。"
 hint.opencode_go_required: "需要 OpenCode Go 订阅，或 API Key 无效。请在 OpenCode TUI 中连接 OpenCode Go，并确认 auth.json 中有 opencode-go / opencode 的 API Key。"
 
 # ── 配额标签 ──────────────────────────────────────────────
-codex.reset.heading: "重置"
+codex.reset.heading: "可兑换重置"
 codex.reset.type: "类型"
 codex.reset.granted: "获取"
 codex.reset.expires: "到期"
