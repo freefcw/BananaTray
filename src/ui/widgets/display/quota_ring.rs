@@ -1,14 +1,14 @@
 //! 圆圈样式的配额卡：顶栏沿用圆点、标题和状态，圆环里只放数字，右边是用量历史折线。
 //!
 //! 顶栏占掉一截高度后，圆环仍尽量大，让数字成为环里唯一的内容。折线不再把窗口加高。
-//! 弧从 12 点顺时针画，长度跟当前「剩余 / 已用」数字一致。纯余额没有总量，画满环。
+//! 弧从 12 点顺时针画，长度跟当前「剩余 / 已用」数字一致。纯余额没有总量，画虚线环区分。
 
 use crate::application::{
     format_quota_card_detail_text, format_quota_card_display_text, format_quota_card_has_unit,
     format_quota_card_mode_label, format_quota_status_label, quota_ring_fill_ratio,
     HistoryChartView, QuotaDisplayViewState,
 };
-use crate::models::{PopupLayout, QuotaDisplayMode};
+use crate::models::{PopupLayout, QuotaDisplayMode, StatusLevel};
 use crate::theme::Theme;
 use gpui::{
     canvas, div, point, px, relative, Bounds, Div, FontWeight, Hsla, IntoElement, ParentElement,
@@ -19,6 +19,15 @@ use gpui::{
 const RING_PAD_Y: f32 = 10.0;
 const RING_SIZE: f32 = 80.0;
 const RING_STROKE: f32 = 7.0;
+const BALANCE_RING_OPACITY: f32 = 0.65;
+const BALANCE_RING_DASH: f32 = 6.0;
+const BALANCE_RING_GAP: f32 = 5.0;
+
+struct RingContent<'a> {
+    ratio: Option<f32>,
+    display_text: &'a str,
+    has_unit: bool,
+}
 
 pub(in crate::ui::widgets::display) fn render_quota_ring(
     quota_view: &QuotaDisplayViewState,
@@ -39,7 +48,20 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
     let status_label = format_quota_status_label(quota_view.status_level);
     let hover_bg = theme.bg.card_inner_hovered;
     let chart = history.map(|history| history.chart);
-    let header_detail = chart.is_some().then_some(detail_text.as_str());
+    let header_detail = chart.is_some().then_some(if !detail_text.is_empty() {
+        detail_text.as_str()
+    } else {
+        mode_label.as_str()
+    });
+    let ring_content = RingContent {
+        ratio,
+        display_text: &display_text,
+        has_unit,
+    };
+    let primary_line_color = match quota_view.status_level {
+        StatusLevel::Green => None,
+        StatusLevel::Yellow | StatusLevel::Red => Some(fill),
+    };
 
     super::quota_bar::render_quota_card_frame(quota, theme, hover_bg)
         .py(px(RING_PAD_Y))
@@ -58,27 +80,19 @@ pub(in crate::ui::widgets::display) fn render_quota_ring(
                 .flex()
                 .items_center()
                 .gap(px(12.0))
-                .child(render_ring(
-                    ratio,
-                    &display_text,
-                    has_unit,
-                    track,
-                    fill,
+                .child(render_ring(&ring_content, track, fill, theme))
+                .child(render_ring_side(
+                    chart,
+                    primary_line_color,
+                    &mode_label,
+                    &detail_text,
                     theme,
-                ))
-                .child(render_ring_side(chart, &mode_label, &detail_text, theme)),
+                )),
         )
 }
 
-fn render_ring(
-    ratio: Option<f32>,
-    display_text: &str,
-    has_unit: bool,
-    track: Hsla,
-    fill: Hsla,
-    theme: &Theme,
-) -> Div {
-    let value_size = value_text_size(display_text);
+fn render_ring(content: &RingContent<'_>, track: Hsla, fill: Hsla, theme: &Theme) -> Div {
+    let ratio = content.ratio;
     div()
         .relative()
         .flex_shrink_0()
@@ -105,11 +119,12 @@ fn render_ring(
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_ring_value(display_text, has_unit, value_size, theme)),
+                .child(render_ring_value(content, theme)),
         )
 }
 
-fn render_ring_value(display_text: &str, has_unit: bool, value_size: f32, theme: &Theme) -> Div {
+fn render_ring_value(content: &RingContent<'_>, theme: &Theme) -> Div {
+    let value_size = value_text_size(content.display_text);
     let mut value = div().flex().items_end().justify_center().child(
         div()
             .text_size(px(value_size))
@@ -117,9 +132,9 @@ fn render_ring_value(display_text: &str, has_unit: bool, value_size: f32, theme:
             .text_color(theme.text.primary)
             .line_height(relative(1.0))
             .whitespace_nowrap()
-            .child(display_text.to_string()),
+            .child(content.display_text.to_string()),
     );
-    if has_unit {
+    if content.has_unit {
         value = value.child(
             div()
                 .text_size(px((value_size * 0.5).max(11.0)))
@@ -136,6 +151,7 @@ fn render_ring_value(display_text: &str, has_unit: bool, value_size: f32, theme:
 
 fn render_ring_side(
     history: Option<&HistoryChartView>,
+    primary_line_color: Option<Hsla>,
     mode_label: &str,
     detail_text: &str,
     theme: &Theme,
@@ -143,12 +159,17 @@ fn render_ring_side(
     let mut side = div().flex_1().min_w_0().flex().flex_col();
     if let Some(history) = history {
         let plot = (RING_SIZE - PopupLayout::CARD_HISTORY_AXIS_CHROME).max(28.0);
-        return side.child(
-            div()
-                .h(px(RING_SIZE))
-                .overflow_hidden()
-                .child(super::render_history_line_chart(history, plot, theme)),
-        );
+        return side.child(div().h(px(RING_SIZE)).overflow_hidden().child(
+            super::render_history_line_chart_with_options(
+                history,
+                plot,
+                super::HistoryChartOptions {
+                    primary_line_color,
+                    suppress_flat_y_tick: true,
+                },
+                theme,
+            ),
+        ));
     }
 
     // 没有折线时右侧整块是空的：放上「剩余 / 已用 / 余额」说明圆环里的数字是什么，
@@ -207,7 +228,17 @@ fn paint_ring(
     let cy = f32::from(bounds.origin.y) + diameter / 2.0;
 
     match ratio {
-        None => paint_circle(cx, cy, radius, RING_STROKE, fill, window),
+        None => {
+            paint_circle(cx, cy, radius, RING_STROKE, track, window);
+            paint_dashed_circle(
+                cx,
+                cy,
+                radius,
+                RING_STROKE,
+                fill.opacity(BALANCE_RING_OPACITY),
+                window,
+            );
+        }
         Some(ratio) if ratio >= 0.995 => {
             paint_circle(cx, cy, radius, RING_STROKE, track, window);
             paint_circle(cx, cy, radius, RING_STROKE, fill, window);
@@ -223,6 +254,24 @@ fn paint_ring(
         }
         Some(_) => paint_circle(cx, cy, radius, RING_STROKE, track, window),
     }
+}
+
+fn paint_dashed_circle(
+    cx: f32,
+    cy: f32,
+    radius: f32,
+    stroke: f32,
+    color: Hsla,
+    window: &mut Window,
+) {
+    let mut builder =
+        PathBuilder::stroke(px(stroke)).dash_array(&[px(BALANCE_RING_DASH), px(BALANCE_RING_GAP)]);
+    let right = point(px(cx + radius), px(cy));
+    let left = point(px(cx - radius), px(cy));
+    builder.move_to(right);
+    builder.arc_to(point(px(radius), px(radius)), px(0.0), false, true, left);
+    builder.arc_to(point(px(radius), px(radius)), px(0.0), false, true, right);
+    paint_built(builder, color, window);
 }
 
 fn paint_circle(cx: f32, cy: f32, radius: f32, stroke: f32, color: Hsla, window: &mut Window) {

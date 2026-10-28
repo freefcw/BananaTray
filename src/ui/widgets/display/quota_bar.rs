@@ -5,7 +5,7 @@ use crate::application::{
     format_quota_card_mode_label, format_quota_status_label, HistoryChartView,
     QuotaDisplayViewState,
 };
-use crate::models::{PopupLayout, QuotaCardStyle, QuotaDisplayMode, QuotaInfo};
+use crate::models::{PopupLayout, QuotaCardStyle, QuotaDisplayMode, QuotaInfo, StatusLevel};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -342,13 +342,21 @@ fn render_quota_bar(
                 .cursor_pointer()
                 .on_mouse_down(MouseButton::Left, on_toggle);
         }
-        card = card.child(
-            chart_wrap.child(crate::ui::widgets::render_history_line_chart(
+        let primary_line_color = match status {
+            StatusLevel::Green => None,
+            StatusLevel::Yellow | StatusLevel::Red => Some(fill_color),
+        };
+        card = card.child(chart_wrap.child(
+            crate::ui::widgets::render_history_line_chart_with_options(
                 history.chart,
                 plot_height,
+                crate::ui::widgets::HistoryChartOptions {
+                    primary_line_color,
+                    suppress_flat_y_tick: false,
+                },
                 theme,
-            )),
-        );
+            ),
+        ));
     }
     card
 }

@@ -29,15 +29,36 @@ const STEP_STROKE: f32 = 2.0;
 const STEP_RADIUS: f32 = 4.0;
 /// 台阶下方填充的不透明度。只铺在折线到基线之间。
 const STEP_FILL: f32 = 0.2;
+/// 持平无波动序列的填充衰减系数，避免水平直线下方形成笨重色块。
+const FLAT_FILL_FACTOR: f32 = 0.45;
+/// 断档桥接下方过渡填充相对主填充的衰减系数。
+const GAP_FILL_FACTOR: f32 = 0.5;
 /// 断档虚线比台阶细、更淡，读作"这段没有数据"。
 const GAP_STROKE: f32 = 1.5;
 const GAP_OPACITY: f32 = 0.5;
+/// 本周期图理想配速参考线的线宽与不透明度。
+const PACE_STROKE: f32 = 1.25;
+const PACE_OPACITY: f32 = 0.45;
 /// 圆点半径是 2.5px。再留一点，孤立采样也能被点中。
 const HOVER_HIT_PX: f64 = 4.0;
 const CHIP_FONT: f32 = 10.0;
 const CHIP_LINE: f32 = 13.0;
 const CHIP_PAD_X: f32 = 5.0;
 const CHIP_PAD_Y: f32 = 2.0;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct HistoryChartOptions {
+    /// 首条折线的颜色覆盖（如配额卡片处于注意/偏低状态时跟随状态色）
+    pub primary_line_color: Option<Hsla>,
+    /// 当序列完全持平（`y_min` 为空）时是否隐藏纵轴唯一刻度（避免与圆环内大数字重复）
+    pub suppress_flat_y_tick: bool,
+}
+
+#[derive(Clone, Copy)]
+struct LinePaint {
+    color: Hsla,
+    fill_opacity: f32,
+}
 
 struct HoverColors {
     guide: Hsla,
@@ -62,10 +83,25 @@ pub(crate) fn render_history_line_chart(
     plot_height: f32,
     theme: &Theme,
 ) -> Div {
+    render_history_line_chart_with_options(
+        chart,
+        plot_height,
+        HistoryChartOptions::default(),
+        theme,
+    )
+}
+
+pub(crate) fn render_history_line_chart_with_options(
+    chart: &HistoryChartView,
+    plot_height: f32,
+    options: HistoryChartOptions,
+    theme: &Theme,
+) -> Div {
     let chart_id = &chart.quota_key;
     let lines = chart.lines.clone();
     let axis = chart.axis.clone();
     let period = chart.period.clone();
+    let is_flat = axis.y_min.is_empty();
     let frame = theme.border.subtle;
     let axis_color = theme.border.strong;
     let label = theme.text.muted;
@@ -78,6 +114,12 @@ pub(crate) fn render_history_line_chart(
     let x_start_ms = axis.x_start_ms;
     let x_end_ms = axis.x_end_ms;
     let hover_lines = lines.clone();
+    let y_max_text = if is_flat && options.suppress_flat_y_tick {
+        ""
+    } else {
+        axis.y_max.as_str()
+    };
+    let fill_opacity = chart_fill_opacity(period.is_none(), lines.len(), is_flat);
     div()
         .w_full()
         .flex()
@@ -108,12 +150,20 @@ pub(crate) fn render_history_line_chart(
                                 if let Some(period) = &period {
                                     paint_period_guides(bounds, period, &paint_theme, window);
                                 }
-                                paint_lines(bounds, &lines, period.is_none(), &paint_theme, window);
+                                paint_lines(
+                                    bounds,
+                                    &lines,
+                                    fill_opacity,
+                                    options.primary_line_color,
+                                    &paint_theme,
+                                    window,
+                                );
                                 paint_baseline(bounds, axis_color, window);
                                 if let Some(hit) = hover {
                                     paint_hover_marker(
                                         bounds,
                                         &hit,
+                                        options.primary_line_color,
                                         &paint_theme,
                                         colors,
                                         window,
@@ -126,7 +176,7 @@ pub(crate) fn render_history_line_chart(
                     ),
                 )
                 .child(y_ticks(
-                    &axis.y_max,
+                    y_max_text,
                     &axis.y_min,
                     chart.period.as_ref().map(|period| period.y_mid.as_str()),
                     plot_height,
@@ -230,24 +280,43 @@ fn x_ticks(start: &str, end: &str, color: Hsla) -> Div {
         .child(end.to_string())
 }
 
+fn resolve_line_color(color_index: usize, primary_override: Option<Hsla>, theme: &Theme) -> Hsla {
+    if color_index == 0 {
+        if let Some(color) = primary_override {
+            return color;
+        }
+    }
+    history_line_color(color_index, theme)
+}
+
+fn chart_fill_opacity(allow_fill: bool, line_count: usize, is_flat: bool) -> f32 {
+    // 多条折线同图时不叠加底部色块填充，避免蓝/绿/橙多重半透明色叠成浑浊暗色。
+    // 本周期图有配速虚线，线下也不铺填充。持平无波动序列把填充压淡，避免抢夺视觉焦点。
+    if !allow_fill || line_count != 1 {
+        return 0.0;
+    }
+    if is_flat {
+        STEP_FILL * FLAT_FILL_FACTOR
+    } else {
+        STEP_FILL
+    }
+}
+
 fn paint_lines(
     bounds: Bounds<Pixels>,
     lines: &[HistoryLineView],
-    allow_fill: bool,
+    fill_opacity: f32,
+    primary_override: Option<Hsla>,
     theme: &Theme,
     window: &mut Window,
 ) {
-    // 多条折线同图时不叠加底部色块填充，避免蓝/绿/橙多重半透明色叠成浑浊暗色。
-    // 本周期图有配速虚线，线下也不铺填充。
-    let fill_opacity = if allow_fill && lines.len() == 1 {
-        STEP_FILL
-    } else {
-        0.0
-    };
     for line in lines {
-        let color = history_line_color(line.color_index, theme);
+        let style = LinePaint {
+            color: resolve_line_color(line.color_index, primary_override, theme),
+            fill_opacity,
+        };
         for segment in &line.segments {
-            paint_segment(bounds, &segment.points, color, fill_opacity, window);
+            paint_segment(bounds, &segment.points, style, window);
         }
     }
 }
@@ -255,35 +324,50 @@ fn paint_lines(
 fn paint_segment(
     bounds: Bounds<Pixels>,
     points: &[HistoryPointView],
-    color: Hsla,
-    fill_opacity: f32,
+    style: LinePaint,
     window: &mut Window,
 ) {
     let mut run: Vec<&HistoryPointView> = Vec::new();
     for point in points {
         if point.gap_before && !run.is_empty() {
-            paint_run(bounds, &run, color, fill_opacity, window);
-            paint_gap_bridge(bounds, run[run.len() - 1], point, color, window);
+            paint_run(bounds, &run, style, window);
+            paint_gap_bridge(bounds, run[run.len() - 1], point, style, window);
             run.clear();
         }
         run.push(point);
     }
     if !run.is_empty() {
-        paint_run(bounds, &run, color, fill_opacity, window);
+        paint_run(bounds, &run, style, window);
     }
 }
 
 /// 断档不留白：用淡虚线按台阶形状接上，先保持断前的值，到恢复时刻再落到新值。
-/// 不铺填充，避免把没有数据的时段读成有用量。
+/// 当折线有底部填充时，断档下方铺一层更淡的过渡填充，避免平线在断档处被切成两块孤立色砖。
 fn paint_gap_bridge(
     bounds: Bounds<Pixels>,
     before: &HistoryPointView,
     after: &HistoryPointView,
-    color: Hsla,
+    style: LinePaint,
     window: &mut Window,
 ) {
     let from = chart_point(bounds, before.x_ratio, before.y_ratio);
     let to = chart_point(bounds, after.x_ratio, after.y_ratio);
+    if style.fill_opacity > 0.0 && to.x > from.x {
+        let plot = line_plot_bounds(bounds);
+        let baseline = plot.origin.y + plot.size.height;
+        let mut fill_path = PathBuilder::fill();
+        fill_path.move_to(point(from.x, baseline));
+        fill_path.line_to(from);
+        fill_path.line_to(point(to.x, from.y));
+        fill_path.line_to(point(to.x, baseline));
+        fill_path.close();
+        if let Ok(path) = fill_path.build() {
+            window.paint_path(
+                path,
+                style.color.opacity(style.fill_opacity * GAP_FILL_FACTOR),
+            );
+        }
+    }
     let mut builder = PathBuilder::stroke(px(GAP_STROKE)).dash_array(&[px(3.0), px(3.0)]);
     builder.move_to(from);
     builder.line_to(point(to.x, from.y));
@@ -291,15 +375,14 @@ fn paint_gap_bridge(
         builder.line_to(to);
     }
     if let Ok(path) = builder.build() {
-        window.paint_path(path, color.opacity(GAP_OPACITY));
+        window.paint_path(path, style.color.opacity(GAP_OPACITY));
     }
 }
 
 fn paint_run(
     bounds: Bounds<Pixels>,
     points: &[&HistoryPointView],
-    color: Hsla,
-    fill_opacity: f32,
+    style: LinePaint,
     window: &mut Window,
 ) {
     // 阶梯：保持上一个采样的值，到下一个不同的值再跳。相同用量并成一段平线。
@@ -325,7 +408,7 @@ fn paint_run(
     let first = vertices[0];
     let last = vertices[vertices.len() - 1];
 
-    if fill_opacity > 0.0 {
+    if style.fill_opacity > 0.0 {
         let mut fill_path = PathBuilder::fill();
         fill_path.move_to(point(px(first.0), px(baseline)));
         fill_path.line_to(point(px(first.0), px(first.1)));
@@ -333,7 +416,7 @@ fn paint_run(
         fill_path.line_to(point(px(last.0), px(baseline)));
         fill_path.close();
         if let Ok(path) = fill_path.build() {
-            window.paint_path(path, color.opacity(fill_opacity));
+            window.paint_path(path, style.color.opacity(style.fill_opacity));
         }
     }
 
@@ -341,7 +424,7 @@ fn paint_run(
     stroke.move_to(point(px(first.0), px(first.1)));
     apply_step(&mut stroke, &commands);
     if let Ok(path) = stroke.build() {
-        window.paint_path(path, color);
+        window.paint_path(path, style.color);
     }
 }
 
@@ -465,7 +548,7 @@ fn apply_step(builder: &mut PathBuilder, commands: &[StepCommand]) {
     }
 }
 
-/// 本周期辅助线：50% 中线、「现在」竖线、理想配速对角线和起点圆点。
+/// 本周期辅助线：50% 中线、「现在」竖线、理想配速对角参考线（中性色，不画伪采样圆点）。
 fn paint_period_guides(
     bounds: Bounds<Pixels>,
     period: &HistoryPeriodView,
@@ -493,27 +576,15 @@ fn paint_period_guides(
         window.paint_path(path, theme.text.muted);
     }
 
-    // 理想配速：从周期起点满额斜到重置时用完，颜色跟着折线但更淡。
-    let pace_color = history_line_color(0, theme);
+    // 理想配速：从周期起点满额斜到重置时用完，用中性淡虚线作背景参考，避免与数据断档虚线撞色。
     let pace_from = chart_point(bounds, 0.0, period.pace_start_y_ratio);
     let pace_to = chart_point(bounds, 1.0, period.pace_end_y_ratio);
-    let mut pace_builder = PathBuilder::stroke(px(1.5)).dash_array(&[px(4.0), px(3.0)]);
+    let mut pace_builder = PathBuilder::stroke(px(PACE_STROKE)).dash_array(&[px(4.0), px(3.0)]);
     pace_builder.move_to(pace_from);
     pace_builder.line_to(pace_to);
     if let Ok(path) = pace_builder.build() {
-        window.paint_path(path, pace_color.opacity(0.55));
+        window.paint_path(path, theme.text.muted.opacity(PACE_OPACITY));
     }
-    let radius = px(2.5);
-    window.paint_quad(
-        fill(
-            Bounds {
-                origin: point(pace_from.x - radius, pace_from.y - radius),
-                size: size(radius * 2.0, radius * 2.0),
-            },
-            pace_color,
-        )
-        .corner_radii(radius),
-    );
 }
 
 fn line_plot_bounds(bounds: Bounds<Pixels>) -> Bounds<Pixels> {
@@ -588,6 +659,7 @@ fn paint_hover_guides(
 fn paint_hover_marker(
     bounds: Bounds<Pixels>,
     hit: &HistoryHoverHit,
+    primary_override: Option<Hsla>,
     theme: &Theme,
     colors: HoverColors,
     window: &mut Window,
@@ -607,7 +679,7 @@ fn paint_hover_marker(
                     origin: point(mark_x - radius, cross_y - radius),
                     size: size(radius * 2.0, radius * 2.0),
                 },
-                history_line_color(mark.color_index, theme),
+                resolve_line_color(mark.color_index, primary_override, theme),
             )
             .corner_radii(radius),
         );
@@ -754,5 +826,13 @@ mod tests {
                 StepCommand::Line(50.0, 4.0),
             ]
         );
+    }
+
+    #[test]
+    fn chart_fill_opacity_attenuates_flat_series_and_disables_on_multi_or_period() {
+        assert_eq!(chart_fill_opacity(false, 1, false), 0.0);
+        assert_eq!(chart_fill_opacity(true, 2, false), 0.0);
+        assert!((chart_fill_opacity(true, 1, false) - STEP_FILL).abs() < 1e-6);
+        assert!((chart_fill_opacity(true, 1, true) - STEP_FILL * FLAT_FILL_FACTOR).abs() < 1e-6);
     }
 }
