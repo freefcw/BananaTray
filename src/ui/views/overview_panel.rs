@@ -1,6 +1,5 @@
 use crate::application::{
-    format_quota_status_label, overview_view_state, AppAction, OverviewItemStatus,
-    OverviewItemViewState, OverviewQuotaItem,
+    overview_view_state, AppAction, OverviewItemStatus, OverviewItemViewState, OverviewQuotaItem,
 };
 use crate::models::{NavTab, PopupLayout, ProviderId, StatusLevel};
 use crate::runtime;
@@ -41,7 +40,7 @@ fn render_provider_name_cell(
     if sub_label.is_some() {
         name_div = name_div.flex_shrink_0();
     } else {
-        name_div = name_div.min_w_0();
+        name_div = name_div.min_w_0().text_ellipsis();
     }
 
     let mut cell = div()
@@ -80,6 +79,7 @@ fn render_provider_name_cell(
                 .text_color(theme.text.muted)
                 .overflow_hidden()
                 .whitespace_nowrap()
+                .text_ellipsis()
                 .child(sub.to_string()),
         );
     }
@@ -198,10 +198,9 @@ fn render_card_disconnected(item: &OverviewItemViewState, theme: &Theme) -> Stat
     )
 }
 
-/// 展开态配额行：[label flex-1] [value 固定宽] [bar 固定宽] [badge] [展开列占位]
+/// 展开态配额行：[label flex-1] [value] [bar 固定宽] [展开列占位]
 fn render_quota_row(q: &OverviewQuotaItem, theme: &Theme) -> Div {
     let fill = theme.status_bar_color(q.status_level);
-    let badge_color = theme.status_badge_color(q.status_level);
     div()
         .w_full()
         .flex()
@@ -215,6 +214,7 @@ fn render_quota_row(q: &OverviewQuotaItem, theme: &Theme) -> Div {
                 .text_color(theme.text.secondary)
                 .whitespace_nowrap()
                 .overflow_hidden()
+                .text_ellipsis()
                 .child(q.label.clone()),
         )
         .child(render_value_cell(&q.display_text, theme))
@@ -224,8 +224,7 @@ fn render_quota_row(q: &OverviewQuotaItem, theme: &Theme) -> Div {
             fill,
             theme,
         ))
-        .child(render_badge(q.status_level, badge_color))
-        // 右侧与折叠态展开按钮等宽占位，保证展开态与折叠态数值/进度条/状态列垂直对齐
+        // 右侧与折叠态展开按钮等宽占位，保证展开态与折叠态数值/进度条列垂直对齐
         .child(render_expand_spacer())
 }
 
@@ -234,10 +233,9 @@ fn render_expand_spacer() -> Div {
     div().w(px(PopupLayout::OVERVIEW_EXPAND_W)).flex_shrink_0()
 }
 
-/// 固定宽度数值单元格（右对齐）
+/// 数值单元格（不设固定宽，紧贴右侧固定宽进度条，避免百分比左侧留出死空白挤压名称列）
 fn render_value_cell(text: &str, theme: &Theme) -> Div {
     div()
-        .w(px(PopupLayout::OVERVIEW_VALUE_W))
         .flex_shrink_0()
         .text_size(px(12.0))
         .font_weight(FontWeight::BOLD)
@@ -245,18 +243,6 @@ fn render_value_cell(text: &str, theme: &Theme) -> Div {
         .whitespace_nowrap()
         .text_align(TextAlign::Right)
         .child(text.to_string())
-}
-
-/// 固定宽度状态徽章（右对齐）
-fn render_badge(level: StatusLevel, color: Hsla) -> Div {
-    div()
-        .w(px(PopupLayout::OVERVIEW_BADGE_W))
-        .flex_shrink_0()
-        .text_size(px(9.0))
-        .font_weight(FontWeight::BOLD)
-        .text_color(color)
-        .text_align(TextAlign::Right)
-        .child(format_quota_status_label(level))
 }
 
 /// 根据配额是否有总额上限选择渲染方式：
@@ -422,7 +408,7 @@ impl AppView {
 
     // ========================================================================
     // 单行卡片（1 配额 / 2+ 折叠态共用）
-    // [dot] [icon] [name (+ 折叠态配额名)] [value] [bar] [badge] [▸?]
+    // [dot] [icon] [name (+ 折叠态配额名)] [value] [bar] [▸?]
     // ========================================================================
 
     /// 单行卡片：`expandable = false` 为纯单行，`true` 为折叠态（追加 ▸ 按钮）
@@ -454,11 +440,6 @@ impl AppView {
             PopupLayout::OVERVIEW_BAR_H,
             fill,
             &theme,
-        ))
-        // 徽章跟随所展示配额：设了主额度时行内数值是它，badge 也应是它而非最差等级。
-        .child(render_badge(
-            quota.status_level,
-            theme.status_badge_color(quota.status_level),
         ));
 
         // 展开列（固定 24×24 尺寸，保证所有单行卡片宽度与 42px 总高度完全一致）
@@ -486,7 +467,7 @@ impl AppView {
         let theme = cx.global::<Theme>().clone();
         let color = theme.status_badge_color(overall_level);
 
-        // header 行：[dot] [icon] [name] [▾]（展开态不显示整体 badge，各行已有独立 badge）
+        // header 行：[dot] [icon] [name] [▾]
         let header_base = div()
             .w_full()
             .flex()

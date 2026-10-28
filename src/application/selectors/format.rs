@@ -223,6 +223,38 @@ pub(crate) fn format_quota_label(quota: &QuotaInfo) -> String {
     format_quota_label_spec(&quota.label_spec)
 }
 
+/// 格式化总览面板专用的紧凑配额标题（省去套餐等级等 Provider 级冗余前后缀，突出具体额度维度）。
+pub(crate) fn format_overview_quota_label(quota: &QuotaInfo) -> String {
+    format_overview_quota_label_spec(&quota.label_spec)
+}
+
+fn format_subscription_pool_label(pool: &str) -> String {
+    match pool {
+        "orb" => t!("quota.label.subscription_pool_orb").to_string(),
+        "agent" => t!("quota.label.subscription_pool_agent").to_string(),
+        "other" => t!("quota.label.subscription_pool_other").to_string(),
+        "auto" => t!("quota.label.subscription_pool_auto").to_string(),
+        "api" => t!("quota.label.subscription_pool_api").to_string(),
+        // 未知池名原文透传，避免丢失上游信息
+        other => other.to_string(),
+    }
+}
+
+pub(crate) fn format_overview_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
+    match label_spec {
+        QuotaLabelSpec::SubscriptionUsage { pool, .. } => format_subscription_pool_label(pool),
+        QuotaLabelSpec::WeeklyTier { .. } => t!("quota.label.weekly").to_string(),
+        QuotaLabelSpec::MonthlyTier { .. } => t!("quota.label.monthly").to_string(),
+        QuotaLabelSpec::PremiumRequests { .. } => {
+            t!("quota.label.premium_requests_short").to_string()
+        }
+        QuotaLabelSpec::ChatCompletions { .. } => {
+            t!("quota.label.chat_completions_short").to_string()
+        }
+        other => format_quota_label_spec(other),
+    }
+}
+
 pub(crate) fn format_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
     match label_spec {
         QuotaLabelSpec::Raw(label) => label.clone(),
@@ -260,15 +292,7 @@ pub(crate) fn format_quota_label_spec(label_spec: &QuotaLabelSpec) -> String {
         QuotaLabelSpec::OnDemand => t!("quota.label.on_demand").to_string(),
         QuotaLabelSpec::Team => t!("quota.label.team").to_string(),
         QuotaLabelSpec::SubscriptionUsage { plan, pool } => {
-            let pool_label = match pool.as_str() {
-                "orb" => t!("quota.label.subscription_pool_orb").to_string(),
-                "agent" => t!("quota.label.subscription_pool_agent").to_string(),
-                "other" => t!("quota.label.subscription_pool_other").to_string(),
-                "auto" => t!("quota.label.subscription_pool_auto").to_string(),
-                "api" => t!("quota.label.subscription_pool_api").to_string(),
-                // 未知池名原文透传，避免丢失上游信息
-                other => other.to_string(),
-            };
+            let pool_label = format_subscription_pool_label(pool);
             t!(
                 "quota.label.subscription_usage",
                 plan = plan,
@@ -943,6 +967,66 @@ mod tests {
         rust_i18n::set_locale("zh-CN");
         assert_eq!(format_quota_label(&auto), "PRO · 自有模型");
         assert_eq!(format_quota_label(&api), "PRO · 三方模型");
+        rust_i18n::set_locale("en");
+    }
+
+    #[test]
+    fn format_overview_quota_label_strips_redundant_plan_and_tier() {
+        let _locale_guard = setup_locale();
+        let cursor_auto = QuotaInfo::from_used_percent(
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "ULTRA".into(),
+                pool: "auto".into(),
+            },
+            5.0,
+            QuotaType::General,
+            None,
+        );
+        let weekly_tier = QuotaInfo::with_details(
+            QuotaLabelSpec::WeeklyTier {
+                tier: "Moderato".into(),
+            },
+            25.0,
+            100.0,
+            QuotaType::Weekly,
+            None,
+        );
+        let monthly_tier = QuotaInfo::with_details(
+            QuotaLabelSpec::MonthlyTier { tier: "PRO".into() },
+            25.0,
+            100.0,
+            QuotaType::Monthly,
+            None,
+        );
+        let premium = QuotaInfo::with_details(
+            QuotaLabelSpec::PremiumRequests { plan: "Pro".into() },
+            10.0,
+            100.0,
+            QuotaType::General,
+            None,
+        );
+        let chat = QuotaInfo::with_details(
+            QuotaLabelSpec::ChatCompletions {
+                plan: "Free".into(),
+            },
+            10.0,
+            100.0,
+            QuotaType::General,
+            None,
+        );
+
+        assert_eq!(format_overview_quota_label(&cursor_auto), "Auto");
+        assert_eq!(format_overview_quota_label(&weekly_tier), "Weekly");
+        assert_eq!(format_overview_quota_label(&monthly_tier), "Monthly");
+        assert_eq!(format_overview_quota_label(&premium), "Premium Requests");
+        assert_eq!(format_overview_quota_label(&chat), "Chat & Completions");
+
+        rust_i18n::set_locale("zh-CN");
+        assert_eq!(format_overview_quota_label(&cursor_auto), "自有模型");
+        assert_eq!(format_overview_quota_label(&weekly_tier), "周配额");
+        assert_eq!(format_overview_quota_label(&monthly_tier), "月配额");
+        assert_eq!(format_overview_quota_label(&premium), "高级请求");
+        assert_eq!(format_overview_quota_label(&chat), "对话与补全");
         rust_i18n::set_locale("en");
     }
 

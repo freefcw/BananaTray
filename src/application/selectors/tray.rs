@@ -6,8 +6,8 @@ use super::super::state::{
     overview_provider_renders_quotas, provider_panel_flags, AppSession, HistoryLoadState,
 };
 use super::format::{
-    format_non_monitoring_message, format_provider_updated_at, format_quota_card_display_text,
-    format_quota_card_has_unit, format_quota_label, format_user_failure_message,
+    format_non_monitoring_message, format_overview_quota_label, format_provider_updated_at,
+    format_quota_card_display_text, format_quota_card_has_unit, format_user_failure_message,
     quota_display_view_state, rate_limit_reset_section, split_stale_age, StaleAgeUnit,
 };
 use super::*;
@@ -299,6 +299,7 @@ fn provider_empty_message(provider: &ProviderStatus) -> String {
 ///
 /// 仅当 `display.nav_status_dots` 开启时由视图层读取：配额偏低/刷新错误为红色，
 /// 配额注意或展示陈旧数据（上次刷新失败）为黄色。
+/// 直接复用领域层 `ProviderConfig::visible_worst_status`，确保与托盘主图标、Overview 状态点保持单一事实来源。
 pub fn provider_nav_alert_level(
     settings: &AppSettings,
     provider: &ProviderStatus,
@@ -315,11 +316,10 @@ pub fn provider_nav_alert_level(
             return None;
         }
         let rules = settings.effective_quota_rules(&provider.provider_id);
-        let worst = visible
-            .iter()
-            .map(|q| q.status_level(&rules))
-            .max()
-            .unwrap_or(StatusLevel::Green);
+        let worst =
+            settings
+                .provider
+                .visible_worst_status(&provider.provider_id, &provider.quotas, &rules);
         match worst {
             StatusLevel::Red => Some(StatusLevel::Red),
             StatusLevel::Yellow => Some(StatusLevel::Yellow),
@@ -369,14 +369,14 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                     let rules = session
                         .settings
                         .effective_quota_rules(&provider.provider_id);
-                    // 收集所有可见配额，按 status_level 降序（最差在前）
+                    // 收集所有可见配额，按 status_level 降序（最差在前），同状态等级下计量配额优先于纯余额项
                     let mut quota_items: Vec<OverviewQuotaItem> = visible
                         .iter()
                         .map(|q| {
                             let sl = q.status_level(&rules);
                             OverviewQuotaItem {
                                 quota_key: q.stable_key.clone(),
-                                label: format_quota_label(q),
+                                label: format_overview_quota_label(q),
                                 display_text: compact_quota_display_text(q, display_mode),
                                 bar_ratio: compact_quota_bar_ratio(q, sl, display_mode),
                                 is_balance_only: q.is_balance_only(),
@@ -384,8 +384,14 @@ pub fn overview_view_state(session: &AppSession) -> OverviewViewState {
                             }
                         })
                         .collect();
-                    quota_items.sort_by_key(|item| std::cmp::Reverse(item.status_level));
-                    let worst = quota_items[0].status_level;
+                    quota_items.sort_by_key(|item| {
+                        (std::cmp::Reverse(item.status_level), item.is_balance_only)
+                    });
+                    let worst = session.settings.provider.visible_worst_status(
+                        &provider.provider_id,
+                        &provider.quotas,
+                        &rules,
+                    );
                     // 用户指定的主额度挪到最前：折叠态展示它而非最差配额。
                     if let Some(primary_key) = session
                         .settings

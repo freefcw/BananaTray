@@ -970,6 +970,45 @@ fn overview_marks_balance_only_quotas() {
             let points = quotas.iter().find(|q| q.label != "weekly").unwrap();
             assert!(!weekly.is_balance_only);
             assert!(points.is_balance_only);
+            // 同为充足（Green）状态时，计量配额排在纯余额前，供折叠态优先展示
+            assert_eq!(quotas[0].label, "weekly");
+        }
+        other => panic!("expected Quota, got {:?}", other),
+    }
+}
+
+#[test]
+fn overview_uses_compact_quota_label_without_plan_prefix() {
+    let _locale_guard = setup_locale();
+    let mut provider = make_provider(ProviderKind::Cursor, ConnectionStatus::Connected);
+    provider.quotas = vec![
+        QuotaInfo::from_used_percent(
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "ULTRA".into(),
+                pool: "auto".into(),
+            },
+            5.0,
+            crate::models::QuotaType::General,
+            None,
+        ),
+        QuotaInfo::from_used_percent(
+            QuotaLabelSpec::SubscriptionUsage {
+                plan: "ULTRA".into(),
+                pool: "api".into(),
+            },
+            20.0,
+            crate::models::QuotaType::General,
+            None,
+        ),
+    ];
+
+    let session = make_overview_session(vec![provider], &[ProviderKind::Cursor]);
+    let vm = overview_view_state(&session);
+
+    match &vm.items[0].status {
+        OverviewItemStatus::Quota { quotas, .. } => {
+            let labels: Vec<&str> = quotas.iter().map(|q| q.label.as_str()).collect();
+            assert_eq!(labels, vec!["Auto", "API"]);
         }
         other => panic!("expected Quota, got {:?}", other),
     }
