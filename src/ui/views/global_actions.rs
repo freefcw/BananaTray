@@ -7,6 +7,7 @@ use gpui::{
     div, px, Context, Div, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
     ParentElement, Styled,
 };
+use rust_i18n::t;
 
 use crate::ui::widgets::{render_svg_icon, with_tooltip};
 use crate::ui::AppView;
@@ -59,12 +60,12 @@ impl AppView {
             )
         };
 
-        // 设置按钮（圆形）
+        // 设置按钮（圆形 + tooltip）
         let settings_btn = render_circle_button(
             "src/icons/settings.svg",
-            cx.global::<Theme>().text.secondary,
-            cx.global::<Theme>().bg.subtle,
-            cx.global::<Theme>().border.subtle,
+            theme.text.secondary,
+            theme.bg.subtle,
+            theme.border.subtle,
         );
         let settings_state = self.state.clone();
         let settings_btn = settings_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -75,18 +76,30 @@ impl AppView {
                 cx,
             );
         });
+        let settings_btn = with_tooltip(
+            ElementId::Name("tray-global-settings".into()),
+            &t!("tooltip.settings"),
+            theme,
+            settings_btn,
+        );
 
-        // 关闭按钮（圆形，红色调）
+        // 退出按钮（圆形，使用明确退出图标替代易误认为「仅关闭弹窗」的 × 图标）
         let close_btn = render_circle_button(
-            "src/icons/close.svg",
-            cx.global::<Theme>().status.error,
-            cx.global::<Theme>().button.danger_bg,
-            cx.global::<Theme>().button.danger_bg,
+            "src/icons/quit.svg",
+            theme.status.error,
+            theme.button.danger_bg,
+            theme.button.danger_bg,
         );
         let close_state = self.state.clone();
         let close_btn = close_btn.on_mouse_down(MouseButton::Left, move |_, window, cx| {
             crate::bootstrap::dispatch_in_window(&close_state, AppAction::QuitApp, window, cx);
         });
+        let close_btn = with_tooltip(
+            ElementId::Name("tray-global-quit".into()),
+            &t!("tooltip.quit"),
+            theme,
+            close_btn,
+        );
 
         let mut footer = div()
             .w_full()
@@ -128,5 +141,6 @@ pub(crate) fn render_circle_button(
         .border_1()
         .border_color(border_color)
         .cursor_pointer()
+        .hover(|style| style.opacity(0.85))
         .child(render_svg_icon(icon, px(16.0), icon_color))
 }
