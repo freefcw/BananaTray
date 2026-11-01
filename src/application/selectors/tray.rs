@@ -56,7 +56,6 @@ pub fn tray_global_actions_view_state(session: &AppSession) -> GlobalActionsView
             .iter()
             .any(|p| session.settings.provider.is_enabled(&p.provider_id) && p.supports_refresh())
             .then_some(RefreshTarget::All),
-        NavTab::Settings => None,
     };
 
     let is_refreshing = match &target {

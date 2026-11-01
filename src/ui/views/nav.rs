@@ -13,7 +13,7 @@ use gpui::{
 use rust_i18n::t;
 use std::time::Duration;
 
-/// Overview 导航图标路径（与 tray_settings.rs 保持一致）
+/// Overview 总览面板的导航图标路径。
 const OVERVIEW_ICON: &str = "src/icons/overview.svg";
 /// 导航项总数超过此阈值时启用紧凑模式（未选中仅显示图标，选中展开图标+文字）
 const COMPACT_TAB_THRESHOLD: usize = 4;

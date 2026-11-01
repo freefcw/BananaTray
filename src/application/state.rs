@@ -448,7 +448,7 @@ fn initial_active_tab(settings: &AppSettings, first_enabled: Option<ProviderId>)
     } else {
         first_enabled
             .map(NavTab::Provider)
-            .unwrap_or(NavTab::Settings)
+            .unwrap_or(NavTab::Overview)
     }
 }
 
@@ -1013,7 +1013,7 @@ pub fn compute_header_status(
 ) -> (HeaderStatusKind, Option<u64>) {
     let id = match &nav.active_tab {
         NavTab::Provider(id) => id.clone(),
-        NavTab::Settings | NavTab::Overview => nav.last_provider_id.clone(),
+        NavTab::Overview => nav.last_provider_id.clone(),
     };
 
     let Some(provider) = store.find_by_id(&id) else {

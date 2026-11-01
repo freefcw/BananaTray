@@ -124,8 +124,7 @@ impl TrayController {
         // Check if window is actually alive, not just if handle exists
         if self.is_window_alive(cx) {
             let popup_visible = self.is_popup_visible(cx);
-            let active_tab = self.state.borrow().session.nav.active_tab.clone();
-            if popup_visible && matches!(active_tab, NavTab::Provider(_) | NavTab::Overview) {
+            if popup_visible {
                 info!(target: "tray", "tray popup already open, closing it");
                 self.close_popup(cx);
             } else {

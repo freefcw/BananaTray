@@ -15,7 +15,7 @@ Core data types shared across the entire crate. **No GPUI dependency** — all t
 - **`ProviderDescriptor`** — combines a registration/source descriptor ID with `ProviderMetadata`. Built-in descriptor IDs may include suffixes such as `codex:api`; persisted built-in identity always comes from `ProviderId::BuiltIn(kind).id_key()`.
 - **`ProviderCapability`** — provider product capability tier: `Monitorable`, `Informational`, `Placeholder`. Refresh scheduling and empty-state UI semantics are keyed off this enum.
 - **`SettingsCapability`** — provider settings UI capability declaration (pure data, GPUI-free). Variants: `None` (default, no extra settings UI), `TokenInput(TokenInputCapability)` (generic token input panel), `NewApiEditable { base_url }` (NewAPI config editor), `ScriptEditable { interpreter }` (script provider editor). The latter two carry the current config value so the settings card can show which config it manages; both are filled by `CustomProvider::settings_capability()` from the loaded YAML. `TokenInputCapability` now contains only static UI metadata and `credential_key`; provider-specific runtime display logic lives in `ProviderCapabilities::resolve_token_input_state()`.
-- **`NavTab`** — navigation tab enum: `Provider(ProviderId)` or `Settings`
+- **`NavTab`** — tray navigation tab enum: `Overview` or `Provider(ProviderId)`
 
 ### `quota/` — Usage Data
 

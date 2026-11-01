@@ -124,14 +124,14 @@ fn session_new_uses_first_enabled_provider_when_overview_hidden() {
 }
 
 #[test]
-fn session_new_uses_settings_tab_when_overview_hidden_and_no_enabled_provider() {
+fn session_new_uses_overview_tab_when_overview_hidden_and_no_enabled_provider() {
     let store = make_store(&[ProviderKind::Claude]);
     let mut settings = AppSettings::default();
     settings.display.show_overview = false;
 
     let session = AppSession::new(settings, store.providers);
 
-    assert_eq!(session.nav.active_tab, NavTab::Settings);
+    assert_eq!(session.nav.active_tab, NavTab::Overview);
     assert_eq!(session.nav.last_provider_id, pid(ProviderKind::Claude));
 }
 

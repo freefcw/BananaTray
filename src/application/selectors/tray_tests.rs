@@ -102,12 +102,10 @@ fn global_actions_hide_refresh_for_non_monitorable_provider() {
 }
 
 #[test]
-fn global_actions_refresh_id_none_on_settings_tab() {
+fn global_actions_refresh_id_none_when_no_enabled_provider_on_overview() {
     let _locale_guard = setup_locale();
     let settings = AppSettings::default();
-    // 没有任何 provider → active_tab 回退到 Settings
-    let mut session = AppSession::new(settings, vec![]);
-    session.nav.active_tab = NavTab::Settings;
+    let session = AppSession::new(settings, vec![]);
     let actions = tray_global_actions_view_state(&session);
 
     assert!(actions.refresh.target.is_none());

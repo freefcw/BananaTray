@@ -322,5 +322,4 @@ pub enum NavTab {
     /// 总览面板：所有 Provider 配额概览
     Overview,
     Provider(ProviderId),
-    Settings,
 }

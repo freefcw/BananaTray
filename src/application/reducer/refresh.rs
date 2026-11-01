@@ -308,11 +308,8 @@ fn cleanup_dangling_refs(session: &mut AppSession) {
     // 导航：如果当前 active_tab 指向的 provider 已不存在，回退
     if let NavTab::Provider(ref id) = session.nav.active_tab {
         if !provider_exists(session, id) {
-            if let Some(tab) = session.default_provider_tab() {
-                session.nav.switch_to(tab);
-            } else {
-                session.nav.switch_to(NavTab::Settings);
-            }
+            let next_tab = session.default_provider_tab().unwrap_or(NavTab::Overview);
+            session.nav.switch_to(next_tab);
         }
     }
     // last_provider_id

@@ -5,7 +5,7 @@ use crate::models::{NavTab, ProviderKind};
 #[test]
 fn nav_switch_to_provider() {
     let mut nav = NavigationState {
-        active_tab: NavTab::Settings,
+        active_tab: NavTab::Overview,
         last_provider_id: pid(ProviderKind::Claude),
         prev_active_tab: None,
         generation: 0,
@@ -16,15 +16,15 @@ fn nav_switch_to_provider() {
 }
 
 #[test]
-fn nav_switch_to_settings_preserves_last_provider() {
+fn nav_switch_to_overview_preserves_last_provider() {
     let mut nav = NavigationState {
         active_tab: NavTab::Provider(pid(ProviderKind::Claude)),
         last_provider_id: pid(ProviderKind::Claude),
         prev_active_tab: None,
         generation: 0,
     };
-    nav.switch_to(NavTab::Settings);
-    assert_eq!(nav.active_tab, NavTab::Settings);
+    nav.switch_to(NavTab::Overview);
+    assert_eq!(nav.active_tab, NavTab::Overview);
     assert_eq!(nav.last_provider_id, pid(ProviderKind::Claude));
 }
 
@@ -90,17 +90,17 @@ fn nav_fallback_noop_when_not_current() {
 }
 
 #[test]
-fn nav_fallback_noop_when_on_settings_tab() {
+fn nav_fallback_noop_when_on_overview_tab() {
     let store = make_store(&[ProviderKind::Gemini]);
     let mut nav = NavigationState {
-        active_tab: NavTab::Settings,
+        active_tab: NavTab::Overview,
         last_provider_id: pid(ProviderKind::Claude),
         prev_active_tab: None,
         generation: 0,
     };
     let settings = make_settings(&[ProviderKind::Gemini]);
     nav.fallback_on_disable(&pid(ProviderKind::Claude), &store.providers, &settings);
-    assert_eq!(nav.active_tab, NavTab::Settings);
+    assert_eq!(nav.active_tab, NavTab::Overview);
 }
 
 #[test]

@@ -67,10 +67,10 @@ fn popup_height_adds_reset_card_without_changing_quota_slots() {
 }
 
 #[test]
-fn popup_height_uses_last_provider_on_settings_tab() {
+fn popup_height_uses_last_provider_on_overview_tab() {
     let store = make_store(&[ProviderKind::Claude]);
     let nav = NavigationState {
-        active_tab: NavTab::Settings,
+        active_tab: NavTab::Overview,
         last_provider_id: pid(ProviderKind::Claude),
         prev_active_tab: None,
         generation: 0,

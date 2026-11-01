@@ -208,10 +208,6 @@ impl AppView {
         header
     }
 
-    pub(crate) fn render_toggle_switch_small(&self, enabled: bool, theme: &Theme) -> Div {
-        crate::ui::widgets::render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
-    }
-
     fn sync_popup_height(&self, window: &mut Window, desired_height: f32) {
         if let WindowBounds::Windowed(current_bounds) = window.window_bounds() {
             let new_height = px(desired_height);
@@ -283,7 +279,6 @@ impl Render for AppView {
                             .pb(px(8.0))
                             .child(self.render_provider_detail(id, cx))
                             .into_any_element(),
-                        NavTab::Settings => self.render_settings_content(cx),
                     }),
             )
             // 底部工具栏

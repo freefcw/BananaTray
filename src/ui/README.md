@@ -32,23 +32,24 @@ GPUI-dependent UI module. Contains concrete view types, rendering logic, widgets
 - `nav.rs` — Tab-style navigation bar. Provider order follows `AppSettings::ordered_providers()`. Overview pill inserted first when enabled. 展示风格由 `settings.display.nav_tab_style` 控制：`Full`（默认）所有项显示「图标 + 名称」；`Compact` 在项数超过 4 时仅当前选中项展开文字、未选中项显示居中图标 + 名称 Tooltip。切换 Tab 时锁定上一项展开 bounds 并在下一帧测量新项 bounds 后自动滚入可视区域与驱动果冻滑块动画；左右翻页指示器常驻占位、仅可滚动时显示素色 chevron，点击把目标项滚到视口边缘；可滚动方向同时在滚动容器边缘叠加 `20px` 面板底色渐变遮罩，缓和截断边缘。`settings.display.nav_status_dots` 开启后，配额注意 / 偏低或刷新异常的 Provider 会在图标右上角叠加对应状态色点（两种风格通用）。
 - `overview_panel.rs` — Overview panel: compact provider cards showing all enabled providers' quota status at a glance. Click-through to provider detail. 2+ 配额的卡片默认折叠（名称旁附带所展示配额的紧凑标签：设了主额度展示主额度，否则展示最差配额，省去套餐等级等冗余前缀）、可展开为多行；行内不重复渲染状态文字徽章（状态已由左侧状态圆点和进度条颜色表达），数值列紧贴右侧固定宽进度条，把水平空间留给名称与配额标签；纯余额/积分/超额用量项渲染分段细虚线轨道而非百分比进度条。展开态不是 view-local 状态，而是 `AppAction::ToggleOverviewExpanded` 写入 `AppSession::overview_expanded` 后由 `overview_view_state` 回读，因此弹窗销毁重建（macOS 每次关闭都会）后仍保留，重启应用则回到折叠。展开按钮使用 24×24 点击区域和 localized tooltip（外层焦点容器 ID 固定以保持键盘焦点，内层 tooltip 宿主 ID 随展开态切换以实时刷新浮层），默认无描边，Tab 聚焦时才显示焦点环，并支持 Enter / Space 切换。
 - `provider_panel.rs` — Provider detail view: header, account card (shows tier + data source in normal state, or stale failure warning with tooltip when refresh failed; includes labeled Dashboard entry button), quota bars/rings, rate-limit reset card, and stale failure badge for providers without an account card. 配额卡内嵌折线按 `quota_key` 画在对应配额卡底部，时间范围跟「显示」里的「卡片折线」走（近 24 小时或配额当前周期），没有匹配序列时卡片保持原高度。线条样式的折线可点开放大 / 收起（每张卡独立，进程内记忆），窗口随高度重算变大；圆圈样式不可点。
-- `tray_settings.rs` — Inline settings content rendered inside the tray popup (overview toggle, auto-hide, account info).
 
 ### `settings_window/` — Full Settings Window
 
 Separate desktop window with tabbed settings UI:
-- `mod.rs` — window shell, tab routing, `SettingsView`, and concrete view factory for `bootstrap`
-- `general_tab.rs` — theme, refresh cadence, auto-hide, launch-at-login
+- `mod.rs` — window shell, tab routing (`General / Providers / Display / Alerts / About / Debug?`), `SettingsView`, and concrete view factory for `bootstrap`
+- `general_tab.rs` — system & window (start at login, auto-hide popup window, global hotkey), sync & history (refresh cadence, history retention, clear all history), developer toggle, and quit action
 - `providers/` — provider sidebar + detail panel
-- `display_tab.rs` / `debug_tab.rs` / `about_tab.rs` — remaining settings tabs
+- `display_tab.rs` — interface & menu bar (theme, language, tray icon style), tray popup layout (overview, nav bar style & status dots, account info, dashboard & refresh buttons), quota cards & charts (display mode, card style, sparkline range, merge history charts)
+- `alerts_tab.rs` — desktop notifications (master toggle, usage reminder step, notification sound) and global quota status & alert thresholds
+- `debug_tab.rs` / `about_tab.rs` — remaining settings tabs
 
 ### `widgets/` — Reusable UI Components
 
 Organized into three sub-modules (see [widgets/README.md](widgets/README.md) for full details):
 
-- `primitives/` — Atomic visual building blocks: icon, colored_icon, toggle, tooltip
+- `primitives/` — Atomic visual building blocks: icon, toggle, tooltip
 - `controls/` — Interactive controls: action_button, icon_button, segmented_control, cadence_dropdown, hotkey_field, input_actions
-- `display/` — Data display components: quota_bar, info_row, icon_row, card, provider_icon
+- `display/` — Data display components: quota_bar, info_row, card, provider_icon
 
 All components are re-exported through `widgets/mod.rs` — callers use `crate::ui::widgets::X` without knowing the sub-directory.
 

@@ -438,7 +438,7 @@ fn providers_reloaded_repoints_active_tab_when_deleted() {
 
     match &session.nav.active_tab {
         NavTab::Provider(id) => assert_ne!(*id, custom_id),
-        NavTab::Settings | NavTab::Overview => {}
+        NavTab::Overview => {}
     }
 }
 
