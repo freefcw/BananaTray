@@ -415,6 +415,7 @@ fn build_initial_settings_ui_state(
     SettingsUiState {
         active_tab: SettingsTab::General,
         selected_provider,
+        provider_detail_tab: ProviderDetailTab::Settings,
         cadence_dropdown_open: false,
         history_retention_dropdown_open: false,
         provider_history_retention_dropdown_open: false,
@@ -509,6 +510,14 @@ pub enum SettingsTab {
     Debug,
 }
 
+/// Provider 详情页内的二级子页签（纯数据，不依赖 GPUI）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProviderDetailTab {
+    #[default]
+    Settings,
+    UsageHistory,
+}
+
 /// 全局热键保存失败原因。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalHotkeyError {
@@ -535,6 +544,7 @@ impl GlobalHotkeyError {
 pub struct SettingsUiState {
     pub active_tab: SettingsTab,
     pub selected_provider: ProviderId,
+    pub provider_detail_tab: ProviderDetailTab,
     pub cadence_dropdown_open: bool,
     pub history_retention_dropdown_open: bool,
     pub provider_history_retention_dropdown_open: bool,

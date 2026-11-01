@@ -1,8 +1,8 @@
-use super::providers::shared::{
-    render_inheritance_badge, render_input_box, render_settings_card, render_settings_card_header,
-};
+use super::providers::shared::{render_inheritance_badge, render_input_box, render_settings_card};
 use super::SettingsView;
-use crate::application::{QuotaThresholdUnitViewState, SettingChange, SettingsTab};
+use crate::application::{
+    ProviderDetailTab, QuotaThresholdUnitViewState, SettingChange, SettingsTab,
+};
 use crate::models::{
     ProviderId, QuotaThresholdTarget, QuotaThresholdUnit, QuotaThresholds, QuotaThresholdsError,
 };
@@ -111,11 +111,14 @@ pub(in crate::ui::settings_window) fn quota_threshold_target_matches_tab(
     target: &QuotaThresholdTarget,
     tab: SettingsTab,
     selected: &ProviderId,
+    detail_tab: ProviderDetailTab,
 ) -> bool {
     match target {
         QuotaThresholdTarget::Global => tab == SettingsTab::General,
         QuotaThresholdTarget::Provider(_) => {
-            tab == SettingsTab::Providers && target.is_provider(selected)
+            tab == SettingsTab::Providers
+                && target.is_provider(selected)
+                && detail_tab == ProviderDetailTab::Settings
         }
     }
 }
@@ -146,25 +149,30 @@ pub(in crate::ui::settings_window) fn render_quota_thresholds_section(
         }
         card
     } else {
-        // Provider 详情页：卡片头与「用量提醒」统一（共享 render_settings_card_header），
-        // 各单位区块直接以细分隔线在卡片内展开，避免再套一层内卡片造成三层套娃。
-        let header = render_settings_card_header(
-            "src/icons/status.svg",
-            t!("settings.quota_thresholds.title").to_string(),
-            None,
-            t!("settings.quota_thresholds.desc").to_string(),
-            theme,
-        );
-
-        let mut card = render_settings_card(theme).child(header);
-        for unit_state in units {
-            card = card.child(render_quota_threshold_unit(
-                view, &target, unit_state, true, theme, window, cx, &on_change,
-            ));
-        }
-
-        card
+        // Provider 详情页生产路径把单位行并入规则卡片（`append_provider_threshold_units`）。
+        // 这里只包一层卡片外壳给 UI 测试单独渲染单位行，不再重复卡片头。
+        let card = render_settings_card(theme);
+        append_provider_threshold_units(card, view, &target, units, theme, window, cx, &on_change)
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::ui::settings_window) fn append_provider_threshold_units(
+    mut card: Div,
+    view: &mut SettingsView,
+    target: &QuotaThresholdTarget,
+    units: &[QuotaThresholdUnitViewState],
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut Context<SettingsView>,
+    on_change: &Rc<QuotaThresholdChange>,
+) -> Div {
+    for unit_state in units {
+        card = card.child(render_quota_threshold_unit(
+            view, target, unit_state, true, theme, window, cx, on_change,
+        ));
+    }
+    card
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -180,6 +188,7 @@ fn render_quota_threshold_unit(
 ) -> Div {
     let unit = unit_state.unit;
     let is_global = matches!(target, QuotaThresholdTarget::Global);
+    let is_custom = unit_state.override_thresholds.is_some();
     let editing = view
         .quota_threshold_draft
         .as_ref()
@@ -199,6 +208,37 @@ fn render_quota_threshold_unit(
             .pt(px(14.0))
             .border_t_1()
             .border_color(theme.border.subtle);
+    }
+
+    // Provider 详情页在「跟随全局」且未处于编辑态时，折叠为单行紧凑摘要，隐藏大号色块条与比例尺。
+    if !is_global && !editing && !is_custom {
+        let unit_key = unit.config_key();
+        return row.child(
+            div()
+                .debug_selector(move || format!("quota-threshold-compact-{unit_key}"))
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .min_h(px(24.0))
+                .child(render_unit_header(target, unit_state, theme))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .ml_auto()
+                        .child(render_compact_threshold_values(
+                            unit,
+                            unit_state.effective,
+                            theme,
+                        ))
+                        .child(render_unit_actions(
+                            target, unit_state, theme, cx, on_change,
+                        )),
+                ),
+        );
     }
 
     // 标题行固定高度：编辑态把操作按钮移到区间条下方，标题行只保留标题，进入 / 退出编辑时内容不跳动，
@@ -241,6 +281,41 @@ fn render_quota_threshold_unit(
         }
     }
 
+    row
+}
+
+/// 跟随全局紧凑态下的单行阈值摘要（弹窗提醒 / 图标变红 / 图标变黄三档色点 + 数值）。
+fn render_compact_threshold_values(
+    unit: QuotaThresholdUnit,
+    values: QuotaThresholds,
+    theme: &Theme,
+) -> Div {
+    let unit_key = unit.config_key();
+    let mut row = div()
+        .debug_selector(move || format!("quota-threshold-summary-{unit_key}"))
+        .flex()
+        .items_center()
+        .gap(px(8.0));
+    for ((_, _, color), value) in
+        threshold_levels(theme)
+            .into_iter()
+            .zip([values.notify, values.critical, values.warning])
+    {
+        row = row.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .child(div().flex_shrink_0().size(px(6.0)).rounded_full().bg(color))
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text.muted)
+                        .whitespace_nowrap()
+                        .child(format_threshold_value(unit, value)),
+                ),
+        );
+    }
     row
 }
 
@@ -555,12 +630,16 @@ fn render_unit_actions(
                         edit_click_handler(cx, target.clone(), unit_state),
                     ));
             } else {
-                actions = actions.child(threshold_ghost_button(
-                    &t!("settings.quota_thresholds.customize"),
-                    theme.text.accent,
-                    theme,
-                    edit_click_handler(cx, target.clone(), unit_state),
-                ));
+                let unit_key = unit_state.unit.config_key();
+                actions = actions.child(
+                    threshold_ghost_button(
+                        &t!("settings.quota_thresholds.customize"),
+                        theme.text.accent,
+                        theme,
+                        edit_click_handler(cx, target.clone(), unit_state),
+                    )
+                    .debug_selector(move || format!("quota-threshold-customize-{unit_key}")),
+                );
             }
         }
     }
@@ -883,7 +962,8 @@ mod tests {
         assert!(quota_threshold_target_matches_tab(
             &target,
             SettingsTab::General,
-            &claude
+            &claude,
+            ProviderDetailTab::Settings
         ));
         for tab in [
             SettingsTab::Providers,
@@ -892,7 +972,12 @@ mod tests {
             SettingsTab::Debug,
         ] {
             assert!(
-                !quota_threshold_target_matches_tab(&target, tab, &claude),
+                !quota_threshold_target_matches_tab(
+                    &target,
+                    tab,
+                    &claude,
+                    ProviderDetailTab::Settings
+                ),
                 "Global 草稿不应在 {tab:?} 存活"
             );
         }
@@ -907,12 +992,20 @@ mod tests {
         assert!(quota_threshold_target_matches_tab(
             &target,
             SettingsTab::Providers,
-            &claude
+            &claude,
+            ProviderDetailTab::Settings
         ));
         assert!(!quota_threshold_target_matches_tab(
             &target,
             SettingsTab::Providers,
-            &codex
+            &codex,
+            ProviderDetailTab::Settings
+        ));
+        assert!(!quota_threshold_target_matches_tab(
+            &target,
+            SettingsTab::Providers,
+            &claude,
+            ProviderDetailTab::UsageHistory
         ));
         for tab in [
             SettingsTab::General,
@@ -921,14 +1014,20 @@ mod tests {
             SettingsTab::Debug,
         ] {
             assert!(
-                !quota_threshold_target_matches_tab(&target, tab, &claude),
+                !quota_threshold_target_matches_tab(
+                    &target,
+                    tab,
+                    &claude,
+                    ProviderDetailTab::Settings
+                ),
                 "Provider 草稿不应在 {tab:?} 存活"
             );
         }
         assert!(!quota_threshold_target_matches_tab(
             &QuotaThresholdTarget::Global,
             SettingsTab::Providers,
-            &claude
+            &claude,
+            ProviderDetailTab::Settings
         ));
     }
 }

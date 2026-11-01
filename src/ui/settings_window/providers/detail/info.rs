@@ -1,110 +1,54 @@
-use crate::application::{SettingsProviderInfoViewState, SettingsProviderStatusKind};
+use crate::application::{
+    SettingsProviderDetailViewState, SettingsProviderInfoViewState, SettingsProviderStatusKind,
+};
 use crate::theme::Theme;
-use gpui::{div, px, relative, Div, FontWeight, Hsla, ParentElement, Styled};
-use rust_i18n::t;
+use gpui::{div, px, relative, Div, Hsla, ParentElement, Styled};
 
-/// Provider 概览：与额度卡同款的紧凑单行 4 列状态条，标签在上、值在下，列间以细竖线分隔。
-///
-/// 服务状态前加状态色圆点，扫一眼就能看出是否正常；超长文案自动以省略号收尾。
-pub(super) fn render_info_table(info: &SettingsProviderInfoViewState, theme: &Theme) -> Div {
-    let primary = theme.text.primary;
+/// Provider 头部内联状态行：直接消费 selector 预计算的 `info.summary_text` 与状态等级，
+/// 替代原先独立占一行的 4 列状态表，在窄宽度下保持单行清晰可读。
+pub(super) fn render_status_summary(
+    detail: &SettingsProviderDetailViewState,
+    theme: &Theme,
+) -> Div {
+    let dot_color = if !detail.is_enabled || !detail.can_refresh {
+        theme.text.muted
+    } else {
+        status_dot_color(&detail.info, theme)
+    };
+
+    let text_color = if detail.is_enabled
+        && detail.can_refresh
+        && detail.info.status_kind == SettingsProviderStatusKind::Error
+    {
+        theme.status.error
+    } else {
+        theme.text.muted
+    };
+
     div()
         .flex()
         .items_center()
-        .gap(px(12.0))
-        .mt(px(16.0))
-        .px(px(16.0))
-        .py(px(11.0))
-        .rounded(px(12.0))
-        .bg(theme.bg.card_inner)
-        .border_1()
-        .border_color(theme.border.strong)
-        .child(render_info_field(
-            &t!("provider.info.state"),
-            &info.state_text,
-            primary,
-            None,
-            theme,
-        ))
-        .child(render_info_divider(theme))
-        .child(render_info_field(
-            &t!("provider.info.source"),
-            &info.source_text,
-            primary,
-            None,
-            theme,
-        ))
-        .child(render_info_divider(theme))
-        .child(render_info_field(
-            &t!("provider.info.updated"),
-            &info.updated_text,
-            primary,
-            None,
-            theme,
-        ))
-        .child(render_info_divider(theme))
-        .child(render_info_field(
-            &t!("provider.info.status"),
-            &info.status_text,
-            status_color(info, theme),
-            Some(status_dot_color(info, theme)),
-            theme,
-        ))
-}
-
-fn render_info_divider(theme: &Theme) -> Div {
-    div()
-        .flex_shrink_0()
-        .w(px(1.0))
-        .h(px(26.0))
-        .bg(theme.border.subtle)
-}
-
-fn render_info_field(
-    label: &str,
-    value: &str,
-    value_color: Hsla,
-    dot: Option<Hsla>,
-    theme: &Theme,
-) -> Div {
-    let mut value_row = div().flex().items_center().gap(px(6.0)).min_w_0();
-    if let Some(dot) = dot {
-        value_row = value_row.child(
+        .gap(px(6.0))
+        .min_w_0()
+        .child(
             div()
                 .flex_shrink_0()
                 .w(px(7.0))
                 .h(px(7.0))
                 .rounded_full()
-                .bg(dot),
-        );
-    }
-    value_row = value_row.child(
-        div()
-            .min_w_0()
-            .text_size(px(13.5))
-            .line_height(relative(1.3))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(value_color)
-            .overflow_hidden()
-            .whitespace_nowrap()
-            .text_ellipsis()
-            .child(value.to_string()),
-    );
-
-    div()
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .flex_col()
-        .gap(px(4.0))
+                .bg(dot_color),
+        )
         .child(
             div()
+                .min_w_0()
                 .text_size(px(11.5))
                 .line_height(relative(1.3))
-                .text_color(theme.text.muted)
-                .child(label.to_string()),
+                .text_color(text_color)
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .child(detail.info.summary_text.clone()),
         )
-        .child(value_row)
 }
 
 fn status_dot_color(info: &SettingsProviderInfoViewState, theme: &Theme) -> Hsla {

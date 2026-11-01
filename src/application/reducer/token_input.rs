@@ -1,4 +1,6 @@
-use crate::application::state::{AppSession, SettingsModalState, SettingsTab, TokenInputLoadState};
+use crate::application::state::{
+    AppSession, ProviderDetailTab, SettingsModalState, SettingsTab, TokenInputLoadState,
+};
 use crate::application::{AppEffect, ContextEffect, SettingsEffect};
 use crate::models::{ProviderId, SettingsCapability, TokenInputState};
 
@@ -17,6 +19,7 @@ pub(super) fn sync_query(
     let provider_id = ui.selected_provider.clone();
     let visible = ui.token_input_query.window_open
         && ui.active_tab == SettingsTab::Providers
+        && ui.provider_detail_tab == ProviderDetailTab::Settings
         && matches!(
             ui.modal,
             SettingsModalState::Idle

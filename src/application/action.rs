@@ -1,4 +1,4 @@
-use super::state::{GlobalHotkeyError, SettingsTab};
+use super::state::{GlobalHotkeyError, ProviderDetailTab, SettingsTab};
 use crate::history::{HistoryLoadOutcome, HistoryRange, HistoryScope};
 use crate::models::{
     AppTheme, CustomProviderLifecycleFailure, NavTab, NavTabStyle, NewApiEditData,
@@ -26,6 +26,7 @@ pub enum AppAction {
         previous_log_level: log::LevelFilter,
     },
     SelectSettingsProvider(ProviderId),
+    SetProviderDetailTab(ProviderDetailTab),
     ToggleCadenceDropdown,
     ToggleHistoryRetentionDropdown,
     ToggleProviderHistoryRetentionDropdown,
@@ -228,6 +229,7 @@ impl AppAction {
             Self::SelectNavTab(_)
             | Self::SetSettingsTab(_)
             | Self::SelectSettingsProvider(_)
+            | Self::SetProviderDetailTab(_)
             | Self::ToggleCadenceDropdown
             | Self::ToggleHistoryRetentionDropdown
             | Self::ToggleProviderHistoryRetentionDropdown

@@ -96,9 +96,10 @@ pub fn format_refresh_status(provider: &ProviderStatus) -> String {
     }
 }
 
-/// 「更新时间」文案（设置页 info table 与托盘详情账户行共用）：
+/// 「更新时间」文案（托盘详情账户行与设置页 `updated_text` 字段共用）：
 /// 有 instant 返回相对时间，否则「尚未获取」。
 /// 上次刷新失败时明示失败与数据年龄——陈旧数据不能冒充正常数据。
+/// 设置页头部摘要 `summary_text` 在已有陈旧数据的失败态只用相对时间，不叠这句失败文案。
 pub fn format_provider_updated_at(provider: &ProviderStatus) -> String {
     let age = provider
         .last_refreshed_instant

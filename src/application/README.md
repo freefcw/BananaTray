@@ -13,7 +13,7 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`ProviderStore`** — Provider 数据存储，提供 `find_by_id()` / `sync_custom_providers()` / `enabled_providers()` 等查询方法
   - `enabled_providers(&self, settings)` — 按设置顺序迭代所有已启用的 Provider，集中了 "custom_ids → ordered → filter enabled → find_by_id" 的公共遍历模式，供 `overview_view_state`、`AppSession::overview_card_rows`、`DBusQuotaSnapshot::from_session` 等多处复用。Overview 的窗口高度和窗口内容都必须走这里，否则两边对"谁被启用"的口径一旦分叉，就会出现死空白或提前滚动
 - **`NavigationState`** — 导航状态（当前 tab、动画 generation）
-- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence / 用量步长 dropdown（两处入口共用同一开合 bool）、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
+- **`SettingsUiState`** — 设置窗口的临时 UI 状态（含 cadence / 用量步长 dropdown（两处入口共用同一开合 bool）、`provider_detail_tab`（可监控服务商详情的「配置 | 用量与历史」子页签，session 真源）、token 编辑目标、modal 状态机、脚本测试异步状态、全局热键错误及候选值回填）
 - **`SettingsModalState`** — 设置页右侧面板的互斥模态状态机。把"添加 Provider 选择列表 / NewAPI 新增 / NewAPI 编辑回填 / 脚本 Provider 新增 / 脚本 Provider 编辑 / 移除二次确认 / 删除二次确认"这些原本散落的 bool/Option 字段折叠成单一 enum：
   - `Idle`、`AddingProvider`、`AddingNewApi`、`EditingNewApi(NewApiEditData)`、`AddingScriptProvider`、`EditingScriptProvider(ScriptProviderEditData)`、`ConfirmingRemoveProvider`、`ConfirmingDeleteNewApi`、`ConfirmingDeleteScriptProvider`
   - helper：`is_newapi_form()` / `is_script_provider_form()` / `is_adding_provider()` / `is_confirming_remove_provider()` / `is_confirming_delete_newapi()` / `is_confirming_delete_script_provider()` / `newapi_edit_data()` / `script_provider_edit_data()` / `form_identity()`
@@ -42,13 +42,13 @@ Action-Reducer-Effect 架构层，实现类 Elm/Redux 的单向数据流。**核
 - **`reduce_at(session, action, ReductionTime) → Vec<AppEffect>`** — 核心 reducer；顶层使用单个穷尽 match 直接解构 action 并调用对应领域函数，不再通过家族 dispatcher 的 `_ => unreachable!` 二次分派。新增 `AppAction` 变体时，编译器会要求补齐唯一分派入口
 - **顶层 `reducer.rs` 只做单层穷尽 action 分发**，具体状态变换按领域拆到子 reducer：
   - `reducer/settings.rs` — 导航 / 设置窗口通用 UI 状态 / `SettingChange` / 全局热键 / 弹窗可见性；`SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` 先对 effective rules 变化做快照比对，仅当 Provider 当前有效额度单位的 `notify` 阈值实际变化时调用 `rebaseline_alerts`（只重建告警状态，不动步长累计），并发出 Render + Persist + PublishQuotaSnapshot（不发通知、不触发刷新）
-  - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、token 编辑、sidebar 增删和排序
+  - `reducer/provider_sidebar.rs` — Provider 开关、设置页 Provider 选择、`SetProviderDetailTab`、token 编辑、sidebar 增删和排序；侧栏点选 / 打开指定 Provider 设置 / 添加到侧栏 / 移除后选中下一项都会把 `provider_detail_tab` 写回 `Settings`
   - `reducer/refresh.rs` — 手动刷新、刷新事件、Provider 热重载，以及热重载后的悬空引用清理
   - `reducer/newapi.rs` — NewAPI 新增 / 编辑 / 删除表单流与对应 effect 发射
   - `reducer/script_provider.rs` — 自定义脚本 Provider 新增 / 编辑 / 测试 / 删除表单流与对应 effect 发射
   - `reducer/debug.rs` — Debug Tab 操作、调试刷新、日志和调试通知
   - `reducer/shared.rs` — 跨子 reducer 共享的纯 helper，如 `build_config_sync_request()`、刷新能力判断、动态图标同步
-  - `reducer/token_input.rs` — 可见 Token 面板的查询状态与请求编号；顶层在 action 分发后统一同步上下文，切换入口立即发查询、关闭 / 离开面板使旧请求失效，保存凭证和 registry 更新重开查询；同轮重复 action 不产生重复查询。后台结果通过 `TokenInputStateResolved` 回填。
+  - `reducer/token_input.rs` — 可见 Token 面板的查询状态与请求编号；顶层在 action 分发后统一同步上下文，切换入口立即发查询、关闭 / 离开面板（含切到「用量与历史」子页签）使旧请求失效，保存凭证和 registry 更新重开查询；同轮重复 action 不产生重复查询。后台结果通过 `TokenInputStateResolved` 回填。查询只在设置窗打开、Providers 大 Tab、配置子页签、Idle/二次确认模态、且当前 Provider 是 TokenInput 时发起。
 - **时间输入**：runtime 每次 dispatch 捕获一份 `ReductionTime`（epoch 毫秒 + 单调时钟），初始 action 与同步后续 action 共用该快照。历史采样、查询窗口、保留 cutoff 和成功刷新时刻都从此输入计算；reducer 与状态变换方法不自行读取时钟。测试辅助 `reduce()` 仅在 test 构建中提供固定时间。
 - **Token 展示**：`TokenInputQueryState` 统一保存窗口可见性、请求编号和 `TokenInputLoadState`；只保存脱敏结果，不保存凭证副本或 manager 句柄。selector 输出 `Loading / Ready(TokenInputState) / Unavailable`，未完成的外部查询不能被当成缺少 Token；本地 override 可即时显示。低频复查保留上次已确认的展示，不打断编辑，也不与在途查询重叠。
 - **窗口 / Debug 生命周期**：`SettingsWindowOpened` 标记窗口可见并清除旧 Token 编辑标记；`SettingsWindowClosed` 清理 Token 查询上下文；`DebugRefreshStarted` 把 runtime 捕获的原日志级别交回 reducer，且必须先于发送失败的完成 action 结算。view 构造和 effect handler 不直接写 `AppSession`。

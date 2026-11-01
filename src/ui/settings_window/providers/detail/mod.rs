@@ -7,7 +7,7 @@ mod settings_section;
 mod usage;
 
 use super::super::SettingsView;
-use crate::application::{AppAction, SettingsProviderDetailViewState};
+use crate::application::{AppAction, ProviderDetailTab, SettingsProviderDetailViewState};
 use crate::models::ProviderId;
 use crate::runtime::AppState;
 use crate::theme::Theme;
@@ -33,19 +33,20 @@ impl DetailActionDispatcher {
         crate::bootstrap::dispatch_in_window(&self.state, action, window, cx);
     }
 
-    pub(super) fn clear_token_input(&self, cx: &mut gpui::App) {
+    pub(super) fn clear_drafts(&self, cx: &mut gpui::App) {
         self.view_entity.update(cx, |view, _| {
             view.clear_token_input();
+            view.clear_quota_threshold_draft();
         });
     }
 
-    pub(super) fn dispatch_after_clearing_token_input(
+    pub(super) fn dispatch_after_clearing_drafts(
         &self,
         action: AppAction,
         window: &mut Window,
         cx: &mut gpui::App,
     ) {
-        self.clear_token_input(cx);
+        self.clear_drafts(cx);
         self.dispatch(action, window, cx);
     }
 
@@ -65,7 +66,7 @@ impl DetailActionDispatcher {
     ) -> impl Fn(&MouseDownEvent, &mut Window, &mut gpui::App) + 'static {
         let dispatcher = self.clone();
         move |_, window, cx| {
-            dispatcher.dispatch_after_clearing_token_input(action(), window, cx);
+            dispatcher.dispatch_after_clearing_drafts(action(), window, cx);
         }
     }
 }
@@ -79,55 +80,46 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Div {
         let dispatcher = DetailActionDispatcher::new(self.state.clone(), cx.entity().clone());
-        let mut content = render_detail_content(detail, theme, &dispatcher);
+        let mut content = div()
+            .flex_col()
+            .px(px(24.0))
+            .pt(px(20.0))
+            .pb(px(40.0))
+            .child(header::render_header(detail, &dispatcher, theme));
 
-        if detail.show_quota_visibility {
-            content = content.child(quota_visibility::render_quota_visibility_section(
-                detail.id.clone(),
-                &detail.quota_visibility,
+        if !detail.can_refresh || detail.detail_tab == ProviderDetailTab::Settings {
+            content = content.child(settings_section::render_settings_section(
+                self,
+                detail,
                 &dispatcher,
                 theme,
+                window,
+                cx,
             ));
+        } else {
+            content = content
+                .child(usage::render_usage_section(
+                    &detail.usage,
+                    theme,
+                    detail.quota_display_mode,
+                    detail.quota_card_style,
+                ))
+                .child(history::render_history_section(detail, &dispatcher, theme));
         }
 
-        content = content.child(settings_section::render_settings_section(
-            self,
-            detail,
-            &dispatcher,
-            theme,
-            window,
-            cx,
-        ));
-
-        render_detail_scroll(content)
+        render_detail_scroll(content, detail.detail_tab)
     }
 }
 
-fn render_detail_content(
-    detail: &SettingsProviderDetailViewState,
-    theme: &Theme,
-    dispatcher: &DetailActionDispatcher,
-) -> Div {
-    div()
-        .flex_col()
-        .px(px(24.0))
-        .pt(px(20.0))
-        .pb(px(60.0))
-        .child(header::render_header(detail, dispatcher, theme))
-        .child(info::render_info_table(&detail.info, theme))
-        .child(usage::render_usage_section(
-            &detail.usage,
-            theme,
-            detail.quota_display_mode,
-            detail.quota_card_style,
-        ))
-        .child(history::render_history_section(detail, dispatcher, theme))
-}
-
-fn render_detail_scroll(content: Div) -> Div {
+fn render_detail_scroll(content: Div, tab: ProviderDetailTab) -> Div {
+    // GPUI 按 ElementId 持久化 scroll_offset；子页签共用同一 id 只会按新内容高度 clamp，不会回顶。
+    let tab_key = match tab {
+        ProviderDetailTab::Settings => 0_usize,
+        ProviderDetailTab::UsageHistory => 1,
+    };
     div().flex_col().flex_1().h_full().overflow_hidden().child(
         div()
-            .id("provider-detail-scroll")
+            .id(("provider-detail-scroll", tab_key))
             .flex_col()
             .h_full()
             .overflow_y_scroll()

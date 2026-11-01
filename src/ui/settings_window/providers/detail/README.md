@@ -4,36 +4,18 @@
 
 ## Boundary
 
-- `mod.rs` owns the scroll container and section ordering.
-- `header.rs` renders provider identity plus remove-from-sidebar, refresh, and enable actions (with the primary enable toggle on the far right).
-- `info.rs` renders status/source/update/service-state as a compact single-row 4-column status strip separated by subtle vertical dividers (label above value, long values end with an ellipsis, a status-colored dot before the service state).
-- `usage.rs` renders quota usage and provider error/empty states（空态/失败走共享 detail card）。
-- `history.rs` renders the quota history card (range/interval toolbar, stacked single-unit or merged multi-series step charts with colored dot legends, and a footer combining notes with the clear-history ghost button).
+- `mod.rs` owns the scroll container and routes between the two sub-tabs (`ProviderDetailTab::Settings` vs `ProviderDetailTab::UsageHistory`) for monitorable providers. The scroll element id is keyed by sub-tab so GPUI does not reuse the previous tab's `scroll_offset`.
+- `header.rs` renders provider identity (with the inline status/source/updated summary from `info.rs`), remove-from-sidebar, refresh, and enable actions (with the primary enable toggle on the far right), plus the `[ 配置 | 用量与历史 ]` sub-tab bar when `can_refresh` is true.
+- `info.rs` renders the compact single-line status summary below the provider title (a status-colored dot + source + updated/error status, or disabled state).
+- `usage.rs` renders quota usage and provider error/empty states in the `UsageHistory` sub-tab（空态/失败走共享 detail card）。
+- `history.rs` renders the quota history card in the `UsageHistory` sub-tab (range/interval toolbar, stacked single-unit or merged multi-series step charts with colored dot legends, and a footer combining notes with the clear-history ghost button).
 - `quota_visibility.rs` renders per-quota tray visibility toggles plus the overview
   primary-quota star (≥2 visible quotas only; toggling dispatches
-  `SettingChange::TogglePrimaryQuota`) in a unified card container.
-- `settings_section.rs` renders provider settings capability branches, the per-provider
-  usage-step （用量提醒） card, and the quota-thresholds （额度状态与提醒阈值） card.
-  When neither `can_refresh` nor `show_quota_thresholds` is active and `settings_capability == None`,
-  it falls back to an informational placeholder card.
-  The usage-step card is gated on the `can_refresh` snapshot field
-  (`ProviderStatus::supports_refresh()` = `ProviderCapability::Monitorable`) and renders regardless
-  of which settings capability (token / NewAPI / script / none) the provider exposes —
-  a `SettingsCapability::None` provider still gets the usage-step entry; non-monitorable providers
-  never get it. Its state comes from the snapshot fields `quota_usage_step_pct` （provider override,
-  `None` = follow global) and `global_quota_usage_step_pct`; the shared card
-  (`quota_usage::render_provider_quota_usage_card`, wrapping `render_quota_usage_stepper`) dispatches `SettingChange::SetProviderQuotaUsageStep`
-  through `DetailActionDispatcher` — `−`/`+` create an override starting from the effective value,
-  and「恢复跟随全局」dispatches `step_pct: None`.
-  The quota-thresholds card is gated on `show_quota_thresholds`
-  (`provider_capability == Monitorable`, likewise independent of `SettingsCapability`), so a
-  monitorable provider with no interactive settings still gets per-unit threshold overrides, and
-  thresholds can be pre-configured before any quota data arrives. Its unit rows come from the
-  `quota_thresholds` snapshot entries (unit / `override_thresholds` / `effective`), filtered by the
-  selector to the units present in the provider's current measured quotas plus any unit with an
-  active user override (falling back to all three units when no measured quotas exist yet); editing
-  reuses the shared `quota_thresholds::render_quota_thresholds_section` component and the view-local
-  `QuotaThresholdDraft`, dispatching `SettingChange::SetProviderQuotaThresholds` on save.
+  `SettingChange::TogglePrimaryQuota`) inside a unified settings card (`shared::render_settings_card` + `render_settings_card_header`).
+- `settings_section.rs` renders the `Settings` sub-tab content:
+  1. Provider settings capability card (`TokenInput` / `NewApiEditable` / `ScriptEditable`); for `SettingsCapability::None` on a monitorable provider, no redundant placeholder box is rendered, while non-monitorable (`Informational` / `Placeholder`) providers render a single explanatory card.
+  2. The `quota_visibility` card (when `show_quota_visibility` is true).
+  3. The unified `render_rules_card` combining the per-provider usage-step row (`quota_usage::render_provider_quota_usage_row`) and per-unit quota-thresholds rows (`quota_thresholds::append_provider_threshold_units`). Uncustomized threshold units in provider view collapse to a single-line summary (`● notify ● critical ● warning [Customize]`) and expand into the 4-segment strip/editor when customized or being edited.
 - `actions.rs` owns the editable-provider edit/delete flow. It renders the same settings card as the
   Token panel (`shared::render_settings_card` + `render_action_button(.., ButtonSize::Panel, ..)`),
   so the settings section looks identical for token-input and editable providers. Add new card-level
@@ -63,10 +45,16 @@ view-state snapshot, not in live `SettingsView.state` reads from section rendere
 
 ## Interaction Rule
 
-Use `DetailActionDispatcher` for actions that dispatch `AppAction` or need to clear token input before
-switching modes. Section modules should receive this dispatcher instead of borrowing `SettingsView`
-state directly, except for token input rendering and quota-threshold drafts where `SettingsView`
-is required to create and reuse input entities.
+Use `DetailActionDispatcher` for actions that dispatch `AppAction` or need to clear view-local drafts
+(`TokenInputDraft` and `QuotaThresholdDraft` via `clear_drafts`) before switching modes. Section
+modules should receive this dispatcher instead of borrowing `SettingsView` state directly, except
+for token input rendering and quota-threshold drafts where `SettingsView` is required to create and
+reuse input entities.
+Active sub-tab pills do not dispatch `SetProviderDetailTab`: the reducer no-ops the same tab without
+`Render`, so a re-click must not clear view-local drafts. Switching to the other sub-tab still goes
+through `interactive_cleanup_action`. Sidebar selection, Open Settings with a provider, adding a
+provider to the sidebar, and removing a sidebar provider that leaves another selected all write
+`provider_detail_tab` back to `Settings`.
 
 ## Boundary Check
 

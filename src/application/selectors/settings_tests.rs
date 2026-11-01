@@ -250,6 +250,7 @@ fn settings_provider_detail_reports_disabled_usage() {
 
     assert!(!view_state.detail.is_enabled);
     assert_eq!(view_state.detail.info.state_text, "Disabled");
+    assert_eq!(view_state.detail.info.summary_text, "Disabled · Custom");
     assert!(matches!(
         view_state.detail.usage,
         SettingsProviderUsageViewState::Disabled { .. }
@@ -395,6 +396,7 @@ fn settings_status_row_marks_stale_refresh_failure() {
         view_state.detail.info.updated_text,
         "Update failed · data just now"
     );
+    assert_eq!(view_state.detail.info.summary_text, "Custom · just now");
 }
 
 #[test]
@@ -977,4 +979,114 @@ fn currency_override_uses_native_remaining_for_status() {
         },
         other => panic!("expected Panel variant, got {:?}", other),
     }
+}
+
+#[test]
+fn settings_provider_detail_tab_switches_and_normalizes_for_non_monitorable() {
+    use crate::application::{reduce, AppAction, ProviderDetailTab};
+
+    let _locale_guard = setup_locale();
+    let settings = AppSettings::default();
+    let claude = make_provider(ProviderKind::Claude, ConnectionStatus::Connected);
+    let kilo = make_provider(ProviderKind::Kilo, ConnectionStatus::Disconnected);
+    let mut session = make_session(settings, pid(ProviderKind::Claude), vec![claude, kilo]);
+
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
+
+    session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Claude));
+    session.settings_ui.modal = SettingsModalState::ConfirmingClearProviderHistory;
+    reduce(
+        &mut session,
+        AppAction::SetProviderDetailTab(ProviderDetailTab::UsageHistory),
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::UsageHistory
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::UsageHistory
+    );
+    assert!(session.settings_ui.token_editing_provider.is_none());
+    assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
+
+    // 侧栏点选把 session 子页签写回 Settings，不只是 selector 展示层归一化
+    reduce(
+        &mut session,
+        AppAction::SelectSettingsProvider(pid(ProviderKind::Kilo)),
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
+
+    reduce(
+        &mut session,
+        AppAction::SetProviderDetailTab(ProviderDetailTab::UsageHistory),
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::UsageHistory
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
+
+    reduce(
+        &mut session,
+        AppAction::SelectSettingsProvider(pid(ProviderKind::Claude)),
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
+
+    // 从托盘打开指定 provider 设置或新添加 provider 到侧栏时，自动归位到 Settings 子页签
+    reduce(
+        &mut session,
+        AppAction::SetProviderDetailTab(ProviderDetailTab::UsageHistory),
+    );
+    reduce(
+        &mut session,
+        AppAction::OpenSettings {
+            provider: Some(pid(ProviderKind::Claude)),
+        },
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
+
+    reduce(
+        &mut session,
+        AppAction::SetProviderDetailTab(ProviderDetailTab::UsageHistory),
+    );
+    reduce(
+        &mut session,
+        AppAction::AddProviderToSidebar(pid(ProviderKind::Copilot)),
+    );
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
+    assert_eq!(
+        detail_snapshot(&session).detail_tab,
+        ProviderDetailTab::Settings
+    );
 }

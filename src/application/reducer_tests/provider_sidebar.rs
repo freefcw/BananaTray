@@ -1,6 +1,7 @@
 use super::common::{has_effect, has_render, make_custom_token_provider, make_session, pid};
 use crate::application::{
-    reduce, AppAction, AppEffect, CommonEffect, RefreshEffect, SettingsEffect, SettingsModalState,
+    reduce, AppAction, AppEffect, CommonEffect, ProviderDetailTab, RefreshEffect, SettingsEffect,
+    SettingsModalState,
 };
 use crate::history::HistoryJob;
 use crate::models::{ProviderId, ProviderKind};
@@ -131,6 +132,7 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .provider
         .set_enabled(&pid(ProviderKind::Gemini), true);
     session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
+    session.settings_ui.provider_detail_tab = ProviderDetailTab::UsageHistory;
 
     let effects = reduce(
         &mut session,
@@ -150,6 +152,10 @@ fn remove_provider_from_sidebar_disables_and_persists() {
     // 自动选中下一项后加载新 Provider 的历史
     let selected_provider = session.settings_ui.selected_provider.id_key();
     assert_ne!(selected_provider, pid(ProviderKind::Claude).id_key());
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
     assert!(has_effect(&effects, |effect| matches!(
         effect,
         AppEffect::Common(CommonEffect::History(HistoryJob::Load(request)))
@@ -269,9 +275,10 @@ fn remove_provider_resets_confirming_flag() {
 #[test]
 fn select_provider_resets_confirming_flags() {
     let mut session = make_session();
-    // 进入确认移除态作为初始模态；切换 provider 时应一并清空。
+    // 进入确认移除态作为初始模态；切换 provider 时应一并清空，子页签归位配置。
     session.settings_ui.modal = SettingsModalState::ConfirmingRemoveProvider;
     session.settings_ui.token_editing_provider = Some(pid(ProviderKind::Copilot));
+    session.settings_ui.provider_detail_tab = ProviderDetailTab::UsageHistory;
 
     reduce(
         &mut session,
@@ -280,6 +287,10 @@ fn select_provider_resets_confirming_flags() {
 
     assert_eq!(session.settings_ui.modal, SettingsModalState::Idle);
     assert!(session.settings_ui.token_editing_provider.is_none());
+    assert_eq!(
+        session.settings_ui.provider_detail_tab,
+        ProviderDetailTab::Settings
+    );
 }
 
 // ── Token Editing / Saving ────────────────────────────

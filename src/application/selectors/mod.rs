@@ -303,6 +303,7 @@ pub struct SettingsProviderDetailViewState {
     pub subtitle: String,
     pub is_enabled: bool,
     pub can_refresh: bool,
+    pub detail_tab: super::state::ProviderDetailTab,
     pub show_quota_visibility: bool,
     pub confirming_remove: bool,
     pub confirming_delete_newapi: bool,
@@ -427,6 +428,7 @@ pub struct QuotaVisibilityItem {
 
 #[derive(Debug, Clone)]
 pub struct SettingsProviderInfoViewState {
+    pub summary_text: String,
     pub state_text: String,
     pub source_text: String,
     pub updated_text: String,

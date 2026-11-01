@@ -48,5 +48,6 @@ pub use selectors::{
 };
 #[allow(unused_imports)] // app/UI 和 reducer 测试通过 application facade 使用这些状态类型
 pub use state::{
-    AppSession, FormIdentity, GlobalHotkeyError, HeaderStatusKind, SettingsModalState, SettingsTab,
+    AppSession, FormIdentity, GlobalHotkeyError, HeaderStatusKind, ProviderDetailTab,
+    SettingsModalState, SettingsTab,
 };

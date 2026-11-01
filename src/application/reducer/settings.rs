@@ -5,7 +5,7 @@ use crate::application::{
 use crate::models::{NavTab, ProviderId, QuotaRules, TrayIconStyle};
 use std::collections::HashMap;
 
-use super::super::state::{AppSession, SettingsModalState, SettingsTab};
+use super::super::state::{AppSession, ProviderDetailTab, SettingsModalState, SettingsTab};
 use super::shared::{
     build_config_sync_request, resolve_tray_icon_request, sync_dynamic_icon_if_needed,
 };
@@ -376,6 +376,7 @@ pub(super) fn open_settings(
     if let Some(id) = provider {
         session.settings_ui.selected_provider = id;
         session.settings_ui.active_tab = SettingsTab::Providers;
+        session.settings_ui.provider_detail_tab = ProviderDetailTab::Settings;
     }
     super::history::begin_history_load(session, now_ms, effects);
     effects.push(ContextEffect::OpenSettingsWindow.into());

@@ -6,7 +6,7 @@ use crate::application::{
 use crate::models::{NavTab, ProviderId, SettingsCapability, TrayIconStyle};
 use crate::refresh::RefreshReason;
 
-use super::super::state::{AppSession, SettingsModalState};
+use super::super::state::{AppSession, ProviderDetailTab, SettingsModalState};
 use super::refresh::request_provider_refresh;
 use super::shared::{build_config_sync_request, provider_supports_refresh};
 
@@ -26,9 +26,33 @@ pub(super) fn select_settings_provider(
     session.settings_ui.selected_provider = id;
     session.settings_ui.token_editing_provider = None;
     session.settings_ui.provider_history_retention_dropdown_open = false;
+    // 侧栏点选总是归位到配置子页签，避免把上一个服务商的「用量与历史」带到下一个
+    session.settings_ui.provider_detail_tab = ProviderDetailTab::Settings;
     // 点选已有服务商时退出 picker / 取消正在确认中的二次状态
     session.settings_ui.modal = SettingsModalState::Idle;
     super::history::begin_history_load(session, now_ms, effects);
+}
+
+pub(super) fn set_provider_detail_tab(
+    session: &mut AppSession,
+    tab: ProviderDetailTab,
+    effects: &mut Vec<AppEffect>,
+) {
+    if session.settings_ui.provider_detail_tab == tab {
+        return;
+    }
+    session.settings_ui.provider_detail_tab = tab;
+    session.settings_ui.token_editing_provider = None;
+    session.settings_ui.provider_history_retention_dropdown_open = false;
+    if matches!(
+        session.settings_ui.modal,
+        SettingsModalState::ConfirmingClearProviderHistory
+            | SettingsModalState::ConfirmingDeleteNewApi
+            | SettingsModalState::ConfirmingDeleteScriptProvider
+    ) {
+        session.settings_ui.modal = SettingsModalState::Idle;
+    }
+    effects.push(ContextEffect::Render.into());
 }
 
 pub(super) fn set_token_editing(
@@ -172,8 +196,9 @@ pub(super) fn add_provider_to_sidebar(
     }
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.selected_provider = id;
-    super::history::begin_history_load(session, now_ms, effects);
+    session.settings_ui.provider_detail_tab = ProviderDetailTab::Settings;
     session.settings_ui.token_editing_provider = None;
+    super::history::begin_history_load(session, now_ms, effects);
     effects.push(ContextEffect::Render.into());
 }
 
@@ -202,6 +227,7 @@ pub(super) fn remove_provider_from_sidebar(
             session.settings_ui.modal = SettingsModalState::AddingProvider;
         } else {
             session.settings_ui.selected_provider = session.first_sidebar_provider();
+            session.settings_ui.provider_detail_tab = ProviderDetailTab::Settings;
             super::history::begin_history_load(session, now_ms, effects);
         }
         effects.push(SettingsEffect::PersistSettings.into());

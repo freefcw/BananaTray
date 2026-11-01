@@ -1,11 +1,11 @@
-use super::providers::shared::{
-    render_inheritance_badge, render_settings_card, render_settings_card_header,
-};
+use super::providers::shared::render_inheritance_badge;
+#[cfg(all(test, feature = "ui-tests"))]
+use super::providers::shared::render_settings_card;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_stepper, StepperOptions};
 use gpui::{
-    div, px, App, Div, InteractiveElement, MouseButton, MouseDownEvent, ParentElement, Styled,
-    Window,
+    div, px, App, Div, FontWeight, InteractiveElement, MouseButton, MouseDownEvent, ParentElement,
+    Styled, Window,
 };
 use rust_i18n::t;
 use std::rc::Rc;
@@ -50,7 +50,7 @@ fn step_label(step: u8) -> String {
 /// - `inherited_step`：`Some` 表示处于 provider 级，可跟随全局；全局设置传 `None`。
 ///
 /// 跟随全局时以弱化色显示全局值，点击 `−`/`+` 会以全局值为起点创建覆盖。
-/// 「跟随全局」状态标签和恢复按钮由 [`render_provider_quota_usage_card`] 放在卡片标题旁。
+/// 「跟随全局」状态标签和恢复按钮由 [`render_provider_quota_usage_row`] 放在标题旁。
 pub(super) fn render_quota_usage_stepper(
     selection: Option<u8>,
     inherited_step: Option<u8>,
@@ -78,13 +78,9 @@ pub(super) fn render_quota_usage_stepper(
     )
 }
 
-/// Provider 详情页的「用量提醒」卡片：上层图标 + 标题 / 状态标签 / 说明，
-/// 下层（细分隔线下方）左侧「提醒步长」，右侧步进器。
-///
-/// 状态标签与下方「额度状态与提醒阈值」卡片的「跟随全局 / 自定义」一致。
-/// 已覆盖时步进器左侧出现「恢复跟随全局」文字按钮（回调参数为 `None`），
-/// 两种状态下卡片高度一致，切换时不跳动。
-pub(super) fn render_provider_quota_usage_card(
+/// Provider 详情页「提醒与状态阈值」卡片内的「用量提醒步长」行：
+/// 左侧标题 +「跟随全局 / 自定义」标签，右侧步进器（已覆盖时左侧出现「恢复跟随全局」文字按钮）。
+pub(in crate::ui::settings_window) fn render_provider_quota_usage_row(
     selection: Option<u8>,
     global_step: u8,
     theme: &Theme,
@@ -98,15 +94,28 @@ pub(super) fn render_provider_quota_usage_card(
         t!("quota_usage.inherited").to_string()
     };
 
-    let header = render_settings_card_header(
-        "src/icons/usage.svg",
-        t!("provider.quota_usage.title").to_string(),
-        Some(render_inheritance_badge(is_custom, tag_label, theme)),
-        t!("provider.quota_usage.desc").to_string(),
-        theme,
-    );
+    let title_row = div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(8.0))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text.primary)
+                .whitespace_nowrap()
+                .child(t!("provider.quota_usage.title").to_string()),
+        )
+        .child(render_inheritance_badge(is_custom, tag_label, theme));
 
-    let mut control = div().flex_shrink_0().flex().items_center().gap(px(6.0));
+    let mut control = div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .justify_end()
+        .gap(px(6.0))
+        .ml_auto();
     if is_custom {
         // 用文字而不是图标：同一页顶部的刷新按钮已经用了刷新图标，图标会让人以为是「刷新数据」。
         let hover_bg = theme.bg.card_inner_hovered;
@@ -138,26 +147,34 @@ pub(super) fn render_provider_quota_usage_card(
         move |step, window, cx| on_change(step, window, cx),
     ));
 
-    let step_row = div()
+    div()
+        .debug_selector(|| "quota-usage-row".to_string())
         .w_full()
         .flex()
+        .flex_wrap()
         .items_center()
         .justify_between()
         .gap(px(12.0))
-        .mt(px(14.0))
         .pt(px(14.0))
         .border_t_1()
         .border_color(theme.border.subtle)
-        .child(
-            div()
-                .text_size(px(12.5))
-                .text_color(theme.text.secondary)
-                .whitespace_nowrap()
-                .child(t!("quota_usage.step_label").to_string()),
-        )
-        .child(control);
+        .child(title_row)
+        .child(control)
+}
 
-    render_settings_card(theme).child(header).child(step_row)
+#[cfg(all(test, feature = "ui-tests"))]
+pub(super) fn render_provider_quota_usage_card(
+    selection: Option<u8>,
+    global_step: u8,
+    theme: &Theme,
+    on_change: impl Fn(Option<u8>, &mut Window, &mut App) + 'static,
+) -> Div {
+    render_settings_card(theme).child(render_provider_quota_usage_row(
+        selection,
+        global_step,
+        theme,
+        on_change,
+    ))
 }
 
 #[cfg(test)]

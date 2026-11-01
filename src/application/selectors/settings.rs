@@ -5,7 +5,8 @@
 use super::super::state::{AppSession, HistoryLoadState, SettingsModalState, TokenInputLoadState};
 use super::format::{
     format_non_monitoring_message, format_provider_updated_at, format_quota_label,
-    format_user_failure_message, provider_source_label, quota_display_view_state,
+    format_relative_refresh_age, format_user_failure_message, provider_source_label,
+    quota_display_view_state,
 };
 use super::*;
 use crate::history::HistoryReadyState;
@@ -173,8 +174,15 @@ fn settings_provider_detail_view_state(
     let provider_capability = provider
         .map(|p| p.provider_capability)
         .unwrap_or(ProviderCapability::Monitorable);
+    let can_refresh = provider.is_some_and(ProviderStatus::supports_refresh);
+    let detail_tab = if can_refresh {
+        session.settings_ui.provider_detail_tab
+    } else {
+        super::super::state::ProviderDetailTab::Settings
+    };
     let effective_rules = session.settings.effective_quota_rules(id);
     let quota_thresholds = provider_quota_threshold_units(session, id, provider, &effective_rules);
+    let info = settings_provider_info_view_state(provider, is_enabled, &subtitle);
 
     SettingsProviderDetailViewState {
         id: id.clone(),
@@ -182,8 +190,9 @@ fn settings_provider_detail_view_state(
         display_name,
         subtitle,
         is_enabled,
-        can_refresh: provider.is_some_and(ProviderStatus::supports_refresh),
-        show_quota_visibility: provider.is_some_and(ProviderStatus::supports_refresh),
+        can_refresh,
+        detail_tab,
+        show_quota_visibility: can_refresh,
         confirming_remove: session.settings_ui.modal.is_confirming_remove_provider(),
         confirming_delete_newapi: session.settings_ui.modal.is_confirming_delete_newapi(),
         confirming_delete_script_provider: session
@@ -192,7 +201,7 @@ fn settings_provider_detail_view_state(
             .is_confirming_delete_script_provider(),
         provider_capability,
         token_input: token_input_display_state(session, id),
-        info: settings_provider_info_view_state(provider, is_enabled),
+        info,
         usage: settings_provider_usage_view_state(provider, is_enabled, &effective_rules),
         settings_capability: provider
             .map(|p| p.settings_capability.clone())
@@ -323,6 +332,7 @@ fn history_phase(session: &AppSession, id: &ProviderId) -> SettingsProviderHisto
 fn settings_provider_info_view_state(
     provider: Option<&ProviderStatus>,
     is_enabled: bool,
+    subtitle: &str,
 ) -> SettingsProviderInfoViewState {
     let state_text = if is_enabled {
         t!("provider.state.enabled").to_string()
@@ -390,7 +400,32 @@ fn settings_provider_info_view_state(
             )
         });
 
+    let can_refresh = provider.is_some_and(ProviderStatus::supports_refresh);
+    let summary_text = if !is_enabled {
+        format!("{state_text} · {subtitle}")
+    } else if !can_refresh {
+        subtitle.to_string()
+    } else {
+        match status_kind {
+            SettingsProviderStatusKind::Success => format!("{subtitle} · {updated_text}"),
+            SettingsProviderStatusKind::Error => {
+                // 失败已由色点 / status_kind 表达；有陈旧数据时摘要只保留来源 + 相对时间，
+                // 避免叠上 updated_text 里的「更新失败 · 数据年龄」。
+                if let Some(instant) = provider.and_then(|p| p.last_refreshed_instant) {
+                    format!(
+                        "{subtitle} · {}",
+                        format_relative_refresh_age(instant.elapsed().as_secs())
+                    )
+                } else {
+                    format!("{subtitle} · {status_text}")
+                }
+            }
+            SettingsProviderStatusKind::Neutral => format!("{subtitle} · {status_text}"),
+        }
+    };
+
     SettingsProviderInfoViewState {
+        summary_text,
         state_text,
         source_text,
         updated_text,

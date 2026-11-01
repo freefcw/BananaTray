@@ -2,9 +2,10 @@ use super::{provider_id_for_action, DetailActionDispatcher};
 use crate::application::{AppAction, QuotaVisibilityItem, SettingChange};
 use crate::models::ProviderId;
 use crate::theme::Theme;
-use crate::ui::widgets::{
-    render_detail_empty_card, render_detail_section_title, render_svg_icon, with_tooltip,
+use crate::ui::settings_window::providers::shared::{
+    render_settings_card, render_settings_card_header,
 };
+use crate::ui::widgets::{render_svg_icon, with_tooltip};
 use gpui::{
     div, px, relative, Div, InteractiveElement, MouseButton, ParentElement, Stateful, Styled,
 };
@@ -18,23 +19,29 @@ pub(super) fn render_quota_visibility_section(
     dispatcher: &DetailActionDispatcher,
     theme: &Theme,
 ) -> Div {
-    let section = div()
-        .flex()
-        .flex_col()
-        .mt(px(20.0))
-        .child(render_detail_section_title(
-            &t!("provider.section.quota_visibility"),
-            theme,
-        ));
+    let header = render_settings_card_header(
+        "src/icons/display.svg",
+        t!("provider.section.quota_visibility").to_string(),
+        None,
+        t!("provider.quota_visibility.desc").to_string(),
+        theme,
+    );
+    let card = render_settings_card(theme).child(header);
 
     if items.is_empty() {
-        return section.child(render_detail_empty_card(
-            &t!("provider.quota_visibility.empty"),
-            theme,
-        ));
+        return card.child(
+            div()
+                .pt(px(14.0))
+                .border_t_1()
+                .border_color(theme.border.subtle)
+                .text_size(px(12.5))
+                .line_height(relative(1.45))
+                .text_color(theme.text.muted)
+                .child(t!("provider.quota_visibility.empty").to_string()),
+        );
     }
 
-    section.child(render_quota_visibility_list(
+    card.child(render_quota_visibility_list(
         provider_id,
         items,
         dispatcher,
@@ -51,12 +58,9 @@ fn render_quota_visibility_list(
     let mut list = div()
         .flex()
         .flex_col()
-        .mt(px(10.0))
-        .rounded(px(12.0))
-        .bg(theme.bg.card_inner)
-        .border_1()
-        .border_color(theme.border.strong)
-        .overflow_hidden();
+        .pt(px(8.0))
+        .border_t_1()
+        .border_color(theme.border.subtle);
 
     // 只有 2 个及以上可见配额时主额度选择才有意义（单配额折叠态就是它自己）
     let has_multiple_visible = items.iter().filter(|item| item.visible).count() > 1;
@@ -106,8 +110,9 @@ fn render_quota_visibility_row(
         .flex()
         .items_center()
         .justify_between()
-        .px(px(16.0))
-        .py(px(10.0))
+        .px(px(8.0))
+        .py(px(9.0))
+        .rounded(px(8.0))
         .cursor_pointer()
         .hover(move |s| s.bg(hover_bg))
         .child(render_quota_label(item, theme))

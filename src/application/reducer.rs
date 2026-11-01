@@ -180,6 +180,9 @@ pub fn reduce_at(
         AppAction::SelectSettingsProvider(id) => {
             provider_sidebar::select_settings_provider(session, id, time.wall_ms, &mut effects)
         }
+        AppAction::SetProviderDetailTab(tab) => {
+            provider_sidebar::set_provider_detail_tab(session, tab, &mut effects)
+        }
         AppAction::SetTokenEditing {
             provider_id,
             editing,

@@ -749,19 +749,22 @@ fn settings_tabs(show_debug: bool) -> Vec<(&'static str, String, SettingsTab)> {
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Self::resolve_theme(&self.state, window.appearance());
-        let (active_tab, selected_provider) = {
+        let (active_tab, selected_provider, detail_tab) = {
             let state = self.state.borrow();
             (
                 state.session.settings_ui.active_tab,
                 state.session.settings_ui.selected_provider.clone(),
+                state.session.settings_ui.provider_detail_tab,
             )
         };
         if let Some(draft) = &self.quota_threshold_draft {
-            if !quota_thresholds::quota_threshold_target_matches_tab(
+            let keep = quota_thresholds::quota_threshold_target_matches_tab(
                 &draft.target,
                 active_tab,
                 &selected_provider,
-            ) {
+                detail_tab,
+            );
+            if !keep {
                 self.quota_threshold_draft = None;
             }
         }

@@ -7,6 +7,7 @@ fn settings_ui_default_values() {
     let ui = SettingsUiState {
         active_tab: SettingsTab::General,
         selected_provider: pid(ProviderKind::Claude),
+        provider_detail_tab: ProviderDetailTab::Settings,
         cadence_dropdown_open: false,
         history_retention_dropdown_open: false,
         provider_history_retention_dropdown_open: false,
@@ -43,6 +44,7 @@ fn clear_script_provider_transient_state_preserves_unrelated_settings_ui_state()
         pending_custom_provider_delete: None,
         active_tab: SettingsTab::Providers,
         selected_provider: selected_provider.clone(),
+        provider_detail_tab: ProviderDetailTab::Settings,
         cadence_dropdown_open: true,
         history_retention_dropdown_open: false,
         provider_history_retention_dropdown_open: false,
@@ -91,6 +93,7 @@ fn global_hotkey_error_helpers_preserve_error_candidate_pair_invariant() {
     let mut ui = SettingsUiState {
         active_tab: SettingsTab::General,
         selected_provider: pid(ProviderKind::Claude),
+        provider_detail_tab: ProviderDetailTab::Settings,
         cadence_dropdown_open: false,
         history_retention_dropdown_open: false,
         provider_history_retention_dropdown_open: false,

@@ -56,6 +56,7 @@ struct UsageHarness {
     selection: Option<u8>,
     inherited: Option<u8>,
     changes: Rc<RefCell<Vec<Option<u8>>>>,
+    provider_layout: bool,
 }
 
 impl Render for UsageHarness {
@@ -73,10 +74,21 @@ impl Render for UsageHarness {
             });
         };
         // Provider 级（有全局值可继承）渲染完整卡片，全局入口只渲染步进器。
-        div().size_full().child(match inherited {
+        let row = match inherited {
             Some(global) => render_provider_quota_usage_card(selection, global, &theme, on_change),
             None => render_quota_usage_stepper(selection, None, &theme, on_change),
-        })
+        };
+        if self.provider_layout {
+            // 复现设置窗最小宽度：侧栏 160 + 分隔线 + 详情区内边距 24。
+            div()
+                .size_full()
+                .flex()
+                .child(div().flex_shrink_0().h_full().w(px(160.0)))
+                .child(div().flex_shrink_0().h_full().w(px(1.0)))
+                .child(div().flex_1().min_w_0().h_full().px(px(24.0)).child(row))
+        } else {
+            div().size_full().child(row)
+        }
     }
 }
 
@@ -86,11 +98,22 @@ fn add_usage_window<'a>(
     inherited: Option<u8>,
     changes: &Rc<RefCell<Vec<Option<u8>>>>,
 ) -> (Entity<UsageHarness>, &'a mut VisualTestContext) {
+    add_usage_window_with_layout(cx, selection, inherited, false, changes)
+}
+
+fn add_usage_window_with_layout<'a>(
+    cx: &'a mut TestAppContext,
+    selection: Option<u8>,
+    inherited: Option<u8>,
+    provider_layout: bool,
+    changes: &Rc<RefCell<Vec<Option<u8>>>>,
+) -> (Entity<UsageHarness>, &'a mut VisualTestContext) {
     let changes = changes.clone();
     cx.add_window_view(move |_, _| UsageHarness {
         selection,
         inherited,
         changes,
+        provider_layout,
     })
 }
 
@@ -290,12 +313,11 @@ fn assert_threshold_fields_in_strip(cx: &mut VisualTestContext, case: &str) {
     let above_footer = cx
         .debug_bounds("quota-threshold-scale")
         .filter(|scale| scale.top() >= parent.bottom())
-        .map(|scale| {
+        .inspect(|&scale| {
             assert!(
                 scale.top() - parent.bottom() >= px(8.0),
                 "[{case}] percentage scale must not stick to the threshold strip above: {parent:?} vs {scale:?}"
             );
-            scale
         })
         .unwrap_or(parent);
     let hint = bounds(cx, "quota-threshold-hint");
@@ -388,6 +410,58 @@ fn quota_usage_follow_global_then_steps_from_new_global(cx: &mut TestAppContext)
     });
     click_selector(cx, "stepper-increment");
     assert_eq!(changes.borrow().as_slice(), &[None, Some(25)]);
+}
+
+#[gpui::test]
+fn quota_usage_row_stays_clickable_at_settings_min_width(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    for locale in ["en", "zh-CN"] {
+        rust_i18n::set_locale(locale);
+        for selection in [None, Some(6_u8)] {
+            let changes = Rc::new(RefCell::new(Vec::new()));
+            let (_harness, cx) =
+                add_usage_window_with_layout(cx, selection, Some(5), true, &changes);
+            cx.simulate_resize(size(px(460.0), px(800.0)));
+            draw(cx);
+
+            let case = format!("{locale}/selection={selection:?}");
+            let row = bounds(cx, "quota-usage-row");
+            let increment = bounds(cx, "stepper-increment");
+            let decrement = bounds(cx, "stepper-decrement");
+            assert!(
+                increment.right() <= row.right() + px(0.5)
+                    && decrement.left() >= row.left() - px(0.5),
+                "[{case}] stepper must stay inside the usage row at min width: row={row:?} decrement={decrement:?} increment={increment:?}"
+            );
+            assert!(
+                increment.size.width > px(0.0) && increment.size.height > px(0.0),
+                "[{case}] increment control must remain hittable: {increment:?}"
+            );
+
+            if selection.is_some() {
+                let follow = bounds(cx, "quota-usage-follow-global");
+                assert!(
+                    follow.right() <= row.right() + px(0.5)
+                        && follow.size.width > px(0.0)
+                        && follow.size.height > px(0.0),
+                    "[{case}] follow-global must stay inside the usage row: row={row:?} follow={follow:?}"
+                );
+            }
+
+            click_selector(cx, "stepper-increment");
+            let expected = if selection.is_some() {
+                Some(7)
+            } else {
+                Some(6)
+            };
+            assert_eq!(
+                changes.borrow().as_slice(),
+                &[expected],
+                "[{case}] increment at min width must still dispatch"
+            );
+        }
+    }
+    rust_i18n::set_locale("en");
 }
 
 #[gpui::test]
@@ -662,4 +736,33 @@ fn threshold_invalid_order_keeps_draft_and_error(cx: &mut TestAppContext) {
         (warning.as_str(), critical.as_str(), notify.as_str()),
         ("50", "20", "25")
     );
+}
+
+#[gpui::test]
+fn threshold_provider_inherited_collapses_strip_until_customize_clicked(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let provider = ProviderId::BuiltIn(ProviderKind::Claude);
+    let target = QuotaThresholdTarget::Provider(provider);
+    let (_harness, cx) = add_threshold_window(cx, target, true, &changes);
+    cx.simulate_resize(size(px(600.0), px(800.0)));
+    draw(cx);
+
+    assert!(
+        cx.debug_bounds("quota-threshold-compact-percentage")
+            .is_some(),
+        "provider threshold unit following global must render compact row"
+    );
+    assert!(
+        cx.debug_bounds("quota-threshold-summary-percentage")
+            .is_some(),
+        "provider threshold unit following global must render inline threshold summary"
+    );
+    assert!(
+        cx.debug_bounds("quota-threshold-scale").is_none(),
+        "provider threshold unit following global must hide the full percentage scale bar"
+    );
+
+    click_selector(cx, "quota-threshold-customize-percentage");
+    assert_threshold_fields_in_strip(cx, "provider/customize-click");
 }
