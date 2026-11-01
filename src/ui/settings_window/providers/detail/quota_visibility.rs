@@ -3,11 +3,12 @@ use crate::application::{AppAction, QuotaVisibilityItem, SettingChange};
 use crate::models::ProviderId;
 use crate::theme::Theme;
 use crate::ui::settings_window::providers::shared::{
-    render_settings_card, render_settings_card_header,
+    render_settings_card, render_settings_card_header, render_status_pill,
 };
 use crate::ui::widgets::{render_svg_icon, with_tooltip};
 use gpui::{
-    div, px, relative, Div, InteractiveElement, MouseButton, ParentElement, Stateful, Styled,
+    div, prelude::FluentBuilder as _, px, relative, Div, InteractiveElement, MouseButton,
+    ParentElement, Stateful, Styled,
 };
 use rust_i18n::t;
 
@@ -115,7 +116,7 @@ fn render_quota_visibility_row(
         .rounded(px(8.0))
         .cursor_pointer()
         .hover(move |s| s.bg(hover_bg))
-        .child(render_quota_label(item, theme))
+        .child(render_quota_label(item, has_multiple_visible, theme))
         .child(trailing)
         .on_mouse_down(MouseButton::Left, {
             let provider_id = provider_id_for_action(&provider_id);
@@ -182,7 +183,11 @@ fn render_primary_toggle(
     )
 }
 
-fn render_quota_label(item: &QuotaVisibilityItem, theme: &Theme) -> Div {
+fn render_quota_label(
+    item: &QuotaVisibilityItem,
+    has_multiple_visible: bool,
+    theme: &Theme,
+) -> Div {
     let mut label = div().flex().items_center().gap(px(8.0));
     if SHOW_QUOTA_ROW_ICON {
         label = label.child(render_svg_icon(
@@ -192,13 +197,23 @@ fn render_quota_label(item: &QuotaVisibilityItem, theme: &Theme) -> Div {
         ));
     }
 
-    label.child(
-        div()
-            .text_size(px(13.0))
-            .line_height(relative(1.3))
-            .text_color(quota_label_color(item.visible, theme))
-            .child(item.label.clone()),
-    )
+    // 多配额可见时才需要标注哪一行是当前总览主额度
+    let show_primary_badge = has_multiple_visible && item.visible && item.is_primary;
+    label
+        .child(
+            div()
+                .text_size(px(13.0))
+                .line_height(relative(1.3))
+                .text_color(quota_label_color(item.visible, theme))
+                .child(item.label.clone()),
+        )
+        .when(show_primary_badge, |el| {
+            el.child(render_status_pill(
+                true,
+                t!("provider.quota_visibility.primary_badge").to_string(),
+                theme,
+            ))
+        })
 }
 
 fn quota_icon_color(visible: bool, theme: &Theme) -> gpui::Hsla {

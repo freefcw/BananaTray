@@ -15,7 +15,7 @@ use gpui::{
 
 /// 紧凑内联热键录入控件 — 用于设置行 trailing 位置（类似 dropdown trigger 的 chip 风格）
 ///
-/// 固定最小宽度，点击进入录制模式；与 `render_icon_row` 的 trailing 槽位配合使用。
+/// 固定最小宽度，点击进入录制模式；放置在设置行的右侧控件位置。
 ///
 /// - `input_entity`: `HotkeyInputState` entity，管理录制生命周期
 /// - `placeholder`: 未录入时的占位文本

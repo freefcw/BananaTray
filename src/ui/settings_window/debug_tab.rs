@@ -1,5 +1,6 @@
 use super::components::{
-    render_dark_card, render_divider, render_section_header, ICON_BG_NOTIF, ICON_FG,
+    render_dark_card, render_divider, render_section_header, render_setting_row, ROW_DESC_SIZE,
+    ROW_GAP, ROW_PADDING_X, ROW_PADDING_Y, ROW_TITLE_SIZE, TAB_PADDING_BOTTOM, TAB_PADDING_X,
 };
 use super::SettingsView;
 use crate::application::{
@@ -9,21 +10,15 @@ use crate::application::{
 use crate::runtime;
 use crate::theme::{monospace_font_family, Theme};
 use crate::ui::widgets::{
-    render_action_button, render_colored_icon_sized, render_dropdown_panel, render_dropdown_row,
-    render_dropdown_trigger, render_icon_row, render_icon_tooltip_button, render_info_cell,
-    render_path_info_cell, ButtonSize, ButtonVariant, IconTooltipButtonOptions,
-    DROPDOWN_TRIGGER_HEIGHT,
+    render_action_button, render_dropdown_panel, render_dropdown_row, render_dropdown_trigger,
+    render_icon_tooltip_button, render_info_cell, render_path_info_cell, ButtonSize, ButtonVariant,
+    IconTooltipButtonOptions, DROPDOWN_TRIGGER_HEIGHT,
 };
 use gpui::{
-    deferred, div, px, rgb, AnyElement, Context, Deferred, Div, FontWeight, InteractiveElement,
+    deferred, div, px, AnyElement, Context, Deferred, Div, FontWeight, InteractiveElement,
     IntoElement, MouseButton, ParentElement, StatefulInteractiveElement, Styled,
 };
 use rust_i18n::t;
-
-// 设计稿颜色常量
-const ICON_BG_LOG: u32 = 0x2d6a4f; // 深绿色 (Log Level)
-const ICON_BG_FILE: u32 = 0x1a5276; // 深蓝色 (Log File)
-const ICON_BG_ENV: u32 = 0x4a1a6b; // 深紫色 (Environment)
 
 /// 当前支持的日志级别
 const LOG_LEVELS: &[(&str, &str)] = &[
@@ -78,8 +73,8 @@ impl SettingsView {
 
         div()
             .flex_col()
-            .px(px(16.0))
-            .pb(px(16.0))
+            .px(px(TAB_PADDING_X))
+            .pb(px(TAB_PADDING_BOTTOM))
             // ═══════ LOG LEVEL ═══════
             .child(render_section_header(
                 &t!("settings.section.debug_log"),
@@ -172,10 +167,7 @@ impl SettingsView {
             trigger = trigger.child(Self::render_log_level_options(&current_lower, state, theme));
         }
 
-        Self::render_icon_dropdown_row(
-            "src/icons/advanced.svg",
-            rgb(ICON_FG).into(),
-            rgb(ICON_BG_LOG).into(),
+        render_setting_row(
             &t!("debug.log_level"),
             &t!("debug.log_level.desc"),
             theme,
@@ -223,7 +215,7 @@ impl SettingsView {
         .with_priority(1)
     }
 
-    /// 日志文件信息行 — 使用 render_icon_row + render_action_button 组合
+    /// 日志文件信息行 — 标准设置行布局 + 自定义中间路径与右侧按钮组
     fn render_log_file_row(
         &self,
         debug_state: &crate::application::DebugTabViewState,
@@ -275,19 +267,12 @@ impl SettingsView {
                 },
             ));
 
-        // render_icon_row 的 description 是纯文字，而这里需要 overflow_hidden 的路径信息，
-        // 因此用 render_colored_icon + 手动中间区域 + trailing 保持布局一致
         div()
             .flex()
             .items_center()
-            .gap(px(12.0))
-            .px(px(14.0))
-            .py(px(12.0))
-            .child(crate::ui::widgets::render_colored_icon(
-                "src/icons/status.svg",
-                rgb(ICON_FG).into(),
-                rgb(ICON_BG_FILE).into(),
-            ))
+            .gap(px(ROW_GAP))
+            .px(px(ROW_PADDING_X))
+            .py(px(ROW_PADDING_Y))
             .child(
                 div()
                     .flex()
@@ -297,17 +282,18 @@ impl SettingsView {
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(ROW_TITLE_SIZE))
+                            .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text.primary)
                             .child(t!("debug.log_file").to_string()),
                     )
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(px(ROW_DESC_SIZE))
                             .text_color(theme.text.muted)
                             .overflow_hidden()
                             .whitespace_nowrap()
+                            .text_ellipsis()
                             .child(subtitle),
                     ),
             )
@@ -315,7 +301,7 @@ impl SettingsView {
     }
 
     // ========================================================================
-    // Section 2: Environment — 使用 render_colored_icon_sized + render_info_cell
+    // Section 2: Environment — 使用 render_info_cell 渲染环境信息网格
     // ========================================================================
 
     fn render_environment_card(
@@ -390,27 +376,14 @@ impl SettingsView {
             .items_center()
             .justify_between()
             .px(px(14.0))
-            .pt(px(8.0))
+            .pt(px(10.0))
             .pb(px(4.0))
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap(px(12.0))
-                    .child(render_colored_icon_sized(
-                        "src/icons/about.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_ENV).into(),
-                        28.0,
-                        14.0,
-                    ))
-                    .child(
-                        div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text.primary)
-                            .child(t!("debug.section.environment").to_string()),
-                    ),
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.text.primary)
+                    .child(t!("debug.section.environment").to_string()),
             )
             .child(render_icon_tooltip_button(
                 "debug-environment-refresh".into(),
@@ -439,7 +412,7 @@ impl SettingsView {
     // Section 3: Test Notifications
     // ========================================================================
 
-    /// 测试通知按钮行 — 使用 render_icon_row + render_action_button
+    /// 测试通知按钮行 — 使用 render_setting_row + render_action_button
     fn render_test_notification_button(
         &self,
         title: &str,
@@ -449,14 +422,11 @@ impl SettingsView {
     ) -> Div {
         let state = self.state.clone();
 
-        render_icon_row(
-            "src/icons/status.svg",
-            rgb(ICON_FG).into(),
-            rgb(ICON_BG_NOTIF).into(),
+        render_setting_row(
             title,
             desc,
             theme,
-            div().flex_shrink_0().child(render_action_button(
+            render_action_button(
                 &t!("debug.send"),
                 None,
                 ButtonVariant::Subtle,
@@ -470,7 +440,7 @@ impl SettingsView {
                         cx,
                     );
                 },
-            )),
+            ),
         )
     }
 

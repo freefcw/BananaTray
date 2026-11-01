@@ -1,32 +1,25 @@
 use super::components::{
-    render_dark_card, render_divider, render_section_header, render_section_header_with_desc,
-    IconSwitchRow, ICON_BG_ACCENT, ICON_BG_NOTIF, ICON_BG_REFRESH, ICON_FG,
+    render_dark_card, render_divider, render_section_header, render_setting_row,
+    render_toggle_setting, TAB_PADDING_BOTTOM, TAB_PADDING_X,
 };
 use super::SettingsView;
-use crate::application::{
-    AppAction, GlobalHotkeyError, QuotaThresholdUnitViewState, SettingChange, SettingsModalState,
-};
-use crate::models::{AppSettings, QuotaThresholdTarget, QuotaThresholdUnit, RETENTION_PRESETS};
+use crate::application::{AppAction, GlobalHotkeyError, SettingChange, SettingsModalState};
+use crate::models::{AppSettings, RETENTION_PRESETS};
 use crate::runtime;
 use crate::theme::Theme;
 use crate::ui::widgets::{
     render_action_button, render_history_retention_dropdown, render_hotkey_field_inline,
-    render_icon_row, ButtonSize, ButtonVariant, HistoryRetentionMenu,
+    ButtonSize, ButtonVariant, HistoryRetentionMenu,
 };
 use fc_ui::components::hotkey_input::HotkeyValue;
 use gpui::{
-    div, prelude::FluentBuilder, px, relative, rgb, Context, Div, Entity, InteractiveElement,
-    Keystroke, MouseButton, ParentElement, Styled, Window,
+    div, prelude::FluentBuilder, px, relative, Context, Div, Entity, InteractiveElement, Keystroke,
+    MouseButton, ParentElement, Styled, Window,
 };
 use rust_i18n::t;
 
-// 设计稿颜色常量 — 各设置项的彩色图标背景
-const ICON_BG_USAGE: u32 = 0x0e7490;
-const ICON_BG_SOUND: u32 = 0x6b3fa0; // 紫色 (Notification Sound)
-const ICON_BG_HOTKEY: u32 = 0x165a93; // 深蓝色 (Global Hotkey)
-
 impl SettingsView {
-    /// Render General settings tab — 匹配设计稿风格
+    /// Render General settings tab — 系统与窗口、数据同步与历史、高级选项
     pub(super) fn render_general_tab(
         &mut self,
         settings: &AppSettings,
@@ -35,27 +28,10 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Div {
         let state = self.state.clone();
-        let global_quota_units: Vec<QuotaThresholdUnitViewState> = QuotaThresholdUnit::ALL
-            .iter()
-            .map(|&unit| QuotaThresholdUnitViewState {
-                unit,
-                override_thresholds: None,
-                effective: settings.quota.thresholds(unit),
-            })
-            .collect();
-
-        // ── SYSTEM section ───────────────────────────────────
-        let login_state = state.clone();
         let login_checked = settings.system.start_at_login;
+        let auto_hide_checked = settings.system.auto_hide_window;
+        let debug_checked = settings.display.show_debug_tab;
 
-        // ── AUTOMATION section ───────────────────────────────
-        let notif_state = state.clone();
-        let notif_checked = settings.notification.session_quota_notifications;
-        let sound_state = state.clone();
-        let sound_checked = settings.notification.notification_sound;
-        let usage_state = state.clone();
-
-        // Cadence dropdown (复用现有组件)
         let cadence_mins = if settings.system.refresh_interval_mins == 0 {
             None
         } else {
@@ -72,56 +48,47 @@ impl SettingsView {
 
         div()
             .flex_col()
-            .px(px(16.0))
-            .pb(px(16.0))
-            // ═══════ SYSTEM ═══════
+            .px(px(TAB_PADDING_X))
+            .pb(px(TAB_PADDING_BOTTOM))
+            // ═══════ 系统与窗口 ═══════
             .child(render_section_header(&t!("settings.section.system"), theme))
             .child(
                 render_dark_card(theme)
-                    .child(Self::render_icon_switch_row(
-                        IconSwitchRow {
-                            icon_path: "src/icons/switch.svg",
-                            icon_color: rgb(ICON_FG).into(),
-                            icon_bg: rgb(ICON_BG_ACCENT).into(),
-                            title: &t!("settings.start_at_login"),
-                            description: &t!("settings.start_at_login.desc"),
-                            enabled: login_checked,
-                        },
+                    .child(render_toggle_setting(
+                        &state,
+                        &t!("settings.start_at_login"),
+                        &t!("settings.start_at_login.desc"),
+                        login_checked,
                         theme,
-                        move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &login_state,
-                                AppAction::UpdateSetting(SettingChange::ToggleStartAtLogin),
-                                window,
-                                cx,
-                            );
-                        },
+                        SettingChange::ToggleStartAtLogin,
+                    ))
+                    .child(render_divider(theme))
+                    .child(render_toggle_setting(
+                        &state,
+                        &t!("settings.auto_hide"),
+                        &t!("settings.auto_hide.desc"),
+                        auto_hide_checked,
+                        theme,
+                        SettingChange::ToggleAutoHideWindow,
                     ))
                     .child(render_divider(theme))
                     .child(self.render_global_hotkey_setting(settings, theme, window, cx)),
             )
-            // ═══════ AUTOMATION ═══════
+            // ═══════ 数据同步与历史 ═══════
             .child(render_section_header(
-                &t!("settings.section.automation"),
+                &t!("settings.section.data_sync"),
                 theme,
             ))
             .child(
                 render_dark_card(theme)
-                    // Refresh Rate — 带下拉选择器
-                    .child(Self::render_icon_dropdown_row(
-                        "src/icons/refresh.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_REFRESH).into(),
+                    .child(render_setting_row(
                         &t!("settings.refresh_cadence"),
                         &t!("settings.refresh_cadence.desc"),
                         theme,
                         crate::ui::widgets::render_cadence_trigger(&state, cadence_mins, theme),
                     ))
                     .child(render_divider(theme))
-                    .child(Self::render_icon_dropdown_row(
-                        "src/icons/usage.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_USAGE).into(),
+                    .child(render_setting_row(
                         &t!("settings.history_retention"),
                         &t!("settings.history_retention.desc"),
                         theme,
@@ -132,102 +99,21 @@ impl SettingsView {
                         confirming_clear_all,
                         &state,
                         theme,
-                    ))
-                    .child(render_divider(theme))
-                    // Quota Notifications
-                    .child(Self::render_icon_switch_row(
-                        IconSwitchRow {
-                            icon_path: "src/icons/status.svg",
-                            icon_color: rgb(ICON_FG).into(),
-                            icon_bg: rgb(ICON_BG_NOTIF).into(),
-                            title: &t!("settings.session_quota_notifications"),
-                            description: &t!("settings.session_quota_notifications.desc"),
-                            enabled: notif_checked,
-                        },
-                        theme,
-                        move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &notif_state,
-                                AppAction::UpdateSetting(
-                                    SettingChange::ToggleSessionQuotaNotifications,
-                                ),
-                                window,
-                                cx,
-                            );
-                        },
-                    ))
-                    .child(render_divider(theme))
-                    .child(Self::render_icon_dropdown_row(
-                        "src/icons/usage.svg",
-                        rgb(ICON_FG).into(),
-                        rgb(ICON_BG_USAGE).into(),
-                        &t!("settings.quota_usage"),
-                        &t!("settings.quota_usage.desc"),
-                        theme,
-                        super::quota_usage::render_quota_usage_stepper(
-                            Some(settings.notification.quota_usage_step_pct),
-                            None,
-                            theme,
-                            move |step, window, cx| {
-                                crate::bootstrap::dispatch_in_window(
-                                    &usage_state,
-                                    AppAction::UpdateSetting(SettingChange::SetQuotaUsageStep(
-                                        step.unwrap_or(0),
-                                    )),
-                                    window,
-                                    cx,
-                                );
-                            },
-                        ),
-                    ))
-                    .child(render_divider(theme))
-                    // Notification Sound
-                    .child(Self::render_icon_switch_row(
-                        IconSwitchRow {
-                            icon_path: "src/icons/sound.svg",
-                            icon_color: rgb(ICON_FG).into(),
-                            icon_bg: rgb(ICON_BG_SOUND).into(),
-                            title: &t!("settings.notification_sound"),
-                            description: &t!("settings.notification_sound.desc"),
-                            enabled: sound_checked,
-                        },
-                        theme,
-                        move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &sound_state,
-                                AppAction::UpdateSetting(SettingChange::ToggleNotificationSound),
-                                window,
-                                cx,
-                            );
-                        },
                     )),
             )
-            .child(render_section_header_with_desc(
-                &t!("settings.section.quota_thresholds"),
-                &t!("settings.quota_thresholds.desc"),
+            // ═══════ 开发者 ═══════
+            .child(render_section_header(
+                &t!("settings.section.developer"),
                 theme,
             ))
-            .child(super::quota_thresholds::render_quota_thresholds_section(
-                self,
-                QuotaThresholdTarget::Global,
-                &global_quota_units,
+            .child(render_dark_card(theme).child(render_toggle_setting(
+                &state,
+                &t!("settings.show_debug_tab"),
+                &t!("settings.show_debug_tab.desc"),
+                debug_checked,
                 theme,
-                window,
-                cx,
-                {
-                    let state = state.clone();
-                    std::rc::Rc::new(
-                        move |change: SettingChange, window: &mut Window, cx: &mut gpui::App| {
-                            crate::bootstrap::dispatch_in_window(
-                                &state,
-                                AppAction::UpdateSetting(change),
-                                window,
-                                cx,
-                            );
-                        },
-                    )
-                },
-            ))
+                SettingChange::ToggleShowDebugTab,
+            )))
             // ═══════ Quit ═══════
             .child(self.render_quit_button(theme))
     }
@@ -277,13 +163,9 @@ impl SettingsView {
         let trailing =
             self.render_global_hotkey_actions(&input_entity, show_save, theme, window, cx);
 
-        // ── 整体布局：icon_row + 可选的 inline note ──
         div()
             .flex_col()
-            .child(render_icon_row(
-                "src/icons/settings.svg",
-                rgb(ICON_FG).into(),
-                rgb(ICON_BG_HOTKEY).into(),
+            .child(render_setting_row(
                 &t!("settings.global_hotkey"),
                 &t!("settings.global_hotkey.desc"),
                 theme,
@@ -480,70 +362,53 @@ fn render_clear_all_history_row(
     if confirming {
         let confirm_state = state.clone();
         let cancel_state = state.clone();
-        return div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px(px(16.0))
-            .py(px(12.0))
-            .child(
-                div()
-                    .text_size(px(13.0))
-                    .text_color(theme.text.primary)
-                    .child(t!("settings.history_clear_all.confirm").to_string()),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap(px(8.0))
-                    .child(render_action_button(
-                        &t!("common.confirm"),
-                        None,
-                        ButtonVariant::Danger,
-                        ButtonSize::Compact,
-                        theme,
-                        move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &confirm_state,
-                                AppAction::ConfirmClearAllHistory,
-                                window,
-                                cx,
-                            );
-                        },
-                    ))
-                    .child(render_action_button(
-                        &t!("common.cancel"),
-                        None,
-                        ButtonVariant::Subtle,
-                        ButtonSize::Compact,
-                        theme,
-                        move |_, window, cx| {
-                            crate::bootstrap::dispatch_in_window(
-                                &cancel_state,
-                                AppAction::CancelClearAllHistory,
-                                window,
-                                cx,
-                            );
-                        },
-                    )),
-            );
+        return render_setting_row(
+            &t!("settings.history_clear_all"),
+            &t!("settings.history_clear_all.confirm"),
+            theme,
+            div()
+                .flex()
+                .gap(px(8.0))
+                .child(render_action_button(
+                    &t!("common.confirm"),
+                    None,
+                    ButtonVariant::Danger,
+                    ButtonSize::Compact,
+                    theme,
+                    move |_, window, cx| {
+                        crate::bootstrap::dispatch_in_window(
+                            &confirm_state,
+                            AppAction::ConfirmClearAllHistory,
+                            window,
+                            cx,
+                        );
+                    },
+                ))
+                .child(render_action_button(
+                    &t!("common.cancel"),
+                    None,
+                    ButtonVariant::Subtle,
+                    ButtonSize::Compact,
+                    theme,
+                    move |_, window, cx| {
+                        crate::bootstrap::dispatch_in_window(
+                            &cancel_state,
+                            AppAction::CancelClearAllHistory,
+                            window,
+                            cx,
+                        );
+                    },
+                )),
+        );
     }
 
     let clear_state = state.clone();
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .px(px(16.0))
-        .py(px(12.0))
-        .child(
-            div()
-                .text_size(px(13.0))
-                .text_color(theme.text.primary)
-                .child(t!("settings.history_clear_all").to_string()),
-        )
-        .child(render_action_button(
-            &t!("settings.history_clear_all"),
+    render_setting_row(
+        &t!("settings.history_clear_all"),
+        &t!("settings.history_clear_all.desc"),
+        theme,
+        render_action_button(
+            &t!("settings.history_clear_all.action"),
             None,
             ButtonVariant::Danger,
             ButtonSize::Compact,
@@ -556,7 +421,8 @@ fn render_clear_all_history_row(
                     cx,
                 );
             },
-        ))
+        ),
+    )
 }
 
 fn displayed_hotkey_error(

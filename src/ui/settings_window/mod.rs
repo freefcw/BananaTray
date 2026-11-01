@@ -1,4 +1,5 @@
 mod about_tab;
+mod alerts_tab;
 mod components;
 mod debug_tab;
 mod display_tab;
@@ -617,16 +618,18 @@ impl SettingsView {
     ) -> Div {
         let show_debug = self.state.borrow().session.settings.display.show_debug_tab;
         let view_entity = cx.entity().clone();
-        settings_tabs(show_debug).into_iter().fold(
+        let scroll = settings_tabs(show_debug).into_iter().fold(
             div()
+                .id("settings-tab-bar")
                 .w_full()
                 .flex()
                 .items_center()
                 .gap(px(2.0))
-                .px(px(16.0))
+                .px(px(components::TAB_PADDING_X))
                 .pb(px(10.0))
-                .overflow_hidden(),
-            |bar, (icon, label, tab)| {
+                .overflow_x_scroll()
+                .scrollbar_width(px(0.0)),
+            |bar: gpui::Stateful<Div>, (icon, label, tab)| {
                 bar.child(self.render_tab_button(
                     icon,
                     label,
@@ -636,7 +639,8 @@ impl SettingsView {
                     theme,
                 ))
             },
-        )
+        );
+        div().w_full().child(scroll)
     }
 
     fn render_tab_button(
@@ -731,6 +735,11 @@ fn settings_tabs(show_debug: bool) -> Vec<(&'static str, String, SettingsTab)> {
             SettingsTab::Display,
         ),
         (
+            "src/icons/status.svg",
+            t!("settings.tab.alerts").to_string(),
+            SettingsTab::Alerts,
+        ),
+        (
             "src/icons/about.svg",
             t!("settings.tab.about").to_string(),
             SettingsTab::About,
@@ -791,9 +800,10 @@ impl Render for SettingsView {
                 .child(match active_tab {
                     SettingsTab::General => self.render_general_tab(&settings, &theme, window, cx),
                     SettingsTab::Display => self.render_display_tab(&settings, &theme),
+                    SettingsTab::Alerts => self.render_alerts_tab(&settings, &theme, window, cx),
                     SettingsTab::About => self.render_about_tab(&theme),
                     SettingsTab::Debug => self.render_debug_tab(&theme, cx),
-                    _ => div(),
+                    SettingsTab::Providers => div(),
                 })
         };
 

@@ -9,9 +9,9 @@
 | 文件 | 职责 |
 |------|------|
 | `mod.rs` | **`SettingsView`** 主视图 + `build_settings_view()` 工厂 — 头部、Tab 导航栏、内容区路由；含 `TokenInputDraft`、`NewApiFormInputs`、`ScriptProviderFormInputs` 表单状态和 Debug 诊断快照管理；表单缓存按 modal identity 驱动重建，由 `bootstrap` 直接调用工厂，构造前派发 `SettingsWindowOpened` 清除旧 Token 编辑标记 |
-| `components.rs` | 设置页共享组件（section title、description text 等） |
-| `quota_usage.rs` | 用量步长步进器共享组件 — General 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」）。`render_provider_quota_usage_row` 嵌入 Provider 详情页的「提醒与状态阈值」卡片内：左侧标题 +「跟随全局 / 自定义」标签（与阈值行一致），右侧步进器与覆盖时的「恢复跟随全局」文字按钮（不用刷新图标，避免与详情页顶部刷新按钮混淆）。设置窗最小宽度 460（侧栏 160）下标题与控件 `flex_wrap`，避免约 148px 步进器挤出卡片 |
-| `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — General「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片内不重复标题），Provider 详情页由 `append_provider_threshold_units` 与「用量提醒」行合并在同一张「提醒与状态阈值」卡片中，并按单位展示继承 / 自定义标签（由 selector 过滤为当前 Provider 实测额度所含单位 + 已配置覆盖的单位，无实测额度时展示全部三个单位）。`render_quota_thresholds_section` 的 Provider 分支只给 UI 测试包一层无标题卡片外壳，生产路径不走这层。General 页始终展开展示等宽区间条（「弹窗提醒 ≤ 图标变红 < 图标变黄 → 正常」+ 百分比 0–100% 比例刻度）；Provider 详情页在「跟随全局」且未处于编辑态时折叠为单行紧凑摘要（三档色点 + 阈值数值 +「自定义」按钮），仅在已覆盖或点击「自定义」进入编辑态时展开四段区间条与比例尺。编辑时输入框原位替换区间块中的数值，取消 / 保存按钮位于区间条下方与提示同行（窄宽度换行右对齐）；编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
+| `components.rs` | 设置页共享布局基元（统一 20px 页边距、分区标题、卡片容器、分隔线，以及无彩色图标块的统一设置行 `render_setting_row` / `render_switch_row` / `render_segmented_row`） |
+| `quota_usage.rs` | 用量步长步进器共享组件 — Alerts 全局入口与 Provider 详情覆盖入口复用；`[−] 每 N% [+]`，0 = 关闭、上限 100；配置文件可保存 / 显示 0–100 任意整数，非整档值按原值显示、点按按钮时按规则对齐。步进规则：递增 — 当前值 <10 时每次 +1，≥10 时对齐到下一个 5 的倍数（10→15、12→15）；递减 — 当前值 ≤10 时每次 −1（10→9，可一直减到 0 = 关闭），>10 时对齐到上一个 5 的倍数且不低于 10（12→10、100→95）。`selection: Option<u8>`（`None` = 跟随全局）+ `inherited_step`（Provider 入口传入全局值：跟随时弱化显示全局值，点 `−`/`+` 以生效值为起点创建覆盖，已覆盖时显示「恢复跟随全局」）。`render_provider_quota_usage_row` 嵌入 Provider 详情页的「提醒与状态阈值」卡片内：左侧标题 +「跟随全局 / 自定义」标签（与阈值行一致），右侧步进器与覆盖时的「恢复跟随全局」文字按钮（不用刷新图标，避免与详情页顶部刷新按钮混淆）。设置窗最小宽度 460（侧栏 160）下标题与控件 `flex_wrap`，避免约 148px 步进器挤出卡片 |
+| `quota_thresholds.rs` | 额度状态与提醒阈值共享组件 — Alerts「额度状态与提醒」section 编辑全局 `QuotaRules`（卡片顶部附带四档颜色图例），Provider 详情页由 `append_provider_threshold_units` 与「用量提醒」行合并在同一张「提醒与状态阈值」卡片中，并按单位展示继承 / 自定义标签（由 selector 过滤为当前 Provider 实测额度所含单位 + 已配置覆盖的单位，无实测额度时展示全部三个单位）。`render_quota_thresholds_section` 的 Provider 分支只给 UI 测试包一层无标题卡片外壳，生产路径不走这层。全局默认态与 Provider「跟随全局」未编辑态均折叠为单行紧凑摘要（三档色点 + 阈值数值 +「编辑 / 自定义」按钮），仅在 Provider 已覆盖或点击「编辑 / 自定义」进入编辑态时原位展开四段区间条与比例尺。编辑时输入框原位替换区间块中的数值，取消 / 保存按钮位于区间条下方与提示同行（窄宽度换行右对齐）；编辑草稿由 view-local `QuotaThresholdDraft`（target + unit + 三个 `InputState`）承载，仅整组保存才派发 `SettingChange::SetGlobalQuotaThresholds` / `SetProviderQuotaThresholds` |
 | `quota_ui_tests.rs` | Opt-in GPUI mock-window UI 回归测试（`#[cfg(all(test, feature = "ui-tests"))]`，运行 `just test-settings-ui` 或 `cargo test --lib --locked --features ui-tests ui::settings_window -- --test-threads=1`）— 真实渲染并点击步进器 / 阈值 section，经 `debug_selector` 定位断言布局与派发；只构造纯内存 AppState + no-op SettingsWriter，无真实配置 I/O |
 | `form_ui_tests.rs` | 同门槛的表单校验回归 — NewAPI / Script Provider 表单的 `collect_*` 提交路径：必填 / 格式校验失败落到字段 state 的 `validation_error`，修正后复验清除；同时钉住 fc-ui 内置 required 文案（本地化映射的耦合点，见「约束」） |
 
@@ -19,8 +19,9 @@
 
 | 文件 | Tab | 内容 |
 |------|-----|------|
-| `general_tab.rs` | General | 系统行为与通知设置：自启动、全局热键、刷新间隔、额度通知总开关、用量提醒步长、提示音、全局额度状态与提醒阈值 |
-| `display_tab.rs` | Display | 外观设置：主题、语言、托盘图标样式、配额显示模式、UI 开关 |
+| `general_tab.rs` | General | 系统与窗口（开机自启、自动隐藏窗口、全局热键）、数据与历史（刷新间隔、历史保留天数、清除全部历史）、开发者选项（调试标签页开关）与退出应用 |
+| `display_tab.rs` | Display | 界面与菜单栏（主题、语言、托盘图标风格）、托盘弹窗布局（总览面板、导航栏样式、导航栏状态点、账户信息、仪表盘按钮、刷新按钮）、配额卡片与图表（额度显示模式、卡片样式、内嵌折线范围、合并历史折线） |
+| `alerts_tab.rs` | Alerts | 桌面通知（额度通知总开关、用量提醒步长、通知声音；总开关关闭时子项弱化）与全局额度状态与提醒阈值 |
 | `about_tab.rs` | About | 版本信息、系统信息、开源许可、贡献者、问题上报（GitHub Issue） |
 | `debug_tab.rs` | Debug | 调试控制台：日志级别下拉选择、日志捕获、可滚动 Provider 下拉选择、单 Provider 刷新、通知测试、后台采集并可手动刷新的系统诊断快照 |
 
@@ -44,7 +45,7 @@
 ```
 SettingsView::render()
   ├── render_header()      — 图标 + "Settings" + ✕ 关闭按钮
-  ├── render_tab_bar()     — 水平 pill 导航（General / Providers / Display / About / Debug?）
+  ├── render_tab_bar()     — 水平 pill 导航（General / Providers / Display / Alerts / About / Debug?）
   └── content area         — 按 active_tab 路由到对应 Tab 渲染
         └── Providers Tab
               ├── sidebar          — 已添加的 Provider 列表

@@ -1,4 +1,4 @@
-use super::providers::shared::{render_inheritance_badge, render_input_box, render_settings_card};
+use super::providers::shared::{render_input_box, render_settings_card, render_status_pill};
 use super::SettingsView;
 use crate::application::{
     ProviderDetailTab, QuotaThresholdUnitViewState, SettingChange, SettingsTab,
@@ -114,7 +114,7 @@ pub(in crate::ui::settings_window) fn quota_threshold_target_matches_tab(
     detail_tab: ProviderDetailTab,
 ) -> bool {
     match target {
-        QuotaThresholdTarget::Global => tab == SettingsTab::General,
+        QuotaThresholdTarget::Global => tab == SettingsTab::Alerts,
         QuotaThresholdTarget::Provider(_) => {
             tab == SettingsTab::Providers
                 && target.is_provider(selected)
@@ -133,18 +133,12 @@ pub(in crate::ui::settings_window) fn render_quota_thresholds_section(
     on_change: Rc<QuotaThresholdChange>,
 ) -> Div {
     if matches!(target, QuotaThresholdTarget::Global) {
-        // 通用设置页：说明已在分区头部作为副标题展示，卡片直接使用与“系统/自动化”一致的单层暗色卡片，避免多层嵌套
-        let mut card = super::components::render_dark_card(theme);
-        for (index, unit_state) in units.iter().enumerate() {
+        // 提醒与阈值页：顶部展示四档颜色图例，各单位默认折叠为单行紧凑摘要，点击「编辑」原位展开
+        let mut card =
+            super::components::render_dark_card(theme).child(render_global_threshold_legend(theme));
+        for unit_state in units {
             card = card.child(render_quota_threshold_unit(
-                view,
-                &target,
-                unit_state,
-                index > 0,
-                theme,
-                window,
-                cx,
-                &on_change,
+                view, &target, unit_state, theme, window, cx, &on_change,
             ));
         }
         card
@@ -154,6 +148,42 @@ pub(in crate::ui::settings_window) fn render_quota_thresholds_section(
         let card = render_settings_card(theme);
         append_provider_threshold_units(card, view, &target, units, theme, window, cx, &on_change)
     }
+}
+
+/// 全局阈值卡片顶部的紧凑色点图例，帮助用户在折叠态直接读懂三档颜色含义。
+fn render_global_threshold_legend(theme: &Theme) -> Div {
+    let mut row = div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(px(14.0))
+        .px(px(14.0))
+        .py(px(9.0))
+        .bg(theme.bg.subtle.opacity(0.45));
+
+    for (_, label, color) in threshold_levels(theme) {
+        row = row.child(render_legend_item(label, color, theme));
+    }
+    row.child(render_legend_item(
+        t!("settings.quota_thresholds.segment.normal").to_string(),
+        theme.status.success,
+        theme,
+    ))
+}
+
+fn render_legend_item(label: String, color: Hsla, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(5.0))
+        .child(div().flex_shrink_0().size(px(6.5)).rounded_full().bg(color))
+        .child(
+            div()
+                .text_size(px(11.0))
+                .text_color(theme.text.secondary)
+                .whitespace_nowrap()
+                .child(label),
+        )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -169,18 +199,16 @@ pub(in crate::ui::settings_window) fn append_provider_threshold_units(
 ) -> Div {
     for unit_state in units {
         card = card.child(render_quota_threshold_unit(
-            view, target, unit_state, true, theme, window, cx, on_change,
+            view, target, unit_state, theme, window, cx, on_change,
         ));
     }
     card
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_quota_threshold_unit(
     view: &mut SettingsView,
     target: &QuotaThresholdTarget,
     unit_state: &QuotaThresholdUnitViewState,
-    with_divider: bool,
     theme: &Theme,
     window: &mut Window,
     cx: &mut Context<SettingsView>,
@@ -196,22 +224,23 @@ fn render_quota_threshold_unit(
 
     let mut row = div().flex().flex_col().gap(px(10.0));
     if is_global {
-        row = row.px(px(14.0)).py(px(12.0));
-        if with_divider {
-            row = row.border_t_1().border_color(theme.border.subtle);
-        }
+        row = row
+            .px(px(14.0))
+            .py(px(12.0))
+            .border_t_1()
+            .border_color(theme.border.subtle);
         if editing {
             row = row.bg(theme.bg.subtle);
         }
-    } else if with_divider {
+    } else {
         row = row
             .pt(px(14.0))
             .border_t_1()
             .border_color(theme.border.subtle);
     }
 
-    // Provider 详情页在「跟随全局」且未处于编辑态时，折叠为单行紧凑摘要，隐藏大号色块条与比例尺。
-    if !is_global && !editing && !is_custom {
+    // 全局默认态与 Provider「跟随全局」未编辑态均折叠为单行紧凑摘要，点击「编辑 / 自定义」展开四段区间条与比例尺。
+    if !editing && (is_global || !is_custom) {
         let unit_key = unit.config_key();
         return row.child(
             div()
@@ -339,7 +368,7 @@ fn render_unit_header(
         } else {
             t!("settings.quota_thresholds.inherit").to_string()
         };
-        row = row.child(render_inheritance_badge(is_custom, label, theme));
+        row = row.child(render_status_pill(is_custom, label, theme));
     }
 
     row
@@ -602,12 +631,16 @@ fn render_unit_actions(
     let mut actions = div().flex().flex_shrink_0().items_center().gap(px(4.0));
     match target {
         QuotaThresholdTarget::Global => {
-            actions = actions.child(threshold_ghost_button(
-                &t!("settings.quota_thresholds.edit"),
-                theme.text.accent,
-                theme,
-                edit_click_handler(cx, target.clone(), unit_state),
-            ));
+            let unit_key = unit_state.unit.config_key();
+            actions = actions.child(
+                threshold_ghost_button(
+                    &t!("settings.quota_thresholds.edit"),
+                    theme.text.accent,
+                    theme,
+                    edit_click_handler(cx, target.clone(), unit_state),
+                )
+                .debug_selector(move || format!("quota-threshold-edit-{unit_key}")),
+            );
         }
         QuotaThresholdTarget::Provider(provider_id) => {
             if unit_state.override_thresholds.is_some() {
@@ -955,17 +988,18 @@ mod tests {
     }
 
     #[test]
-    fn global_draft_only_survives_on_general_tab() {
+    fn global_draft_only_survives_on_alerts_tab() {
         let claude = ProviderId::BuiltIn(ProviderKind::Claude);
         let target = QuotaThresholdTarget::Global;
 
         assert!(quota_threshold_target_matches_tab(
             &target,
-            SettingsTab::General,
+            SettingsTab::Alerts,
             &claude,
             ProviderDetailTab::Settings
         ));
         for tab in [
+            SettingsTab::General,
             SettingsTab::Providers,
             SettingsTab::Display,
             SettingsTab::About,
@@ -1010,6 +1044,7 @@ mod tests {
         for tab in [
             SettingsTab::General,
             SettingsTab::Display,
+            SettingsTab::Alerts,
             SettingsTab::About,
             SettingsTab::Debug,
         ] {

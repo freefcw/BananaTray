@@ -1,6 +1,6 @@
-use super::providers::shared::render_inheritance_badge;
 #[cfg(all(test, feature = "ui-tests"))]
 use super::providers::shared::render_settings_card;
+use super::providers::shared::render_status_pill;
 use crate::theme::Theme;
 use crate::ui::widgets::{render_stepper, StepperOptions};
 use gpui::{
@@ -107,7 +107,7 @@ pub(in crate::ui::settings_window) fn render_provider_quota_usage_row(
                 .whitespace_nowrap()
                 .child(t!("provider.quota_usage.title").to_string()),
         )
-        .child(render_inheritance_badge(is_custom, tag_label, theme));
+        .child(render_status_pill(is_custom, tag_label, theme));
 
     let mut control = div()
         .flex()

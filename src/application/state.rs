@@ -506,6 +506,7 @@ pub enum SettingsTab {
     General,
     Providers,
     Display,
+    Alerts,
     About,
     Debug,
 }

@@ -10,7 +10,7 @@
 - `usage.rs` renders quota usage and provider error/empty states in the `UsageHistory` sub-tab（空态/失败走共享 detail card）。
 - `history.rs` renders the quota history card in the `UsageHistory` sub-tab (range/interval toolbar, stacked single-unit or merged multi-series step charts with colored dot legends, and a footer combining notes with the clear-history ghost button).
 - `quota_visibility.rs` renders per-quota tray visibility toggles plus the overview
-  primary-quota star (≥2 visible quotas only; toggling dispatches
+  primary-quota star and `Primary` badge (≥2 visible quotas only; toggling dispatches
   `SettingChange::TogglePrimaryQuota`) inside a unified settings card (`shared::render_settings_card` + `render_settings_card_header`).
 - `settings_section.rs` renders the `Settings` sub-tab content:
   1. Provider settings capability card (`TokenInput` / `NewApiEditable` / `ScriptEditable`); for `SettingsCapability::None` on a monitorable provider, no redundant placeholder box is rendered, while non-monitorable (`Informational` / `Placeholder`) providers render a single explanatory card.

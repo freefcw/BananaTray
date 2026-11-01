@@ -766,3 +766,30 @@ fn threshold_provider_inherited_collapses_strip_until_customize_clicked(cx: &mut
     click_selector(cx, "quota-threshold-customize-percentage");
     assert_threshold_fields_in_strip(cx, "provider/customize-click");
 }
+
+#[gpui::test]
+fn threshold_global_collapses_strip_until_edit_clicked(cx: &mut TestAppContext) {
+    let _locale_guard = test_locale_guard("en");
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let (_harness, cx) = add_threshold_window(cx, QuotaThresholdTarget::Global, false, &changes);
+    cx.simulate_resize(size(px(600.0), px(800.0)));
+    draw(cx);
+
+    assert!(
+        cx.debug_bounds("quota-threshold-compact-percentage")
+            .is_some(),
+        "global threshold unit must render compact row before edit"
+    );
+    assert!(
+        cx.debug_bounds("quota-threshold-summary-percentage")
+            .is_some(),
+        "global threshold unit must render inline threshold summary before edit"
+    );
+    assert!(
+        cx.debug_bounds("quota-threshold-scale").is_none(),
+        "global threshold unit must hide the full percentage scale bar before edit"
+    );
+
+    click_selector(cx, "quota-threshold-edit-percentage");
+    assert_threshold_fields_in_strip(cx, "global/edit-click");
+}

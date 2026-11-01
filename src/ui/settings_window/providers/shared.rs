@@ -85,14 +85,14 @@ pub(in crate::ui::settings_window) fn render_settings_card_header(
         .child(text)
 }
 
-/// 统一「跟随全局 / 自定义」状态胶囊徽章，供用量提醒与提醒阈值卡片共用。
-pub(in crate::ui::settings_window) fn render_inheritance_badge(
-    is_custom: bool,
+/// 统一胶囊状态徽章：`highlighted` 为强调色（自定义 / 主额度），否则为中性弱化态。
+pub(in crate::ui::settings_window) fn render_status_pill(
+    highlighted: bool,
     label: String,
     theme: &Theme,
 ) -> Div {
     let accent = theme.text.accent;
-    let (fg, bg, border) = if is_custom {
+    let (fg, bg, border) = if highlighted {
         (accent, accent.opacity(0.14), accent.opacity(0.32))
     } else {
         (theme.text.secondary, theme.bg.subtle, theme.border.subtle)

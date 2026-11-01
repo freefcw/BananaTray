@@ -1,6 +1,6 @@
 use super::components::{
-    render_dark_card, render_divider, render_section_header, IconSwitchRow, ICON_BG_ACCENT,
-    ICON_BG_REFRESH, ICON_FG,
+    render_dark_card, render_divider, render_section_header, render_segmented_row,
+    render_toggle_setting, TAB_PADDING_BOTTOM, TAB_PADDING_X,
 };
 use super::SettingsView;
 use crate::application::{AppAction, SettingChange};
@@ -9,64 +9,115 @@ use crate::models::{
     TrayIconStyle,
 };
 use crate::theme::Theme;
-use crate::ui::widgets::{render_segmented_control, render_toggle_switch, SegmentedSize};
-use gpui::{
-    div, px, rgb, App, Div, FontWeight, InteractiveElement, MouseButton, ParentElement, Styled,
-    Window,
-};
+use gpui::{div, px, Div, ParentElement, Styled};
 use rust_i18n::t;
 
-// 设计稿颜色常量
-const ICON_BG_DEBUG: u32 = 0x555555; // 灰色 (Debug Tab)
-
 impl SettingsView {
-    /// Render Display settings tab — 匹配设计稿风格
+    /// Render Display settings tab — 按「界面与菜单栏 → 托盘弹窗布局 → 配额卡片与图表」三层组织
     pub(super) fn render_display_tab(&self, settings: &AppSettings, theme: &Theme) -> Div {
         div()
             .flex_col()
-            .px(px(16.0))
-            .pb(px(16.0))
-            .child(render_section_header(&t!("settings.section.theme"), theme))
-            .child(self.render_appearance_card(settings, theme))
+            .px(px(TAB_PADDING_X))
+            .pb(px(TAB_PADDING_BOTTOM))
             .child(render_section_header(
-                &t!("settings.section.toolbar"),
+                &t!("settings.section.interface"),
                 theme,
             ))
-            .child(self.render_toolbar_card(settings, theme))
+            .child(self.render_interface_card(settings, theme))
             .child(render_section_header(
-                &t!("settings.section.developer"),
+                &t!("settings.section.popup_layout"),
                 theme,
             ))
-            .child(self.render_developer_card(settings, theme))
+            .child(self.render_popup_layout_card(settings, theme))
+            .child(render_section_header(
+                &t!("settings.section.quota_cards"),
+                theme,
+            ))
+            .child(self.render_quota_cards_card(settings, theme))
     }
 
-    fn render_appearance_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
+    fn render_interface_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
         render_dark_card(theme)
-            .px(px(14.0))
-            .py(px(4.0))
             .child(self.render_theme_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_language_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_tray_icon_setting(settings, theme))
+    }
+
+    fn render_popup_layout_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        render_dark_card(theme)
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.show_overview"),
+                &t!("settings.show_overview.desc"),
+                settings.display.show_overview,
+                theme,
+                SettingChange::ToggleShowOverview,
+            ))
             .child(render_divider(theme))
+            .child(self.render_nav_tab_style_setting(settings, theme))
+            .child(render_divider(theme))
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.nav_status_dots"),
+                &t!("settings.nav_status_dots.desc"),
+                settings.display.nav_status_dots,
+                theme,
+                SettingChange::ToggleNavStatusDots,
+            ))
+            .child(render_divider(theme))
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.show_account_info"),
+                &t!("settings.show_account_info.desc"),
+                settings.display.show_account_info,
+                theme,
+                SettingChange::ToggleShowAccountInfo,
+            ))
+            .child(render_divider(theme))
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.show_dashboard"),
+                &t!("settings.show_dashboard.desc"),
+                settings.display.show_dashboard_button,
+                theme,
+                SettingChange::ToggleShowDashboardButton,
+            ))
+            .child(render_divider(theme))
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.show_refresh"),
+                &t!("settings.show_refresh.desc"),
+                settings.display.show_refresh_button,
+                theme,
+                SettingChange::ToggleShowRefreshButton,
+            ))
+    }
+
+    fn render_quota_cards_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
+        render_dark_card(theme)
             .child(self.render_quota_display_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_quota_card_style_setting(settings, theme))
             .child(render_divider(theme))
             .child(self.render_quota_card_history_setting(settings, theme))
             .child(render_divider(theme))
-            .child(self.render_merge_charts_setting(settings, theme))
-            .child(render_divider(theme))
-            .child(self.render_nav_tab_style_setting(settings, theme))
-            .child(render_divider(theme))
-            .child(self.render_nav_status_dots_setting(settings, theme))
+            .child(render_toggle_setting(
+                &self.state,
+                &t!("settings.merge_history_charts"),
+                &t!("settings.merge_history_charts.desc"),
+                settings.display.merge_history_charts,
+                theme,
+                SettingChange::ToggleMergeHistoryCharts,
+            ))
     }
 
     fn render_theme_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.theme"),
+            &t!("settings.theme.desc"),
             vec![
                 (t!("theme.system").to_string(), AppTheme::System),
                 (t!("theme.light").to_string(), AppTheme::Light),
@@ -92,8 +143,9 @@ impl SettingsView {
             .iter()
             .map(|&(code, name_key)| (t!(name_key).to_string(), code.to_string()))
             .collect();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.language"),
+            &t!("settings.language.desc"),
             languages,
             &settings.display.language,
             theme,
@@ -110,8 +162,9 @@ impl SettingsView {
 
     fn render_tray_icon_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.tray_icon_style"),
+            &t!("settings.tray_icon_style.desc"),
             vec![
                 (
                     t!("settings.tray_icon.monochrome").to_string(),
@@ -145,8 +198,9 @@ impl SettingsView {
 
     fn render_quota_display_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.quota_display_mode"),
+            &t!("settings.quota_display_mode.desc"),
             vec![
                 (
                     t!("settings.quota_display_mode.remaining").to_string(),
@@ -172,8 +226,9 @@ impl SettingsView {
 
     fn render_quota_card_style_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.quota_card_style"),
+            &t!("settings.quota_card_style.desc"),
             vec![
                 (
                     t!("settings.quota_card_style.bar").to_string(),
@@ -199,8 +254,9 @@ impl SettingsView {
 
     fn render_quota_card_history_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.quota_card_history"),
+            &t!("settings.quota_card_history.desc"),
             vec![
                 (
                     t!("settings.quota_card_history.last_24h").to_string(),
@@ -224,20 +280,11 @@ impl SettingsView {
         )
     }
 
-    fn render_merge_charts_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        self.render_inline_toggle_row(
-            &t!("settings.merge_history_charts"),
-            &t!("settings.merge_history_charts.desc"),
-            settings.display.merge_history_charts,
-            theme,
-            SettingChange::ToggleMergeHistoryCharts,
-        )
-    }
-
     fn render_nav_tab_style_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
         let state = self.state.clone();
-        render_inline_segmented_row(
+        render_segmented_row(
             &t!("settings.nav_tab_style"),
+            &t!("settings.nav_tab_style.desc"),
             vec![
                 (
                     t!("settings.nav_tab_style.full").to_string(),
@@ -260,172 +307,4 @@ impl SettingsView {
             },
         )
     }
-
-    fn render_nav_status_dots_setting(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        self.render_inline_toggle_row(
-            &t!("settings.nav_status_dots"),
-            &t!("settings.nav_status_dots.desc"),
-            settings.display.nav_status_dots,
-            theme,
-            SettingChange::ToggleNavStatusDots,
-        )
-    }
-
-    /// 行内开关行：左侧标题 + 描述，右侧小尺寸 toggle。
-    fn render_inline_toggle_row(
-        &self,
-        label: &str,
-        desc: &str,
-        enabled: bool,
-        theme: &Theme,
-        change: SettingChange,
-    ) -> Div {
-        let state = self.state.clone();
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .w_full()
-            .py(px(10.0))
-            .gap(px(16.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text.primary)
-                            .child(label.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(theme.text.muted)
-                            .child(desc.to_string()),
-                    ),
-            )
-            .child(
-                render_toggle_switch(enabled, px(36.0), px(20.0), px(14.0), theme)
-                    .flex_shrink_0()
-                    .cursor_pointer()
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        crate::bootstrap::dispatch_in_window(
-                            &state,
-                            AppAction::UpdateSetting(change.clone()),
-                            window,
-                            cx,
-                        );
-                    }),
-            )
-    }
-
-    fn render_toolbar_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        render_dark_card(theme)
-            .child(self.render_toolbar_switch(
-                IconSwitchRow {
-                    icon_path: "src/icons/overview.svg",
-                    icon_color: rgb(ICON_FG).into(),
-                    icon_bg: rgb(ICON_BG_ACCENT).into(),
-                    title: &t!("settings.show_dashboard"),
-                    description: &t!("settings.show_dashboard.desc"),
-                    enabled: settings.display.show_dashboard_button,
-                },
-                SettingChange::ToggleShowDashboardButton,
-                theme,
-            ))
-            .child(render_divider(theme))
-            .child(self.render_toolbar_switch(
-                IconSwitchRow {
-                    icon_path: "src/icons/refresh.svg",
-                    icon_color: rgb(ICON_FG).into(),
-                    icon_bg: rgb(ICON_BG_REFRESH).into(),
-                    title: &t!("settings.show_refresh"),
-                    description: &t!("settings.show_refresh.desc"),
-                    enabled: settings.display.show_refresh_button,
-                },
-                SettingChange::ToggleShowRefreshButton,
-                theme,
-            ))
-    }
-
-    fn render_toolbar_switch(
-        &self,
-        row: IconSwitchRow<'_>,
-        change: SettingChange,
-        theme: &Theme,
-    ) -> Div {
-        let state = self.state.clone();
-        Self::render_icon_switch_row(row, theme, move |_, window, cx| {
-            crate::bootstrap::dispatch_in_window(
-                &state,
-                AppAction::UpdateSetting(change.clone()),
-                window,
-                cx,
-            );
-        })
-    }
-
-    fn render_developer_card(&self, settings: &AppSettings, theme: &Theme) -> Div {
-        let state = self.state.clone();
-        render_dark_card(theme).child(Self::render_icon_switch_row(
-            IconSwitchRow {
-                icon_path: "src/icons/advanced.svg",
-                icon_color: rgb(ICON_FG).into(),
-                icon_bg: rgb(ICON_BG_DEBUG).into(),
-                title: &t!("settings.show_debug_tab"),
-                description: &t!("settings.show_debug_tab.desc"),
-                enabled: settings.display.show_debug_tab,
-            },
-            theme,
-            move |_, window, cx| {
-                crate::bootstrap::dispatch_in_window(
-                    &state,
-                    AppAction::UpdateSetting(SettingChange::ToggleShowDebugTab),
-                    window,
-                    cx,
-                );
-            },
-        ))
-    }
-}
-
-/// 渲染水平行式分段选择器行：左侧标签（13px MEDIUM）+ 右侧 Inline SegmentedControl
-///
-/// 用于 Appearance section 的 Theme / Language / Tray Icon Style 行。
-fn render_inline_segmented_row<T, F>(
-    label: &str,
-    options: Vec<(String, T)>,
-    current: &T,
-    theme: &Theme,
-    on_select: F,
-) -> Div
-where
-    T: PartialEq + Clone + 'static,
-    F: Fn(T, &mut Window, &mut App) + Clone + 'static,
-{
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .w_full()
-        .py(px(10.0))
-        .child(
-            div()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text.primary)
-                .flex_shrink_0()
-                .mr(px(16.0))
-                .child(label.to_string()),
-        )
-        .child(div().flex_shrink_0().child(render_segmented_control(
-            &options,
-            current,
-            SegmentedSize::Inline,
-            theme,
-            on_select,
-        )))
 }
