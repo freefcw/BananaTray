@@ -164,6 +164,7 @@ pub(super) fn cancel_add_provider(session: &mut AppSession, effects: &mut Vec<Ap
 pub(super) fn add_provider_to_sidebar(
     session: &mut AppSession,
     id: ProviderId,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     if session.settings.provider.add_to_sidebar(&id) {
@@ -171,6 +172,7 @@ pub(super) fn add_provider_to_sidebar(
     }
     session.settings_ui.modal = SettingsModalState::Idle;
     session.settings_ui.selected_provider = id;
+    super::history::begin_history_load(session, now_ms, effects);
     session.settings_ui.token_editing_provider = None;
     effects.push(ContextEffect::Render.into());
 }
@@ -178,6 +180,7 @@ pub(super) fn add_provider_to_sidebar(
 pub(super) fn remove_provider_from_sidebar(
     session: &mut AppSession,
     id: ProviderId,
+    now_ms: i64,
     effects: &mut Vec<AppEffect>,
 ) {
     // 先离开二次确认态，无论 sidebar 操作是否成功
@@ -199,6 +202,7 @@ pub(super) fn remove_provider_from_sidebar(
             session.settings_ui.modal = SettingsModalState::AddingProvider;
         } else {
             session.settings_ui.selected_provider = session.first_sidebar_provider();
+            super::history::begin_history_load(session, now_ms, effects);
         }
         effects.push(SettingsEffect::PersistSettings.into());
         effects.push(RefreshEffect::SendRequest(build_config_sync_request(session)).into());

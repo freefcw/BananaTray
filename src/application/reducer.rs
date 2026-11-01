@@ -199,10 +199,10 @@ pub fn reduce_at(
             provider_sidebar::cancel_add_provider(session, &mut effects)
         }
         AppAction::AddProviderToSidebar(id) => {
-            provider_sidebar::add_provider_to_sidebar(session, id, &mut effects)
+            provider_sidebar::add_provider_to_sidebar(session, id, time.wall_ms, &mut effects)
         }
         AppAction::RemoveProviderFromSidebar(id) => {
-            provider_sidebar::remove_provider_from_sidebar(session, id, &mut effects)
+            provider_sidebar::remove_provider_from_sidebar(session, id, time.wall_ms, &mut effects)
         }
         AppAction::ConfirmRemoveProvider => {
             provider_sidebar::confirm_remove_provider(session, &mut effects)

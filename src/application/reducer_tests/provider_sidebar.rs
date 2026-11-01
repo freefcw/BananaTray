@@ -2,6 +2,7 @@ use super::common::{has_effect, has_render, make_custom_token_provider, make_ses
 use crate::application::{
     reduce, AppAction, AppEffect, CommonEffect, RefreshEffect, SettingsEffect, SettingsModalState,
 };
+use crate::history::HistoryJob;
 use crate::models::{ProviderId, ProviderKind};
 use crate::refresh::RefreshRequest;
 
@@ -97,8 +98,13 @@ fn add_provider_to_sidebar_persists_and_selects() {
         .settings
         .provider
         .is_in_sidebar(&pid(ProviderKind::Gemini)));
-    // 选中了刚添加的 provider
+    // 选中了刚添加的 provider，并加载对应历史
     assert_eq!(session.settings_ui.selected_provider, id);
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::History(HistoryJob::Load(request)))
+            if request.provider_id == id.id_key()
+    )));
     // 退出添加模式
     assert!(!session.settings_ui.modal.is_adding_provider());
     assert!(session.settings_ui.token_editing_provider.is_none());
@@ -141,6 +147,14 @@ fn remove_provider_from_sidebar_disables_and_persists() {
         .settings
         .provider
         .is_enabled(&pid(ProviderKind::Claude)));
+    // 自动选中下一项后加载新 Provider 的历史
+    let selected_provider = session.settings_ui.selected_provider.id_key();
+    assert_ne!(selected_provider, pid(ProviderKind::Claude).id_key());
+    assert!(has_effect(&effects, |effect| matches!(
+        effect,
+        AppEffect::Common(CommonEffect::History(HistoryJob::Load(request)))
+            if request.provider_id == selected_provider
+    )));
     assert!(session.settings_ui.token_editing_provider.is_none());
     assert!(has_effect(&effects, |e| matches!(
         e,
